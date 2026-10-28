@@ -1,0 +1,25 @@
+---
+# The coordinator supplies identity only. Paths, endpoints and policy must come
+# from the exact local instance that was prepared on the delegated host.
+- name: Проверка подготовленного контекста участника Schema Registry
+  ansible.builtin.assert:
+    that:
+      - registry_prepared_instances | length == 1
+      - registry_prepared_activation | length == 1
+      - hostvars[registry_candidate.host]._platform_kafka_registry_cli_directory is defined
+      - hostvars[registry_candidate.host]._platform_kafka_registry_cli_directory | length > 0
+    fail_msg: SCHEMA_REGISTRY_PREPARED_INSTANCE_REQUIRED
+  vars:
+    registry_prepared_instances: "{{ hostvars[registry_candidate.host]._platform_kafka_registry_local | default([]) | selectattr('deployment_id', 'equalto', registry_candidate.deployment_id) | selectattr('id', 'equalto', registry_candidate.id) | selectattr('host', 'equalto', registry_candidate.host) | list }}"
+    registry_prepared_activation: "{{ hostvars[registry_candidate.host]._platform_kafka_registry_activation | default([]) | selectattr('key', 'equalto', [registry_candidate.deployment_id, registry_candidate.id] | to_json) | list }}"
+
+- name: Проверка топика схем в подготовленном контексте выбранного узла
+  ansible.builtin.include_tasks:
+    file: schema_registry_topic.yml
+    apply:
+      delegate_to: "{{ registry_candidate.host }}"
+      become: true
+  vars:
+    registry_instance: "{{ hostvars[registry_candidate.host]._platform_kafka_registry_local | selectattr('deployment_id', 'equalto', registry_candidate.deployment_id) | selectattr('id', 'equalto', registry_candidate.id) | selectattr('host', 'equalto', registry_candidate.host) | first }}"
+    registry_topic_cli_directory: "{{ hostvars[registry_candidate.host]._platform_kafka_registry_cli_directory }}"
+    _platform_kafka_registry_projection: "{{ hostvars[registry_candidate.host]._platform_kafka_registry_projection }}"

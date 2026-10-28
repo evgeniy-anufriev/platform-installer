@@ -8,6 +8,23 @@ new destructive operation still requires explicit owner authorization.
 
 ## Active work and acceptance
 
+Kafka ACL/Registry optimization (separate `codex/kafka-acl-registry-optimization`
+worktree): implemented; TARGETED_RECHECK APPROVE, blocking0; KRO-D01/KRO-T01 closed.
+Focused RED OS Registry13 PASS and account/ACL/phase26 PASS in their final selections;
+Apply/Verify syntax PASS. Compatibility ACLs
+use the shared delta grouping; Registry preparation/topic/activation/readiness
+are phased, with sequential existing-unit readiness and deferred cold readiness.
+FULL PLAN APPROVE_WITH_CHANGES, blocking0; P01/P02 incorporated. Delegated topic
+selection now uses the selected host's exact prepared local instance and CLI
+context, with uniqueness/activation guards. Activation records are a resettable
+list to avoid dictionary merge retention. Prior FULL DIFF BLOCK and failed
+combined runs remain historical evidence; the corrected Registry suite passed
+separately. The one permitted targeted recheck has been consumed.
+See [review/evidence](docs/work/execution/kafka-acl-registry-optimization-review.md)
+and [plan](docs/work/execution/kafka-acl-registry-optimization-plan.md).
+No active bundle or project service changed; real React/Wails installation and
+wall-time acceptance remain pending.
+
 Kafka controller SASL update (owner-authorized, 2026-10-28): role now uses
 SASL_SSL/PLAIN and the existing admin runtime secret in host-encrypted systemd
 credentials; temporary certificate-superuser bootstrap is removed. Focused RED

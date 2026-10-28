@@ -1,0 +1,42 @@
+---
+# Ordinary linear strategy supplies the preparation barrier. With serial, each
+# batch reconciles through one of its own prepared members, never a future batch.
+- name: Подготовка и активация Schema Registry в текущей группе узлов
+  any_errors_fatal: true
+  block:
+    - name: Сброс признаков запуска экземпляров Schema Registry текущего вызова
+      ansible.builtin.set_fact:
+        # Lists replace lower-precedence values even with hash_behaviour=merge.
+        _platform_kafka_registry_activation: []
+        _platform_kafka_registry_cli_directory: "{{ platform_kafka_install_directory }}"
+      changed_when: false
+
+    - name: Подготовка каждого локального экземпляра Schema Registry
+      ansible.builtin.include_tasks: schema_registry_member.yml
+      loop: "{{ _platform_kafka_registry_local }}"
+      loop_control:
+        loop_var: registry_instance
+        label: "{{ registry_instance.id }}"
+
+    - name: Проверка служебного топика каждого развёртывания через подготовленного участника
+      ansible.builtin.include_tasks: schema_registry_topic_for_host.yml
+      loop: "{{ _platform_kafka_registry_projection.instances | selectattr('host', 'in', ansible_play_batch) | unique(attribute='deployment_id', case_sensitive=true) | list }}"
+      loop_control:
+        loop_var: registry_candidate
+        label: "{{ registry_candidate.deployment_id }}"
+      run_once: true
+
+    - name: Запуск подготовленных экземпляров Schema Registry
+      ansible.builtin.include_tasks: schema_registry_activate.yml
+      loop: "{{ _platform_kafka_registry_local }}"
+      loop_control:
+        loop_var: registry_instance
+        label: "{{ registry_instance.id }}"
+
+    - name: Ожидание готовности новых экземпляров Schema Registry после запуска группы
+      ansible.builtin.include_tasks: schema_registry_ready.yml
+      loop: "{{ _platform_kafka_registry_local }}"
+      loop_control:
+        loop_var: registry_instance
+        label: "{{ registry_instance.id }}"
+      when: (_platform_kafka_registry_activation | selectattr('key', 'equalto', [registry_instance.deployment_id, registry_instance.id] | to_json) | first).new | bool

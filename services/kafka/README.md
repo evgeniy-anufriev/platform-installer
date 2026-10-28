@@ -34,6 +34,32 @@ after library resources have been created. Direct preflight/verify role calls
 remain available and read fresh state.
 See the [portable topic contract](../../docs/project-contract.md#kafka-topic-resources).
 
+ACL writes group equal missing operation sets for topic/group/transactional-id,
+within one principal and pattern type. Resource identity includes both type and
+case-sensitive name. Cluster grants remain separate; batching does not grant
+extra operations or delete existing bindings. The same writer serves application
+accounts and compatibility principals. One CLI invocation can still issue several
+Kafka protocol requests; batching avoids repeated JVM/client startup.
+
+Schema Registry Apply requires Ansible's ordinary `linear` strategy (explicit in
+the supplied playbook); `free` is not supported. Preparation completes before
+topic reconciliation and activation. `_schemas` policy is checked once per
+deployment in the current Ansible batch, through a prepared member. With `serial`
+it is read again in each batch. A partial inventory may check through a non-seed
+member but cannot create the missing topic there. The coordinator supplies only
+candidate identity; the delegated operation uses the selected host's exact
+prepared local instance and captured CLI directory after uniqueness/activation
+checks. Creation is followed by policy
+readback before activation. Ownership, symlink, PKI and configuration guards stay
+enabled. Ordinary health-only Verify remains unchanged.
+
+New Registry units start before the final HTTP/HTTPS readiness loop so startup
+waits can overlap. A unit is new only when its file is absent and systemd reports
+`LoadState=not-found` and `ActiveState=inactive`; loaded/active/ambiguous units keep
+the sequential activation/readiness path. Per-instance flags are a host-local list
+reset on each invocation, including with hash_behaviour=merge; they are not
+portable desired state or a persistent cache.
+
 The delivery slices are:
 
 - SERVICE-01A: `kraft-standalone`, production single-node KRaft (implemented);

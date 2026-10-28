@@ -70,6 +70,8 @@
 
 - name: Применение Schema Registry после запуска всех экземпляров службы Kafka
   hosts: platform_targets
+  strategy: linear
+  any_errors_fatal: true
   become: true
   gather_facts: false
   tasks:
