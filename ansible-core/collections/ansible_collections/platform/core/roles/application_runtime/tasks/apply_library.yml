@@ -2,6 +2,9 @@
 - name: Привязка всех размещений с общей проекцией узла библиотеки
   ansible.builtin.set_fact:
     application_library_jobs: "{{ platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | list }}"
+    application_library_pending_instances: >-
+      {{ hostvars['localhost'].application_runtime_inputs.integrations |
+         platform.core.application_pending_instances(hostvars['localhost'].platform_application_completed_batches | default([])) }}
   no_log: true
 
 - name: "Проверка одинакового содержимого общей библиотеки у всех потребителей"
@@ -43,7 +46,13 @@
       loop: "{{ application_library_jobs }}"
       when: >-
         (application_runtime_job.libraryId ~ '/' ~ application_runtime_job.instanceId) not in
-        (hostvars['localhost'].application_runtime_inputs.integrations |
-         platform.core.application_pending_instances(hostvars['localhost'].platform_application_completed_batches | default([])))
+        application_library_pending_instances
       loop_control:
         loop_var: application_runtime_job
+
+- name: Фиксация успешно подготовленных размещений текущей библиотеки
+  ansible.builtin.set_fact:
+    application_prepared_instance_ids: >-
+      {{ application_library_jobs | map(attribute='instanceId') | list |
+         difference(application_library_pending_instances | map('regex_replace', '^' ~ (application_library_id | regex_escape) ~ '/', '') | list) }}
+  no_log: true

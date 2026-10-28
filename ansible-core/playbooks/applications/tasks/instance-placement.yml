@@ -1,0 +1,38 @@
+---
+- name: "Подготовка отложенных файлов агента после полной доставки учётных данных из Vault"
+  ansible.builtin.include_role:
+    name: platform.core.application_runtime
+    tasks_from: apply_instance
+  loop: "{{ application_instance_runtime_jobs | rejectattr('instanceId', 'in', application_prepared_instance_ids) | list }}"
+  loop_control:
+    loop_var: application_runtime_job
+
+- name: Выполнение сценариев pre_start экземпляра после доставки всех образов
+  ansible.builtin.include_role:
+    name: platform.core.application_runtime
+    tasks_from: run_scripts
+  vars:
+    application_script_phase: before_start
+    application_script_scope: instance
+  loop: "{{ application_instance_runtime_jobs | platform.core.application_script_jobs(application_script_phase, application_script_scope) }}"
+  loop_control:
+    loop_var: application_runtime_job
+
+- name: Активация и проверка размещений логического экземпляра приложения
+  ansible.builtin.include_role:
+    name: platform.core.application_runtime
+    tasks_from: activate_instance
+  loop: "{{ application_instance_runtime_jobs }}"
+  loop_control:
+    loop_var: application_runtime_job
+
+- name: Запуск готовых сценариев только после того, как каждое размещение будет работоспособным
+  ansible.builtin.include_role:
+    name: platform.core.application_runtime
+    tasks_from: run_scripts
+  vars:
+    application_script_phase: after_ready
+    application_script_scope: instance
+  loop: "{{ application_instance_runtime_jobs | platform.core.application_script_jobs(application_script_phase, application_script_scope) }}"
+  loop_control:
+    loop_var: application_runtime_job
