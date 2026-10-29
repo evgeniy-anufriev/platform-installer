@@ -1,0 +1,62 @@
+{
+  "format": "platform-installer-npm-source-v1",
+  "maxPartBytes": 5000000,
+  "files": 194,
+  "sourceBytes": 34414512,
+  "npmKind": "platform-installer-npm-offline-v1",
+  "npmLockSHA256": "7cedb4abcd5936c2a1ce0fae09d0248998216944a8f22b89ca9bc38f026a340c",
+  "npmPackageSHA256": "d104e476d7e940b034607efd3944e8770f7545ea827f6697f8624cfa3520d27b",
+  "npmPlatform": "linux-x64-glibc",
+  "parts": [
+    {
+      "name": "npm-source-0001.txt",
+      "bytes": 4941653,
+      "sha256": "5c3e5cf92f69841999307a5254ef4ce3e7ca4372776edd6e8dbbb9e66953bba1"
+    },
+    {
+      "name": "npm-source-0002.txt",
+      "bytes": 4982983,
+      "sha256": "2bf3c8b9426ff3462cddd8979a5b1620c74b6ce36d3609596ff168fa2f8ad644"
+    },
+    {
+      "name": "npm-source-0003.txt",
+      "bytes": 4955247,
+      "sha256": "b49af68b71247437bd869cf2814bf5640c2ba477bb87444e82a7dded43992deb"
+    },
+    {
+      "name": "npm-source-0004.txt",
+      "bytes": 4951937,
+      "sha256": "c70ab9fa482b427a5f48e839a062f230b91395077503aef60e25e87e129e966c"
+    },
+    {
+      "name": "npm-source-0005.txt",
+      "bytes": 4939916,
+      "sha256": "28ee02adc0da1d1b37fa79a2f40065ff777d3dcb9dd8423f50bfc6c289eb69ff"
+    },
+    {
+      "name": "npm-source-0006.txt",
+      "bytes": 4950142,
+      "sha256": "8e7276553d38c3b975142ea97ecc5b31ca37f6c3e27b56957698f1115d99bdf0"
+    },
+    {
+      "name": "npm-source-0007.txt",
+      "bytes": 4994374,
+      "sha256": "d31c894002947f6b329558535190505bd7424804205e6d3a656dc2f4a1a12ed0"
+    },
+    {
+      "name": "npm-source-0008.txt",
+      "bytes": 4983934,
+      "sha256": "5ce2c1d5d4d7cdd1b9a75a224a63f3fc6b814bd23f89cf8257d041ae8f9255f4"
+    },
+    {
+      "name": "npm-source-0009.txt",
+      "bytes": 4950310,
+      "sha256": "8d65b9209905741997e6fae3228419705949687a1e74f8d76e4e8d87f642d255"
+    },
+    {
+      "name": "npm-source-0010.txt",
+      "bytes": 1479238,
+      "sha256": "1319f1f7592aa2487c2793f5529865b4640bb7ed595b6a0513b3726017dd9bcf"
+    }
+  ]
+}

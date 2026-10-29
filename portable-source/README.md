@@ -2,8 +2,9 @@
 
 Этот комплект содержит исходники приложения, Ansible Core, Go `vendor` и ресурсы
 Wails для Windows/Linux, исходники Wails v2.15.0 и зависимости его CLI.
-Он состоит из всех частей `source-*.txt`,
-`manifest.json` и `portable_source.py`. Каждая текстовая часть не превышает
+Он состоит из частей исходников `source-*.txt`, `manifest.json`,
+`portable_source.py`, отдельного npm-комплекта `npm-source-*.txt`,
+`npm-manifest.json` и скрипта `npm_offline.py`. Каждая текстовая часть не превышает
 5 000 000 байт. Текстовые исходники читаемы; двоичные ресурсы используют Base64.
 Тесты, документация, кэши, секреты, RPM и бинарные пакеты Core исключены.
 
@@ -61,6 +62,62 @@ python3 portable_source.py verify . "$HOME/installer-restored"
 Старые комплекты v2 по-прежнему читаются строго побайтово: новая устойчивость
 к переносам действует только для пересозданных комплектов v3.
 
+## 1.1. Отдельный npm-комплект для автономной сборки
+
+Текущий `npm-manifest.json` имеет профиль `linux-x64-glibc`: все 194 пакета,
+которые устанавливает lockfile на таком узле, включая зависимости разработки.
+26 необязательных пакетов для чужих платформ исключены. Размер архивов около
+33 МиБ; они хранятся в 10 отдельных Base64-частях `npm-source-*.txt` с лимитом
+5 000 000 байт, включая возможное преобразование LF в CRLF. Чужие платформы
+не нужны и при сборке Windows EXE: Node.js и frontend работают на Linux-узле.
+Этот же npm-комплект подходит для сборки UI под Linux x86-64/glibc.
+
+После восстановления проекта проверьте npm-комплект отдельно:
+
+```sh
+python3 ~/installer-package/npm_offline.py verify ~/installer-package ~/installer-restored
+```
+
+Для ручного переноса отдельной npm-части:
+
+Нужны `npm_offline.py`, `portable_source.py`, `npm-manifest.json` и выбранная
+часть; остальные части для этой команды не требуются.
+
+```sh
+python3 npm_offline.py verify-part . npm-source-0001.txt
+```
+
+Скрипты, оба манифеста и все части двух комплектов должны принадлежать
+одной поставке. Нормализация LF/CRLF и проверка целостности npm-частей используют
+однозначное преобразование CRLF в LF, как и части исходников v3. Формат npm-частей
+отдельный (`platform-installer-npm-source-v1`); архивы восстанавливаются побайтово.
+Перед `npm ci` дополнительно проверяются SHA-512 архивов из lockfile и совпадение
+package.json/lockfile. Изменённый lockfile требует нового npm-комплекта.
+
+Go, Node.js, npm и системные development-библиотеки должны быть заранее
+установлены или предоставлены отдельно из утверждённого источника. Сборка
+не скачивает эти инструменты. Тесты Playwright с реальными браузерами требуют
+отдельной поставки браузеров; для сборки приложения они не нужны.
+
+Только для подготовки новой DEV-поставки с доступом в Интернет:
+
+```sh
+python3 scripts/npm_offline.py acquire . /path/to/new-npm-payload
+```
+
+Команда скачивает архивы по HTTPS URL из lockfile и проверяет каждый SHA-512.
+`verify`, `ci`, `build` и автоматическое обновление portable-source ничего
+не скачивают. Для другой ОС сборки нужен отдельный профиль: `acquire --profile all`
+включает все платформы lockfile; текущая компактная поставка проверена для
+Linux x86-64/glibc. Генератор не подменяет устаревшие зависимости онлайн.
+
+При публикации новой DEV-поставки перенесите `npm-manifest.json`,
+`npm-source-*.txt` и `npm_offline.py` из нового каталога в `portable-source`,
+удалив только старые `npm-source-*.txt`, затем запустите
+`python3 scripts/npm_offline.py verify portable-source .`. Обычные `source-*.txt`,
+`manifest.json` и `portable_source.py` при npm-only обновлении не изменяются.
+Автоматизация GitHub также сохраняет их при таком обновлении.
+
 ## 2. Собрать приложение для Linux
 
 Сборка выполняется непосредственно в Linux. Установленные инструменты должны
@@ -84,22 +141,16 @@ python3 scripts/portable_source.py build-wails .
 
 ```sh
 cd "$HOME/installer-restored"
-sh build/linux/build.sh
+python3 "$HOME/installer-package/npm_offline.py" build "$HOME/installer-package" . --platform linux/amd64
 ```
 
 Скрипт определяет доступный WebKit2GTK через `pkg-config`: предпочитает 4.1
 и добавляет `-tags webkit2_41`, иначе использует 4.0. Можно выбрать ABI явно:
 
 ```sh
-sh build/linux/build.sh --webkit 4.1
+python3 "$HOME/installer-package/npm_offline.py" build "$HOME/installer-package" . --platform linux/amd64 --webkit 4.1
 # Либо, если установлены development-библиотеки ABI 4.0:
-sh build/linux/build.sh --webkit 4.0
-```
-
-То же самое напрямую через Python:
-
-```sh
-python3 scripts/portable_source.py build . --webkit 4.1
+python3 "$HOME/installer-package/npm_offline.py" build "$HOME/installer-package" . --platform linux/amd64 --webkit 4.0
 ```
 
 Результат: `build/bin/platform-installer-ui`. Рядом в `build/bin/linux-resources/`
@@ -109,6 +160,11 @@ python3 scripts/portable_source.py build . --webkit 4.1
 в стандартном каталоге иконок. GTK3/WebKit2GTK runtime-библиотеки нужны и при запуске.
 
 ## 3. Собрать приложение для Windows
+
+Этот раздел описывает сборку на самой Windows. Текущий компактный npm-комплект
+рассчитан на Linux-узел сборки; для Windows EXE из него используйте раздел 3.1.
+Для `npm ci` непосредственно на Windows нужна отдельно подготовленная поставка
+с `npmPlatform: all` (см. раздел 1.1).
 
 Нужны Go 1.25+, Node.js >=24.19 и <25, npm 11.17.0
 и штатная Windows-среда Wails. Для запуска приложения требуется WebView2 Runtime.
@@ -126,18 +182,19 @@ python scripts/portable_source.py build-wails .
 
 ```powershell
 Set-Location C:\work\installer-restored
-python scripts/portable_source.py build .
+python C:\work\installer-package\npm_offline.py build C:\work\installer-package . --platform windows/amd64
 ```
 
 Результат: `build\bin\platform-installer-ui.exe`.
 
-Для обеих платформ `build` сначала собирает локальную Wails CLI, затем запускает
-`npm ci`, сборку frontend и Wails production build. Зависимости CLI берутся
+Для обеих платформ `npm_offline.py build` сначала собирает локальную Wails CLI,
+затем выполняет offline `ci`, сборку frontend и Wails production build. Зависимости CLI берутся
 из `third_party/wails/vendor`, зависимости приложения — из корневого `vendor`.
 Обе Go-сборки используют `-mod=vendor`, `GOPROXY=off`, `GOSUMDB=off`,
 `GOWORK=off` и `GOTOOLCHAIN=local`: скачивание Go-модулей и toolchain не выполняется.
-`go mod tidy` и синхронизация `go.mod` отключены. `npm ci` требует сети или
-заранее подготовленного npm-кэша. Go, Node.js и системные development-библиотеки
+`go mod tidy` и синхронизация `go.mod` отключены. `npm ci --offline` использует
+только включённые архивы; отсутствующий/устаревший npm-комплект блокирует сборку
+без online retry. Go, Node.js и системные development-библиотеки
 в текстовый комплект не входят. Wails может обновить генерируемые
 `frontend/wailsjs/runtime` при сборке, поэтому сравнивайте восстановленные
 исходники с комплектом до сборки. В `third_party/wails/SOURCE.json` зафиксированы
@@ -151,7 +208,13 @@ python scripts/portable_source.py build .
 собраны Linux Wails CLI, frontend и Windows EXE. Полученный EXE перенесён на
 Windows с проверкой SHA-256; окно `Platform Installer` создано, процесс отвечает,
 WebView2 инициализирован. Это проверка сборки и запуска, без визуальной проверки
-и установки сервисов.
+и установки сервисов. Повторная автономная проверка нового `npm_offline.py build`
+прошла внутри `unshare --net`: сеть недоступна, Go- и npm-кэши изначально пустые,
+`npm ci --offline` установил 194 пакета, frontend и Windows EXE собраны успешно.
+EXE запущен на Windows: процесс отвечает спустя 20 секунд, WebView2 инициализирован.
+Основные `source-*.txt`, `manifest.json` и `portable_source.py` при добавлении
+npm-комплекта сохранены побайтово. SHA-256 проверенного EXE:
+`39b14605e8d05499c0536cf158fc1f3897e0b929bbcb0f2ac24f7081e8e90715`.
 
 1. Подготовьте Python 3.8+ и инструменты сборки. Проверенные версии из
    существующих репозиториев RED OS `base`/`updates`: Go 1.26.6, Node.js 24.19.0,
@@ -176,7 +239,8 @@ WebView2 инициализирован. Это проверка сборки и
    python3 --version
    ```
 
-2. Поместите `portable_source.py`, `manifest.json` и все `source-*.txt` одной
+2. Поместите `portable_source.py`, `manifest.json`, все `source-*.txt`,
+   `npm_offline.py`, `npm-manifest.json` и все `npm-source-*.txt` одной
    версии в `~/installer-package`. Для v3 допускаются LF/CRLF; части сохраняйте
    в UTF-8 без BOM. Проверяйте комплект перед распаковкой:
 
@@ -221,16 +285,21 @@ WebView2 инициализирован. Это проверка сборки и
 
    Ожидается `v2.15.0`; глобальная установка Wails не требуется.
 
-6. Соберите frontend Linux-командами:
+6. Проверьте отдельный npm-комплект, установите зависимости без сети и соберите
+   frontend Linux-командами:
 
    ```sh
+   python3 "$HOME/installer-package/npm_offline.py" verify "$HOME/installer-package" .
+   python3 "$HOME/installer-package/npm_offline.py" ci "$HOME/installer-package" .
    cd frontend
-   npm ci --no-audit --no-fund
    npm run build
    cd ..
    ```
 
-   Для `npm ci` нужен доступ к npm registry либо полный подготовленный npm-кэш.
+   Скрипт сверяет package.json и lockfile, SHA-256 частей и SHA-512 каждого
+   архива по lockfile. Затем создаёт пустой приватный кэш, наполняет его локальными
+   архивами через `npm cache add --offline` и вызывает `npm ci --offline`.
+   Пользовательский npm-кэш не требуется. Загрузка браузеров Playwright отключена.
 
 7. Из корня восстановленного проекта соберите Windows EXE:
 
@@ -243,8 +312,17 @@ WebView2 инициализирован. Это проверка сборки и
    `-s` пропускает встроенную сборку frontend: она уже выполнена на шаге 6.
    Благодаря этому Windows-команды `npm.cmd` из `wails.json` не вызываются.
    Результат: `build/bin/platform-installer-ui.exe`. Обычная команда
-   `python3 scripts/portable_source.py build .` выбирает ОС хоста; для Windows
-   из Linux используйте явный `-platform windows/amd64`, как показано выше.
+   Вместо шагов 5–7 можно выполнить общую offline-сборку с явной целью:
+
+   ```sh
+   python3 "$HOME/installer-package/npm_offline.py" build \
+     "$HOME/installer-package" . --platform windows/amd64
+   ```
+
+   Для нового скрипта цель по умолчанию — `windows/amd64`.
+   Старые `scripts/portable_source.py build` и `build/linux/build.sh` сохранены
+   в неизменённом исходном комплекте и вызывают обычный `npm ci`; для автономной
+   сборки используйте только новый внешний `npm_offline.py`.
 
 8. Вычислите SHA-256 перед переносом:
 

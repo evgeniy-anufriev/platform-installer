@@ -32,9 +32,22 @@ jobs:
             git fetch --no-tags origin master
             git checkout --detach origin/master
             source_revision=$(git rev-parse HEAD)
-            python3 scripts/update_portable_source.py
+            python3 scripts/npm_offline.py verify portable-source .
+            cp scripts/npm_offline.py portable-source/npm_offline.py
+            # npm-only changes have their own payload. Preserve the original
+            # source parts and source revision instead of repacking them.
+            snapshot_revision=$(python3 -c 'import json; print(json.load(open("portable-source/manifest.json"))["sourceRevision"])')
+            if git merge-base --is-ancestor "$snapshot_revision" HEAD && \
+               ! git diff --name-only "$snapshot_revision" HEAD | grep -Ev '^(portable-source/|scripts/(npm_offline|test_npm_offline)\.py$|\.github/workflows/portable-source\.yml$)' >/dev/null; then
+              echo 'npm-only update: preserving ordinary source parts.'
+              python3 scripts/portable_source.py verify portable-source .
+            else
+              python3 scripts/update_portable_source.py
+            fi
             git add -- portable-source/manifest.json portable-source/portable_source.py
+            git add -- portable-source/npm_offline.py portable-source/npm-manifest.json
             git add -A -- 'portable-source/source-*.txt'
+            git add -A -- 'portable-source/npm-source-*.txt'
             if git diff --cached --quiet; then
               echo 'Portable source snapshot is current.'
               exit 0
