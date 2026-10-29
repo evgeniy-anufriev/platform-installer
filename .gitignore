@@ -2,8 +2,7 @@
 .runtime/
 runs/
 bundle/
-cache/
-!third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/cache/
+/cache/
 
 # Local user-created project workspaces
 Projects/
@@ -37,15 +36,25 @@ env/
 fact_cache/
 
 # Go build/test output
-bin/
-/build/
+/bin/
+# Keep build icons, manifests and platform resources in Git.
+/build/bin/
 *.test
 *.out
 
 # Frontend dependencies
 node_modules/
+/frontend/dist/
 /.vite/
 frontend/package.json.md5
+
+# Local dependency caches and GitLab CI intermediate artifacts
+/.npm/
+/.go-cache/
+/.go-path/
+/npm-archives/
+/npm-deps.tar.gz
+/frontend-node-modules.tar.gz
 
 # OS/editor metadata
 .DS_Store
