@@ -45667,7 +45667,7 @@ AAABAAYAAAAAAAAAIAC9MgAAZgAAAICAAAAAACAAjA4AACMzAABAQAAAAAAgAG4HAACvQQAAMDAAAAAA
     </asmv3:application>
 </assembly>
 @@END
-@@PORTABLE {"path":"ci/redos-builder/Dockerfile","mode":420,"size":2002,"sha256":"9962d22d031c66bb4107527056f9256738cdc75de705127f93a3a9c7ab4bcbc2","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2002}
+@@PORTABLE {"path":"ci/redos-builder/Dockerfile","mode":420,"size":1713,"sha256":"852d895e8f6591a43a133fcef37d6546471200f440ffb9bef86f46f0b4266ba8","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1713}
 ARG REDOS_BASE=registry.red-soft.ru/ubi8/ubi@sha256:8ff657eea9666b984dfd37b1b3296e98d1cbc95038a849204d1b67d69978fe5c
 FROM ${REDOS_BASE} AS toolchain
 
@@ -45694,17 +45694,10 @@ RUN cd /src/wails \
     && CGO_ENABLED=0 go build -mod=vendor -trimpath -o /usr/local/bin/wails ./cmd/wails \
     && /usr/local/bin/wails version
 
-FROM toolchain AS npm-cache
-COPY npm-tarballs/ /src/npm-tarballs/
-RUN npm cache add --offline --cache /opt/npm-cache --no-audit --no-fund /src/npm-tarballs/*.tgz \
-    && chmod -R a+rX /opt/npm-cache
-
 FROM toolchain AS builder
 COPY --from=wails-builder /usr/local/bin/wails /usr/local/bin/wails
 COPY --from=wails-builder /src/wails/SOURCE.json /usr/share/wails/SOURCE.json
 COPY --from=wails-builder /src/wails/LICENSE /usr/share/licenses/wails/LICENSE
-COPY --from=npm-cache /opt/npm-cache /opt/npm-cache
-COPY frontend/ /opt/builder-inputs/
 COPY build-target.sh /usr/local/bin/build-installer
 RUN chmod 755 /usr/local/bin/build-installer && wails version \
     && rpm -qa --qf '%{NAME} %{VERSION}-%{RELEASE} %{ARCH}\n' | sort > /usr/share/wails/builder-rpms.txt
@@ -45712,7 +45705,7 @@ WORKDIR /workspace
 CMD ["bash"]
 
 @@END
-@@PORTABLE {"path":"ci/redos-builder/build-target.sh","mode":420,"size":2142,"sha256":"caec8864866c5dfdb32d58f8918856c93f8eeb8cf6b72adf065814df3a7e0292","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2142}
+@@PORTABLE {"path":"ci/redos-builder/build-target.sh","mode":420,"size":1832,"sha256":"7887fd88e0fd95076906695619a8b2408400733c7ce2f7112ad28b3116ea79ba","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1832}
 #!/bin/sh
 # ordinary-project-dir windows/amd64|linux/amd64
 set -eu
@@ -45730,23 +45723,16 @@ esac
 export GOFLAGS=-mod=vendor GOPROXY=off GOSUMDB=off GOWORK=off GOTOOLCHAIN=local
 export npm_config_offline=true npm_config_audit=false npm_config_fund=false
 export npm_config_update_notifier=false PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
-python3 - "$project_dir" <<'PY'
-import json, pathlib, sys
-root = pathlib.Path(sys.argv[1])
-for name in ('package.json', 'package-lock.json'):
-    expected = json.loads((pathlib.Path('/opt/builder-inputs') / name).read_text())
-    actual = json.loads((root / 'frontend' / name).read_text())
-    if expected != actual:
-        raise SystemExit('Builder image npm closure does not match ' + name + '; rebuild the image')
-PY
+if [ ! -x "$project_dir/frontend/node_modules/.bin/tsc" ] || \
+   [ ! -x "$project_dir/frontend/node_modules/.bin/vite" ]; then
+    echo 'Project frontend dependencies are missing. Prepare them in the project/CI dependency step before compilation.' >&2
+    exit 1
+fi
 HOME=$(mktemp -d /tmp/installer-home-XXXXXX)
 export HOME
 export GOCACHE="${GOCACHE:-$HOME/go-build}" GOPATH="${GOPATH:-$HOME/go-path}"
-cache_dir=$(mktemp -d /tmp/npm-builder-XXXXXX)
-trap 'rm -rf -- "$cache_dir" "$HOME"' EXIT
-cp -R /opt/npm-cache/. "$cache_dir/"
+trap 'rm -rf -- "$HOME"' EXIT
 cd "$project_dir/frontend"
-npm ci --offline --cache "$cache_dir" --no-audit --no-fund
 npm run build
 cd "$project_dir"
 case "$target" in
@@ -45767,18 +45753,40 @@ case "$target" in
 esac
 
 @@END
-@@PORTABLE {"path":"ci/redos-builder/gitlab-ci.example.yml","mode":420,"size":775,"sha256":"3c9b3827d7a133b15e3ec89f624dca5d98682cf3b6ec85838f4babd37b54358d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":775}
+@@PORTABLE {"path":"ci/redos-builder/gitlab-ci.example.yml","mode":420,"size":1746,"sha256":"b89bc7d3839a1fcfbbd2b3f4dc726b86f1511bb568049c47f089fef63075caa0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1746}
 # Requires a Docker executor and a prebuilt image published to your GitLab registry.
 # This file is an example; include/copy it into your GitLab pipeline explicitly.
-stages: [build]
+# npm-deps.tar.gz is a project input/artifact, never part of the toolchain image.
+stages: [dependencies, build]
 variables:
   BUILDER_IMAGE: "$CI_REGISTRY_IMAGE/builder:redos8"
   GOCACHE: "$CI_PROJECT_DIR/.runtime/go-build"
   GOPATH: "$CI_PROJECT_DIR/.runtime/go-path"
+  NPM_ARCHIVE: "$CI_PROJECT_DIR/npm-deps.tar.gz"
+
+frontend-dependencies:
+  stage: dependencies
+  image: "$BUILDER_IMAGE"
+  script:
+    - mkdir -p .runtime/npm-archives
+    - tar -xzf "$NPM_ARCHIVE" -C .runtime/npm-archives
+    - NPM_CACHE_DIR=$(mktemp -d)
+    - npm cache add --offline --cache "$NPM_CACHE_DIR" --no-audit --no-fund "$CI_PROJECT_DIR"/.runtime/npm-archives/*.tgz
+    - cd frontend
+    - npm ci --offline --cache "$NPM_CACHE_DIR" --no-audit --no-fund
+    - tar -czf "$CI_PROJECT_DIR/frontend-node-modules.tar.gz" node_modules
+  artifacts:
+    paths:
+      - frontend-node-modules.tar.gz
 
 build-windows:
   stage: build
   image: "$BUILDER_IMAGE"
+  needs:
+    - job: frontend-dependencies
+      artifacts: true
+  before_script:
+    - tar -xzf frontend-node-modules.tar.gz -C frontend
   script:
     - build-installer "$CI_PROJECT_DIR" windows/amd64
   artifacts:
@@ -45789,6 +45797,11 @@ build-windows:
 build-linux:
   stage: build
   image: "$BUILDER_IMAGE"
+  needs:
+    - job: frontend-dependencies
+      artifacts: true
+  before_script:
+    - tar -xzf frontend-node-modules.tar.gz -C frontend
   script:
     - build-installer "$CI_PROJECT_DIR" linux/amd64
   artifacts:
@@ -45798,66 +45811,30 @@ build-linux:
       - config/
 
 @@END
-@@PORTABLE {"path":"ci/redos-builder/prepare-context.py","mode":420,"size":2645,"sha256":"916bf80977b81c5469d0d7707b40d994d84fdae9f97aed66616a7f369ec2c238","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2645}
+@@PORTABLE {"path":"ci/redos-builder/prepare-context.py","mode":420,"size":1047,"sha256":"645a7f998a365fdc6166b9d34df65ca62466ee177353f506c20bbdd6fd3dccfd","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1047}
 #!/usr/bin/env python3
-"""Create a minimal image context from an ordinary checkout and pinned npm archives."""
+"""Create a tools-only image context from local vendored Wails sources."""
 import argparse
 from pathlib import Path
 import shutil
-import hashlib
-import json
-import base64
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("project", type=Path)
-parser.add_argument("npm_tarballs", type=Path)
 parser.add_argument("output", type=Path)
 args = parser.parse_args()
 source = args.project.resolve()
 output = args.output.resolve()
 if output.exists():
     raise SystemExit("Context destination must be new")
-lock = json.loads((source / "frontend/package-lock.json").read_text(encoding="utf-8"))
-if lock.get("lockfileVersion") != 3:
-    raise SystemExit("Expected npm lockfileVersion 3")
-archives = {}
-for package_path, entry in lock["packages"].items():
-    if not package_path:
-        continue
-    def allows(field, target):
-        values = entry.get(field, [])
-        return (not values or target in values or
-                (all(value.startswith("!") for value in values) and "!" + target not in values))
-    if not all(allows(field, target) for field, target in (("os", "linux"), ("cpu", "x64"), ("libc", "glibc"))):
-        if entry.get("optional") is not True:
-            raise SystemExit("Required npm package incompatible with Linux x64/glibc: " + package_path)
-        continue
-    integrity = entry.get("integrity", "")
-    if not integrity.startswith("sha512-"):
-        raise SystemExit("Expected pinned npm SHA-512: " + package_path)
-    expected = base64.b64decode(integrity[7:], validate=True)
-    if len(expected) != 64:
-        raise SystemExit("Invalid npm SHA-512")
-    archives["npm-tarballs/" + expected.hex() + ".tgz"] = expected
-if not archives:
-    raise SystemExit("Empty npm closure")
-tarballs = args.npm_tarballs.resolve()
-for name, expected in archives.items():
-    archive = tarballs / Path(name).name
-    if hashlib.sha512(archive.read_bytes()).digest() != expected:
-        raise SystemExit("npm archive integrity mismatch: " + archive.name)
+for name in ("go.mod", "vendor/modules.txt", "cmd/wails/internal/version.txt"):
+    if not (source / "third_party/wails" / name).is_file():
+        raise SystemExit("Missing Wails CLI source: " + str(source / "third_party/wails" / name))
 output.mkdir(parents=True)
 shutil.copytree(source / "third_party/wails", output / "wails",
                 ignore=shutil.ignore_patterns(".git", ".runtime", "node_modules", "__pycache__"))
-(output / "frontend").mkdir()
-for name in ("package.json", "package-lock.json"):
-    shutil.copyfile(source / "frontend" / name, output / "frontend" / name)
-(output / "npm-tarballs").mkdir()
-for name in archives:
-    shutil.copyfile(tarballs / Path(name).name, output / name)
 for name in ("Dockerfile", "build-target.sh"):
     shutil.copyfile(Path(__file__).parent / name, output / name)
-print("Docker context: " + str(output))
+print("Tools-only Docker context: " + str(output))
 
 @@END
 @@PORTABLE {"path":"cmd/platform-installer/execution_watch.go","mode":420,"size":5781,"sha256":"7145f1bfe8840da67150eaddadd58193fa68d9b1b090b5e37049051745b555c7","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5781}
