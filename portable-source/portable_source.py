@@ -13,7 +13,8 @@ import subprocess
 import sys
 import tempfile
 
-FORMAT = "platform-installer-portable-source-v2"
+LEGACY_FORMAT = "platform-installer-portable-source-v2"
+FORMAT = "platform-installer-portable-source-v3"
 LIMIT = 5_000_000
 BLOCK = 48_000
 HEADER = b"@@PORTABLE "
@@ -174,9 +175,15 @@ def pack(root, output):
             data = target.read_bytes()
             manifest["sourceBytes"] += len(data)
             checksum = digest(data)
+            newline = "lf"
             try:
                 text = data.decode("utf-8")
                 require("\0" not in text, "Binary NUL")
+                if "\r" in text:
+                    normalized = text.replace("\r\n", "\n")
+                    require("\r" not in normalized and text.count("\n") == text.count("\r\n"),
+                            "Mixed or bare CR: preserve as Base64")
+                    text, newline = normalized, "crlf"
             except (UnicodeDecodeError, ValueError):
                 encoding = "base64"
                 chunks = [base64.b64encode(data[start:start + BLOCK])
@@ -191,13 +198,15 @@ def pack(root, output):
             for index, payload in enumerate(chunks):
                 record = {"path": name, "mode": mode, "size": len(data), "sha256": checksum,
                           "index": index, "count": count,
+                          "newline": newline,
                           "encoding": encoding, "payloadBytes": len(payload)}
                 line = HEADER + json.dumps(record, ensure_ascii=True, separators=(",", ":")).encode("ascii") + b"\n" + payload + FOOTER
-                require(len(line) <= LIMIT, "Record exceeds part limit")
-                if length + len(line) > LIMIT:
+                transport_length = len(line) + line.count(b"\n")
+                require(transport_length <= LIMIT, "Record exceeds part limit")
+                if length + transport_length > LIMIT:
                     flush()
                 lines.append(line)
-                length += len(line)
+                length += transport_length
         flush()
         manifest_data = (json.dumps(manifest, indent=2) + "\n").encode("utf-8")
         require(len(manifest_data) <= LIMIT, "Manifest exceeds part limit")
@@ -217,7 +226,7 @@ def pack(root, output):
 
 def read_package(source):
     manifest = json.loads((source / "manifest.json").read_text(encoding="utf-8"))
-    require(manifest.get("format") == FORMAT and manifest.get("maxPartBytes") == LIMIT and
+    require(manifest.get("format") in {FORMAT, LEGACY_FORMAT} and manifest.get("maxPartBytes") == LIMIT and
             type(manifest.get("files")) is int and manifest["files"] > 0 and
             isinstance(manifest.get("parts"), list) and bool(manifest["parts"]), "Invalid manifest")
     files, seen, blocks = [], set(), []
@@ -226,6 +235,10 @@ def read_package(source):
     for part_index, part in enumerate(manifest["parts"], 1):
         require(part["name"] == "source-{:04d}.txt".format(part_index), "Invalid part order")
         data = (source / part["name"]).read_bytes()
+        require(len(data) <= LIMIT, "Part exceeds transport limit")
+        if manifest["format"] == FORMAT:
+            data = data.replace(b"\r\n", b"\n")
+            require(b"\r" not in data, "Bare CR in normalized part")
         require(len(data) <= LIMIT and len(data) == part["bytes"] and digest(data) == part["sha256"],
                 "Part checksum/size mismatch: " + part["name"])
         stream = io.BytesIO(data)
@@ -233,6 +246,10 @@ def read_package(source):
             header = stream.readline(16385)
             require(len(header) <= 16384 and header.startswith(HEADER) and header.endswith(b"\n"), "Invalid record header")
             record = json.loads(header[len(HEADER):].decode("ascii"))
+            if manifest["format"] == FORMAT:
+                require(record.get("newline") in {"lf", "crlf"} and
+                        (record.get("encoding") == "utf-8" or record["newline"] == "lf"),
+                        "Invalid newline metadata")
             safe_path(record["path"])
             require(type(record.get("size")) is int and record["size"] >= 0 and
                     type(record.get("count")) is int and record["count"] > 0 and
@@ -248,7 +265,7 @@ def read_package(source):
                 current, blocks, next_index = record, [], 0
             require(current is not None and record["index"] == next_index and
                     record["index"] < record["count"] and
-                    all(record[key] == current[key] for key in ("path", "mode", "size", "sha256", "count", "encoding")),
+                    all(record.get(key) == current.get(key) for key in ("path", "mode", "size", "sha256", "count", "encoding", "newline")),
                     "Invalid block order/metadata")
             payload = stream.read(record["payloadBytes"])
             require(len(payload) == record["payloadBytes"] and stream.read(len(FOOTER)) == FOOTER,
@@ -263,6 +280,8 @@ def read_package(source):
             next_index += 1
             if next_index == current["count"]:
                 content = b"".join(blocks)
+                if manifest["format"] == FORMAT and current["encoding"] == "utf-8" and current["newline"] == "crlf":
+                    content = content.replace(b"\n", b"\r\n")
                 require(len(content) == current["size"] and digest(content) == current["sha256"],
                         "File checksum mismatch: " + current["path"])
                 files.append((current, content))
