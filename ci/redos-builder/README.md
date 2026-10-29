@@ -13,12 +13,39 @@ RPM устанавливаются только из base/updates RED OS с пр
 Wails CLI собирается один раз из локального third_party/wails/vendor,
 без скачивания Go-модулей. В заданиях GitLab используется готовая CLI.
 
+## Пошаговый порядок
+
+1. Подготовьте обычное дерево проекта и актуальный каталог ci/redos-builder.
+2. Преобразуйте npm-source TXT в читаемые tgz и npm-deps.tar.gz по разделу GitLab.
+3. Создайте контекст и соберите общий образ без npm-зависимостей проекта.
+4. Загрузите образ в Container Registry своего проекта GitLab.
+5. Добавьте .gitlab-ci.yml, npm-deps.tar.gz и необходимые статические ресурсы в Git.
+6. Запустите pipeline: frontend-dependencies → build-windows/build-linux.
+
+На машине подготовки нужны Docker и Python 3; Go/Node.js/npm устанавливаются
+внутри образа. Для CI нужен Linux x86-64/glibc runner с Docker executor,
+доступом к репозиторию и Container Registry проекта. Само дерево приложения
+должно содержать frontend, vendor, third_party/wails, build, config, internal,
+cmd, go.mod, go.sum, корневые Go-файлы и wails.json.
+
+Задайте фактические пути в используемой shell-сессии:
+
+```sh
+PROJECT_DIR="$HOME/platform-installer-restored"
+NPM_PACKAGE_DIR="$HOME/installer-package"
+NPM_ARCHIVES_DIR="$HOME/npm-archives"
+```
+
+NPM_PACKAGE_DIR содержит npm_offline.py, portable_source.py, npm-manifest.json
+и все 10 npm-source-*.txt одной поставки. NPM_ARCHIVES_DIR должен быть новым.
+
 ## Подготовка образа
 
 Из корня обычного распакованного проекта, аналогичного каталогу с go.mod,
 frontend, vendor, third_party, build, config и wails.json:
 
 ```sh
+cd "$PROJECT_DIR"
 python3 ci/redos-builder/prepare-context.py . /var/tmp/installer-builder-context
 docker build -t platform-installer-builder:redos8 /var/tmp/installer-builder-context
 ```
@@ -44,6 +71,31 @@ docker build "$@" -t platform-installer-builder:redos8 /var/tmp/installer-builde
 ```
 
 HTTPS и проверка подписей RPM остаются включёнными.
+
+Проверка версий в готовом образе без сети:
+
+```sh
+docker run --rm --network none platform-installer-builder:redos8 \
+  sh -c 'go version; node --version; npm --version; wails version'
+```
+
+## Публикация образа в Container Registry GitLab
+
+Подставьте адрес registry и полный путь именно своего проекта, взятые из
+Container Registry в GitLab. Значение REGISTRY_IMAGE должно соответствовать
+CI_REGISTRY_IMAGE этого проекта, чтобы совпасть с примером CI:
+
+```sh
+REGISTRY="registry.example.local"
+REGISTRY_IMAGE="$REGISTRY/group/project"
+docker login "$REGISTRY"
+docker tag platform-installer-builder:redos8 "$REGISTRY_IMAGE/builder:redos8"
+docker push "$REGISTRY_IMAGE/builder:redos8"
+```
+
+В образе нет npm-архивов проекта. npm-deps.tar.gz передаётся отдельно как
+файл репозитория или входной artifact. Runner должен иметь доступ к образу;
+если образ размещён по другому пути, задайте BUILDER_IMAGE полным именем.
 
 ## Подготовленные зависимости проекта
 
@@ -94,17 +146,17 @@ CGO_ENABLED=0, Linux — CGO_ENABLED=1 и webkit2_41.
 
 ### Подготовить npm-deps.tar.gz из имеющихся npm-source-*.txt
 
-Перейдите в папку с npm_offline.py, portable_source.py, npm-manifest.json и всеми
-10 npm-source-*.txt. Укажите фактический путь распакованного проекта в project.
-Каталог ~/npm-archives должен быть новым. Команды не используют Интернет:
+Используйте пути из начала инструкции. Команды выполняются без Интернета:
 
 ```sh
-python3 - <<'PY'
+cd "$NPM_PACKAGE_DIR"
+python3 - "$PROJECT_DIR" "$NPM_ARCHIVES_DIR" <<'PY'
 from pathlib import Path
 from urllib.parse import unquote, urlparse
+import sys
 import npm_offline
 
-project = Path.home() / "platform-installer-restored"
+project = Path(sys.argv[1])
 manifest, records = npm_offline.verify_package(Path.cwd(), project)
 _, lock = npm_offline.project_inputs(project)
 entries = npm_offline.archives(lock, manifest["npmPlatform"])
@@ -119,13 +171,13 @@ for record, content in records:
     if not name.endswith(".tgz") or name in exports:
         raise ValueError("Invalid/duplicate archive filename: " + name)
     exports[name] = content
-output = Path.home() / "npm-archives"
-output.mkdir(exist_ok=False)
+output = Path(sys.argv[2])
+output.mkdir(parents=True, exist_ok=False)
 for name, content in exports.items():
     (output / name).write_bytes(content)
 print(f"Готово: {len(exports)} .tgz в {output}")
 PY
-tar -czf "$HOME/npm-deps.tar.gz" -C "$HOME/npm-archives" .
+tar -czf "$PROJECT_DIR/npm-deps.tar.gz" -C "$NPM_ARCHIVES_DIR" .
 ```
 
 Это восстанавливает архивы npm после проверки целостности; исходники приложения
@@ -177,6 +229,37 @@ include:
   - local: /ci/redos-builder/gitlab-ci.example.yml
 ```
 
+Этот блок нужно записать в корневой .gitlab-ci.yml. Если pipeline уже есть,
+добавьте include и согласуйте его stages со стадиями dependencies/build.
+В примере frontend-dependencies явно выполняет npm ci --offline; затем
+два задания через needs получают архив node_modules и независимо собирают
+Windows/amd64 и Linux/amd64. Переменные Go и CGO задаёт build-installer,
+ручной export для задания не нужен.
+
+Убедитесь, что каталог ci/redos-builder и npm-deps.tar.gz доступны в checkout.
+Для нового репозитория из распакованной папки проверьте статические ресурсы:
+/build/ исключён через .gitignore, поэтому добавьте именно исходные ресурсы:
+
+```sh
+cd "$PROJECT_DIR"
+git add ci/redos-builder .gitlab-ci.yml npm-deps.tar.gz
+git add -f \
+  build/appicon.png \
+  build/windows/icon.ico \
+  build/windows/info.json \
+  build/windows/wails.exe.manifest \
+  build/linux/build.sh \
+  build/linux/icon.png \
+  build/linux/platform-installer-ui.desktop
+git diff --cached --stat
+```
+
+Исходники проекта, frontend/wailsjs, vendor и third_party также должны быть
+загружены в GitLab. build/bin, .runtime, секреты и локальный node_modules
+коммитить не нужно. После проверки состава коммита выполните git commit/git push
+в свой GitLab remote. Для запуска заданий runner должен принимать их tags
+либо задания без tags; при необходимости добавьте фактические tags своего runner.
+
 Готовый образ сначала нужно разместить на Docker-host runner или в разрешённом
 GitLab Registry. Задайте BUILDER_IMAGE полным именем, предпочтительно с digest.
 В примере используется $CI_REGISTRY_IMAGE/builder:redos8.
@@ -193,6 +276,23 @@ docker load -i installer-builder-redos8.tar
 Политика сети реального GitLab Runner задаётся отдельно. В проверке локального
 образа компиляция выполняется через docker run --network none.
 Реальный pipeline на GitLab Runner и публикация в GitLab Registry не выполнялись.
+
+## Получение результатов pipeline
+
+В успешном pipeline скачайте artifacts отдельно из build-windows и build-linux:
+
+- Windows: build/bin/platform-installer-ui.exe и config/;
+- Linux: build/bin/platform-installer-ui, build/bin/linux-resources/ и config/.
+
+Сохраняйте config рядом с build. Для запуска EXE на Windows нужен WebView2 Runtime:
+
+```powershell
+Set-Location C:\work\installer
+.\build\bin\platform-installer-ui.exe
+```
+
+Для Linux UI нужны графическая сессия и совместимые GTK3/WebKit2GTK runtime-
+библиотеки. Сам файл ELF не содержит эти системные библиотеки.
 
 ## Проверка общего образа 2026-10-29
 
