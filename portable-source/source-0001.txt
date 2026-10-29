@@ -37634,11 +37634,13 @@ artifactLock:
   when: application_library_id in hostvars['localhost'].application_selection.scope.installLibraries
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/applications/tasks/post-install-script.yml","mode":420,"size":681,"sha256":"91d85c09bcddae2529ff28baa997b0af3a46ca3f789384453f5c7fb55752a3dc","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":681}
+@@PORTABLE {"path":"ansible-core/playbooks/applications/tasks/post-install-script.yml","mode":420,"size":988,"sha256":"23e54ad4b839229c4a7e4c866f3396eaa0c100ff65223b8ac642934837d83f9f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":988}
 ---
 - name: "Подготовка контекста и запуск сценария post_install"
   ansible.builtin.include_tasks: provider-script.yml
   vars:
+    application_instance_id: "{{ application_post_install_script.target.instanceId | default(application_post_install_script.instanceId | default('')) }}"
+    application_library_id: "{{ application_post_install_script.target.libraryId | default(application_post_install_script.libraryId | default('')) }}"
     application_provider_batch:
       providerLibraryId: "{{ application_post_install_script.target.libraryId | default(application_post_install_script.libraryId) }}"
       providerInstanceId: "{{ application_post_install_script.target.instanceId | default(application_post_install_script.instanceId) }}"
