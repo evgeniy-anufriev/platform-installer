@@ -1,7 +1,7 @@
 {
   "format": "platform-installer-portable-source-v3",
   "maxPartBytes": 5000000,
-  "sourceRevision": "6ce12a0f901fcba27b1882d08ac303c8a205f7b0",
+  "sourceRevision": "cf645096628ca7eb2678282065f9c7b3ac3d7c2e",
   "files": 6550,
   "sourceBytes": 68571994,
   "textFiles": 6462,
