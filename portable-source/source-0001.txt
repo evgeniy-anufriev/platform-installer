@@ -14,13 +14,12 @@ services/docker/** text eol=lf
 portable-source/source-*.txt -text
 
 @@END
-@@PORTABLE {"path":".gitignore","mode":420,"size":690,"sha256":"77418b6c69f5fe151cca02de097e9e026ae3e78763293ac55d9f8e51dc930461","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":690}
+@@PORTABLE {"path":".gitignore","mode":420,"size":859,"sha256":"817ce1be7bd3a8dfa44bd420db3105e2fee2b8406819f54b901946d8b45e03b7","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":859}
 # Generated Ansible workspaces and runtime evidence
 .runtime/
 runs/
 bundle/
-cache/
-!third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/cache/
+/cache/
 
 # Local user-created project workspaces
 Projects/
@@ -54,15 +53,25 @@ env/
 fact_cache/
 
 # Go build/test output
-bin/
-/build/
+/bin/
+# Keep build icons, manifests and platform resources in Git.
+/build/bin/
 *.test
 *.out
 
 # Frontend dependencies
 node_modules/
+/frontend/dist/
 /.vite/
 frontend/package.json.md5
+
+# Local dependency caches and GitLab CI intermediate artifacts
+/.npm/
+/.go-cache/
+/.go-path/
+/npm-archives/
+/npm-deps.tar.gz
+/frontend-node-modules.tar.gz
 
 # OS/editor metadata
 .DS_Store
