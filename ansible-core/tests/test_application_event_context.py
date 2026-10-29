@@ -16,6 +16,58 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class ApplicationEventContextTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which('ansible-playbook'), 'native Ansible required')
+    def test_native_post_install_runner_target_fallback_and_no_stale_context(self):
+        with tempfile.TemporaryDirectory(prefix='qa-post-install-context-') as directory:
+            root = Path(directory)
+            journal = _active_journal(str(root/'state'))
+            script = root/'probe.sh'
+            script.write_text('#!/bin/sh\nprintf \'%s\\n\' \'{"status":"ok","changed":false}\'\n')
+            jobs = [
+                {'libraryId': 'sdku', 'instanceId': 'data-manager-sdku'},
+                {'libraryId': 'sdku', 'instanceId': 'data-manager-sdku',
+                 'target': {'libraryId': 'cspa', 'instanceId': 'data-manager-cspa', 'hostId': 'localhost'}},
+                {'libraryId': 'szi'},
+            ]
+            for job in jobs:
+                job.update(id='probe', path=str(script), argv=['NEVER_LOG_THIS'],
+                           secretInputs={}, hostId='localhost', runOn='execution_node')
+            (root/'play.yml').write_text(yaml.safe_dump([{
+                'hosts': 'localhost', 'gather_facts': False,
+                'vars': {'platform_project_root': str(root),
+                         'platform_application_secret_root': str(root/'private'),
+                         'platform_application_secret_files': {},
+                         'application_runtime_inputs': {'scriptContexts': []}},
+                'tasks': [
+                    {'name': 'General before', 'ansible.builtin.debug': {'msg': 'safe'}},
+                    {'name': 'Post-install scripts', 'ansible.builtin.include_tasks': str(
+                        ROOT/'ansible-core/playbooks/applications/tasks/post-install-script.yml'),
+                     'loop': jobs, 'loop_control': {'loop_var': 'application_post_install_script'}},
+                    {'name': 'General after', 'ansible.builtin.debug': {'msg': 'safe'}},
+                ],
+            }], sort_keys=False))
+            env = dict(os.environ, ANSIBLE_COLLECTIONS_PATH=str(ROOT/'ansible-core/collections'),
+                       ANSIBLE_CALLBACKS_ENABLED='platform.core.execution_events_json',
+                       PLATFORM_EXECUTION_STATE_ROOT=str(root/'state'), PLATFORM_EXECUTION_RUN_ID=journal.run_id,
+                       PLATFORM_EXECUTION_ACTION_ID='applications:post-install',
+                       PLATFORM_EXECUTION_SERVICE_DEPLOYMENT='')
+            result = subprocess.run(['ansible-playbook', '-i', 'localhost,', '-c', 'local', str(root/'play.yml')],
+                                    env=env, capture_output=True, text=True, timeout=90)
+            self.assertEqual(0, result.returncode, (result.stdout+result.stderr)[-1500:])
+            raw = Path(journal.events_path).read_text()
+            self.assertNotIn('NEVER_LOG_THIS', raw)
+            events = [json.loads(line) for line in raw.splitlines()]
+            for name in ('General before', 'General after'):
+                matched = [e for e in events if e.get('task', {}).get('name') == name]
+                self.assertTrue(matched)
+                self.assertTrue(all(not e.get('serviceDeployment') for e in matched))
+            for event_type in ('TASK_STARTED', 'TASK_COMPLETED'):
+                matched = [e for e in events if e['eventType'] == event_type and
+                           e.get('task', {}).get('name') ==
+                           'Выполнение точного сценария пакета без оболочки или неограниченной среды выполнения']
+                self.assertEqual(['data-manager-sdku', 'data-manager-cspa', 'szi'],
+                                 [e.get('serviceDeployment') for e in matched])
+
     def test_only_identity_selectors_and_infrastructure_precedence(self):
         task = _Task(no_log=True)
         task.get_vars = lambda: {'application_runtime_job': {'instanceId': 'keycloak', 'password': 'NEVER_LOG_THIS'},

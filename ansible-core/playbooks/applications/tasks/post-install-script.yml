@@ -2,6 +2,8 @@
 - name: "Подготовка контекста и запуск сценария post_install"
   ansible.builtin.include_tasks: provider-script.yml
   vars:
+    application_instance_id: "{{ application_post_install_script.target.instanceId | default(application_post_install_script.instanceId | default('')) }}"
+    application_library_id: "{{ application_post_install_script.target.libraryId | default(application_post_install_script.libraryId | default('')) }}"
     application_provider_batch:
       providerLibraryId: "{{ application_post_install_script.target.libraryId | default(application_post_install_script.libraryId) }}"
       providerInstanceId: "{{ application_post_install_script.target.instanceId | default(application_post_install_script.instanceId) }}"
