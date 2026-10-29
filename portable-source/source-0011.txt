@@ -1,4 +1,4 @@
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/text/unicode/norm/tables17.0.0.go","mode":420,"size":410905,"sha256":"a98b3de9321c1313a4f76d598220def9d4ebf4f1265333b36668a4b12cced63c","index":4,"count":9,"newline":"crlf","encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/text/unicode/norm/tables17.0.0.go","mode":420,"size":402801,"sha256":"26784025eb1881a4452f101a7ef34b33c8ca02bd0603bfec41d2c823494ff7cb","index":4,"count":9,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
 , lo: 0xa1, hi: 0xa1},
 	{value: 0x8101, lo: 0xa5, hi: 0xa6},
 	{value: 0x8133, lo: 0xa7, hi: 0xa7},
@@ -1098,7 +1098,7 @@ var nfkcValues = [6208]uint16{
 	0x87c: 0x1bb8, 0x87d: 0x1db0, 0x87e: 0x1db5, 0x87f: 0x1dba,
 	/
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/text/unicode/norm/tables17.0.0.go","mode":420,"size":410905,"sha256":"a98b3de9321c1313a4f76d598220def9d4ebf4f1265333b36668a4b12cced63c","index":5,"count":9,"newline":"crlf","encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/text/unicode/norm/tables17.0.0.go","mode":420,"size":402801,"sha256":"26784025eb1881a4452f101a7ef34b33c8ca02bd0603bfec41d2c823494ff7cb","index":5,"count":9,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
 / Block 0x22, offset 0x880
 	0x880: 0x1dbf, 0x881: 0x1dc4, 0x882: 0x1dc9, 0x883: 0x1dce, 0x884: 0x1dd3, 0x885: 0x1dd8,
 	0x886: 0x1ddd, 0x887: 0x1de2, 0x888: 0x19ac, 0x889: 0x19d0, 0x88a: 0x19f4, 0x88b: 0x1a18,
@@ -1703,7 +1703,7 @@ var nfkcValues = [6208]uint16{
 	0x15ea: 0x07c6, 0x15eb: 0x1506, 0x15ec: 0x0bd6, 0x15ed: 0x07e2, 0x15ee: 0x09ea, 0x15ef: 0x0d36,
 	0x15f0: 0x14ae, 0x15f1: 0x0d0e,
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/text/unicode/norm/tables17.0.0.go","mode":420,"size":410905,"sha256":"a98b3de9321c1313a4f76d598220def9d4ebf4f1265333b36668a4b12cced63c","index":6,"count":9,"newline":"crlf","encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/text/unicode/norm/tables17.0.0.go","mode":420,"size":402801,"sha256":"26784025eb1881a4452f101a7ef34b33c8ca02bd0603bfec41d2c823494ff7cb","index":6,"count":9,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
  0x15f2: 0x116a, 0x15f3: 0x11a6, 0x15f4: 0x09f2, 0x15f5: 0x0f3e,
 	0x15f6: 0x0e06, 0x15f7: 0x0e02, 0x15f8: 0x1092, 0x15f9: 0x0926, 0x15fa: 0x0a52, 0x15fb: 0x153e,
 	// Block 0x58, offset 0x1600
@@ -2810,7 +2810,7 @@ var nfkcSparseValues = [980]valueRange{
 	{value: 0x8105, lo: 0xab, hi: 0xab},
 	// Block 0x8
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/text/unicode/norm/tables17.0.0.go","mode":420,"size":410905,"sha256":"a98b3de9321c1313a4f76d598220def9d4ebf4f1265333b36668a4b12cced63c","index":7,"count":9,"newline":"crlf","encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/text/unicode/norm/tables17.0.0.go","mode":420,"size":402801,"sha256":"26784025eb1881a4452f101a7ef34b33c8ca02bd0603bfec41d2c823494ff7cb","index":7,"count":9,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
 a, offset 0x2dd
 	{value: 0x0000, lo: 0x02},
 	{value: 0x8105, lo: 0xb9, hi: 0xb9},
@@ -3749,7 +3749,7 @@ const recompMapPacked = "" +
 	"\x03\xb5\x03\x14\x00\x00\x1f\x11" + // 0x03B50314: 0x00001F11
 	"\x1f\
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/text/unicode/norm/tables17.0.0.go","mode":420,"size":410905,"sha256":"a98b3de9321c1313a4f76d598220def9d4ebf4f1265333b36668a4b12cced63c","index":8,"count":9,"newline":"crlf","encoding":"utf-8","payloadBytes":18801}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/text/unicode/norm/tables17.0.0.go","mode":420,"size":402801,"sha256":"26784025eb1881a4452f101a7ef34b33c8ca02bd0603bfec41d2c823494ff7cb","index":8,"count":9,"newline":"lf","encoding":"utf-8","payloadBytes":18801}
 x10\x03\x00\x00\x00\x1f\x12" + // 0x1F100300: 0x00001F12
 	"\x1f\x11\x03\x00\x00\x00\x1f\x13" + // 0x1F110300: 0x00001F13
 	"\x1f\x10\x03\x01\x00\x00\x1f\x14" + // 0x1F100301: 0x00001F14
@@ -4080,7 +4080,7 @@ x10\x03\x00\x00\x00\x1f\x12" + // 0x1F100300: 0x00001F12
 	// Total size of tables: 57KB (58086 bytes)
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/text/unicode/norm/transform.go","mode":420,"size":2510,"sha256":"60835e9b36af8e1426ef48d4aaa624af98a99edddc8b7169967ffa17fd88a642","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":2422}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/text/unicode/norm/transform.go","mode":420,"size":2422,"sha256":"6f8014595643e2acae76d47ed6abe8ace969a0c9070dbfa5a89c86bebcec812d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2422}
 // Copyright 2013 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -4171,7 +4171,7 @@ func (f Form) transform(dst, src []byte, atEOF bool) (nDst, nSrc int, err error)
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/text/unicode/norm/trie.go","mode":420,"size":1287,"sha256":"b381d14d98861ce80a8c588186f02ce21ab73a1c93fe573ef6afb7f5198594c9","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":1233}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/text/unicode/norm/trie.go","mode":420,"size":1233,"sha256":"d87793d558251ee8824954f0b7bc5564803e4c9d59a8c4eebb4c3c5cfbd19492","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1233}
 // Copyright 2011 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -4228,7 +4228,7 @@ func (t *sparseBlocks) lookup(n uint32, b byte) uint16 {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/LICENSE","mode":420,"size":1480,"sha256":"cfafa52502a751f278b6da9566fa8ec1f1dfaea516283ab56acbb7838f87384a","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":1453}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/LICENSE","mode":420,"size":1453,"sha256":"911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1453}
 Copyright 2009 The Go Authors.
 
 Redistribution and use in source and binary forms, with or without
@@ -4258,7 +4258,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/PATENTS","mode":420,"size":1325,"sha256":"f4c57292147457cfc5ec744e759510e96032f8c81b7793c260dddc0e34dc73b8","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":1303}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/PATENTS","mode":420,"size":1303,"sha256":"96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1303}
 Additional IP Rights Grant (Patents)
 
 "This implementation" means the copyrightable works distributed by
@@ -4283,7 +4283,7 @@ rights granted to you under this License for this implementation of Go
 shall terminate as of the date such litigation is filed.
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/go/ast/edge/edge.go","mode":420,"size":10153,"sha256":"35b2b563653004e288ba8dd28e1ce3110f931390e5debbb5c9d6a796972605f9","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":9854}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/go/ast/edge/edge.go","mode":420,"size":9854,"sha256":"ff2821507aa000f31d17f785868432484f2de47e6f91ea9e12fdb44ee9f9fb6f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":9854}
 // Copyright 2025 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -4585,7 +4585,7 @@ var fieldInfos = [...]fieldInfo{
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/go/ast/inspector/cursor.go","mode":420,"size":17003,"sha256":"9ecd06faf1ea2d1b79dfac8ed98af81f947766bc112bfe92df7bf6844f5b000b","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":16452}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/go/ast/inspector/cursor.go","mode":420,"size":16452,"sha256":"ae2bd239090f771d92cd95475d10276889e8c6e61edfca9a64f1b068d303d80c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":16452}
 // Copyright 2025 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -5139,7 +5139,7 @@ func (c Cursor) FindByPos(start, end token.Pos) (Cursor, bool) {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/go/ast/inspector/inspector.go","mode":420,"size":10162,"sha256":"f486beb7d452f135ab01d71b890d84fe96415cfadb68b80bdfc68947dfcb69e4","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":9851}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/go/ast/inspector/inspector.go","mode":420,"size":9851,"sha256":"f0a5138deb307807a35fa709c5672f2a3a6e63f0cf4dd01e26dbe6c5a08e96b5","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":9851}
 // Copyright 2018 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -5453,7 +5453,7 @@ func (v *visitor) pop(node ast.Node) {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/go/ast/inspector/iter.go","mode":420,"size":3084,"sha256":"fea1e10f52e3a657150aae462293b5837051b50b72ef896e12d1623478b3e37b","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":2971}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/go/ast/inspector/iter.go","mode":420,"size":2971,"sha256":"f37058e3122835457a2e313245729c033d62a5270f60dc2485ddb8d4ec27056c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2971}
 // Copyright 2024 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -5569,7 +5569,7 @@ func All[N interface {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/go/ast/inspector/typeof.go","mode":420,"size":5160,"sha256":"01b19b1087fbeb5b988be4a4f7ec3fb1b77fb7c5eeb0ef35c521e47509a010c0","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":4933}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/go/ast/inspector/typeof.go","mode":420,"size":4933,"sha256":"89f7a572b74b9848a8d2566da97d446edc0b250a608a56f91f74b715fc0e4c94","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4933}
 // Copyright 2018 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -5799,7 +5799,7 @@ func maskOf(nodes []ast.Node) uint64 {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/go/ast/inspector/walk.go","mode":420,"size":8265,"sha256":"199610d4c68c5877307f02f2e50495754dc5be9b492c769f54118f620a922809","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":7924}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/go/ast/inspector/walk.go","mode":420,"size":7924,"sha256":"7255d3b8c0199fcb08936bca99a3665c7783603282fbc51d7311c5c0b3a4d828","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7924}
 // Copyright 2025 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -6143,7 +6143,7 @@ func walk(v *visitor, ek edge.Kind, index int, node ast.Node) {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/go/gcexportdata/gcexportdata.go","mode":420,"size":9441,"sha256":"527ecfba3144ab9c3dce6d58dd1ca128578fac9d7c2d59dff4172194574f1fe3","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":9205}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/go/gcexportdata/gcexportdata.go","mode":420,"size":9205,"sha256":"11d7509118b6ea206c3eed768f3d9f48208cd1263e7b40adf92da7ec0b63e0e4","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":9205}
 // Copyright 2016 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -6382,7 +6382,7 @@ func WriteBundle(out io.Writer, fset *token.FileSet, pkgs []*types.Package) erro
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/go/gcexportdata/importer.go","mode":420,"size":2101,"sha256":"45f54a06e97da37d48063cdc6144779b44e5e9587d64cbdbf00da49aee33809f","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":2026}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/go/gcexportdata/importer.go","mode":420,"size":2026,"sha256":"144f9060e1cf20b36b8ca2930da56b08d3ea79fece33424bc13f420b56ea08da","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2026}
 // Copyright 2016 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -6460,7 +6460,7 @@ func (imp importer) ImportFrom(importPath, srcDir string, mode types.ImportMode)
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/go/packages/doc.go","mode":420,"size":12694,"sha256":"77e83d035c8fb4b2d9e637db3c8aa5b69529f7a03f4f69308d94872586e28c3d","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":12441}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/go/packages/doc.go","mode":420,"size":12441,"sha256":"4a6d8ed8c653c2c3dfbe566ce30a0eece34df2bcadc012cc230b4ac92ca4d9fe","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":12441}
 // Copyright 2018 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -6716,7 +6716,7 @@ Questions & Tasks
 */
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/go/packages/external.go","mode":420,"size":5491,"sha256":"072eb93f5de4930b3679cb7222aef3ba5cd8ff86662a0454828ff9acded33e0f","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":5338}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/go/packages/external.go","mode":420,"size":5338,"sha256":"913aeda530dbc214b50ebd179d3a5aded8855ed2e121451b512903eb1b174974","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5338}
 // Copyright 2018 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -6872,7 +6872,7 @@ func findExternalDriver(cfg *Config) driver {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/go/packages/golist.go","mode":420,"size":40334,"sha256":"f6e9ac24253a7dfcb5b99191e81abfb0fea3d43ad8cd7962b8fc7d61f218fc15","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":39208}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/go/packages/golist.go","mode":420,"size":39208,"sha256":"a2ff5119716057603cba93871ca23c1513cf78c66d5ba5798cabf30f73647829","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":39208}
 // Copyright 2018 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -8001,7 +8001,7 @@ func getSizesForArgs(ctx context.Context, inv gocommand.Invocation, gocmdRunner 
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/go/packages/golist_overlay.go","mode":420,"size":2487,"sha256":"26e1690adea4cbbaaf6c5e32549d68a098403aa3ec3b30f1a520e541fc4c76e0","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":2404}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/go/packages/golist_overlay.go","mode":420,"size":2404,"sha256":"771f2fc0133663f07056923ccd0bc22a00732d1d58cf3dd40961812e477ad9df","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2404}
 // Copyright 2018 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -8087,7 +8087,7 @@ func (state *golistState) determineRootDirsGOPATH() (map[string]string, error) {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/go/packages/loadmode_string.go","mode":420,"size":1294,"sha256":"07b4ece424dfd2e0f863006cf9c0f6c577fd3cb60d6bb515369130000920814a","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":1238}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/go/packages/loadmode_string.go","mode":420,"size":1238,"sha256":"b2ab5a9e57f504018fa50045ee8af11db90e7097bb3aa910a820b8a1cf757b39","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1238}
 // Copyright 2019 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -8146,7 +8146,7 @@ func (mode LoadMode) String() string {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/go/packages/packages.go","mode":420,"size":53726,"sha256":"696c1c7ab241e84b9764426112a882ab5b937cdf3a0fe94973b894475d7002ab","index":0,"count":2,"newline":"crlf","encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/go/packages/packages.go","mode":420,"size":52121,"sha256":"cd982cb33222c3869ab8070177cd6f8259967b498122e738069e881981c3073f","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
 // Copyright 2018 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -9621,7 +9621,7 @@ func sameFile(x, y string) bool {
 // loadFromExportData ensures that type information is present for the specified
 // package, loading it from an
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/go/packages/packages.go","mode":420,"size":53726,"sha256":"696c1c7ab241e84b9764426112a882ab5b937cdf3a0fe94973b894475d7002ab","index":1,"count":2,"newline":"crlf","encoding":"utf-8","payloadBytes":4121}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/go/packages/packages.go","mode":420,"size":52121,"sha256":"cd982cb33222c3869ab8070177cd6f8259967b498122e738069e881981c3073f","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":4121}
  export data file on the first request.
 // On success it sets lpkg.Types to a new Package.
 func (ld *loader) loadFromExportData(lpkg *loaderPackage) error {
@@ -9757,7 +9757,7 @@ func cond[T any](cond bool, t, f T) T {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/go/packages/visit.go","mode":420,"size":3315,"sha256":"6004a4c699a809890e7d5071910338f9e3deb8b21144d5249db76e1466178a75","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":3182}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/go/packages/visit.go","mode":420,"size":3182,"sha256":"c4d29f03471ada69ae678569c2f456cf4562e7dcaae0db8ed135ef6eca13a358","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3182}
 // Copyright 2018 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -9893,7 +9893,7 @@ func keySlice[M ~map[K]V, K comparable, V any](m M) []K {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/go/types/objectpath/objectpath.go","mode":420,"size":31249,"sha256":"b5407176b78b6f84227b52930e84f87386376cb11659623954c51b68857d0dc9","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":30304}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/go/types/objectpath/objectpath.go","mode":420,"size":30304,"sha256":"df38ff9ab8b55d4a561602689e59363baf8308e6b3fb53a50df35e4b81d11210","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":30304}
 // Copyright 2018 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -10841,7 +10841,7 @@ func Object(pkg *types.Package, p Path) (types.Object, error) {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/go/types/typeutil/callee.go","mode":420,"size":2802,"sha256":"71a5962596c6275d5f3697fd8b9e5b075adeeb624f1f8a7603952356b383c486","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":2716}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/go/types/typeutil/callee.go","mode":420,"size":2716,"sha256":"6ef0b26f29c3fd6b5407f068a2ccf2ef1281a1958f42ef0779aa6977f50c2277","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2716}
 // Copyright 2018 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -10930,7 +10930,7 @@ func interfaceMethod(f *types.Func) bool {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/go/types/typeutil/imports.go","mode":420,"size":913,"sha256":"5b3f04d067f2158542a72b431d6177b72eb97ca3917735e86a8a9b68200aa283","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":883}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/go/types/typeutil/imports.go","mode":420,"size":883,"sha256":"0ae519946446f6dbe09a616e3c63373c2582b335ccf7b0f754b411dc2bcc407e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":883}
 // Copyright 2014 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -10963,7 +10963,7 @@ func Dependencies(pkgs ...*types.Package) []*types.Package {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/go/types/typeutil/map.go","mode":420,"size":12337,"sha256":"ea57fd883d14d338965ec1e238556707f963208f9f5b172486cf568b4f95434d","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":11878}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/go/types/typeutil/map.go","mode":420,"size":11878,"sha256":"2d215fd5696eacc94a4d4ac6e0f74116ac5cdaa1920599b3835e4810cad0499f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":11878}
 // Copyright 2014 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -11425,7 +11425,7 @@ func (h hasher) shallowHash(t types.Type) uint32 {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/go/types/typeutil/methodsetcache.go","mode":420,"size":2203,"sha256":"214f18daf2ee12365da5d55328641f73f3a6e014972040e96bd571d99c546053","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":2132}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/go/types/typeutil/methodsetcache.go","mode":420,"size":2132,"sha256":"100c78e2baf07de1d4a620904ffb0a57ef440392629c6324fce3a385811627f2","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2132}
 // Copyright 2014 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -11499,7 +11499,7 @@ func (cache *MethodSetCache) lookupNamed(named *types.Named) struct{ value, poin
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/go/types/typeutil/ui.go","mode":420,"size":1733,"sha256":"ffc56f77e2ecb1bfbb5a79caf5bf13af7cce92410bef4835c905cf42ba77f649","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":1680}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/go/types/typeutil/ui.go","mode":420,"size":1680,"sha256":"f3fab1cec5e81bdf56207ebf00a54b739c636624a4c6ab3d9b2ec26a7a486560","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1680}
 // Copyright 2014 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -11555,7 +11555,7 @@ func IntuitiveMethodSet(T types.Type, msets *MethodSetCache) []*types.Selection 
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/aliases/aliases.go","mode":420,"size":549,"sha256":"df16df648c93b0bdded792188a5df87c8eed8227351ebaf55fea320bfb58a6dc","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":531}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/aliases/aliases.go","mode":420,"size":531,"sha256":"3a8cc1f67f1884da48f3f34923161c9faf6cc938432617ddc7f106fcf5106a3f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":531}
 // Copyright 2024 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -11576,7 +11576,7 @@ func New(pos token.Pos, pkg *types.Package, name string, rhs types.Type, tparams
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/event/core/event.go","mode":420,"size":2387,"sha256":"1d48ea64eabbb12d82a63b7342cc82b068e3a2058278b838961e7b5eac634b89","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":2292}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/event/core/event.go","mode":420,"size":2292,"sha256":"123eb7ed55f63686b1ec73f36c2beb004f648d900911d7f3a92b33faf39b4ed3","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2292}
 // Copyright 2019 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -11674,7 +11674,7 @@ func CloneEvent(ev Event, at time.Time) Event {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/event/core/export.go","mode":420,"size":2239,"sha256":"a94ee80f84f26567f629b9b34931d79f9f4f0a1563ce69ab7793f08767083944","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":2172}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/event/core/export.go","mode":420,"size":2172,"sha256":"e97ad6c110da853e7f7529afc58093e770c5fcb76e12150ea70b49dd758e53d8","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2172}
 // Copyright 2019 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -11744,7 +11744,7 @@ func ExportPair(ctx context.Context, begin, end Event) (context.Context, func())
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/event/core/fast.go","mode":420,"size":2299,"sha256":"221eeb0fb970c6d44867b800ca887eed95afb75424019349150efa521cdc14bf","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":2222}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/event/core/fast.go","mode":420,"size":2222,"sha256":"eeca498a9f3c6057f571c9836a5f0c6ae2cfa9ae71a43961f935fb3db8dda83e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2222}
 // Copyright 2019 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -11824,7 +11824,7 @@ func Start2(ctx context.Context, name string, t1, t2 label.Label) (context.Conte
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/event/doc.go","mode":420,"size":305,"sha256":"2ddca248400e45d87c05117c38cd7e4eb48b38cd72a92252c5b355246fa3c744","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":298}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/event/doc.go","mode":420,"size":298,"sha256":"b445c134d90b26e77a83d413fc1be3033e2ba8979c10efb3d46280e70392e890","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":298}
 // Copyright 2019 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -11834,7 +11834,7 @@ func Start2(ctx context.Context, name string, t1, t2 label.Label) (context.Conte
 package event
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/event/event.go","mode":420,"size":4591,"sha256":"495ee6428474155c41fb8db240629338025271d2b05e23cb23745c2da69bdd44","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":4464}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/event/event.go","mode":420,"size":4464,"sha256":"7c047e8aae01bd441f81bb710e9dc26a639b0bd7cdf1f6b55d425103046f33a1","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4464}
 // Copyright 2019 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -11964,7 +11964,7 @@ func IsDetach(ev core.Event) bool {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/event/keys/keys.go","mode":420,"size":6798,"sha256":"1fba6e224bacbf8fa2826e7c7f24afb7c6c23c35f620a5d1ffc8eab7484423c9","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":6561}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/event/keys/keys.go","mode":420,"size":6561,"sha256":"8d480184d9966c1a1602aecfcbc0dbfdc00d5aaeb4070f971854702ea56dca46","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":6561}
 // Copyright 2019 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -12204,7 +12204,7 @@ func (k *Error) From(t label.Label) error {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/event/keys/standard.go","mode":420,"size":983,"sha256":"a2434bdcfc7061a3e0fdbf88f6b528e8aad102b6ef53549d51b7fc28d10990cf","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":961}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/event/keys/standard.go","mode":420,"size":961,"sha256":"a148501721c061870eed1bd936028157e6b3b109391763dafb00888b3a221b60","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":961}
 // Copyright 2020 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -12229,7 +12229,7 @@ var (
 )
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/event/keys/util.go","mode":420,"size":509,"sha256":"e901a24e49d80a2c04a38a8cf22a1f5e88b7fa0f215f3a407ef061ca2d5d9a70","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":488}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/event/keys/util.go","mode":420,"size":488,"sha256":"0df0a7d65008baf347371eb61c8dd26d3c1eb6f22099f605ee9716d76f2dcd35","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":488}
 // Copyright 2023 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -12253,7 +12253,7 @@ func Join[S ~[]T, T ~string](s S) string {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/event/label/label.go","mode":420,"size":5634,"sha256":"e49025baf87dc43913e387ef43a35db18710c087878be346f85f4f9721fc9058","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":5431}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/event/label/label.go","mode":420,"size":5431,"sha256":"edc13c7542de258d48493794fe0186680d2609a72cffe1698956f463664ab9c6","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5431}
 // Copyright 2019 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -12459,7 +12459,7 @@ func MergeMaps(srcs ...Map) Map {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/gcimporter/bimport.go","mode":420,"size":2116,"sha256":"b19223828535767cdcad55384bce7f66ff4fae1ee9eec27020ef7dc2dd773a98","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":2027}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/gcimporter/bimport.go","mode":420,"size":2027,"sha256":"13d38c6742327c752163ad78c78f43792b703bd550316eb09d177a2936d8cfa7","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2027}
 // Copyright 2015 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -12551,7 +12551,7 @@ func chanDir(d int) types.ChanDir {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/gcimporter/exportdata.go","mode":420,"size":12777,"sha256":"0a7a1e74d246fbf0dc92722da2f0b3dc5999f40307a48bc0b9f7f00556ced70d","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":12356}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/gcimporter/exportdata.go","mode":420,"size":12356,"sha256":"5d3acd6def1174913b2f1256492a3ca671d578f67b6907fcb548294dfcc114dd","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":12356}
 // Copyright 2011 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -12975,7 +12975,7 @@ func lookupGorootExport(pkgDir string) (string, error) {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/gcimporter/gcimporter.go","mode":420,"size":3244,"sha256":"338497241c94413c301fe414c50b9e0d427bd711fcfa0af500c46c7abef5270f","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":3136}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/gcimporter/gcimporter.go","mode":420,"size":3136,"sha256":"2e615f50e10859939ddb1f8baa3eb94c6ba7f9a5b4a39e87687f1d9c4c1b7d4f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3136}
 // Copyright 2011 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -13086,7 +13086,7 @@ func Import(fset *token.FileSet, packages map[string]*types.Package, path, srcDi
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/gcimporter/iexport.go","mode":420,"size":45414,"sha256":"edea339a32f7f43fc21fa21aa350db694da3ba07d83cc6aa7cbd2249bba9c709","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":43809}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/gcimporter/iexport.go","mode":420,"size":43809,"sha256":"00e28ef55024e43e13e1f4e532ec17868b21abef922ccfb6d7954471eb2172bc","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":43809}
 // Copyright 2019 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -14694,7 +14694,7 @@ func internalErrorf(format string, args ...any) error {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/gcimporter/iimport.go","mode":420,"size":30269,"sha256":"aa8d528b4b5ed28401650c2bbf6eed8e2be7d601421b0e7a3f998cf36b28aead","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":29147}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/gcimporter/iimport.go","mode":420,"size":29147,"sha256":"d1e3e803f58f67b33dc74d81ac93ebd6ebc8c9953483e0c5dc5487380520f0a7","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":29147}
 // Copyright 2018 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -15819,7 +15819,7 @@ func (a byPath) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a byPath) Less(i, j int) bool { return a[i].Path() < a[j].Path() }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/gcimporter/predeclared.go","mode":420,"size":2207,"sha256":"431e8e5883cd28ef015737975f503ba7539cc9d0f0bc09d165e037c461575606","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":2116}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/gcimporter/predeclared.go","mode":420,"size":2116,"sha256":"c749f1f8f79b08ec0ff11e963f54b264e2edcf1d8a79e654c9776a550e0f936a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2116}
 // Copyright 2024 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -15913,7 +15913,7 @@ func (t anyType) Underlying() types.Type { return t }
 func (t anyType) String() string         { return "any" }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/gcimporter/support.go","mode":420,"size":727,"sha256":"cbf8970f949a18f334c86cd715bf57684ab4be040e6b59b700f1b1fb99a956ed","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":697}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/gcimporter/support.go","mode":420,"size":697,"sha256":"c03a9375b40c46a4ee4f8b4b89fc5b04abb60cff8f84815229febfaaffb28bc0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":697}
 // Copyright 2024 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -15946,7 +15946,7 @@ func readArchiveHeader(b *bufio.Reader, name string) int {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/gcimporter/ureader.go","mode":420,"size":21962,"sha256":"b6754812c6763b9c50c28ca05f32245d16f2e7146f92368210046de2f7745e09","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":21149}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/gcimporter/ureader.go","mode":420,"size":21149,"sha256":"112ca2bce10a898c0535e75120e41be961058bd9c3f5d4c19cdbc86e137f5ca8","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":21149}
 // Copyright 2021 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -16762,7 +16762,7 @@ func splitVargenSuffix(name string) (base, suffix string) {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/gocommand/invoke.go","mode":420,"size":17976,"sha256":"565e7145d1c53a7c24e7171e250a31778173d148e298890bd1bda3d177b3acfa","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":17409}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/gocommand/invoke.go","mode":420,"size":17409,"sha256":"6a07f4ecd3e7566643810962ba551001b50bd4403e87a915327899f0cd6d55a5","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":17409}
 // Copyright 2020 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -17332,7 +17332,7 @@ func WriteOverlays(overlay map[string][]byte) (filename string, cleanup func(), 
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/gocommand/invoke_notunix.go","mode":420,"size":390,"sha256":"77852531481a4d1a14956dd806f9e0a6282c6586daa5c3bb9a54347b5db8a312","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":377}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/gocommand/invoke_notunix.go","mode":420,"size":377,"sha256":"df5c54077bf4ba9f2674cef5ccaa81e779d15dbb405845dec4ffaa4522f0c211","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":377}
 // Copyright 2025 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -17348,7 +17348,7 @@ import "os"
 var sigStuckProcess = os.Kill
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/gocommand/invoke_unix.go","mode":420,"size":374,"sha256":"a727a66a28bd07e0bacb703c3fe7ee9be6af2446b2b9d34cf5af9f4ce193d527","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":361}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/gocommand/invoke_unix.go","mode":420,"size":361,"sha256":"d2157f049e3394fa873136bd180fd295e46d543b8f13dd1542ffa21665bdf0c6","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":361}
 // Copyright 2025 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -17364,7 +17364,7 @@ import "syscall"
 var sigStuckProcess = syscall.SIGQUIT
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/gocommand/vendor.go","mode":420,"size":5405,"sha256":"c0406e6bff82bec6489c8bb90e7374587a5258bc3bdf775e21af13c690756d02","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":5242}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/gocommand/vendor.go","mode":420,"size":5242,"sha256":"e945f1e01b59274b673488b1cbb5a0bdb470b47d26c0dfdc12f859e5860fe3be","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5242}
 // Copyright 2020 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -17530,7 +17530,7 @@ func getWorkspaceMainModules(ctx context.Context, inv Invocation, r *Runner) ([]
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/gocommand/version.go","mode":420,"size":2564,"sha256":"a686d6360b434915196ec690c2342ffc4535a40cb774fc94285e18670514af03","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":2489}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/gocommand/version.go","mode":420,"size":2489,"sha256":"ab2f51c02839cd552d499da0093880028dd279a6872323a927f9f40327ba8794","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2489}
 // Copyright 2020 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -17608,7 +17608,7 @@ func ParseGoVersionOutput(data string) string {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/packagesinternal/packages.go","mode":420,"size":811,"sha256":"499fab0a901aa70de35c7e9086a3eeb47b61e618bf9d03345836ab2d3bcb4008","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":788}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/packagesinternal/packages.go","mode":420,"size":788,"sha256":"fc0553fc12bd0244147a183719504350895c81eea15ce8bd46a63568cb3dd2aa","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":788}
 // Copyright 2020 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -17634,7 +17634,7 @@ var TypecheckCgo int
 var DepsErrors int // must be set as a LoadMode to call GetDepsErrors
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/pkgbits/codes.go","mode":420,"size":1803,"sha256":"59a9070d4d8bb674936f50d89cfc1fcb42de846ea339832a427823fc9e456a2f","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":1726}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/pkgbits/codes.go","mode":420,"size":1726,"sha256":"5c461c53bbb51051b771cdf19529769d1f2ebfc477a55d79c577cec8d9fb36b8","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1726}
 // Copyright 2021 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -17714,7 +17714,7 @@ const (
 )
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/pkgbits/decoder.go","mode":420,"size":14285,"sha256":"effec34d46d9e2a214ec14683e9433f377c40e29d0f47e8786889e8eacfb86ea","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":13766}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/pkgbits/decoder.go","mode":420,"size":13766,"sha256":"c33bc4c61be2941ad7e548add06486b9c42b6aa65cb15514089fccf19b946e06","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":13766}
 // Copyright 2021 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -18236,7 +18236,7 @@ func (pr *PkgDecoder) PeekObj(idx Index) (string, string, CodeObj) {
 func (w *Decoder) Version() Version { return w.common.version }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/pkgbits/doc.go","mode":420,"size":1575,"sha256":"1c0ffaf02964e72a06cc5f385102e400330050f651afaea5a729e43d4a408932","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":1543}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/pkgbits/doc.go","mode":420,"size":1543,"sha256":"1d77eb03ea757b7e5dfccb19f21cd37881afaf7c54a9168b12ed703ef6033744","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1543}
 // Copyright 2022 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -18271,7 +18271,7 @@ func (w *Decoder) Version() Version { return w.common.version }
 package pkgbits
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/pkgbits/encoder.go","mode":420,"size":10173,"sha256":"38c49d3f5c79580980cf2c95aaae8f45a6559f048cdda90ca5367c5db1aee98f","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":9781}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/pkgbits/encoder.go","mode":420,"size":9781,"sha256":"0518a4b2e6be4f9429d1b73b97388ae79574291383d131967700bb8101048cb3","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":9781}
 // Copyright 2021 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -18666,7 +18666,7 @@ func (w *Encoder) bigFloat(v *big.Float) {
 func (w *Encoder) Version() Version { return w.p.version }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/pkgbits/flags.go","mode":420,"size":262,"sha256":"c7d19ccb814ad48bd41ab78ebe83a37a4c96cc12604eaafab26bd32f60591283","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":253}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/pkgbits/flags.go","mode":420,"size":253,"sha256":"4f999d54f9614c9c2aa162e048fdec78158bbcafebeef188a2fef9a347a8e488","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":253}
 // Copyright 2022 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -18678,7 +18678,7 @@ const (
 )
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/pkgbits/reloc.go","mode":420,"size":877,"sha256":"5a8b7f6f6492a1dde9b98b8684f20d13764b60bd1bc476504386d0dd63d7a985","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":835}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/pkgbits/reloc.go","mode":420,"size":835,"sha256":"04fe1a5ee6398ee088d2c358ffbbf5610b9a86f4db79616ae7ca823fe5365e38","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":835}
 // Copyright 2021 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -18723,7 +18723,7 @@ const (
 )
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/pkgbits/support.go","mode":420,"size":353,"sha256":"c1d92726cd0b98f9dac157ca101cc66224b5c0e603a9f640c9bc3b5f67d24a78","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":336}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/pkgbits/support.go","mode":420,"size":336,"sha256":"b21d95c059b9f6c697d2e5a4fe6907650402d26bd6d0207f2297906cd7753543","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":336}
 // Copyright 2022 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -18743,7 +18743,7 @@ func panicf(format string, args ...any) {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/pkgbits/sync.go","mode":420,"size":2611,"sha256":"7c52a779f5f9d0f2f63f5e4bd3b7ed990e87d514ce3f443681a11582a35e0a41","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":2475}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/pkgbits/sync.go","mode":420,"size":2475,"sha256":"4f6b2ae8d2bef0eced46e8baf60c4b0f096615fbd8e1c10ca351e2c1e181de7d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2475}
 // Copyright 2021 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -18882,7 +18882,7 @@ const (
 )
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/pkgbits/syncmarker_string.go","mode":420,"size":3081,"sha256":"4283aa64601b8622127477f3fc7d676b9d73f446825006a94414c2599a591e81","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":2989}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/pkgbits/syncmarker_string.go","mode":420,"size":2989,"sha256":"0d2ff4992c445a0c06f3a99f53f743d169e3affd7a3b7602bfcd47c99290f994","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2989}
 // Code generated by "stringer -type=SyncMarker -trimprefix=Sync"; DO NOT EDIT.
 
 package pkgbits
@@ -18977,7 +18977,7 @@ func (i SyncMarker) String() string {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/pkgbits/version.go","mode":420,"size":3107,"sha256":"a3172bfbda8e31810e96bc334cfa594e4d4f6bc9ff63263a4b694a853ea540e4","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":3005}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/pkgbits/version.go","mode":420,"size":3005,"sha256":"cf2f8ac9b3ece8196c46cac9500ad11b825eadec157bcc30ef57713b33679f3e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3005}
 // Copyright 2024 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -19082,7 +19082,7 @@ func (v Version) Has(f Field) bool {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/stdlib/deps.go","mode":420,"size":29162,"sha256":"e655c1fe1b09287f11cb165ee3bbaf7bab37a84c356812058d6a5a8fce0fa9ef","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":28613}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/stdlib/deps.go","mode":420,"size":28613,"sha256":"35942f837bc8ea6d6df193d872d58b2a8f6d2d748b7c3106a21902326a4d6663","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":28613}
 // Copyright 2025 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -19634,7 +19634,7 @@ var bootstrap = map[string]bool{
 const BootstrapVersion = Version(24) // go1.24.6
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/stdlib/import.go","mode":420,"size":2937,"sha256":"9f776f8bb828ae50d06e422c4cde172c88e85da5d4b0224be050d58f21fcde51","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":2840}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/stdlib/import.go","mode":420,"size":2840,"sha256":"38a8438bb7cb7c5fa13b979b99fdb9d2628481de6112a09468e52a2fcfae72e5","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2840}
 // Copyright 2025 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -19734,7 +19734,7 @@ func IsBootstrapPackage(pkg string) bool {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/stdlib/manifest.go","mode":420,"size":758441,"sha256":"0298b3f1d6c18e8bb74c806f8bbc645b518b88c1ad755c5ce77db12cfa56811e","index":0,"count":16,"newline":"crlf","encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/stdlib/manifest.go","mode":420,"size":739828,"sha256":"6f507b11116812b1222b4bd972ddc16617f736785c8980ffeba8e11c479c03fe","index":0,"count":16,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
 // Copyright 2025 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -20816,7 +20816,7 @@ var PackageSymbols = map[string][]Symbol{
 		{"(RecordHeaderError).Error", Method, 6, ""},
 		{"(SignatureS
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/stdlib/manifest.go","mode":420,"size":758441,"sha256":"0298b3f1d6c18e8bb74c806f8bbc645b518b88c1ad755c5ce77db12cfa56811e","index":1,"count":16,"newline":"crlf","encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/stdlib/manifest.go","mode":420,"size":739828,"sha256":"6f507b11116812b1222b4bd972ddc16617f736785c8980ffeba8e11c479c03fe","index":1,"count":16,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
 cheme).String", Method, 15, ""},
 		{"AlertError", Type, 21, ""},
 		{"Certificate", Type, 0, ""},
@@ -21932,7 +21932,7 @@ cheme).String", Method, 15, ""},
 		{"FloatType", Type, 0, ""},
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/stdlib/manifest.go","mode":420,"size":758441,"sha256":"0298b3f1d6c18e8bb74c806f8bbc645b518b88c1ad755c5ce77db12cfa56811e","index":2,"count":16,"newline":"crlf","encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/stdlib/manifest.go","mode":420,"size":739828,"sha256":"6f507b11116812b1222b4bd972ddc16617f736785c8980ffeba8e11c479c03fe","index":2,"count":16,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
 		{"FloatType.BasicType", Field, 0, ""},
 		{"FuncType", Type, 0, ""},
 		{"FuncType.CommonType", Field, 0, ""},
@@ -23219,7 +23219,7 @@ cheme).String", Method, 15, ""},
 		{"R_LARCH_TLS_DESC_HI20", Const, 26, ""},
 		{"R_LARCH_TLS_DESC_LD"
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/stdlib/manifest.go","mode":420,"size":758441,"sha256":"0298b3f1d6c18e8bb74c806f8bbc645b518b88c1ad755c5ce77db12cfa56811e","index":3,"count":16,"newline":"crlf","encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/stdlib/manifest.go","mode":420,"size":739828,"sha256":"6f507b11116812b1222b4bd972ddc16617f736785c8980ffeba8e11c479c03fe","index":3,"count":16,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
 , Const, 26, ""},
 		{"R_LARCH_TLS_DESC_LO12", Const, 26, ""},
 		{"R_LARCH_TLS_DESC_PCREL20_S2", Const, 26, ""},
@@ -24462,7 +24462,7 @@ cheme).String", Method, 15, ""},
 		{"OptionalHeader32.BaseOfCode", Field, 3, ""},
 		{"OptionalHead
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/stdlib/manifest.go","mode":420,"size":758441,"sha256":"0298b3f1d6c18e8bb74c806f8bbc645b518b88c1ad755c5ce77db12cfa56811e","index":4,"count":16,"newline":"crlf","encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/stdlib/manifest.go","mode":420,"size":739828,"sha256":"6f507b11116812b1222b4bd972ddc16617f736785c8980ffeba8e11c479c03fe","index":4,"count":16,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
 er32.BaseOfData", Field, 3, ""},
 		{"OptionalHeader32.CheckSum", Field, 3, ""},
 		{"OptionalHeader32.DataDirectory", Field, 3, ""},
@@ -25578,7 +25578,7 @@ er32.BaseOfData", Field, 3, ""},
 		{"DirectiveArg.Pos", Field, 26, ""},
 		{"
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/stdlib/manifest.go","mode":420,"size":758441,"sha256":"0298b3f1d6c18e8bb74c806f8bbc645b518b88c1ad755c5ce77db12cfa56811e","index":5,"count":16,"newline":"crlf","encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/stdlib/manifest.go","mode":420,"size":739828,"sha256":"6f507b11116812b1222b4bd972ddc16617f736785c8980ffeba8e11c479c03fe","index":5,"count":16,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
 Ellipsis", Type, 0, ""},
 		{"Ellipsis.Ellipsis", Field, 0, ""},
 		{"Ellipsis.Elt", Field, 0, ""},
@@ -26811,7 +26811,7 @@ Ellipsis", Type, 0, ""},
 		{"(Hash64).Write", Method, 0, ""},
 		{"(XOF).BlockSize", 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/stdlib/manifest.go","mode":420,"size":758441,"sha256":"0298b3f1d6c18e8bb74c806f8bbc645b518b88c1ad755c5ce77db12cfa56811e","index":6,"count":16,"newline":"crlf","encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/stdlib/manifest.go","mode":420,"size":739828,"sha256":"6f507b11116812b1222b4bd972ddc16617f736785c8980ffeba8e11c479c03fe","index":6,"count":16,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
 Method, 25, ""},
 		{"(XOF).Read", Method, 25, ""},
 		{"(XOF).Reset", Method, 25, ""},
@@ -28003,7 +28003,7 @@ Method, 25, ""},
 		{"(*Float).SetFloat64", Method, 5, ""},
 		{"(*Fl
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/stdlib/manifest.go","mode":420,"size":758441,"sha256":"0298b3f1d6c18e8bb74c806f8bbc645b518b88c1ad755c5ce77db12cfa56811e","index":7,"count":16,"newline":"crlf","encoding":"utf-8","payloadBytes":48002}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/stdlib/manifest.go","mode":420,"size":739828,"sha256":"6f507b11116812b1222b4bd972ddc16617f736785c8980ffeba8e11c479c03fe","index":7,"count":16,"newline":"lf","encoding":"utf-8","payloadBytes":48002}
 oat).SetInf", Method, 5, ""},
 		{"(*Float).SetInt", Method, 5, ""},
 		{"(*Float).SetInt64", Method, 5, ""},
@@ -29105,7 +29105,7 @@ oat).SetInf", Method, 5, ""},
 		{"StatusHTTPVersionNotSupported", Const, 0, ""},
 		{"StatusIMUsed", Const, 7, ""},
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/stdlib/manifest.go","mode":420,"size":758441,"sha256":"0298b3f1d6c18e8bb74c806f8bbc645b518b88c1ad755c5ce77db12cfa56811e","index":8,"count":16,"newline":"crlf","encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/stdlib/manifest.go","mode":420,"size":739828,"sha256":"6f507b11116812b1222b4bd972ddc16617f736785c8980ffeba8e11c479c03fe","index":8,"count":16,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
 
 		{"StatusInsufficientStorage", Const, 7, ""},
 		{"StatusInternalServerError", Const, 0, ""},
@@ -30252,7 +30252,7 @@ oat).SetInf", Method, 5, ""},
 		{"(*Regexp).FindAllStringIndex", Method, 0, ""},
 		{"(*Regexp
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/stdlib/manifest.go","mode":420,"size":758441,"sha256":"0298b3f1d6c18e8bb74c806f8bbc645b518b88c1ad755c5ce77db12cfa56811e","index":9,"count":16,"newline":"crlf","encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/stdlib/manifest.go","mode":420,"size":739828,"sha256":"6f507b11116812b1222b4bd972ddc16617f736785c8980ffeba8e11c479c03fe","index":9,"count":16,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
 ).FindAllStringSubmatch", Method, 0, ""},
 		{"(*Regexp).FindAllStringSubmatchIndex", Method, 0, ""},
 		{"(*Regexp).FindAllSubmatch", Method, 0, ""},
@@ -31373,7 +31373,7 @@ oat).SetInf", Method, 5, ""},
 		{"BPF_JGE", Const, 0, ""},
 		{"BPF_J
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/stdlib/manifest.go","mode":420,"size":758441,"sha256":"0298b3f1d6c18e8bb74c806f8bbc645b518b88c1ad755c5ce77db12cfa56811e","index":10,"count":16,"newline":"crlf","encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/stdlib/manifest.go","mode":420,"size":739828,"sha256":"6f507b11116812b1222b4bd972ddc16617f736785c8980ffeba8e11c479c03fe","index":10,"count":16,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
 GT", Const, 0, ""},
 		{"BPF_JMP", Const, 0, ""},
 		{"BPF_JSET", Const, 0, ""},
@@ -32686,7 +32686,7 @@ GT", Const, 0, ""},
 		{"F_TEST", Const, 0, ""},
 		{"F_THAW_FS
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/stdlib/manifest.go","mode":420,"size":758441,"sha256":"0298b3f1d6c18e8bb74c806f8bbc645b518b88c1ad755c5ce77db12cfa56811e","index":11,"count":16,"newline":"crlf","encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/stdlib/manifest.go","mode":420,"size":739828,"sha256":"6f507b11116812b1222b4bd972ddc16617f736785c8980ffeba8e11c479c03fe","index":11,"count":16,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
 ", Const, 0, ""},
 		{"F_TLOCK", Const, 0, ""},
 		{"F_TRANSCODEKEY", Const, 16, ""},
@@ -33978,7 +33978,7 @@ GT", Const, 0, ""},
 		{"MS_DIRSYNC", Const, 0, ""},
 		{"MS_INVALIDAT
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/stdlib/manifest.go","mode":420,"size":758441,"sha256":"0298b3f1d6c18e8bb74c806f8bbc645b518b88c1ad755c5ce77db12cfa56811e","index":12,"count":16,"newline":"crlf","encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/stdlib/manifest.go","mode":420,"size":739828,"sha256":"6f507b11116812b1222b4bd972ddc16617f736785c8980ffeba8e11c479c03fe","index":12,"count":16,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
 E", Const, 0, ""},
 		{"MS_I_VERSION", Const, 0, ""},
 		{"MS_KERNMOUNT", Const, 0, ""},
@@ -35272,7 +35272,7 @@ E", Const, 0, ""},
 		{"SIOCSIFLLADDR", Const, 0, ""},
 		{"SIOCS
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/stdlib/manifest.go","mode":420,"size":758441,"sha256":"0298b3f1d6c18e8bb74c806f8bbc645b518b88c1ad755c5ce77db12cfa56811e","index":13,"count":16,"newline":"crlf","encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/stdlib/manifest.go","mode":420,"size":739828,"sha256":"6f507b11116812b1222b4bd972ddc16617f736785c8980ffeba8e11c479c03fe","index":13,"count":16,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
 IFMAC", Const, 0, ""},
 		{"SIOCSIFMAP", Const, 0, ""},
 		{"SIOCSIFMEDIA", Const, 0, ""},
@@ -36548,7 +36548,7 @@ IFMAC", Const, 0, ""},
 		{"Stat_t.Pad_cgo_0", Field, 0, ""},
 		{"Stat_
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/stdlib/manifest.go","mode":420,"size":758441,"sha256":"0298b3f1d6c18e8bb74c806f8bbc645b518b88c1ad755c5ce77db12cfa56811e","index":14,"count":16,"newline":"crlf","encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/stdlib/manifest.go","mode":420,"size":739828,"sha256":"6f507b11116812b1222b4bd972ddc16617f736785c8980ffeba8e11c479c03fe","index":14,"count":16,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
 t.Pad_cgo_1", Field, 0, ""},
 		{"Stat_t.Pad_cgo_2", Field, 0, ""},
 		{"Stat_t.Padding0", Field, 12, ""},
@@ -37800,7 +37800,7 @@ t.Pad_cgo_1", Field, 0, ""},
 		{"NodeWith", Const, 0, ""},
 		
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/stdlib/manifest.go","mode":420,"size":758441,"sha256":"0298b3f1d6c18e8bb74c806f8bbc645b518b88c1ad755c5ce77db12cfa56811e","index":15,"count":16,"newline":"crlf","encoding":"utf-8","payloadBytes":19826}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/stdlib/manifest.go","mode":420,"size":739828,"sha256":"6f507b11116812b1222b4bd972ddc16617f736785c8980ffeba8e11c479c03fe","index":15,"count":16,"newline":"lf","encoding":"utf-8","payloadBytes":19826}
 {"NumberNode", Type, 0, ""},
 		{"NumberNode.Complex128", Field, 0, ""},
 		{"NumberNode.Float64", Field, 0, ""},
@@ -38395,7 +38395,7 @@ t.Pad_cgo_1", Field, 0, ""},
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/stdlib/stdlib.go","mode":420,"size":2982,"sha256":"d254b898a29f0dd5e0c9286819ac711f42b396e702c85c9c5e0b84c0da2707f7","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":2877}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/stdlib/stdlib.go","mode":420,"size":2877,"sha256":"081296b764bc64d4ec3a799ef497bbb93d2f3ee68a6aa49f60dd799005a7fd5a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2877}
 // Copyright 2022 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -38503,7 +38503,7 @@ func (sym *Symbol) SplitMethod() (ptr bool, recv, name string) {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/typeparams/common.go","mode":420,"size":2146,"sha256":"25c4ec1550c1757a1bf3feab9aadf47ae45c2c3351509e96e5a316fb268ce860","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":2078}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/typeparams/common.go","mode":420,"size":2078,"sha256":"897b914268f42beefb0e6c22121b59b6f89d915e18923b1f65f5153331344ea7","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2078}
 // Copyright 2021 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -38574,7 +38574,7 @@ func IsTypeParam(t types.Type) bool {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/typeparams/coretype.go","mode":420,"size":5807,"sha256":"1de8f6aac0247df545be703d6ca53fb999b6793b1d574bf823fe9f50c5d638a1","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":5650}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/typeparams/coretype.go","mode":420,"size":5650,"sha256":"6d405c903a5c932207bc04141205f5ad589eec1597f49627e6d670569f7325f2","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5650}
 // Copyright 2022 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -38734,7 +38734,7 @@ func MustDeref(t types.Type) types.Type {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/typeparams/free.go","mode":420,"size":3234,"sha256":"125393c76e3c754a35d929bff64f58b0cc95d932460ad3be5804ab3ad343ca88","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":3105}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/typeparams/free.go","mode":420,"size":3105,"sha256":"e8bf3163eb3aec3d9ca34d4340ea0dde2a93a0751cf3a06f5298e93364f54d07","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3105}
 // Copyright 2024 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -38866,7 +38866,7 @@ func (w *Free) Has(typ types.Type) (res bool) {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/typeparams/normalize.go","mode":420,"size":7007,"sha256":"4dff67b7fc896a4124c9c17bb64f715fbbf84fa2dc36d3c7b1df288333e3329b","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":6791}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/typeparams/normalize.go","mode":420,"size":6791,"sha256":"237b6ca60362ba878a7488853ed64dd128087107a6f3a2ed809e60a8ddfeada2","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":6791}
 // Copyright 2021 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -39085,7 +39085,7 @@ func under(t types.Type) types.Type {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/typeparams/termlist.go","mode":420,"size":4235,"sha256":"54405efcb9103df7762cabe0faedc7ace54d00914c44a953620ef43041044408","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":4066}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/typeparams/termlist.go","mode":420,"size":4066,"sha256":"12c02e6bfb07862b3c689521de7f140d709764615ba45a217c0975fef36775bc","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4066}
 // Code generated by "go test -run=Generate -write=all"; DO NOT EDIT.
 // Source: ../../cmd/compile/internal/types2/termlist.go
 
@@ -39257,7 +39257,7 @@ func (xl termlist) subsetOf(yl termlist) bool {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/typeparams/typeterm.go","mode":420,"size":4007,"sha256":"bc34c310fc332b861a0e4ff5cb2baf1354a0d3ccc62c3c391d8ff4685c67af92","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":3835}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/typeparams/typeterm.go","mode":420,"size":3835,"sha256":"8b07ccdb692525921710ac25043c57b3a1472eda1bc2dfc701b9793835a662d2","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3835}
 // Code generated by "go test -run=Generate -write=all"; DO NOT EDIT.
 // Source: ../../cmd/compile/internal/types2/typeterm.go
 
@@ -39432,7 +39432,7 @@ func (x *term) disjoint(y *term) bool {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/typesinternal/classify_call.go","mode":420,"size":3818,"sha256":"033266bb15b8db6be06644847efa24cc374e59810020ded8549071b9df898efb","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":3681}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/typesinternal/classify_call.go","mode":420,"size":3681,"sha256":"2cdb89a64e8fbcd62730f1c6a1ea1e68f0ee3311cad9aacaa5d3c42a9ad78952","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3681}
 // Copyright 2018 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -39572,7 +39572,7 @@ func usedIdent(info *types.Info, e ast.Expr) *ast.Ident
 func interfaceMethod(f *types.Func) bool
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/typesinternal/element.go","mode":420,"size":4359,"sha256":"2a82048d6ed54b1f96e93982a7de2500e93c503c9cfb2a9325fa38324f3f0afa","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":4222}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/typesinternal/element.go","mode":420,"size":4222,"sha256":"f7d7a901833e7953ee06493e971690dd221e625e1a3b0d902abbf18f35489117","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4222}
 // Copyright 2024 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -39712,7 +39712,7 @@ func ForEachElement(rtypes *typeutil.Map, msets *typeutil.MethodSetCache, T type
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/typesinternal/errorcode.go","mode":420,"size":36327,"sha256":"7c6d8532dd159d4b922113e2a8af2e9a7cf5f04de4702077660eff74875d13eb","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":34767}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/typesinternal/errorcode.go","mode":420,"size":34767,"sha256":"194f42c4cfa2bcb5ac5ebd9b8400a6424d4ffb4d2e4996d3763598791467207b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":34767}
 // Copyright 2020 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -41275,7 +41275,7 @@ const (
 )
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/typesinternal/errorcode_string.go","mode":420,"size":7843,"sha256":"140e02cb8873544f52f019308b9b63d605ed74f07c1fa6361ad01e21170805c6","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":7664}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/typesinternal/errorcode_string.go","mode":420,"size":7664,"sha256":"32f91e4d3af45b513dffba82d283db0c5981ce6aa16172a74b65aed383956b8e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7664}
 // Code generated by "stringer -type=ErrorCode"; DO NOT EDIT.
 
 package typesinternal
@@ -41457,7 +41457,7 @@ func (i ErrorCode) String() string {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/typesinternal/fx.go","mode":420,"size":2528,"sha256":"9c666c5e1b80e98fdf5b03f8d3341a8d233745521aaea371617ebb862a37eaba","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":2440}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/typesinternal/fx.go","mode":420,"size":2440,"sha256":"f52d46d3390667671c16898659c5b924f34adbaa8ab8a8795b12ab7d68fda760","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2440}
 // Copyright 2025 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -41548,7 +41548,7 @@ func CallsPureBuiltin(info *types.Info, call *ast.CallExpr) bool {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/typesinternal/isnamed.go","mode":420,"size":2494,"sha256":"3e010b8c3e0da56bcafc12a4136f7a1bf90761ab85d8a00efb0cfb51eda5c769","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":2423}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/typesinternal/isnamed.go","mode":420,"size":2423,"sha256":"60f4c3ed35f0c87d2b88f5f25ecc0bf0c28cb9b9dc6b56bf78a8afa2bdaa2b18","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2423}
 // Copyright 2025 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -41622,7 +41622,7 @@ func IsMethodNamed(obj types.Object, pkgPath string, typeName string, names ...s
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/typesinternal/qualifier.go","mode":420,"size":1731,"sha256":"4fce32ce424738f0039ed7d7286a54dadf4070716bce56b34880433fb26a0241","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":1677}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/typesinternal/qualifier.go","mode":420,"size":1677,"sha256":"3f184e8309137ba66593f203eb258b1261669e85af3c3aa62ee252b87aa652c1","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1677}
 // Copyright 2024 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -41679,7 +41679,7 @@ func FileQualifier(f *ast.File, pkg *types.Package) types.Qualifier {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/typesinternal/recv.go","mode":420,"size":1455,"sha256":"a2b63b5049c0669636da4ed958db2179128a3e1172a91a5b488d9f98feb0aa90","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":1411}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/typesinternal/recv.go","mode":420,"size":1411,"sha256":"c8787e980f61efeab19c99ca7dc4d1f318b9fa77c3952add7f82be3c947b47b0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1411}
 // Copyright 2024 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -41726,7 +41726,7 @@ func Unpointer(t types.Type) types.Type {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/typesinternal/toonew.go","mode":420,"size":3032,"sha256":"288c2687c300cc0590a4a9f6e59f4c6cbd1d72c60dc0dc25dc9af1d73f581ff2","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":2943}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/typesinternal/toonew.go","mode":420,"size":2943,"sha256":"54cff0151c458fce40c8e85746718c415087863df29229f6168ded7e338ba2c4","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2943}
 // Copyright 2024 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -41818,7 +41818,7 @@ func TooNewStdSymbols(pkg *types.Package, version string) map[types.Object]strin
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/typesinternal/types.go","mode":420,"size":8265,"sha256":"a4aa8b71b8202c4fc06c895180913cce4bbbc87e13354f5e7d01e738dfa6f23a","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":7993}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/typesinternal/types.go","mode":420,"size":7993,"sha256":"ce0bf914a16ff30c8d33237016e50f8d33f53f5b7cc6c0b4c66ed95b91fd69d9","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7993}
 // Copyright 2020 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -42093,7 +42093,7 @@ func ImplicitFieldSelections(seln types.Selection) iter.Seq2[*types.Var, bool] {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/typesinternal/varkind.go","mode":420,"size":589,"sha256":"133397c5eb59b568a43858e89c4e3603ffa4fdb1384620c63821953792e3837e","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":566}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/typesinternal/varkind.go","mode":420,"size":566,"sha256":"4b02e364269b68358ede6b3304e43626176d0378e0d4aed0562b7263233b4258","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":566}
 // Copyright 2024 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -42119,7 +42119,7 @@ func GetVarKind(v *types.Var) VarKind       { return v.Kind() }
 func SetVarKind(v *types.Var, kind VarKind) { v.SetKind(kind) }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/typesinternal/varkind_go124.go","mode":420,"size":1087,"sha256":"e12043de7b8920509f0786eacc719b196f0142c7429bec5146acf6d6c1816cdb","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":1048}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/typesinternal/varkind_go124.go","mode":420,"size":1048,"sha256":"8cad49e88b2cb471673a54d797b20dfbbc80e9dd8880d4745f0236aa864b451e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1048}
 // Copyright 2024 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -42161,7 +42161,7 @@ func GetVarKind(v *types.Var) VarKind { return 0 }
 func SetVarKind(v *types.Var, kind VarKind) {}
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/typesinternal/zerovalue.go","mode":420,"size":10982,"sha256":"553234b7506d499bb76fc7a1eac5517d5ec23c7b5758f8352d79e46898e81028","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":10601}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/typesinternal/zerovalue.go","mode":420,"size":10601,"sha256":"45f590c7f20578930dbd22178b02f238d0c3b543accf01b911fcad38a6e90187","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":10601}
 // Copyright 2024 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -42545,7 +42545,7 @@ func TypeExpr(t types.Type, qual types.Qualifier) ast.Expr {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/versions/features.go","mode":420,"size":1478,"sha256":"a64a149a37fb86f52db8bbb73461aa6fbfd787052b34830c2f16ea8321b4aeb1","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":1429}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/versions/features.go","mode":420,"size":1429,"sha256":"08ff0e3b5231c95aa3371dc33f97730103ce3b93c96338e552c2b1af37189187","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1429}
 // Copyright 2023 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -42597,7 +42597,7 @@ func Before(v, release string) bool {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/versions/gover.go","mode":420,"size":4469,"sha256":"95edc92d1ff04940875e60217ce06354ed1a468caaa4036c4b387d15729f4573","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":4297}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/versions/gover.go","mode":420,"size":4297,"sha256":"fe5a58b005181f17e132c3261ce552a58454d178356bf8a5f294914d3915a750","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4297}
 // Copyright 2023 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -42772,7 +42772,7 @@ func cmpInt(x, y string) int {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/versions/types.go","mode":420,"size":1213,"sha256":"447a7c8085748b2f0e8b87e3d900394ff18574fdfcf8986c7f46cfbddd14b72f","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":1180}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/versions/types.go","mode":420,"size":1180,"sha256":"e08b60c8fe9503229f2e5dac29d84ba092e14aba41824e68f201b338e40930a6","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1180}
 // Copyright 2023 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -42808,7 +42808,7 @@ func FileVersion(info *types.Info, file *ast.File) string {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/versions/versions.go","mode":420,"size":2087,"sha256":"d419ac7a560834ee4789fb263ac645972fc60bc2ae890c4a533fb49d77f6acda","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":2030}
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/versions/versions.go","mode":420,"size":2030,"sha256":"c63d071bcf95bb6a3f1f869a51255198980de8c36ddbff20227653cd33b4769d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2030}
 // Copyright 2023 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -42868,7 +42868,7 @@ func stripGo(v string) string {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/gopkg.in/warnings.v0/LICENSE","mode":420,"size":1299,"sha256":"e34d18c5a401b0737a51b25643ecd04d0e05b6122c77f94d0508788f97285722","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":1275}
+@@PORTABLE {"path":"third_party/wails/vendor/gopkg.in/warnings.v0/LICENSE","mode":420,"size":1275,"sha256":"986175a94c6ab7f33be5d3b5018797147a6cc740c357597fdb1ca679b72206a8","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1275}
 Copyright (c) 2016 Péter Surányi.
 
 Redistribution and use in source and binary forms, with or without
@@ -42895,7 +42895,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/gopkg.in/warnings.v0/README","mode":420,"size":2672,"sha256":"92e94714b69573673181b8014e2be2335a26c2ddc4e965a1a50fb75191182c88","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":2595}
+@@PORTABLE {"path":"third_party/wails/vendor/gopkg.in/warnings.v0/README","mode":420,"size":2595,"sha256":"9aea7e041f4184747030c8f1e31cdf1d3f73cb9c50baa440dc8d930d33058970","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2595}
 Package warnings implements error handling with non-fatal errors (warnings).
 
 import path:   "gopkg.in/warnings.v0"
@@ -42975,7 +42975,7 @@ Rules for using warnings
  - ensure that Collect is never called after Done
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/gopkg.in/warnings.v0/warnings.go","mode":420,"size":5715,"sha256":"ba6f340635762e4e099a7cd60df6aa75314923490e6319fc96e8d35d09229f60","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":5521}
+@@PORTABLE {"path":"third_party/wails/vendor/gopkg.in/warnings.v0/warnings.go","mode":420,"size":5521,"sha256":"f03b30f74cc2be263a09ace0399ee9685bc9ecfc36f42385c97d71f2d1ef7e84","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5521}
 // Package warnings implements error handling with non-fatal errors (warnings).
 //
 // A recurring pattern in Go programming is the following:
@@ -43172,7 +43172,7 @@ func WarningsOnly(err error) []error {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/gopkg.in/yaml.v3/LICENSE","mode":420,"size":2201,"sha256":"aa9c3350a28b6dbe4dce26fd20aec8d8f71f097232cca2a571c1427acb70f9a4","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":2151}
+@@PORTABLE {"path":"third_party/wails/vendor/gopkg.in/yaml.v3/LICENSE","mode":420,"size":2151,"sha256":"d18f6323b71b0b768bb5e9616e36da390fbd39369a81807cca352de4e4e6aa0b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2151}
 
 This project is covered by two different licenses: MIT and Apache.
 
@@ -43225,7 +43225,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/gopkg.in/yaml.v3/NOTICE","mode":420,"size":573,"sha256":"b7c97449ed03855db996078b8968955a040371858c98cfd2aac21604f1c898a1","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":560}
+@@PORTABLE {"path":"third_party/wails/vendor/gopkg.in/yaml.v3/NOTICE","mode":420,"size":560,"sha256":"f6c2dd3a67b576eafb89b80200b8b1627230bf3821a0c14cb99a22ac19107d00","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":560}
 Copyright 2011-2016 Canonical Ltd.
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -43394,7 +43394,7 @@ b:
 
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/gopkg.in/yaml.v3/apic.go","mode":420,"size":22746,"sha256":"2178e065a1c6d32443664bd5aa018709831a4655e98c7cc4a15c947d1f9efad6","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":21999}
+@@PORTABLE {"path":"third_party/wails/vendor/gopkg.in/yaml.v3/apic.go","mode":420,"size":21999,"sha256":"53051cabd9cd9e98d49dea201a11475a11e6cc436b32a54e7d46bebdce88cdc3","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":21999}
 // 
 // Copyright (c) 2011-2019 Canonical Ltd
 // Copyright (c) 2006-2010 Kirill Simonov
@@ -44144,7 +44144,7 @@ func yaml_event_delete(event *yaml_event_t) {
 //
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/gopkg.in/yaml.v3/decode.go","mode":420,"size":25953,"sha256":"4718719dfc188ce2053eb472b7fede99e12c7bbd77ec216d505222fd03e6cb60","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":24953}
+@@PORTABLE {"path":"third_party/wails/vendor/gopkg.in/yaml.v3/decode.go","mode":420,"size":24953,"sha256":"a66a783addb0f9cdb45f9e87deb0e51c2aca6bf81e46d4e822136993ba81505d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":24953}
 //
 // Copyright (c) 2011-2019 Canonical Ltd
 //
@@ -45147,7 +45147,7 @@ func isMerge(n *Node) bool {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/gopkg.in/yaml.v3/emitterc.go","mode":420,"size":57207,"sha256":"c4314dfa3c86537f6b27191fff236982d15119c8ee1f8b3d91a8823bfbf38d23","index":0,"count":2,"newline":"crlf","encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"third_party/wails/vendor/gopkg.in/yaml.v3/emitterc.go","mode":420,"size":55187,"sha256":"5ce8fbd8a664831adb58c1c82280fd3568d14fab38868142a765d1eb1e05d3a3","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
 //
 // Copyright (c) 2011-2019 Canonical Ltd
 // Copyright (c) 2006-2010 Kirill Simonov
@@ -46833,7 +46833,7 @@ func yaml_emitter_write_single_quoted_scalar(emitter *yaml_emitter_t, value []by
 			} else {
 				if !writ
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/gopkg.in/yaml.v3/emitterc.go","mode":420,"size":57207,"sha256":"c4314dfa3c86537f6b27191fff236982d15119c8ee1f8b3d91a8823bfbf38d23","index":1,"count":2,"newline":"crlf","encoding":"utf-8","payloadBytes":7187}
+@@PORTABLE {"path":"third_party/wails/vendor/gopkg.in/yaml.v3/emitterc.go","mode":420,"size":55187,"sha256":"5ce8fbd8a664831adb58c1c82280fd3568d14fab38868142a765d1eb1e05d3a3","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":7187}
 e(emitter, value, &i) {
 					return false
 				}
@@ -47173,7 +47173,7 @@ func yaml_emitter_write_comment(emitter *yaml_emitter_t, comment []byte) bool {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/gopkg.in/yaml.v3/encode.go","mode":420,"size":15366,"sha256":"5bef091cb1d5b82412f65e501e398678d8a6527fc32ea45ee42ea5655b643b44","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":14789}
+@@PORTABLE {"path":"third_party/wails/vendor/gopkg.in/yaml.v3/encode.go","mode":420,"size":14789,"sha256":"be13ba7293fb7a39157b58e304de89d81c46c0332b97bbc4152273515b61ee86","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":14789}
 //
 // Copyright (c) 2011-2019 Canonical Ltd
 //
@@ -47753,7 +47753,7 @@ func (e *encoder) node(node *Node, tail string) {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/gopkg.in/yaml.v3/parserc.go","mode":420,"size":42080,"sha256":"bd02d4111e9ae6498fd4c8817c94794241533fab6c504849b9c12b536e287ac0","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":40822}
+@@PORTABLE {"path":"third_party/wails/vendor/gopkg.in/yaml.v3/parserc.go","mode":420,"size":40822,"sha256":"4ca0ff93c79c32592106e3c44a7a6dedd41f6d55d88809aaa3b28fd675b0aa82","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":40822}
 //
 // Copyright (c) 2011-2019 Canonical Ltd
 // Copyright (c) 2006-2010 Kirill Simonov
@@ -49014,7 +49014,7 @@ func yaml_parser_append_tag_directive(parser *yaml_parser_t, value yaml_tag_dire
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/gopkg.in/yaml.v3/readerc.go","mode":420,"size":14523,"sha256":"afd4008b1557e406f239cd53c41c4852aca4680466daf2e54a3a4ae20c0d6972","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":14089}
+@@PORTABLE {"path":"third_party/wails/vendor/gopkg.in/yaml.v3/readerc.go","mode":420,"size":14089,"sha256":"7693311b8e90eebf81d8468cb5a312725491002c5c6061c49a5488435069c7a3","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":14089}
 // 
 // Copyright (c) 2011-2019 Canonical Ltd
 // Copyright (c) 2006-2010 Kirill Simonov
@@ -49451,7 +49451,7 @@ func yaml_parser_update_buffer(parser *yaml_parser_t, length int) bool {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/gopkg.in/yaml.v3/resolve.go","mode":420,"size":8840,"sha256":"c32d13676f6bfd5da54fe91a713e338cf72cddcfa029969e7a824dc5dd5567b5","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":8514}
+@@PORTABLE {"path":"third_party/wails/vendor/gopkg.in/yaml.v3/resolve.go","mode":420,"size":8514,"sha256":"69b6069012fef0a518e379222007f6ea7622cb1c235a35b1355bb5641ab16d26","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":8514}
 //
 // Copyright (c) 2011-2019 Canonical Ltd
 //
@@ -49780,7 +49780,7 @@ func parseTimestamp(s string) (time.Time, bool) {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/gopkg.in/yaml.v3/scannerc.go","mode":420,"size":90998,"sha256":"9430ca5301e1549a91f16600fdfb9b99078e8c232e065d234c4ea2cf8e3c17af","index":0,"count":2,"newline":"crlf","encoding":"utf-8","payloadBytes":48004}
+@@PORTABLE {"path":"third_party/wails/vendor/gopkg.in/yaml.v3/scannerc.go","mode":420,"size":87960,"sha256":"730400aff4d8033ea29e472fe29f63aa9d78068dc3a2f719385dc2a612ccf884","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48004}
 //
 // Copyright (c) 2011-2019 Canonical Ltd
 // Copyright (c) 2006-2010 Kirill Simonov
@@ -51384,7 +51384,7 @@ func yaml_parser_scan_to_next_token(parser *yaml_parser_t) bool {
 
 			// In the block context, a new line may start a s
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/gopkg.in/yaml.v3/scannerc.go","mode":420,"size":90998,"sha256":"9430ca5301e1549a91f16600fdfb9b99078e8c232e065d234c4ea2cf8e3c17af","index":1,"count":2,"newline":"crlf","encoding":"utf-8","payloadBytes":39956}
+@@PORTABLE {"path":"third_party/wails/vendor/gopkg.in/yaml.v3/scannerc.go","mode":420,"size":87960,"sha256":"730400aff4d8033ea29e472fe29f63aa9d78068dc3a2f719385dc2a612ccf884","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":39956}
 imple key.
 			if parser.flow_level == 0 {
 				parser.simple_key_allowed = true
@@ -52824,7 +52824,7 @@ func yaml_parser_scan_comments(parser *yaml_parser_t, scan_mark yaml_mark_t) boo
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/gopkg.in/yaml.v3/sorter.go","mode":420,"size":3479,"sha256":"4b493e3360022c27b539e1d0f6cb552265ef21bb2b8cb20973446b62f08dbf03","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":3345}
+@@PORTABLE {"path":"third_party/wails/vendor/gopkg.in/yaml.v3/sorter.go","mode":420,"size":3345,"sha256":"111f911a8095798fda2a7c708e20a931d2c228e637ff82de3ff44794d2d0ae92","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3345}
 //
 // Copyright (c) 2011-2019 Canonical Ltd
 //
@@ -52961,7 +52961,7 @@ func numLess(a, b reflect.Value) bool {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/gopkg.in/yaml.v3/writerc.go","mode":420,"size":1882,"sha256":"6103972bbe19f69b4899fab9ba9c8a3425db83add73d6ebd32bc518c190c9038","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":1834}
+@@PORTABLE {"path":"third_party/wails/vendor/gopkg.in/yaml.v3/writerc.go","mode":420,"size":1834,"sha256":"ebf6b56361527f081803c4067263ea97f44637ce2cc329168fb17e4e193fc40d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1834}
 // 
 // Copyright (c) 2011-2019 Canonical Ltd
 // Copyright (c) 2006-2010 Kirill Simonov
@@ -53012,7 +53012,7 @@ func yaml_emitter_flush(emitter *yaml_emitter_t) bool {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/gopkg.in/yaml.v3/yaml.go","mode":420,"size":20782,"sha256":"9aa714153927aa29496718577801bc167b9e45fb34af89895540a000a210a987","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":20084}
+@@PORTABLE {"path":"third_party/wails/vendor/gopkg.in/yaml.v3/yaml.go","mode":420,"size":20084,"sha256":"447f1c34c1851298028e561e8aaefde8c9c3ebcc2f965ff81f9a603f2d9e4fc5","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":20084}
 //
 // Copyright (c) 2011-2019 Canonical Ltd
 //
@@ -53713,7 +53713,7 @@ func isZero(v reflect.Value) bool {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/gopkg.in/yaml.v3/yamlh.go","mode":420,"size":29853,"sha256":"002caca146e58d51f86d7eca5a80b190e9ca03f7b578cec704b9fc27e91537f5","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":29046}
+@@PORTABLE {"path":"third_party/wails/vendor/gopkg.in/yaml.v3/yamlh.go","mode":420,"size":29046,"sha256":"013b8e96cde431fcacb828c6ea5de97d02f659ac02f42bb2310b7ad173897ff5","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":29046}
 //
 // Copyright (c) 2011-2019 Canonical Ltd
 // Copyright (c) 2006-2010 Kirill Simonov
@@ -54523,7 +54523,7 @@ type yaml_emitter_t struct {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/gopkg.in/yaml.v3/yamlprivateh.go","mode":420,"size":6327,"sha256":"b9727d1ff8cc6f63a74fc7c4e56bcf7f5d987f6419b2e1bf426faba52b67c186","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":6129}
+@@PORTABLE {"path":"third_party/wails/vendor/gopkg.in/yaml.v3/yamlprivateh.go","mode":420,"size":6129,"sha256":"5e29848cb6ddbfe90bea82fd2c26e507de666833a1ff45dfd545a4bf5bb6254d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":6129}
 // 
 // Copyright (c) 2011-2019 Canonical Ltd
 // Copyright (c) 2006-2010 Kirill Simonov
@@ -54724,7 +54724,7 @@ func width(b byte) int {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/.gitignore","mode":420,"size":292,"sha256":"f4878f522527baae047ecde4db01ccb641bb97cfe8ad8423c76fe16b5f192c1b","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":276}
+@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/.gitignore","mode":420,"size":276,"sha256":"05b785f505cacf4b2d18e691e5efcfc38e63d9e4c6949df2215ce791f65242f5","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":276}
 # Binaries for programs and plugins
 *.exe
 *.exe~
@@ -54785,7 +54785,7 @@ go-test:1.2:
     image: golang:1.2
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/LICENSE","mode":420,"size":3362,"sha256":"b9d119bb4466062150dfc23e118336be4337d6642bad3fa10e36e5eb507f4575","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":3304}
+@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/LICENSE","mode":420,"size":3304,"sha256":"20d9b7d9372369484ecadae229d3e3efee8029b259e11c9a1b07d2e0a3c82e39","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3304}
 Copyright (c) 2013, Dustin L. Howett. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -54870,7 +54870,7 @@ func main() {
 ```
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/bplist.go","mode":420,"size":635,"sha256":"0d5910a8f13d6927b9918e2c2e7d972f8b157b4df73e35b757ce0e2aa6561295","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":609}
+@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/bplist.go","mode":420,"size":609,"sha256":"fe831fbcb63ada54d32a11fac2985a4ded833548f6058e098285badcb361d6af","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":609}
 package plist
 
 type bplistTrailer struct {
@@ -54899,7 +54899,7 @@ const (
 )
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/bplist_generator.go","mode":420,"size":7568,"sha256":"38ad3184372c4f82de0971b7b8c3bc0de8df8fa8ed38c634b81eb550b4995120","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":7265}
+@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/bplist_generator.go","mode":420,"size":7265,"sha256":"9dac669e0cf0c401578c3ff32ae1bf0c2ac64e7f4a8e57a3639897bab6890cae","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7265}
 package plist
 
 import (
@@ -55205,7 +55205,7 @@ func newBplistGenerator(w io.Writer) *bplistGenerator {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/bplist_parser.go","mode":420,"size":11174,"sha256":"3f9a576d14b8741572d89f353d1fc8ccb27588737d270b331e28102b10387757","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":10818}
+@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/bplist_parser.go","mode":420,"size":10818,"sha256":"b92c157f40e91e0832108d6c1dedf922bf8bbf6cd86b9324dd8cbf1775d52b39","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":10818}
 package plist
 
 import (
@@ -55564,7 +55564,7 @@ func newBplistParser(r io.ReadSeeker) *bplistParser {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/decode.go","mode":420,"size":4177,"sha256":"8017dc268cc6ae80228b6b275bda02f6d8479a99d464257be1a633c006140511","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":4058}
+@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/decode.go","mode":420,"size":4058,"sha256":"b1b12b28a5e21d3ae4823efd38e87e41a88751d1ba3f0fad5b191dfe1004d877","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4058}
 package plist
 
 import (
@@ -55686,7 +55686,7 @@ func Unmarshal(data []byte, v interface{}) (format int, err error) {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/doc.go","mode":420,"size":352,"sha256":"31deecad0cefc8383f173ea38c0e90338e5a5b7d00ea4469e0df6df50ca8df1a","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":347}
+@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/doc.go","mode":420,"size":347,"sha256":"6371663e6d6df9ebf1b3952a586f8a8208100a02dc2b6f3102e63b555c03799d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":347}
 // Package plist implements encoding and decoding of Apple's "property list" format.
 // Property lists come in three sorts: plain text (GNUStep and OpenStep), XML and binary.
 // plist supports all of them.
@@ -55694,7 +55694,7 @@ func Unmarshal(data []byte, v interface{}) (format int, err error) {
 package plist
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/encode.go","mode":420,"size":4074,"sha256":"c1997a93ba75de38e7297ba3097232727e6c27a762eb5eb14c787915eba6f041","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":3948}
+@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/encode.go","mode":420,"size":3948,"sha256":"d1a93cb630c7a12bd8f9d0da74dd94d799da8aa8c48c7e72c4632c32a01387a9","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3948}
 package plist
 
 import (
@@ -55823,7 +55823,7 @@ func MarshalIndent(v interface{}, format int, indent string) ([]byte, error) {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/fuzz.go","mode":420,"size":232,"sha256":"3952cceca9016a9a1c54bf49bbac8376945da2bbe296cdd45c68718c556157e3","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":215}
+@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/fuzz.go","mode":420,"size":215,"sha256":"50b6ffbb921ad3a08fa63c644bb0de2cb3f8436ffde23f617fde98beca163649","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":215}
 // +build gofuzz
 
 package plist
@@ -55843,7 +55843,7 @@ func Fuzz(data []byte) int {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/marshal.go","mode":420,"size":4970,"sha256":"6ade80bea59f26921b59f2ee1a16f5bebb4665f475ea1ea3bbd87f3acdf75aa6","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":4791}
+@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/marshal.go","mode":420,"size":4791,"sha256":"89fd4226fa6ee6ed5d6b618088b42fbfc990234e2cdb3754569cd985faac6a97","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4791}
 package plist
 
 import (
@@ -56025,7 +56025,7 @@ func (p *Encoder) marshal(val reflect.Value) cfValue {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/must.go","mode":420,"size":813,"sha256":"f5a3c1e116855a9fb9788bee608ffd285e2cb57a18bd63265fd0c4dd97ce8897","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":763}
+@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/must.go","mode":420,"size":763,"sha256":"505b4521de914fe560157a75f9d03f9f4facfd1928fc3cf545ab6dddc49f91c4","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":763}
 package plist
 
 import (
@@ -56078,7 +56078,7 @@ func mustParseBool(str string) bool {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/plist.go","mode":420,"size":2123,"sha256":"9d2049292e4cbba1254afb99969cea360c25d4bdb65ae9eae5ee82f88b319c87","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":2040}
+@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/plist.go","mode":420,"size":2040,"sha256":"1b38553db4a1f94152ac45077828a87c4a311de394c62f85947549686e9e996e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2040}
 package plist
 
 import (
@@ -56164,7 +56164,7 @@ type Unmarshaler interface {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/plist_types.go","mode":420,"size":2959,"sha256":"9d9d66b819846116e2bfdd4354bef0c7908b17a3d10a91d0c5f1fe927fa18b3d","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":2787}
+@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/plist_types.go","mode":420,"size":2787,"sha256":"803ab672ad23f8f0ec0301efac27dbc5a18089d07b06693386d19368099b5d47","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2787}
 package plist
 
 import (
@@ -56339,7 +56339,7 @@ func (p cfDate) hash() interface{} {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/text_generator.go","mode":420,"size":5100,"sha256":"84f5feda21b8227f6e1224a6fc27eb004b8dbe45c36b69f0fdc5aceefdf05c1e","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":4872}
+@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/text_generator.go","mode":420,"size":4872,"sha256":"70d27387ef665e9f94871a887f702e5608a39eeb5d97ac025511c4c9e839423c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4872}
 package plist
 
 import (
@@ -56570,7 +56570,7 @@ func newTextPlistGenerator(w io.Writer, format int) *textPlistGenerator {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/text_parser.go","mode":420,"size":13102,"sha256":"dd4199008c18be5e49d26bf16510487b51de3c28810da2c75d05c24f513106cc","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":12516}
+@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/text_parser.go","mode":420,"size":12516,"sha256":"d175169082a4c3f5e333feb4937d9f3ec5161e2f30b77740bb89a485a7611d64","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":12516}
 // Parser for text plist formats.
 // @see https://github.com/apple/swift-corelibs-foundation/blob/master/CoreFoundation/Parsing.subproj/CFOldStylePList.c
 // @see https://github.com/gnustep/libs-base/blob/master/Source/NSPropertyList.m
@@ -57159,7 +57159,7 @@ func newTextPlistParser(r io.Reader) *textPlistParser {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/text_tables.go","mode":420,"size":1507,"sha256":"c3c90d6e4675dfbb51a920ac0834a2fc787e83c04b17a2c7a8d23e62d5eeec8a","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":1446}
+@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/text_tables.go","mode":420,"size":1446,"sha256":"585a642a5c59927cf37503c4da904e59dda481b2a08f8707cf30759e72137a99","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1446}
 package plist
 
 type characterSet [4]uint64
@@ -57223,7 +57223,7 @@ var base64ValidChars = characterSet{
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/typeinfo.go","mode":420,"size":6456,"sha256":"c9fab6a23e9beeed84929557c0f587cffb438c38a0e94e612825a62695971eae","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":6235}
+@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/typeinfo.go","mode":420,"size":6235,"sha256":"a32143034c85bcd6aa3ce427c4580a03bac1002889cc9c76312dd746389ccc79","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":6235}
 package plist
 
 import (
@@ -57447,7 +57447,7 @@ func (finfo *fieldInfo) value(v reflect.Value) reflect.Value {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/unmarshal.go","mode":420,"size":8686,"sha256":"86d5273c735d72ebefca25f372cb9a9a2898af930f4ea9322b75cd3ca9da64ee","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":8339}
+@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/unmarshal.go","mode":420,"size":8339,"sha256":"cca399160bfb5c6d02e9dffc3b1d6f007f544ff2b387bc5b649b503722601503","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":8339}
 package plist
 
 import (
@@ -57797,7 +57797,7 @@ func (p *Decoder) dictionaryInterface(dict *cfDictionary) map[string]interface{}
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/util.go","mode":420,"size":438,"sha256":"9888e9df9e7f05afc99cc0ac2468740200a32d6429a9fd897aebf6915b7834aa","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":413}
+@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/util.go","mode":420,"size":413,"sha256":"8dfda143eada5b65bd2c4b438336ce132080866b1cac2f5b66160616de65cd3c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":413}
 package plist
 
 import "io"
@@ -57825,7 +57825,7 @@ func unsignedGetBase(s string) (string, int) {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/xml_generator.go","mode":420,"size":3808,"sha256":"2e423b21c2fc377222a70e4f3d3157dda3780294d1ea42aa10640132540900ec","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":3630}
+@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/xml_generator.go","mode":420,"size":3630,"sha256":"d417a85326d416f04bdc479f424758bb6a79c81b8e2b00162b22c87920bd168e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3630}
 package plist
 
 import (
@@ -58006,7 +58006,7 @@ func newXMLPlistGenerator(w io.Writer) *xmlPlistGenerator {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/xml_parser.go","mode":420,"size":4895,"sha256":"ee72b9fd0eed76b9ff9b44ad20c9a047fc756865a111521f8f2f48c670ccb3d2","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":4684}
+@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/xml_parser.go","mode":420,"size":4684,"sha256":"e0371f9b2d4245aa17455304035ee39deb06f37271d97e814229ff2d5a33ced7","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4684}
 package plist
 
 import (
@@ -58220,7 +58220,7 @@ func newXMLPlistParser(r io.Reader) *xmlPlistParser {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/zerocopy.go","mode":420,"size":324,"sha256":"5536bf3de390ba010fefbdc3af7f4590ef1f686b5632bb58adc675f5c0384211","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":304}
+@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/zerocopy.go","mode":420,"size":304,"sha256":"15defbbd2c5dd2feae7d2134b21f9f8a98761323961300d7d5f2f4e2a4e950c6","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":304}
 // +build !appengine
 
 package plist
@@ -58243,7 +58243,7 @@ func zeroCopy8BitString(buf []byte, off int, len int) string {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/zerocopy_appengine.go","mode":420,"size":143,"sha256":"d42c7ab9cf2dadcd8be6884f3c0143cb38865737bfebde8b863a69988a282a93","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":136}
+@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/zerocopy_appengine.go","mode":420,"size":136,"sha256":"58dc42bffbb7817089d056d1e58a77d1379ecf26acd0565dd81759698342fc8b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":136}
 // +build appengine
 
 package plist
@@ -58253,7 +58253,7 @@ func zeroCopy8BitString(buf []byte, off int, len int) string {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/modules.txt","mode":420,"size":19086,"sha256":"78572bb70aa0419740755ba46494857c059421fbef28b493215af4033b4786c7","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":18532}
+@@PORTABLE {"path":"third_party/wails/vendor/modules.txt","mode":420,"size":18532,"sha256":"2b82ce04280d4148b2cbfe473f8c49e9bb2566b010f6c028bee1c9780db0dc0a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":18532}
 # atomicgo.dev/cursor v0.2.0
 ## explicit; go 1.15
 atomicgo.dev/cursor
@@ -58810,7 +58810,7 @@ mvdan.cc/sh/v3/shell
 mvdan.cc/sh/v3/syntax
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/LICENSE","mode":420,"size":1515,"sha256":"46134aac8eea7772954a533cf82ff59c74eb8bf8546cfe6d91caf5c266708b4d","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":1488}
+@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/LICENSE","mode":420,"size":1488,"sha256":"ce63850f77649f00d1394045e2794ffb09a5596beabac51c9548edd958845d7c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1488}
 Copyright (c) 2016, Daniel Martí. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -58840,7 +58840,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/expand/arith.go","mode":420,"size":4621,"sha256":"96e485b1d345c6aa813d22fe147d2488b9d38d247371f2ebc0e85e1ff3011858","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":4400}
+@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/expand/arith.go","mode":420,"size":4400,"sha256":"5ead1df8472dd02e1189cae201e3edce7b7a1f8bcef3b75c249d85f9a4c2babc","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4400}
 // Copyright (c) 2017, Daniel Martí <mvdan@mvdan.cc>
 // See LICENSE for licensing information
 
@@ -59064,7 +59064,7 @@ func binArit(op syntax.BinAritOperator, x, y int) (int, error) {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/expand/braces.go","mode":420,"size":2040,"sha256":"dbc39ed7972cce644952cf303b2631f14cfdcf567348c2496642e023b74082bf","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":1955}
+@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/expand/braces.go","mode":420,"size":1955,"sha256":"70ed26cef872e5c972b6807aedf829a16c54e9c3d2d513ce4c0af5cbf1309243","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1955}
 // Copyright (c) 2018, Daniel Martí <mvdan@mvdan.cc>
 // See LICENSE for licensing information
 
@@ -59152,7 +59152,7 @@ func Braces(word *syntax.Word) []*syntax.Word {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/expand/doc.go","mode":420,"size":185,"sha256":"20a1e48700aad88d1a85f9dc0ff7faef89f52f2b18ae80aa9850e2615713e199","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":180}
+@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/expand/doc.go","mode":420,"size":180,"sha256":"0ed156e5ecee5577c663ce9e6dd61d0acf7899df1d9b6faff6e962bf7a32ed3a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":180}
 // Copyright (c) 2018, Daniel Martí <mvdan@mvdan.cc>
 // See LICENSE for licensing information
 
@@ -59160,7 +59160,7 @@ func Braces(word *syntax.Word) []*syntax.Word {
 package expand
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/expand/environ.go","mode":420,"size":6731,"sha256":"9113a83b52aa8e47915b1e7868b214853c1a3337b3ba6805e91ffb7d25a7fbb4","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":6504}
+@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/expand/environ.go","mode":420,"size":6504,"sha256":"9b3460599a22d55904203e2cd1c65ab82ef9448f8037c2674c5cf876c014ba09","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":6504}
 // Copyright (c) 2018, Daniel Martí <mvdan@mvdan.cc>
 // See LICENSE for licensing information
 
@@ -59390,7 +59390,7 @@ func (l listEnviron) Each(fn func(name string, vr Variable) bool) {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/expand/expand.go","mode":420,"size":28579,"sha256":"5fc3f3c650187f0b8a6983fbf792f111e4aae8fd6c8cced935855a649e47aca4","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":27539}
+@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/expand/expand.go","mode":420,"size":27539,"sha256":"8bedb7457384e60d76eca967e93cf7394505b24c18c2874819746f7cbba15d4b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":27539}
 // Copyright (c) 2017, Daniel Martí <mvdan@mvdan.cc>
 // See LICENSE for licensing information
 
@@ -60433,7 +60433,7 @@ func ReadFields(cfg *Config, s string, n int, raw bool) []string {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/expand/param.go","mode":420,"size":9587,"sha256":"dc4dce883bc92e46b9aa7c127defc146474dd44586ada87510f9bd758ac8d3df","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":9160}
+@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/expand/param.go","mode":420,"size":9160,"sha256":"3665e3c5b420dfd86e630f4fc47f429a6f5973c4681d2c5516bfd78cf1441c56","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":9160}
 // Copyright (c) 2017, Daniel Martí <mvdan@mvdan.cc>
 // See LICENSE for licensing information
 
@@ -60863,7 +60863,7 @@ func (cfg *Config) namesByPrefix(prefix string) []string {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/fileutil/file.go","mode":420,"size":2688,"sha256":"05299c113a28344f07d5f5ace4e61520435298ca57944f7d3221090026ba9d7b","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":2603}
+@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/fileutil/file.go","mode":420,"size":2603,"sha256":"084f27d5c1b168f7eb3432eea9ae4d72fae7bce00ac549cfad58659927f7c359","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2603}
 // Copyright (c) 2016, Daniel Martí <mvdan@mvdan.cc>
 // See LICENSE for licensing information
 
@@ -60951,7 +60951,7 @@ func CouldBeScript2(entry fs.DirEntry) ScriptConfidence {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/pattern/pattern.go","mode":420,"size":8802,"sha256":"8e476be9b5b660c3f0f770f34b65d9c394f2623deade8874a7d26979622563e0","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":8467}
+@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/pattern/pattern.go","mode":420,"size":8467,"sha256":"0fc84eff26346f366c81d820ef74f5d21c15ac415b13f10bef14af75d35e3765","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":8467}
 // Copyright (c) 2017, Daniel Martí <mvdan@mvdan.cc>
 // See LICENSE for licensing information
 
@@ -61289,7 +61289,7 @@ loop:
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/shell/doc.go","mode":420,"size":615,"sha256":"80cb2a10d5d338d21da22097667fe4d7330ca0c98bbd69d7df7eef930ea6fd41","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":601}
+@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/shell/doc.go","mode":420,"size":601,"sha256":"5827665e9ad9eae01d09c386e4280baaa672a1d5144c4b515abc3f8e263666df","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":601}
 // Copyright (c) 2017, Daniel Martí <mvdan@mvdan.cc>
 // See LICENSE for licensing information
 
@@ -61306,7 +61306,7 @@ loop:
 package shell
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/shell/expand.go","mode":420,"size":2025,"sha256":"79a8754fe504a94ef95dc2d7757327db02f6dc00bf2c6f354ce68fff660f4067","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":1962}
+@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/shell/expand.go","mode":420,"size":1962,"sha256":"861b13106ffe7dca2ee45075aa374f2406ef86497fbdb0d937e8369f1c72b0d8","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1962}
 // Copyright (c) 2018, Daniel Martí <mvdan@mvdan.cc>
 // See LICENSE for licensing information
 
@@ -61372,7 +61372,7 @@ func Fields(s string, env func(string) string) ([]string, error) {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/syntax/braces.go","mode":420,"size":4040,"sha256":"11d9bddfd4bd913aed0a72c670208111812ddf6542437d91c771553be301f98a","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":3863}
+@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/syntax/braces.go","mode":420,"size":3863,"sha256":"f87d717a504ecf2f2f1da8c20a44f041d64bfdabaa2d9f9ced4e5584a0173a4d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3863}
 // Copyright (c) 2018, Daniel Martí <mvdan@mvdan.cc>
 // See LICENSE for licensing information
 
@@ -61592,7 +61592,7 @@ EOF
 $((3 + 4))
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/syntax/doc.go","mode":420,"size":232,"sha256":"11632c287cdbd9e6001c1e3a8d90e623033fcf8e9e0a06ec883c5d48b8641e8b","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":226}
+@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/syntax/doc.go","mode":420,"size":226,"sha256":"cf0d9c337e9c1444ba4722ef2eed72a685fbda3a7ff0386beddc892bebb507a9","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":226}
 // Copyright (c) 2016, Daniel Martí <mvdan@mvdan.cc>
 // See LICENSE for licensing information
 
@@ -61601,7 +61601,7 @@ $((3 + 4))
 package syntax
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/syntax/lexer.go","mode":420,"size":23414,"sha256":"02ba30ca7ebf3d89314e2f874388ea619a3d6ee3084b715484ec4c00b1e38398","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":22205}
+@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/syntax/lexer.go","mode":420,"size":22205,"sha256":"507e4190fa3ea45061941696b9967a71d1809d57f95c1d7c28ae6895d6891d34","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":22205}
 // Copyright (c) 2016, Daniel Martí <mvdan@mvdan.cc>
 // See LICENSE for licensing information
 
@@ -62813,7 +62813,7 @@ func testBinaryOp(val string) BinTestOperator {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/syntax/nodes.go","mode":420,"size":25766,"sha256":"0495842b8fb43b3cf4685ef6a286a667dbdacb2651fb6366016407495c7860b8","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":24813}
+@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/syntax/nodes.go","mode":420,"size":24813,"sha256":"3a5568c4c5851a3758f5887fa8b830ba86b508c1c28ac8231f1cfe38d93d5197","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":24813}
 // Copyright (c) 2016, Daniel Martí <mvdan@mvdan.cc>
 // See LICENSE for licensing information
 
@@ -63769,7 +63769,7 @@ func wordLastEnd(ws []*Word) Pos {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/syntax/parser.go","mode":420,"size":62479,"sha256":"b051db1fb2ef28900ba4b3830651a7845211f8710bdd244f84cdb1849f18cb1e","index":0,"count":2,"newline":"crlf","encoding":"utf-8","payloadBytes":48001}
+@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/syntax/parser.go","mode":420,"size":59990,"sha256":"f7064ee1978680bffee54f5d36c8c10c64cd6e568f370415ae99bde6eda5d10b","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48001}
 // Copyright (c) 2016, Daniel Martí <mvdan@mvdan.cc>
 // See LICENSE for licensing information
 
@@ -65763,7 +65763,7 @@ func (p *Parser) forClause(s *Stmt) {
 
 func (p *Parser) loop(f
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/syntax/parser.go","mode":420,"size":62479,"sha256":"b051db1fb2ef28900ba4b3830651a7845211f8710bdd244f84cdb1849f18cb1e","index":1,"count":2,"newline":"crlf","encoding":"utf-8","payloadBytes":11989}
+@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/syntax/parser.go","mode":420,"size":59990,"sha256":"f7064ee1978680bffee54f5d36c8c10c64cd6e568f370415ae99bde6eda5d10b","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":11989}
 pos Pos) Loop {
 	if !p.lang.isBash() {
 		switch p.tok {
@@ -66264,7 +66264,7 @@ func (p *Parser) funcDecl(s *Stmt, name *Lit, pos Pos, withParens bool) {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/syntax/parser_arithm.go","mode":420,"size":8713,"sha256":"36eea87d21c722884b7374ab347a7d0a28cc52206a05432663fdfad13442c560","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":8360}
+@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/syntax/parser_arithm.go","mode":420,"size":8360,"sha256":"33d354b642308f8756aba92589f2e12bccef80b00876865433783fae11f4f28b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":8360}
 package syntax
 
 // compact specifies whether we allow spaces between expressions.
@@ -66620,7 +66620,7 @@ func (p *Parser) arithmEnd(ltok token, lpos Pos, old saveState) Pos {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/syntax/printer.go","mode":420,"size":37948,"sha256":"39ffe95b02f1f4a8ffa0d9cdc17796a4a49fca5add3331bf638d8a5d906e87f8","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":36418}
+@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/syntax/printer.go","mode":420,"size":36418,"sha256":"34d04f3ed57e15496ed9355e237419636624a5b4177e877b359f04c870c479e0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":36418}
 // Copyright (c) 2016, Daniel Martí <mvdan@mvdan.cc>
 // See LICENSE for licensing information
 
@@ -68153,7 +68153,7 @@ func startsWithLparen(node Node) bool {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/syntax/quote.go","mode":420,"size":5506,"sha256":"2c1ee1ba658de08bcd781b58418839c05d16bfa78b3bfd8ee6f492524581117a","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":5321}
+@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/syntax/quote.go","mode":420,"size":5321,"sha256":"878b38a84c39608a85bd80e2cf7b23a22ab63d9c001baaba591b79eb2a7ee161","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5321}
 // Copyright (c) 2021, Daniel Martí <mvdan@mvdan.cc>
 // See LICENSE for licensing information
 
@@ -68341,7 +68341,7 @@ func isHex(r rune) bool {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/syntax/quotestate_string.go","mode":420,"size":1894,"sha256":"1fdb877db2a4eabebdb0ff0a989ad6cd4a72c30a238b233288d18d768f122aff","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":1833}
+@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/syntax/quotestate_string.go","mode":420,"size":1833,"sha256":"dde7958a422fa6940080593bf5b1f96d4cd807efee99e523ecba7b14ff8f76d5","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1833}
 // Code generated by "stringer -type=quoteState"; DO NOT EDIT.
 
 package syntax
@@ -68405,7 +68405,7 @@ func (i quoteState) String() string {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/syntax/simplify.go","mode":420,"size":5760,"sha256":"3e829423d268aee385484ac7c666fd5ad09966c5248782921e83b606e3eed1ed","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":5510}
+@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/syntax/simplify.go","mode":420,"size":5510,"sha256":"aef146e3bc49b6f4c1ba5bc25f3824345b6f354c2175d5e85c9c5f080d212132","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5510}
 // Copyright (c) 2017, Daniel Martí <mvdan@mvdan.cc>
 // See LICENSE for licensing information
 
@@ -68658,7 +68658,7 @@ func (s *simplifier) removeNegateTest(x TestExpr) TestExpr {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/syntax/token_string.go","mode":420,"size":4009,"sha256":"8e8f0bc06fe3f83ed37bc1512bd58e03ab1d3bf08619f4d80457d5c034030aba","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":3860}
+@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/syntax/token_string.go","mode":420,"size":3860,"sha256":"abf37801cdaea931ea79d2a9cb89ccda0ab25b8a364bf400ab5e7317bcb743ba","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3860}
 // Code generated by "stringer -type token -linecomment -trimprefix _"; DO NOT EDIT.
 
 package syntax
@@ -68810,7 +68810,7 @@ func (i token) String() string {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/syntax/tokens.go","mode":420,"size":10170,"sha256":"c292add73e9bf5e7bacb4dedcd16d7670bd055fc3d89ac299a74d35bd2679423","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":9821}
+@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/syntax/tokens.go","mode":420,"size":9821,"sha256":"fdd7e6e219a8a165b523ecdd953ed16889537241aa9c11acb8748bcfd6e412ce","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":9821}
 // Copyright (c) 2016, Daniel Martí <mvdan@mvdan.cc>
 // See LICENSE for licensing information
 
@@ -69162,7 +69162,7 @@ func (o UnTestOperator) String() string   { return token(o).String() }
 func (o BinTestOperator) String() string  { return token(o).String() }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/syntax/walk.go","mode":420,"size":6024,"sha256":"0804543b042b82ad3444101b7dd0fdb1553846b0eaf743235aed4ef8d8a829ca","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":5711}
+@@PORTABLE {"path":"third_party/wails/vendor/mvdan.cc/sh/v3/syntax/walk.go","mode":420,"size":5711,"sha256":"45ab5d24c59f3085c4d563a441a250958c66a52b9738badae4d77cf41239aeeb","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5711}
 // Copyright (c) 2016, Daniel Martí <mvdan@mvdan.cc>
 // See LICENSE for licensing information
 
@@ -69478,7 +69478,7 @@ func (p *debugPrinter) print(x reflect.Value) {
 }
 
 @@END
-@@PORTABLE {"path":"third_party/wails/wails.go","mode":420,"size":524,"sha256":"58073afb27be457517c7fabe80747c3298367ae9b6cc557b96f578db020a7f59","index":0,"count":1,"newline":"crlf","encoding":"utf-8","payloadBytes":509}
+@@PORTABLE {"path":"third_party/wails/wails.go","mode":420,"size":509,"sha256":"0fef20e5358265d99793113c43dbe3b2b80a535d0eefcc9061d04b5f4d56bd05","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":509}
 // Package wails is the main package of the Wails project.
 // It is used by client applications.
 package wails
@@ -74245,8 +74245,251 @@ func wrapDecapsulator(dk any, err error) (crypto.Decapsulator, error) {
 @@PORTABLE {"path":"vendor/git.sr.ht/~jackmordaunt/go-toast/v2/.gitignore","mode":420,"size":5,"sha256":"53e77a92a134f705efa4c63617cc9584b2b1ed42bc3feaedb300e1be0473de94","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5}
 *.exe
 @@END
-@@PORTABLE {"path":"vendor/git.sr.ht/~jackmordaunt/go-toast/v2/ARCHITECTURE.md","mode":420,"size":9155,"sha256":"3f21049bf33fd703999f9fc1778202a78a9f9a0329c9db1de334837d0ea0b516","index":0,"count":1,"newline":"lf","encoding":"base64","payloadBytes":12208}
-IyBBcmNoaXRlY3R1cmUNCg0KVGhpcyBkb2N1bWVudCB3aWxsIGF0dGVtcHQgdG8gZXhwbGFpbiBob3cgdGhpcyBjb2RlIHdvcmtzLiANCg0KIyMgV2luZG93cyBDT00gDQoNCldpbmRvd3MgbWFrZXMgaGVhdnkgdXNlIG9mIGl0J3MgW0NPTSBhcGldKGh0dHBzOi8vZW4ud2lraXBlZGlhLm9yZy93aWtpL0NvbXBvbmVudF9PYmplY3RfTW9kZWwpLCANCihDb21wb25lbnQgT2JqZWN0IE1vZGVsKSB3aGljaCBpcyBhIGJpbmFyeSBpbnRlcmZhY2UgLSBhbGxvd2luZyBwcm9ncmFtcyB0aGF0IGFncmVlIG9uIGEgbWVtb3J5IA0KbGF5b3V0IGluIG9yZGVyIHRvIGNvbW11bmljYXRlLiANCg0KQ09NIGFwaXMgYXJlIHR5cGljYWxseSBPYmplY3QgT3JpZW50ZWQsIGFuZCBiYXNlZCBvbiBpbnRlcmZhY2VzLiBUaGlzIHNob3VsZCBiZSBmYW1pbGlhciB0byBHbw0KcHJvZ3JhbW1lcnMsIHNpbmNlIEdvIGluY2x1ZGVzIGludGVyZmFjZXMgYXMgYSBjb3JlIHBhcnQgb2YgaXRzIGxhbmd1YWdlIGRlc2lnbiBhbmQgdHlwZSBzeXN0ZW0uICANCg0KVGhlIGRpZmZlcmVuY2UgYmVpbmcgdGhhdCBpbiBDT00gd2UgZG9uJ3QgZ2V0IGFueSBydW50aW1lIGhlbHAsIG5pY2Ugc3ludGF4IG9yIHR5cGUgc2FmZXR5LiBXZQ0KZ2V0IHJhdyBbVlRhYmxlc10oaHR0cHM6Ly9lbi53aWtpcGVkaWEub3JnL3dpa2kvVmlydHVhbF9tZXRob2RfdGFibGUpIGFuZCBkZWFsIHdpdGggcmF3IG1lbW9yeS4gDQoNCllvdSBjYW4gdGhpbmsgb2YgQ09NIGFzIGxpa2Ugd29ya2luZyB3aXRoIGEgR28gYXBpIHRoYXQgdXNlcyBgYW55YCAoZW1wdHkgaW50ZXJmYWNlKSBfZXZlcnl3aGVyZV8NCmFuZCB0eXBlc3dpdGNoaW5nIGlzIHJlcXVpcmVkIHRvIGFjY2VzcyBtZXRob2RzIGBmaWxlLCBvayA6PSBvYmouKEZpbGUpYC4gIA0KDQpTb21lIGxhbmd1YWdlcyBsaWtlIEMrKyBoYXZlIGV4dGVuc2lvbnMgdGhhdCBzdXBwb3J0IENPTSBhbmQgcHJvdmlkZSBjb252ZW5pZW50IHdyYXBwZXJzIGZvcg0KZ2VuZXJhdGluZyBhbmQgdXNpbmcgQ09NIGFwaXMuIEdvIGRvZXMgbm90LiBDIGFsc28sIGRvZXMgbm90LiANCg0KSG93ZXZlciB0aGVyZSBpcyBhIHBhY2thZ2UgYGdvLW9sZWAgdGhhdCBhbGxvd3MgdXMgdG8gX2NhbGxfIENPTSBhcGlzIHdpdGggc29tZSBsZXZlbCBvZiANCmNvbnZlbmllbmNlIC0gd2hpY2ggd2Ugd2lsbCB1c2Ugd2hlcmUgcG9zc2libGUuIFdoYXQgZ28tb2xlIGRvZXMgbm90IGV4cG9zZSBpcyBhIHdheSB0byANCmltcGxlbWVudCBhIENPTSBvYmplY3QgaW4gR28uIA0KDQojIyBJbnRlcmFjdGluZyB3aXRoIENPTSBvYmplY3RzIGluIHB1cmUgR28NCg0KSW4gb3JkZXIgdG8gaW50ZXJhY3Qgd2l0aCBDT00gb2JqZWN0cyB3ZSBuZWVkIHRvOg0KDQoxLiBsb2NhdGUgaGVhZGVycyBjb250YWluaW5nIHRoZSBWVGFibGUgZGVmaW5pdGlvbnMNCjIuIGRlZmluZSB2dGFibGVzIGluIEdvIHRoYXQgYXJlIGNvbXBhdGFibGUgd2l0aCB0aG9zZSBkZWZpbml0aW9ucw0KMy4gaW52b2tlIHRoZSBhcHByb3ByaWF0ZSBDT00gb2JqZWN0cyB1c2luZyBvdXIgdnRhYmxlcyBhbmQgdGhlIHN5c2NhbGwgcGFja2FnZSAgDQoNCiMjIyAxLiBsb2NhdGUgaGVhZGVycyANCg0KRG93bmxvYWQgV2luZG93cyBTREsgdmlhIHRoZSBbVmlzdWFsIFN0dWRpbyBpbnN0YWxsZXJdKGh0dHBzOi8vdmlzdWFsc3R1ZGlvLm1pY3Jvc29mdC5jb20vZG93bmxvYWRzKS4gDQpZb3Ugd2lsbCBuZWVkIHRvIGNoZWNrICJEZXNrdG9wIGRldmVsb3BtZW50IHdpdGggQysrIi4NCg0KT25jZSBjb21wbGV0ZSB5b3UgY2FuIG5hdmlnYXRlIHRvIHRoZSBTREsgaW5jbHVkZSBkaXJlY3RvcnkuDQoNCkluIG91ciBjYXNlIHdlIG5lZWRlZCBgV2luZG93cy51aS5ub3RpZmljYXRpb25zLmhgLCB3aGljaCBjb250YWlucyB0aGUgZGVmaW5pdGlvbnMgb2YKdGhlIHR5cGVzIHdlIHdhbnQgdG8gY2FsbCwgYW5kIGBOb3RpZmljYXRpb25BY3RpdmF0aW9uQ2FsbGJhY2suaGAgd2hpY2ggY29udGFpbnMgdGhlIGRlZmluaXRpb24gb2YKYElOb3RpZmljYXRpb25BY3RpdmF0aW9uQ2FsbGJhY2tgIHdoaWNoIGlzIHRoZSBpbnRlcmZhY2Ugd2UgbmVlZCB0byBfaW1wbGVtZW50Xy4KDQojIyMgMi4gZGVmaW5lIHZ0YWJsZXMgaW4gR28NCg0KVGhlIFZUYWJsZXMgYXJlIGRlZmluZWQgaW4gQyAobWlyZWQgaW4gbWFjcm9zKS4gV2UgbmVlZCB0byBkZWZpbmUgY29tcGF0aWJsZSB2dGFibGVzIGluIEdvIHN5bnRheA0Kc28gd2UgY2FuIGNhbGwgdGhlIG9uZXMgZGVmaW5lZCBpbiB0aGUgaGVhZGVyLiANCg0KQ09NIG9iamVjdHMgYXJlIHN0cnVjdHVyZWQgaW4gYSBzdWNoIGEgd2F5IHRoYXQgd2Ugd2FudCBhIHBhcmVudCBzdHJ1Y3Qgd2hvJ3MgZmlyc3QgZmllbGQgaXMgYSBwb2ludGVyDQp0byB0aGUgdnRhYmxlIHN0cnVjdC4gQSBmdWxsIGV4YW1wbGUgaXMgcHJvdmlkZWQgbGF0ZXIsIGZvciBub3cgaXQgd2UgbmVlZCBzb21ldGhpbmcgbGlrZSB0aGlzOg0KDQpgYGBnbw0KdHlwZSBPYmplY3Qgc3RydWN0IHsNCiAgbHB2dGJsICpPYmplY3RWdGJsDQp9DQp0eXBlIE9iamVjdFZ0Ymwgc3RydWN0IHsNCiAgTWV0aG9kT25lIHVpbnRwdHINCiAgTWV0aGRvVHdvIHVpbnRwdHINCiAgLy8uLi4NCn0NCmBgYA0KDQojIyMgMy4gaW52b2tlIG1ldGhvZHMgaW4gR28gDQoNClVzaW5nIHBhY2thZ2UgYHN5c2NhbGxgIHdlIGNhbiBpbnZva2UgdGhlc2UgbWV0aG9kcyAocHJvdmlkZWQgdGhlIHVpbnRwdHIgYXJlIHZhbGlkKSB1c2luZw0KYHN5c2NhbC5TeXNjYWxsTmAuIFBhcmFtdGVycyBhbmQgcmV0dXJuIHZhbHVlcyBhcmUgZGVmaW5lZCBpbiB0aGUgQyBoZWFkZXJzLiANCg0KYGBgZ28NCmZ1bmMgKHYgKk9iamVjdCkgT25lKCkgZXJyb3Igew0KICBociwgXywgXyA6PSBzeXNjYWxsLlN5c2NhbGxOKHVpbnRwdHIodikpDQogIGlmIGhyICE9IG9sZS5TX09LIHsNCiAgICByZXR1cm4gb2xlLk5ld0Vycm9yKGhyKQ0KICB9DQogIHJldHVybiBuaWwNCn0NCmBgYA0KDQpXaXRoIHRoYXQgd2UgY2FuIGlub2tlIG1ldGhvZHMgb24gYSBDT00gb2JqZWN0LiBUaGlzIGlzIGhvdyBgZ28tb2xlYCB3b3Jrcy4gDQoNCiMjIEltcGxlbWVudGluZyBhIENPTSBvYmplY3QgaW4gcHVyZSBHbyAobm8gY2dvISkNCg0KVG8gZG8gdGhpcyB3ZSB3aWxsIG5lZWQgdG8gYWxsb2NhdGUgcmF3IG1lbW9yeSBmb3IgdGhlIFZUYWJsZXMgKHNvIHRoYXQgR28gZ2FyYmFnZSBjb2xsZWN0b3INCmRvZXNuJ3QgaW50ZXJmZXJlKSBhbmQgd3JpdGUgb3VyIGZ1bmN0aW9uIHBvaW50ZXJzIHRvIHRoZSBWVGFibGVzLiANCg0KU2luY2UgdGhlc2UgYXJlIG5vdCBzYWZlIEdvIGNhcGFiaWxpdGllcyB3ZSB3aWxsIG5lZWQgdGhlIGhlbHAgb2YgcGFja2FnZSBgc3lzY2FsbGAgKG9uIFdpbmRvd3MpLiANCg0KUGFja2FnZSBgc3lzY2FsbGAgcHJvdmlkZXMgdHdvIHZlcnkgaW1wb3J0YW50IGZ1bmN0aW9uczoNCg0KMS4gYE5ld1Byb2NgIC0gd2hpY2ggbG9hZHMgYSBmdW5jdGlvbiBmcm9tIGEgRExMIA0KMi4gYE5ld0NhbGxiYWNrYCAtIHdoaWNoIGFsbG9jYXRlcyBhIEMtY2FsbGFibGUgZnVuY3Rpb24gcG9pbnRlciBmcm9tIGEgR28gZnVuY3Rpb24NCg0KRm9yIHRoZSBmaXJzdCBwYXJ0LCB3ZSBjYW4gbG9hZCB0aGUgV2luZG93cyBrZXJuZWwgYXBpIHZpYSBga2VybmVsMzIuZGxsYCBzeXN0ZW0gZGxsLCBhbmQNCnB1bGwgb3V0IGBHbG9iYWxBbGxvY2AgYW5kIGBHbG9iYWxGcmVlYCB1c2luZyBgc3lzY2FsbC5OZXdQcm9jYC4gDQoNCkZvciB0aGUgc2Vjb25kIHBhcnQsIHdlIGNhbiB1c2UgYHN5c2NhbGwuTmV3Q2FsbGJhY2tgIHRvIGJ1aWxkIGEgQy1jYWxsYWJsZSBmdW5jdGlvbiBwb2ludGVyIA0KZnJvbSBhIEdvIGZ1bmN0aW9uIGFuZCBpbnN0YW50aWF0ZSB0aGUgVnRUYWJsZXMgd2l0aCBpdC4gQ2F2ZWF0IGVtcHRvcjogbWVtb3J5IGFsbG9jYXRlZCBieQ0KYE5ld0NhbGxiYWNrYCBpcyBuZXZlciByZWxlYXNlZCwgYW5kIG9ubHkgMTAyNCBjYWxsYmFja3MgYXJlIGd1YXJhbnRlZWQgdG8gYmUgYWxsb3dlZC4gVGhpcw0KaXMgd2h5IHdlIG9ubHkgYWxsb2NhdGUgdGhlIGNhbGxiYWNrcyBvbmNlIG9uIGluaXQuDQoNClRodXMgd2UgY2FuIGltcGxlbWVudCBhIENPTSBvYmplY3QgKGludm9rYWJsZSBmcm9tIEMpIGxpa2UgdGhpczoNCg0KYGBgZ28NCg0KLy8gSW5pdGlhbGl6ZSBvdXIga2VybmVsIGZ1bmN0aW9ucy4gDQp2YXIgKA0KICBrZXJuZWwzMiAgID0gd2luZG93cy5OZXdMYXp5U3lzdGVtRExMKCJrZXJuZWwzMi5kbGwiKQ0KICBwcm9jTWFsbG9jID0ga2VybmVsMzIuTmV3UHJvYygiR2xvYmFsQWxsb2MiKQ0KICBwcm9jRnJlZSAgID0ga2VybmVsMzIuTmV3UHJvYygiR2xvYmFsRnJlZSIpDQopDQoNCi8vIG1hbGxvYyBhbGxvY2F0ZXMgcmF3IG1lbW9yeSB1c2luZyB0aGUgV2luZG93cyBrZXJuZWwuDQovLyBJbiBjYXNlIG9mIG91dCBvZiBtZW1vcnksIHRoZSByZXR1cm5lZCBwb2ludGVyIHdpbGwgYmUgbmlsLg0KLy8gVGhlIG1lbW9yeSBpcyB6ZXJvZWQgb3V0IHRvIG1ha2Ugc3VyZSB3ZSBkb24ndCBnZXQgZ2FyYmFnZSB0aGF0IGxvb2tzIGxpa2UNCi8vIHZhbGlkIEdvIGRhdGEgdHlwZXMuDQpmdW5jIG1hbGxvYyhzaXplIHVpbnRwdHIpIHVuc2FmZS5Qb2ludGVyIHsNCglociwgXywgXyA6PSBwcm9jTWFsbG9jLkNhbGwodWludHB0cihHTUVNX0ZJWEVEfEdNRU1fWkVST0lOSVQpLCB1aW50cHRyKHNpemUpKQ0KCWlmIGhyID09IDAgew0KCQlyZXR1cm4gbmlsDQoJfQ0KCXJldHVybiB1bnNhZmUuUG9pbnRlcihocikNCn0NCg0KLy8gZnJlZSBkZWFsbG9jYXRlcyByYXcgbWVtb3J5IGFsbG9jYXRlZCBieSBtYWxsb2MuDQpmdW5jIGZyZWUob2JqZWN0IHVuc2FmZS5Qb2ludGVyKSB7DQoJcHJvY0ZyZWUuQ2FsbCh1aW50cHRyKG9iamVjdCkpDQp9DQoNCi8vIE9iamVjdCBkZWZpbmVzIG91ciBvYmplY3QuIA0KLy8gVGhpcyBpcyBob3cgQ09NIG9iamVjdHMgYXJlIGxhaWQgb3V0IGluIG1lbW9yeSwgd2hlcmUgdGhlIGZpcnN0IGZpZWxkIGlzIGEgcG9pbnRlcg0KLy8gdG8gYSB2dGFibGUsIGFuZCB0aGUgdnRhYmxlJ3MgZmllbGRzIGFyZSBwb2ludGVycyB0byBmdW5jdGlvbnMuIA0KdHlwZSBPYmplY3Qgc3RydWN0IHsNCiAgbHB2dGJsICpPYmplY3RWdGJsIC8vIGxwdnRibCBpcyBhIENPTSBjb252ZW50aW9uYWwgbmFtZSBmb3IgdGhpcyBmaWVsZC4gDQp9DQoNCi8vIE9iamVjdFZ0YmwgZGVmaW5lcyB0aGUgVnRhYmxlIG9mIG91ciBvYmplY3QuIA0KdHlwZSBPYmplY3RWdGJsIHN0cnVjdCB7DQogIE1ldGhvZE9uZSAgIHVpbnRwdHINCiAgTWV0aG9kVHdvICAgdWludHB0cg0KICBNZXRob2RUaHJlZSB1aW50cHRyDQp9DQoNCi8vIFRoZXNlIG1ldGhvZHMgYXJlIGFsbG9jYXRlZCBvbmNlIGFzIHBhY2thZ2UgZ2xvYmFscyBiZWNhdXNlIEdvIHdpbGwgbmV2ZXIgcmVjbGFpbSB0aGUNCi8vIG1lbW9yeSBhbGxvY2F0ZWQgZm9yIHN1Y2ggY2FsbGJhY2tzLiANCi8vIA0KLy8gQWxsIGFyZ3VtZW50cyBtdXN0IGJlIHVpbnRwdHIgc2l6ZWQsIGFuZCB0aGUgcmV0dXJuIG11c3QgYmUgYSB1aW50cHRyIGFzIHdlbGwuIA0KLy8gDQovLyBCeSBjb252ZW50aW9uLCB0aGUgZmlyc3QgcGFyYW1ldGVyIGlzIGEgcG9pbnRlciB0byB0aGUgcGFyZW50IG9iamVjdC4gDQp2YXIgKA0KICBtZXRob2RPbmUgPSBzeXNjYWxsLk5ld0NhbGxiYWNrKGZ1bmModGhpcyAqT2JqZWN0KSB1aW50cHRyIHsNCiAgICBmbXQuUHJpbnRmKCJtZXRob2RPbmUgaW52b2tlZFxuIikNCiAgICByZXR1cm4gdWludHB0cigwKQ0KICB9KQ0KICANCiAgbWV0aG9kVHdvID0gc3lzY2FsbC5OZXdDYWxsYmFjayhmdW5jKHRoaXMgKk9iamVjdCkgdWludHB0ciB7DQogICAgZm10LlByaW50ZigibWV0aG9kVHdvIGludm9rZWRcbiIpDQogICAgcmV0dXJuIHVpbnRwdHIoMCkNCiAgfSkNCiAgDQogIG1ldGhvZFRocmVlID0gc3lzY2FsbC5OZXdDYWxsYmFjayhmdW5jKHRoaXMgKk9iamVjdCkgdWludHB0ciB7DQogICAgZm10LlByaW50ZigibWV0aG9kVGhyZWUgaW52b2tlZFxuIikNCiAgICByZXR1cm4gdWludHB0cigwKQ0KICB9KQ0KKQ0KDQoNCmZ1bmMgTmV3T2JqZWN0KCkgKk9iamVjdCB7DQogIC8vIEFsbG9jYXRlIHRoZSBwYXJlbnQgb2JqZWN0IGFuZCB0aGUgdnRhYmxlLiANCiAgb2JqIDo9ICgqT2JqZWN0KShtYWxsb2ModW5zYWZlLlNpemVvZihPYmplY3R7fSkpKQ0KICB2dGJsIDo9ICgqT2JqZWN0VnRibCkobWFsbG9jKHVuc2FmZS5TaXplb2YoT2JqZWN0VnRibHt9KSkpDQoNCiAgLy8gSW5pdGlhbGl6ZSB0aGUgdnRhYmxlIHdpdGggb3VyIHN0YXRpYyBjYWxsYmFjayBpbXBsZW1lbnRhdGlvbnMuIA0KICB2dGJsLk1ldGhvZE9uZSA9IG1ldGhvZE9uZQ0KICB2dGJsLk1ldGhvZFR3byA9IG1ldGhvZFR3bw0KICB2dGJsLk1ldGhvZFRocmVlID0gbWV0aG9kVGhyZWUNCiAgDQogIC8vIFRoZSByZXR1cm5lZCBvYmplY3QgbXVzdCBiZSBmcmVlZCBieSBHbG9iYWxGcmVlLiANCiAgb2JqZWN0LmxwdnRibCA9IHZ0YmwNCiAgcmV0dXJuIG9iag0KfQ0KYGBgDQoNCiMjIFdpblJUIGFuZCBUb2FzdCBOb3RpZmljYXRpb25zDQoNCkZvciB0aGlzIHBhY2thZ2UgdGhlIHZ0YWJsZXMgd2UgbmVlZCBhcmUgbG9jYXRlZCBpbiB2YXJpb3VzIGhlYWRlcnMgYFdpbmRvd3MudWkubm90aWZpY2F0aW9ucy5oYCBhbmQKYE5vdGlmaWNhdGlvbkFjdGl2YXRpb25DYWxsYmFjay5oYCBhbmQgYGNvbWJhc2UuaGAuDQoNCldpdGggYWxsIG9mIHRoZSB2dGFibGVzIHJlcGxpY2F0ZWQgaW4gR28gYXMgZXhwbGFpbmVkIGFib3ZlIHdlIG5vdyBuZWVkIHRvIGludGVyYWN0IHdpdGggdGhlIFdpbmRvd3MNClJ1bnRpbWUuIA0KDQpGaXJzdCB3ZSBuZWVkIHRvIGluaXRpYWxpemUgdGhlIFdpbmRvd3MgUnVudGltZSB3aXRoIGBSb0luaXRpYWxpemVgLiANCg0KYGBgZ28NCm9sZS5Sb0luaXRpYWxpemUoMCkNCmBgYA0KDQpUcmFkaXRpb25hbCBDT00gdXNlcyBHVUlEcyB0byBpZGVudGlmeSBvYmplY3RzIGFuZCBpbnRlcmZhY2VzLiBXaW5SVCB1c2VzIHN0cmluZ3MgKG1hcHBlZCB0byBHVUlEUyANCmF0IHJ1bnRpbWUpLg0KDQpUbyBpbnN0YW50aWF0ZSBhIFdpblJUIENPTSBvYmplY3Qgd2UgaW52b2tlIGBSb0dldEFjdGl2YXRpb25GYWN0b3J5YCB3aXRoIHRoZSBjbGFzcyBzdHJpbmcgYWxvbmcgd2l0aA0KdGhlIGludGVyZmFjZSBHVUlEIHdlIGV4cGVjdCB0byB1c2UuIA0KDQoNCmBgYGdvDQpDTFNJRF9Ub2FzdE5vdGlmaWNhdGlvbiA6PSAiV2luZG93cy5VSS5Ob3RpZmljYXRpb25zLlRvYXN0Tm90aWZpY2F0aW9uIg0KSUlEX0lUb2FzdE5vdGlmaWNhdGlvbkZhY3RvcnkgOj0gb2xlLk5ld0dVSUQoIns1MEFDMTAzRi1EMjM1LTQ1OTgtQkJFRi05OEZFNEQxQTNBRDR9IikNCg0KZmFjdG9yeU9iamVjdCwgZXJyIDo9IG9sZS5Sb0dldEFjdGl2YXRpb25GYWN0b3J5KENMU0lEX1RvYXN0Tm90aWZpY2F0aW9uLCBJSURfVG9hc3ROb3RpZmljYXRpb25GYWN0b3J5KQ0KaWYgZXJyICE9IG5pbCB7DQoJcmV0dXJuIG5pbCwgZm10LkVycm9yZigiZ2V0dGluZyBhY3RpdmF0aW9uIGZhY3Rvcnk6ICV3IiwgZXJyKQ0KfQ0KYGBgDQoNCkZyb20gdGhlcmUgd2UgY2FuIHVuc2FmZSBjYXN0IHRvIG91ciBjYWxsYmFjayBkZWZpbml0aW9uIChvbGUgZG9lc24ndCBwcm92aWRlIGRpcmVjdCBhY2Nlc3MgdG8gdGhlIG1ldGhvZHMpLg0KDQpgYGBnbw0KZmFjdG9yeSA6PSAoKklUb2FzdE5vdGlmaWNhdGlvbkZhY3RvcnkpKHVuc2FmZS5Qb2ludGVyKGZhY3RvcnlPYmplY3QpKQ0Kbm90aWZpY2F0aW9uLCBlcnIgOj0gZmFjdG9yeS5DcmVhdGVUb2FzdE5vdGlmaWNhdGlvbih4bWwpDQpgYGANCg0KUmVwZWF0IHRoaXMgcHJvY2VzcyBwZXIgb2JqZWN0IHdlIG5lZWQgdG8gaW5zdGFudGlhdGUuIA0KDQpUbyBnZW5lcmF0ZSBhIHRvYXN0IG5vdGlmaWNhdGlvbiBmcm9tIFhNTCB3aXRoIGEgY2FsbGJhY2sgd2UgbmVlZCB0byBpbnN0YW50aWF0ZSBzZXZlcmFsIENPTSBvYmplY3RzOg0KDQoxLiBgSU5vdGlmaWNhdGlvbkFjdGl2YXRpb25DYWxsYmFja2Agb3VyIGltcGxlbWVudGF0aW9uIHRvIGJlIGludm9rZWQgYnkgdGhlIHJ1bnRpbWUgDQoxLiBgQ2xhc3NGYWN0b3J5YCB3aGljaCBjYW4gaW5zdGFudGlhdGUgb3VyIGBJTm90aWZpY2F0aW9uQWN0aXZhdGlvbkNhbGxiYWNrYCBpbXBsZW1lbnRhdGlvbg0KMS4gYFhtbERvY3VtZW50YCB0byBjb250YWluIHRoZSB4bWwgY29udGVudCBvZiB0aGUgbm90aWZpY2F0aW9uDQoxLiBgWG1sRG9jdW1lbnRJT2AgdG8gcHJvdmlkZSBhbiBJTyBpbnRlcmZhY2UgdG8gdGhlIHhtbCBkb2N1bWVudCAoc28gd2UgY2FuIHdyaXRlIHRoZSB4bWwgdG8gaXQpDQoxLiBgTm90aWZpY2F0aW9uYCBzcGVjaWZ5aW5nIHRoZSBjb250ZW50IG9mIHRoZSBub3RpZmljYXRpb24NCjEuIGBOb3RpZmllcmAgZm9yIHNob3dpbmcgbm90aWZpY2F0aW9ucw0KDQpGaW5hbGx5IHdlIHJlZ2lzdGVyIG91ciBjbGFzcyBmYWN0b3J5IHVzaW5nIGBDb1JlZ2lzdGVyQ2xhc3NPYmplY3RgIHNvIHRoZSBydW50aW1lIGNhbiBjYWxsIHVzIGJhY2sNCmFuZCB0aGVuIHdlIGludm9rZSBgTm90aWZpZXIuU2hvd2AgcGFzc2luZyBpbiB0aGUgYE5vdGlmaWNhdGlvbmAgb2JqZWN0IHRvIGRpc3BsYXkgdGhlIG5vdGlmaWNhdGlvbi4gDQoNCkluIGFkZGl0aW9uIHRvIGNhbGxpbmcgYW5kIGltcGxlbWVudGluZyBDT00gb2JqZWN0cyB3ZSBuZWVkIHRvIG1hbmlwdWxhdGUgcmVnaXN0cnkgc3RhdGUgdG8gdGVsbCB0aGUgDQpXaW5kb3dzIFJ1bnRpbWUgbWV0YWRhdGEgYWJvdXQgb3VyIGFwcGxpY2F0aW9uLiANCg0KMS4gcmVnaXN0ZXIgYSBDTFNJRCAoR1VJRCkgZm9yIG91ciBJTm90aWZpY2F0aW9uQWN0aXZhdGlvbkNhbGxiYWNrOyB0aGlzIGlzIGhvdyB0aGUgcnVudGltZSBrbm93cwp3aGF0IG9iamVjdCB0byBhc2sgZm9yCjIuIG9wdGlvbmFsbHkgcHJvdmlkZSBhbiBpY29uIGFuZCBhbiBhY3RpdmF0aW9uIGV4ZWN1dGFibGUgdG8gYmUgaW52b2tlZCB3aGVuIG91ciBhcHBsaWNhdGlvbiBpcyBub3QgcnVubmluZw0KDQoNCldpdGggYWxsIG9mIHRoYXQgY29ycmVjdGx5IGNvbmZpZ3VyZWQgd2UgY2FuIGdlbmVyYXRlIHRvYXN0IG5vdGlmaWNhdGlvbnMgb24gV2luZG93cyBpbiBwdXJlIEdvISA=
+@@PORTABLE {"path":"vendor/git.sr.ht/~jackmordaunt/go-toast/v2/ARCHITECTURE.md","mode":420,"size":8918,"sha256":"5e120d6e99d5e577fca321bb01dd4b20057ded51db4dbb9d604a68607b409c37","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":8918}
+# Architecture
+
+This document will attempt to explain how this code works. 
+
+## Windows COM 
+
+Windows makes heavy use of it's [COM api](https://en.wikipedia.org/wiki/Component_Object_Model), 
+(Component Object Model) which is a binary interface - allowing programs that agree on a memory 
+layout in order to communicate. 
+
+COM apis are typically Object Oriented, and based on interfaces. This should be familiar to Go
+programmers, since Go includes interfaces as a core part of its language design and type system.  
+
+The difference being that in COM we don't get any runtime help, nice syntax or type safety. We
+get raw [VTables](https://en.wikipedia.org/wiki/Virtual_method_table) and deal with raw memory. 
+
+You can think of COM as like working with a Go api that uses `any` (empty interface) _everywhere_
+and typeswitching is required to access methods `file, ok := obj.(File)`.  
+
+Some languages like C++ have extensions that support COM and provide convenient wrappers for
+generating and using COM apis. Go does not. C also, does not. 
+
+However there is a package `go-ole` that allows us to _call_ COM apis with some level of 
+convenience - which we will use where possible. What go-ole does not expose is a way to 
+implement a COM object in Go. 
+
+## Interacting with COM objects in pure Go
+
+In order to interact with COM objects we need to:
+
+1. locate headers containing the VTable definitions
+2. define vtables in Go that are compatable with those definitions
+3. invoke the appropriate COM objects using our vtables and the syscall package  
+
+### 1. locate headers 
+
+Download Windows SDK via the [Visual Studio installer](https://visualstudio.microsoft.com/downloads). 
+You will need to check "Desktop development with C++".
+
+Once complete you can navigate to the SDK include directory.
+
+In our case we needed `Windows.ui.notifications.h`, which contains the definitions of
+the types we want to call, and `NotificationActivationCallback.h` which contains the definition of
+`INotificationActivationCallback` which is the interface we need to _implement_.
+
+### 2. define vtables in Go
+
+The VTables are defined in C (mired in macros). We need to define compatible vtables in Go syntax
+so we can call the ones defined in the header. 
+
+COM objects are structured in a such a way that we want a parent struct who's first field is a pointer
+to the vtable struct. A full example is provided later, for now it we need something like this:
+
+```go
+type Object struct {
+  lpvtbl *ObjectVtbl
+}
+type ObjectVtbl struct {
+  MethodOne uintptr
+  MethdoTwo uintptr
+  //...
+}
+```
+
+### 3. invoke methods in Go 
+
+Using package `syscall` we can invoke these methods (provided the uintptr are valid) using
+`syscal.SyscallN`. Paramters and return values are defined in the C headers. 
+
+```go
+func (v *Object) One() error {
+  hr, _, _ := syscall.SyscallN(uintptr(v))
+  if hr != ole.S_OK {
+    return ole.NewError(hr)
+  }
+  return nil
+}
+```
+
+With that we can inoke methods on a COM object. This is how `go-ole` works. 
+
+## Implementing a COM object in pure Go (no cgo!)
+
+To do this we will need to allocate raw memory for the VTables (so that Go garbage collector
+doesn't interfere) and write our function pointers to the VTables. 
+
+Since these are not safe Go capabilities we will need the help of package `syscall` (on Windows). 
+
+Package `syscall` provides two very important functions:
+
+1. `NewProc` - which loads a function from a DLL 
+2. `NewCallback` - which allocates a C-callable function pointer from a Go function
+
+For the first part, we can load the Windows kernel api via `kernel32.dll` system dll, and
+pull out `GlobalAlloc` and `GlobalFree` using `syscall.NewProc`. 
+
+For the second part, we can use `syscall.NewCallback` to build a C-callable function pointer 
+from a Go function and instantiate the VtTables with it. Caveat emptor: memory allocated by
+`NewCallback` is never released, and only 1024 callbacks are guaranteed to be allowed. This
+is why we only allocate the callbacks once on init.
+
+Thus we can implement a COM object (invokable from C) like this:
+
+```go
+
+// Initialize our kernel functions. 
+var (
+  kernel32   = windows.NewLazySystemDLL("kernel32.dll")
+  procMalloc = kernel32.NewProc("GlobalAlloc")
+  procFree   = kernel32.NewProc("GlobalFree")
+)
+
+// malloc allocates raw memory using the Windows kernel.
+// In case of out of memory, the returned pointer will be nil.
+// The memory is zeroed out to make sure we don't get garbage that looks like
+// valid Go data types.
+func malloc(size uintptr) unsafe.Pointer {
+	hr, _, _ := procMalloc.Call(uintptr(GMEM_FIXED|GMEM_ZEROINIT), uintptr(size))
+	if hr == 0 {
+		return nil
+	}
+	return unsafe.Pointer(hr)
+}
+
+// free deallocates raw memory allocated by malloc.
+func free(object unsafe.Pointer) {
+	procFree.Call(uintptr(object))
+}
+
+// Object defines our object. 
+// This is how COM objects are laid out in memory, where the first field is a pointer
+// to a vtable, and the vtable's fields are pointers to functions. 
+type Object struct {
+  lpvtbl *ObjectVtbl // lpvtbl is a COM conventional name for this field. 
+}
+
+// ObjectVtbl defines the Vtable of our object. 
+type ObjectVtbl struct {
+  MethodOne   uintptr
+  MethodTwo   uintptr
+  MethodThree uintptr
+}
+
+// These methods are allocated once as package globals because Go will never reclaim the
+// memory allocated for such callbacks. 
+// 
+// All arguments must be uintptr sized, and the return must be a uintptr as well. 
+// 
+// By convention, the first parameter is a pointer to the parent object. 
+var (
+  methodOne = syscall.NewCallback(func(this *Object) uintptr {
+    fmt.Printf("methodOne invoked\n")
+    return uintptr(0)
+  })
+  
+  methodTwo = syscall.NewCallback(func(this *Object) uintptr {
+    fmt.Printf("methodTwo invoked\n")
+    return uintptr(0)
+  })
+  
+  methodThree = syscall.NewCallback(func(this *Object) uintptr {
+    fmt.Printf("methodThree invoked\n")
+    return uintptr(0)
+  })
+)
+
+
+func NewObject() *Object {
+  // Allocate the parent object and the vtable. 
+  obj := (*Object)(malloc(unsafe.Sizeof(Object{})))
+  vtbl := (*ObjectVtbl)(malloc(unsafe.Sizeof(ObjectVtbl{})))
+
+  // Initialize the vtable with our static callback implementations. 
+  vtbl.MethodOne = methodOne
+  vtbl.MethodTwo = methodTwo
+  vtbl.MethodThree = methodThree
+  
+  // The returned object must be freed by GlobalFree. 
+  object.lpvtbl = vtbl
+  return obj
+}
+```
+
+## WinRT and Toast Notifications
+
+For this package the vtables we need are located in various headers `Windows.ui.notifications.h` and
+`NotificationActivationCallback.h` and `combase.h`.
+
+With all of the vtables replicated in Go as explained above we now need to interact with the Windows
+Runtime. 
+
+First we need to initialize the Windows Runtime with `RoInitialize`. 
+
+```go
+ole.RoInitialize(0)
+```
+
+Traditional COM uses GUIDs to identify objects and interfaces. WinRT uses strings (mapped to GUIDS 
+at runtime).
+
+To instantiate a WinRT COM object we invoke `RoGetActivationFactory` with the class string along with
+the interface GUID we expect to use. 
+
+
+```go
+CLSID_ToastNotification := "Windows.UI.Notifications.ToastNotification"
+IID_IToastNotificationFactory := ole.NewGUID("{50AC103F-D235-4598-BBEF-98FE4D1A3AD4}")
+
+factoryObject, err := ole.RoGetActivationFactory(CLSID_ToastNotification, IID_ToastNotificationFactory)
+if err != nil {
+	return nil, fmt.Errorf("getting activation factory: %w", err)
+}
+```
+
+From there we can unsafe cast to our callback definition (ole doesn't provide direct access to the methods).
+
+```go
+factory := (*IToastNotificationFactory)(unsafe.Pointer(factoryObject))
+notification, err := factory.CreateToastNotification(xml)
+```
+
+Repeat this process per object we need to instantiate. 
+
+To generate a toast notification from XML with a callback we need to instantiate several COM objects:
+
+1. `INotificationActivationCallback` our implementation to be invoked by the runtime 
+1. `ClassFactory` which can instantiate our `INotificationActivationCallback` implementation
+1. `XmlDocument` to contain the xml content of the notification
+1. `XmlDocumentIO` to provide an IO interface to the xml document (so we can write the xml to it)
+1. `Notification` specifying the content of the notification
+1. `Notifier` for showing notifications
+
+Finally we register our class factory using `CoRegisterClassObject` so the runtime can call us back
+and then we invoke `Notifier.Show` passing in the `Notification` object to display the notification. 
+
+In addition to calling and implementing COM objects we need to manipulate registry state to tell the 
+Windows Runtime metadata about our application. 
+
+1. register a CLSID (GUID) for our INotificationActivationCallback; this is how the runtime knows
+what object to ask for
+2. optionally provide an icon and an activation executable to be invoked when our application is not running
+
+
+With all of that correctly configured we can generate toast notifications on Windows in pure Go! 
 @@END
 @@PORTABLE {"path":"vendor/git.sr.ht/~jackmordaunt/go-toast/v2/LICENSE","mode":420,"size":2561,"sha256":"1b57eeb121b97d5920085fddd4cf395e71b8b027051a367bec8228688d68292f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2561}
 This project is dual-licensed under the UNLICENSE or
