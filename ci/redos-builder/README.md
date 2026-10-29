@@ -1,61 +1,37 @@
-# Сборочный образ RED OS для GitLab
+# Общий сборочный образ RED OS для GitLab
 
-Образ предназначен для обычного распакованного проекта с `go.mod`, `vendor`,
-`third_party/wails`, `frontend`, `build`, `config` и `wails.json`.
-В заданиях CI не используются `source-*.txt`, `npm-source-*.txt` или скрипты
-распаковки portable-source.
+Образ содержит только инструменты сборки: Go 1.26.6, Node.js 24.19.0,
+npm 11.17.0, заранее собранную Wails CLI v2.15.0, Python, GCC/G++, pkg-config
+и GTK3/WebKit2GTK 4.1 development-библиотеки.
 
-## Состав
+В образе нет исходников приложения, frontend/package.json, package-lock.json,
+node_modules, npm-архивов или npm-кэша конкретного проекта. Смена зависимостей
+проекта не требует пересборки образа, пока подходит версия инструментов.
 
-- Официальный [RED OS UBI 8](https://redos.red-soft.ru/base/redos-8_0/8_0-administation/8_0-containers/8_0-docker-install/),
-  закреплённый в Dockerfile по digest.
-- Go 1.26.6, Node.js 24.19.0, npm 11.17.0, Python, GCC/G++, pkg-config,
-  GTK3/WebKit2GTK 4.1 development-библиотеки из `base`/`updates` RED OS.
-  DNF проверяет подписи RPM.
-- Wails CLI v2.15.0, заранее собранная из `third_party/wails` и её vendor,
-  без загрузки Go-модулей. В заданиях Wails повторно не компилируется.
-- Локальный npm-кэш для текущих package.json/package-lock.json, заполненный
-  проверенными архивами. Архивы для чужих необязательных платформ не включаются.
-  Смена package.json/lockfile требует пересборки образа; job остановится явно,
-  без загрузки зависимостей из Интернета.
+База — официальный RED OS UBI 8, закреплённый в Dockerfile по digest.
+RPM устанавливаются только из base/updates RED OS с проверкой подписей.
+Wails CLI собирается один раз из локального third_party/wails/vendor,
+без скачивания Go-модулей. В заданиях GitLab используется готовая CLI.
 
-Образ и задания рассчитаны на Linux x86-64/glibc. Он собирает Windows/amd64
-EXE и Linux/amd64 UI. Для запуска Linux UI на целевой машине нужны совместимые
-GTK3/WebKit2GTK runtime-библиотеки; графическая сессия не нужна для компиляции.
+## Подготовка образа
 
-## Подготовка и сборка образа
-
-На машине подготовки нужны Docker, Python 3 и обычное дерево проекта. Каталог
-`ci/redos-builder` должен быть скопирован в проект или присутствовать в Git.
-Отдельно подготовьте каталог с проверенными npm `.tgz`-архивами: имена файлов
-должны быть SHA-512 в hex с расширением `.tgz`, как в ранее подготовленных
-offline-входах. Это вход подготовки образа, а не вход заданий GitLab.
+Из корня обычного распакованного проекта, аналогичного каталогу с go.mod,
+frontend, vendor, third_party, build, config и wails.json:
 
 ```sh
-cd /path/to/platform-installer
-python3 ci/redos-builder/prepare-context.py \
-  . /srv/build-input/npm-tarballs /var/tmp/installer-builder-context
+python3 ci/redos-builder/prepare-context.py . /var/tmp/installer-builder-context
 docker build -t platform-installer-builder:redos8 /var/tmp/installer-builder-context
 ```
 
-Папка контекста должна быть новой. Подготовщик проверяет SHA-512 архивов по
-lockfile и копирует только Wails sources/vendor, npm-архивы, два frontend
-манифеста, Dockerfile и build-target.sh. `.runtime/secrets`, конфигурация Docker,
-пользовательские данные и исходники всего приложения в контекст не попадают.
-Архивы npm он не скачивает; отсутствие нужного архива — ошибка подготовки.
+Папка контекста должна быть новой. Никаких npm-входов на этом шаге не нужно.
+Скрипт копирует только Wails sources/vendor, Dockerfile и build-target.sh;
+frontend, node_modules, .runtime/secrets и исходники приложения не копируются.
+Сам скрипт работает без Интернета. Сеть при сборке образа нужна только для
+официального базового образа и настроенных репозиториев RPM RED OS.
+Список установленных RPM находится в /usr/share/wails/builder-rpms.txt.
 
-Во время сборки образа сеть нужна только для официального базового образа
-и настроенных репозиториев RPM RED OS. `npm cache add` работает с локальными
-архивами через `--offline`. Устанавливаемые RPM и их версии записываются
-в `/usr/share/wails/builder-rpms.txt` готового образа.
-
-Пакеты ОС/Go/Node.js/npm приходят из RED OS, Wails — из локальных исходников,
-а npm-зависимости приложения — из отдельно предоставленных архивов lockfile.
-Скачивания из npm registry при подготовке этого контекста, сборке образа
-и компиляции приложения не выполняются.
-
-На проверочном node2 у rootless Docker не работал DNS внутри контейнеров.
-Применялся временный обход только для операции сборки, без изменения daemon.json:
+Если rootless Docker на проверочном node2 не разрешает имена зеркал, можно
+передать временные записи только для сборки, без изменения daemon.json:
 
 ```sh
 set --
@@ -67,87 +43,140 @@ done
 docker build "$@" -t platform-installer-builder:redos8 /var/tmp/installer-builder-context
 ```
 
-Если DNS контейнеров работает, дополнительные параметры не нужны. HTTPS и
-проверка подписей RPM остаются включёнными в обоих вариантах.
+HTTPS и проверка подписей RPM остаются включёнными.
 
-## Сборка приложения без сети
+## Подготовленные зависимости проекта
 
-Команды запускаются из обычного дерева проекта, аналогичного checkout GitLab.
-Они создают/обновляют `frontend/node_modules` и `build/bin` в этом дереве:
+Вход сборки — обычное дерево проекта с уже подготовленным frontend/node_modules.
+Установка npm-зависимостей выполняется отдельным шагом CI из проектного npm-deps.tar.gz, а не при сборке образа.
+Скрипт build-installer не вызывает npm ci/npm install и ничего не скачивает.
+Если tsc/vite отсутствуют, сборка завершается с понятной ошибкой.
+
+node_modules должен соответствовать lockfile проекта и Linux x86-64/glibc:
+именно на Linux запускаются TypeScript/Vite при сборке обеих целей.
+node_modules, подготовленный под Windows, macOS, ARM64 или musl, для этого
+образа не подходит. Получение зависимостей через Интернет, внутренний registry
+или offline-кэш выбирается отдельно на уровне проекта.
+
+## Сборка из обычного дерева проекта
+
+Запускайте из папки проекта, где уже есть frontend/node_modules:
 
 ```sh
 docker run --rm --pull=never --network none \
   -v "$PWD:/work:Z" platform-installer-builder:redos8 \
   build-installer /work windows/amd64
+```
 
+Для Linux UI используйте другой checkout/каталог того же проекта:
+
+```sh
 docker run --rm --pull=never --network none \
   -v "$PWD:/work:Z" platform-installer-builder:redos8 \
   build-installer /work linux/amd64
 ```
 
-`:Z` нужен на SELinux-хостах и меняет метку только подключённого дерева проекта.
-Для rootless Docker используется обычный пользователь, владеющий daemon/socket.
-Для rootful Docker можно добавить `--user "$(id -u):$(id -g)"`, чтобы результаты
-принадлежали текущему пользователю. Для независимого хранения обоих результатов
-используйте разные checkout/каталоги: Wails очищает `build/bin` перед сборкой.
+Разные каталоги нужны, чтобы сохранить оба результата: Wails очищает build/bin.
+Скрипт выполняет npm run build и Wails build с явной целевой платформой.
+Go использует vendor и не загружает модули/toolchain; Windows-сборка использует
+CGO_ENABLED=0, Linux — CGO_ENABLED=1 и webkit2_41.
 
-Результаты:
+Результаты: build/bin/platform-installer-ui.exe или build/bin/platform-installer-ui.
+Для Linux также создаётся build/bin/linux-resources с desktop-файлом и иконкой.
+Передавайте config рядом с build. Для запуска Windows нужен WebView2 Runtime,
+для Linux — графическая сессия и совместимые GTK3/WebKit2GTK runtime-библиотеки.
 
-- Windows: `build/bin/platform-installer-ui.exe`;
-- Linux: `build/bin/platform-installer-ui` и `build/bin/linux-resources/`.
-
-Для передачи приложения сохраняйте `config/` рядом с `build/`. При запуске
-Windows EXE нужны WebView2 Runtime, при запуске Linux UI — графическая сессия
-и совместимые GTK/WebKit runtime-библиотеки.
+:Z меняет SELinux-метку подключённого дерева проекта. Для rootless Docker
+используется пользователь, владеющий daemon/socket. Для rootful Docker можно
+добавить --user "$(id -u):$(id -g)", чтобы результаты принадлежали пользователю.
 
 ## GitLab
 
-`gitlab-ci.example.yml` содержит два независимых задания для Docker executor:
-каждое собирает обычный checkout и сохраняет бинарный файл с config в artifacts.
-Пример можно подключить из корневого `.gitlab-ci.yml`:
+### Подготовить npm-deps.tar.gz из имеющихся npm-source-*.txt
+
+Перейдите в папку с npm_offline.py, portable_source.py, npm-manifest.json и всеми
+10 npm-source-*.txt. Укажите фактический путь распакованного проекта в project.
+Каталог ~/npm-archives должен быть новым. Команды не используют Интернет:
+
+```sh
+python3 - <<'PY'
+from pathlib import Path
+import npm_offline
+
+project = Path.home() / "platform-installer-restored"
+_, records = npm_offline.verify_package(Path.cwd(), project)
+output = Path.home() / "npm-archives"
+output.mkdir(exist_ok=False)
+for record, content in records:
+    (output / Path(record["path"]).name).write_bytes(content)
+print(f"Готово: {len(records)} .tgz в {output}")
+PY
+tar -czf "$HOME/npm-deps.tar.gz" -C "$HOME/npm-archives" .
+```
+
+Это восстанавливает архивы npm после проверки целостности; исходники приложения
+не перепаковываются. Обычные source-*.txt здесь не нужны. Передайте готовый
+npm-deps.tar.gz в проект GitLab или как входной artifact. В примере его путь
+задаёт переменная NPM_ARCHIVE, по умолчанию это корень checkout.
+
+### Установка модулей в CI
+
+Из корня checkout, где уже доступен npm-deps.tar.gz:
+
+```sh
+mkdir -p .runtime/npm-archives
+tar -xzf npm-deps.tar.gz -C .runtime/npm-archives
+NPM_CACHE_DIR=$(mktemp -d)
+npm cache add --offline --cache "$NPM_CACHE_DIR" --no-audit --no-fund \
+  "$PWD"/.runtime/npm-archives/*.tgz
+cd frontend
+PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm ci --offline \
+  --cache "$NPM_CACHE_DIR" --no-audit --no-fund
+```
+
+npm ci использует подготовленный кэш: напрямую .txt или общий tar.gz он не
+читает. Всё это выполняется заданием CI, а не при сборке Docker-образа.
+
+### Задания сборки
+
+Пример gitlab-ci.example.yml принимает npm-deps.tar.gz как вход проекта.
+Отдельное задание frontend-dependencies распаковывает архив, наполняет пустой
+кэш через npm cache add --offline и явно вызывает npm ci --offline. Затем
+frontend/node_modules передаётся двум заданиям компиляции в tar.gz, чтобы
+сохранить права и символические ссылки. В самом образе npm-зависимостей нет.
 
 ```yaml
 include:
   - local: /ci/redos-builder/gitlab-ci.example.yml
 ```
 
-Перед первым запуском администратор сборочной среды должен загрузить готовый
-образ в реестр GitLab и задать `BUILDER_IMAGE` его полным именем, предпочтительно
-с digest. В примере используется `$CI_REGISTRY_IMAGE/builder:redos8`.
-Это обычный job image: Docker-in-Docker и privileged для заданий компиляции
-не требуются. Docker нужен только на этапе подготовки/публикации образа.
+Готовый образ сначала нужно разместить на Docker-host runner или в разрешённом
+GitLab Registry. Задайте BUILDER_IMAGE полным именем, предпочтительно с digest.
+В примере используется $CI_REGISTRY_IMAGE/builder:redos8.
+Docker-in-Docker и privileged для самих заданий компиляции не нужны.
 
-В примере Go/npm загрузки отключены переменными и `npm ci --offline`.
-Физическая изоляция сети в реальном GitLab настраивается на стороне runner;
-она не включается произвольным полем в YAML задания. Проверка этого образа
-проводится отдельно через `docker run --network none`.
-
-Готовый образ можно перенести между изолированными Docker-хостами обычным файлом:
+Для переноса готового образа без реестра:
 
 ```sh
 docker save -o installer-builder-redos8.tar platform-installer-builder:redos8
-# На сборочном хосте GitLab после переноса файла:
+# После переноса на Docker-host runner:
 docker load -i installer-builder-redos8.tar
 ```
 
-Для Docker executor образ должен быть доступен daemon соответствующего runner
-либо в разрешённом реестре. Загрузка образа на рабочую станцию сама по себе
-не размещает его на другом runner.
+Политика сети реального GitLab Runner задаётся отдельно. В проверке локального
+образа компиляция выполняется через docker run --network none.
+Реальный pipeline на GitLab Runner и публикация в GitLab Registry не выполнялись.
 
-## Выполненная проверка 2026-10-29
+## Проверка общего образа 2026-10-29
 
-- Образ собран на RED OS 8.0.3 через rootless Docker без изменения настроек
-  daemon и существующих сервисных контейнеров. Размер около 1,67 ГБ.
-- Локальный проверенный тег на node2: `platform-installer-builder:redos8`.
-  Image ID: `sha256:3f163eae2abe25a4b288a11a2dcc1c0b2262e5215aa578f5443bb69ed0742603`.
-- Оба задания собрали обычные деревья проекта без portable-source и без
-  исходного frontend/node_modules. Сеть отключена через `docker run --network none`;
-  контрольное соединение возвращало `Network is unreachable`.
-- Windows/amd64: EXE построен; перенесён на Windows с совпадением SHA-256,
-  создано окно Platform Installer, процесс отвечает, WebView2 инициализирован.
-- Linux/amd64: ELF построен с `webkit2_41`, отсутствующих библиотек в ldd нет.
-  Графический запуск Linux UI отдельно не проверялся.
-- Проверена блокировка устаревшего lockfile: задание завершилось до npm ci,
-  без загрузки зависимостей и без создания node_modules.
-- Команды и пути artifacts из примера GitLab проверены; реальный pipeline
-  на GitLab Runner и публикация образа в GitLab Registry не выполнялись.
+Текущий тег на node2 — platform-installer-builder:redos8, image ID
+sha256:f736fa81224c662a01d65d9b4e7583b51e8b58912c03761e5265a28a7836dd91,
+размер около 1,64 ГБ. Отсутствие /opt/npm-cache и /opt/builder-inputs проверено.
+Windows EXE и Linux ELF собраны из обычных деревьев с подготовленными
+node_modules при --network none, без npm ci в заданиях компиляции.
+Отсутствие node_modules даёт явную ошибку без попытки установки.
+
+Отдельно проверена цепочка npm-source TXT → 194 tgz → npm-deps.tar.gz →
+npm cache add --offline → npm ci --offline в контейнере без сети. Установлены
+194 пакета. Передача node_modules в tar.gz сохраняет исполняемые файлы и ссылки.
+Сам образ при этом не меняется и не получает зависимости проекта.

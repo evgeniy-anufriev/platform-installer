@@ -24,17 +24,10 @@ RUN cd /src/wails \
     && CGO_ENABLED=0 go build -mod=vendor -trimpath -o /usr/local/bin/wails ./cmd/wails \
     && /usr/local/bin/wails version
 
-FROM toolchain AS npm-cache
-COPY npm-tarballs/ /src/npm-tarballs/
-RUN npm cache add --offline --cache /opt/npm-cache --no-audit --no-fund /src/npm-tarballs/*.tgz \
-    && chmod -R a+rX /opt/npm-cache
-
 FROM toolchain AS builder
 COPY --from=wails-builder /usr/local/bin/wails /usr/local/bin/wails
 COPY --from=wails-builder /src/wails/SOURCE.json /usr/share/wails/SOURCE.json
 COPY --from=wails-builder /src/wails/LICENSE /usr/share/licenses/wails/LICENSE
-COPY --from=npm-cache /opt/npm-cache /opt/npm-cache
-COPY frontend/ /opt/builder-inputs/
 COPY build-target.sh /usr/local/bin/build-installer
 RUN chmod 755 /usr/local/bin/build-installer && wails version \
     && rpm -qa --qf '%{NAME} %{VERSION}-%{RELEASE} %{ARCH}\n' | sort > /usr/share/wails/builder-rpms.txt

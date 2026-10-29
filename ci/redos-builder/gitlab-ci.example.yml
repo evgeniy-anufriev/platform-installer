@@ -1,14 +1,36 @@
 # Requires a Docker executor and a prebuilt image published to your GitLab registry.
 # This file is an example; include/copy it into your GitLab pipeline explicitly.
-stages: [build]
+# npm-deps.tar.gz is a project input/artifact, never part of the toolchain image.
+stages: [dependencies, build]
 variables:
   BUILDER_IMAGE: "$CI_REGISTRY_IMAGE/builder:redos8"
   GOCACHE: "$CI_PROJECT_DIR/.runtime/go-build"
   GOPATH: "$CI_PROJECT_DIR/.runtime/go-path"
+  NPM_ARCHIVE: "$CI_PROJECT_DIR/npm-deps.tar.gz"
+
+frontend-dependencies:
+  stage: dependencies
+  image: "$BUILDER_IMAGE"
+  script:
+    - mkdir -p .runtime/npm-archives
+    - tar -xzf "$NPM_ARCHIVE" -C .runtime/npm-archives
+    - NPM_CACHE_DIR=$(mktemp -d)
+    - npm cache add --offline --cache "$NPM_CACHE_DIR" --no-audit --no-fund "$CI_PROJECT_DIR"/.runtime/npm-archives/*.tgz
+    - cd frontend
+    - npm ci --offline --cache "$NPM_CACHE_DIR" --no-audit --no-fund
+    - tar -czf "$CI_PROJECT_DIR/frontend-node-modules.tar.gz" node_modules
+  artifacts:
+    paths:
+      - frontend-node-modules.tar.gz
 
 build-windows:
   stage: build
   image: "$BUILDER_IMAGE"
+  needs:
+    - job: frontend-dependencies
+      artifacts: true
+  before_script:
+    - tar -xzf frontend-node-modules.tar.gz -C frontend
   script:
     - build-installer "$CI_PROJECT_DIR" windows/amd64
   artifacts:
@@ -19,6 +41,11 @@ build-windows:
 build-linux:
   stage: build
   image: "$BUILDER_IMAGE"
+  needs:
+    - job: frontend-dependencies
+      artifacts: true
+  before_script:
+    - tar -xzf frontend-node-modules.tar.gz -C frontend
   script:
     - build-installer "$CI_PROJECT_DIR" linux/amd64
   artifacts:

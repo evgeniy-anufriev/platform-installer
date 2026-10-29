@@ -15,23 +15,16 @@ esac
 export GOFLAGS=-mod=vendor GOPROXY=off GOSUMDB=off GOWORK=off GOTOOLCHAIN=local
 export npm_config_offline=true npm_config_audit=false npm_config_fund=false
 export npm_config_update_notifier=false PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
-python3 - "$project_dir" <<'PY'
-import json, pathlib, sys
-root = pathlib.Path(sys.argv[1])
-for name in ('package.json', 'package-lock.json'):
-    expected = json.loads((pathlib.Path('/opt/builder-inputs') / name).read_text())
-    actual = json.loads((root / 'frontend' / name).read_text())
-    if expected != actual:
-        raise SystemExit('Builder image npm closure does not match ' + name + '; rebuild the image')
-PY
+if [ ! -x "$project_dir/frontend/node_modules/.bin/tsc" ] || \
+   [ ! -x "$project_dir/frontend/node_modules/.bin/vite" ]; then
+    echo 'Project frontend dependencies are missing. Prepare them in the project/CI dependency step before compilation.' >&2
+    exit 1
+fi
 HOME=$(mktemp -d /tmp/installer-home-XXXXXX)
 export HOME
 export GOCACHE="${GOCACHE:-$HOME/go-build}" GOPATH="${GOPATH:-$HOME/go-path}"
-cache_dir=$(mktemp -d /tmp/npm-builder-XXXXXX)
-trap 'rm -rf -- "$cache_dir" "$HOME"' EXIT
-cp -R /opt/npm-cache/. "$cache_dir/"
+trap 'rm -rf -- "$HOME"' EXIT
 cd "$project_dir/frontend"
-npm ci --offline --cache "$cache_dir" --no-audit --no-fund
 npm run build
 cd "$project_dir"
 case "$target" in
