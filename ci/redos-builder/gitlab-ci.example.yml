@@ -1,0 +1,28 @@
+# Requires a Docker executor and a prebuilt image published to your GitLab registry.
+# This file is an example; include/copy it into your GitLab pipeline explicitly.
+stages: [build]
+variables:
+  BUILDER_IMAGE: "$CI_REGISTRY_IMAGE/builder:redos8"
+  GOCACHE: "$CI_PROJECT_DIR/.runtime/go-build"
+  GOPATH: "$CI_PROJECT_DIR/.runtime/go-path"
+
+build-windows:
+  stage: build
+  image: "$BUILDER_IMAGE"
+  script:
+    - build-installer "$CI_PROJECT_DIR" windows/amd64
+  artifacts:
+    paths:
+      - build/bin/platform-installer-ui.exe
+      - config/
+
+build-linux:
+  stage: build
+  image: "$BUILDER_IMAGE"
+  script:
+    - build-installer "$CI_PROJECT_DIR" linux/amd64
+  artifacts:
+    paths:
+      - build/bin/platform-installer-ui
+      - build/bin/linux-resources/
+      - config/
