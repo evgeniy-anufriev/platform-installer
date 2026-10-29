@@ -79,7 +79,9 @@ Thumbs.db
 *.swp
 
 @@END
-@@PORTABLE {"path":".gitlab-ci.yml","mode":420,"size":62,"sha256":"a175a389087fdb39c9aabbddd3c887f7f842ed9900c0bbbd473dae005a3ac1c5","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":62}
+@@PORTABLE {"path":".gitlab-ci.yml","mode":420,"size":215,"sha256":"b0efb51cd32037ec0999428cb3c39ff591b1c6243ba701f68acad94d6d0501f6","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":215}
+# Start frontend-dependencies manually once to build both UI platforms.
+# build-runtime-bundle has a separate manual start; no child pipelines are used.
 include:
   - local: '/ci/redos-builder/gitlab-ci.example.yml'
 
@@ -45768,7 +45770,7 @@ case "$target" in
 esac
 
 @@END
-@@PORTABLE {"path":"ci/redos-builder/gitlab-ci.example.yml","mode":420,"size":3149,"sha256":"39658b3c32355401459b68dc7cd7a51ce74844fb55d643ecdf79936833e0eab7","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3149}
+@@PORTABLE {"path":"ci/redos-builder/gitlab-ci.example.yml","mode":420,"size":3262,"sha256":"342c0fc340bcc5a1a9d51d418a406fe8109d4a2c9988890976674c500eddf2ec","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3262}
 # Requires a Docker executor and a prebuilt image published to your GitLab registry.
 # This file is an example; include/copy it into your GitLab pipeline explicitly.
 # npm-deps.tar.gz is a project input/artifact, never part of the toolchain image.
@@ -45786,6 +45788,8 @@ variables:
 build-runtime-bundle:
   stage: build
   image: "$BUILDER_IMAGE"
+  when: manual
+  allow_failure: true
   needs: []
   script:
     - test -d "$RUNTIME_INPUT" || { echo "Missing RUNTIME_INPUT directory; supply prepared runtime files before building." >&2; exit 1; }
@@ -45807,6 +45811,8 @@ build-runtime-bundle:
 frontend-dependencies:
   stage: dependencies
   image: "$BUILDER_IMAGE"
+  when: manual
+  allow_failure: false
   script:
     - mkdir -p .runtime/npm-archives
     - tar -xzf "$NPM_ARCHIVE" -C .runtime/npm-archives
@@ -45822,6 +45828,7 @@ frontend-dependencies:
 build-windows:
   stage: build
   image: "$BUILDER_IMAGE"
+  when: on_success
   needs:
     - job: frontend-dependencies
       artifacts: true
@@ -45837,6 +45844,7 @@ build-windows:
 build-linux:
   stage: build
   image: "$BUILDER_IMAGE"
+  when: on_success
   needs:
     - job: frontend-dependencies
       artifacts: true
