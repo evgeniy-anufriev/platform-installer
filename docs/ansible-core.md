@@ -553,6 +553,15 @@ lifecycle is excluded; existing account ACL jobs are unchanged. See
 [Redis key bindings](work/application-libraries/configuration.md#redis-key-name-bindings)
 for precedence, isolated evaluation order and template variables.
 
+### Runtime bundle catalog
+
+Execution runtime bundles generate their derived `catalog/service-catalog.yml`
+from the copied `services/*/service.yml` packages. The shared catalog generator
+relocates schema/compatibility references and calculates definition/catalog
+digests. The development fixture catalog under `examples/catalog/` remains
+separate and is not a runtime-bundle input. A new bundle catalog digest belongs
+to that bundle; this does not rewrite existing project locks or active bundles.
+
 ### Automatic application image metadata
 
 Application `defaults.image` remains the packaged image selection. An installation

@@ -4,6 +4,12 @@ Read before acquiring, building, validating, publishing, rebinding or activating
 These are mandatory procedures routed by [AGENTS.md](../../AGENTS.md).
 They do not authorize a new milestone or target mutation.
 
+The runtime bundle derives `catalog/service-catalog.yml` from its copied
+`services/*/service.yml` manifests. It does not consume or validate the fixture
+catalog under repository-root `examples/`. The required source roots are
+`ansible-core/`, `services/` and `contracts/`, plus the explicit runtime input.
+Service schema/compatibility references and bundle checksums remain mandatory.
+
 EMPTY-PACKAGES-BOOTSTRAP-01 allows an existing empty `--runtime-input` directory.
 Compatibility then comes from repeatable `--platform OS:VERSION:ARCH`, or from
 the Linux build host's `/etc/os-release` and `uname -m`. The output retains the

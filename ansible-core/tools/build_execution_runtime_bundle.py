@@ -20,6 +20,8 @@ import yaml
 
 
 REPOSITORY = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from service_catalog import build_catalog
 sys.path.insert(0, str(REPOSITORY / "ansible-core" / "collections"))
 from ansible_collections.platform.core.plugins.module_utils.service_configuration_preview import ordinary_presentation_value
 from ansible_collections.platform.core.plugins.module_utils.application_images import docker_save_image
@@ -27,7 +29,6 @@ SOURCE_ROOTS = (
     ("ansible-core", REPOSITORY / "ansible-core"),
     ("services", REPOSITORY / "services"),
     ("contracts", REPOSITORY / "contracts"),
-    ("catalog", REPOSITORY / "examples" / "catalog"),
 )
 EXCLUDED_PARTS = {"tests", "__pycache__", ".pytest_cache", ".git", "docs"}
 
@@ -151,8 +152,18 @@ def components(root):
     return result
 
 
-def catalog_digest():
-    catalog = REPOSITORY / "examples" / "catalog" / "service-catalog.yml"
+def write_service_catalog(root):
+    output = root / "catalog" / "service-catalog.yml"
+    sources = [(source.parent.name, source) for source in sorted((root / "services").glob("*/service.yml"))]
+    if not sources:
+        raise ValueError("no service manifests found in services")
+    value = build_catalog(root, sources, output)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(yaml.safe_dump(value, allow_unicode=True, sort_keys=False), encoding="utf-8", newline="\n")
+
+
+def catalog_digest(root):
+    catalog = root / "catalog" / "service-catalog.yml"
     value = yaml.safe_load(catalog.read_text(encoding="utf-8"))
     digest = value.get("digest") if isinstance(value, dict) else None
     if not isinstance(digest, str) or not digest.startswith("sha256:"):
@@ -318,6 +329,7 @@ def build(output, runtime, bundle_version, core_version, platforms=None, applica
         copy_tree(runtime, temporary / "runtime")
         for directory in ("packages", "python"):
             (temporary / "runtime" / directory).mkdir(parents=True, exist_ok=True)
+        write_service_catalog(temporary)
         validate_catalog_layout(temporary)
         write_ui_static_defaults(temporary)
         manifest = {
@@ -326,7 +338,7 @@ def build(output, runtime, bundle_version, core_version, platforms=None, applica
             "bundleVersion": bundle_version,
             "bootstrapProtocol": "v1alpha1",
             "coreVersion": core_version,
-            "catalogDigest": catalog_digest(),
+            "catalogDigest": catalog_digest(temporary),
             "schemaDigest": schema_digest(),
             "platforms": runtime_platforms(runtime, platforms),
             "artifactSources": artifact_sources(temporary),

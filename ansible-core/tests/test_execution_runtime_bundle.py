@@ -4,6 +4,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+import yaml
+
 
 TOOLS = Path(__file__).resolve().parents[1] / "tools"
 SPEC = importlib.util.spec_from_file_location(
@@ -19,6 +21,7 @@ class ExecutionRuntimeBundleTests(unittest.TestCase):
             root = Path(temporary)
             for destination, source in BUILDER.SOURCE_ROOTS:
                 BUILDER.copy_tree(source, root / destination)
+            BUILDER.write_service_catalog(root)
             BUILDER.validate_catalog_layout(root)
             indexed = {item['path']: item for item in BUILDER.components(root)}
             required = [
@@ -103,6 +106,35 @@ class ExecutionRuntimeBundleTests(unittest.TestCase):
             self.assertTrue((output / "ansible-core/tools/bootstrap_execution_runtime.sh").is_file())
             with self.assertRaisesRegex(ValueError, "output already exists"):
                 BUILDER.build(output, runtime, "empty-test", "0.1.0", ["redos:8.0:x86_64"])
+
+    def test_bundle_builds_without_examples_from_service_manifests_only(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            roots = []
+            for name, original in BUILDER.SOURCE_ROOTS:
+                destination = source / name
+                BUILDER.copy_tree(original, destination)
+                roots.append((name, destination))
+            self.assertFalse((source / "examples").exists())
+            runtime = root / "input"
+            runtime.mkdir()
+            with patch.object(BUILDER, "REPOSITORY", source), patch.object(BUILDER, "SOURCE_ROOTS", roots):
+                BUILDER.build(root / "bundle", runtime, "services-only", "0.1.0", ["redos:8.0:x86_64"])
+            output = root / "bundle"
+            catalog = yaml.safe_load((output / "catalog/service-catalog.yml").read_text())
+            expected = {manifest.parent.name for manifest in (source / "services").glob("*/service.yml")}
+            self.assertEqual(expected, set(catalog["definitions"]))
+            self.assertNotIn("etcd", catalog["definitions"])
+            self.assertFalse((output / "catalog/fixtures").exists())
+            self.assertEqual(catalog["digest"], yaml.safe_load((output / "manifest.yaml").read_text())["catalogDigest"])
+            for definition in catalog["definitions"].values():
+                self.assertTrue(definition["x-sourceManifest"].startswith("services/"))
+                self.assertFalse(definition.get("x-conformanceOnly", False))
+            # Production schema references remain authoritative and mandatory.
+            (output / "services/postgresql/configuration.schema.json").unlink()
+            with self.assertRaisesRegex(ValueError, "catalog reference is missing"):
+                BUILDER.validate_catalog_layout(output)
 
     def test_components_are_sorted_and_do_not_include_manifest(self):
         with tempfile.TemporaryDirectory() as temporary:
