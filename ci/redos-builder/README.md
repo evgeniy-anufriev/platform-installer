@@ -101,15 +101,29 @@ CGO_ENABLED=0, Linux — CGO_ENABLED=1 и webkit2_41.
 ```sh
 python3 - <<'PY'
 from pathlib import Path
+from urllib.parse import unquote, urlparse
 import npm_offline
 
 project = Path.home() / "platform-installer-restored"
-_, records = npm_offline.verify_package(Path.cwd(), project)
+manifest, records = npm_offline.verify_package(Path.cwd(), project)
+_, lock = npm_offline.project_inputs(project)
+entries = npm_offline.archives(lock, manifest["npmPlatform"])
+exports = {}
+for record, content in records:
+    url = entries[record["path"]][0]
+    parts = unquote(urlparse(url).path).strip("/").split("/")
+    name = parts[-1]
+    if parts[0].startswith("@"):
+        name = parts[0][1:] + "-" + name
+    npm_offline.portable.safe_path(name)
+    if not name.endswith(".tgz") or name in exports:
+        raise ValueError("Invalid/duplicate archive filename: " + name)
+    exports[name] = content
 output = Path.home() / "npm-archives"
 output.mkdir(exist_ok=False)
-for record, content in records:
-    (output / Path(record["path"]).name).write_bytes(content)
-print(f"Готово: {len(records)} .tgz в {output}")
+for name, content in exports.items():
+    (output / name).write_bytes(content)
+print(f"Готово: {len(exports)} .tgz в {output}")
 PY
 tar -czf "$HOME/npm-deps.tar.gz" -C "$HOME/npm-archives" .
 ```
@@ -118,6 +132,19 @@ tar -czf "$HOME/npm-deps.tar.gz" -C "$HOME/npm-archives" .
 не перепаковываются. Обычные source-*.txt здесь не нужны. Передайте готовый
 npm-deps.tar.gz в проект GitLab или как входной artifact. В примере его путь
 задаёт переменная NPM_ARCHIVE, по умолчанию это корень checkout.
+
+Имена читаемые, в стиле [npm pack](https://docs.npmjs.com/cli/v11/commands/npm-pack/):
+react-19.2.8.tgz, typescript-6.0.3.tgz, types-node-24.13.3.tgz,
+rolldown-binding-linux-x64-gnu-1.2.7.tgz. Для scoped-модулей добавлен scope,
+например @types/node → types-node-24.13.3.tgz. Совпадение имён блокируется,
+чтобы один архив не перезаписал другой. Меняется только внешнее имя файла;
+байты .tgz, npm-source-*.txt, манифесты и integrity из lockfile не меняются.
+Команды npm cache add/npm ci ниже подходят и для читаемых, и для хеш-имён.
+
+Если архивы размещаются в registry, их публикация и доставка в задание CI
+выполняются отдельно. Эти команды только создают файлы и ничего не публикуют.
+В приведённом примере CI входом служит общий npm-deps.tar.gz. Имена файлов
+не меняют имя/версию модуля внутри архива и URL в package-lock.json.
 
 ### Установка модулей в CI
 
@@ -180,3 +207,7 @@ node_modules при --network none, без npm ci в заданиях компи
 npm cache add --offline → npm ci --offline в контейнере без сети. Установлены
 194 пакета. Передача node_modules в tar.gz сохраняет исполняемые файлы и ссылки.
 Сам образ при этом не меняется и не получает зависимости проекта.
+
+Читаемые имена также проверены: 194 архива экспортированы без изменения байтов
+и SHA-512, затем npm cache add --offline и npm ci --offline успешно выполнены
+в общем сборочном образе с отключённой сетью (установка 194 пакетов за 5 секунд).
