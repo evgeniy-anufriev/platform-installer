@@ -14,12 +14,13 @@ services/docker/** text eol=lf
 portable-source/source-*.txt -text
 
 @@END
-@@PORTABLE {"path":".gitignore","mode":420,"size":620,"sha256":"4f33fc5f46456b6e1c9ef1ef6044d1dcf84cd19c5a8e968ca1e1d27deb39e6d6","index":0,"count":1,"encoding":"utf-8","payloadBytes":620}
+@@PORTABLE {"path":".gitignore","mode":420,"size":741,"sha256":"695918c14086f849002f6052f9aed5645f9d327214c85970f495182cfca4a1a0","index":0,"count":1,"encoding":"utf-8","payloadBytes":741}
 # Generated Ansible workspaces and runtime evidence
 .runtime/
 runs/
 bundle/
 cache/
+!third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/cache/
 
 # Local user-created project workspaces
 Projects/
@@ -69,17 +70,17 @@ Thumbs.db
 *.swp
 
 @@END
-@@PORTABLE {"path":".rgignore","mode":420,"size":9,"sha256":"5f4d0cb39ea5878aeb6d812356654346b4f5f4284ab0d018f2b027c381b636f5","index":0,"count":1,"encoding":"utf-8","payloadBytes":9}
+@@PORTABLE {"path":".rgignore","mode":420,"size":10,"sha256":"6f10f0dbde2b768a3ee5701a2344308c600a34293cdf253787106fffb8b6a311","index":0,"count":1,"encoding":"utf-8","payloadBytes":10}
 /vendor/
 
 @@END
-@@PORTABLE {"path":"ansible-core/.gitignore","mode":420,"size":33,"sha256":"3f55d7bc3bb83e04ec02a9c7a1a9d3a3415e26ef41fa67725fabc703e5074e70","index":0,"count":1,"encoding":"utf-8","payloadBytes":33}
+@@PORTABLE {"path":"ansible-core/.gitignore","mode":420,"size":36,"sha256":"114e324de41c94190318d84e9849af80e49f6b5b542a9cc5d2acf2724aca4b1b","index":0,"count":1,"encoding":"utf-8","payloadBytes":36}
 .runtime/
 __pycache__/
 *.py[cod]
 
 @@END
-@@PORTABLE {"path":"ansible-core/ansible.cfg","mode":420,"size":351,"sha256":"a5b1dcf69f456b279f5424c4b2dae86a0f8b2dc5f753cff919ef03d308b2d04e","index":0,"count":1,"encoding":"utf-8","payloadBytes":351}
+@@PORTABLE {"path":"ansible-core/ansible.cfg","mode":420,"size":365,"sha256":"dd0691b5e300fa0bfad798d29ecef8523caed1f5b7accfa3ce0e8998ccdb148a","index":0,"count":1,"encoding":"utf-8","payloadBytes":365}
 [defaults]
 collections_path = ./collections
 retry_files_enabled = False
@@ -2172,7 +2173,7 @@ class FilterModule(object):
                 "platform_java_properties_value": properties_value}
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/ATTRS_LICENSE.txt","mode":420,"size":1109,"sha256":"882115c95dfc2af1eeb6714f8ec6d5cbcabf667caff8729f42420da63f714e9f","index":0,"count":1,"encoding":"utf-8","payloadBytes":1109}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/ATTRS_LICENSE.txt","mode":420,"size":1130,"sha256":"f3f5c30313daec595b7dfe6f3f6fce2c9ad1f0f04a780ad463e6a382ffc50a81","index":0,"count":1,"encoding":"utf-8","payloadBytes":1130}
 The MIT License (MIT)
 
 Copyright (c) 2015 Hynek Schlawack and the attrs contributors
@@ -2196,7 +2197,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/JSONSCHEMA_LICENSE.txt","mode":420,"size":1057,"sha256":"4f92a015a13c4d1a040bef018aa13430b4f1bc73b41b16bb846c346766de7439","index":0,"count":1,"encoding":"utf-8","payloadBytes":1057}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/JSONSCHEMA_LICENSE.txt","mode":420,"size":1076,"sha256":"66010c33da1256c30c4359f6edd8c30fbccbf41a4bf66cb0c576e5c726978142","index":0,"count":1,"encoding":"utf-8","payloadBytes":1076}
 Copyright (c) 2013 Julian Berman
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -2218,7 +2219,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/PYRSISTENT_LICENSE.txt","mode":420,"size":1060,"sha256":"3ea56753cbd0cc897d3f4414a902f5694991db7c1b3abb8230216381185f9112","index":0,"count":1,"encoding":"utf-8","payloadBytes":1060}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/PYRSISTENT_LICENSE.txt","mode":420,"size":1081,"sha256":"572ecae9cb72ed5a442dc54be9b066d6f1f998a29f860b9b68c302be4991ed37","index":0,"count":1,"encoding":"utf-8","payloadBytes":1081}
 Copyright (c) 2022 Tobias Gustafsson
 
 Permission is hereby granted, free of charge, to any person
@@ -2383,7 +2384,7 @@ def _make_getattr(mod_name: str) -> Callable:
 __getattr__ = _make_getattr(__name__)
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/attr/__init__.pyi","mode":420,"size":16976,"sha256":"bb4f04ba3607cbfad2c9e6cd9fe23d5efd92fdc5e6b40f71586734701b32975f","index":0,"count":1,"encoding":"utf-8","payloadBytes":16976}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/attr/__init__.pyi","mode":420,"size":17531,"sha256":"d385ae8261c716b3dd4b679be4d25853d63c1efdbe891dd91dd8743a4fe9d5f1","index":0,"count":1,"encoding":"utf-8","payloadBytes":17531}
 import enum
 import sys
 
@@ -3094,7 +3095,7 @@ def _check_same_type(self, other):
     return other.value.__class__ is self.value.__class__
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/attr/_cmp.pyi","mode":420,"size":399,"sha256":"b0642638cd30dff2b8f97f1c4d747b8341eaaf6f7413c3d339b03d250c5642a7","index":0,"count":1,"encoding":"utf-8","payloadBytes":399}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/attr/_cmp.pyi","mode":420,"size":412,"sha256":"e21daaafac8c9f472f137a71d9a2ab01c541deea3bafb8567c31a9c287a75c66","index":0,"count":1,"encoding":"utf-8","payloadBytes":412}
 from typing import Any, Callable, Optional, Type
 
 _CompareWithType = Callable[[Any, Any], bool]
@@ -7080,7 +7081,7 @@ def astuple(inst, *, recurse=True, filter=None):
     )
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/attr/_typing_compat.pyi","mode":420,"size":469,"sha256":"5c33f9e13527f992a10fad9339079b9b3af0172a268540a8191a5c95be9a9510","index":0,"count":1,"encoding":"utf-8","payloadBytes":469}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/attr/_typing_compat.pyi","mode":420,"size":484,"sha256":"3a27b567cf7831250fd5ca193b0c568b3fb5a6c36f83c4ddd74a077c6e4b7599","index":0,"count":1,"encoding":"utf-8","payloadBytes":484}
 from typing import Any, ClassVar, Protocol
 
 # MYPY is a special constant in mypy which works the same way as `TYPE_CHECKING`.
@@ -7187,7 +7188,7 @@ class VersionInfo:
         return us < them
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/attr/_version_info.pyi","mode":420,"size":209,"sha256":"c7f3372f75ae07baff50b5c05a3c7de7db9d290e072c1f25fa1b1cd450c636f9","index":0,"count":1,"encoding":"utf-8","payloadBytes":209}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/attr/_version_info.pyi","mode":420,"size":218,"sha256":"152f65f10dbf952a6dcaf3c62f744186d113734dfcd5229326ba212580e67941","index":0,"count":1,"encoding":"utf-8","payloadBytes":218}
 class VersionInfo:
     @property
     def year(self) -> int: ...
@@ -7346,7 +7347,7 @@ def to_bool(val):
     raise ValueError(msg)
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/attr/converters.pyi","mode":420,"size":406,"sha256":"8ca9691c112de8754a26f82b305251ac7abca7ad465e0e3e35de516562895fb3","index":0,"count":1,"encoding":"utf-8","payloadBytes":406}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/attr/converters.pyi","mode":420,"size":419,"sha256":"29471053fa75896b4fcedb83aa79882ef102f68a8b866e5402b57721a77eade0","index":0,"count":1,"encoding":"utf-8","payloadBytes":419}
 from typing import Callable, TypeVar, overload
 
 from . import _ConverterType
@@ -7460,7 +7461,7 @@ class NotCallableError(TypeError):
         return str(self.msg)
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/attr/exceptions.pyi","mode":420,"size":539,"sha256":"cd9abc6c2527280cbd983b41130e366613e1014207a1329e7434089c90fcf373","index":0,"count":1,"encoding":"utf-8","payloadBytes":539}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/attr/exceptions.pyi","mode":420,"size":556,"sha256":"b245792295ecf533761cc7e75781c38f8e778056fff385b1a04e9a16ae19bf9e","index":0,"count":1,"encoding":"utf-8","payloadBytes":556}
 from typing import Any
 
 class FrozenError(AttributeError):
@@ -7549,7 +7550,7 @@ def exclude(*what):
     return exclude_
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/attr/filters.pyi","mode":420,"size":225,"sha256":"d264428cb2b175cbc0a34bc3f82afcd477d15d70a9f63fdc0178cea001ed3c63","index":0,"count":1,"encoding":"utf-8","payloadBytes":225}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/attr/filters.pyi","mode":420,"size":231,"sha256":"bca3613a0ba84755ee0c856a90a24d46dc57e3b2daadc343a925952e733d2ed9","index":0,"count":1,"encoding":"utf-8","payloadBytes":231}
 from typing import Any, Union
 
 from . import Attribute, _FilterType
@@ -7637,7 +7638,7 @@ def convert(instance, attrib, new_value):
 NO_OP = object()
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/attr/setters.pyi","mode":420,"size":567,"sha256":"a7263c4d5341bbc4d684e95dbff4711f3986bdd805407f7cd5d6fbd2bd1f9f92","index":0,"count":1,"encoding":"utf-8","payloadBytes":567}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/attr/setters.pyi","mode":420,"size":586,"sha256":"0fa38c6e10c031a0b2dd3783a3369355177b7538b636cd9203a9ba0f528c33ad","index":0,"count":1,"encoding":"utf-8","payloadBytes":586}
 from typing import Any, NewType, NoReturn, TypeVar
 
 from . import Attribute, _OnSetAttrType
@@ -8343,7 +8344,7 @@ def not_(validator, *, msg=None, exc_types=(ValueError, TypeError)):
     return _NotValidator(validator, msg, exc_types)
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/attr/validators.pyi","mode":420,"size":2580,"sha256":"d7aec397d9edecd52113dc21b7523e6eea34dfdab2513d671144ff9ca8d25abe","index":0,"count":1,"encoding":"utf-8","payloadBytes":2580}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/attr/validators.pyi","mode":420,"size":2668,"sha256":"62d29ab20244aa01a245f62d453e1071eee2ff7a2272a5b3813d0750557fba31","index":0,"count":1,"encoding":"utf-8","payloadBytes":2668}
 from typing import (
     Any,
     AnyStr,
@@ -14804,7 +14805,7 @@ class Validator(Protocol):
 }
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/jsonschema/schemas/vocabularies/draft2019-09/applicator","mode":420,"size":1860,"sha256":"6895100e99726fbb107058512bbec3ecfd4b24e8fd2facee3e505ee72b0d4c31","index":0,"count":1,"encoding":"utf-8","payloadBytes":1860}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/jsonschema/schemas/vocabularies/draft2019-09/applicator","mode":420,"size":1916,"sha256":"708d712141fe41ca063644a9f3d5a8ed19fd9a802290f1357c66d486ec95f0be","index":0,"count":1,"encoding":"utf-8","payloadBytes":1916}
 {
     "$schema": "https://json-schema.org/draft/2019-09/schema",
     "$id": "https://json-schema.org/draft/2019-09/meta/applicator",
@@ -14863,7 +14864,7 @@ class Validator(Protocol):
 }
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/jsonschema/schemas/vocabularies/draft2019-09/content","mode":420,"size":517,"sha256":"9b7d4f55a4e2fdb02c430068fdffabc732addce238da3f1df2690249c3353274","index":0,"count":1,"encoding":"utf-8","payloadBytes":517}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/jsonschema/schemas/vocabularies/draft2019-09/content","mode":420,"size":534,"sha256":"b1e2f542ba2af95cc44c2604474ecccf7cf91a339bc7a4c9dbe8b5cac7a265b9","index":0,"count":1,"encoding":"utf-8","payloadBytes":534}
 {
     "$schema": "https://json-schema.org/draft/2019-09/schema",
     "$id": "https://json-schema.org/draft/2019-09/meta/content",
@@ -14883,7 +14884,7 @@ class Validator(Protocol):
 }
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/jsonschema/schemas/vocabularies/draft2019-09/core","mode":420,"size":1531,"sha256":"b5a2c4957f6495d0a5081f0409ebe8a14e4139acb203fc748471f8ede2af5b2c","index":0,"count":1,"encoding":"utf-8","payloadBytes":1531}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/jsonschema/schemas/vocabularies/draft2019-09/core","mode":420,"size":1588,"sha256":"b77b54a31ffdfda939ad81cc11c74679cc574603ff08514ac1382ee7be5e0c13","index":0,"count":1,"encoding":"utf-8","payloadBytes":1588}
 {
     "$schema": "https://json-schema.org/draft/2019-09/schema",
     "$id": "https://json-schema.org/draft/2019-09/meta/core",
@@ -14943,7 +14944,7 @@ class Validator(Protocol):
 }
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/jsonschema/schemas/vocabularies/draft2019-09/meta-data","mode":420,"size":892,"sha256":"d47e2445dd6a82271a298d83cc6c6cb8d4ae1e15e0dc56becd37a163ecf01286","index":0,"count":1,"encoding":"utf-8","payloadBytes":892}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/jsonschema/schemas/vocabularies/draft2019-09/meta-data","mode":420,"size":929,"sha256":"4084bb6f92e78499c1900b781dde75250179cdf33cbe3281e4bde41f426fdb3f","index":0,"count":1,"encoding":"utf-8","payloadBytes":929}
 {
     "$schema": "https://json-schema.org/draft/2019-09/schema",
     "$id": "https://json-schema.org/draft/2019-09/meta/meta-data",
@@ -14983,7 +14984,7 @@ class Validator(Protocol):
 }
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/jsonschema/schemas/vocabularies/draft2019-09/validation","mode":420,"size":2834,"sha256":"1e526c1d335a734805fc82cf5798c12b960ad7da2517c66cda5a1b09359c3c1c","index":0,"count":1,"encoding":"utf-8","payloadBytes":2834}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/jsonschema/schemas/vocabularies/draft2019-09/validation","mode":420,"size":2932,"sha256":"3c850b2bb5334c793a128d37c3479e654472f734163bd89b0179f1214628a1a6","index":0,"count":1,"encoding":"utf-8","payloadBytes":2932}
 {
     "$schema": "https://json-schema.org/draft/2019-09/schema",
     "$id": "https://json-schema.org/draft/2019-09/meta/validation",
@@ -15084,7 +15085,7 @@ class Validator(Protocol):
 }
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/jsonschema/schemas/vocabularies/draft2020-12/applicator","mode":420,"size":1659,"sha256":"c4a6e4147b91fef7fea6dc058cb1bf93402f7414b76578a8b16aaf1dad6aacef","index":0,"count":1,"encoding":"utf-8","payloadBytes":1659}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/jsonschema/schemas/vocabularies/draft2020-12/applicator","mode":420,"size":1707,"sha256":"f8903c0f87b19dc9b50d20967b840c0706832f01ca5c17dadd631cc2619324ff","index":0,"count":1,"encoding":"utf-8","payloadBytes":1707}
 {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "$id": "https://json-schema.org/draft/2020-12/meta/applicator",
@@ -15135,7 +15136,7 @@ class Validator(Protocol):
 }
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/jsonschema/schemas/vocabularies/draft2020-12/content","mode":420,"size":519,"sha256":"08343747764e4a5814262793cf4d652057a7913863c5950d43297e8e1fdac5b6","index":0,"count":1,"encoding":"utf-8","payloadBytes":519}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/jsonschema/schemas/vocabularies/draft2020-12/content","mode":420,"size":536,"sha256":"c0f7d4011548f7a9d00016c099039ad9007a821cf33457c602a2e330b92cac77","index":0,"count":1,"encoding":"utf-8","payloadBytes":536}
 {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "$id": "https://json-schema.org/draft/2020-12/meta/content",
@@ -15155,7 +15156,7 @@ class Validator(Protocol):
 }
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/jsonschema/schemas/vocabularies/draft2020-12/core","mode":420,"size":1564,"sha256":"c2d12a8e4dd11d336dfc83a3f663aa4c69f0b49b3beb094ffeb25b5316f4803d","index":0,"count":1,"encoding":"utf-8","payloadBytes":1564}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/jsonschema/schemas/vocabularies/draft2020-12/core","mode":420,"size":1615,"sha256":"598755b1f1f52cfd0b094dde23a073595a40157d53dad82f3bbee72c3c533a7b","index":0,"count":1,"encoding":"utf-8","payloadBytes":1615}
 {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "$id": "https://json-schema.org/draft/2020-12/meta/core",
@@ -15209,7 +15210,7 @@ class Validator(Protocol):
 }
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/jsonschema/schemas/vocabularies/draft2020-12/format","mode":420,"size":403,"sha256":"50ebbfe790611a849b8cc400a09c1d0e0fb6ab5c0d43a0f22201fd3625056bf4","index":0,"count":1,"encoding":"utf-8","payloadBytes":403}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/jsonschema/schemas/vocabularies/draft2020-12/format","mode":420,"size":417,"sha256":"90b8dbf1d056976aa427ec1100794ea4c8fb11d2afec65cf34dd5f60ef25bcba","index":0,"count":1,"encoding":"utf-8","payloadBytes":417}
 {
     "$schema": "https://json-schema.org/draft/2019-09/schema",
     "$id": "https://json-schema.org/draft/2019-09/meta/format",
@@ -15226,7 +15227,7 @@ class Validator(Protocol):
 }
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/jsonschema/schemas/vocabularies/draft2020-12/format-annotation","mode":420,"size":448,"sha256":"abc775adfefd89d22358170d9bf93f4ebd2349563bbbedd60f02bef7c812bcc0","index":0,"count":1,"encoding":"utf-8","payloadBytes":448}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/jsonschema/schemas/vocabularies/draft2020-12/format-annotation","mode":420,"size":462,"sha256":"237515cd135a9f69d1403e1dd335246652014e6947450fe2a9bff4478eceff54","index":0,"count":1,"encoding":"utf-8","payloadBytes":462}
 {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "$id": "https://json-schema.org/draft/2020-12/meta/format-annotation",
@@ -15243,7 +15244,7 @@ class Validator(Protocol):
 }
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/jsonschema/schemas/vocabularies/draft2020-12/format-assertion","mode":420,"size":445,"sha256":"c52242b9a1bb786b26c3e82c7add428c31f9c96e575dce99e56ea5feaa6da20c","index":0,"count":1,"encoding":"utf-8","payloadBytes":445}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/jsonschema/schemas/vocabularies/draft2020-12/format-assertion","mode":420,"size":459,"sha256":"6a83a49383515eebba6b54f3aea09e1ace194478629f3b94d819d7e1f2d227b7","index":0,"count":1,"encoding":"utf-8","payloadBytes":459}
 {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "$id": "https://json-schema.org/draft/2020-12/meta/format-assertion",
@@ -15260,7 +15261,7 @@ class Validator(Protocol):
 }
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/jsonschema/schemas/vocabularies/draft2020-12/meta-data","mode":420,"size":892,"sha256":"8f76d6e14f41b9b92ef933b708cdc5144c8b5268651ad11918485fb1754f1c76","index":0,"count":1,"encoding":"utf-8","payloadBytes":892}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/jsonschema/schemas/vocabularies/draft2020-12/meta-data","mode":420,"size":929,"sha256":"97267e6fe09acfae53a80fcb114988aafa19e369b1168e370d5f690282156f92","index":0,"count":1,"encoding":"utf-8","payloadBytes":929}
 {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "$id": "https://json-schema.org/draft/2020-12/meta/meta-data",
@@ -15300,7 +15301,7 @@ class Validator(Protocol):
 }
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/jsonschema/schemas/vocabularies/draft2020-12/unevaluated","mode":420,"size":506,"sha256":"2dbfbcb73994b670b0976492adee1fffb46c21682784d2f5a4ca561f9e2d0cb4","index":0,"count":1,"encoding":"utf-8","payloadBytes":506}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/jsonschema/schemas/vocabularies/draft2020-12/unevaluated","mode":420,"size":521,"sha256":"1f3a8991f426eb1b31188c36847531c86eec64cfd285f3d449af8011cc0565ed","index":0,"count":1,"encoding":"utf-8","payloadBytes":521}
 {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "$id": "https://json-schema.org/draft/2020-12/meta/unevaluated",
@@ -15318,7 +15319,7 @@ class Validator(Protocol):
 }
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/jsonschema/schemas/vocabularies/draft2020-12/validation","mode":420,"size":2834,"sha256":"7010a31e541f32d2be721e2de348df75c9b36876a3ed304877fc0abda1d37a58","index":0,"count":1,"encoding":"utf-8","payloadBytes":2834}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/jsonschema/schemas/vocabularies/draft2020-12/validation","mode":420,"size":2932,"sha256":"5ab9453fdde6a35b0793edc100c467046c5fe3e4bf0d3724ac01de9972f9f190","index":0,"count":1,"encoding":"utf-8","payloadBytes":2932}
 {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "$id": "https://json-schema.org/draft/2020-12/meta/validation",
@@ -16657,7 +16658,7 @@ __all__ = ('pmap', 'm', 'PMap',
            'inc', 'discard', 'rex', 'ny')
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/pyrsistent/__init__.pyi","mode":420,"size":7188,"sha256":"c6b9727aac244501f1b125d9128211fcf9624014ab322132f13a6ec91a5ede66","index":0,"count":1,"encoding":"utf-8","payloadBytes":7188}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/pyrsistent/__init__.pyi","mode":420,"size":7401,"sha256":"02d58eb9e09c59b1af6e1a54e3fd8e378b2941b34b785f20343af9cae6d5ae22","index":0,"count":1,"encoding":"utf-8","payloadBytes":7401}
 # flake8: noqa: E704
 # from https://gist.github.com/WuTheFWasThat/091a17d4b5cab597dfd5d4c2d96faf09
 # Stubs for pyrsistent (Python 3.6)
@@ -21189,7 +21190,7 @@ except ImportError:
     pass
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/pyrsistent/typing.pyi","mode":420,"size":10416,"sha256":"6b237fc1b003fde81d9d5c99fd07615fea894febf1f8074790aae90ba66478b0","index":0,"count":1,"encoding":"utf-8","payloadBytes":10416}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/_vendor/pyrsistent/typing.pyi","mode":420,"size":10708,"sha256":"42bd75a136c9f2893056ecbbe11b5d333520d0d3ac680f70d5216227ba08e363","index":0,"count":1,"encoding":"utf-8","payloadBytes":10708}
 # flake8: noqa: E704
 # from https://gist.github.com/WuTheFWasThat/091a17d4b5cab597dfd5d4c2d96faf09
 # Stubs for pyrsistent (Python 3.6)
@@ -35325,7 +35326,7 @@ platform_pki_keytool_package: java-21-openjdk-headless
       no_log: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/pki_materialize/templates/openssl-request.cnf.j2","mode":420,"size":664,"sha256":"ee507c0056425cb68ba128667086a402ad18b7379cb12847e28c122c2fa7f2ca","index":0,"count":1,"encoding":"utf-8","payloadBytes":664}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/pki_materialize/templates/openssl-request.cnf.j2","mode":420,"size":688,"sha256":"70fb88c6647150879cb80154666bafa1569b309aee6423d9a8cfad4775926d99","index":0,"count":1,"encoding":"utf-8","payloadBytes":688}
 [req]
 distinguished_name = req_distinguished_name
 req_extensions = v3_req
@@ -45614,7 +45615,7 @@ HPowVgBYxm7s2LGy1bStCtdHqsZlokVrLd/ZckuZ0NUVGTvoY6TqY/Lmk+WOO+6Q3p5eMXfk16k+581b
 @@PORTABLE {"path":"build/linux/icon.png","mode":420,"size":132625,"sha256":"28332a3b130d1970d208e40b7ab2c84f9ead10199f8c058e08e07fe21fe7ea49","index":2,"count":3,"encoding":"base64","payloadBytes":48836}
 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
 @@END
-@@PORTABLE {"path":"build/linux/platform-installer-ui.desktop","mode":420,"size":231,"sha256":"36b01372c41bdcbafaaf96a14c22afec2f0428a664e1703660e1fb149c535b38","index":0,"count":1,"encoding":"utf-8","payloadBytes":231}
+@@PORTABLE {"path":"build/linux/platform-installer-ui.desktop","mode":420,"size":241,"sha256":"d602860fd454dd5f351cc6b820141d1102e2e2b2e67441cca70a94af311b3252","index":0,"count":1,"encoding":"utf-8","payloadBytes":241}
 [Desktop Entry]
 Version=1.0
 Type=Application
@@ -45647,7 +45648,7 @@ AAABAAYAAAAAAAAAIAC9MgAAZgAAAICAAAAAACAAjA4AACMzAABAQAAAAAAgAG4HAACvQQAAMDAAAAAA
 	}
 }
 @@END
-@@PORTABLE {"path":"build/windows/wails.exe.manifest","mode":420,"size":1036,"sha256":"c63cb75ce48fb1354c95264f6fc43a7686a9b85a82a71efa9722ae4ce6561dc0","index":0,"count":1,"encoding":"utf-8","payloadBytes":1036}
+@@PORTABLE {"path":"build/windows/wails.exe.manifest","mode":420,"size":1050,"sha256":"de5ceeb519cb63f7bdaa26aa5f3a0e253c8d36d952cbbdae4b7af0cec5c8230d","index":0,"count":1,"encoding":"utf-8","payloadBytes":1050}
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1" xmlns:asmv3="urn:schemas-microsoft-com:asm.v3">
     <assemblyIdentity type="win32" name="com.wails.{{.Name}}" version="{{.Info.ProductVersion}}.0" processorArchitecture="*"/>
@@ -45664,7 +45665,7 @@ AAABAAYAAAAAAAAAIAC9MgAAZgAAAICAAAAAACAAjA4AACMzAABAQAAAAAAgAG4HAACvQQAAMDAAAAAA
     </asmv3:application>
 </assembly>
 @@END
-@@PORTABLE {"path":"cmd/platform-installer/execution_watch.go","mode":420,"size":5781,"sha256":"7145f1bfe8840da67150eaddadd58193fa68d9b1b090b5e37049051745b555c7","index":0,"count":1,"encoding":"utf-8","payloadBytes":5781}
+@@PORTABLE {"path":"cmd/platform-installer/execution_watch.go","mode":420,"size":5949,"sha256":"95951b29925ac12a99cb620c31034f4d70f8ade85933d8369304b36465330d95","index":0,"count":1,"encoding":"utf-8","payloadBytes":5949}
 package main
 
 import (
@@ -46068,7 +46069,7 @@ func output(value any)  { encoded, _ := json.Marshal(value); fmt.Println(string(
 func fatal(code string) { fmt.Fprintln(os.Stderr, code); os.Exit(1) }
 
 @@END
-@@PORTABLE {"path":"cmd/qa-runtime-promote/main.go","mode":420,"size":4650,"sha256":"af9359a3ffce3730ec73833ed974fa5e0639ff5300ea67c6b2a67f24d9153f47","index":0,"count":1,"encoding":"utf-8","payloadBytes":4650}
+@@PORTABLE {"path":"cmd/qa-runtime-promote/main.go","mode":420,"size":4737,"sha256":"e9a781e9d39449cf0ab8207b2b0d6edbb8a70699881a6fb898993535fef60d98","index":0,"count":1,"encoding":"utf-8","payloadBytes":4737}
 // qa-runtime-promote is a DEV/QA-only resumable promotion helper. It is never
 // called by the Installer UI or production Execution Node lifecycle.
 package main
@@ -50401,7 +50402,7 @@ libraryExecutionPriorities:
 }
 
 @@END
-@@PORTABLE {"path":"contracts/execution-capabilities/v1alpha13/schema.json","mode":420,"size":7136,"sha256":"86334a86c3348da825814eb60518b7b776763919d8ef47fed8927c60a90eac68","index":0,"count":1,"encoding":"utf-8","payloadBytes":7136}
+@@PORTABLE {"path":"contracts/execution-capabilities/v1alpha13/schema.json","mode":420,"size":7397,"sha256":"c22fd7199722df460cf8ff82ca21f6dfa434fa969ebb117df8f7c5ad322949cd","index":0,"count":1,"encoding":"utf-8","payloadBytes":7397}
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://platform-installer.local/contracts/execution-capabilities/v1alpha13/schema.json",
@@ -51384,7 +51385,7 @@ libraryExecutionPriorities:
 }
 
 @@END
-@@PORTABLE {"path":"contracts/execution-capabilities/v1alpha9/schema.json","mode":420,"size":4397,"sha256":"38702b8133bd8a4f22ffebc0af904095e88c948a8df04f1186fcc90015bf4473","index":0,"count":1,"encoding":"utf-8","payloadBytes":4397}
+@@PORTABLE {"path":"contracts/execution-capabilities/v1alpha9/schema.json","mode":420,"size":4551,"sha256":"a04cafbaad0d95a6936f63f994678b5117eb5127c49a8f0c52bcc29cbe5bee61","index":0,"count":1,"encoding":"utf-8","payloadBytes":4551}
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://platform-installer.local/contracts/execution-capabilities/v1alpha9/schema.json",
@@ -52225,7 +52226,7 @@ libraryExecutionPriorities:
 }
 
 @@END
-@@PORTABLE {"path":"contracts/execution-manifest/v1alpha4/schema.json","mode":420,"size":8508,"sha256":"8429d9afc540de515cf43bbbdfa5ea2fc24a586a7fefb4d490a85d5b2066ef8c","index":0,"count":1,"encoding":"utf-8","payloadBytes":8508}
+@@PORTABLE {"path":"contracts/execution-manifest/v1alpha4/schema.json","mode":420,"size":8841,"sha256":"1b0a27094315d58943f1a9627b29d7e9a17454212867a2b65e41fec748bb0bc7","index":0,"count":1,"encoding":"utf-8","payloadBytes":8841}
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "required": [
@@ -54275,7 +54276,7 @@ libraryExecutionPriorities:
 }
 
 @@END
-@@PORTABLE {"path":"contracts/execution-runtime/v1alpha5/build-deployment-plan.schema.json","mode":420,"size":1596,"sha256":"7949570b7cd6a771bba4a3f45a7d82605a487ba96bf03bb27a54b09478c60971","index":0,"count":1,"encoding":"utf-8","payloadBytes":1596}
+@@PORTABLE {"path":"contracts/execution-runtime/v1alpha5/build-deployment-plan.schema.json","mode":420,"size":1663,"sha256":"abfc393ae4b1f9e0154a29773fc7f3e57e3bb09158b92f9fef46281a799e6e5b","index":0,"count":1,"encoding":"utf-8","payloadBytes":1663}
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://platform-installer.local/contracts/execution-runtime/v1alpha5/build-deployment-plan.schema.json",
@@ -55168,7 +55169,7 @@ libraryExecutionPriorities:
 }
 
 @@END
-@@PORTABLE {"path":"contracts/plan/v1alpha10/schema.json","mode":420,"size":13335,"sha256":"d109a2c47b606c73e6b9de7707dfe191f833dbe7e51ca58a752e41c229be1764","index":0,"count":1,"encoding":"utf-8","payloadBytes":13335}
+@@PORTABLE {"path":"contracts/plan/v1alpha10/schema.json","mode":420,"size":13935,"sha256":"e0b1609e404723491c8dcb8c53d8b5d8635ff1b64167a65611870b4547328f35","index":0,"count":1,"encoding":"utf-8","payloadBytes":13935}
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://platform-installer.local/contracts/plan/v1alpha10/schema.json",
@@ -57442,7 +57443,7 @@ libraryExecutionPriorities:
 }
 
 @@END
-@@PORTABLE {"path":"contracts/plan/v1alpha6/schema.json","mode":420,"size":10857,"sha256":"0991de99cb37cb1de99b463133b448b982b76bcb9d16c1bc290e0ade9ee10493","index":0,"count":1,"encoding":"utf-8","payloadBytes":10857}
+@@PORTABLE {"path":"contracts/plan/v1alpha6/schema.json","mode":420,"size":11363,"sha256":"8765b192da2d4cbb17d469d187dee810688d68dfcd4245beb35663ae0b4a3d7a","index":0,"count":1,"encoding":"utf-8","payloadBytes":11363}
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://platform-installer.local/contracts/plan/v1alpha6/schema.json",
@@ -59745,7 +59746,7 @@ libraryExecutionPriorities:
 }
 
 @@END
-@@PORTABLE {"path":"contracts/project-edit/v1alpha10/schema.json","mode":420,"size":11707,"sha256":"25605d4baf55b558a9b6d828c4180c6b2f4b14cbba27361e961351397b3df2f4","index":0,"count":1,"encoding":"utf-8","payloadBytes":11707}
+@@PORTABLE {"path":"contracts/project-edit/v1alpha10/schema.json","mode":420,"size":11708,"sha256":"edbbc4b2c72d0444bf74ccb4dba3708da53cc08f3a497318461332639e11339a","index":0,"count":1,"encoding":"utf-8","payloadBytes":11708}
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://platform-installer.local/contracts/project-edit/v1alpha10/schema.json",
@@ -62952,14 +62953,14 @@ libraryExecutionPriorities:
 }
 
 @@END
-@@PORTABLE {"path":"docker/application-connection-probe/.dockerignore","mode":420,"size":46,"sha256":"0bbf709f21f7b507bad5b3f670fdc88ec0ca239cca4726582b38ee96fa23f530","index":0,"count":1,"encoding":"utf-8","payloadBytes":46}
+@@PORTABLE {"path":"docker/application-connection-probe/.dockerignore","mode":420,"size":50,"sha256":"8a93dd5dd5430531cc70808a8d53828d58f1682e91ee34f16af8ac54e3be8700","index":0,"count":1,"encoding":"utf-8","payloadBytes":50}
 README.md
 main.go
 main_test.go
 build-redos.sh
 
 @@END
-@@PORTABLE {"path":"docker/application-connection-probe/.gitignore","mode":420,"size":54,"sha256":"bf162a795ee5075761f1a8376a23bdbda9acae4948a0995ba20ad87875a5f9fe","index":0,"count":1,"encoding":"utf-8","payloadBytes":54}
+@@PORTABLE {"path":"docker/application-connection-probe/.gitignore","mode":420,"size":59,"sha256":"70ec0704ad4308e07dafee078c4a9198fb2d8206b495d309820983e80fba54c3","index":0,"count":1,"encoding":"utf-8","payloadBytes":59}
 /connection-probe
 /rootfs/
 /*.tar
@@ -62967,7 +62968,7 @@ build-redos.sh
 /*.sha256
 
 @@END
-@@PORTABLE {"path":"docker/application-connection-probe/Dockerfile","mode":420,"size":269,"sha256":"43afc7dcd78e79661a1357594c653257b3ef8867def771cc9a2cb5f39a20a0c1","index":0,"count":1,"encoding":"utf-8","payloadBytes":269}
+@@PORTABLE {"path":"docker/application-connection-probe/Dockerfile","mode":420,"size":276,"sha256":"9c8657dd9fb269523e0c38c3ac93e436de034c23104accf173be8b60246e4b0d","index":0,"count":1,"encoding":"utf-8","payloadBytes":276}
 FROM scratch
 COPY rootfs/ /
 COPY --chmod=0755 connection-probe /usr/bin/connection-probe
@@ -62977,7 +62978,7 @@ EXPOSE 8080
 ENTRYPOINT ["/usr/bin/vault", "agent", "-config=/etc/probe/agent.hcl"]
 
 @@END
-@@PORTABLE {"path":"docker/application-connection-probe/agent.hcl.example","mode":420,"size":1651,"sha256":"8e0d454141187d970eace41abcd80a412783fe0a88a8dda9fb8391fb2cafaa09","index":0,"count":1,"encoding":"utf-8","payloadBytes":1651}
+@@PORTABLE {"path":"docker/application-connection-probe/agent.hcl.example","mode":420,"size":1696,"sha256":"00515572eeefb2a145719b9c59569dc1caaa68b4404f38a8307bdb58f76dbf73","index":0,"count":1,"encoding":"utf-8","payloadBytes":1696}
 # Example only. Generate real paths from the library/instance bindings.
 # VAULT_ADDR and trusted Vault CA are supplied by the runtime environment.
 auto_auth {
@@ -63073,7 +63074,7 @@ sudo -n -u platform-docker env XDG_RUNTIME_DIR="/run/user/$docker_uid" \
   docker image inspect "$probe_image_tag" --format '{{.Id}}'
 
 @@END
-@@PORTABLE {"path":"docker/application-connection-probe/main.go","mode":420,"size":15303,"sha256":"0cf58a973035cc04ff5049559ba3d401e51099a10c7796fb28e6cd5807287294","index":0,"count":1,"encoding":"utf-8","payloadBytes":15303}
+@@PORTABLE {"path":"docker/application-connection-probe/main.go","mode":420,"size":15745,"sha256":"d600d1a19d75a861f356b8f4b6dfe51d193f26f47176245d0cb03cd27156ab89","index":0,"count":1,"encoding":"utf-8","payloadBytes":15745}
 // application-connection-probe is a QA-only application started by Vault Agent.
 // It never prints credential values or persists them in project files.
 package main
@@ -74449,12 +74450,12 @@ assert len(base_contents) == 1, 'Library base depends on consumer'
 print(json.dumps({'packageSchemasAndDigests':len(packages),'prepareJobs':len(prepared['jobs']),'secretExampleJobs':len(secret_prepared['jobs']),'syntheticComposeRenders':len(rendered),'sharedBaseVariants':len(base_contents),'realTargetExecution':False}))
 
 @@END
-@@PORTABLE {"path":"examples/szi/.gitattributes","mode":420,"size":115,"sha256":"ce5d44572752416e6f9ce02c764964d5ea0c69a9b489ae490df9ecc41cda9a3b","index":0,"count":1,"encoding":"utf-8","payloadBytes":115}
+@@PORTABLE {"path":"examples/szi/.gitattributes","mode":420,"size":117,"sha256":"34ce1250ab102afb07d05e35bb20d50cc63d858a533a45259d935616c92b19ce","index":0,"count":1,"encoding":"utf-8","payloadBytes":117}
 # Preserve the source assets byte-for-byte, including all Keycloak themes.
 application-packages/**/assets/** -text
 
 @@END
-@@PORTABLE {"path":"examples/szi/.gitignore","mode":420,"size":276,"sha256":"6a6671a32afe2b74bec9d2d04d5d9375607ba2559a575ccbe1c6cd21e411e8db","index":0,"count":1,"encoding":"utf-8","payloadBytes":276}
+@@PORTABLE {"path":"examples/szi/.gitignore","mode":420,"size":281,"sha256":"835c75fce4fd8b0596989977593d4008c3e22ef20180c46e319b5677c415e8b2","index":0,"count":1,"encoding":"utf-8","payloadBytes":281}
 # Keycloak binary inputs are kept locally and supplied separately.
 /application-packages/keycloak/*/assets/themes/
 /application-packages/keycloak/*/assets/themes.tar.gz
@@ -79613,7 +79614,7 @@ services:
       "SERVER_{{ loop.index }}_IP": "${SERVER_{{ loop.index }}_IP}"
 {% endfor %}
 @@END
-@@PORTABLE {"path":"examples/valid/application-libraries/ansible.cfg","mode":420,"size":62,"sha256":"c16e599c95e1b84e34265172ec3f03ecc026710164915846cf34a2773603c175","index":0,"count":1,"encoding":"utf-8","payloadBytes":62}
+@@PORTABLE {"path":"examples/valid/application-libraries/ansible.cfg","mode":420,"size":65,"sha256":"5140c29a212e9a2372487f4e7b7eb2a55ac5453e9a10afdcdcb422ddf253f961","index":0,"count":1,"encoding":"utf-8","payloadBytes":65}
 [defaults]
 hash_behaviour = merge
 retry_files_enabled = False
@@ -79781,7 +79782,7 @@ retry_files_enabled = False
 }
 
 @@END
-@@PORTABLE {"path":"examples/valid/application-libraries/application-packages/apigateway/1.0.0/roles/application_apigateway/templates/agent.hcl.j2","mode":420,"size":674,"sha256":"cdd2048528b4341b50a35537614f5d5e7dbb5b291b3ac4837c7027e3d4c34cf1","index":0,"count":1,"encoding":"utf-8","payloadBytes":674}
+@@PORTABLE {"path":"examples/valid/application-libraries/application-packages/apigateway/1.0.0/roles/application_apigateway/templates/agent.hcl.j2","mode":420,"size":697,"sha256":"1d5325c31c03f163d56358029ac5256af898a59bba142108638025589193f484","index":0,"count":1,"encoding":"utf-8","payloadBytes":697}
 exit_after_auth = false
 vault {
   address = {{ application_runtime.vault.address | to_json }}
@@ -79807,7 +79808,7 @@ exec {
 }
 
 @@END
-@@PORTABLE {"path":"examples/valid/application-libraries/application-packages/apigateway/1.0.0/roles/application_apigateway/templates/apigateway.compose.yml.j2","mode":420,"size":210,"sha256":"9abd04a3b5ba7420d58824c69396c25ae49658a2bda252850dca0269ec16b04d","index":0,"count":1,"encoding":"utf-8","payloadBytes":210}
+@@PORTABLE {"path":"examples/valid/application-libraries/application-packages/apigateway/1.0.0/roles/application_apigateway/templates/apigateway.compose.yml.j2","mode":420,"size":217,"sha256":"d187b7041cc1b0d2fa05a582e75e19ec3375ba1c4e56917db563f6b22e6cd4bf","index":0,"count":1,"encoding":"utf-8","payloadBytes":217}
 services:
   {{ application_instance_id }}:
     extends:
@@ -80194,7 +80195,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/valid/application-libraries/library-packages/cspa/1.0.0/roles/library_cspa/templates/.base_compose.yml.j2","mode":420,"size":83,"sha256":"440dc4283320f416c9d512657df996c627325404dc135297c09f8da9ab4ebb5b","index":0,"count":1,"encoding":"utf-8","payloadBytes":83}
+@@PORTABLE {"path":"examples/valid/application-libraries/library-packages/cspa/1.0.0/roles/library_cspa/templates/.base_compose.yml.j2","mode":420,"size":87,"sha256":"52198a5e9d5e538a9c6e93176b61334ac117cb95f3114e2080e9c63fcabff40c","index":0,"count":1,"encoding":"utf-8","payloadBytes":87}
 services:
   base:
     environment:
@@ -80244,14 +80245,14 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/valid/application-libraries/library-packages/sdku/1.0.0/roles/library_sdku/templates/.base_compose.yml.j2","mode":420,"size":83,"sha256":"440dc4283320f416c9d512657df996c627325404dc135297c09f8da9ab4ebb5b","index":0,"count":1,"encoding":"utf-8","payloadBytes":83}
+@@PORTABLE {"path":"examples/valid/application-libraries/library-packages/sdku/1.0.0/roles/library_sdku/templates/.base_compose.yml.j2","mode":420,"size":87,"sha256":"52198a5e9d5e538a9c6e93176b61334ac117cb95f3114e2080e9c63fcabff40c","index":0,"count":1,"encoding":"utf-8","payloadBytes":87}
 services:
   base:
     environment:
       REQUEST_TIMEOUT_MS: ${REQUEST_TIMEOUT_MS}
 
 @@END
-@@PORTABLE {"path":"examples/valid/application-providers/ansible.cfg","mode":420,"size":62,"sha256":"c16e599c95e1b84e34265172ec3f03ecc026710164915846cf34a2773603c175","index":0,"count":1,"encoding":"utf-8","payloadBytes":62}
+@@PORTABLE {"path":"examples/valid/application-providers/ansible.cfg","mode":420,"size":65,"sha256":"5140c29a212e9a2372487f4e7b7eb2a55ac5453e9a10afdcdcb422ddf253f961","index":0,"count":1,"encoding":"utf-8","payloadBytes":65}
 [defaults]
 hash_behaviour = merge
 retry_files_enabled = False
@@ -80365,7 +80366,7 @@ retry_files_enabled = False
 }
 
 @@END
-@@PORTABLE {"path":"examples/valid/application-providers/application-packages/apigateway/1.0.0/roles/application_apigateway/templates/agent.hcl.j2","mode":420,"size":674,"sha256":"cdd2048528b4341b50a35537614f5d5e7dbb5b291b3ac4837c7027e3d4c34cf1","index":0,"count":1,"encoding":"utf-8","payloadBytes":674}
+@@PORTABLE {"path":"examples/valid/application-providers/application-packages/apigateway/1.0.0/roles/application_apigateway/templates/agent.hcl.j2","mode":420,"size":697,"sha256":"1d5325c31c03f163d56358029ac5256af898a59bba142108638025589193f484","index":0,"count":1,"encoding":"utf-8","payloadBytes":697}
 exit_after_auth = false
 vault {
   address = {{ application_runtime.vault.address | to_json }}
@@ -80391,7 +80392,7 @@ exec {
 }
 
 @@END
-@@PORTABLE {"path":"examples/valid/application-providers/application-packages/apigateway/1.0.0/roles/application_apigateway/templates/apigateway.compose.yml.j2","mode":420,"size":210,"sha256":"9abd04a3b5ba7420d58824c69396c25ae49658a2bda252850dca0269ec16b04d","index":0,"count":1,"encoding":"utf-8","payloadBytes":210}
+@@PORTABLE {"path":"examples/valid/application-providers/application-packages/apigateway/1.0.0/roles/application_apigateway/templates/apigateway.compose.yml.j2","mode":420,"size":217,"sha256":"d187b7041cc1b0d2fa05a582e75e19ec3375ba1c4e56917db563f6b22e6cd4bf","index":0,"count":1,"encoding":"utf-8","payloadBytes":217}
 services:
   {{ application_instance_id }}:
     extends:
@@ -80509,7 +80510,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/valid/application-providers/application-packages/datamanager/1.0.0/roles/application_datamanager/templates/agent.hcl.j2","mode":420,"size":674,"sha256":"cdd2048528b4341b50a35537614f5d5e7dbb5b291b3ac4837c7027e3d4c34cf1","index":0,"count":1,"encoding":"utf-8","payloadBytes":674}
+@@PORTABLE {"path":"examples/valid/application-providers/application-packages/datamanager/1.0.0/roles/application_datamanager/templates/agent.hcl.j2","mode":420,"size":697,"sha256":"1d5325c31c03f163d56358029ac5256af898a59bba142108638025589193f484","index":0,"count":1,"encoding":"utf-8","payloadBytes":697}
 exit_after_auth = false
 vault {
   address = {{ application_runtime.vault.address | to_json }}
@@ -80535,7 +80536,7 @@ exec {
 }
 
 @@END
-@@PORTABLE {"path":"examples/valid/application-providers/application-packages/datamanager/1.0.0/roles/application_datamanager/templates/datamanager.compose.yml.j2","mode":420,"size":210,"sha256":"9abd04a3b5ba7420d58824c69396c25ae49658a2bda252850dca0269ec16b04d","index":0,"count":1,"encoding":"utf-8","payloadBytes":210}
+@@PORTABLE {"path":"examples/valid/application-providers/application-packages/datamanager/1.0.0/roles/application_datamanager/templates/datamanager.compose.yml.j2","mode":420,"size":217,"sha256":"d187b7041cc1b0d2fa05a582e75e19ec3375ba1c4e56917db563f6b22e6cd4bf","index":0,"count":1,"encoding":"utf-8","payloadBytes":217}
 services:
   {{ application_instance_id }}:
     extends:
@@ -80868,7 +80869,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/valid/application-providers/library-packages/sdku/1.0.0/roles/library_sdku/templates/.base_compose.yml.j2","mode":420,"size":83,"sha256":"440dc4283320f416c9d512657df996c627325404dc135297c09f8da9ab4ebb5b","index":0,"count":1,"encoding":"utf-8","payloadBytes":83}
+@@PORTABLE {"path":"examples/valid/application-providers/library-packages/sdku/1.0.0/roles/library_sdku/templates/.base_compose.yml.j2","mode":420,"size":87,"sha256":"52198a5e9d5e538a9c6e93176b61334ac117cb95f3114e2080e9c63fcabff40c","index":0,"count":1,"encoding":"utf-8","payloadBytes":87}
 services:
   base:
     environment:
@@ -80932,7 +80933,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/valid/application-runtime/application-packages/apigateway/1.0.0/roles/application_apigateway/templates/apigateway.compose.yml.j2","mode":420,"size":1247,"sha256":"ab16a76d9300d04cddb84244b979b1c94707ba76761a59c75000644f46ca7f9d","index":0,"count":1,"encoding":"utf-8","payloadBytes":1247}
+@@PORTABLE {"path":"examples/valid/application-runtime/application-packages/apigateway/1.0.0/roles/application_apigateway/templates/apigateway.compose.yml.j2","mode":420,"size":1272,"sha256":"a136be81f53bef66fa9f9e3a4fe74752d6aeb81cd381d515282ef95c77e75690","index":0,"count":1,"encoding":"utf-8","payloadBytes":1272}
 services:
   {{ application_instance_id }}:
     extends:
@@ -80960,7 +80961,7 @@ services:
       - {{ (application_runtime.config_path ~ '/default.conf:/etc/nginx/conf.d/default.conf:ro') | to_json }}
 
 @@END
-@@PORTABLE {"path":"examples/valid/application-runtime/application-packages/apigateway/1.0.0/roles/application_apigateway/templates/default.conf.j2","mode":420,"size":183,"sha256":"ee42a9a08715aa84daba7cb42f243aa74e26fc5e5764d0f23e0498163840896f","index":0,"count":1,"encoding":"utf-8","payloadBytes":183}
+@@PORTABLE {"path":"examples/valid/application-runtime/application-packages/apigateway/1.0.0/roles/application_apigateway/templates/default.conf.j2","mode":420,"size":190,"sha256":"846dfa8f8a828649e186c2b83d080e60f27509c1deb258c90a2b52ccfc963473","index":0,"count":1,"encoding":"utf-8","payloadBytes":190}
 server {
     listen 8080;
     location /status {
@@ -81172,7 +81173,7 @@ server {
 }
 
 @@END
-@@PORTABLE {"path":"examples/valid/application-runtime/library-packages/cspa/1.0.0/roles/library_cspa/templates/.base_compose.yml.j2","mode":420,"size":83,"sha256":"440dc4283320f416c9d512657df996c627325404dc135297c09f8da9ab4ebb5b","index":0,"count":1,"encoding":"utf-8","payloadBytes":83}
+@@PORTABLE {"path":"examples/valid/application-runtime/library-packages/cspa/1.0.0/roles/library_cspa/templates/.base_compose.yml.j2","mode":420,"size":87,"sha256":"52198a5e9d5e538a9c6e93176b61334ac117cb95f3114e2080e9c63fcabff40c","index":0,"count":1,"encoding":"utf-8","payloadBytes":87}
 services:
   base:
     environment:
@@ -81215,7 +81216,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/valid/application-runtime/library-packages/sdku/1.0.0/roles/library_sdku/templates/.base_compose.yml.j2","mode":420,"size":83,"sha256":"440dc4283320f416c9d512657df996c627325404dc135297c09f8da9ab4ebb5b","index":0,"count":1,"encoding":"utf-8","payloadBytes":83}
+@@PORTABLE {"path":"examples/valid/application-runtime/library-packages/sdku/1.0.0/roles/library_sdku/templates/.base_compose.yml.j2","mode":420,"size":87,"sha256":"52198a5e9d5e538a9c6e93176b61334ac117cb95f3114e2080e9c63fcabff40c","index":0,"count":1,"encoding":"utf-8","payloadBytes":87}
 services:
   base:
     environment:
@@ -82447,7 +82448,7 @@ catalogLock:
 </html>
 
 @@END
-@@PORTABLE {"path":"frontend/index.html","mode":420,"size":443,"sha256":"e9f268abb827a0c230e6cfe48904258db8b6ce6573bb681257e68f17e99bf1b7","index":0,"count":1,"encoding":"utf-8","payloadBytes":443}
+@@PORTABLE {"path":"frontend/index.html","mode":420,"size":456,"sha256":"f2d788dccaa718fc4028588993ab70947c0b34f9c4352fe5cca296ea634a1126","index":0,"count":1,"encoding":"utf-8","payloadBytes":456}
 <!doctype html>
 <html lang="ru">
   <head>
@@ -85910,7 +85911,7 @@ catalogLock:
 })();
 
 @@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":126043,"sha256":"b661118852d6aa8e075b5b8246ff5fab1c3e4bd83742905977caf2216907e63a","index":0,"count":3,"encoding":"utf-8","payloadBytes":49661}
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":129481,"sha256":"c33fb69536c66c66d9f2e199bc94bfee2f015c815106b0f99307cbd0079fbadf","index":0,"count":3,"encoding":"utf-8","payloadBytes":49661}
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   EditResult,
@@ -87260,7 +87261,10 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             (left, right) => left.sequence - right.sequence,
           );
         });
-        const previousProgress = runProgressRef.current;
+        const previousProgr
+@@END
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":129481,"sha256":"c33fb69536c66c66d9f2e199bc94bfee2f015c815106b0f99307cbd0079fbadf","index":1,"count":3,"encoding":"utf-8","payloadBytes":49682}
+ess = runProgressRef.current;
         const nextProgress = previousProgress
           ? observeRunEvent(previousProgress, value.event)
           : undefined;
@@ -87303,10 +87307,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     recoverInstallationRunEvents,
   ]);
   useEffect(
-    () =>
-@@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":126043,"sha256":"b661118852d6aa8e075b5b8246ff5fab1c3e4bd83742905977caf2216907e63a","index":1,"count":3,"encoding":"utf-8","payloadBytes":49682}
- () => {
+    () => () => {
       if (installationSubscriptionRef.current && api.unsubscribeInstallationRun)
         void api.unsubscribeInstallationRun(
           installationSubscriptionRef.current,
@@ -88569,7 +88570,10 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
                 error={editError?.message}
                 view={servicesView}
                 selectedDeploymentId={selectedServiceDeployment}
-                selectedMemberId={selectedServiceMember}
+                selectedMemberId={select
+@@END
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":129481,"sha256":"c33fb69536c66c66d9f2e199bc94bfee2f015c815106b0f99307cbd0079fbadf","index":2,"count":3,"encoding":"utf-8","payloadBytes":30138}
+edServiceMember}
                 focusMemberSettings={focusServiceMemberSettings}
                 onSelectedMemberChange={setSelectedServiceMember}
                 onOpenDeployment={(deploymentId) => {
@@ -88623,10 +88627,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
                   intent.operation === "DeleteTLSProfile" ||
                   intent.operation === "CreateCertificateScope" ||
                   intent.operation === "UpdateCertificateScope" ||
-                  intent.operation === "DeleteCertificateSco
-@@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":126043,"sha256":"b661118852d6aa8e075b5b8246ff5fab1c3e4bd83742905977caf2216907e63a","index":2,"count":3,"encoding":"utf-8","payloadBytes":26700}
-pe",
+                  intent.operation === "DeleteCertificateScope",
               )}
               busy={editBusy}
               structuralDisabled={refreshRequired}
@@ -89728,7 +89729,7 @@ export function ApplicationRedisAccess({
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/ApplicationBindings.tsx","mode":420,"size":8730,"sha256":"a356ad445d3918d147798978e70c79100f1bf33f1f2774816c25aaad4ea86a8e","index":0,"count":1,"encoding":"utf-8","payloadBytes":8730}
+@@PORTABLE {"path":"frontend/src/ApplicationBindings.tsx","mode":420,"size":9024,"sha256":"6aa14f3c764621b19d50b6845e233aa6bb0a4fde1650bf90e361f88156a1beb0","index":0,"count":1,"encoding":"utf-8","payloadBytes":9024}
 import { useState, useRef } from "react";
 import { objectValue } from "./application-draft";
 
@@ -90025,7 +90026,7 @@ function BindingRow({
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/ApplicationCredentials.tsx","mode":420,"size":25376,"sha256":"49457d214f17b0dc15286daf9dab8017ec4b7dd07d3d952f2e59647731025d69","index":0,"count":1,"encoding":"utf-8","payloadBytes":25376}
+@@PORTABLE {"path":"frontend/src/ApplicationCredentials.tsx","mode":420,"size":26002,"sha256":"eab59d1727ed5bbae948bdb8ec30018ce6935b5c1feec54e48f212c85fa16609","index":0,"count":1,"encoding":"utf-8","payloadBytes":26002}
 import { useRef, useState, type ReactNode } from "react";
 import { objectValue } from "./application-draft";
 import { ApplicationValueFields } from "./ApplicationValueFields";
@@ -90654,7 +90655,7 @@ export function ApplicationCredentials({
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/ApplicationFileSettings.tsx","mode":420,"size":4479,"sha256":"1bbf128eeaf6c9b388be7ed63a6cf6e0d8ff2276845a46421cd85e902f6d3b47","index":0,"count":1,"encoding":"utf-8","payloadBytes":4479}
+@@PORTABLE {"path":"frontend/src/ApplicationFileSettings.tsx","mode":420,"size":4636,"sha256":"54b26735824810e3f5bb2df62b6b47e51ebec2f7ab189bc953eb1870239aa729","index":0,"count":1,"encoding":"utf-8","payloadBytes":4636}
 import { useState } from "react";
 import { objectValue } from "./application-draft";
 
@@ -91539,7 +91540,7 @@ function Group({ title, children }: { title: string; children: ReactNode }) {
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/ApplicationPackageImport.tsx","mode":420,"size":3091,"sha256":"11b58fff9558b61080624c699e4ed11163382edd16e2b98be06a418e942a4ef6","index":0,"count":1,"encoding":"utf-8","payloadBytes":3091}
+@@PORTABLE {"path":"frontend/src/ApplicationPackageImport.tsx","mode":420,"size":3192,"sha256":"7b80e2065ecdb9ad3e6066140c92522d7f19e55e0b46ded1a330c88d9e0ab11e","index":0,"count":1,"encoding":"utf-8","payloadBytes":3192}
 import { useState } from "react";
 
 export function ApplicationPackageImport({
@@ -91852,7 +91853,7 @@ export function ApplicationPorts({
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/ApplicationProvidedConnections.tsx","mode":420,"size":6042,"sha256":"75556ebcc55857635f0720269d9454f26b6fe17246e25185dc7803abab7e910d","index":0,"count":1,"encoding":"utf-8","payloadBytes":6042}
+@@PORTABLE {"path":"frontend/src/ApplicationProvidedConnections.tsx","mode":420,"size":6194,"sha256":"1434415c91df6e9502fbb9175cc015e9fe5a4ef70c826caa6e8d9cd3763380d6","index":0,"count":1,"encoding":"utf-8","payloadBytes":6194}
 import { objectValue } from "./application-draft";
 import { ApplicationValueFields } from "./ApplicationValueFields";
 import { CredentialSourceEditor } from "./ApplicationCredentials";
@@ -92165,7 +92166,7 @@ export function ApplicationReadiness({
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/ApplicationRegistryCredentials.tsx","mode":420,"size":3578,"sha256":"31f3c119dccfa9a856d707cf222b88a874f37747c31ff68c7c1e038834e8025d","index":0,"count":1,"encoding":"utf-8","payloadBytes":3578}
+@@PORTABLE {"path":"frontend/src/ApplicationRegistryCredentials.tsx","mode":420,"size":3700,"sha256":"c41292f318f4e98d990d3348ff7faa6ea39705a868564f0ae84a4fe6a24f54c8","index":0,"count":1,"encoding":"utf-8","payloadBytes":3700}
 import { useState } from "react";
 import { ApplicationSecretInputs } from "./ApplicationSecretInputs";
 import { objectValue, type ObjectValue } from "./application-draft";
@@ -92916,7 +92917,7 @@ function BindingRow({
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/ApplicationSecretInputs.tsx","mode":420,"size":5139,"sha256":"0770bbfc08ac600d1cea84d8fa82a370ce83b343fcf37b66e6addb576529f746","index":0,"count":1,"encoding":"utf-8","payloadBytes":5139}
+@@PORTABLE {"path":"frontend/src/ApplicationSecretInputs.tsx","mode":420,"size":5301,"sha256":"d7112078d7a56af061c8adcf93cb841b25ec31e827eff307fb2c50ea5fc84dde","index":0,"count":1,"encoding":"utf-8","payloadBytes":5301}
 import { useRef, useState } from "react";
 import type {
   RuntimeSecretDescriptorOperation,
@@ -93269,7 +93270,7 @@ export function ApplicationTopicBindings({
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/ApplicationValueFields.tsx","mode":420,"size":15286,"sha256":"313c103e135e7313d3fccf98d1326c692c853ceccb68fad958ce6afb4df16f4c","index":0,"count":1,"encoding":"utf-8","payloadBytes":15286}
+@@PORTABLE {"path":"frontend/src/ApplicationValueFields.tsx","mode":420,"size":15780,"sha256":"6b87ecd0c232100797e3b03befdfd676f810a6e33e2b783af204458b8bc98c52","index":0,"count":1,"encoding":"utf-8","payloadBytes":15780}
 import { useRef, useState } from "react";
 import { objectValue } from "./application-draft";
 
@@ -93766,7 +93767,7 @@ export function inferParameterValue(text: string): string | number | boolean {
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":79941,"sha256":"0b8404a616ee72e5c7974607127a227c25e34c37ee0c2118e4d3a49f62e743d6","index":0,"count":2,"encoding":"utf-8","payloadBytes":49807}
+@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":81843,"sha256":"db87aaf740d1cc9da98c35c15c6c467b4467a4c56e19abc127fc934dec8d3075","index":0,"count":2,"encoding":"utf-8","payloadBytes":49807}
 import { ApplicationProvidedConnections } from "./ApplicationProvidedConnections";
 import {
   ApplicationRuntimeSecretField,
@@ -95015,7 +95016,10 @@ export function ApplicationsPage({
                       providedConnections={
                         freshSecrets
                           ? Object.entries(
-                              snapshot?.applicationLibraries?.libraries ?? {},
+                              snapshot?.applicationLibrari
+@@END
+@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":81843,"sha256":"db87aaf740d1cc9da98c35c15c6c467b4467a4c56e19abc127fc934dec8d3075","index":1,"count":2,"encoding":"utf-8","payloadBytes":32036}
+es?.libraries ?? {},
                             ).flatMap(([id, lib]) =>
                               Object.keys(lib.providedConnections ?? {}).map(
                                 (name) => id + "/" + name,
@@ -95042,10 +95046,7 @@ export function ApplicationsPage({
                           ? objectValue(resolved?.providedConnections)
                           : {}
                       }
-                      di
-@@END
-@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":79941,"sha256":"0b8404a616ee72e5c7974607127a227c25e34c37ee0c2118e4d3a49f62e743d6","index":1,"count":2,"encoding":"utf-8","payloadBytes":30134}
-sabled={busy}
+                      disabled={busy}
                       onDirtyChange={(v, k) =>
                         markChildDirty(v, "provided:" + k)
                       }
@@ -97809,7 +97810,7 @@ function ProviderDialog({
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/InstallationPage.tsx","mode":420,"size":90363,"sha256":"17ef91c4ed8cbce418e2f7c3313276e95c1842e7e71b855205dfef65f1a8ac0a","index":0,"count":2,"encoding":"utf-8","payloadBytes":52106}
+@@PORTABLE {"path":"frontend/src/InstallationPage.tsx","mode":420,"size":92745,"sha256":"02b2ae99c2b92a45cd22c49d4049d6a81083cbb75f4bb16c19dd994def9a5e5e","index":0,"count":2,"encoding":"utf-8","payloadBytes":51972}
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type {
   InstallationEventView,
@@ -99180,6 +99181,9 @@ function PlanStage({
             </ul>
           </article>
         )}
+
+@@END
+@@PORTABLE {"path":"frontend/src/InstallationPage.tsx","mode":420,"size":92745,"sha256":"02b2ae99c2b92a45cd22c49d4049d6a81083cbb75f4bb16c19dd994def9a5e5e","index":1,"count":2,"encoding":"utf-8","payloadBytes":40773}
         {!currentPlan && !runActive && (
           <article className="card">
             <p role="status">
@@ -99219,10 +99223,7 @@ function PlanStage({
             open={!outputPasswordPresent}
           >
             <summary>
-            
-@@END
-@@PORTABLE {"path":"frontend/src/InstallationPage.tsx","mode":420,"size":90363,"sha256":"17ef91c4ed8cbce418e2f7c3313276e95c1842e7e71b855205dfef65f1a8ac0a","index":1,"count":2,"encoding":"utf-8","payloadBytes":38257}
-  Защищённые выходные файлы
+              Защищённые выходные файлы
               {outputPasswordPresent
                 ? " · пароль задан"
                 : " · требуется пароль"}
@@ -100266,7 +100267,7 @@ export function ServerInformationDialog({ hostId, onProbe, onCheck, onResult, on
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/ServersPage.tsx","mode":420,"size":55574,"sha256":"a970737ea3dccfc722bc4ae40a6be5c4c42352b93bdc68a6b6e422c22f5a402b","index":0,"count":2,"encoding":"utf-8","payloadBytes":51167}
+@@PORTABLE {"path":"frontend/src/ServersPage.tsx","mode":420,"size":57181,"sha256":"f0bf2a72b438275e3f79b679448ded49d1ef41e89d07d4595f5a1e0cf96db13e","index":0,"count":2,"encoding":"utf-8","payloadBytes":51110}
 import { useEffect, useState, type ReactNode } from "react";
 import type {
   ExecutionNodeContext,
@@ -101686,7 +101687,10 @@ function ServerDialog({
     const intent: ServerIntent = { operation: "UpdateServer", hostId };
     if (type !== row?.type) intent.type = type;
     if (desiredHostname !== row?.desiredHostname)
-      intent.desiredHostname = desiredHostname;
+      intent.
+@@END
+@@PORTABLE {"path":"frontend/src/ServersPage.tsx","mode":420,"size":57181,"sha256":"f0bf2a72b438275e3f79b679448ded49d1ef41e89d07d4595f5a1e0cf96db13e","index":1,"count":2,"encoding":"utf-8","payloadBytes":6071}
+desiredHostname = desiredHostname;
     if (address !== row?.address) intent.address = address;
     if (portMode === "explicit") intent.sshPort = numericPort;
     if (portMode === "clear") intent.clearSSHPort = true;
@@ -101730,10 +101734,7 @@ function ServerDialog({
               disabled={typeDisabled}
               required={mode === "add" || !type}
             >
-              <option value="">Выбер
-@@END
-@@PORTABLE {"path":"frontend/src/ServersPage.tsx","mode":420,"size":55574,"sha256":"a970737ea3dccfc722bc4ae40a6be5c4c42352b93bdc68a6b6e422c22f5a402b","index":1,"count":2,"encoding":"utf-8","payloadBytes":4407}
-ите тип</option>
+              <option value="">Выберите тип</option>
               {unknownCurrentType && (
                 <option value={type}>Неизвестный тип ({type})</option>
               )}
@@ -103700,7 +103701,7 @@ function SessionActions({
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/TopologyPage.tsx","mode":420,"size":52692,"sha256":"dcce10acd48b6dd938f4bf7f489207977e1c732695b35f31356c61a059e079a9","index":0,"count":2,"encoding":"utf-8","payloadBytes":50543}
+@@PORTABLE {"path":"frontend/src/TopologyPage.tsx","mode":420,"size":54201,"sha256":"e826a7be72fcd87877a494ed112dff8651070c369ec32267f11c9c2b8333bf30","index":0,"count":2,"encoding":"utf-8","payloadBytes":50398}
 import { useEffect, useMemo, useState } from "react";
 import type { EndpointPreview, OpenResult } from "./backend";
 import {
@@ -105095,7 +105096,10 @@ function AddDeploymentDialog({
             required
             autoFocus
           />
-        </label>
+        </labe
+@@END
+@@PORTABLE {"path":"frontend/src/TopologyPage.tsx","mode":420,"size":54201,"sha256":"e826a7be72fcd87877a494ed112dff8651070c369ec32267f11c9c2b8333bf30","index":1,"count":2,"encoding":"utf-8","payloadBytes":3803}
+l>
         <small className="muted">ID стабилен и не переименовывается.</small>
         <label>
           Сервис
@@ -105136,10 +105140,7 @@ function AddDeploymentDialog({
         <p className="muted">
           Размещение, группы точек входа и настройки сервиса здесь не создаются.
         </p>
-        <div className=
-@@END
-@@PORTABLE {"path":"frontend/src/TopologyPage.tsx","mode":420,"size":52692,"sha256":"dcce10acd48b6dd938f4bf7f489207977e1c732695b35f31356c61a059e079a9","index":1,"count":2,"encoding":"utf-8","payloadBytes":2149}
-"actions">
+        <div className="actions">
           <button
             type="button"
             className="outline"
@@ -105215,7 +105216,7 @@ function DeleteDeploymentDialog({
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/UtilityPages.tsx","mode":420,"size":67854,"sha256":"c12fdcbd6ead013efaf64f28be32743d53d6a75d98098ca3c438b4f34f5a701d","index":0,"count":2,"encoding":"utf-8","payloadBytes":62487}
+@@PORTABLE {"path":"frontend/src/UtilityPages.tsx","mode":420,"size":69324,"sha256":"ff2202a6754560f808530d9a1f038376ea5d20c696ac58f09a5ff33977a49c42","index":0,"count":2,"encoding":"utf-8","payloadBytes":62327}
 import { useEffect, useMemo, useState } from "react";
 import type {
   EditResult,
@@ -106514,7 +106515,10 @@ export function UtilityPages({
   if (page === "logs")
     return (
       <section className="utility-page" aria-labelledby="logs-title">
-        <header className="utility-page-title">
+        <header className="ut
+@@END
+@@PORTABLE {"path":"frontend/src/UtilityPages.tsx","mode":420,"size":69324,"sha256":"ff2202a6754560f808530d9a1f038376ea5d20c696ac58f09a5ff33977a49c42","index":1,"count":2,"encoding":"utf-8","payloadBytes":6997}
+ility-page-title">
           <div>
             <h1 id="logs-title">Журналы</h1>
             <p>События текущего выполнения в безопасном представлении.</p>
@@ -106551,10 +106555,7 @@ export function UtilityPages({
               <dt>Типы серверов</dt>
               <dd>
                 {serverTypes.length
-                  ? serverTypes.m
-@@END
-@@PORTABLE {"path":"frontend/src/UtilityPages.tsx","mode":420,"size":67854,"sha256":"c12fdcbd6ead013efaf64f28be32743d53d6a75d98098ca3c438b4f34f5a701d","index":1,"count":2,"encoding":"utf-8","payloadBytes":5367}
-ap((item) => item.displayName).join(", ")
+                  ? serverTypes.map((item) => item.displayName).join(", ")
                   : "Недоступны"}
               </dd>
             </dl>
@@ -106790,7 +106791,7 @@ export function applicationDraft(
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/applications.css","mode":420,"size":29047,"sha256":"f396b4021ad12cdc4d52109a7811b874134557194b7f57c94b567b5a1b950815","index":0,"count":1,"encoding":"utf-8","payloadBytes":29047}
+@@PORTABLE {"path":"frontend/src/applications.css","mode":420,"size":30430,"sha256":"e0b62ab2e7777f39f7b3ecb44260ca9aa3171cfad15649aafda70ffb1ef9aebc","index":0,"count":1,"encoding":"utf-8","payloadBytes":30430}
 .applications-page {
   min-width: 750px;
   display: flex;
@@ -108176,7 +108177,7 @@ export function applicationDraft(
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/backend.ts","mode":420,"size":28484,"sha256":"0221cb38ff356259a02c241fc106bab3582f9087533abfc35c8427f192b3ec8e","index":0,"count":1,"encoding":"utf-8","payloadBytes":28484}
+@@PORTABLE {"path":"frontend/src/backend.ts","mode":420,"size":29330,"sha256":"ffcbcab18b06f6aa71137e0c44ee820e5dae46ba03215274c17a4dd6130dfa82","index":0,"count":1,"encoding":"utf-8","payloadBytes":29330}
 import {
   ProbeServerInformation,
   CheckServerInformation,
@@ -109415,7 +109416,7 @@ export const browserBackend: ProjectBackend = {
 };
 
 @@END
-@@PORTABLE {"path":"frontend/src/edit.css","mode":420,"size":12776,"sha256":"5a1af453fc6cd8fd8084ead9f86ef5d5795259f21bbe4a28a6ad17f8aacfdcb3","index":0,"count":1,"encoding":"utf-8","payloadBytes":12776}
+@@PORTABLE {"path":"frontend/src/edit.css","mode":420,"size":13391,"sha256":"a53dd6cd92665258ed17d1de63c32b30a22bde9f3b42ab6c367b7f2cc935959a","index":0,"count":1,"encoding":"utf-8","payloadBytes":13391}
 .unsaved {
   font-size: 12px;
   color: #8a5600;
@@ -110204,7 +110205,7 @@ export function executionNodeCombinedStatus(
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/installationPresentation.ts","mode":420,"size":8163,"sha256":"b0c2f899b69dc30c8c4f2340958cecb6ba760d1be08bffcd21b65394252d549a","index":0,"count":1,"encoding":"utf-8","payloadBytes":8163}
+@@PORTABLE {"path":"frontend/src/installationPresentation.ts","mode":420,"size":8423,"sha256":"f159f654dc04b4115771a110cfe3c2b62df42787d4a14ccd2a209b192938936b","index":0,"count":1,"encoding":"utf-8","payloadBytes":8423}
 import type {
   InstallationEventView,
   InstallationPlanView,
@@ -110467,7 +110468,7 @@ function confirmedPercent(progress?: RunProgress): number | undefined {
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/main.tsx","mode":420,"size":276,"sha256":"4c6017f319ac4a7814a06b81f4d493e1f863e6223ec8273b3f62853736498b8e","index":0,"count":1,"encoding":"utf-8","payloadBytes":276}
+@@PORTABLE {"path":"frontend/src/main.tsx","mode":420,"size":280,"sha256":"db9a990464e103e993ca24d73f195c62f4c0c5d9e65fa514d85bafed2a09e5f8","index":0,"count":1,"encoding":"utf-8","payloadBytes":280}
 import { renderApplication } from "./render";
 import { backend } from "./backend";
 import { qaE4Backend } from "./qa-e4";
@@ -110477,2141 +110478,4 @@ const qaE4 =
   new URLSearchParams(window.location.search).get("qa") === "e4";
 renderApplication(qaE4 ? qaE4Backend : backend);
 
-@@END
-@@PORTABLE {"path":"frontend/src/production-ui.css","mode":420,"size":72791,"sha256":"b87f73c2cddc59d1c14e064ae91e19d200dcf626b9983c3fd938759629382198","index":0,"count":2,"encoding":"utf-8","payloadBytes":48107}
-/* Desktop target from UI-DESIGN-01. Work regions, not the window, own overflow. */
-:root {
-  --ui-font-page-title: 22px;
-  --ui-font-section-title: 14px;
-  --ui-font-subsection-title: 13px;
-  --ui-font-body: 12px;
-  --ui-font-secondary: 11px;
-  --ui-font-caption: 10px;
-  --status-success-ink: #176443;
-  --status-success-fill: #e5f6ee;
-  --status-warning-ink: #805500;
-  --status-warning-fill: #fff3d6;
-  --status-danger-ink: #9f3028;
-  --status-danger-fill: #fde9e7;
-  --status-info-ink: #245b91;
-  --status-info-fill: #e8f2ff;
-  --status-neutral-ink: #52647a;
-  --status-neutral-fill: #edf1f6;
-  font:
-    14px / 1.4 Inter,
-    "Segoe UI",
-    Arial,
-    sans-serif;
-}
-html,
-body,
-#root {
-  height: 100%;
-  overflow: hidden;
-}
-body {
-  margin: 0;
-}
-.shell {
-  width: 100%;
-  height: 100dvh;
-  min-height: 0;
-  overflow: hidden;
-  grid-template-columns: 190px minmax(0, 1fr);
-  background: #f4f7fb;
-}
-.app-sidebar {
-  min-height: 0;
-  overflow-y: auto;
-  padding: 16px 12px;
-  background: #17233a;
-}
-.app-sidebar .brand {
-  margin: 4px 8px 22px;
-  font-size: 18px;
-  line-height: 1.12;
-}
-.app-sidebar nav button {
-  padding: 10px 12px;
-  border-radius: 7px;
-  text-align: left;
-}
-.app-sidebar nav button.active {
-  background: #3268a4;
-}
-.app-sidebar nav button[aria-current="page"] {
-  color: #fff;
-}
-.app-main {
-  width: 100%;
-  max-width: none;
-  height: 100%;
-  min-width: 0;
-  min-height: 0;
-  margin: 0;
-  padding: 0 18px 12px;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.app-header {
-  flex: 0 0 auto;
-  height: auto;
-  min-height: 68px;
-  padding: 8px 0;
-  display: grid;
-  grid-template-columns: minmax(130px, 1fr) auto minmax(180px, 245px) minmax(
-      155px,
-      190px
-    );
-  grid-template-areas: "identity statuses node installation" "actions actions actions actions";
-  align-items: center;
-  gap: 5px 10px;
-  background: #f4f7fb;
-}
-.app-project-identity {
-  grid-area: identity;
-  min-width: 130px;
-  max-width: none;
-}
-.app-project-identity strong {
-  font-size: 14px;
-}
-.app-project-identity span {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-.app-header .readonly,
-.app-header .unsaved {
-  padding: 5px 8px;
-  border-radius: 6px;
-  white-space: nowrap;
-}
-.app-header-statuses {
-  grid-area: statuses;
-  display: flex;
-  gap: 5px;
-  justify-content: flex-end;
-}
-.app-header .execution-node-badge {
-  grid-area: node;
-  min-width: 0;
-  width: 100%;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  padding: 6px 9px;
-}
-.installation-global-status {
-  grid-area: installation;
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-  width: 100%;
-  padding: 5px 9px;
-  text-align: left;
-  color: #172033;
-  background: white;
-  border: 1px solid #c6d4e5;
-  border-radius: 7px;
-}
-.installation-global-status strong {
-  font-size: 12px;
-  line-height: 1.2;
-}
-.installation-global-status small {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  color: #526987;
-  font-size: 10px;
-}
-.installation-global-status.running {
-  border-color: #2173b9;
-}
-.installation-global-status.failed {
-  border-color: #a33332;
-}
-.installation-global-status.succeeded {
-  border-color: #147748;
-}
-.app-header-actions {
-  grid-area: actions;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-.app-header-actions button {
-  padding: 6px 9px;
-  font-size: 12px;
-  white-space: nowrap;
-}
-.app-banner {
-  flex: 0 0 auto;
-  margin: 0 0 8px;
-  padding: 6px 10px;
-  font-size: 12px;
-  line-height: 1.3;
-}
-.workspace-content {
-  flex: 1;
-  min-height: 0;
-  min-width: 0;
-  overflow: auto;
-}
-.workspace-content:has(> .servers-layout) {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.workspace-content:has(> .servers-layout) > .title {
-  flex: 0 0 auto;
-}
-.workspace-content:has(> .servers-layout) > .session-credentials {
-  flex: 0 0 auto;
-  max-height: none;
-  margin: 4px 0 8px;
-  padding: 11px 13px;
-  gap: 7px;
-  overflow: visible;
-}
-.session-credentials > div:first-child {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  min-width: 0;
-}
-.session-credentials > div:first-child p {
-  margin: 0;
-  font-size: 11px;
-}
-.session-credentials form {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  align-items: end;
-  gap: 7px 10px;
-}
-.session-credentials form .checkbox-label {
-  align-self: center;
-  margin: 0;
-  font-size: 12px;
-}
-.session-credentials form .actions {
-  grid-column: 3 / 5;
-  justify-content: flex-end;
-  margin: 0;
-}
-.session-credentials form .field-error {
-  grid-column: 1 / -1;
-}
-.workspace-content:has(> .servers-layout) > .servers-layout {
-  flex: 1;
-  min-height: 0;
-  max-height: none;
-  overflow: hidden;
-  grid-template-rows: minmax(205px, 1fr) minmax(130px, auto);
-}
-.workspace-content:has(> .servers-layout) .server-list-scroll {
-  min-height: 0;
-  max-height: none;
-}
-.workspace-content:has(> .servers-layout) .server-list-scroll.empty {
-  width: 100%;
-  max-width: none;
-  min-height: 0;
-  margin: 0;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-}
-.workspace-content:has(> .servers-layout) .server-list-scroll.empty p {
-  max-width: 520px;
-  margin: 5px 0 12px;
-}
-.workspace-content:has(> .servers-layout) .execution-node-panel {
-  max-height: min(30vh, 215px);
-  padding: 11px 13px;
-  margin: 6px 0 0;
-  overflow: auto;
-}
-.execution-node-panel .execution-node-detail {
-  grid-template-columns: minmax(120px, 155px) minmax(0, 1fr);
-  gap: 4px 10px;
-  margin: 8px 0;
-}
-.execution-node-panel > p {
-  margin: 5px 0;
-  font-size: 12px;
-  line-height: 1.35;
-}
-.execution-node-host-key {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 4px 10px;
-  margin: 5px 0;
-}
-.execution-node-host-key > p:first-child {
-  margin: 0;
-}
-.execution-node-host-key > button {
-  grid-column: 2;
-  grid-row: 1;
-  padding: 6px 8px;
-  font-size: 12px;
-}
-.execution-node-panel > .actions {
-  gap: 6px;
-  margin-top: 6px;
-}
-.execution-node-panel > .actions button,
-.execution-node-panel > button[aria-label="Выбрать узел выполнения"] {
-  padding: 6px 8px;
-  font-size: 12px;
-}
-.workspace-content:has(> .servers-layout) > .draft-actions {
-  flex: 0 0 auto;
-  max-height: 90px;
-  overflow: auto;
-}
-.session-credentials h2 {
-  margin-bottom: 5px;
-}
-.session-credentials > div:first-child p {
-  margin: 0 0 8px;
-  font-size: 12px;
-}
-.session-credentials form {
-  gap: 7px 10px;
-}
-.session-credentials form input,
-.session-credentials form select {
-  padding: 6px 8px;
-  min-height: 32px;
-}
-.session-credentials form .actions button {
-  padding: 6px 9px;
-}
-.workspace-content:has(> .servers-layout) .server-table td button {
-  min-height: 34px;
-  padding: 6px 9px;
-  line-height: 1.4;
-}
-.server-line-icon {
-  flex: 0 0 auto;
-  width: 16px;
-  height: 16px;
-  color: #58708e;
-}
-.server-name-cell {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-.status-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  max-width: 100%;
-  padding: 3px 8px;
-  border: 1px solid transparent;
-  border-radius: 999px;
-  font-size: 10px;
-  font-weight: 600;
-  line-height: 1.25;
-  white-space: nowrap;
-  vertical-align: middle;
-}
-.status-chip-symbol {
-  display: inline-grid;
-  width: 12px;
-  place-items: center;
-  font-size: 11px;
-  font-weight: 700;
-}
-.status-chip--success {
-  background: var(--status-success-fill);
-  color: var(--status-success-ink);
-}
-.status-chip--warning {
-  background: var(--status-warning-fill);
-  color: var(--status-warning-ink);
-}
-.status-chip--danger {
-  background: var(--status-danger-fill);
-  color: var(--status-danger-ink);
-}
-.status-chip--info {
-  background: var(--status-info-fill);
-  color: var(--status-info-ink);
-}
-.status-chip--neutral {
-  background: var(--status-neutral-fill);
-  color: var(--status-neutral-ink);
-}
-.execution-node-host-key-approved {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.workspace-content:has(> .servers-layout) > .servers-title {
-  margin: 4px 0 5px;
-}
-.workspace-content:has(> .servers-layout) .servers-title p {
-  margin: 2px 0;
-  font-size: 13px;
-}
-.workspace-content:has(> .servers-layout) .session-credentials {
-  margin: 3px 0 6px;
-  padding: 8px 12px;
-  gap: 4px;
-}
-.workspace-content:has(> .servers-layout) .session-credentials h2 {
-  margin: 0;
-  font-size: 14px;
-}
-.workspace-content:has(> .servers-layout)
-  .session-credentials
-  > div:first-child
-  p {
-  margin: 0;
-  font-size: 10px;
-  line-height: 1.25;
-}
-.workspace-content:has(> .servers-layout)
-  .session-credentials
-  .session-credentials-status {
-  padding-left: 8px;
-  border-left: 1px solid #dbe3ed;
-  color: #526987;
-  white-space: nowrap;
-}
-.workspace-content:has(> .servers-layout) .session-credentials form {
-  grid-template-columns:
-    minmax(140px, 1fr) minmax(140px, 1fr) minmax(140px, 1fr) max-content
-    max-content;
-  align-items: end;
-  gap: 5px 9px;
-}
-.workspace-content:has(> .servers-layout) .session-credentials form label {
-  gap: 2px;
-  margin: 0;
-  font-size: 11px;
-}
-.workspace-content:has(> .servers-layout) .session-credentials form input,
-.workspace-content:has(> .servers-layout) .session-credentials form select {
-  min-height: 29px;
-  padding: 4px 7px;
-}
-.workspace-content:has(> .servers-layout)
-  .session-credentials
-  form
-  .checkbox-label {
-  align-self: center;
-  font-size: 10px;
-}
-.workspace-content:has(> .servers-layout) .session-credentials form .actions {
-  grid-column: 5;
-  justify-content: flex-end;
-  margin: 0;
-}
-.workspace-content:has(> .servers-layout)
-  .session-credentials
-  > .muted:last-child {
-  margin: 0;
-  font-size: 10px;
-  line-height: 1.2;
-}
-.workspace-content:has(> .servers-layout) > .servers-layout {
-  grid-template-rows: minmax(205px, 1fr) minmax(130px, auto);
-  gap: 6px;
-  margin-bottom: 0;
-}
-.workspace-content:has(> .servers-layout) .servers-layout > .card {
-  margin: 0;
-}
-.workspace-content:has(> .servers-layout) .execution-node-panel {
-  display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(250px, 1fr);
-  align-content: start;
-  gap: 4px 12px;
-  max-height: none;
-  overflow: visible;
-  padding: 8px 10px;
-}
-.execution-node-panel > .execution-node-heading {
-  grid-column: 1 / -1;
-}
-.execution-node-panel .execution-node-heading h2 {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.2;
-}
-.execution-node-panel > .execution-node-detail,
-.execution-node-panel > p,
-.execution-node-panel > .execution-node-host-key,
-.execution-node-panel > [role="status"],
-.execution-node-panel > [role="alert"] {
-  grid-column: 1;
-}
-.execution-node-panel .execution-node-detail {
-  gap: 2px 8px;
-  margin: 3px 0;
-  font-size: 11px;
-  line-height: 1.2;
-}
-.execution-node-trust-status {
-  align-self: center;
-  color: #087443;
-  font-size: 11px;
-  white-space: nowrap;
-}
-.execution-node-key-dialog h1 {
-  margin: 0 0 10px;
-  font-size: 18px;
-}
-.execution-node-key-dialog p {
-  margin: 8px 0;
-}
-.execution-node-key-dialog [role="group"] {
-  padding: 8px 10px;
-  border: 1px solid #dbe5f1;
-  border-radius: 7px;
-  background: #f7faff;
-}
-.execution-node-key-dialog code {
-  overflow-wrap: anywhere;
-}
-.execution-node-key-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 14px;
-}
-.execution-node-panel > p {
-  margin: 2px 0;
-  font-size: 10px;
-  line-height: 1.2;
-}
-.execution-node-panel .execution-node-host-key {
-  gap: 3px 8px;
-  margin: 2px 0;
-}
-.execution-node-panel .execution-node-host-key > p {
-  font-size: 10px;
-  line-height: 1.2;
-}
-.execution-node-panel .execution-node-host-key > [role="group"] {
-  grid-column: 1 / -1;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  align-items: center;
-  gap: 3px 8px;
-  min-width: 0;
-}
-.execution-node-panel .execution-node-host-key > [role="group"] p {
-  grid-column: 1 / -1;
-  margin: 0;
-  font-size: 10px;
-  line-height: 1.2;
-}
-.execution-node-panel .execution-node-host-key code {
-  overflow-wrap: anywhere;
-}
-.execution-node-panel .execution-node-host-key > [role="group"] button {
-  min-height: 28px;
-  padding: 4px 8px;
-  white-space: nowrap;
-}
-.execution-node-panel > .actions {
-  grid-column: 2;
-  grid-row: 2 / span 2;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-self: center;
-  margin: 0;
-  align-items: center;
-  justify-items: stretch;
-}
-.execution-node-panel > button[aria-label="Выбрать узел выполнения"],
-.execution-node-panel > .execution-node-change {
-  grid-column: 2;
-  grid-row: 4;
-  align-self: start;
-}
-.execution-node-panel > button[aria-label="Выбрать узел выполнения"] {
-  justify-self: end;
-}
-.execution-node-panel > .actions button,
-.execution-node-panel > button[aria-label="Выбрать узел выполнения"],
-.execution-node-panel > .execution-node-change .actions button {
-  min-height: 29px;
-  padding: 4px 8px;
-  font-size: 11px;
-}
-.execution-node-panel > .actions button,
-.execution-node-panel .execution-node-host-key > [role="group"] button {
-  width: 100%;
-  margin: 0;
-}
-@media (max-height: 700px) {
-  .workspace-content:has(> .servers-layout) > .servers-layout {
-    grid-template-rows: minmax(145px, 1fr) minmax(120px, auto);
-  }
-  .workspace-content:has(> .servers-layout) .execution-node-panel {
-    gap: 3px 10px;
-  }
-  .execution-node-panel .execution-node-detail {
-    margin: 2px 0;
-  }
-}
-.workspace-content:has(> .topology-title) {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.workspace-content:has(> .topology-title) > .topology-title {
-  flex: 0 0 auto;
-  margin: 4px 0 5px;
-}
-.workspace-content:has(> .topology-title) > .topology-title h1 {
-  margin: 0;
-  font-size: 23px;
-}
-.workspace-content:has(> .topology-title) > .topology-title p {
-  margin: 2px 0 0;
-  font-size: 13px;
-}
-.workspace-content:has(> .topology-title) > .topology-tabs {
-  flex: 0 0 auto;
-  gap: 4px;
-  margin: 2px 0 8px;
-}
-.workspace-content:has(> .topology-title) > .topology-tabs button {
-  padding: 6px 10px;
-  font-size: 13px;
-}
-.workspace-content:has(> .topology-title) > .topology-warning {
-  flex: 0 0 auto;
-  margin: 0 0 8px;
-  padding: 9px 12px;
-}
-.workspace-content:has(> .topology-title) > .topology-warning p {
-  margin: 3px 0 0;
-  font-size: 12px;
-  line-height: 1.35;
-}
-.workspace-content:has(> .topology-title) .topology-grid {
-  flex: 1 1 auto;
-  min-height: 0;
-  grid-template-columns: minmax(185px, 0.78fr) minmax(0, 1.6fr) minmax(
-      205px,
-      0.9fr
-    );
-  grid-template-rows: minmax(0, 1fr);
-  gap: 8px;
-  overflow: hidden;
-}
-.workspace-content:has(> .topology-title) .topology-grid > .card {
-  min-height: 0;
-  margin: 0;
-  padding: 12px;
-  overflow: auto;
-}
-.workspace-content:has(> .topology-title) .entry-grid {
-  flex: 1 1 auto;
-  min-height: 0;
-  grid-template-rows: minmax(0, 1fr);
-  overflow: hidden;
-}
-.workspace-content:has(> .topology-title) .entry-panel {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-  margin: 0;
-  padding: 0;
-  overflow: hidden;
-}
-.workspace-content:has(> .topology-title) .entry-panel-title {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
-  padding: 10px 12px;
-  border-bottom: 1px solid #e2eaf3;
-  background: #f3f7fc;
-  font-size: 14px;
-  line-height: 1.25;
-}
-.entry-panel-icon {
-  flex: 0 0 auto;
-  width: 18px;
-  height: 18px;
-  color: #507092;
-}
-.workspace-content:has(> .topology-title) .entry-panel > .entry-list {
-  flex: 1 1 auto;
-  min-height: 0;
-  padding: 3px 12px 12px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-.workspace-content:has(> .topology-title) .entry-panel > .muted {
-  margin: 10px 12px;
-}
-.entry-state-chip {
-  width: fit-content;
-  max-width: 100%;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 7px;
-  border-radius: 999px;
-  font-size: 10px;
-  line-height: 1.3;
-  overflow-wrap: anywhere;
-}
-.entry-state-chip--success {
-  background: var(--status-success-fill);
-  color: var(--status-success-ink);
-}
-.entry-state-chip--warning {
-  background: var(--status-warning-fill);
-  color: var(--status-warning-ink);
-}
-.entry-state-chip--danger {
-  background: var(--status-danger-fill);
-  color: var(--status-danger-ink);
-}
-.entry-state-chip--info {
-  background: var(--status-info-fill);
-  color: var(--status-info-ink);
-}
-.entry-state-chip--neutral {
-  background: var(--status-neutral-fill);
-  color: var(--status-neutral-ink);
-}
-.entry-findings,
-.entry-draft-notice {
-  flex: 0 0 auto;
-  margin: 0 0 8px;
-  padding: 8px 10px;
-  border: 1px solid #f0d08a;
-  border-radius: 6px;
-  background: #fff8e8;
-  color: #614c1a;
-  font-size: 11px;
-}
-.entry-findings p {
-  margin: 4px 0 0;
-}
-.workspace-content:has(> .topology-title) .entry-consumers {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  overflow: hidden;
-}
-.workspace-content:has(> .topology-title) .entry-consumers > .entry-list {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-.workspace-content:has(> .topology-title) .topology-grid > .card > h2 {
-  margin: -12px -12px 10px;
-  padding: 10px 12px;
-  border-bottom: 1px solid #e4ebf2;
-  font-size: 14px;
-}
-.workspace-content:has(> .topology-title) .topology-summary {
-  grid-column: auto;
-}
-.workspace-content:has(> .topology-title) .topology-summary dl {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
-  gap: 5px 10px;
-  font-size: 12px;
-}
-.workspace-content:has(> .topology-title) .topology-summary p {
-  margin: 8px 0 0;
-  font-size: 11px;
-}
-.workspace-content:has(> .topology-title) .topology-list-scroll {
-  max-height: none;
-  min-height: 0;
-}
-.workspace-content:has(> .installation-page) {
-  overflow: hidden;
-}
-.workspace-content > .installation-page {
-  height: 100%;
-  min-height: 0;
-}
-.workspace-content .title {
-  margin: 10px 0 8px;
-}
-.workspace-content h1 {
-  font-size: 22px;
-}
-.workspace-content h2 {
-  font-size: 15px;
-}
-.workspace-content .card {
-  margin: 9px 0;
-  padding: 14px;
-}
-.workspace-content .stat {
-  padding: 12px;
-}
-.workspace-content .stat strong {
-  font-size: 22px;
-}
-.workspace-content .server-table td,
-.workspace-content .server-table th {
-  padding: 8px 9px;
-}
-.workspace-content .servers-layout {
-  grid-template-rows: minmax(160px, 1fr) auto;
-  max-height: calc(100% - 155px);
-}
-.workspace-content .server-list-scroll {
-  max-height: none;
-}
-.workspace-content .topology-list-scroll {
-  max-height: min(54vh, 540px);
-}
-.workspace-content .services-setting {
-  padding-block: 10px;
-}
-.workspace-content .installation-page {
-  max-width: none;
-  display: flex;
-  flex-direction: column;
-}
-.installation-page > .title,
-.installation-page > .installation-tabs {
-  flex: 0 0 auto;
-}
-.installation-page > .title p {
-  margin: 1px 0;
-}
-.installation-page > .installation-tabs {
-  margin: 4px 0;
-  gap: 4px;
-  padding: 3px;
-  background: #e5edf6;
-  border-radius: 8px;
-}
-.installation-page > .installation-tabs button {
-  padding: 7px 11px;
-}
-.installation-page > .installation-tabs button.active {
-  background: #fff;
-  color: #194d8b;
-  border-color: #fff;
-  box-shadow: 0 1px 3px #0002;
-}
-.installation-body {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  padding-right: 4px;
-}
-.installation-body:has(> .installation-plan-content) {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.installation-body > .card:first-child,
-.installation-body > section > .card:first-child {
-  margin-top: 0;
-}
-.installation-stage-content {
-  min-height: 0;
-}
-.installation-stage-heading {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
-}
-.installation-stage-heading h2,
-.installation-stage-heading p {
-  margin: 0 0 5px;
-}
-.installation-progress {
-  margin: 12px 0;
-}
-.installation-progress > div {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  font-size: 12px;
-  color: #475569;
-}
-.installation-progress progress {
-  width: 100%;
-  height: 13px;
-  accent-color: #176fc1;
-}
-.installation-progress-unavailable {
-  padding: 8px 10px;
-  background: #edf2f8;
-  border-radius: 6px;
-  font-size: 12px;
-}
-.installation-current-action,
-.installation-current-task {
-  margin: 8px 0;
-}
-.installation-event-card {
-  min-height: 0;
-}
-.installation-events {
-  max-height: 360px;
-  overflow: auto;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.installation-events li {
-  display: grid;
-  grid-template-columns: 38px minmax(0, 1fr);
-  gap: 8px;
-  padding: 7px 0;
-  border-bottom: 1px solid #e2e8f0;
-}
-.installation-events li span:last-child {
-  min-width: 0;
-}
-.installation-events b {
-  font-size: 12px;
-  font-weight: 600;
-  overflow-wrap: anywhere;
-}
-.installation-events small {
-  display: block;
-  color: #526987;
-  margin-top: 2px;
-}
-.installation-event-sequence {
-  color: #526987;
-  font-variant-numeric: tabular-nums;
-}
-.action-result-table {
-  max-height: 330px;
-  overflow: auto;
-  border: 1px solid #d8e2ef;
-  border-radius: 7px;
-}
-.action-result-table table {
-  width: 100%;
-  min-width: 620px;
-  border-collapse: collapse;
-}
-.action-result-table th,
-.action-result-table td {
-  text-align: left;
-  padding: 8px 9px;
-  border-bottom: 1px solid #e2e8f0;
-  vertical-align: top;
-}
-.action-result-table th {
-  position: sticky;
-  top: 0;
-  background: #f2f6fa;
-  font-size: 12px;
-}
-.modal {
-  z-index: 100;
-  padding: 18px;
-}
-.modal > .dialog,
-.modal .dialog {
-  max-height: calc(100dvh - 36px);
-  overflow: auto;
-  box-shadow: 0 18px 50px #0005;
-}
-.dialog-actions,
-.dialog .actions {
-  position: sticky;
-  bottom: 0;
-  z-index: 1;
-  padding-top: 9px;
-  background: white;
-}
-.runtime-secret-dialog {
-  max-height: calc(100dvh - 36px);
-  overflow: auto;
-}
-.runtime-secret-dialog form {
-  max-height: calc(100dvh - 36px);
-  overflow: auto;
-}
-button:focus-visible,
-input:focus-visible,
-select:focus-visible,
-summary:focus-visible,
-a:focus-visible,
-[tabindex]:focus-visible {
-  outline: 3px solid #125b9f;
-  outline-offset: 2px;
-}
-button:disabled {
-  cursor: not-allowed;
-}
-.workspace-content .safe-findings code {
-  color: #9c2525;
-}
-@media (max-width: 1150px) {
-  .shell {
-    grid-template-columns: 160px minmax(0, 1fr);
-  }
-  .app-main {
-    padding-inline: 10px;
-  }
-  .app-header {
-    grid-template-columns: minmax(125px, 1fr) auto minmax(160px, 220px) minmax(
-        145px,
-        175px
-      );
-    gap: 4px 7px;
-  }
-  .workspace-content:has(> .servers-layout) .session-credentials form {
-    grid-template-columns:
-      minmax(115px, 1fr) minmax(125px, 1fr) minmax(125px, 1.15fr) max-content
-      max-content;
-  }
-  .workspace-content:has(> .servers-layout) .session-credentials form .actions {
-    grid-column: auto;
-  }
-}
-@media (max-width: 960px) {
-  .workspace-content:has(> .servers-layout) .session-credentials form {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .workspace-content:has(> .servers-layout) .session-credentials form .actions {
-    grid-column: 1 / -1;
-  }
-  .session-credentials-status {
-    white-space: normal;
-  }
-}
-@media (max-width: 800px) {
-  .shell {
-    grid-template-columns: 140px minmax(0, 1fr);
-  }
-  .app-sidebar nav {
-    display: grid;
-    grid-template-columns: 1fr;
-  }
-  .app-header {
-    grid-template-columns: minmax(110px, 1fr) minmax(145px, 180px);
-    grid-template-areas: "identity installation" "statuses node" "actions actions";
-  }
-  .app-header-statuses {
-    justify-content: flex-start;
-  }
-  .installation-page > .installation-tabs {
-    overflow-x: auto;
-    flex-wrap: nowrap;
-  }
-  .installation-page > .installation-tabs button {
-    white-space: nowrap;
-  }
-  .session-credentials > div:first-child {
-    display: block;
-  }
-  .session-credentials form {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .workspace-content:has(> .servers-layout) .session-credentials form .actions {
-    grid-column: 1 / -1;
-  }
-  .session-credentials form .actions {
-    grid-column: 1 / -1;
-  }
-  .workspace-content:has(> .servers-layout) > .servers-layout {
-    grid-template-rows: minmax(175px, 1fr) minmax(120px, auto);
-  }
-  .workspace-content:has(> .servers-layout) .servers-layout > .card {
-    margin: 0;
-  }
-  .workspace-content:has(> .servers-layout) .execution-node-panel {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .execution-node-panel > .execution-node-heading,
-  .execution-node-panel > .execution-node-detail,
-  .execution-node-panel > p,
-  .execution-node-panel > .execution-node-host-key,
-  .execution-node-panel > [role="status"],
-  .execution-node-panel > [role="alert"],
-  .execution-node-panel > .actions,
-  .execution-node-panel > button[aria-label="Выбрать узел выполнения"],
-  .execution-node-panel > .execution-node-change {
-    grid-column: 1;
-    grid-row: auto;
-  }
-}
-@media (max-width: 960px) {
-  .workspace-content:has(> .topology-title) {
-    overflow: auto;
-  }
-  .workspace-content:has(> .topology-title) .topology-grid {
-    flex: 0 0 auto;
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto;
-    overflow: visible;
-  }
-  .workspace-content:has(> .topology-title) .topology-grid > .card {
-    min-height: 120px;
-  }
-  .workspace-content:has(> .topology-title) .topology-summary {
-    grid-column: 1;
-  }
-}
-
-/* Selected production layout for Topology / By services. */
-.workspace-content:has(> .topology-title) .topology-grid {
-  grid-template-columns: minmax(185px, 0.78fr) minmax(0, 1.6fr) minmax(
-      205px,
-      0.9fr
-    );
-  gap: 8px;
-}
-.workspace-content:has(> .topology-title) .topology-detail {
-  display: flex;
-  flex-direction: column;
-}
-.topology-detail > .topology-selected-facts {
-  grid-template-columns: minmax(84px, 0.7fr) minmax(0, 1.3fr);
-  gap: 8px 12px;
-  margin: 0 0 8px;
-}
-.topology-selected-facts dd {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-.topology-detail > h3 {
-  margin: 4px 0 8px;
-  padding-top: 9px;
-  border-top: 1px solid #e2e8f0;
-}
-.topology-placement-list {
-  display: grid;
-  flex: 0 1 auto;
-  gap: 7px;
-  min-height: 0;
-  max-height: min(38vh, 330px);
-  overflow: auto;
-  overscroll-behavior: contain;
-}
-.topology-assignment {
-  align-items: center;
-  min-width: 0;
-  padding: 9px 10px;
-}
-.topology-assignment-host {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-.topology-assignment-host b {
-  color: #172b4d;
-}
-.topology-assignment-host small {
-  color: #63728a;
-  font-size: 11px;
-}
-.topology-assignment .topology-role-chip {
-  justify-self: end;
-  padding: 5px 9px;
-  border-radius: 6px;
-  background: #e8f2ff;
-  color: #194d8b;
-  font-size: 11px;
-  font-weight: 650;
-  overflow-wrap: anywhere;
-}
-.topology-member-assignment {
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  width: 100%;
-  background: #fff;
-  color: #29415e;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.topology-member-assignment:hover,
-.topology-member-assignment:focus-visible {
-  border-color: #78a9ed;
-  background: #f7faff;
-}
-.topology-member-assignment::after {
-  content: "›";
-  grid-column: 3;
-  grid-row: 1;
-  color: #5279a9;
-  font-size: 20px;
-}
-.topology-actions {
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 8px;
-  margin-top: auto;
-  padding-top: 10px;
-  border-top: 1px solid #e2e8f0;
-}
-.topology-actions > button {
-  min-height: 36px;
-  white-space: nowrap;
-}
-.topology-actions > .danger {
-  margin-left: auto;
-  color: #b42318;
-}
-@media (max-width: 620px) {
-  .topology-actions > button {
-    flex: 1 1 145px;
-    white-space: normal;
-  }
-  .topology-actions > .danger {
-    margin-left: 0;
-  }
-}
-
-/* Selected production layout for Topology / By servers (variant A). */
-.workspace-content:has(> .topology-title) .topology-servers-grid {
-  grid-template-columns: minmax(190px, 0.82fr) minmax(0, 2.1fr) minmax(
-      220px,
-      0.92fr
-    );
-}
-.workspace-content:has(> .topology-title) .topology-servers-grid > .card {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  overflow: hidden;
-}
-.workspace-content:has(> .topology-title)
-  .topology-servers-grid
-  > .topology-list
-  .topology-list-scroll,
-.workspace-content:has(> .topology-title)
-  .topology-servers-grid
-  > .topology-detail
-  .topology-list-scroll {
-  flex: 1 1 auto;
-  width: 100%;
-  min-height: 0;
-  max-height: none;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-.workspace-content:has(> .topology-title)
-  .topology-servers-grid
-  > .topology-list
-  .topology-list-scroll {
-  align-content: start;
-  gap: 0;
-}
-.topology-servers-grid .topology-row {
-  grid-template-columns: 18px minmax(0, 1fr);
-  align-items: center;
-  column-gap: 9px;
-  min-height: 52px;
-  padding: 6px 9px;
-  border: 0;
-  border-bottom: 1px solid #e4ebf2;
-  border-radius: 0;
-  background: transparent;
-}
-.topology-servers-grid .topology-row.selected {
-  border-bottom-color: transparent;
-  border-radius: 6px;
-  background: #edf5ff;
-  box-shadow: inset 3px 0 #3278bd;
-}
-.topology-servers-grid .topology-row:hover:not(.selected) {
-  background: #f7f9fc;
-}
-.topology-server-icon {
-  grid-column: 1;
-  grid-row: 1;
-  width: 16px;
-  height: 16px;
-  color: #607b9a;
-}
-.topology-servers-grid .topology-instance-copy {
-  grid-column: 2;
-}
-.topology-servers-grid .topology-instance-heading b {
-  color: #172b4d;
-}
-.topology-servers-grid .topology-row.selected .topology-instance-heading b {
-  color: #173f70;
-}
-.topology-servers-grid .topology-assignment-actions button {
-  min-height: 36px;
-  padding: 7px 11px;
-  border-radius: 6px;
-  font-size: 12px;
-  white-space: nowrap;
-}
-.topology-servers-grid .topology-assignment-actions button:disabled {
-  opacity: 0.58;
-}
-.topology-servers-grid .topology-row .status-chip--success {
-  color: var(--status-success-ink);
-}
-.topology-servers-grid .topology-row .status-chip--warning {
-  color: var(--status-warning-ink);
-}
-.topology-servers-grid .topology-row .status-chip--danger {
-  color: var(--status-danger-ink);
-}
-.topology-servers-grid .topology-row .status-chip--info {
-  color: var(--status-info-ink);
-}
-.topology-servers-grid .topology-row.draft-deleting {
-  opacity: 1;
-  border-bottom-color: transparent;
-  background: #fff8f6;
-}
-.topology-servers-grid .topology-row.draft-deleting.selected {
-  background: #fff0ed;
-}
-.topology-servers-grid
-  .topology-row.draft-deleting
-  .topology-instance-heading
-  b {
-  color: #7a2e26;
-}
-.topology-servers-grid .topology-detail > .topology-list-scroll {
-  gap: 6px;
-  margin-top: 0;
-}
-.topology-servers-grid .topology-assignment {
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px 12px;
-  align-items: center;
-  padding: 8px 10px;
-}
-.topology-assignment-info {
-  display: grid;
-  min-width: 0;
-  gap: 3px;
-  overflow-wrap: anywhere;
-}
-.topology-assignment-info b {
-  color: #172b4d;
-}
-.topology-assignment-info span {
-  color: #63728a;
-  font-size: 12px;
-}
-.topology-assignment-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 6px;
-}
-.topology-assignment-actions button {
-  min-height: 34px;
-  padding: 6px 10px;
-  white-space: nowrap;
-}
-.topology-servers-grid .topology-add-placement {
-  flex: 0 0 auto;
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid #e2e8f0;
-}
-.topology-servers-grid .topology-summary dl {
-  grid-template-columns: minmax(82px, 0.8fr) minmax(0, 1.2fr);
-  gap: 7px 10px;
-  margin: 0;
-}
-.topology-servers-grid .topology-summary dd {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-.topology-servers-grid .topology-summary p {
-  margin: 12px 0 0;
-  padding-top: 10px;
-  border-top: 1px solid #e2e8f0;
-  font-size: 12px;
-  line-height: 1.45;
-}
-@media (max-width: 960px) {
-  .workspace-content:has(> .topology-title) .topology-servers-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .workspace-content:has(> .topology-title)
-    .topology-servers-grid
-    > .topology-list
-    .topology-list-scroll {
-    max-height: 190px;
-  }
-  .workspace-content:has(> .topology-title)
-    .topology-servers-grid
-    > .topology-detail
-    .topology-list-scroll {
-    max-height: min(54vh, 440px);
-  }
-}
-@media (max-width: 620px) {
-  .topology-servers-grid .topology-assignment {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .topology-assignment-actions {
-    justify-content: flex-start;
-  }
-}
-
-/* Shared typography scale, based on the Certificates screen. */
-#root .app-main {
-  font-size: var(--ui-font-body);
-  line-height: 1.35;
-}
-#root .app-main h1 {
-  font-size: var(--ui-font-page-title);
-  line-height: 1.15;
-}
-#root .app-main h2 {
-  font-size: var(--ui-font-section-title);
-  line-height: 1.25;
-}
-#root .app-main h3 {
-  font-size: var(--ui-font-subsection-title);
-  line-height: 1.25;
-}
-#root .app-main p {
-  font-size: var(--ui-font-body);
-  line-height: 1.35;
-}
-#root
-  .app-main
-  :is(
-    label,
-    input:not([type="checkbox"]),
-    select,
-    textarea,
-    button:not(.execution-event-select)
-  ) {
-  font-size: var(--ui-font-body);
-}
-#root .app-main .muted {
-  font-size: var(--ui-font-secondary);
-}
-#root .app-main small {
-  font-size: var(--ui-font-caption);
-}
-#root .app-main .services-list .topology-row small,
-#root
-  .app-main
-  .topology-grid:not(.topology-servers-grid)
-  > .topology-list
-  .topology-row
-  small {
-  font-size: var(--ui-font-secondary);
-}
-#root
-  .app-main
-  :is(.execution-event-table td small, .event-log-table td small) {
-  font-size: var(--ui-font-caption);
-}
-#root .app-main .certificate-section .section-head small,
-#root .app-main .certificate-verification .section-head small {
-  font-size: var(--ui-font-caption);
-}
-#root .app-main .modal .dialog {
-  gap: 10px;
-  margin: 0;
-  padding: 16px;
-  font-size: var(--ui-font-body);
-  line-height: 1.3;
-}
-#root .app-main .modal .dialog > :is(h1, h2, h3, p) {
-  margin-block: 0;
-}
-#root .app-main .modal .dialog label {
-  gap: 4px;
-  font-size: var(--ui-font-body);
-  line-height: 1.25;
-}
-#root
-  .app-main
-  .modal
-  .dialog
-  :is(input:not([type="checkbox"]), select, textarea) {
-  min-height: 32px;
-  padding: 6px 8px;
-  font: inherit;
-}
-#root .app-main .modal .dialog button {
-  font-size: var(--ui-font-body);
-}
-#root .app-main .modal .dialog .actions,
-#root .app-main .modal .dialog .dialog-actions {
-  gap: 8px;
-  padding-top: 6px;
-}
-#root .app-main .runtime-secret-dialog form {
-  gap: 10px;
-  padding: 16px;
-  font-size: var(--ui-font-body);
-  line-height: 1.3;
-}
-#root .app-main .runtime-secret-dialog h2 {
-  margin: 0;
-}
-#root .app-main .runtime-secret-dialog label {
-  gap: 4px;
-}
-#root .app-main .runtime-secret-dialog input {
-  min-height: 36px;
-  padding: 6px 8px;
-}
-
-/* Certificates: ordered PKI navigation, selected section and Core evidence. */
-.workspace-content:has(> .certificates-page) {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.certificates-page {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  overflow: hidden;
-}
-.certificates-page > .title {
-  flex: 0 0 auto;
-  margin: 0;
-}
-.certificates-page > .title h1 {
-  margin: 0 0 2px;
-  font-size: 22px;
-  line-height: 1.15;
-}
-.certificates-page > .title p {
-  margin: 2px 0 0;
-  font-size: 11px;
-  line-height: 1.25;
-}
-.certificate-dependency-guide {
-  flex: 0 0 auto;
-  display: grid;
-  grid-template-columns: minmax(225px, 0.75fr) minmax(0, 1.6fr);
-  align-items: center;
-  gap: 8px 14px;
-  min-width: 0;
-  padding: 7px 11px;
-  border: 1px solid #dbe4ef;
-  border-radius: 8px;
-  background: #f8fbff;
-}
-.certificate-dependency-guide h2 {
-  margin: 0 0 2px;
-  font-size: 12px;
-}
-.certificate-dependency-guide p {
-  margin: 0;
-  color: #526987;
-  font-size: 10px;
-  line-height: 1.25;
-}
-.certificate-dependency-flow {
-  min-width: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr);
-  align-items: center;
-  gap: 6px 12px;
-  color: #263a55;
-  font-weight: 650;
-}
-.certificate-dependency-chain {
-  min-width: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.15fr);
-  align-items: center;
-  gap: 7px;
-  text-align: center;
-}
-.certificate-dependency-chain > span,
-.certificate-dependency-branches > div > span:last-child {
-  font-size: 10px;
-}
-.certificate-dependency-chain > span:nth-child(2),
-.certificate-dependency-branches > div > span:first-child {
-  color: #3278bd;
-  font-size: 13px;
-}
-.certificate-dependency-branches {
-  display: grid;
-  gap: 3px;
-  padding-left: 8px;
-  border-left: 1px solid #9cb9d8;
-}
-.certificate-dependency-branches > div {
-  display: grid;
-  grid-template-columns: 18px minmax(0, 1fr);
-  align-items: center;
-  gap: 4px;
-}
-.certificate-workspace {
-  flex: 1 1 auto;
-  min-height: 0;
-  min-width: 0;
-  display: grid;
-  grid-template-columns: minmax(235px, 0.34fr) minmax(0, 1fr);
-  gap: 8px;
-  overflow: hidden;
-}
-.certificate-type-nav {
-  min-height: 0;
-  display: grid;
-  align-content: start;
-  gap: 6px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-.certificate-type-option {
-  min-width: 0;
-  display: grid;
-  gap: 3px;
-  padding: 8px 9px;
-  border: 1px solid #dbe4ef;
-  border-radius: 7px;
-  background: #fff;
-  color: #172033;
-  text-align: left;
-}
-.certificate-type-option.selected,
-.certificate-type-option[aria-current="page"] {
-  border-color: #3278bd;
-  background: #edf5ff;
-  box-shadow: inset 3px 0 #3278bd;
-}
-.certificate-type-title {
-  min-width: 0;
-  display: grid;
-  grid-template-columns: 22px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  font-weight: 700;
-}
-.certificate-type-step,
-.certificate-type-count {
-  width: 19px;
-  height: 19px;
-  display: inline-grid;
-  place-items: center;
-  border-radius: 50%;
-  background: #e7eff9;
-  color: #245b91;
-  font-size: 10px;
-}
-.certificate-type-option.selected .certificate-type-step {
-  background: #3278bd;
-  color: #fff;
-}
-.certificate-type-title > span:nth-child(2) {
-  overflow-wrap: anywhere;
-}
-.certificate-type-count {
-  border: 1px solid #c8d7e8;
-  background: #fff;
-}
-.certificate-type-option small {
-  padding-left: 28px;
-  color: #526987;
-  font-size: 10px;
-  line-height: 1.25;
-}
-.certificate-workspace > .certificate-section {
-  min-width: 0;
-  min-height: 0;
-  margin: 0;
-  padding: 11px 13px;
-  overflow: auto;
-}
-.certificate-section .section-head {
-  align-items: flex-start;
-  gap: 8px;
-}
-.certificate-section .section-head h2 {
-  margin: 0 0 2px;
-  font-size: 14px;
-  line-height: 1.25;
-}
-.certificate-section .section-head small {
-  font-size: 10px;
-  line-height: 1.3;
-}
-.certificate-section .section-head button,
-.certificate-verification button {
-  flex: 0 0 auto;
-  padding: 6px 9px;
-  font-size: 11px;
-}
-.certificate-section .certificate-rows {
-  gap: 4px;
-  margin-top: 7px;
-}
-.certificate-section .certificate-row {
-  padding: 7px 0;
-}
-.certificates-page > .certificate-verification {
-  flex: 0 0 auto;
-  max-height: 24vh;
-  display: grid;
-  gap: 2px;
-  overflow: auto;
-  margin: 0;
-  padding: 6px 10px;
-}
-.certificates-page > .certificate-verification > p {
-  margin: 2px 0 0;
-  line-height: 1.2;
-}
-.certificate-verification .section-head {
-  align-items: center;
-  gap: 6px;
-}
-.certificate-verification .section-head h2 {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.2;
-}
-.certificate-verification .section-head small,
-.certificate-verification > .muted {
-  font-size: 9px;
-  line-height: 1.2;
-}
-.certificate-verification > .muted {
-  margin: 4px 0 0;
-}
-.certificate-verification button {
-  min-height: 28px;
-  padding: 4px 8px;
-}
-@media (max-width: 960px) {
-  .certificate-dependency-guide {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-@media (max-width: 900px) {
-  .workspace-content:has(> .certificates-page) {
-    overflow: auto;
-  }
-  .certificates-page {
-    min-height: 100%;
-    overflow: visible;
-  }
-  .workspace-content:has(> .topology-title) .entry-grid {
-    flex: 0 0 auto;
-    min-height: auto;
-    grid-template-rows: auto;
-    overflow: visible;
-  }
-  .workspace-content:has(> .topology-title) .entry-consumers {
-    min-height: 120px;
-    overflow: visible;
-  }
-  .workspace-content:has(> .topology-title) .entry-consumers > .entry-list {
-    flex: 0 0 auto;
-    overflow: visible;
-  }
-  .certificate-workspace {
-    flex: 0 0 auto;
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(220px, auto);
-    overflow: visible;
-  }
-  .certificate-type-nav {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    overflow: visible;
-  }
-  .certificate-workspace > .certificate-section {
-    min-height: 220px;
-  }
-  .certificate-dependency-flow {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-@media (max-width: 560px) {
-  .certificate-type-nav {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .certificate-dependency-flow {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-/* Services overview and schema-driven editor. */
-.workspace-content:has(> .services-workspace) {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.services-workspace {
-  flex: 1 1 auto;
-  display: grid;
-  grid-template-columns: minmax(220px, 0.32fr) minmax(0, 0.68fr);
-  gap: 10px;
-  min-height: 0;
-  min-width: 0;
-  overflow: hidden;
-}
-.services-picker,
-.services-detail,
-.services-detail-empty {
-  min-width: 0;
-  min-height: 0;
-  margin: 0;
-  padding: 11px 13px;
-  border: 1px solid #e2e7ef;
-  border-radius: 9px;
-  background: #fff;
-}
-.services-picker {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  overflow: hidden;
-  color: #172033;
-}
-.services-picker-head {
-  flex: 0 0 auto;
-  display: grid;
-  gap: 8px;
-}
-.services-picker-head h1 {
-  margin: 0;
-  font-size: 17px;
-}
-.services-picker-head label {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 8px;
-  font-size: 11px;
-  font-weight: 650;
-}
-.services-picker-head input {
-  min-width: 0;
-  min-height: 32px;
-  padding: 5px 8px;
-}
-.services-picker-list {
-  flex: 1 1 auto;
-  display: grid;
-  align-content: start;
-  gap: 6px;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding-right: 3px;
-}
-.services-picker-list .topology-row {
-  min-height: 56px;
-  padding: 7px 9px;
-  border: 1px solid #e2e7ef;
-  border-radius: 6px;
-  background: #fff;
-  color: #172033;
-  text-align: left;
-}
-.services-picker-list .topology-row[aria-current="page"] {
-  border-color: #3278bd;
-  background: #edf5ff;
-  box-shadow: inset 3px 0 #3278bd;
-}
-.services-picker-list .topology-row strong {
-  overflow-wrap: anywhere;
-  font-size: 12px;
-}
-.services-picker-list .topology-row span,
-.services-picker-list .topology-row small {
-  color: #526987;
-  font-size: 10px;
-}
-.services-picker-empty {
-  align-self: center;
-  justify-self: center;
-  padding: 12px;
-  text-align: center;
-}
-.services-list {
-  min-height: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-}
-.services-list > .page-title {
-  flex: 0 0 auto;
-  margin: 4px 0 2px;
-}
-.services-list > .page-title h1,
-.services-detail > .page-title h1 {
-  margin: 0;
-  font-size: 22px;
-}
-.services-list > .page-title p,
-.services-detail > .page-title p {
-  margin: 2px 0 0;
-  font-size: 12px;
-}
-.services-list > .topology-list {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 0;
-  padding: 12px;
-}
-.services-list > .topology-list > label {
-  flex: 0 0 auto;
-  display: grid;
-  grid-template-columns: minmax(130px, 210px) minmax(180px, 360px);
-  align-items: center;
-  gap: 10px;
-  font-size: 12px;
-}
-.services-list > .topology-list > label input {
-  min-width: 0;
-  min-height: 32px;
-  padding: 6px 9px;
-}
-.services-list .topology-list-scroll {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 235px), 1fr));
-  align-content: start;
-  align-items: start;
-  gap: 8px;
-  max-height: none;
-  margin: 0;
-  overflow: auto;
-}
-.services-list .topology-row,
-.workspace-content:has(> .topology-title)
-  .topology-grid:not(.topology-servers-grid)
-  > .topology-list
-  .topology-row {
-  min-height: 78px;
-  align-content: center;
-  gap: 3px;
-  padding: 10px 12px;
-  border-radius: 7px;
-}
-.workspace-content:has(> .topology-title)
-  .topology-grid:not(.topology-servers-grid)
-  > .topology-list
-  .topology-row {
-  grid-template-columns: 18px minmax(0, 1fr);
-  align-items: center;
-  column-gap: 9px;
-  min-height: 52px;
-  padding: 6px 9px;
-  border: 0;
-  border-bottom: 1px solid #e4ebf2;
-  border-radius: 0;
-  background: transparent;
-}
-.workspace-content:has(> .topology-title)
-  .topology-grid:not(.topology-servers-grid)
-  > .topology-list
-  .topology-list-scroll {
-  gap: 0;
-}
-.workspace-content:has(> .topology-title)
-  .topology-grid:not(.topology-servers-grid)
-  > .topology-list
-  .topology-row.selected {
-  border-bottom-color: transparent;
-  border-radius: 6px;
-  background: #edf5ff;
-  box-shadow: inset 3px 0 #3278bd;
-}
-.workspace-content:has(> .topology-title)
-  .topology-grid:not(.topology-servers-grid)
-  > .topology-list
-  .topology-row:hover:not(.selected) {
-  background: #f7f9fc;
-}
-.workspace-content:has(> .topology-title)
-  .topology-grid:not(.topology-servers-grid)
-  > .topology-list
-  .topology-row.draft-deleting {
-  opacity: 1;
-  border-bottom-color: transparent;
-  background: #fff8f6;
-}
-.workspace-content:has(> .topology-title)
-  .topology-grid:not(.topology-servers-grid)
-  > .topology-list
-  .topology-row.draft-deleting.selected {
-  background: #fff0ed;
-}
-.topology-instance-icon {
-  grid-column: 1;
-  grid-row: 1;
-  width: 16px;
-  height: 16px;
-  color: #607b9a;
-}
-.topology-instance-copy {
-  display: grid;
-  min-width: 0;
-  gap: 2px;
-}
-.topology-instance-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 5px;
-  min-width: 0;
-}
-.topology-instance-heading b {
-  min-width: 0;
-  overflow-wrap: anywhere;
-  color: #172b4d;
-}
-.topology-row.selected .topology-instance-heading b {
-  color: #173f70;
-}
-.topology-instance-heading .status-chip {
-  flex: 0 0 auto;
-  padding: 2px 6px;
-  font-size: 9px;
-}
-.topology-row .status-chip--success {
-  color: var(--status-success-ink);
-}
-.topology-row .status-chip--warning {
-  color: var(--status-warning-ink);
-}
-.topology-row .status-chip--danger {
-  color: var(--status-danger-ink);
-}
-.topology-row .status-chip--info {
-  color: var(--status-info-ink);
-}
-.topology-instance-copy > span:last-child {
-  color: #667b94;
-  font-size: 11px;
-}
-.workspace-content:has(> .topology-title)
-  .topology-grid:not(.topology-servers-grid)
-  > .topology-detail
-  > .topology-selected-facts {
-  padding: 10px 12px;
-  border: 1px solid #e2eaf3;
-  border-radius: 7px;
-  background: #f8fafe;
-}
-.topology-selected-facts .status-chip {
-  vertical-align: middle;
-}
-.workspace-content:has(> .topology-title)
-  .topology-grid:not(.topology-servers-grid)
-  > .topology-summary {
-  background: #fbfcfe;
-}
-.workspace-content:has(> .topology-title)
-  .topology-grid:not(.topology-servers-grid)
-  > .topology-summary
-  p {
-  padding: 9px 10px;
-  border-radius: 6px;
-  background: #f1f6fc;
-}
-.services-list .topology-row strong,
-.workspace-content:has(> .topology-title)
-  .topology-grid:not(.topology-servers-grid)
-  > .topology-list
-  .topology-row
-  b {
-  overflow-wrap: anywhere;
-  font-size: 13px;
-}
-.services-list .topology-row span,
-.services-list .topology-row small,
-.workspace-content:has(> .topology-title)
-  .topology-grid:not(.topology-servers-grid)
-  > .topology-list
-  .topology-row
-  span,
-.workspace-content:has(> .topology-title)
-  .topology-grid:not(.topology-servers-grid)
-  > .topology-list
-  .topology-row
-  small {
-  font-size: 11px;
-}
-.services-list .topology-list-scroll > div {
-  grid-column: 1 / -1;
-  align-self: center;
-  justify-self: center;
-  text-align: center;
-}
-.services-list > .services-session-actions {
-  flex: 0 0 auto;
-  justify-content: flex-end;
-  gap: 7px;
-  margin: 0;
-  padding: 7px 0 0;
-}
-.services-list > .services-session-actions .muted {
-  font-size: 12px;
-}
-.services-detail {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  overflow: hidden;
-}
-.services-detail > .page-title {
-  margin: 4px 0 2px;
-}
-.services-detail > .card,
-.services-detail > .services-settings {
-  min-width: 0;
-  margin: 0;
-  padding: 11px 13px;
-}
-.services-parameter-column {
-  flex: 1 1 auto;
-  display: grid;
-  align-content: start;
-  gap: 8px;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding-right: 4px;
-}
-.services-parameter-column > .services-settings {
-  min-width: 0;
-  margin: 0;
-  padding: 11px 13px;
-}
-.services-detail-empty {
-  display: flex;
 @@END

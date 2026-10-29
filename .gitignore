@@ -3,6 +3,7 @@
 runs/
 bundle/
 cache/
+!third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/cache/
 
 # Local user-created project workspaces
 Projects/

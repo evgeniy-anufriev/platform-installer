@@ -55,6 +55,9 @@ def safe_path(name):
 
 
 def included(name):
+    # Dependency package names (for example cache) are not runtime directories.
+    if name.startswith("vendor/"):
+        return not name.endswith("_test.go")
     if name.startswith(WAILS_SOURCE + "/"):
         relative = name[len(WAILS_SOURCE) + 1:]
         if "/" not in relative and relative not in {"go.mod", "go.sum", "wails.go", "LICENSE", "SOURCE.json"}:
@@ -131,7 +134,18 @@ def source_files(root):
         target = root.joinpath(*name.split("/"))
         require(target.is_file() and not target.is_symlink(), "Missing/nonregular source: " + name)
         files.append((name, modes[name], target))
+    validate_vendor_packages(root, [name for name, _, _ in files])
     return files
+
+
+def validate_vendor_packages(root, names):
+    """Reject snapshots missing a package declared by either vendor manifest."""
+    package_dirs = {name.rsplit("/", 1)[0] for name in names if name.endswith(".go")}
+    for vendor in ("vendor", WAILS_SOURCE + "/vendor"):
+        for line in (root / vendor / "modules.txt").read_text(encoding="utf-8").splitlines():
+            if line and not line.startswith("#"):
+                require(vendor + "/" + line in package_dirs,
+                        "Missing vendored Go package: " + vendor + "/" + line)
 
 
 def pack(root, output):
