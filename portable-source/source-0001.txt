@@ -79,6 +79,11 @@ Thumbs.db
 *.swp
 
 @@END
+@@PORTABLE {"path":".gitlab-ci.yml","mode":420,"size":62,"sha256":"a175a389087fdb39c9aabbddd3c887f7f842ed9900c0bbbd473dae005a3ac1c5","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":62}
+include:
+  - local: '/ci/redos-builder/gitlab-ci.example.yml'
+
+@@END
 @@PORTABLE {"path":".rgignore","mode":420,"size":9,"sha256":"5f4d0cb39ea5878aeb6d812356654346b4f5f4284ab0d018f2b027c381b636f5","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":9}
 /vendor/
 
@@ -45676,7 +45681,7 @@ AAABAAYAAAAAAAAAIAC9MgAAZgAAAICAAAAAACAAjA4AACMzAABAQAAAAAAgAG4HAACvQQAAMDAAAAAA
     </asmv3:application>
 </assembly>
 @@END
-@@PORTABLE {"path":"ci/redos-builder/Dockerfile","mode":420,"size":1713,"sha256":"852d895e8f6591a43a133fcef37d6546471200f440ffb9bef86f46f0b4266ba8","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1713}
+@@PORTABLE {"path":"ci/redos-builder/Dockerfile","mode":420,"size":1762,"sha256":"0786903d34b4aa8da26d90bd70e134062d40e8e093aafa190abfa1527d122e7d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1762}
 ARG REDOS_BASE=registry.red-soft.ru/ubi8/ubi@sha256:8ff657eea9666b984dfd37b1b3296e98d1cbc95038a849204d1b67d69978fe5c
 FROM ${REDOS_BASE} AS toolchain
 
@@ -45685,11 +45690,12 @@ RUN dnf -y --disablerepo='*' --enablerepo=base,updates \
       golang-1.26.6-1.red80.x86_64 \
       nodejs-1:24.19.0-1.red80.x86_64 \
       nodejs-npm-1:11.17.0-1.24.19.0.1.red80.x86_64 \
-      python3 gcc gcc-c++ pkgconf-pkg-config git file \
+      python3 python3-pyyaml gcc gcc-c++ pkgconf-pkg-config git file \
       gtk3-devel-3.24.49-1.red80.x86_64 \
       webkit2gtk4.1-devel-1:2.50.4-2.red80.x86_64 \
     && dnf clean all \
     && go version && node --version && npm --version \
+    && python3 -c 'import yaml' \
     && pkg-config --modversion gtk+-3.0 webkit2gtk-4.1
 
 ENV GOFLAGS=-mod=vendor GOPROXY=off GOSUMDB=off GOWORK=off GOTOOLCHAIN=local \
@@ -45762,7 +45768,7 @@ case "$target" in
 esac
 
 @@END
-@@PORTABLE {"path":"ci/redos-builder/gitlab-ci.example.yml","mode":420,"size":1746,"sha256":"b89bc7d3839a1fcfbbd2b3f4dc726b86f1511bb568049c47f089fef63075caa0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1746}
+@@PORTABLE {"path":"ci/redos-builder/gitlab-ci.example.yml","mode":420,"size":3149,"sha256":"39658b3c32355401459b68dc7cd7a51ce74844fb55d643ecdf79936833e0eab7","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3149}
 # Requires a Docker executor and a prebuilt image published to your GitLab registry.
 # This file is an example; include/copy it into your GitLab pipeline explicitly.
 # npm-deps.tar.gz is a project input/artifact, never part of the toolchain image.
@@ -45772,6 +45778,31 @@ variables:
   GOCACHE: "$CI_PROJECT_DIR/.runtime/go-build"
   GOPATH: "$CI_PROJECT_DIR/.runtime/go-path"
   NPM_ARCHIVE: "$CI_PROJECT_DIR/npm-deps.tar.gz"
+  RUNTIME_INPUT: "$CI_PROJECT_DIR/.runtime/runtime-input"
+  RUNTIME_BUNDLE_VERSION: "ci-$CI_PIPELINE_IID-$CI_COMMIT_SHORT_SHA"
+
+# Independent of frontend dependencies and application compilation.
+# Supply RUNTIME_INPUT from an approved local input/artifact or runner mount.
+build-runtime-bundle:
+  stage: build
+  image: "$BUILDER_IMAGE"
+  needs: []
+  script:
+    - test -d "$RUNTIME_INPUT" || { echo "Missing RUNTIME_INPUT directory; supply prepared runtime files before building." >&2; exit 1; }
+    - python3 -c 'import yaml'
+    - >-
+      python3 ansible-core/tools/build_execution_runtime_bundle.py
+      --runtime-input "$RUNTIME_INPUT"
+      --output "$CI_PROJECT_DIR/.runtime/ci-output/execution-bundle"
+      --bundle-version "$RUNTIME_BUNDLE_VERSION"
+    - CGO_ENABLED=0 go build -mod=vendor -trimpath -o .runtime/ci-output/platform-installer ./cmd/platform-installer
+    - .runtime/ci-output/platform-installer -command validate-bundle -bundle .runtime/ci-output/execution-bundle > .runtime/ci-output/bundle-validation.json
+    - tar -czf .runtime/ci-output/execution-runtime-bundle.tar.gz -C .runtime/ci-output execution-bundle
+    - cd .runtime/ci-output && sha256sum execution-runtime-bundle.tar.gz > execution-runtime-bundle.tar.gz.sha256
+  artifacts:
+    paths:
+      - .runtime/ci-output/execution-runtime-bundle.tar.gz
+      - .runtime/ci-output/execution-runtime-bundle.tar.gz.sha256
 
 frontend-dependencies:
   stage: dependencies
