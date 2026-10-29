@@ -1,7 +1,7 @@
 # Общий сборочный образ RED OS для GitLab
 
 Образ содержит только инструменты сборки: Go 1.26.6, Node.js 24.19.0,
-npm 11.17.0, заранее собранную Wails CLI v2.15.0, Python, GCC/G++, pkg-config
+npm 11.17.0, заранее собранную Wails CLI v2.15.0, Python с PyYAML, GCC/G++, pkg-config
 и GTK3/WebKit2GTK 4.1 development-библиотеки.
 
 В образе нет исходников приложения, frontend/package.json, package-lock.json,
@@ -20,7 +20,9 @@ Wails CLI собирается один раз из локального third_p
 3. Создайте контекст и соберите общий образ без npm-зависимостей проекта.
 4. Загрузите образ в Container Registry своего проекта GitLab.
 5. Добавьте .gitlab-ci.yml, npm-deps.tar.gz и необходимые статические ресурсы в Git.
-6. Запустите pipeline: frontend-dependencies → build-windows/build-linux.
+6. Подготовьте runtime-input для build-runtime-bundle по разделу ниже.
+7. Запустите pipeline: frontend-dependencies → build-windows/build-linux;
+   build-runtime-bundle выполняется независимо.
 
 На машине подготовки нужны Docker и Python 3; Go/Node.js/npm устанавливаются
 внутри образа. Для CI нужен Linux x86-64/glibc runner с Docker executor,
@@ -229,7 +231,7 @@ include:
   - local: /ci/redos-builder/gitlab-ci.example.yml
 ```
 
-Этот блок нужно записать в корневой .gitlab-ci.yml. Если pipeline уже есть,
+Этот блок уже записан в корневой .gitlab-ci.yml репозитория. Если pipeline уже есть,
 добавьте include и согласуйте его stages со стадиями dependencies/build.
 В примере frontend-dependencies явно выполняет npm ci --offline; затем
 два задания через needs получают архив node_modules и независимо собирают
@@ -238,11 +240,12 @@ Windows/amd64 и Linux/amd64. Переменные Go и CGO задаёт build-
 
 Убедитесь, что каталог ci/redos-builder и npm-deps.tar.gz доступны в checkout.
 Для нового репозитория из распакованной папки проверьте статические ресурсы:
-/build/ исключён через .gitignore, поэтому добавьте именно исходные ресурсы:
+/build/bin/ исключён через .gitignore; исходные ресурсы build должны остаться в Git:
 
 ```sh
 cd "$PROJECT_DIR"
-git add ci/redos-builder .gitlab-ci.yml npm-deps.tar.gz
+git add ci/redos-builder .gitlab-ci.yml
+git add -f npm-deps.tar.gz
 git add -f \
   build/appicon.png \
   build/windows/icon.ico \
@@ -276,6 +279,69 @@ docker load -i installer-builder-redos8.tar
 Политика сети реального GitLab Runner задаётся отдельно. В проверке локального
 образа компиляция выполняется через docker run --network none.
 Реальный pipeline на GitLab Runner и публикация в GitLab Registry не выполнялись.
+
+### Сборка offline Execution Runtime Bundle
+
+Задание `build-runtime-bundle` запускает существующий
+`ansible-core/tools/build_execution_runtime_bundle.py` из текущего checkout.
+Оно не зависит от npm, Windows EXE или Linux UI. Образ нужно пересобрать с
+обновлённым Dockerfile: сборщику bundle требуется пакет RED OS `python3-pyyaml`.
+Python-пакеты через pip в CI не загружаются.
+
+До запуска задания предоставьте подготовленный каталог `RUNTIME_INPUT`:
+например, через read-only mount Docker executor или artifact отдельного
+внутреннего задания подготовки. По умолчанию ожидается
+`$CI_PROJECT_DIR/.runtime/runtime-input`. При отсутствии каталога задание
+останавливается; оно не скачивает пакеты и не создаёт пустой вход автоматически.
+Для artifact из другого задания укажите это задание в `needs` с `artifacts: true`
+вместо стандартного `needs: []`.
+
+Пример структуры подготовленного входа:
+
+```text
+runtime-input/
+├── packages/<os>/<version>/<architecture>/*.rpm
+├── python/
+└── artifacts/<service>/...
+```
+
+Используйте существующие утверждённые runtime-файлы. Для внутреннего каталога,
+смонтированного runner в `/build-input/runtime`, задайте в GitLab CI/CD Variables:
+
+```text
+RUNTIME_INPUT=/build-input/runtime
+```
+
+Версия bundle по умолчанию — `ci-$CI_PIPELINE_IID-$CI_COMMIT_SHORT_SHA`;
+её можно изменить переменной `RUNTIME_BUNDLE_VERSION`. Платформы сборщик
+определяет по структуре RPM-входа, а при его отсутствии — по ОС Linux-контейнера.
+Для другой целевой ОС добавьте к команде сборки явный
+`--platform OS:VERSION:ARCH`; для нескольких платформ повторите параметр.
+Если нужны записи `containerImages` для архивов приложений, добавьте к этой же
+команде повторяемый `--application-image IMAGE artifacts/app.tar`.
+
+Пустой существующий `RUNTIME_INPUT` поддерживается для Core-only bootstrap,
+но такой bundle не содержит RPM и сервисных артефактов и не доказывает
+возможность полной установки без сети. Полностью автономная установка требует
+заранее подготовленного полного набора зависимостей для выбранных сервисов.
+
+После сборки задание компилирует Go CLI из `vendor`, выполняет
+`validate-bundle`, затем сохраняет artifacts:
+
+- `.runtime/ci-output/execution-runtime-bundle.tar.gz`;
+- `.runtime/ci-output/execution-runtime-bundle.tar.gz.sha256`.
+
+Проверка `validate-bundle` доказывает целостность и структуру bundle, но не
+полноту offline-установки. Задание не публикует bundle в активный cache и
+не изменяет выбранный Execution Node.
+
+После скачивания обоих artifacts в одну папку:
+
+```sh
+sha256sum -c execution-runtime-bundle.tar.gz.sha256
+tar -xzf execution-runtime-bundle.tar.gz
+# Результат: execution-bundle/manifest.yaml и содержимое bundle.
+```
 
 ## Получение результатов pipeline
 

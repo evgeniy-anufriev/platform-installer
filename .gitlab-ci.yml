@@ -1,0 +1,2 @@
+include:
+  - local: '/ci/redos-builder/gitlab-ci.example.yml'

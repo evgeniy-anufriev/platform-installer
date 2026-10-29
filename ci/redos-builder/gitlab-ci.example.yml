@@ -7,6 +7,31 @@ variables:
   GOCACHE: "$CI_PROJECT_DIR/.runtime/go-build"
   GOPATH: "$CI_PROJECT_DIR/.runtime/go-path"
   NPM_ARCHIVE: "$CI_PROJECT_DIR/npm-deps.tar.gz"
+  RUNTIME_INPUT: "$CI_PROJECT_DIR/.runtime/runtime-input"
+  RUNTIME_BUNDLE_VERSION: "ci-$CI_PIPELINE_IID-$CI_COMMIT_SHORT_SHA"
+
+# Independent of frontend dependencies and application compilation.
+# Supply RUNTIME_INPUT from an approved local input/artifact or runner mount.
+build-runtime-bundle:
+  stage: build
+  image: "$BUILDER_IMAGE"
+  needs: []
+  script:
+    - test -d "$RUNTIME_INPUT" || { echo "Missing RUNTIME_INPUT directory; supply prepared runtime files before building." >&2; exit 1; }
+    - python3 -c 'import yaml'
+    - >-
+      python3 ansible-core/tools/build_execution_runtime_bundle.py
+      --runtime-input "$RUNTIME_INPUT"
+      --output "$CI_PROJECT_DIR/.runtime/ci-output/execution-bundle"
+      --bundle-version "$RUNTIME_BUNDLE_VERSION"
+    - CGO_ENABLED=0 go build -mod=vendor -trimpath -o .runtime/ci-output/platform-installer ./cmd/platform-installer
+    - .runtime/ci-output/platform-installer -command validate-bundle -bundle .runtime/ci-output/execution-bundle > .runtime/ci-output/bundle-validation.json
+    - tar -czf .runtime/ci-output/execution-runtime-bundle.tar.gz -C .runtime/ci-output execution-bundle
+    - cd .runtime/ci-output && sha256sum execution-runtime-bundle.tar.gz > execution-runtime-bundle.tar.gz.sha256
+  artifacts:
+    paths:
+      - .runtime/ci-output/execution-runtime-bundle.tar.gz
+      - .runtime/ci-output/execution-runtime-bundle.tar.gz.sha256
 
 frontend-dependencies:
   stage: dependencies

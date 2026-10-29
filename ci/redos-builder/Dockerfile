@@ -6,11 +6,12 @@ RUN dnf -y --disablerepo='*' --enablerepo=base,updates \
       golang-1.26.6-1.red80.x86_64 \
       nodejs-1:24.19.0-1.red80.x86_64 \
       nodejs-npm-1:11.17.0-1.24.19.0.1.red80.x86_64 \
-      python3 gcc gcc-c++ pkgconf-pkg-config git file \
+      python3 python3-pyyaml gcc gcc-c++ pkgconf-pkg-config git file \
       gtk3-devel-3.24.49-1.red80.x86_64 \
       webkit2gtk4.1-devel-1:2.50.4-2.red80.x86_64 \
     && dnf clean all \
     && go version && node --version && npm --version \
+    && python3 -c 'import yaml' \
     && pkg-config --modversion gtk+-3.0 webkit2gtk-4.1
 
 ENV GOFLAGS=-mod=vendor GOPROXY=off GOSUMDB=off GOWORK=off GOTOOLCHAIN=local \
