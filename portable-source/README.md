@@ -216,133 +216,145 @@ EXE запущен на Windows: процесс отвечает спустя 20
 npm-комплекта сохранены побайтово. SHA-256 проверенного EXE:
 `39b14605e8d05499c0536cf158fc1f3897e0b929bbcb0f2ac24f7081e8e90715`.
 
-1. Подготовьте Python 3.8+ и инструменты сборки. Проверенные версии из
-   существующих репозиториев RED OS `base`/`updates`: Go 1.26.6, Node.js 24.19.0,
-   npm 11.17.0. Для системной установки этих версий:
+1. Заранее подготовьте инструменты на Linux x86-64 с glibc. Проверенные
+   версии: Python 3.8+, Go 1.26.6, Node.js 24.19.0 и npm 11.17.0.
 
    ```sh
-   sudo dnf install \
-     golang-1.26.6-1.red80.x86_64 \
-     nodejs-1:24.19.0-1.red80.x86_64 \
-     nodejs-npm-1:11.17.0-1.24.19.0.1.red80.x86_64
-   ```
-
-   Команда изменяет установленные пакеты системы. При проведённой проверке RPM
-   скачивались с зависимостями, проверялись через `rpmkeys --checksig` и
-   распаковывались во временную папку без установки. Для сборки Windows EXE
-   GTK/WebKit и MinGW не потребовались.
-
-   ```sh
+   python3 --version
    go version
    node --version
    npm --version
-   python3 --version
    ```
 
-2. Поместите `portable_source.py`, `manifest.json`, все `source-*.txt`,
-   `npm_offline.py`, `npm-manifest.json` и все `npm-source-*.txt` одной
-   версии в `~/installer-package`. Для v3 допускаются LF/CRLF; части сохраняйте
-   в UTF-8 без BOM. Проверяйте комплект перед распаковкой:
+   Инструменты не входят в текстовый комплект. На изолированный Linux-узел
+   заранее перенесите утверждённые RPM с необходимыми зависимостями из RED OS,
+   если инструменты ещё не установлены. Во время сборки ничего устанавливать
+   из Интернета не требуется. GTK, WebKit и MinGW для Windows EXE не нужны.
+
+2. Из одной версии `portable-source` перенесите в `~/installer-package`
+   следующие 30 обязательных файлов. README можно перенести дополнительно:
+
+   ```text
+   installer-package/
+   ├── portable_source.py
+   ├── manifest.json
+   ├── source-0001.txt
+   ├── …
+   ├── source-0016.txt
+   ├── npm_offline.py
+   ├── npm-manifest.json
+   ├── npm-source-0001.txt
+   ├── …
+   └── npm-source-0010.txt
+   ```
+
+   Все 16 обычных частей и все 10 npm-частей обязательны для полной сборки.
+   Не смешивайте версии скриптов, манифестов и частей. При ручном копировании
+   сохраняйте части в UTF-8 без BOM: LF/CRLF поддерживаются, но символы,
+   пробелы и количество строк менять нельзя. Запускайте скрипты через
+   `python3`, как ниже: это также позволяет читать скрипт с CRLF в первой строке.
+
+3. Проверьте основные части:
 
    ```sh
    cd ~/installer-package
    python3 portable_source.py verify .
    ```
 
-   Ожидается `PASS`. При ручном переносе можно сначала проверить одну часть:
+   Ожидается `PASS`. При ошибке исправьте повреждённый файл до распаковки.
+   Отдельные части можно проверить до переноса всего комплекта:
 
    ```sh
    python3 portable_source.py verify-part . source-0001.txt
+   python3 npm_offline.py verify-part . npm-source-0001.txt
    ```
 
-3. Восстановите проект в новую папку и сверьте файлы:
+4. Восстановите исходники в новую, ещё не существующую папку и сверьте файлы:
 
    ```sh
    python3 portable_source.py unpack . ~/installer-restored
    python3 portable_source.py verify . ~/installer-restored
    ```
 
-4. Перейдите в восстановленный проект и задайте окружение:
+   Ожидается `PASS`. Затем проверьте отдельный npm-комплект:
 
    ```sh
-   cd ~/installer-restored
-   export GOFLAGS=-mod=vendor
-   export GOPROXY=off
-   export GOSUMDB=off
-   export GOWORK=off
-   export GOTOOLCHAIN=local
-   export CGO_ENABLED=0
+   python3 npm_offline.py verify . ~/installer-restored
    ```
 
-   Go использует зависимости из комплекта, без скачивания модулей и toolchain.
+   Проверяются все 194 архива, соответствие package.json/lockfile,
+   SHA-256 npm-частей и SHA-512 архивов из lockfile.
 
-5. Соберите локальную Linux Wails CLI из включённых исходников:
+5. Оставаясь в `~/installer-package`, соберите Windows EXE:
 
    ```sh
-   python3 scripts/portable_source.py build-wails .
-   .runtime/tools/wails version
+   python3 npm_offline.py build . ~/installer-restored --platform windows/amd64
    ```
 
-   Ожидается `v2.15.0`; глобальная установка Wails не требуется.
+   Скрипт собирает Linux Wails CLI из включённых исходников, создаёт пустой
+   приватный npm-кэш, наполняет его локальными архивами, выполняет
+   `npm ci --offline`, собирает frontend и Windows EXE. Пользовательский
+   npm-кэш не требуется, загрузка браузеров Playwright отключена.
+   Go использует `-mod=vendor`, `GOPROXY=off`, `GOSUMDB=off`, `GOWORK=off`,
+   `GOTOOLCHAIN=local`; для Windows EXE задаётся `CGO_ENABLED=0`.
+   Обновление go.mod и генерация bindings отключены; Windows-команды
+   `npm.cmd` из wails.json не вызываются, frontend собирается Linux npm.
 
-6. Проверьте отдельный npm-комплект, установите зависимости без сети и соберите
-   frontend Linux-командами:
-
-   ```sh
-   python3 "$HOME/installer-package/npm_offline.py" verify "$HOME/installer-package" .
-   python3 "$HOME/installer-package/npm_offline.py" ci "$HOME/installer-package" .
-   cd frontend
-   npm run build
-   cd ..
-   ```
-
-   Скрипт сверяет package.json и lockfile, SHA-256 частей и SHA-512 каждого
-   архива по lockfile. Затем создаёт пустой приватный кэш, наполняет его локальными
-   архивами через `npm cache add --offline` и вызывает `npm ci --offline`.
-   Пользовательский npm-кэш не требуется. Загрузка браузеров Playwright отключена.
-
-7. Из корня восстановленного проекта соберите Windows EXE:
-
-   ```sh
-   .runtime/tools/wails build \
-     -platform windows/amd64 \
-     -nopackage -clean -m -nosyncgomod -skipbindings -s
-   ```
-
-   `-s` пропускает встроенную сборку frontend: она уже выполнена на шаге 6.
-   Благодаря этому Windows-команды `npm.cmd` из `wails.json` не вызываются.
-   Результат: `build/bin/platform-installer-ui.exe`. Обычная команда
-   Вместо шагов 5–7 можно выполнить общую offline-сборку с явной целью:
-
-   ```sh
-   python3 "$HOME/installer-package/npm_offline.py" build \
-     "$HOME/installer-package" . --platform windows/amd64
-   ```
-
-   Для нового скрипта цель по умолчанию — `windows/amd64`.
    Старые `scripts/portable_source.py build` и `build/linux/build.sh` сохранены
-   в неизменённом исходном комплекте и вызывают обычный `npm ci`; для автономной
-   сборки используйте только новый внешний `npm_offline.py`.
+   в неизменённом исходном комплекте и вызывают обычный `npm ci`.
+   Для автономной сборки используйте новый внешний `npm_offline.py`.
 
-8. Вычислите SHA-256 перед переносом:
+   Для принудительного отключения сети выполните вместо обычной команды
+   из своей пользовательской сессии:
 
    ```sh
-   sha256sum build/bin/platform-installer-ui.exe
+   sudo unshare --net runuser -u "$(id -un)" -- \
+     python3 "$HOME/installer-package/npm_offline.py" build \
+     "$HOME/installer-package" "$HOME/installer-restored" \
+     --platform windows/amd64
    ```
 
-   Скопируйте EXE на Windows в ту же структуру проекта: `build/bin/`, сохранив
-   рядом с `build/` каталог `config` из восстановленного проекта. Сверьте хеш:
+   Нужны доступ к sudo, `unshare`, `runuser` и инструменты в стандартном PATH
+   этого пользователя. Именно изоляция через `unshare --net` использовалась
+   при проверке полного цикла сборки. Инструменты и файлы поставки должны
+   быть подготовлены до отключения сети.
 
-   ```powershell
-   Get-FileHash -LiteralPath 'C:\work\installer-restored\build\bin\platform-installer-ui.exe' -Algorithm SHA256
+6. Готовый файл находится здесь:
+
+   ```text
+   ~/installer-restored/build/bin/platform-installer-ui.exe
    ```
 
-9. При установленном Microsoft Edge WebView2 Runtime запустите приложение:
+   Вычислите SHA-256 перед переносом:
+
+   ```sh
+   sha256sum ~/installer-restored/build/bin/platform-installer-ui.exe
+   ```
+
+   На Windows перенесите EXE и каталог config из восстановленного проекта:
+
+   ```text
+   C:\work\installer/
+   ├── config/
+   └── build/
+       └── bin/
+           └── platform-installer-ui.exe
+   ```
+
+   Проверьте хеш в PowerShell — он должен совпасть с полученным на Linux:
 
    ```powershell
-   Set-Location C:\work\installer-restored
+   Get-FileHash -LiteralPath 'C:\work\installer\build\bin\platform-installer-ui.exe' -Algorithm SHA256
+   ```
+
+7. При установленном Microsoft Edge WebView2 Runtime запустите приложение:
+
+   ```powershell
+   Set-Location C:\work\installer
    .\build\bin\platform-installer-ui.exe
    ```
+
+   Node.js, npm и Go на Windows для запуска готового EXE не требуются.
 
 ## 4. Подготовить входы для runtime bundle
 
