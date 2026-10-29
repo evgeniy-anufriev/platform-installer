@@ -38633,7 +38633,7 @@ for package in $missing; do rpm -q "$package" >/dev/null 2>&1 || fail EXECUTION_
 printf 'BOOTSTRAP_SOURCE=%s\n' "$source"
 
 @@END
-@@PORTABLE {"path":"ansible-core/tools/build_execution_runtime_bundle.py","mode":420,"size":17737,"sha256":"068c49c140474f266f99ccdb4be04d6c57c6447ead76f4ebbbdfbc27ea826927","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":17737}
+@@PORTABLE {"path":"ansible-core/tools/build_execution_runtime_bundle.py","mode":420,"size":18318,"sha256":"d4ac8602cf338a2663b9cabebda219b4eb84f3d202d6c6217d34d20b8df50afa","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":18318}
 #!/usr/bin/env python3
 """Build a deterministic, versioned offline Execution Node runtime directory.
 
@@ -38656,6 +38656,8 @@ import yaml
 
 
 REPOSITORY = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from service_catalog import build_catalog
 sys.path.insert(0, str(REPOSITORY / "ansible-core" / "collections"))
 from ansible_collections.platform.core.plugins.module_utils.service_configuration_preview import ordinary_presentation_value
 from ansible_collections.platform.core.plugins.module_utils.application_images import docker_save_image
@@ -38663,7 +38665,6 @@ SOURCE_ROOTS = (
     ("ansible-core", REPOSITORY / "ansible-core"),
     ("services", REPOSITORY / "services"),
     ("contracts", REPOSITORY / "contracts"),
-    ("catalog", REPOSITORY / "examples" / "catalog"),
 )
 EXCLUDED_PARTS = {"tests", "__pycache__", ".pytest_cache", ".git", "docs"}
 
@@ -38787,8 +38788,18 @@ def components(root):
     return result
 
 
-def catalog_digest():
-    catalog = REPOSITORY / "examples" / "catalog" / "service-catalog.yml"
+def write_service_catalog(root):
+    output = root / "catalog" / "service-catalog.yml"
+    sources = [(source.parent.name, source) for source in sorted((root / "services").glob("*/service.yml"))]
+    if not sources:
+        raise ValueError("no service manifests found in services")
+    value = build_catalog(root, sources, output)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(yaml.safe_dump(value, allow_unicode=True, sort_keys=False), encoding="utf-8", newline="\n")
+
+
+def catalog_digest(root):
+    catalog = root / "catalog" / "service-catalog.yml"
     value = yaml.safe_load(catalog.read_text(encoding="utf-8"))
     digest = value.get("digest") if isinstance(value, dict) else None
     if not isinstance(digest, str) or not digest.startswith("sha256:"):
@@ -38954,6 +38965,7 @@ def build(output, runtime, bundle_version, core_version, platforms=None, applica
         copy_tree(runtime, temporary / "runtime")
         for directory in ("packages", "python"):
             (temporary / "runtime" / directory).mkdir(parents=True, exist_ok=True)
+        write_service_catalog(temporary)
         validate_catalog_layout(temporary)
         write_ui_static_defaults(temporary)
         manifest = {
@@ -38962,7 +38974,7 @@ def build(output, runtime, bundle_version, core_version, platforms=None, applica
             "bundleVersion": bundle_version,
             "bootstrapProtocol": "v1alpha1",
             "coreVersion": core_version,
-            "catalogDigest": catalog_digest(),
+            "catalogDigest": catalog_digest(temporary),
             "schemaDigest": schema_digest(),
             "platforms": runtime_platforms(runtime, platforms),
             "artifactSources": artifact_sources(temporary),
@@ -39006,19 +39018,18 @@ if __name__ == "__main__":
     raise SystemExit(main())
 
 @@END
-@@PORTABLE {"path":"ansible-core/tools/build_fixture_catalog.py","mode":420,"size":6746,"sha256":"07aa87d1b679ae01e7e7ecc1e53849b792936f05f4764df8e779e751cfbabb4a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":6746}
+@@PORTABLE {"path":"ansible-core/tools/build_fixture_catalog.py","mode":420,"size":4346,"sha256":"a56ca6b576160ad254ecb399cc00b7d000e7d067c6a84457e4a4c34ee9d19f10","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4346}
 #!/usr/bin/env python3
 """Build/check the CORE-01 derived fixture catalog using offline PyYAML."""
 
 import argparse
-import copy
-import hashlib
-import json
-import os
 from pathlib import Path
 import sys
 
 import yaml
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from service_catalog import build_catalog as generate_catalog, canonical_bytes, digest, load_yaml
 
 
 REPOSITORY = Path(__file__).resolve().parents[2]
@@ -39043,77 +39054,8 @@ PROJECT_MANIFEST_GLOBS = (
 )
 
 
-def canonical_bytes(value):
-    return json.dumps(
-        value,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8")
-
-
-def digest(value):
-    return "sha256:" + hashlib.sha256(canonical_bytes(value)).hexdigest()
-
-
-def load_yaml(path):
-    with path.open("r", encoding="utf-8") as stream:
-        value = yaml.safe_load(stream)
-    if not isinstance(value, dict):
-        raise ValueError("%s must contain a YAML object" % path)
-    return value
-
-
-def _catalog_relative_reference(source, reference):
-    if not isinstance(reference, str) or "://" in reference or reference.startswith("/"):
-        return reference
-    target = (source.parent / reference).resolve()
-    return Path(os.path.relpath(target, OUTPUT.parent)).as_posix()
-
-
-def _relocate_manifest_references(manifest, source):
-    """Keep relative manifest references valid after embedding in the catalog."""
-    relocated = copy.deepcopy(manifest)
-    configuration_schema = relocated.get("configurationSchema", {})
-    if isinstance(configuration_schema, dict) and "$ref" in configuration_schema:
-        configuration_schema["$ref"] = _catalog_relative_reference(
-            source, configuration_schema["$ref"]
-        )
-    if "compatibilityRef" in relocated:
-        relocated["compatibilityRef"] = _catalog_relative_reference(
-            source, relocated["compatibilityRef"]
-        )
-    for mode in relocated.get("modes", {}).values():
-        if isinstance(mode, dict) and "configurationSchemaRef" in mode:
-            mode["configurationSchemaRef"] = _catalog_relative_reference(
-                source, mode["configurationSchemaRef"]
-            )
-    return relocated
-
-
 def build_catalog():
-    definitions = {}
-    for service_type, source in SOURCES:
-        manifest = load_yaml(source)
-        metadata = manifest.get("metadata", {})
-        if metadata.get("id") != service_type:
-            raise ValueError("%s metadata.id must be %s" % (source, service_type))
-        definition = _relocate_manifest_references(manifest, source)
-        definition["x-definitionDigest"] = digest(definition)
-        definition["x-sourceManifest"] = source.relative_to(REPOSITORY).as_posix()
-        definitions[service_type] = definition
-
-    unsigned = {
-        "apiVersion": "platform.installer/catalog/v1alpha1",
-        "kind": "ServiceCatalog",
-        "definitions": definitions,
-    }
-    return {
-        "apiVersion": unsigned["apiVersion"],
-        "kind": unsigned["kind"],
-        "digest": digest(unsigned),
-        "definitions": definitions,
-    }
+    return generate_catalog(REPOSITORY, SOURCES, OUTPUT)
 
 
 def dump_yaml(value):
@@ -45558,6 +45500,73 @@ def encode_fetch(metadata, token, shares, validator, schema_path):
         return struct.pack(">4sIII", b"SOD1", len(header), len(token), len(shares)) + header + token + shares
     except (ValueError, TypeError, KeyError, UnicodeError, RecursionError):
         raise OutputWireError("OUTPUT_TRANSFER_FAILED") from None
+
+@@END
+@@PORTABLE {"path":"ansible-core/tools/service_catalog.py","mode":420,"size":2392,"sha256":"6efe9037593408484a90d543d7e39a7846a79a0a30801d455dcb4a5caceadc2e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2392}
+"""Generate a derived service catalog from an explicit set of manifests."""
+
+import copy
+import hashlib
+import json
+import os
+from pathlib import Path
+
+import yaml
+
+
+def canonical_bytes(value):
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+
+def digest(value):
+    return "sha256:" + hashlib.sha256(canonical_bytes(value)).hexdigest()
+
+
+def load_yaml(path):
+    with Path(path).open("r", encoding="utf-8") as stream:
+        value = yaml.safe_load(stream)
+    if not isinstance(value, dict):
+        raise ValueError("%s must contain a YAML object" % path)
+    return value
+
+
+def relocate_manifest_references(manifest, source, output):
+    def reference(value):
+        if not isinstance(value, str) or "://" in value or value.startswith("/"):
+            return value
+        target = (source.parent / value).resolve()
+        return Path(os.path.relpath(target, output.parent)).as_posix()
+
+    relocated = copy.deepcopy(manifest)
+    schema = relocated.get("configurationSchema", {})
+    if isinstance(schema, dict) and "$ref" in schema:
+        schema["$ref"] = reference(schema["$ref"])
+    if "compatibilityRef" in relocated:
+        relocated["compatibilityRef"] = reference(relocated["compatibilityRef"])
+    for mode in relocated.get("modes", {}).values():
+        if isinstance(mode, dict) and "configurationSchemaRef" in mode:
+            mode["configurationSchemaRef"] = reference(mode["configurationSchemaRef"])
+    return relocated
+
+
+def build_catalog(repository, sources, output):
+    definitions = {}
+    for service_type, source in sources:
+        manifest = load_yaml(source)
+        if manifest.get("metadata", {}).get("id") != service_type:
+            raise ValueError("%s metadata.id must be %s" % (source, service_type))
+        if service_type in definitions:
+            raise ValueError("duplicate catalog service: %s" % service_type)
+        definition = relocate_manifest_references(manifest, source, output)
+        definition["x-definitionDigest"] = digest(definition)
+        definition["x-sourceManifest"] = source.relative_to(repository).as_posix()
+        definitions[service_type] = definition
+    unsigned = {
+        "apiVersion": "platform.installer/catalog/v1alpha1",
+        "kind": "ServiceCatalog",
+        "definitions": definitions,
+    }
+    return dict(unsigned, digest=digest(unsigned))
 
 @@END
 @@PORTABLE {"path":"browser_main.go","mode":420,"size":220,"sha256":"4e592ff0130217440d7a7dfb25d61deef3ed3f387efa22c65abe9c8720abb60d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":220}
