@@ -419,7 +419,9 @@ For task events, the existing `serviceDeployment` display field keeps the
 controller-supplied infrastructure deployment when present. Within application
 operations, the callback otherwise resolves only the scoped public identity:
 `application_runtime_job.instanceId`, then `application_instance_id`, then
-`application_library_id`. General preparation has no deployment value. This
+`application_library_id`. Post-install scripts bind these existing scoped
+selectors from their selected target, falling back to the script's application
+and library. General preparation has no deployment value. This
 also applies to `no_log` task metadata; arguments, environment and raw results
 remain excluded. Go and UI transport and display the field without inferring
 application identities. Plan action deployment references are unchanged.
