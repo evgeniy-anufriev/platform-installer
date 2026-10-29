@@ -145,6 +145,127 @@ python scripts/portable_source.py build .
 лицензии зависимостей и обязательные встроенные шаблоны. README-файлы внутри
 шаблонов CLI являются ресурсами `go:embed`, а не отдельной документацией проекта.
 
+### 3.1. Собрать Windows EXE на Linux
+
+Способ проверен 2026-10-29 на RED OS 8.0.3 x86_64: комплект v3 восстановлен,
+собраны Linux Wails CLI, frontend и Windows EXE. Полученный EXE перенесён на
+Windows с проверкой SHA-256; окно `Platform Installer` создано, процесс отвечает,
+WebView2 инициализирован. Это проверка сборки и запуска, без визуальной проверки
+и установки сервисов.
+
+1. Подготовьте Python 3.8+ и инструменты сборки. Проверенные версии из
+   существующих репозиториев RED OS `base`/`updates`: Go 1.26.6, Node.js 24.19.0,
+   npm 11.17.0. Для системной установки этих версий:
+
+   ```sh
+   sudo dnf install \
+     golang-1.26.6-1.red80.x86_64 \
+     nodejs-1:24.19.0-1.red80.x86_64 \
+     nodejs-npm-1:11.17.0-1.24.19.0.1.red80.x86_64
+   ```
+
+   Команда изменяет установленные пакеты системы. При проведённой проверке RPM
+   скачивались с зависимостями, проверялись через `rpmkeys --checksig` и
+   распаковывались во временную папку без установки. Для сборки Windows EXE
+   GTK/WebKit и MinGW не потребовались.
+
+   ```sh
+   go version
+   node --version
+   npm --version
+   python3 --version
+   ```
+
+2. Поместите `portable_source.py`, `manifest.json` и все `source-*.txt` одной
+   версии в `~/installer-package`. Для v3 допускаются LF/CRLF; части сохраняйте
+   в UTF-8 без BOM. Проверяйте комплект перед распаковкой:
+
+   ```sh
+   cd ~/installer-package
+   python3 portable_source.py verify .
+   ```
+
+   Ожидается `PASS`. При ручном переносе можно сначала проверить одну часть:
+
+   ```sh
+   python3 portable_source.py verify-part . source-0001.txt
+   ```
+
+3. Восстановите проект в новую папку и сверьте файлы:
+
+   ```sh
+   python3 portable_source.py unpack . ~/installer-restored
+   python3 portable_source.py verify . ~/installer-restored
+   ```
+
+4. Перейдите в восстановленный проект и задайте окружение:
+
+   ```sh
+   cd ~/installer-restored
+   export GOFLAGS=-mod=vendor
+   export GOPROXY=off
+   export GOSUMDB=off
+   export GOWORK=off
+   export GOTOOLCHAIN=local
+   export CGO_ENABLED=0
+   ```
+
+   Go использует зависимости из комплекта, без скачивания модулей и toolchain.
+
+5. Соберите локальную Linux Wails CLI из включённых исходников:
+
+   ```sh
+   python3 scripts/portable_source.py build-wails .
+   .runtime/tools/wails version
+   ```
+
+   Ожидается `v2.15.0`; глобальная установка Wails не требуется.
+
+6. Соберите frontend Linux-командами:
+
+   ```sh
+   cd frontend
+   npm ci --no-audit --no-fund
+   npm run build
+   cd ..
+   ```
+
+   Для `npm ci` нужен доступ к npm registry либо полный подготовленный npm-кэш.
+
+7. Из корня восстановленного проекта соберите Windows EXE:
+
+   ```sh
+   .runtime/tools/wails build \
+     -platform windows/amd64 \
+     -nopackage -clean -m -nosyncgomod -skipbindings -s
+   ```
+
+   `-s` пропускает встроенную сборку frontend: она уже выполнена на шаге 6.
+   Благодаря этому Windows-команды `npm.cmd` из `wails.json` не вызываются.
+   Результат: `build/bin/platform-installer-ui.exe`. Обычная команда
+   `python3 scripts/portable_source.py build .` выбирает ОС хоста; для Windows
+   из Linux используйте явный `-platform windows/amd64`, как показано выше.
+
+8. Вычислите SHA-256 перед переносом:
+
+   ```sh
+   sha256sum build/bin/platform-installer-ui.exe
+   ```
+
+   Скопируйте EXE на Windows в ту же структуру проекта: `build/bin/`, сохранив
+   рядом с `build/` каталог `config` из восстановленного проекта. Сверьте хеш:
+
+   ```powershell
+   Get-FileHash -LiteralPath 'C:\work\installer-restored\build\bin\platform-installer-ui.exe' -Algorithm SHA256
+   ```
+
+9. При установленном Microsoft Edge WebView2 Runtime запустите приложение:
+
+   ```powershell
+   Set-Location C:\work\installer-restored
+   .\build\bin\platform-installer-ui.exe
+   ```
+
 ## 4. Подготовить входы для runtime bundle
 
 Runtime bundle — отдельный immutable каталог для подготовки Execution Node и
@@ -305,6 +426,8 @@ frontend/Wails production build из восстановленных файлов
 Проверка проведена с удалённой из PATH глобальной Wails CLI: локальная CLI
 v2.15.0 собрана из исходников и использована для production build приложения.
 CLI также кросс-собрана для Linux amd64 с отключённым Go proxy.
-Linux-ресурсы включены и восстановлены; Linux Wails-сборка не запускалась.
+Linux-ресурсы включены и восстановлены; сборка самого UI для Linux не запускалась.
+Кросс-сборка Windows EXE на Linux и запуск результата на Windows прошли;
+пошаговые команды приведены в разделе 3.1.
 Runtime bundle в рамках подготовки этого README не собирался и не публиковался:
 здесь описаны команды и обязательные входы, сверенные с текущими исходниками.
