@@ -21,8 +21,9 @@ Wails CLI собирается один раз из локального third_p
 4. Загрузите образ в Container Registry своего проекта GitLab.
 5. Добавьте .gitlab-ci.yml, npm-deps.tar.gz и необходимые статические ресурсы в Git.
 6. Подготовьте runtime-input для build-runtime-bundle по разделу ниже.
-7. Запустите pipeline: frontend-dependencies → build-windows/build-linux;
-   build-runtime-bundle выполняется независимо.
+7. В pipeline вручную запустите frontend-dependencies: после его успеха
+   build-windows/build-linux выполнятся автоматически с общим artifact.
+   build-runtime-bundle запускается отдельно вручную.
 
 На машине подготовки нужны Docker и Python 3; Go/Node.js/npm устанавливаются
 внутри образа. Для CI нужен Linux x86-64/glibc runner с Docker executor,
@@ -237,6 +238,17 @@ include:
 два задания через needs получают архив node_modules и независимо собирают
 Windows/amd64 и Linux/amd64. Переменные Go и CGO задаёт build-installer,
 ручной export для задания не нужен.
+
+При push задания сами не запускаются. Нажмите Run у frontend-dependencies:
+оно один раз готовит frontend-node-modules.tar.gz, затем build-windows и
+build-linux автоматически получают один и тот же artifact. Ошибка подготовки
+зависимостей блокирует обе сборки. Все задания находятся в одном pipeline;
+скрытые задания и дочерние pipeline не используются.
+
+build-runtime-bundle запускается своей кнопкой Run независимо от UI. Это
+необязательное ручное задание (allow_failure: true): отсутствие запуска или
+его ошибка не блокирует статус UI-сборок. Результат самого задания нужно
+проверять отдельно.
 
 Убедитесь, что каталог ci/redos-builder и npm-deps.tar.gz доступны в checkout.
 Для нового репозитория из распакованной папки проверьте статические ресурсы:

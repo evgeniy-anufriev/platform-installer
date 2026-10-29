@@ -1,2 +1,4 @@
+# Start frontend-dependencies manually once to build both UI platforms.
+# build-runtime-bundle has a separate manual start; no child pipelines are used.
 include:
   - local: '/ci/redos-builder/gitlab-ci.example.yml'
