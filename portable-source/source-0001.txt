@@ -45667,6 +45667,199 @@ AAABAAYAAAAAAAAAIAC9MgAAZgAAAICAAAAAACAAjA4AACMzAABAQAAAAAAgAG4HAACvQQAAMDAAAAAA
     </asmv3:application>
 </assembly>
 @@END
+@@PORTABLE {"path":"ci/redos-builder/Dockerfile","mode":420,"size":2002,"sha256":"9962d22d031c66bb4107527056f9256738cdc75de705127f93a3a9c7ab4bcbc2","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2002}
+ARG REDOS_BASE=registry.red-soft.ru/ubi8/ubi@sha256:8ff657eea9666b984dfd37b1b3296e98d1cbc95038a849204d1b67d69978fe5c
+FROM ${REDOS_BASE} AS toolchain
+
+RUN dnf -y --disablerepo='*' --enablerepo=base,updates \
+      --setopt=gpgcheck=1 --setopt=install_weak_deps=False --setopt=tsflags=nodocs install \
+      golang-1.26.6-1.red80.x86_64 \
+      nodejs-1:24.19.0-1.red80.x86_64 \
+      nodejs-npm-1:11.17.0-1.24.19.0.1.red80.x86_64 \
+      python3 gcc gcc-c++ pkgconf-pkg-config git file \
+      gtk3-devel-3.24.49-1.red80.x86_64 \
+      webkit2gtk4.1-devel-1:2.50.4-2.red80.x86_64 \
+    && dnf clean all \
+    && go version && node --version && npm --version \
+    && pkg-config --modversion gtk+-3.0 webkit2gtk-4.1
+
+ENV GOFLAGS=-mod=vendor GOPROXY=off GOSUMDB=off GOWORK=off GOTOOLCHAIN=local \
+    npm_config_offline=true npm_config_audit=false npm_config_fund=false \
+    npm_config_update_notifier=false PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+
+FROM toolchain AS wails-builder
+COPY wails/ /src/wails/
+RUN cd /src/wails \
+    && test "$(cat cmd/wails/internal/version.txt)" = v2.15.0 \
+    && CGO_ENABLED=0 go build -mod=vendor -trimpath -o /usr/local/bin/wails ./cmd/wails \
+    && /usr/local/bin/wails version
+
+FROM toolchain AS npm-cache
+COPY npm-tarballs/ /src/npm-tarballs/
+RUN npm cache add --offline --cache /opt/npm-cache --no-audit --no-fund /src/npm-tarballs/*.tgz \
+    && chmod -R a+rX /opt/npm-cache
+
+FROM toolchain AS builder
+COPY --from=wails-builder /usr/local/bin/wails /usr/local/bin/wails
+COPY --from=wails-builder /src/wails/SOURCE.json /usr/share/wails/SOURCE.json
+COPY --from=wails-builder /src/wails/LICENSE /usr/share/licenses/wails/LICENSE
+COPY --from=npm-cache /opt/npm-cache /opt/npm-cache
+COPY frontend/ /opt/builder-inputs/
+COPY build-target.sh /usr/local/bin/build-installer
+RUN chmod 755 /usr/local/bin/build-installer && wails version \
+    && rpm -qa --qf '%{NAME} %{VERSION}-%{RELEASE} %{ARCH}\n' | sort > /usr/share/wails/builder-rpms.txt
+WORKDIR /workspace
+CMD ["bash"]
+
+@@END
+@@PORTABLE {"path":"ci/redos-builder/build-target.sh","mode":420,"size":2142,"sha256":"caec8864866c5dfdb32d58f8918856c93f8eeb8cf6b72adf065814df3a7e0292","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2142}
+#!/bin/sh
+# ordinary-project-dir windows/amd64|linux/amd64
+set -eu
+if [ "$#" -ne 2 ]; then
+    echo 'Usage: build-installer PROJECT_DIR windows/amd64|linux/amd64' >&2
+    exit 2
+fi
+project_dir=$(realpath "$1")
+target=$2
+case "$target" in
+    windows/amd64) export CGO_ENABLED=0 ;;
+    linux/amd64) export CGO_ENABLED=1 ;;
+    *) echo 'Unsupported build target' >&2; exit 2 ;;
+esac
+export GOFLAGS=-mod=vendor GOPROXY=off GOSUMDB=off GOWORK=off GOTOOLCHAIN=local
+export npm_config_offline=true npm_config_audit=false npm_config_fund=false
+export npm_config_update_notifier=false PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+python3 - "$project_dir" <<'PY'
+import json, pathlib, sys
+root = pathlib.Path(sys.argv[1])
+for name in ('package.json', 'package-lock.json'):
+    expected = json.loads((pathlib.Path('/opt/builder-inputs') / name).read_text())
+    actual = json.loads((root / 'frontend' / name).read_text())
+    if expected != actual:
+        raise SystemExit('Builder image npm closure does not match ' + name + '; rebuild the image')
+PY
+HOME=$(mktemp -d /tmp/installer-home-XXXXXX)
+export HOME
+export GOCACHE="${GOCACHE:-$HOME/go-build}" GOPATH="${GOPATH:-$HOME/go-path}"
+cache_dir=$(mktemp -d /tmp/npm-builder-XXXXXX)
+trap 'rm -rf -- "$cache_dir" "$HOME"' EXIT
+cp -R /opt/npm-cache/. "$cache_dir/"
+cd "$project_dir/frontend"
+npm ci --offline --cache "$cache_dir" --no-audit --no-fund
+npm run build
+cd "$project_dir"
+case "$target" in
+    windows/amd64)
+        wails build -platform "$target" -nopackage -clean -m -nosyncgomod -skipbindings -s
+        sha256sum build/bin/platform-installer-ui.exe
+        file build/bin/platform-installer-ui.exe
+        ;;
+    linux/amd64)
+        wails build -platform "$target" -tags webkit2_41 -nopackage -clean -m -nosyncgomod -skipbindings -s
+        sha256sum build/bin/platform-installer-ui
+        file build/bin/platform-installer-ui
+        ldd build/bin/platform-installer-ui
+        mkdir -p build/bin/linux-resources
+        cp build/linux/platform-installer-ui.desktop build/bin/linux-resources/
+        cp build/linux/icon.png build/bin/linux-resources/platform-installer-ui.png
+        ;;
+esac
+
+@@END
+@@PORTABLE {"path":"ci/redos-builder/gitlab-ci.example.yml","mode":420,"size":775,"sha256":"3c9b3827d7a133b15e3ec89f624dca5d98682cf3b6ec85838f4babd37b54358d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":775}
+# Requires a Docker executor and a prebuilt image published to your GitLab registry.
+# This file is an example; include/copy it into your GitLab pipeline explicitly.
+stages: [build]
+variables:
+  BUILDER_IMAGE: "$CI_REGISTRY_IMAGE/builder:redos8"
+  GOCACHE: "$CI_PROJECT_DIR/.runtime/go-build"
+  GOPATH: "$CI_PROJECT_DIR/.runtime/go-path"
+
+build-windows:
+  stage: build
+  image: "$BUILDER_IMAGE"
+  script:
+    - build-installer "$CI_PROJECT_DIR" windows/amd64
+  artifacts:
+    paths:
+      - build/bin/platform-installer-ui.exe
+      - config/
+
+build-linux:
+  stage: build
+  image: "$BUILDER_IMAGE"
+  script:
+    - build-installer "$CI_PROJECT_DIR" linux/amd64
+  artifacts:
+    paths:
+      - build/bin/platform-installer-ui
+      - build/bin/linux-resources/
+      - config/
+
+@@END
+@@PORTABLE {"path":"ci/redos-builder/prepare-context.py","mode":420,"size":2645,"sha256":"916bf80977b81c5469d0d7707b40d994d84fdae9f97aed66616a7f369ec2c238","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2645}
+#!/usr/bin/env python3
+"""Create a minimal image context from an ordinary checkout and pinned npm archives."""
+import argparse
+from pathlib import Path
+import shutil
+import hashlib
+import json
+import base64
+
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("project", type=Path)
+parser.add_argument("npm_tarballs", type=Path)
+parser.add_argument("output", type=Path)
+args = parser.parse_args()
+source = args.project.resolve()
+output = args.output.resolve()
+if output.exists():
+    raise SystemExit("Context destination must be new")
+lock = json.loads((source / "frontend/package-lock.json").read_text(encoding="utf-8"))
+if lock.get("lockfileVersion") != 3:
+    raise SystemExit("Expected npm lockfileVersion 3")
+archives = {}
+for package_path, entry in lock["packages"].items():
+    if not package_path:
+        continue
+    def allows(field, target):
+        values = entry.get(field, [])
+        return (not values or target in values or
+                (all(value.startswith("!") for value in values) and "!" + target not in values))
+    if not all(allows(field, target) for field, target in (("os", "linux"), ("cpu", "x64"), ("libc", "glibc"))):
+        if entry.get("optional") is not True:
+            raise SystemExit("Required npm package incompatible with Linux x64/glibc: " + package_path)
+        continue
+    integrity = entry.get("integrity", "")
+    if not integrity.startswith("sha512-"):
+        raise SystemExit("Expected pinned npm SHA-512: " + package_path)
+    expected = base64.b64decode(integrity[7:], validate=True)
+    if len(expected) != 64:
+        raise SystemExit("Invalid npm SHA-512")
+    archives["npm-tarballs/" + expected.hex() + ".tgz"] = expected
+if not archives:
+    raise SystemExit("Empty npm closure")
+tarballs = args.npm_tarballs.resolve()
+for name, expected in archives.items():
+    archive = tarballs / Path(name).name
+    if hashlib.sha512(archive.read_bytes()).digest() != expected:
+        raise SystemExit("npm archive integrity mismatch: " + archive.name)
+output.mkdir(parents=True)
+shutil.copytree(source / "third_party/wails", output / "wails",
+                ignore=shutil.ignore_patterns(".git", ".runtime", "node_modules", "__pycache__"))
+(output / "frontend").mkdir()
+for name in ("package.json", "package-lock.json"):
+    shutil.copyfile(source / "frontend" / name, output / "frontend" / name)
+(output / "npm-tarballs").mkdir()
+for name in archives:
+    shutil.copyfile(tarballs / Path(name).name, output / name)
+for name in ("Dockerfile", "build-target.sh"):
+    shutil.copyfile(Path(__file__).parent / name, output / name)
+print("Docker context: " + str(output))
+
+@@END
 @@PORTABLE {"path":"cmd/platform-installer/execution_watch.go","mode":420,"size":5781,"sha256":"7145f1bfe8840da67150eaddadd58193fa68d9b1b090b5e37049051745b555c7","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5781}
 package main
 
@@ -106790,1392 +106983,6 @@ export function applicationDraft(
     }
   }
   return { libraries, placements };
-}
-
-@@END
-@@PORTABLE {"path":"frontend/src/applications.css","mode":420,"size":29047,"sha256":"f396b4021ad12cdc4d52109a7811b874134557194b7f57c94b567b5a1b950815","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":29047}
-.applications-page {
-  min-width: 750px;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  flex: 1;
-  gap: 12px;
-}
-.applications-layout {
-  display: grid;
-  grid-template-columns: 250px minmax(0, 1fr);
-  gap: 14px;
-  min-height: 0;
-  flex: 1;
-}
-.application-list,
-.application-editor {
-  border: 1px solid var(--border, #cad5e3);
-  border-radius: 8px;
-  padding: 14px;
-  min-height: 0;
-  overflow: auto;
-}
-.application-list {
-  background: #fff;
-  color: #172033;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.application-group {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  border-bottom: 1px solid var(--border, #cad5e3);
-  padding: 8px 0;
-}
-.application-group button {
-  text-align: left;
-}
-.application-group small {
-  display: block;
-}
-.application-slot {
-  margin-left: 14px;
-}
-.application-group [aria-current] {
-  background: #e4effb;
-  color: #175b97;
-}
-.application-editor {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.application-tabs {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  margin-top: 12px;
-}
-.application-tabs [aria-pressed="true"] {
-  background: #e4effb;
-  color: #175b97;
-}
-.application-content {
-  flex: 1;
-  overflow: auto;
-  min-height: 0;
-}
-.application-editor footer {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-}
-.application-field {
-  display: grid;
-  gap: 6px;
-  margin: 14px 0;
-}
-.application-value-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 8px;
-  margin: 8px 0;
-}
-.application-startup-policy-fields {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-  align-items: start;
-}
-.application-startup-policy-fields .application-field {
-  min-width: 0;
-  margin: 0;
-}
-.application-startup-policy-fields input,
-.application-startup-policy-fields textarea {
-  min-width: 0;
-  width: 100%;
-}
-.application-startup-policy-fields .row {
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.application-value-row .application-value-key {
-  display: grid;
-  grid-template-columns: minmax(120px, 0.8fr) minmax(140px, 1.2fr);
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-  margin: 0;
-}
-.application-value-key > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12px;
-}
-.application-value-row input {
-  min-width: 0;
-  width: 100%;
-}
-.application-value-row > button {
-  white-space: nowrap;
-  margin: 0;
-}
-.application-compact-values {
-  min-width: 0;
-  overflow-x: auto;
-}
-.application-compact-values .application-value-row {
-  min-width: 530px;
-}
-.application-field label,
-.application-editor > label {
-  display: grid;
-  gap: 6px;
-}
-.application-editor pre {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-.application-editor fieldset {
-  margin: 12px 0;
-  border: 1px solid var(--border, #cad5e3);
-}
-@media (max-width: 1100px) {
-  .applications-layout {
-    grid-template-columns: 220px minmax(0, 1fr);
-  }
-}
-
-.application-list label {
-  display: grid;
-  gap: 6px;
-}
-.application-editor input,
-.application-editor select,
-.application-editor textarea,
-.application-list input {
-  width: 100%;
-  min-width: 0;
-  padding: 8px 10px;
-  border: 1px solid var(--border, #cad5e3);
-  border-radius: 6px;
-  font: inherit;
-  color: inherit;
-  background: #fff;
-}
-.application-editor > header {
-  height: auto;
-  min-height: 80px;
-  flex-wrap: wrap;
-  flex-shrink: 0;
-  padding-bottom: 12px;
-}
-.application-editor > header h2 {
-  margin: 0;
-}
-.application-tabs {
-  flex-basis: 100%;
-  margin-top: 0;
-}
-
-/* Application settings share the project shell; only the form body scrolls. */
-.applications-page {
-  font-size: 12px;
-  color: #21334c;
-  gap: 16px;
-}
-.applications-page h1 {
-  font-size: 22px;
-}
-.applications-page h2 {
-  font-size: 18px;
-}
-.applications-page h3 {
-  font-size: 14px;
-  margin: 0 0 12px;
-}
-.applications-page p {
-  font-size: 11px;
-}
-.applications-layout {
-  grid-template-columns: 222px minmax(0, 1fr);
-  gap: 16px;
-}
-.application-editor {
-  padding: 0;
-  overflow: hidden;
-  gap: 0;
-  background: #fff;
-  color: #21334c;
-}
-.application-editor > header {
-  padding: 18px 20px 0;
-  gap: 8px;
-}
-.application-editor > header small {
-  color: #728196;
-  font-size: 11px;
-  overflow-wrap: anywhere;
-}
-.application-breadcrumb {
-  flex-basis: 100%;
-  font-size: 10px;
-}
-.application-content {
-  padding: 20px;
-  background: #fbfcfe;
-}
-.application-tabs {
-  gap: 18px;
-  flex-wrap: nowrap;
-  overflow: auto;
-  white-space: nowrap;
-}
-.application-tabs button {
-  border: 0;
-  border-bottom: 2px solid transparent;
-  border-radius: 0;
-  font-size: 11px;
-  padding: 12px 0;
-  background: transparent;
-  color: #728196;
-}
-.application-tabs [aria-pressed="true"] {
-  border-bottom-color: #2676df;
-  color: #2676df;
-  background: transparent;
-}
-.application-section,
-.application-content > section {
-  border: 1px solid #e1e7ef;
-  border-radius: 8px;
-  padding: 16px;
-  background: #fff;
-  margin: 0 0 16px;
-}
-.application-field-origin {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  color: #728196;
-  font-size: 10px;
-}
-.applications-page .application-link {
-  border: 0;
-  padding: 0;
-  background: none;
-  color: #2676df;
-  font-size: 11px;
-}
-.application-field small {
-  color: #728196;
-  font-size: 10px;
-}
-.application-field button {
-  font-size: 10px;
-  padding: 5px 8px;
-}
-.application-editor input:disabled,
-.application-editor textarea:disabled,
-.application-editor select:disabled,
-.application-editor input[readonly] {
-  background: #f5f8fb;
-  color: #536a86;
-  opacity: 1;
-}
-.applications-page button:focus-visible,
-.applications-page input:focus-visible,
-.applications-page select:focus-visible,
-.applications-page textarea:focus-visible {
-  outline: 2px solid #78aaee;
-  outline-offset: 2px;
-}
-.application-summary {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
-}
-.application-summary > div {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-  border-left: 1px solid #e1e7ef;
-  padding-left: 12px;
-}
-.application-summary small {
-  font-size: 10px;
-  color: #728196;
-}
-.application-table-scroll {
-  overflow: auto;
-  margin-top: 12px;
-}
-.application-table-scroll table {
-  width: 100%;
-  border-collapse: collapse;
-  text-align: left;
-}
-.application-table-scroll th,
-.application-table-scroll td {
-  padding: 12px;
-  border-bottom: 1px solid #e1e7ef;
-  font-size: 11px;
-}
-.application-table-scroll th {
-  color: #728196;
-  font-weight: 500;
-}
-.application-editor footer {
-  flex-shrink: 0;
-  flex-wrap: wrap;
-  padding: 12px 20px;
-  border-top: 1px solid #e1e7ef;
-}
-.application-draft-status {
-  display: grid;
-  gap: 3px;
-  margin-right: auto;
-}
-.application-draft-status strong {
-  font-size: 11px;
-  font-weight: 500;
-}
-.application-draft-status small {
-  color: #728196;
-  font-size: 10px;
-}
-.application-inline-secrets form {
-  display: grid;
-  gap: 12px;
-}
-.application-inline-secrets small {
-  font-size: 10px;
-  color: #728196;
-}
-@media (max-width: 1100px) {
-  .applications-layout {
-    grid-template-columns: 190px minmax(0, 1fr);
-  }
-  .application-summary {
-    grid-template-columns: 1fr 1fr;
-  }
-  .application-content {
-    padding: 14px;
-  }
-}
-
-.workspace-content:has(> .applications-page) {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.applications-page > .page-heading {
-  flex-shrink: 0;
-}
-.application-editor > header > .application-breadcrumb {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  margin-right: 0;
-}
-.application-field .row {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.application-secret-bindings fieldset {
-  padding: 12px;
-  border-radius: 6px;
-}
-.application-secret-bindings label {
-  display: grid;
-  gap: 6px;
-}
-.application-account-card {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  border: 1px solid #dce4ee;
-  border-radius: 8px;
-  padding: 10px 12px;
-  margin-bottom: 10px;
-}
-.application-account-card > * {
-  grid-column: 1 / -1;
-  min-width: 0;
-}
-.application-account-card > h3 {
-  grid-column: 1;
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin: 0;
-}
-.application-account-settings {
-  grid-column: 2;
-  font-size: 11px;
-}
-.application-account-settings > summary {
-  cursor: pointer;
-  color: #34659a;
-}
-.application-account-settings[open] {
-  grid-column: 1 / -1;
-}
-.application-account-settings-content {
-  display: grid;
-  gap: 8px;
-  padding: 8px 0;
-}
-.application-account-card > h3 small {
-  font-weight: 400;
-  color: #65758b;
-}
-.application-account-card > h3 .application-secret-prerequisite {
-  flex-basis: 100%;
-  font-size: 11px;
-}
-.application-credential-scroll {
-  overflow-x: auto;
-}
-.application-credential-table {
-  width: 100%;
-  min-width: 550px;
-  table-layout: fixed;
-  border-collapse: collapse;
-  margin: 6px 0;
-}
-.application-credential-table th,
-.application-credential-table td {
-  padding: 5px 6px;
-  text-align: left;
-  vertical-align: middle;
-  border-bottom: 1px solid #dce4ee;
-}
-.application-credential-table th {
-  font-weight: 500;
-}
-.application-credential-table th:first-child {
-  width: 70px;
-  white-space: nowrap;
-}
-.application-credential-table th:nth-child(2) {
-  width: 30%;
-}
-.application-credential-table td:nth-child(2),
-.application-credential-source > small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.application-credential-table td > code {
-  display: inline;
-  white-space: nowrap;
-}
-:is(.application-credential-table, .application-provided-credentials):has(
-  .application-credential-source-expanded
-) {
-  min-width: 950px;
-}
-.application-credential-table code {
-  display: block;
-  font-size: 11px;
-  color: #355a82;
-}
-.application-credential-variables {
-  display: flex;
-  align-items: center;
-  flex-wrap: nowrap;
-  gap: 4px;
-}
-.application-credential-variable-names {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.application-credential-variables code {
-  display: inline;
-  margin: 0;
-  white-space: nowrap;
-}
-.application-credential-variables code + code::before {
-  content: ", ";
-}
-.application-credential-variables button {
-  flex-shrink: 0;
-  padding: 3px 6px;
-}
-.application-credential-variables input {
-  flex: 1;
-  width: 100%;
-  min-width: 0;
-}
-:is(.application-credential-table, .application-provided-credentials)
-  .application-credential-source {
-  display: grid;
-  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.3fr) auto;
-  align-items: center;
-  gap: 6px;
-  border: 0;
-  padding: 0;
-  margin: 0;
-}
-.application-credential-label {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-}
-.application-credential-source label {
-  min-width: 0;
-}
-.application-credential-actions {
-  display: flex;
-  gap: 4px;
-}
-.application-credential-actions-default {
-  display: contents;
-}
-.application-credential-actions button {
-  width: 32px;
-  min-width: 32px;
-  padding: 5px;
-}
-:is(.application-credential-table, .application-provided-credentials)
-  .application-credential-source-expanded {
-  grid-template-columns: none;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(80px, 1fr);
-}
-.application-credential-source-expanded .application-credential-actions {
-  justify-content: flex-end;
-  align-self: end;
-}
-.application-credential-source legend {
-  display: none;
-}
-.application-credential-source p {
-  grid-column: 1 / -1;
-  font-size: 10px;
-  margin: 0;
-  color: #65758b;
-}
-.application-runtime-secret {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-.application-runtime-secret-entry {
-  flex: 1;
-  min-width: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 4px;
-}
-.application-runtime-secret-entry button {
-  padding: 5px;
-  min-width: 28px;
-}
-.application-runtime-secret small {
-  flex-shrink: 0;
-  font-size: 11px;
-  color: #65758b;
-}
-.application-account-card > fieldset {
-  display: grid;
-  grid-template-columns: minmax(140px, 1fr) minmax(180px, 1.5fr) auto auto;
-  align-items: end;
-  gap: 8px;
-}
-.application-account-card > fieldset > p {
-  grid-column: 1 / -1;
-  margin: 0;
-}
-.application-account-access header {
-  display: flex;
-  height: auto;
-  border-bottom: 0;
-  justify-content: space-between;
-  align-items: center;
-  margin: 0;
-  padding: 0;
-  min-height: 0;
-  gap: 8px;
-}
-.application-account-access {
-  margin: 0;
-  padding: 0;
-}
-.application-account-access header h4 {
-  margin: 0;
-}
-.application-account-access > p {
-  margin: 6px 0;
-}
-.application-account-access table {
-  width: 100%;
-  border-collapse: collapse;
-}
-.application-account-access th,
-.application-account-access td {
-  padding: 9px;
-  border-bottom: 1px solid #dce4ee;
-  text-align: left;
-}
-.application-account-access td small {
-  display: block;
-  color: #65758b;
-  margin-top: 5px;
-}
-.application-account-access td:last-child {
-  white-space: nowrap;
-}
-.application-account-access td button {
-  margin-right: 6px;
-  padding: 5px 8px;
-  font-size: 11px;
-  color: #34659a;
-  background: #fff;
-  border-color: #cad5e3;
-}
-.application-rights {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14px;
-  margin: 12px 0;
-}
-.application-rights label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.application-rights input {
-  width: auto;
-}
-.application-redis-access {
-  display: grid;
-  gap: 10px;
-}
-.application-account-card > .application-kafka-access {
-  display: block;
-}
-.application-kafka-access td {
-  min-width: 100px;
-}
-.application-kafka-access td input,
-.application-kafka-access td select {
-  min-width: 130px;
-}
-.application-kafka-access > button {
-  margin: 6px 6px 0 0;
-}
-.application-legacy-grants {
-  margin: 12px 0;
-}
-@media (max-width: 1100px) {
-  .application-account-card > fieldset {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-.application-secret-bindings .row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 8px;
-}
-.application-library-resources table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 12px;
-}
-.application-resources-scroll {
-  max-height: 420px;
-  overflow: auto;
-}
-.application-resources-scroll thead th {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  background: #fff;
-}
-.application-library-resources td,
-.application-library-resources th {
-  padding: 7px 10px;
-  text-align: left;
-  border-bottom: 1px solid #e2e8f0;
-}
-.application-resource-group {
-  background: #eef3f9;
-}
-.application-resource-form {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  padding: 12px;
-  border: 1px solid #d4deeb;
-  margin-top: 12px;
-}
-.application-resource-form h4,
-.application-resource-form > .row,
-.application-resource-form > [role="alert"] {
-  grid-column: 1/-1;
-  margin: 0;
-}
-.application-resource-form label {
-  display: grid;
-  gap: 4px;
-}
-.application-shared-secret {
-  border-bottom: 1px solid #e2e8f0;
-  padding: 8px 0;
-}
-.application-shared-secret summary,
-.application-host-settings summary {
-  cursor: pointer;
-  font-weight: 500;
-}
-.application-host-settings {
-  margin-top: 10px;
-}
-.application-content:has(.application-host-settings) .application-section {
-  margin-bottom: 10px;
-  padding: 10px;
-}
-.application-content:has(.application-host-settings) .application-section p {
-  margin: 4px 0;
-}
-.application-content:has(.application-host-settings) > .row {
-  display: inline-flex;
-  margin: 8px 14px 8px 0;
-  gap: 8px;
-}
-.application-placement {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 8px 12px;
-  margin: 6px 8px 6px 0;
-  border: 1px solid #d4deeb;
-  border-radius: 5px;
-}
-.application-placement input {
-  width: auto;
-}
-.application-content:has(.application-host-settings) {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px 16px;
-  align-content: start;
-}
-.application-content:has(.application-host-settings) > .application-section {
-  grid-column: 1/-1;
-}
-.application-content:has(.application-host-settings)
-  > .application-host-settings {
-  grid-column: 1/-1;
-}
-.application-content:has(.application-host-settings)
-  > .application-library-overview,
-.application-content:has(.application-host-settings)
-  > .application-library-placement,
-.application-content:has(.application-host-settings)
-  > .application-library-package {
-  grid-column: 1/-1;
-}
-.application-library-overview {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px 16px;
-}
-.application-library-overview h3,
-.application-library-overview p {
-  grid-column: 1/-1;
-  margin: 0;
-}
-.application-library-overview label {
-  display: grid;
-  gap: 6px;
-}
-.application-library-placement h3,
-.application-library-placement p {
-  margin: 4px 0;
-}
-.application-library-package summary {
-  cursor: pointer;
-}
-.application-library-resources > .row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.application-content:has(.application-resource-form) {
-  position: relative;
-}
-.application-resource-form {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  left: 12px;
-  z-index: 2;
-  background: #fff;
-  box-shadow: 0 8px 30px #17243b33;
-  margin: 0;
-  border-radius: 6px;
-}
-@media (max-height: 800px) {
-  .application-library-resources > .muted {
-    font-size: 10px;
-    margin: 4px 0;
-  }
-  .application-library-resources td,
-  .application-library-resources th {
-    padding: 4px 7px;
-    font-size: 11px;
-  }
-  .application-library-resources button {
-    padding: 5px 8px;
-    min-height: 26px;
-  }
-  .application-library-resources h3 {
-    margin: 4px 0;
-  }
-  .application-content:has(.application-library-resources) > h3 {
-    margin: 8px 0 4px;
-  }
-  .application-shared-secret {
-    padding: 5px 0;
-  }
-  .application-content:has(.application-host-settings) {
-    gap: 6px 12px;
-  }
-  .application-library-overview,
-  .application-library-placement {
-    padding: 9px;
-  }
-}
-.application-content > .application-library-overview,
-.application-content > .application-library-placement {
-  margin: 0;
-  padding: 10px;
-}
-.application-content:has(.application-host-settings)
-  > .application-host-settings {
-  margin-top: 0;
-}
-.application-add-parameter {
-  display: flex;
-  align-items: end;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-top: 8px;
-}
-.application-add-parameter label {
-  display: grid;
-  gap: 4px;
-  flex: 1;
-  min-width: 160px;
-}
-.application-add-parameter small {
-  flex-basis: 100%;
-  color: #728196;
-}
-.application-parameter-type summary {
-  cursor: pointer;
-  font-size: 11px;
-  color: #50739c;
-}
-.application-host-settings .application-field {
-  padding: 10px 0;
-  border-bottom: 1px solid #e1e7ef;
-}
-.application-bindings-table table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 12px;
-  table-layout: fixed;
-}
-.application-bindings-table td,
-.application-bindings-table th {
-  padding: 5px;
-  text-align: left;
-  border-bottom: 1px solid #e1e7ef;
-  overflow-wrap: anywhere;
-}
-.application-bindings-table th:first-child {
-  width: 18%;
-}
-.application-bindings-table th:nth-child(2) {
-  width: 23%;
-}
-.application-bindings-table th:nth-child(3) {
-  width: 27%;
-}
-.application-bindings-table .row {
-  display: flex;
-  gap: 5px;
-  flex-wrap: wrap;
-  align-items: center;
-}
-.application-bindings-table button {
-  padding: 5px 8px;
-}
-.application-bindings-table > p {
-  margin: 6px 0;
-  font-size: 11px;
-}
-.application-bindings-table > button,
-.application-bindings-table > .row {
-  margin-top: 8px;
-}
-.application-vault-reference summary {
-  cursor: pointer;
-}
-@media (max-height: 800px) {
-  .application-bindings-table select {
-    padding: 5px;
-  }
-  .application-content > .application-bindings-table {
-    padding: 8px;
-    margin-bottom: 8px;
-  }
-}
-.application-bindings-table h3 {
-  margin: 0 0 4px;
-}
-.application-content > .application-bindings-table {
-  padding: 10px;
-  margin: 0 0 8px;
-}
-.application-bindings-table select {
-  padding: 5px;
-}
-.application-bindings-table td,
-.application-bindings-table th {
-  padding: 4px;
-}
-.application-content:has(.application-bindings-table) {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.application-content > .application-bindings-table {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  flex: 1;
-}
-.application-connections-scroll {
-  overflow: auto;
-  min-height: 0;
-  flex: 1;
-  border-bottom: 1px solid #e1e7ef;
-}
-.application-connections-scroll thead th {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  background: #fff;
-}
-.application-bindings-table > button {
-  align-self: flex-start;
-  flex-shrink: 0;
-}
-.application-bindings-table h3,
-.application-bindings-table > p,
-.application-bindings-table > .application-add-parameter {
-  flex-shrink: 0;
-}
-.application-vault-badge {
-  display: block;
-  color: #50739c;
-  font-size: 10px;
-  font-weight: normal;
-  margin-top: 3px;
-}
-.application-instance-general {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
-  gap: 8px;
-}
-.shell:has(.applications-page) {
-  min-width: 1024px;
-}
-@media (max-width: 1023px) {
-  .shell:has(.applications-page) {
-    grid-template-columns: 160px minmax(0, 1fr);
-  }
-  .shell:has(.applications-page) .app-header {
-    grid-template-columns: minmax(125px, 1fr) auto minmax(160px, 220px) minmax(
-        145px,
-        175px
-      );
-    grid-template-areas: "identity statuses node installation" "actions actions actions actions";
-    gap: 4px 7px;
-  }
-}
-.application-instance-general > .application-section:first-child,
-.application-general-ports {
-  grid-column: 1 / -1;
-}
-.application-instance-general .application-image-field {
-  margin: 0;
-}
-.application-instance-general .application-field-origin {
-  font-size: 11px;
-}
-.application-overview-lines {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 6px 10px;
-  font-size: 12px;
-  margin-bottom: 8px;
-}
-.application-overview-lines dd {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 3px 8px;
-}
-.application-overview-lines dd span {
-  overflow-wrap: anywhere;
-  background: #edf4ff;
-  border-radius: 4px;
-  padding: 1px 4px;
-}
-.application-general-summary h3 {
-  margin: 0 0 8px;
-}
-.application-general-ports {
-  border: 1px solid #e1e7ef;
-  border-radius: 8px;
-  padding: 8px 10px;
-  background: #fff;
-}
-.application-general-ports > .application-section {
-  border: 0;
-  padding: 0;
-  margin: 0;
-}
-.application-general-ports .application-ports h3 {
-  font-size: 13px;
-}
-.application-general-ports .application-ports > .row > button {
-  padding: 5px 8px;
-  font-size: 12px;
-}
-.application-general-ports .application-general-port-overrides > h3 {
-  display: none;
-}
-.application-general-port-overrides fieldset {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 12px;
-  margin: 6px 0;
-  padding: 4px 8px;
-}
-.application-general-port-overrides .application-field {
-  margin: 0;
-}
-.application-general-port-overrides .application-field > small {
-  display: none;
-}
-.application-general-port-overrides .application-field > label {
-  display: grid;
-  gap: 3px;
-}
-.application-general-port-overrides input {
-  padding: 6px 8px;
-}
-.application-general-port-overrides .application-field > .row {
-  display: flex;
-  gap: 4px;
-  margin-top: 3px;
-}
-.application-general-port-overrides .application-field > .row button:disabled {
-  display: none;
-}
-.application-general-port-overrides button {
-  padding: 3px 7px;
-  font-size: 11px;
-}
-.application-general-endpoint,
-.application-port-provenance {
-  font-size: 12px;
-  margin-top: 5px;
-}
-.application-general-endpoint > summary,
-.application-port-provenance > summary {
-  cursor: pointer;
-  color: #34659a;
-}
-.application-content:has(.application-instance-general) {
-  padding: 10px 12px;
-}
-.application-instance-general .application-readiness-fields {
-  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr);
-}
-.application-instance-general .application-readiness > .row {
-  flex-wrap: wrap;
-}
-.application-instance-general .application-readiness-fields input,
-.application-instance-general .application-readiness-fields select {
-  padding: 6px;
-  min-width: 0;
-}
-.application-instance-general > .application-section {
-  padding: 10px;
-  margin: 0;
-}
-.application-image-field {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 5px 12px;
-  align-items: center;
-}
-.application-image-field > label {
-  grid-column: 1;
-  grid-row: 1 / span 2;
-  display: grid;
-  gap: 5px;
-}
-.application-image-field > .application-field-origin {
-  grid-column: 2;
-  grid-row: 1;
-}
-.application-image-field > .row {
-  grid-column: 2;
-  grid-row: 2;
-  display: flex;
-  gap: 5px;
-}
-.application-image-field > small {
-  display: none;
-}
-.application-general-summary .application-summary {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-.application-general-summary .application-summary > div {
-  padding-left: 8px;
-  gap: 5px;
-}
-.application-general-summary strong {
-  font-size: 11px;
-  overflow-wrap: anywhere;
-}
-.application-readiness > .row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-}
-.application-readiness h3 {
-  margin: 0;
-}
-.application-readiness-fields {
-  display: grid;
-  grid-template-columns: 1.5fr 1fr 1fr;
-  gap: 10px;
-  margin-top: 8px;
-}
-.application-readiness-fields label {
-  display: grid;
-  gap: 4px;
-  font-size: 11px;
-}
-.application-readiness-fields small {
-  color: #728196;
-  font-size: 10px;
-}
-.application-readiness > p,
-.application-instance-general > p {
-  margin: 5px 0 0;
-  font-size: 10px;
-}
-.application-readiness > .row:last-child {
-  justify-content: flex-start;
-  margin-top: 6px;
-}
-.application-readiness button {
-  font-size: 11px;
-  padding: 5px 8px;
-}
-.application-tabs button {
-  flex-shrink: 0;
-}
-.application-instance-name {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 5px 10px;
-  font-size: 11px;
-  padding-bottom: 7px;
-  margin-bottom: 7px;
-  border-bottom: 1px solid #e1e7ef;
-}
-.application-instance-name small {
-  font-size: 10px;
-  color: #728196;
-  margin-left: auto;
-}
-.application-image-field > label {
-  grid-row: 1;
-}
-.application-image-field > .row:not(:has(button:not([hidden]))) {
-  display: none;
-}
-@media (max-height: 800px) {
-  .application-instance-general {
-    gap: 6px;
-  }
-  .application-instance-general > .application-section {
-    padding: 8px;
-  }
-  .application-general-summary .application-summary > div {
-    gap: 3px;
-  }
-  .application-readiness-fields {
-    margin-top: 6px;
-    gap: 8px;
-  }
-  .application-readiness-fields input,
-  .application-readiness-fields select {
-    padding: 6px 8px;
-  }
-  .application-image-field input {
-    padding: 6px 8px;
-  }
-  .application-instance-name {
-    padding-bottom: 5px;
-    margin-bottom: 5px;
-  }
-}
-@media (max-height: 800px) {
-  .application-content:has(.application-instance-general) {
-    padding: 8px 12px;
-  }
-}
-.application-ports > .row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-}
-.application-ports h3 {
-  margin: 0;
-}
-.application-ports > p {
-  font-size: 11px;
-  margin: 8px 0;
-}
-.application-port-sources-scroll {
-  max-height: 180px;
-  overflow: auto;
-}
-.application-ports table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 11px;
-}
-.application-ports td,
-.application-ports th {
-  padding: 6px;
-  border-bottom: 1px solid #e1e7ef;
-  text-align: left;
-  overflow-wrap: anywhere;
-}
-.application-ports thead th {
-  position: sticky;
-  top: 0;
-  background: #fff;
-}
-.application-port-form {
-  display: grid;
-  grid-template-columns: 1fr 1fr auto 1fr;
-  gap: 8px;
-  align-items: end;
-  margin-top: 10px;
-}
-.application-port-form label {
-  display: grid;
-  gap: 4px;
-}
-.application-port-form > .row,
-.application-port-form > small,
-.application-port-form > p {
-  grid-column: 1/-1;
-}
-.application-port-form > .row {
-  display: flex;
-  gap: 8px;
-}
-.application-port-arrow {
-  align-self: center;
-}
-
-.application-content:has(.application-library-connections) {
-  display: block;
-  overflow: auto;
-}
-.application-library-connections {
-  min-width: 0;
-}
-.application-provided-connection {
-  min-width: 0;
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border, #cad5e3);
-}
-.application-provided-credentials {
-  width: 100%;
-  min-width: 530px;
-  border-collapse: collapse;
-  font-size: 12px;
-}
-.application-provided-credentials th,
-.application-provided-credentials td {
-  padding: 4px;
-  text-align: left;
-  border-bottom: 1px solid #e1e7ef;
-}
-.application-provided-credentials th:first-child {
-  width: 20%;
-}
-.application-provided-credentials .application-credential-source {
-  margin: 0;
-}
-
-.application-compact-values .application-value-row,
-.application-value-heading {
-  grid-template-columns: minmax(0, 1fr) 96px 152px;
-  gap: 8px;
-  min-width: 530px;
-  padding: 6px 0;
-  margin: 0;
-  border-bottom: 1px solid #e1e7ef;
-}
-.application-value-heading {
-  display: grid;
-  font-size: 11px;
-  font-weight: 600;
-  color: #52657d;
-}
-.application-value-heading > div {
-  display: grid;
-  grid-template-columns: minmax(120px, 0.8fr) minmax(140px, 1.2fr);
-  gap: 12px;
-}
-.application-value-heading > span {
-  grid-column: 2 / 4;
 }
 
 @@END
