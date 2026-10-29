@@ -1,4 +1,5 @@
 # Start frontend-dependencies manually once to build both UI platforms.
 # build-runtime-bundle has a separate manual start; no child pipelines are used.
+# release-linux (RPM) and release-windows (ZIP) are manual after UI and bundle.
 include:
   - local: '/ci/redos-builder/gitlab-ci.example.yml'

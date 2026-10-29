@@ -1,7 +1,7 @@
 # Requires a Docker executor and a prebuilt image published to your GitLab registry.
 # This file is an example; include/copy it into your GitLab pipeline explicitly.
 # npm-deps.tar.gz is a project input/artifact, never part of the toolchain image.
-stages: [dependencies, build]
+stages: [dependencies, build, release]
 variables:
   BUILDER_IMAGE: "$CI_REGISTRY_IMAGE/builder:redos8"
   GOCACHE: "$CI_PROJECT_DIR/.runtime/go-build"
@@ -9,6 +9,7 @@ variables:
   NPM_ARCHIVE: "$CI_PROJECT_DIR/npm-deps.tar.gz"
   RUNTIME_INPUT: "$CI_PROJECT_DIR/.runtime/runtime-input"
   RUNTIME_BUNDLE_VERSION: "ci-$CI_PIPELINE_IID-$CI_COMMIT_SHORT_SHA"
+  RELEASE_VERSION: "0.1.$CI_PIPELINE_IID"
 
 # Independent of frontend dependencies and application compilation.
 # Supply RUNTIME_INPUT from an approved local input/artifact or runner mount.
@@ -16,7 +17,7 @@ build-runtime-bundle:
   stage: build
   image: "$BUILDER_IMAGE"
   when: manual
-  allow_failure: true
+  allow_failure: false
   needs: []
   script:
     - test -d "$RUNTIME_INPUT" || { echo "Missing RUNTIME_INPUT directory; supply prepared runtime files before building." >&2; exit 1; }
@@ -84,3 +85,37 @@ build-linux:
       - build/bin/platform-installer-ui
       - build/bin/linux-resources/
       - config/
+
+release-linux:
+  stage: release
+  image: "$BUILDER_IMAGE"
+  when: manual
+  allow_failure: false
+  needs:
+    - job: build-linux
+      artifacts: true
+    - job: build-runtime-bundle
+      artifacts: true
+  script:
+    - python3 ci/redos-builder/package-release.py linux --version "$RELEASE_VERSION"
+  artifacts:
+    paths:
+      - .runtime/releases/*.rpm
+      - .runtime/releases/*.rpm.sha256
+
+release-windows:
+  stage: release
+  image: "$BUILDER_IMAGE"
+  when: manual
+  allow_failure: false
+  needs:
+    - job: build-windows
+      artifacts: true
+    - job: build-runtime-bundle
+      artifacts: true
+  script:
+    - python3 ci/redos-builder/package-release.py windows --version "$RELEASE_VERSION"
+  artifacts:
+    paths:
+      - .runtime/releases/*.zip
+      - .runtime/releases/*.zip.sha256

@@ -1,7 +1,7 @@
 # Общий сборочный образ RED OS для GitLab
 
 Образ содержит только инструменты сборки: Go 1.26.6, Node.js 24.19.0,
-npm 11.17.0, заранее собранную Wails CLI v2.15.0, Python с PyYAML, GCC/G++, pkg-config
+npm 11.17.0, заранее собранную Wails CLI v2.15.0, Python с PyYAML, rpm-build, GCC/G++, pkg-config
 и GTK3/WebKit2GTK 4.1 development-библиотеки.
 
 В образе нет исходников приложения, frontend/package.json, package-lock.json,
@@ -24,6 +24,8 @@ Wails CLI собирается один раз из локального third_p
 7. В pipeline вручную запустите frontend-dependencies: после его успеха
    build-windows/build-linux выполнятся автоматически с общим artifact.
    build-runtime-bundle запускается отдельно вручную.
+8. После UI и runtime-bundle запустите release-linux для RPM и/или
+   release-windows для ZIP.
 
 На машине подготовки нужны Docker и Python 3; Go/Node.js/npm устанавливаются
 внутри образа. Для CI нужен Linux x86-64/glibc runner с Docker executor,
@@ -233,7 +235,7 @@ include:
 ```
 
 Этот блок уже записан в корневой .gitlab-ci.yml репозитория. Если pipeline уже есть,
-добавьте include и согласуйте его stages со стадиями dependencies/build.
+добавьте include и согласуйте его stages со стадиями dependencies/build/release.
 В примере frontend-dependencies явно выполняет npm ci --offline; затем
 два задания через needs получают архив node_modules и независимо собирают
 Windows/amd64 и Linux/amd64. Переменные Go и CGO задаёт build-installer,
@@ -245,10 +247,9 @@ build-linux автоматически получают один и тот же 
 зависимостей блокирует обе сборки. Все задания находятся в одном pipeline;
 скрытые задания и дочерние pipeline не используются.
 
-build-runtime-bundle запускается своей кнопкой Run независимо от UI. Это
-необязательное ручное задание (allow_failure: true): отсутствие запуска или
-его ошибка не блокирует статус UI-сборок. Результат самого задания нужно
-проверять отдельно.
+build-runtime-bundle запускается своей кнопкой Run независимо от UI.
+Для выпуска пакетов его успешное выполнение обязательно (allow_failure: false).
+UI-сборки используют needs только на frontend-dependencies и не ждут bundle.
 
 Убедитесь, что каталог ci/redos-builder и npm-deps.tar.gz доступны в checkout.
 Для нового репозитория из распакованной папки проверьте статические ресурсы:
@@ -356,6 +357,80 @@ tar -xzf execution-runtime-bundle.tar.gz
 ```
 
 ## Получение результатов pipeline
+
+### Stage release: Linux RPM и Windows ZIP
+
+Пересоберите и опубликуйте сборочный образ: обновлённый Dockerfile добавляет
+`rpm-build` из репозиториев RED OS. В release-заданиях пакеты не скачиваются.
+
+Две ручные джобы в одном stage `release`:
+
+- `release-linux` получает artifacts `build-linux` и `build-runtime-bundle`;
+- `release-windows` получает artifacts `build-windows` и `build-runtime-bundle`.
+
+Они запускают `ci/redos-builder/package-release.py` и не пересобирают UI или
+runtime-bundle. Версия `RELEASE_VERSION` по умолчанию — `0.1.$CI_PIPELINE_IID`.
+Можно задать свою версию из 2–4 числовых компонентов, например `1.2.0`.
+
+Artifacts находятся в `.runtime/releases/`:
+
+```text
+platform-installer-<version>-1.x86_64.rpm
+platform-installer-<version>-1.x86_64.rpm.sha256
+platform-installer-<version>-windows-amd64.zip
+platform-installer-<version>-windows-amd64.zip.sha256
+```
+
+RPM устанавливает структуру:
+
+```text
+/opt/platform-installer/
+├── build/bin/platform-installer-ui
+├── config/application.yml
+└── bundle/execution-bundle/
+    ├── manifest.yaml
+    ├── ansible-core/
+    ├── services/
+    ├── contracts/
+    ├── catalog/
+    └── runtime/
+/usr/bin/platform-installer-ui
+/usr/share/applications/platform-installer-ui.desktop
+/usr/share/pixmaps/platform-installer-ui.png
+```
+
+Установка на совместимой RED OS x86-64 и запуск обычным пользователем:
+
+```sh
+sha256sum -c platform-installer-<version>-1.x86_64.rpm.sha256
+sudo dnf install ./platform-installer-<version>-1.x86_64.rpm
+platform-installer-ui
+```
+
+RPM требует GTK3, WebKit2GTK 4.1 и OpenSSH Client; дополнительные зависимости
+UI вычисляет rpmbuild по ELF. Системные зависимости должны уже присутствовать
+или быть доступны из разрешённых репозиториев для установки без внешней сети.
+Пакет не запускает UI/Core, не подключается к узлам и не активирует bundle.
+`application.yml` помечен `%config(noreplace)`; изменённый файл сохраняется
+при обновлении. Каталог установленного приложения принадлежит root;
+пользовательские проекты храните отдельно в доступной для записи папке.
+Лицензия проекта в исходном дереве не объявлена; RPM использует метку
+`LicenseRef-Unknown`, её нужно заменить утверждённой лицензией перед публикацией
+в реестр с обязательной лицензионной политикой.
+
+Windows ZIP распаковывается в `platform-installer/` с аналогичными
+`build/bin/platform-installer-ui.exe`, `config/application.yml` и
+`bundle/execution-bundle/`. Запускать EXE нужно из этой структуры. WebView2
+Runtime и OpenSSH Client должны быть установлены на Windows; ZIP их не включает.
+Runtime-bundle внутри Windows ZIP предназначен для Linux Execution Node.
+
+Проверка упаковки 2026-10-29 на RED OS: RPM и ZIP созданы в контейнере без
+сети; RPM установлен и обновлён в изолированном корне с `--nodeps`, изменённый
+`application.yml` сохранён. Все компоненты bundle после установки RPM и внутри
+ZIP совпали с manifest по размеру и SHA-256. Для RPM использован тестовый Linux
+исполняемый файл, для ZIP — готовый Windows EXE; это проверка упаковки,
+а не запуска UI. Также проверены отказ при неверной сумме архива, небезопасном
+пути и связи `needs` release-заданий. Реальный GitLab pipeline не запускался.
 
 В успешном pipeline скачайте artifacts отдельно из build-windows и build-linux:
 
