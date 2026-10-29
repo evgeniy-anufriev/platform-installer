@@ -21,6 +21,18 @@ python portable_source.py unpack . C:\work\installer-restored
 python portable_source.py verify . C:\work\installer-restored
 ```
 
+Для проверки только одной вручную скопированной части достаточно скрипта,
+`manifest.json` и выбранного `source-*.txt` в одной папке:
+
+```powershell
+python portable_source.py verify-part . source-0001.txt
+```
+
+Команда проверяет размер и SHA-256 выбранной части по манифесту. Для v3
+применяется нормализация LF/CRLF, для v2 — строгое побайтовое сравнение.
+Остальные части не читаются; это не проверка полноты комплекта или возможности
+сборки. При успехе выводится `PASS`, при ошибке — причина и код завершения 1.
+
 В Linux откройте терминал в папке комплекта:
 
 ```sh

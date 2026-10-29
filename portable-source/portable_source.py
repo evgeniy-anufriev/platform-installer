@@ -224,23 +224,43 @@ def pack(root, output):
                       "output": str(output)}))
 
 
-def read_package(source):
+def read_manifest(source):
     manifest = json.loads((source / "manifest.json").read_text(encoding="utf-8"))
     require(manifest.get("format") in {FORMAT, LEGACY_FORMAT} and manifest.get("maxPartBytes") == LIMIT and
             type(manifest.get("files")) is int and manifest["files"] > 0 and
             isinstance(manifest.get("parts"), list) and bool(manifest["parts"]), "Invalid manifest")
+    for index, part in enumerate(manifest["parts"], 1):
+        require(part["name"] == "source-{:04d}.txt".format(index), "Invalid part order")
+    return manifest
+
+
+def read_part(source, manifest, part):
+    data = (source / part["name"]).read_bytes()
+    require(len(data) <= LIMIT, "Part exceeds transport limit")
+    if manifest["format"] == FORMAT:
+        data = data.replace(b"\r\n", b"\n")
+        require(b"\r" not in data, "Bare CR in normalized part")
+    require(len(data) == part["bytes"] and digest(data) == part["sha256"],
+            "Part checksum/size mismatch: " + part["name"])
+    return data
+
+
+def verify_part(source, name):
+    manifest = read_manifest(source)
+    part = next((part for part in manifest["parts"] if part["name"] == name), None)
+    require(part is not None, "Part not listed in manifest: " + name)
+    read_part(source, manifest, part)
+    print("PASS: {} ; SHA-256 and size verified ({}). Other parts not checked.".format(
+        name, "LF/CRLF normalized" if manifest["format"] == FORMAT else "byte-exact v2"))
+
+
+def read_package(source):
+    manifest = read_manifest(source)
     files, seen, blocks = [], set(), []
     current, next_index, total = None, 0, 0
     encodings = {"utf-8": 0, "base64": 0}
-    for part_index, part in enumerate(manifest["parts"], 1):
-        require(part["name"] == "source-{:04d}.txt".format(part_index), "Invalid part order")
-        data = (source / part["name"]).read_bytes()
-        require(len(data) <= LIMIT, "Part exceeds transport limit")
-        if manifest["format"] == FORMAT:
-            data = data.replace(b"\r\n", b"\n")
-            require(b"\r" not in data, "Bare CR in normalized part")
-        require(len(data) <= LIMIT and len(data) == part["bytes"] and digest(data) == part["sha256"],
-                "Part checksum/size mismatch: " + part["name"])
+    for part in manifest["parts"]:
+        data = read_part(source, manifest, part)
         stream = io.BytesIO(data)
         while stream.tell() < len(data):
             header = stream.readline(16385)
@@ -382,14 +402,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     for name, first, second in [("pack", "root", "output"), ("unpack", "source", "destination"),
-                                ("verify", "source", "root"), ("build", "root", None), ("build-wails", "root", None)]:
+                                ("verify", "source", "root"), ("verify-part", "source", "part"), ("build", "root", None), ("build-wails", "root", None)]:
         command = commands.add_parser(name)
         command.add_argument(first, type=Path)
         if name == "build":
             command.add_argument("--webkit", choices=["auto", "4.0", "4.1"], default="auto",
                                  help="Linux WebKit2GTK ABI; auto prefers 4.1")
         if second:
-            command.add_argument(second, type=Path, nargs="?" if name == "verify" else None)
+            command.add_argument(second, type=str if name == "verify-part" else Path, nargs="?" if name == "verify" else None)
     args = parser.parse_args()
     try:
         if args.command == "pack":
@@ -398,6 +418,8 @@ def main():
             unpack(args.source.resolve(), args.destination.resolve())
         elif args.command == "verify":
             verify(args.source.resolve(), args.root.resolve() if args.root else None)
+        elif args.command == "verify-part":
+            verify_part(args.source.resolve(), args.part)
         elif args.command == "build-wails":
             build_wails(args.root.resolve())
         else:

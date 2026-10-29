@@ -4,6 +4,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 import json
+import subprocess
+import sys
 
 import portable_source
 
@@ -33,6 +35,38 @@ class VendorPackagingTests(unittest.TestCase):
 
 
 class NewlineFormatTests(unittest.TestCase):
+    def test_verify_part_cli_without_other_parts(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            original = b"hello\nworld\n"
+            name = "source-0001.txt"
+            part = root / name
+            manifest = dict(format=portable_source.FORMAT, maxPartBytes=portable_source.LIMIT,
+                            files=1, parts=[dict(name=name, bytes=len(original), sha256=portable_source.digest(original)),
+                                            dict(name="source-0002.txt", bytes=0, sha256=portable_source.digest(b""))])
+            manifest_path = root / "manifest.json"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            command = [sys.executable, portable_source.__file__, "verify-part", str(root), name]
+            for data in (original, original.replace(b"\n", b"\r\n")):
+                part.write_bytes(data)
+                result = subprocess.run(command, capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("PASS:", result.stdout)
+            for data in (b"jello\nworld\n", original + b"\n", b"\xef\xbb\xbf" + original):
+                part.write_bytes(data)
+                result = subprocess.run(command, capture_output=True, text=True)
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("checksum/size mismatch", result.stderr)
+            for invalid in ("source-9999.txt", "../source-0001.txt", "source-0002.txt"):
+                result = subprocess.run(command[:-1] + [invalid], capture_output=True, text=True)
+                self.assertEqual(result.returncode, 1)
+            manifest["format"] = portable_source.LEGACY_FORMAT
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            part.write_bytes(original.replace(b"\n", b"\r\n"))
+            self.assertEqual(subprocess.run(command, capture_output=True).returncode, 1)
+            part.write_bytes(original)
+            self.assertEqual(subprocess.run(command, capture_output=True).returncode, 0)
+
     def test_transport_roundtrip_and_corruption(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
