@@ -88,6 +88,7 @@ describe("target host trust on the Servers page", () => {
     fireEvent.click(screen.getByRole("button", { name: "Спланировать подготовку" }));
 
     expect(await screen.findByText("Проверен: Несовместим")).toBeTruthy();
+    expect(screen.getByText("Несовместим")).toBeTruthy();
     expect(await screen.findByText(/Платформа узла redos\/8\.0\/x86_64 не указана/)).toBeTruthy();
   });
 
@@ -141,6 +142,7 @@ describe("target host trust on the Servers page", () => {
     render(
       <ServersPage
         {...props}
+        executionNode={{ status: "PREPARATION_REQUIRED", selectionKind: "PROJECT_SERVER", selectionSource: "EXPLICIT", selectedHostId: "node2", safeLabel: "node2" } as never}
         onPlanExecutionNodePreparation={vi.fn().mockResolvedValue({
           status: "CONFIRMATION_REQUIRED",
           planId: "prepare-2",
@@ -153,10 +155,12 @@ describe("target host trust on the Servers page", () => {
     fireEvent.click(screen.getByRole("button", { name: "Спланировать подготовку" }));
     fireEvent.click(await screen.findByRole("button", { name: "Подтвердить подготовку" }));
 
-    expect(await screen.findByText("Выполняется подготовка")).toBeTruthy();
+    await waitFor(() => expect(screen.getAllByText("Выполняется подготовка")).toHaveLength(2));
+    expect(screen.queryByText("Требуется подготовка")).toBeNull();
     expect(onPrepareExecutionNode).toHaveBeenCalledWith("prepare-2");
     finishPreparation({ status: "PREPARED" });
     expect(await screen.findByText("Проверен: Подготовлен")).toBeTruthy();
+    expect(screen.getByText("Подготовлен")).toBeTruthy();
     vi.restoreAllMocks();
   });
 

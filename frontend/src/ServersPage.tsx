@@ -717,6 +717,14 @@ function ExecutionNodePanel({
     selectionSource: "NONE",
   };
   const combinedStatus = executionNodeCombinedStatus(readiness || cachedReadiness, preparation);
+  const headingStatus = readiness || cachedReadiness || preparation
+    ? { ...combinedStatus, label: combinedStatus.label.replace(/^Проверен: /, "") }
+    : {
+        tone: executionNodeTone(effective.status),
+        label: effective.status === "READY" && coreProjectionNotice
+          ? "Ожидание данных Core"
+          : executionNodeStatusLabel(effective.status),
+      };
   const checkedNode = readiness || cachedReadiness;
   const useServerInformation =
     !!onInformationCheck && context?.selectionKind === "PROJECT_SERVER";
@@ -770,8 +778,8 @@ function ExecutionNodePanel({
           <ServerLineIcon kind="execution" />
           Узел выполнения
         </h2>
-        <StatusChip tone={executionNodeTone(effective.status)}>
-          {effective.status === "READY" && coreProjectionNotice ? "Ожидание данных Core" : executionNodeStatusLabel(effective.status)}
+        <StatusChip tone={headingStatus.tone}>
+          {headingStatus.label}
         </StatusChip>
       </div>
       <div className="execution-node-detail">
