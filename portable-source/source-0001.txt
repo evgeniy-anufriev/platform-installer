@@ -38701,13 +38701,24 @@ if __name__ == "__main__":
     raise SystemExit(main())
 
 @@END
-@@PORTABLE {"path":"ansible-core/tools/bootstrap_execution_runtime.sh","mode":420,"size":2743,"sha256":"a56043237772dd3794eb46a471083e4838a2188bb1d8128c0120ed40a3ead79d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2743}
+@@PORTABLE {"path":"ansible-core/tools/bootstrap_execution_runtime.sh","mode":420,"size":3631,"sha256":"37d88a70b2c97cd6c35f52da73e1fb90c8698d0476d3f2e0e8d77ccca31d0a32","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3631}
 #!/bin/sh
 # Fixed pre-Python runtime bootstrap. Executed only from a verified root-owned bundle.
 set -eu
 release=$1
 platforms=$2
 fail() { printf '%s\n' "$1" >&2; exit 78; }
+dnf_failure() {
+    case "$dnf_output" in
+        *'No space left on device'*) fail EXECUTION_BOOTSTRAP_DISK_FULL ;;
+        *'GPG check FAILED'*|*'GPG verification'*|*'Public key for'*) fail EXECUTION_BOOTSTRAP_PACKAGE_SIGNATURE_FAILED ;;
+        *'No match for argument'*|*'Unable to find a match'*) fail EXECUTION_BOOTSTRAP_PACKAGE_UNAVAILABLE ;;
+        *'nothing provides'*|*'conflicting requests'*|*'cannot install'*|*'conflicts with'*) fail EXECUTION_BOOTSTRAP_DEPENDENCY_RESOLUTION_FAILED ;;
+        *'Curl error'*|*'Failed to download'*|*'Cannot download'*|*'All mirrors were tried'*) fail EXECUTION_BOOTSTRAP_REPOSITORY_DOWNLOAD_FAILED ;;
+        *'Could not obtain lock'*|*'Failed to obtain'*'lock'*|*'another copy is running'*) fail EXECUTION_BOOTSTRAP_PACKAGE_MANAGER_BUSY ;;
+    esac
+    fail "$1"
+}
 [ "$(id -u)" = 0 ] || fail EXECUTION_BOOTSTRAP_NOT_ROOT
 [ -r /etc/os-release ] || fail EXECUTION_BOOTSTRAP_OS_RELEASE_MISSING
 . /etc/os-release
@@ -38743,11 +38754,11 @@ for package in $missing; do
     case " $local_names " in *" $package "*) ;; *) repository="$repository $package" ;; esac
 done
 if [ -z "$repository" ]; then
-    dnf -q -y --disablerepo='*' --setopt=install_weak_deps=False install "$@" >/dev/null 2>&1 || fail EXECUTION_BOOTSTRAP_OFFLINE_INSTALL_FAILED
+    if dnf_output=$(LC_ALL=C dnf -q -y --disablerepo='*' --setopt=install_weak_deps=False install "$@" 2>&1); then :; else dnf_failure EXECUTION_BOOTSTRAP_OFFLINE_INSTALL_FAILED; fi
     source=OFFLINE_BUNDLE
 else
     for package in $repository; do set -- "$@" "$package"; done
-    dnf -q -y --setopt=install_weak_deps=False install "$@" >/dev/null 2>&1 || fail EXECUTION_BOOTSTRAP_REPOSITORY_INSTALL_FAILED
+    if dnf_output=$(LC_ALL=C dnf -q -y --setopt=install_weak_deps=False install "$@" 2>&1); then :; else dnf_failure EXECUTION_BOOTSTRAP_REPOSITORY_INSTALL_FAILED; fi
     source=REPOSITORY_OR_MIXED
 fi
 for package in $missing; do rpm -q "$package" >/dev/null 2>&1 || fail EXECUTION_BOOTSTRAP_PACKAGE_NOT_INSTALLED; done
@@ -86461,7 +86472,7 @@ catalogLock:
 })();
 
 @@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":129474,"sha256":"5a674112bab883836f2dd51894fad2e4c7bb9cdf41e26bd871a37dbc48405f6c","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49715}
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":130047,"sha256":"e4ea0c8ae6b07c527de3fcb9e8ff5b2005029be8fb74c23b3b6e82c167ae9f86","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49783}
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   EditResult,
@@ -87076,6 +87087,15 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     }
     request
       .then((value) => {
+        if (live && value.diagnostic) {
+          const { Code, SafeMessage } = value.diagnostic;
+          const valid = /^[A-Z][A-Z0-9_]{0,95}$/u.test(Code) && typeof SafeMessage === "string" && SafeMessage.length <= 512;
+          setServiceConfigurationPreview(undefined);
+          setServiceConfigurationPreviewError(valid
+            ? `Core-проекция недоступна. Код: ${Code}. ${SafeMessage}`
+            : "Core-проекция недоступна: некорректная диагностика ответа.");
+          return;
+        }
         if (
           live &&
           (value.projectRevision !== revision ||
@@ -87820,7 +87840,10 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             api.getInstallationRun
           ) {
             void api
-              .getInstallationRun(activeRunIdRef.current)
+              .getInstall
+@@END
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":130047,"sha256":"e4ea0c8ae6b07c527de3fcb9e8ff5b2005029be8fb74c23b3b6e82c167ae9f86","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49719}
+ationRun(activeRunIdRef.current)
               .then(setInstallationRun)
               .catch(() => {});
           }
@@ -87836,10 +87859,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
           return;
         }
         const subscriptionMatches =
-          value.sub
-@@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":129474,"sha256":"5a674112bab883836f2dd51894fad2e4c7bb9cdf41e26bd871a37dbc48405f6c","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49719}
-scriptionId === installationSubscriptionRef.current;
+          value.subscriptionId === installationSubscriptionRef.current;
         if (
           !subscriptionMatches &&
           value.event.runId !== activeRunIdRef.current
@@ -89162,7 +89182,10 @@ scriptionId === installationSubscriptionRef.current;
                     intent.operation === "CreateCertificateProfile" ||
                     intent.operation === "UpdateCertificateProfile" ||
                     intent.operation === "DeleteCertificateProfile" ||
-                    intent.operation === "CreateTLSProfile" ||
+                    intent.operation === "Crea
+@@END
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":130047,"sha256":"e4ea0c8ae6b07c527de3fcb9e8ff5b2005029be8fb74c23b3b6e82c167ae9f86","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":30545}
+teTLSProfile" ||
                     intent.operation === "UpdateTLSProfile" ||
                     intent.operation === "DeleteTLSProfile" ||
                     intent.operation === "CreateCertificateScope" ||
@@ -89171,10 +89194,7 @@ scriptionId === installationSubscriptionRef.current;
                 )}
                 configurationIntents={intents.filter(
                   (intent): intent is ConfigurationIntent =>
-                    int
-@@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":129474,"sha256":"5a674112bab883836f2dd51894fad2e4c7bb9cdf41e26bd871a37dbc48405f6c","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":30040}
-ent.operation === "SetServiceConfigurationValue" ||
+                    intent.operation === "SetServiceConfigurationValue" ||
                     intent.operation === "RemoveServiceConfigurationOverride",
                 )}
                 busy={editBusy}

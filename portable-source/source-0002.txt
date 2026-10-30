@@ -1384,7 +1384,7 @@
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/backend.ts","mode":420,"size":28484,"sha256":"0221cb38ff356259a02c241fc106bab3582f9087533abfc35c8427f192b3ec8e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":28484}
+@@PORTABLE {"path":"frontend/src/backend.ts","mode":420,"size":28538,"sha256":"a579e5a70aeb8c6df15e13960639de51cbac655223fcea35a7a4c4b741ce3ae2","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":28538}
 import {
   ProbeServerInformation,
   CheckServerInformation,
@@ -1847,6 +1847,7 @@ export type RuntimeSecretDescriptorOperation = {
   error?: { code: string; message: string };
 };
 export type ServiceConfigurationPreview = {
+  diagnostic?: { Code: string; SafeMessage: string };
   apiVersion: string;
   kind: string;
   projectRevision: string;
@@ -13419,7 +13420,7 @@ func (a *CommandAdapter) BuildSnapshot(ctx context.Context, projectRoot string, 
 }
 
 @@END
-@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":109715,"sha256":"2698fe8cdc9277dbbd200f018fc40bdd1da3aac5c945fa0829312cac259de32c","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48157}
+@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":109922,"sha256":"3883d06750155b81dc5e932bc085da218cbe44186146da07b83fb35923c39709","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48157}
 package desktop
 
 import (
@@ -14536,7 +14537,7 @@ func (a *App) secretOutputEncryptionPasswordPresentLocked() bool {
 	binding, err := a.credentialBindingLocked()
 	return err == nil && a.secrets.HasOutputE
 @@END
-@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":109715,"sha256":"2698fe8cdc9277dbbd200f018fc40bdd1da3aac5c945fa0829312cac259de32c","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":50595}
+@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":109922,"sha256":"3883d06750155b81dc5e932bc085da218cbe44186146da07b83fb35923c39709","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":50487}
 ncryptionPassword(binding)
 }
 
@@ -15319,7 +15320,14 @@ func (a *App) CurrentProject() ProjectOpenResult {
 
 // GetServiceConfigurationPreview obtains a read-only Core projection for the
 // exact saved revision. It neither changes Verify state nor creates a plan.
-func (a *App) GetServiceConfigurationPreview() (executionnode.ServiceConfigurationPreview, error) {
+func (a *App) GetServiceConfigurationPreview() (result executionnode.ServiceConfigurationPreview, failure error) {
+	defer func() {
+		if failure != nil {
+			finding := servicePreviewFailureFinding(failure)
+			result = executionnode.ServiceConfigurationPreview{Diagnostic: &finding}
+			failure = nil
+		}
+	}()
 	a.editMu.Lock()
 	// A draft is not a change of SSH identity. Do not send this read-only
 	// request through transport revalidation while the saved binding is gated
@@ -15501,13 +15509,13 @@ func projectErrorMessage(code string) string {
 	case "EXECUTION_BUNDLE_UNAVAILABLE":
 		return "Для проекта нет одного совместимого проверенного runtime bundle."
 	case "PROJECT_CHANGES_UNSAVED":
-		return "Сначала сохраните или отмените несохранённые изменения проекта."
+	
+@@END
+@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":109922,"sha256":"3883d06750155b81dc5e932bc085da218cbe44186146da07b83fb35923c39709","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":11278}
+	return "Сначала сохраните или отмените несохранённые изменения проекта."
 	case "PROJECT_REVISION_UNAVAILABLE":
 		return "Не удалось безопасно прочитать сохранённую ревизию проекта."
-	case "RUNTIME_SECRET_DE
-@@END
-@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":109715,"sha256":"2698fe8cdc9277dbbd200f018fc40bdd1da3aac5c945fa0829312cac259de32c","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":10963}
-SCRIPTOR_NOT_FOUND":
+	case "RUNTIME_SECRET_DESCRIPTOR_NOT_FOUND":
 		return "Для выбранного сервиса в текущем режиме секреты не требуются."
 	case "RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE":
 		return "Не удалось получить требования к секретам от Core на узле выполнения. Проверьте доступность узла и повторите запуск этого плана; секреты не удалены."
@@ -17171,6 +17179,57 @@ func writeBrowserError(w http.ResponseWriter, status int, err error) {
 }
 
 @@END
+@@PORTABLE {"path":"internal/desktop/core_preview_diagnostics.go","mode":420,"size":3042,"sha256":"4310a5d7de33bce65b8c322c6d7102ca9e00542557ff3c253727bdf0d092585a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3042}
+package desktop
+
+import (
+	"context"
+	"errors"
+	"platform-installer/internal/executionnode"
+)
+
+func servicePreviewFailureFinding(err error) executionnode.Finding {
+	reasons := map[string]string{
+		"SERVICE_CONFIGURATION_PREVIEW_UNAVAILABLE":      "Сохранённый проект и готовая привязка узла недоступны для запроса Core.",
+		"SERVICE_CONFIGURATION_PREVIEW_UNSUPPORTED":      "Runtime не подтвердил поддерживаемую версию capabilities и операцию BuildServiceConfigurationPreview.",
+		"SERVICE_CONFIGURATION_PREVIEW_INPUT_INVALID":    "Запрос Core-проекции содержит некорректные входные данные.",
+		"SERVICE_CONFIGURATION_PREVIEW_RESPONSE_INVALID": "Ответ Core-проекции не соответствует контракту.",
+		"SERVICE_CONFIGURATION_PREVIEW_STALE":            "Проект, runtime или привязка узла изменились во время получения Core-проекции.",
+		"PROJECT_SNAPSHOT_INPUT_INVALID":                 "Core не смог построить снимок входных данных проекта.",
+		"PROJECT_SNAPSHOT_FAILED":                        "Core завершил построение снимка проекта с ошибкой.",
+		"CORE_OPERATION_FAILED":                          "Операция Core завершилась ошибкой до публикации результата.",
+		"PROJECT_REVISION_CHANGED":                       "Сохранённая ревизия проекта изменилась.",
+		"EXECUTION_RUNTIME_IDENTITY_UNCONFIRMED":         "Ответ Core не содержит подтверждённую идентичность текущего runtime.",
+		"EXECUTION_NODE_UNAVAILABLE":                     "Не выполнен SSH-запрос к Execution Node.",
+		"BINDING_REQUIRED":                               "Отсутствует действующая привязка Execution Node к текущему сеансу.",
+		"SERVICE_CONFIGURATION_PREVIEW_TIMEOUT":          "Истёк тайм-аут получения Core-проекции.",
+	}
+	code := projectErrorCode(err)
+	var executionError *executionnode.ExecutionError
+	if errors.As(err, &executionError) {
+		code = executionError.Code
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		code = "SERVICE_CONFIGURATION_PREVIEW_TIMEOUT"
+	}
+	message, known := reasons[code]
+	if !known {
+		code, message = "SERVICE_CONFIGURATION_PREVIEW_UNAVAILABLE", "Не удалось получить Core-проекцию; безопасный код причины не предоставлен."
+	}
+	if known && executionError != nil {
+		for _, finding := range executionError.Findings {
+			if finding.Code == code {
+				if safe := boundedFindingString(finding.SafeMessage, 512); safe != "" {
+					message = safe
+					break
+				}
+			}
+		}
+	}
+	return executionnode.Finding{Code: code, SafeMessage: message}
+}
+
+@@END
 @@PORTABLE {"path":"internal/desktop/endpoint_preview.go","mode":420,"size":10258,"sha256":"78234d40fa430b7a410785f889ec8ff0dd4fb6c0b81b323c70589552062139d7","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":10258}
 package desktop
 
@@ -17835,7 +17894,7 @@ func (s *executionNodeContextStore) selectProjectServer(hostID string) error {
 }
 
 @@END
-@@PORTABLE {"path":"internal/desktop/execution_node_readiness.go","mode":420,"size":14874,"sha256":"684cf3041bacc1f6e88ed531ab65378bbfd82c888be88f64de32674b42e048df","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":14874}
+@@PORTABLE {"path":"internal/desktop/execution_node_readiness.go","mode":420,"size":15101,"sha256":"af39185b948abd28489a19305a394239323a585bf8bc06b881f4ec29d8474cd7","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":15101}
 package desktop
 
 import (
@@ -18125,7 +18184,12 @@ func (a *App) PlanExecutionNodePreparation() ExecutionNodePreparation {
 
 func preparationFailure(err error) ExecutionNodePreparation {
 	code := projectErrorCode(err)
-	return ExecutionNodePreparation{Status: "BLOCKED", Error: &ProjectOpenError{Code: code, Message: projectErrorMessage(code)}}
+	message := projectErrorMessage(code)
+	var diagnostic *executionnode.RuntimePreparationError
+	if errors.As(err, &diagnostic) {
+		message = diagnostic.Phase + ": " + diagnostic.Finding.SafeMessage + " Код: " + diagnostic.Finding.Code + "."
+	}
+	return ExecutionNodePreparation{Status: "BLOCKED", Error: &ProjectOpenError{Code: code, Message: message}}
 }
 
 // PrepareExecutionNode continues only the exact preparation plan generated for
@@ -25654,7 +25718,7 @@ func validModePlanInput(order []string, mode ExecutionMode, sources map[string]s
 }
 
 @@END
-@@PORTABLE {"path":"internal/executionnode/openssh.go","mode":420,"size":42465,"sha256":"f8369ca1196762aeddc4506229d6dbe40ab8f4604f7fd26b66125a71960f10c2","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":42465}
+@@PORTABLE {"path":"internal/executionnode/openssh.go","mode":420,"size":42928,"sha256":"a3e6ee19d7e9de39554be30acf78c8fe78f30452f4228ad0360787de7779f77a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":42928}
 package executionnode
 
 // This adapter is deliberately semantic: all remote paths and shell programs
@@ -26095,7 +26159,12 @@ func (t OpenSSHTransport) ActivateStagedRuntime(ctx context.Context, node Node, 
 			bootstrap = "1"
 		}
 	}
-	args := []string{"-n", "sh", "-s", "--", stage, t.runtimeRoot(), bundle.Digest, bundle.Manifest.BundleVersion, bundle.Manifest.CoreVersion, bundle.Manifest.BootstrapProtocol, strings.Join(platforms, " "), bootstrap}
+	args := []string{"-n", "sh", "-s", "--"}
+	// OpenSSH joins remote argv into a shell command. Keep the platform list
+	// as one positional argument, including when sudo password wrapping is used.
+	for _, value := range []string{stage, t.runtimeRoot(), bundle.Digest, bundle.Manifest.BundleVersion, bundle.Manifest.CoreVersion, bundle.Manifest.BootstrapProtocol, strings.Join(platforms, " "), bootstrap} {
+		args = append(args, shellLiteral(value))
+	}
 	complete := false
 	defer func() {
 		if !complete {
@@ -26104,14 +26173,20 @@ func (t OpenSSHTransport) ActivateStagedRuntime(ctx context.Context, node Node, 
 			_, _ = t.ssh(cleanupCtx, node, "sudo", []string{"-n", "sh", "-s", "--", stage}, []byte(runtimeCandidateCleanupScript))
 		}
 	}()
-	if _, err := t.ssh(ctx, node, "sudo", args, []byte(bootstrapScript)); err != nil {
-		return Runtime{}, err
+	if output, err := t.sshBounded(ctx, node, "sudo", args, []byte(bootstrapScript), 16384); err != nil {
+		if ctx.Err() != nil {
+			err = ctx.Err()
+		}
+		return Runtime{}, runtimePreparationFailure("bootstrap", output, err)
 	}
 	if err := ctx.Err(); err != nil {
 		return Runtime{}, err
 	}
-	if _, err := t.ssh(ctx, node, "sudo", args, []byte(activationScript)); err != nil {
-		return Runtime{}, err
+	if output, err := t.sshBounded(ctx, node, "sudo", args, []byte(activationScript), 16384); err != nil {
+		if ctx.Err() != nil {
+			err = ctx.Err()
+		}
+		return Runtime{}, runtimePreparationFailure("activation", output, err)
 	}
 	complete = true
 	return Runtime{BundleVersion: bundle.Manifest.BundleVersion, BundleDigest: bundle.Digest, CoreVersion: bundle.Manifest.CoreVersion, Protocol: bundle.Manifest.BootstrapProtocol, Ansible: true, Capabilities: true}, nil
@@ -26752,6 +26827,101 @@ func parseInt64(value string) int64 { var result int64; fmt.Sscan(value, &result
 func containedLocal(root, candidate string) bool {
 	relative, err := filepath.Rel(root, candidate)
 	return err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))
+}
+
+@@END
+@@PORTABLE {"path":"internal/executionnode/preparation_diagnostics.go","mode":420,"size":7434,"sha256":"bf9cc19ca04e70ec3c3a2413d0b13c09d4c55a161c20d7c43c5f3cf126429477","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7434}
+package executionnode
+
+import (
+	"context"
+	"errors"
+	"strings"
+)
+
+// RuntimePreparationError contains a closed diagnostic, never remote output.
+type RuntimePreparationError struct {
+	Phase   string
+	Finding Finding
+	cause   error
+}
+
+func (e *RuntimePreparationError) Error() string { return e.Finding.Code }
+func (e *RuntimePreparationError) Unwrap() error { return e.cause }
+
+var preparationReasons = map[string]string{
+	"EXECUTION_RUNTIME_ARGUMENTS_INVALID":              "Нарушено число аргументов подготовки runtime.",
+	"EXECUTION_BOOTSTRAP_NOT_ROOT":                     "Команда подготовки запущена без root.",
+	"EXECUTION_BOOTSTRAP_OS_RELEASE_MISSING":           "Недоступен /etc/os-release.",
+	"EXECUTION_BOOTSTRAP_PLATFORM_INVALID":             "Некорректные OS, VERSION_ID или архитектура узла.",
+	"EXECUTION_BOOTSTRAP_OS_UNSUPPORTED":               "ОС узла не поддерживается bootstrap.",
+	"EXECUTION_BOOTSTRAP_PLATFORM_MISMATCH":            "Платформа узла отсутствует в наборе установки.",
+	"EXECUTION_BOOTSTRAP_PACKAGE_TOOL_MISSING":         "Не найдены rpm/dnf.",
+	"EXECUTION_BOOTSTRAP_INSTALLED_PACKAGE_BROKEN":     "Установленный runtime-пакет не предоставляет требуемую команду.",
+	"EXECUTION_BOOTSTRAP_RPM_UNSAFE":                   "RPM набора не является обычным файлом.",
+	"EXECUTION_BOOTSTRAP_RPM_INVALID":                  "Не удалось прочитать метаданные RPM набора.",
+	"EXECUTION_BOOTSTRAP_RPM_AMBIGUOUS":                "В наборе несколько RPM одного пакета.",
+	"EXECUTION_BOOTSTRAP_OFFLINE_INSTALL_FAILED":       "DNF завершил установку из offline-набора с ошибкой.",
+	"EXECUTION_BOOTSTRAP_REPOSITORY_INSTALL_FAILED":    "DNF завершил установку runtime-пакетов из репозиториев с ошибкой.",
+	"EXECUTION_BOOTSTRAP_PACKAGE_UNAVAILABLE":          "DNF не нашёл требуемый runtime-пакет.",
+	"EXECUTION_BOOTSTRAP_DEPENDENCY_RESOLUTION_FAILED": "DNF не разрешил зависимости runtime-пакетов.",
+	"EXECUTION_BOOTSTRAP_REPOSITORY_DOWNLOAD_FAILED":   "DNF не смог загрузить данные из настроенного репозитория.",
+	"EXECUTION_BOOTSTRAP_PACKAGE_SIGNATURE_FAILED":     "DNF отклонил подпись пакета.",
+	"EXECUTION_BOOTSTRAP_DISK_FULL":                    "DNF остановлен: недостаточно места на диске.",
+	"EXECUTION_BOOTSTRAP_PACKAGE_MANAGER_BUSY":         "DNF не получил блокировку пакетного менеджера.",
+	"EXECUTION_BOOTSTRAP_PACKAGE_NOT_INSTALLED":        "После DNF требуемый runtime-пакет не установлен.",
+	"EXECUTION_BOOTSTRAP_LEGACY_PREREQUISITES_MISSING": "В бандле нет скрипта автоматического bootstrap; Python/Ansible отсутствуют. Перевыпустите бандл с bootstrap_execution_runtime.sh.",
+	"EXECUTION_BOOTSTRAP_LOCK_TOOL_MISSING":            "Не найдена команда flock.",
+	"EXECUTION_BUNDLE_STAGE_INVALID":                   "Некорректный staging-каталог набора.",
+	"EXECUTION_BUNDLE_DIGEST_INVALID":                  "Некорректный digest набора.",
+	"EXECUTION_RUNTIME_DIRECTORY_UNSAFE":               "Небезопасные владелец, тип или права каталога runtime.",
+	"EXECUTION_RUNTIME_LOCK_UNSAFE":                    "Небезопасный файл блокировки runtime.",
+	"EXECUTION_RUNTIME_PREPARATION_BUSY":               "Подготовка runtime уже выполняется: блокировка занята.",
+	"EXECUTION_RUNTIME_CANDIDATE_EXISTS":               "Каталог кандидата runtime уже существует.",
+	"EXECUTION_RUNTIME_CANDIDATE_UNSAFE":               "Кандидат runtime содержит недопустимые файлы.",
+	"EXECUTION_RUNTIME_CANDIDATE_INVALID":              "Не пройдена проверка файлов, прав или checksum кандидата runtime.",
+	"EXECUTION_RUNTIME_BACKUP_EXISTS":                  "Каталог резервного состояния runtime уже существует.",
+	"EXECUTION_RUNTIME_CURRENT_UNSAFE":                 "Некорректная ссылка current у runtime.",
+	"EXECUTION_RUNTIME_ACTIVE_UNSAFE":                  "Небезопасный файл активного состояния runtime.",
+	"EXECUTION_RUNTIME_EXISTING_RELEASE_INVALID":       "Существующий runtime release не прошёл проверку целостности.",
+	"EXECUTION_RUNTIME_CANDIDATE_COPY_FAILED":          "Не удалось скопировать и подготовить root-owned runtime-кандидат.",
+	"EXECUTION_RUNTIME_STATE_INITIALIZATION_FAILED":    "Не удалось подготовить состояние активации runtime.",
+	"EXECUTION_RUNTIME_PYTHON_INITIALIZATION_FAILED":   "Python не смог инициализировать защищённое состояние runtime.",
+	"EXECUTION_RUNTIME_CAPABILITY_CHECK_FAILED":        "Ansible-проверка execution-capabilities.yml завершилась ошибкой.",
+	"EXECUTION_RUNTIME_SWITCH_FAILED":                  "Не удалось переключить current/active на новый runtime.",
+	"EXECUTION_BOOTSTRAP_COMMAND_FAILED":               "Команда bootstrap завершилась ошибкой.",
+	"EXECUTION_RUNTIME_ACTIVATION_COMMAND_FAILED":      "Команда активации runtime завершилась ошибкой.",
+	"EXECUTION_RUNTIME_PREPARATION_TIMEOUT":            "Истёк тайм-аут подготовки runtime.",
+}
+
+func runtimePreparationFailure(phase string, output []byte, cause error) error {
+	code := "EXECUTION_BOOTSTRAP_COMMAND_FAILED"
+	if phase == "activation" {
+		code = "EXECUTION_RUNTIME_ACTIVATION_COMMAND_FAILED"
+	}
+	for _, line := range strings.Split(string(output), "\n") {
+		candidate := strings.TrimSpace(line)
+		if _, exists := preparationReasons[candidate]; exists {
+			code = candidate
+			break
+		}
+	}
+	if errors.Is(cause, context.DeadlineExceeded) {
+		code = "EXECUTION_RUNTIME_PREPARATION_TIMEOUT"
+	}
+	return &RuntimePreparationError{Phase: phase, Finding: Finding{Code: code, SafeMessage: preparationReasons[code]}, cause: cause}
+}
+
+func serviceConfigurationPreviewSupported(capabilities map[string]any) bool {
+	switch capabilities["apiVersion"] {
+	case "platform.installer/execution-capabilities/v1alpha5", "platform.installer/execution-capabilities/v1alpha6",
+		"platform.installer/execution-capabilities/v1alpha7", "platform.installer/execution-capabilities/v1alpha8",
+		"platform.installer/execution-capabilities/v1alpha9", "platform.installer/execution-capabilities/v1alpha10",
+		"platform.installer/execution-capabilities/v1alpha11":
+		return validServiceConfigurationPreviewCapability(capabilities["serviceConfigurationPreview"], capabilities["supportedOperations"])
+	default:
+		return false
+	}
 }
 
 @@END
@@ -27804,7 +27974,7 @@ func waitObserver(ctx context.Context, duration time.Duration) bool {
 }
 
 @@END
-@@PORTABLE {"path":"internal/executionnode/runtime_bootstrap.go","mode":420,"size":8159,"sha256":"6292bede6c8eb353dca860b1f65fec79a80bd7b073d89d8c712bfdb8301259b2","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":8159}
+@@PORTABLE {"path":"internal/executionnode/runtime_bootstrap.go","mode":420,"size":8669,"sha256":"d45c9553671363473099622cc729bd04a6996ed9fd1537f5ab64fdf62f625952","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":8669}
 package executionnode
 
 import (
@@ -27834,8 +28004,9 @@ func runtimePreparationScripts(bundle executionbundle.Verified) (string, string)
 }
 
 const runtimePreparationCommon = `set -eu
-stage=$1; root=$2; bundle_digest=$3; bundle_version=$4; core_version=$5; protocol=$6; platforms=$7; bootstrap=$8
 fail() { printf '%s\n' "$1" >&2; exit 78; }
+[ "$#" = 8 ] || fail EXECUTION_RUNTIME_ARGUMENTS_INVALID
+stage=$1; root=$2; bundle_digest=$3; bundle_version=$4; core_version=$5; protocol=$6; platforms=$7; bootstrap=$8
 case "$stage:$root" in /var/tmp/platform-installer-bootstrap-*:/var/lib/platform-installer/runtime) ;; *) fail EXECUTION_BUNDLE_STAGE_INVALID ;; esac
 nonce=${stage##*-}
 id=${bundle_digest#sha256:}
@@ -27885,7 +28056,8 @@ const runtimeBootstrapPhase = `
 [ -d "$stage" ] && [ ! -L "$stage" ] || fail EXECUTION_BUNDLE_STAGE_INVALID
 [ ! -e "$candidate" ] && [ ! -L "$candidate" ] || fail EXECUTION_RUNTIME_CANDIDATE_EXISTS
 success=0
-cleanup() { if [ "$success" = 0 ]; then rm -rf -- "$candidate"; fi; }
+diagnostic_code=EXECUTION_RUNTIME_CANDIDATE_COPY_FAILED
+cleanup() { if [ "$success" = 0 ]; then printf '%s\n' "$diagnostic_code" >&2; rm -rf -- "$candidate"; fi; }
 trap cleanup EXIT
 trap 'exit 130' HUP INT TERM
 install -d -m 0700 "$candidate"
@@ -27896,6 +28068,7 @@ find "$candidate" -type d -exec chmod 0750 {} +
 find "$candidate" -type f -exec chmod 0640 {} +
 verify_bundle "$candidate" || fail EXECUTION_RUNTIME_CANDIDATE_INVALID
 if [ "$bootstrap" = 1 ]; then
+    diagnostic_code=EXECUTION_BOOTSTRAP_COMMAND_FAILED
     sh "$candidate/ansible-core/tools/bootstrap_execution_runtime.sh" "$candidate" "$platforms"
 else
     # Legacy bundles remain usable with manually installed prerequisites.
@@ -27907,10 +28080,12 @@ success=1
 const runtimeActivationPhase = `
 verify_bundle "$candidate" || fail EXECUTION_RUNTIME_CANDIDATE_INVALID
 created=0; switching=0; success=0
+diagnostic_code=EXECUTION_RUNTIME_STATE_INITIALIZATION_FAILED
 backup=$root/state/.prepare-$nonce
 [ ! -e "$backup" ] && [ ! -L "$backup" ] || fail EXECUTION_RUNTIME_BACKUP_EXISTS
 install -d -m 0700 "$backup"
 cleanup() {
+    if [ "$success" = 0 ]; then printf '%s\n' "$diagnostic_code" >&2; fi
     if [ "$success" = 0 ] && [ "$switching" = 1 ]; then
         if [ -L "$backup/current" ]; then mv -Tf -- "$backup/current" "$root/current"; else rm -f -- "$root/current"; fi
         if [ -f "$backup/active" ]; then mv -f -- "$backup/active" "$root/state/active"; else rm -f -- "$root/state/active"; fi
@@ -27936,10 +28111,13 @@ else
     mv -- "$candidate" "$release"
     created=1
 fi
+diagnostic_code=EXECUTION_RUNTIME_PYTHON_INITIALIZATION_FAILED
 env PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$release/ansible-core/tools" python3 -c 'from execution_secret_output import _directory; from execution_lifecycle import EXECUTION_STATE_ROOT; exec("with _directory(EXECUTION_STATE_ROOT, create=True):\n    pass")'
+diagnostic_code=EXECUTION_RUNTIME_CAPABILITY_CHECK_FAILED
 env PYTHONDONTWRITEBYTECODE=1 ANSIBLE_CONFIG="$release/ansible-core/ansible.cfg" ANSIBLE_COLLECTIONS_PATH="$release/ansible-core/collections" ansible-playbook -i localhost, "$release/ansible-core/playbooks/execution-capabilities.yml" -e "platform_execution_runtime_root=$release" -e "platform_execution_bundle_digest=$bundle_digest" >/dev/null
 printf 'BUNDLE_VERSION=%s\nBUNDLE_DIGEST=%s\nCORE_VERSION=%s\nPROTOCOL=%s\nANSIBLE=yes\nCAPABILITIES=yes\n' "$bundle_version" "$bundle_digest" "$core_version" "$protocol" > "$backup/new-active"
 ln -s -- "$release" "$backup/new-current"
+diagnostic_code=EXECUTION_RUNTIME_SWITCH_FAILED
 switching=1
 mv -Tf -- "$backup/new-current" "$root/current"
 mv -f -- "$backup/new-active" "$root/state/active"
@@ -27966,7 +28144,7 @@ fi
 `
 
 @@END
-@@PORTABLE {"path":"internal/executionnode/runtime_protocol.go","mode":420,"size":69446,"sha256":"b6d1e9ef15d4592f830f1e18be0db21eddc7c6484b24e79041722c5b3832222e","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"internal/executionnode/runtime_protocol.go","mode":420,"size":69402,"sha256":"c1867c32bb90a22ca3bb191c2e02da03966b0acf20c18a21fc74e3138e72967a","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
 package executionnode
 
 // Typed access to the fixed UI-BE-04C runtime protocol.  This is transport
@@ -28351,6 +28529,8 @@ type ServiceConfigurationPreview struct {
 	// Core response; this is Wails presentation metadata, not a Core field.
 	RuntimeDigest string          `json:"runtimeDigest,omitempty"`
 	Runtime       RuntimeEvidence `json:"-"`
+	// Wails/browser-only safe failure metadata; not accepted from Core JSON.
+	Diagnostic *Finding `json:"diagnostic,omitempty"`
 }
 
 type ServiceConfigurationScope struct {
@@ -28369,7 +28549,10 @@ func (t OpenSSHTransport) BuildServiceConfigurationPreview(ctx context.Context, 
 		return ServiceConfigurationPreview{}, errors.New("SERVICE_CONFIGURATION_PREVIEW_INPUT_INVALID")
 	}
 	capabilities, err := t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": "platform.installer/execution-runtime/v1alpha1", "operation": "GetCapabilities"})
-	if err != nil || (capabilities["apiVersion"] != "platform.installer/execution-capabilities/v1alpha5" && capabilities["apiVersion"] != "platform.installer/execution-capabilities/v1alpha6") || !validServiceConfigurationPreviewCapability(capabilities["serviceConfigurationPreview"], capabilities["supportedOperations"]) {
+	if err != nil {
+		return ServiceConfigurationPreview{}, err
+	}
+	if !serviceConfigurationPreviewSupported(capabilities) {
 		return ServiceConfigurationPreview{}, errors.New("SERVICE_CONFIGURATION_PREVIEW_UNSUPPORTED")
 	}
 	runID, err := newRunID()
@@ -28390,7 +28573,7 @@ func (t OpenSSHTransport) BuildServiceConfigurationPreview(ctx context.Context, 
 	var result ServiceConfigurationPreview
 	decoder := json.NewDecoder(strings.NewReader(string(data)))
 	decoder.DisallowUnknownFields()
-	if decoder.Decode(&result) != nil || decoder.Decode(new(any)) != io.EOF || result.RuntimeDigest != "" || result.APIVersion != "platform.installer/service-configuration-preview/v1alpha1" || result.Kind != "ServiceConfigurationPreview" || !validSHA256(result.ProjectRevision) || result.Services == nil || len(result.Services) > 512 {
+	if decoder.Decode(&result) != nil || decoder.Decode(new(any)) != io.EOF || result.RuntimeDigest != "" || result.Diagnostic != nil || result.APIVersion != "platform.installer/service-configuration-preview/v1alpha1" || result.Kind != "ServiceConfigurationPreview" || !validSHA256(result.ProjectRevision) || result.Services == nil || len(result.Services) > 512 {
 		return ServiceConfigurationPreview{}, errors.New("SERVICE_CONFIGURATION_PREVIEW_RESPONSE_INVALID")
 	}
 	for deploymentID, service := range result.Services {
@@ -28943,11 +29126,11 @@ func decodeEventPage(response map[string]any, runID string, afterSequence, limit
 	}
 	next, nextOK := nextRaw.(float64)
 	more, moreOK := moreRaw.(bool)
-	if !nextOK || next < 0 || next != float64(int(next)) 
+	if !nextOK || next < 0 || next != float64(int(next)) || !moreOK || len(result) > limit {
+		return
 @@END
-@@PORTABLE {"path":"internal/executionnode/runtime_protocol.go","mode":420,"size":69446,"sha256":"b6d1e9ef15d4592f830f1e18be0db21eddc7c6484b24e79041722c5b3832222e","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":21446}
-|| !moreOK || len(result) > limit {
-		return ExecutionEventPage{}, errExecutionEventsResponseInvalid
+@@PORTABLE {"path":"internal/executionnode/runtime_protocol.go","mode":420,"size":69402,"sha256":"c1867c32bb90a22ca3bb191c2e02da03966b0acf20c18a21fc74e3138e72967a","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":21402}
+ ExecutionEventPage{}, errExecutionEventsResponseInvalid
 	}
 	page.NextSequence, page.HasMore = int(next), more
 	if len(result) > 0 && page.NextSequence != result[len(result)-1].Sequence {
