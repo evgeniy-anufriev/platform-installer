@@ -100902,7 +100902,7 @@ export function ServerInformationDialog({ hostId, onProbe, onCheck, onResult, on
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/ServersPage.tsx","mode":420,"size":57400,"sha256":"bae49e3e6f7458d2d221a3b0e5fc783700ac3b781941aa2dc49115c337b61a66","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":51118}
+@@PORTABLE {"path":"frontend/src/ServersPage.tsx","mode":420,"size":56592,"sha256":"5c01dc29b92c4b22bbca6bdf0be9c0b3dc369b85de6e00faf35d763a4108f2cb","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":51104}
 import { useEffect, useState, type ReactNode } from "react";
 import type {
   ExecutionNodeContext,
@@ -100918,7 +100918,6 @@ import { ServerInformationDialog, ServerInformationText } from "./ServerInformat
 import {
   executionNodeCombinedStatus,
   executionNodeSelectionLabel,
-  executionNodeStatusLabel,
   type ExecutionNodeCombinedStatus,
 } from "./executionNodeLabels";
 
@@ -101014,28 +101013,6 @@ function ServerLineIcon({ kind }: { kind: "server" | "key" | "execution" }) {
       )}
     </svg>
   );
-}
-
-function executionNodeTone(status?: string): StatusTone {
-  switch (status) {
-    case "READY":
-    case "PREPARED":
-      return "success";
-    case "UNREACHABLE":
-    case "INCOMPATIBLE":
-    case "BROKEN":
-      return "danger";
-    case "NOT_CONFIGURED":
-    case "NOT_PREPARED":
-    case "UNPREPARED":
-    case "PREPARATION_REQUIRED":
-    case "UPDATE_REQUIRED":
-    case "CONFIRMATION_REQUIRED":
-    case "BLOCKED":
-      return "warning";
-    default:
-      return "neutral";
-  }
 }
 
 function sessionCredentialErrorText(reason: unknown): string {
@@ -101627,20 +101604,15 @@ function ExecutionNodePanel({
     status: "NOT_CONFIGURED",
     selectionSource: "NONE",
   };
-  const combinedStatus = nodeDisplayStatus || executionNodeCombinedStatus(readiness || cachedReadiness, preparation);
-  const headingStatus = nodeDisplayStatus || readiness || cachedReadiness || preparation
-    ? { ...combinedStatus, label: combinedStatus.label.replace(/^Проверен: /, "") }
-    : {
-        tone: executionNodeTone(effective.status),
-        label: effective.status === "READY" && coreProjectionNotice
-          ? "Ожидание данных Core"
-          : executionNodeStatusLabel(effective.status),
-      };
+  const combinedStatus = nodeDisplayStatus || executionNodeCombinedStatus(
+    readiness || cachedReadiness || { status: effective.status }, preparation,
+  );
+  const headingStatus = { ...combinedStatus, label: combinedStatus.label.replace(/^Проверен: /, "") };
   const checkedNode = readiness || cachedReadiness;
   const useServerInformation =
     !!onInformationCheck && context?.selectionKind === "PROJECT_SERVER";
   const canSuggestAction =
-    !disabled && !busy && !changing && !context?.locked;
+    !disabled && !busy && !changing;
   const checkIsNext =
     canSuggestAction &&
     !!context?.safeLabel &&
@@ -102357,10 +102329,7 @@ function ServerDialog({
     }
     if (mode === "add") {
       const intent: ServerIntent = {
-        operati
-@@END
-@@PORTABLE {"path":"frontend/src/ServersPage.tsx","mode":420,"size":57400,"sha256":"bae49e3e6f7458d2d221a3b0e5fc783700ac3b781941aa2dc49115c337b61a66","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":6282}
-on: "CreateServer",
+        operation: "CreateServer",
         hostId,
         type,
         desiredHostname,
@@ -102383,7 +102352,10 @@ on: "CreateServer",
     }
     await onAppend(intent);
   };
-  const typeDisabled = !!configError || (mode === "edit" && !!configError);
+  const typeDisabled = !!configError || (mode === "edit" && !!con
+@@END
+@@PORTABLE {"path":"frontend/src/ServersPage.tsx","mode":420,"size":56592,"sha256":"5c01dc29b92c4b22bbca6bdf0be9c0b3dc369b85de6e00faf35d763a4108f2cb","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":5488}
+figError);
   return (
     <div className="modal" role="presentation">
       <form

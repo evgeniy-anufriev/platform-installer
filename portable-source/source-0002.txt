@@ -3267,12 +3267,13 @@ export function taskNameWithoutRole(
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/executionNodeLabels.ts","mode":420,"size":5577,"sha256":"6acb13e2e3f0a36f0163f3964630b76cfa82fc3353ef5a36a304818441230716","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5577}
+@@PORTABLE {"path":"frontend/src/executionNodeLabels.ts","mode":420,"size":5784,"sha256":"ef96e5acfa83d5808b5a64cee1a05b43901ee5573bf04ba9f92f33ba51958e9d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5784}
 // Presentation only: runtime identity and capability decisions remain in Go.
 export function executionNodeStatusLabel(status?: string): string {
   switch (status) {
     case "NOT_CONFIGURED": return "Не настроен";
-    case "NOT_PREPARED":
+    // Selection/reset state is not evidence that runtime preparation is needed.
+    case "NOT_PREPARED": return "Требуется проверка";
     case "UNPREPARED": return "Не подготовлен";
     case "UNREACHABLE": return "Недоступен";
     case "PREPARATION_REQUIRED": return "Требуется подготовка";
@@ -3397,8 +3398,9 @@ export function executionNodeCombinedStatus(
       return { label: "Проверен: Требуется обновление", tone: "warning" };
     case "PREPARATION_REQUIRED":
     case "UNPREPARED":
-    case "NOT_PREPARED":
       return { label: "Проверен: Требуется подготовка", tone: "warning" };
+    case "NOT_PREPARED":
+      return { label: "Требуется проверка", tone: "warning" };
     case "UNREACHABLE":
       return { label: "Проверен: Недоступен", tone: "danger" };
     case "INCOMPATIBLE":
