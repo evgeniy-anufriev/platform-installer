@@ -35815,7 +35815,7 @@ platform_pki_materialization_plans: []
       no_log: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/project_resolution/tasks/main.yml","mode":420,"size":1668,"sha256":"17e71860448c4ab5bc28736758d95dbecc06eee3b00be58372d0a96a07a8c162","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1668}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/project_resolution/tasks/main.yml","mode":420,"size":1700,"sha256":"266b25a2dc9cd638b692ce3cfa835bb5958de8a0365097f3ef168cdbd61636f8","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1700}
 ---
 - name: Чтение результата разрешения неизменившегося проекта
   platform.core.project_resolution:
@@ -35837,7 +35837,7 @@ platform_pki_materialization_plans: []
 
 - name: Формирование результата разрешения проекта
   platform.core.project_snapshot:
-    project_root: "{{ platform_project_root | default(inventory_dir | dirname) }}"
+    project_root: "{{ platform_project_root if platform_project_root is defined else (inventory_dir | dirname) }}"
     service_catalog_path: "{{ platform_service_catalog_path }}"
     installer_owned_paths: "{{ platform_installer_owned_paths | default([]) }}"
     desired_only: true
@@ -36171,11 +36171,11 @@ platform_name_prefix: ''
   become: false
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/resolve_application_libraries/tasks/main.yml","mode":420,"size":2988,"sha256":"14f287c61338a0b221e73551bb892acd37cc17e9a7ba77e126c8920c87b39426","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2988}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/resolve_application_libraries/tasks/main.yml","mode":420,"size":3020,"sha256":"2edcd4d9cbeccc4c91e5d955dc2e09aaece8e02f5a3edbde18c3b7f64c25ae8b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3020}
 ---
 - name: "Проверка комплектности пакетов библиотек перед загрузкой значений по умолчанию"
   platform.core.prepare_application_libraries:
-    project_root: "{{ platform_project_root | default(inventory_dir | dirname) }}"
+    project_root: "{{ platform_project_root if platform_project_root is defined else (inventory_dir | dirname) }}"
     contracts_root: "{{ platform_contracts_root | default(role_path ~ '/../../../../../../../contracts') }}"
   register: _application_inputs
   no_log: true
@@ -37295,7 +37295,7 @@ artifactLock:
         loop_var: platform_postgresql_application_job
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/applications/stages/providers-resolve.yml","mode":420,"size":1571,"sha256":"e4e15af1ee45d32d3f018a580c5ec3f3eb27e6c6b8e1535b688c50d3843ce4d0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1571}
+@@PORTABLE {"path":"ansible-core/playbooks/applications/stages/providers-resolve.yml","mode":420,"size":1603,"sha256":"289689fcb88d165a8dc38dc76389feea6d9092e8a2546c812b9d5431e970941d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1603}
 ---
 - import_playbook: credential-root.yml
 - name: Обработка входных данных автономного провайдера приложений без обращения к целевым узлам
@@ -37309,7 +37309,7 @@ artifactLock:
         name: platform.core.resolve_application_libraries
     - name: "Формирование снимка текущего проекта без внесения изменений"
       platform.core.project_snapshot:
-        project_root: "{{ platform_project_root | default(inventory_dir | dirname) }}"
+        project_root: "{{ platform_project_root if platform_project_root is defined else (inventory_dir | dirname) }}"
         service_catalog_path: "{{ platform_service_catalog_path }}"
       register: application_provider_snapshot
       no_log: true
@@ -37331,7 +37331,7 @@ artifactLock:
 - import_playbook: provider-verify-stage.yml
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/applications/stages/resolve-runtime.yml","mode":420,"size":5227,"sha256":"894cd22279185adfaea44bbd58f07d69aa2ef3f4f6dce3f33f36d0440ee801bd","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5227}
+@@PORTABLE {"path":"ansible-core/playbooks/applications/stages/resolve-runtime.yml","mode":420,"size":5323,"sha256":"b5c087062d691c4135afe33b8c45967e99feda341df041762f86eefd1920752b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5323}
 ---
 - import_playbook: credential-root.yml
 - name: Определение и проверка полного состава автономной операции приложения
@@ -37345,7 +37345,7 @@ artifactLock:
         name: platform.core.resolve_application_libraries
     - name: Формирование снимка текущего проекта без внесения изменений
       platform.core.project_snapshot:
-        project_root: "{{ platform_project_root | default(inventory_dir | dirname) }}"
+        project_root: "{{ platform_project_root if platform_project_root is defined else (inventory_dir | dirname) }}"
         service_catalog_path: "{{ platform_service_catalog_path }}"
       register: application_snapshot
       no_log: true
@@ -37388,7 +37388,7 @@ artifactLock:
       platform.core.prepare_application_providers:
         snapshot_result: "{{ application_snapshot }}"
         service_catalog_path: "{{ platform_service_catalog_path }}"
-        project_root: "{{ platform_project_root | default(inventory_dir | dirname) }}"
+        project_root: "{{ platform_project_root if platform_project_root is defined else (inventory_dir | dirname) }}"
       register: application_provider_inputs
       when: not platform_application_post_install_only | default(false)
       no_log: true
@@ -37398,7 +37398,7 @@ artifactLock:
       no_log: true
     - name: "Подготовка параметров выполнения приложений без планировщика развёртывания"
       platform.core.prepare_application_runtime:
-        project_root: "{{ platform_project_root | default(inventory_dir | dirname) }}"
+        project_root: "{{ platform_project_root if platform_project_root is defined else (inventory_dir | dirname) }}"
         contracts_root: "{{ platform_contracts_root | default(playbook_dir ~ '/../../../../contracts') }}"
         snapshot: "{{ application_snapshot.snapshot }}"
         scripts_only: "{{ platform_application_post_install_only | default(false) }}"
@@ -37786,7 +37786,7 @@ artifactLock:
     application_provider_script_host: "{{ application_post_install_script.target.hostId | default(application_post_install_script.hostId) }}"
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/applications/tasks/provider-batch.yml","mode":420,"size":4660,"sha256":"6dc239f4921c9d50011c82483d5328f838a4856ce4843fa22a5fbcfc22f7f670","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4660}
+@@PORTABLE {"path":"ansible-core/playbooks/applications/tasks/provider-batch.yml","mode":420,"size":4692,"sha256":"6c95af572291b29f79fe3b03a33e5bb59c3b134d8d3dc9c74e9c194f2c902dbb","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4692}
 ---
 - name: Выполнение обработчиков интеграции в заданном порядке перед обработкой учётных записей
   ansible.builtin.include_tasks: provider-script.yml
@@ -37803,7 +37803,7 @@ artifactLock:
     - name: "Определение обработчика учётных записей из пакета провайдера"
       platform.core.prepare_application_account_batch:
         batch: "{{ application_provider_batch }}"
-        project_root: "{{ platform_project_root | default(hostvars['localhost'].inventory_dir | dirname) }}"
+        project_root: "{{ platform_project_root if platform_project_root is defined else (hostvars['localhost'].inventory_dir | dirname) }}"
       delegate_to: localhost
       become: false
       register: application_account_callback
@@ -37867,7 +37867,7 @@ artifactLock:
   no_log: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/applications/tasks/provider-script.yml","mode":420,"size":3016,"sha256":"5b3719578d48c00235ab10a4d1604ba3e367e8b348e775e5a687e1dd0fee25eb","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3016}
+@@PORTABLE {"path":"ansible-core/playbooks/applications/tasks/provider-script.yml","mode":420,"size":3048,"sha256":"9050235234924014414270935f4329e00c1666ec0f53a9aa687401b33f53586d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3048}
 ---
 - name: Выполнение сценария провайдера с контекстом выбранной цели
   vars:
@@ -37901,7 +37901,7 @@ artifactLock:
           invocations: "{{ application_provider_script.invocations | default([]) }}"
           account: "{{ lookup('ansible.builtin.pipe', 'id -un') if application_provider_script.runOn | default('target') == 'execution_node' else application_script_target_job.account }}"
           workingDirectory: >-
-            {{ (platform_project_root | default(hostvars['localhost'].inventory_dir | dirname))
+            {{ (platform_project_root if platform_project_root is defined else (hostvars['localhost'].inventory_dir | dirname))
                if application_provider_script.runOn | default('target') == 'execution_node' else
                (application_script_target_job.placement.runtimeDirectory | regex_replace('^~(?=/|$)',
                  application_script_identity.ansible_facts.getent_passwd[application_script_target_job.account][4])) ~
@@ -38385,7 +38385,7 @@ artifactLock:
         platform_validation_default_artifact: "{{ playbook_dir }}/../.runtime/infrastructure-validation-result.json"
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/validate.yml","mode":420,"size":1627,"sha256":"ee3e5f5474d8e94d9a6eaaa76231f035b6f250b0ef3b8d00ef7f4fa1ff59bbc1","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1627}
+@@PORTABLE {"path":"ansible-core/playbooks/validate.yml","mode":420,"size":1659,"sha256":"799d476e91d248382d7e4bb2be15a1734dded8d092129bb636ef6bc85174a6dc","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1659}
 ---
 - name: Проверка контракта проекта платформы
   hosts: localhost
@@ -38404,7 +38404,7 @@ artifactLock:
 
     - name: Проверка проекции приложения через общий путь к снимку
       platform.core.project_snapshot:
-        project_root: "{{ platform_project_root | default(inventory_dir | dirname) }}"
+        project_root: "{{ platform_project_root if platform_project_root is defined else (inventory_dir | dirname) }}"
         service_catalog_path: "{{ platform_service_catalog_path }}"
       register: platform_application_validation
       when: platform_desired_state.applicationLibraryDeployments is defined
