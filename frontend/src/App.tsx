@@ -450,6 +450,20 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       ? serviceConfigurationPreview.value
       : undefined;
   const coreProjectionReady = !!savedServiceConfigurationPreview;
+  const projectVerificationIsNext =
+    projectOpen &&
+    !!managed &&
+    !!api.verifyProject &&
+    result.catalog?.status === "READY" &&
+    executionReady &&
+    !!executionNode?.runtimeDigest &&
+    !sessionId &&
+    !editBusy &&
+    !refreshRequired &&
+    !["STARTING", "RUNNING", "CANCELLING"].includes(
+      installationRun?.run?.state || "",
+    ) &&
+    ["UNVERIFIED", "STALE"].includes(verification.status);
   const visibleServiceConfigurationPreview =
     commandCount === 0 ? savedServiceConfigurationPreview : undefined;
   const serviceConfigurationPreviewNotice = coreProjectionReady
@@ -2272,7 +2286,9 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             )}
             {projectOpen && (
               <button
-                className="outline"
+                className={
+                  projectVerificationIsNext ? "outline next-step-hint" : "outline"
+                }
                 onClick={verify}
                 disabled={
                   editBusy ||

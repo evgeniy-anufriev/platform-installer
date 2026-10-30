@@ -641,6 +641,15 @@ check state; a later check supersedes the prior preparation display. After the
 operator confirms preparation, the status reads **Выполняется подготовка**
 until the operation returns its final result.
 
+The current Servers screen uses an inline Execution Node panel where the static
+mockup shows an older dialog. A soft green outline marks the next available
+action inside that panel: check the selected server or node, plan and explicitly
+confirm preparation when the check requires it. Once the node is READY, the
+existing Project Verify button in the header receives the same outline for an
+unverified saved project. The hint stops during an operation and never changes
+action availability or interprets infrastructure status beyond the existing
+backend results. Reduced motion keeps a static outline.
+
 The page may accept a password or private-key path only as a current-session
 runtime credential input. A server record stores transport metadata and, at
 most, a `SecretRef`; it never stores the password or private-key material in

@@ -1487,6 +1487,110 @@ describe("UI-01E2 server editor", () => {
     expect(await screen.findByText(/Проверен: Подготовлен/)).toBeTruthy();
   });
 
+  it("moves the next-action hint from node check through preparation to project Verify", async () => {
+    const initialNode = {
+      status: "NOT_PREPARED",
+      selectionKind: "EXPLICIT_EXTERNAL",
+      selectionSource: "EXPLICIT",
+      safeLabel: "execution-node · 192.0.2.10",
+      locked: false,
+    };
+    const getExecutionNodeContext = vi.fn().mockResolvedValue(initialNode);
+    const value = api({
+      getExecutionNodeContext,
+      checkExecutionNode: vi
+        .fn()
+        .mockResolvedValueOnce({ status: "PREPARATION_REQUIRED" })
+        .mockResolvedValue({ status: "READY" }),
+      planExecutionNodePreparation: vi.fn().mockResolvedValue({
+        status: "CONFIRMATION_REQUIRED",
+        planId: "prepare-plan",
+        steps: [{ id: "activate-runtime", action: "INSTALL", mutates: true }],
+      }),
+      prepareExecutionNode: vi.fn().mockResolvedValue({ status: "PREPARED" }),
+    });
+    await openServers(value, {
+      ...project,
+      verification: { status: "UNVERIFIED" },
+    } as unknown as OpenResult);
+    const check = screen.getByRole("button", { name: "Проверить узел" });
+    const plan = screen.getByRole("button", { name: "Спланировать подготовку" });
+    const verify = screen.getByRole("button", { name: "Проверить" });
+    await waitFor(() => expect(check.classList.contains("next-step-hint")).toBe(true));
+    expect(plan.classList.contains("next-step-hint")).toBe(false);
+    expect(verify.classList.contains("next-step-hint")).toBe(false);
+
+    await userEvent.click(check);
+    await waitFor(() => expect(plan.classList.contains("next-step-hint")).toBe(true));
+    expect(check.classList.contains("next-step-hint")).toBe(false);
+
+    await userEvent.click(plan);
+    const confirm = await screen.findByRole("button", {
+      name: "Подтвердить подготовку",
+    });
+    expect(confirm.classList.contains("next-step-hint")).toBe(true);
+    expect(plan.classList.contains("next-step-hint")).toBe(false);
+
+    getExecutionNodeContext.mockResolvedValue({
+      ...initialNode,
+      status: "READY",
+      runtimeDigest: "sha256:runtime-ready",
+    });
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    await userEvent.click(confirm);
+    await waitFor(() => expect(value.checkExecutionNode).toHaveBeenCalledTimes(2));
+    expect(check.classList.contains("next-step-hint")).toBe(false);
+    expect(plan.classList.contains("next-step-hint")).toBe(false);
+    await waitFor(() => expect(verify.classList.contains("next-step-hint")).toBe(true));
+    await userEvent.click(verify);
+    await waitFor(() => expect(verify.classList.contains("next-step-hint")).toBe(false));
+  });
+
+  it("suggests the server check used by a selected project Execution Node", async () => {
+    const checkExecutionNode = vi.fn().mockResolvedValue({
+      status: "PREPARATION_REQUIRED",
+    });
+    const value = api({
+      getExecutionNodeContext: vi.fn().mockResolvedValue({
+        status: "NOT_PREPARED",
+        selectionKind: "PROJECT_SERVER",
+        selectionSource: "EXPLICIT",
+        selectedHostId: "node1",
+        safeLabel: "node1 · 192.0.2.10",
+        locked: false,
+      }),
+      getSessionCredentialStatus: vi.fn().mockResolvedValue({
+        status: "PRESENT",
+        sshMode: "SSH_PASSWORD",
+        expiresAt: "2026-10-30T15:00:00Z",
+      }),
+      probeServerInformation: vi.fn().mockResolvedValue({
+        status: "APPROVAL_REQUIRED",
+        probeId: "probe-1",
+        keyType: "ssh-ed25519",
+        fingerprint: "SHA256:example",
+      }),
+      checkServerInformation: vi.fn().mockResolvedValue({
+        status: "CHECKED",
+        hostId: "node1",
+      }),
+      checkExecutionNode,
+    });
+    await openServers(value);
+    const check = (await screen.findAllByRole("button", {
+      name: "Проверить сервер",
+    })).at(-1)!;
+    const plan = screen.getByRole("button", { name: "Спланировать подготовку" });
+    await waitFor(() => expect(check.classList.contains("next-step-hint")).toBe(true));
+    await userEvent.click(check);
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Подтверждаю совпадение" }),
+    );
+    await waitFor(() => expect(checkExecutionNode).toHaveBeenCalledOnce());
+    await waitFor(() => expect(plan.classList.contains("next-step-hint")).toBe(true));
+    expect(check.classList.contains("next-step-hint")).toBe(false);
+  });
+
   it("requires a name before creating a metadata-only project", async () => {
     const value = api({
       chooseProjectParent: vi.fn().mockResolvedValue("C:/Projects"),

@@ -717,6 +717,31 @@ function ExecutionNodePanel({
     selectionSource: "NONE",
   };
   const combinedStatus = executionNodeCombinedStatus(readiness || cachedReadiness, preparation);
+  const checkedNode = readiness || cachedReadiness;
+  const useServerInformation =
+    !!onInformationCheck && context?.selectionKind === "PROJECT_SERVER";
+  const canSuggestAction =
+    !disabled && !busy && !changing && !context?.locked;
+  const checkIsNext =
+    canSuggestAction &&
+    !!context?.safeLabel &&
+    context.status !== "READY" &&
+    !(useServerInformation ? information?.status === "CHECKED" : checkedNode) &&
+    !preparation &&
+    (context.selectionKind !== "PROJECT_SERVER" ||
+      credentialStatus?.status === "PRESENT");
+  const preparationIsNeeded = [
+    "PREPARATION_REQUIRED",
+    "UPDATE_REQUIRED",
+    "UNPREPARED",
+    "NOT_PREPARED",
+  ].includes(checkedNode?.status || "");
+  const planPreparationIsNext =
+    canSuggestAction && preparationIsNeeded && !preparation;
+  const confirmPreparationIsNext =
+    canSuggestAction &&
+    preparation?.status === "CONFIRMATION_REQUIRED" &&
+    !!preparation.steps?.some((step) => step.mutates);
   const choose = async () => {
     if (!selected) return;
     setBusy(true);
@@ -875,10 +900,18 @@ function ExecutionNodePanel({
       )}
       <div className="actions">
         {recoveryAction}
-        {onInformationCheck && <button className="outline" onClick={onInformationCheck} disabled={disabled || busy || credentialStatus?.status !== "PRESENT"}>Проверить сервер</button>}
-        {!onInformationCheck &&
+        {useServerInformation && (
+          <button
+            className={checkIsNext ? "outline next-step-hint" : "outline"}
+            onClick={onInformationCheck}
+            disabled={disabled || busy || credentialStatus?.status !== "PRESENT"}
+          >
+            Проверить сервер
+          </button>
+        )}
+        {!useServerInformation &&
         <button
-          className="outline"
+          className={checkIsNext ? "outline next-step-hint" : "outline"}
           onClick={async () => {
             setBusy(true);
             setError("");
@@ -897,7 +930,7 @@ function ExecutionNodePanel({
         </button>
         }
         <button
-          className="outline"
+          className={planPreparationIsNext ? "outline next-step-hint" : "outline"}
           onClick={async () => {
             setBusy(true);
             setError("");
@@ -916,6 +949,7 @@ function ExecutionNodePanel({
         {preparation?.status === "CONFIRMATION_REQUIRED" &&
           preparation.planId && (
             <button
+              className={confirmPreparationIsNext ? "next-step-hint" : undefined}
               onClick={async () => {
                 const planId = preparation.planId;
                 if (!planId) return;

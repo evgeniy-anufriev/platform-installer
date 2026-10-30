@@ -168,6 +168,26 @@ body {
   font-size: 12px;
   white-space: nowrap;
 }
+.execution-node-panel button.next-step-hint:not(:disabled),
+.app-header-actions button.next-step-hint:not(:disabled) {
+  border-color: #79bd98;
+  animation: next-step-outline 3s ease-in-out infinite;
+}
+@keyframes next-step-outline {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgb(75 164 111 / 8%);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgb(75 164 111 / 22%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .execution-node-panel button.next-step-hint:not(:disabled),
+  .app-header-actions button.next-step-hint:not(:disabled) {
+    animation: none;
+    box-shadow: 0 0 0 2px rgb(75 164 111 / 18%);
+  }
+}
 .app-banner {
   flex: 0 0 auto;
   margin: 0 0 8px;
