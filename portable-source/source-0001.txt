@@ -810,7 +810,7 @@ class ActionModule(ActionBase):
             return dict(failed=True, changed=False, msg=code, error_code=code)
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/project_snapshot.py","mode":420,"size":45089,"sha256":"382cb6ccc732d6ac67c88fe47791ec93bf4dc08550600faa7d0c3d9be9234a6a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":45089}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/project_snapshot.py","mode":420,"size":47548,"sha256":"3b66d4dc11723a90c6e4381cd8f522bf1fcc4ee88a76f6552812b99af0b78ebd","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":47548}
 from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
@@ -820,6 +820,7 @@ import json
 import os
 import posixpath
 import re
+import traceback
 from collections.abc import Mapping
 
 from ansible.errors import AnsibleError
@@ -830,6 +831,7 @@ from ansible_collections.platform.core.plugins.module_utils.deployment_plan impo
 from ansible_collections.platform.core.plugins.module_utils.haproxy_resolution import resolve_haproxy_backends
 from ansible_collections.platform.core.plugins.module_utils.pki_resolution import resolve_certificate_requests
 from ansible_collections.platform.core.plugins.module_utils.project_snapshot import build_project_snapshot, project_documents
+from ansible_collections.platform.core.plugins.module_utils.project_snapshot_output import write_snapshot_output
 from ansible_collections.platform.core.plugins.module_utils.project_state import canonical_inventory_members
 from ansible_collections.platform.core.plugins.module_utils.service_configuration_resolution import resolve_service_configuration
 from ansible_collections.platform.core.plugins.module_utils.service_configuration_preview import ordinary_presentation_value
@@ -865,7 +867,7 @@ def snapshot_input_message(stage, error):
         'APPLICATION_EXECUTION_MODEL_MISMATCH': 'Модель приложений не совпадает с ожидаемой.',
         'APPLICATION_BUNDLE_DIGEST_INVALID': 'Некорректный digest набора приложений.',
         'APPLICATION_BUNDLE_MANIFEST_INVALID': 'Некорректный манифест набора приложений.',
-        'PROJECT_RESOLUTION_INVALID': 'Разрешённая проекция проекта отсутствует или некорректна.',
+        'PROJECT_RESOLUTION_INVALID': 'Разрешённая проекция проекта не прошла проверку.',
         'Canonical project variable directories must not contain symlinks': 'Каталоги переменных проекта содержат запрещённые символические ссылки.',
         'Canonical project documents must not be symlinks': 'Документы проекта содержат запрещённые символические ссылки.',
         'Application resolve role must run before snapshot': 'Не выполнено разрешение библиотек приложений.',
@@ -880,7 +882,8 @@ def snapshot_input_message(stage, error):
                   else 'Ошибка чтения входных данных.' if isinstance(error, OSError)
                   else 'Отсутствует обязательное поле входных данных.' if isinstance(error, KeyError)
                   else 'Ошибка вычисления переменных Ansible.' if isinstance(error, AnsibleError)
-                  else 'Некорректный тип или структура входных данных.')
+                  else 'Нарушена структура входных данных.' if isinstance(error, (TypeError, ValueError))
+                  else 'Внутренний сбой построения снимка.')
     return 'Не удалось построить снимок проекта. Этап: %s. %s' % (stage, reason)
 
 
@@ -1161,6 +1164,13 @@ class ActionModule(ActionBase):
 
     TRANSFERS_FILES = False
 
+    def _public_result(self, result):
+        # Only the public projection crosses the artifact boundary. Private
+        # execution configuration stays censored even with task no_log removed.
+        write_snapshot_output(result['snapshot'])
+        result['_ansible_no_log'] = True
+        return result
+
     def _load(self, path, required=True):
         if not os.path.isfile(path):
             if required:
@@ -1291,11 +1301,20 @@ class ActionModule(ActionBase):
         task_vars = task_vars or {}
         stage = 'загрузка проекта и inventory'
         try:
-            if self._task.args.get('resolved_result') is not None:
+            resolved_result = self._task.args.get('resolved_result')
+            reference = self._task.args.get('resolved_result_variable')
+            if reference == '_project_resolution_cache':
+                cache = task_vars[reference]
+                resolved_result = cache['result'] if cache['hit'] else None
+            elif reference == 'platform_project_resolution':
+                resolved_result = task_vars[reference]
+            elif reference is not None:
+                raise ValueError('PROJECT_RESOLUTION_INVALID')
+            if resolved_result is not None:
                 stage = 'построение из разрешённой проекции Core'
                 from ansible_collections.platform.core.plugins.module_utils.project_resolution import enrich
-                return enrich(self._task.args['resolved_result'],
-                              None if self._task.args.get('desired_only') else task_vars.get('platform_prepared_application_images'))
+                return self._public_result(enrich(resolved_result,
+                              None if self._task.args.get('desired_only') else task_vars.get('platform_prepared_application_images')))
             requested_root = self._task.args.get("project_root")
             if requested_root and not os.path.isdir(os.path.realpath(requested_root)):
                 raise SnapshotInputError('PROJECT_ROOT_MISSING')
@@ -1319,8 +1338,8 @@ class ActionModule(ActionBase):
                 cached = reuse.read(os.path.join(task_vars['platform_project_resolution_directory'],
                                                 reuse.scope_name(project_root, runtime)), expected)
                 if cached is not None:
-                    return dict(changed=False, snapshot=_safe_configuration_preview(
-                        cached['execution_configuration'], catalog, expected['revision'], task_vars.get('hostvars', {})))
+                    return self._public_result(dict(changed=False, snapshot=_safe_configuration_preview(
+                        cached['execution_configuration'], catalog, expected['revision'], task_vars.get('hostvars', {}))))
             repo_root = self._repo_root(catalog_path, catalog)
             stage = 'чтение desired state и библиотек приложений'
             desired_state = task_vars.get("platform_desired_state", {})
@@ -1409,7 +1428,7 @@ class ActionModule(ActionBase):
             )
             if self._task.args.get("configuration_only") is True:
                 _, revision = project_documents(project_root, [])
-                return {"changed": False, "snapshot": _safe_configuration_preview(configuration, catalog, revision, hostvars)}
+                return self._public_result({"changed": False, "snapshot": _safe_configuration_preview(configuration, catalog, revision, hostvars)})
             deployments = materialized.get("serviceDeployments", {}) if isinstance(materialized, dict) else {}
             definitions = catalog.get("definitions", {}) if isinstance(catalog, dict) else {}
             _, _, secret_findings = _service_runtime_secret_requirements(
@@ -1521,13 +1540,13 @@ class ActionModule(ActionBase):
             # remains redacted; the immediately following planner receives
             # the resolved configuration needed to build a digest-bound
             # execution manifest.
-            return {"changed": False, "snapshot": snapshot, "pki_materialization": pki,
+            return self._public_result({"changed": False, "snapshot": snapshot, "pki_materialization": pki,
                     "application_rows": task_vars.get('platform_application_rows', []),
                     "application_image_lock": private_image_lock if applications_enabled else {},
                     "execution_configuration": configuration,
-                    "execution_connections": execution_connections}
-        except (AnsibleError, KeyError, OSError, TypeError, ValueError) as error:
-            return {
+                    "execution_connections": execution_connections})
+        except Exception as error:
+            result = {
                 "failed": True,
                 "changed": False,
                 "error_code": "PROJECT_SNAPSHOT_INPUT_INVALID",
@@ -1539,6 +1558,27 @@ class ActionModule(ActionBase):
                     "field": "project", "safeMessage": snapshot_input_message(stage, error),
                 },
             }
+            # Actual exception location, not speculative alternatives. No source
+            # excerpts, full paths, values or raw exception message are emitted.
+            frame = traceback.extract_tb(error.__traceback__)[-1]
+            module = os.path.basename(frame.filename)
+            if re.fullmatch(r'[A-Za-z0-9_]+\.py', module):
+                location = '%s:%s' % (module, frame.lineno)
+                kind = next((name for cls, name in (
+                    (AnsibleError, 'AnsibleError'), (KeyError, 'KeyError'),
+                    (OSError, 'OSError'), (TypeError, 'TypeError'), (ValueError, 'ValueError'),
+                    (AttributeError, 'AttributeError'), (RuntimeError, 'RuntimeError'))
+                    if isinstance(error, cls)), 'Exception')
+                message = result['finding']['safeMessage'] + ' Сбой: ' + kind + ', ' + location + '.'
+                if len(message.encode('utf-8')) <= 512:
+                    result['finding']['safeMessage'] = message
+            # Task no_log also censors safe findings before callbacks. Publish
+            # ONLY the fixed public finding, never this action's private result.
+            try:
+                write_snapshot_output({'adapterError': result['finding']})
+            except OSError:
+                pass  # Preserve the original failure if its output is unavailable.
+            return result
 
 @@END
 @@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/validate_project.py","mode":420,"size":7752,"sha256":"4f1d2902e09aa73af82ed7f96986abfdd793dedd2850c1978cb37382704589c2","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7752}
@@ -1985,16 +2025,13 @@ class CallbackModule(CallbackBase):
             self._journal().mark_task_observability_degraded('TASK_EVENT_WRITE_FAILED')
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/callback/project_snapshot_json.py","mode":420,"size":1874,"sha256":"a2eae7bf50f049bf03ad1c77dc57b8ec771415d323a0f9ad7d0d5e14acfa475b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1874}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/callback/project_snapshot_json.py","mode":420,"size":1440,"sha256":"ac980a311cba2f7c57d56d046fb531275afcfb4bd7192f98ce6aab7fbd85ce90","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1440}
 from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
 
-import json
-import os
-import tempfile
-
 from ansible.plugins.callback import CallbackBase
+from ansible_collections.platform.core.plugins.module_utils.project_snapshot_output import write_snapshot_output, snapshot_failure_published
 
 
 class CallbackModule(CallbackBase):
@@ -2006,22 +2043,7 @@ class CallbackModule(CallbackBase):
     CALLBACK_NEEDS_ENABLED = True
 
     def _write(self, payload):
-        destination = os.environ.get("PLATFORM_PROJECT_SNAPSHOT_OUTPUT")
-        if not destination:
-            return
-        directory = os.path.dirname(os.path.realpath(destination))
-        if not os.path.isdir(directory):
-            return
-        descriptor, temporary = tempfile.mkstemp(prefix=".project-snapshot-", dir=directory)
-        try:
-            with os.fdopen(descriptor, "w", encoding="utf-8") as output:
-                json.dump(payload, output, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
-                output.flush()
-                os.fsync(output.fileno())
-            os.replace(temporary, destination)
-        finally:
-            if os.path.exists(temporary):
-                os.unlink(temporary)
+        write_snapshot_output(payload)
 
     def v2_runner_on_ok(self, result):
         if getattr(result._task, "action", "") == "platform.core.project_snapshot":
@@ -2032,9 +2054,11 @@ class CallbackModule(CallbackBase):
     def v2_runner_on_failed(self, result, ignore_errors=False):
         del ignore_errors
         if getattr(result._task, "action", "") == "platform.core.project_snapshot":
+            if snapshot_failure_published():
+                return
             self._write({"adapterError": result._result.get("finding", {
                 "code": "PROJECT_SNAPSHOT_INPUT_INVALID",
-                "safeMessage": "Project snapshot could not be built",
+                "safeMessage": "Задача platform.core.project_snapshot завершилась без диагностического результата action.",
             })})
 
 @@END
@@ -28094,6 +28118,52 @@ def build_project_snapshot(project_id, project_name, documents, project_revision
     return redact(snapshot)
 
 @@END
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/project_snapshot_output.py","mode":420,"size":1664,"sha256":"74215d846e9ed15b76b64b41267d7a7b0fff046d1275d8fb7c02b71f8f918095","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1664}
+"""Public snapshot artifact shared by the action and its redacting callback."""
+import json
+import os
+import tempfile
+
+
+def write_snapshot_output(payload):
+    destination = os.environ.get('PLATFORM_PROJECT_SNAPSHOT_OUTPUT')
+    if not destination:
+        return
+    directory = os.path.dirname(os.path.realpath(destination))
+    if not os.path.isdir(directory):
+        return
+    descriptor, temporary = tempfile.mkstemp(prefix='.project-snapshot-', dir=directory)
+    try:
+        with os.fdopen(descriptor, 'w', encoding='utf-8') as output:
+            json.dump(payload, output, ensure_ascii=True, sort_keys=True, separators=(',', ':'))
+            output.flush()
+            os.fsync(output.fileno())
+        os.replace(temporary, destination)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+def snapshot_failure_published():
+    """A no_log callback must not overwrite the action's safe error artifact."""
+    path = os.environ.get('PLATFORM_PROJECT_SNAPSHOT_OUTPUT')
+    if not path or os.path.islink(path):
+        return False
+    try:
+        with open(path, 'r', encoding='utf-8') as stream:
+            raw = stream.read(4097)
+        if len(raw) > 4096:
+            return False
+        payload = json.loads(raw)
+        finding = payload.get('adapterError') if isinstance(payload, dict) else None
+        return (isinstance(finding, dict)
+                and finding.get('code') == 'PROJECT_SNAPSHOT_INPUT_INVALID'
+                and isinstance(finding.get('safeMessage'), str)
+                and 0 < len(finding['safeMessage'].encode('utf-8')) <= 512)
+    except (OSError, ValueError):
+        return False
+
+@@END
 @@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/project_state.py","mode":420,"size":10227,"sha256":"dff366753755bc4fd00d642f7fea5e092c50381da4d34afb170359428d017cca","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":10227}
 from __future__ import absolute_import, division, print_function
 
@@ -35745,7 +35815,7 @@ platform_pki_materialization_plans: []
       no_log: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/project_resolution/tasks/main.yml","mode":420,"size":1731,"sha256":"f766ed48da4a4f995977a57cd5144c0c806ba5cf42130d8147bad092cd3afd8b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1731}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/project_resolution/tasks/main.yml","mode":420,"size":1668,"sha256":"17e71860448c4ab5bc28736758d95dbecc06eee3b00be58372d0a96a07a8c162","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1668}
 ---
 - name: Чтение результата разрешения неизменившегося проекта
   platform.core.project_resolution:
@@ -35771,9 +35841,8 @@ platform_pki_materialization_plans: []
     service_catalog_path: "{{ platform_service_catalog_path }}"
     installer_owned_paths: "{{ platform_installer_owned_paths | default([]) }}"
     desired_only: true
-    resolved_result: "{{ _project_resolution_cache.result if _project_resolution_cache.hit else omit }}"
+    resolved_result_variable: _project_resolution_cache
   register: platform_project_resolution
-  no_log: true
 
 - name: Сохранение результата разрешения проекта
   platform.core.project_resolution:
@@ -35784,7 +35853,7 @@ platform_pki_materialization_plans: []
 
 - name: Дополнение результата актуальными сведениями об образах
   platform.core.project_snapshot:
-    resolved_result: "{{ platform_project_resolution }}"
+    resolved_result_variable: platform_project_resolution
   register: platform_project_resolution
 
 @@END
