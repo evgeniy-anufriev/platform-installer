@@ -1523,12 +1523,17 @@ describe("UI-01E2 server editor", () => {
     const check = screen.getByRole("button", { name: "Проверить узел" });
     const plan = screen.getByRole("button", { name: "Спланировать подготовку" });
     const verify = screen.getByRole("button", { name: "Проверить" });
+    expect(screen.getByRole("button", { name: "Открыть узел выполнения" }).textContent).toContain("Требуется проверка");
+    expect(screen.getAllByText("Требуется проверка")).toHaveLength(2);
+    expect(screen.queryByText("Проверен: Требуется подготовка")).toBeNull();
     await waitFor(() => expect(check.classList.contains("next-step-hint")).toBe(true));
     expect(plan.classList.contains("next-step-hint")).toBe(false);
     expect(verify.classList.contains("next-step-hint")).toBe(false);
 
     await userEvent.click(check);
     await waitFor(() => expect(plan.classList.contains("next-step-hint")).toBe(true));
+    expect(await screen.findByText("Проверен: Требуется подготовка")).toBeTruthy();
+    expect(screen.queryByText("Требуется проверка")).toBeNull();
     expect(check.classList.contains("next-step-hint")).toBe(false);
 
     await userEvent.click(plan);

@@ -13,7 +13,6 @@ import { ServerInformationDialog, ServerInformationText } from "./ServerInformat
 import {
   executionNodeCombinedStatus,
   executionNodeSelectionLabel,
-  executionNodeStatusLabel,
   type ExecutionNodeCombinedStatus,
 } from "./executionNodeLabels";
 
@@ -109,28 +108,6 @@ function ServerLineIcon({ kind }: { kind: "server" | "key" | "execution" }) {
       )}
     </svg>
   );
-}
-
-function executionNodeTone(status?: string): StatusTone {
-  switch (status) {
-    case "READY":
-    case "PREPARED":
-      return "success";
-    case "UNREACHABLE":
-    case "INCOMPATIBLE":
-    case "BROKEN":
-      return "danger";
-    case "NOT_CONFIGURED":
-    case "NOT_PREPARED":
-    case "UNPREPARED":
-    case "PREPARATION_REQUIRED":
-    case "UPDATE_REQUIRED":
-    case "CONFIRMATION_REQUIRED":
-    case "BLOCKED":
-      return "warning";
-    default:
-      return "neutral";
-  }
 }
 
 function sessionCredentialErrorText(reason: unknown): string {
@@ -722,20 +699,15 @@ function ExecutionNodePanel({
     status: "NOT_CONFIGURED",
     selectionSource: "NONE",
   };
-  const combinedStatus = nodeDisplayStatus || executionNodeCombinedStatus(readiness || cachedReadiness, preparation);
-  const headingStatus = nodeDisplayStatus || readiness || cachedReadiness || preparation
-    ? { ...combinedStatus, label: combinedStatus.label.replace(/^Проверен: /, "") }
-    : {
-        tone: executionNodeTone(effective.status),
-        label: effective.status === "READY" && coreProjectionNotice
-          ? "Ожидание данных Core"
-          : executionNodeStatusLabel(effective.status),
-      };
+  const combinedStatus = nodeDisplayStatus || executionNodeCombinedStatus(
+    readiness || cachedReadiness || { status: effective.status }, preparation,
+  );
+  const headingStatus = { ...combinedStatus, label: combinedStatus.label.replace(/^Проверен: /, "") };
   const checkedNode = readiness || cachedReadiness;
   const useServerInformation =
     !!onInformationCheck && context?.selectionKind === "PROJECT_SERVER";
   const canSuggestAction =
-    !disabled && !busy && !changing && !context?.locked;
+    !disabled && !busy && !changing;
   const checkIsNext =
     canSuggestAction &&
     !!context?.safeLabel &&

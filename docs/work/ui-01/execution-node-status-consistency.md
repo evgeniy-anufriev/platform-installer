@@ -21,6 +21,16 @@ Backend return values, approval, Start and Core readiness authority are unchange
 Saved project, Project Verify and deployment plan remain separate facts.
 The saved-Core-preview effect from commit 4e41a9ba is unchanged.
 
+Initial selection/reset context `NOT_PREPARED` now displays «Требуется проверка»
+instead of claiming a completed check that requires preparation. Observed
+`UNPREPARED`/`PREPARATION_REQUIRED` still display «Проверен: Требуется подготовка».
+The standalone Servers panel uses the same context fallback as App. Selection
+locking does not suppress the check/preparation hints: those operations remain
+available for a pinned node. Wire states and backend/Core authority are unchanged.
+Regression tests assert the initial header/card/inline state and the transition
+after a real handler response in the existing mocked-bridge tests:101 PASS;
+TypeScript typecheck and git diff --check PASS. Real Wails acceptance remains OPEN.
+
 Verification: affected App/Servers tests 98 PASS; TypeScript typecheck PASS;
 git diff --check PASS. Tests cover pending Core fetch, failure with matching
 danger tones, retry to success, and preparation across page navigation. Old

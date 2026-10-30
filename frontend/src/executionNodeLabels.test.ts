@@ -3,7 +3,7 @@ import { executionNodeCombinedStatus, executionNodePreparationLabel, executionNo
 
 describe("русские подписи узла выполнения", () => {
   it("не показывает внутренние коды готовности", () => {
-    expect(executionNodeStatusLabel("NOT_PREPARED")).toBe("Не подготовлен");
+    expect(executionNodeStatusLabel("NOT_PREPARED")).toBe("Требуется проверка");
     expect(executionNodeStatusLabel("READY")).toBe("Готов");
     expect(executionNodeStatusLabel("UNKNOWN_CODE")).toBe("Состояние неизвестно");
   });
@@ -23,6 +23,8 @@ describe("русские подписи узла выполнения", () => {
 
   it("объединяет проверку и подготовку в один статус", () => {
     expect(executionNodeCombinedStatus().label).toBe("Не проверен");
+    expect(executionNodeCombinedStatus({ status: "NOT_PREPARED" })).toMatchObject({ label: "Требуется проверка", tone: "warning" });
+    expect(executionNodeCombinedStatus({ status: "UNPREPARED" }).label).toBe("Проверен: Требуется подготовка");
     expect(executionNodeCombinedStatus({ status: "UPDATE_REQUIRED" }).label).toBe("Проверен: Требуется обновление");
     expect(executionNodeCombinedStatus({ status: "PREPARATION_REQUIRED" }).label).toBe("Проверен: Требуется подготовка");
     expect(executionNodeCombinedStatus({ status: "READY" }).label).toBe("Проверен: Подготовлен");

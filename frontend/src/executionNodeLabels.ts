@@ -2,7 +2,8 @@
 export function executionNodeStatusLabel(status?: string): string {
   switch (status) {
     case "NOT_CONFIGURED": return "Не настроен";
-    case "NOT_PREPARED":
+    // Selection/reset state is not evidence that runtime preparation is needed.
+    case "NOT_PREPARED": return "Требуется проверка";
     case "UNPREPARED": return "Не подготовлен";
     case "UNREACHABLE": return "Недоступен";
     case "PREPARATION_REQUIRED": return "Требуется подготовка";
@@ -127,8 +128,9 @@ export function executionNodeCombinedStatus(
       return { label: "Проверен: Требуется обновление", tone: "warning" };
     case "PREPARATION_REQUIRED":
     case "UNPREPARED":
-    case "NOT_PREPARED":
       return { label: "Проверен: Требуется подготовка", tone: "warning" };
+    case "NOT_PREPARED":
+      return { label: "Требуется проверка", tone: "warning" };
     case "UNREACHABLE":
       return { label: "Проверен: Недоступен", tone: "danger" };
     case "INCOMPATIBLE":

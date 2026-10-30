@@ -26,6 +26,20 @@ const props = {
 };
 
 describe("target host trust on the Servers page", () => {
+  it("requires a check after selection before showing preparation required", async () => {
+    render(<ServersPage {...props}
+      executionNode={{ status: "NOT_PREPARED", selectionKind: "EXPLICIT_EXTERNAL", selectionSource: "EXPLICIT", safeLabel: "node2", locked: true } as never}
+      onCheckExecutionNode={vi.fn().mockResolvedValue({ status: "PREPARATION_REQUIRED" })}
+    />);
+    expect(screen.getAllByText("Требуется проверка")).toHaveLength(2);
+    expect(screen.queryByText("Проверен: Требуется подготовка")).toBeNull();
+    const check = screen.getByRole("button", { name: "Проверить узел" });
+    expect(check.classList.contains("next-step-hint")).toBe(true);
+    await fireEvent.click(check);
+    expect(await screen.findByText("Проверен: Требуется подготовка")).toBeTruthy();
+    expect(screen.queryByText("Требуется проверка")).toBeNull();
+    expect(screen.getByRole("button", { name: "Спланировать подготовку" }).classList.contains("next-step-hint")).toBe(true);
+  });
   it("explains why credentials cannot be changed during an active run", async () => {
     render(
       <ServersPage
