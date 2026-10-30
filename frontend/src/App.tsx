@@ -104,11 +104,20 @@ function projectSettingValuesFromDraft(
 
 type ServicePreviewObservation = {
   value: ServiceConfigurationPreview;
+  displayServices: ServiceConfigurationPreview["services"];
+  deploymentTypes: Record<string, string>;
+  projectId?: string;
   root: string;
   selectionKind: string;
   selectedHostId?: string;
   safeLabel?: string;
 };
+type PreviewValues = ServiceConfigurationPreview["services"][string]["configuration"];
+const retainResolvedPreviewValues = (previous: PreviewValues = {}, next: PreviewValues = {}): PreviewValues => ({
+  ...previous,
+  ...Object.fromEntries(Object.entries(next).filter(([key, item]) =>
+    item.state === "RESOLVED" && item.value !== undefined || previous[key]?.state !== "RESOLVED" || previous[key]?.value === undefined)),
+});
 const navigation: Array<{ id: Page | string; label: string }> = [
   { id: "project", label: "Проект" },
   { id: "servers", label: "Серверы" },
@@ -480,8 +489,14 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     ) &&
     ["UNVERIFIED", "STALE"].includes(verification.status);
   const visibleServiceConfigurationPreview =
-    savedServiceConfigurationPreview;
-  const serviceConfigurationPreviewNotice = coreProjectionReady
+    serviceConfigurationPreview && serviceConfigurationPreview.root === result.root &&
+    serviceConfigurationPreview.projectId === result.project?.id
+      ? { ...serviceConfigurationPreview.value, services: Object.fromEntries(
+          Object.entries(serviceConfigurationPreview.displayServices).filter(([id]) =>
+            managed?.deployments[id]?.serviceType === serviceConfigurationPreview.deploymentTypes[id]),
+        ) }
+      : undefined;
+  const serviceConfigurationPreviewNotice = serviceConfigurationPreviewError || (coreProjectionReady
     ? ""
     : commandCount !== 0
       ? "Сохраните или отмените изменения проекта, чтобы получить Core-проекцию."
@@ -492,7 +507,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
           : !managed?.projectRevision
             ? "Core-проекция недоступна: ревизия проекта не определена. Сохраните проект."
             : serviceConfigurationPreviewError ||
-              "Получение Core-проекции для сохранённой ревизии. Тайм-аут запроса — 90 секунд. Актуальные вычисленные значения появятся после получения проекции.";
+              "Получение Core-проекции для сохранённой ревизии. Тайм-аут запроса — 90 секунд. Актуальные вычисленные значения появятся после получения проекции.");
 
   useEffect(() => {
     let live = true;
@@ -572,8 +587,8 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
 
   useEffect(() => {
     let live = true;
+    if (!projectOpen) setServiceConfigurationPreview(undefined);
     if (commandCount === 0) {
-      setServiceConfigurationPreview(undefined);
       setServiceConfigurationPreviewError("");
     }
     const revision = result.managed?.projectRevision;
@@ -630,7 +645,6 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
         if (live && value.diagnostic) {
           const { Code, SafeMessage } = value.diagnostic;
           const valid = /^[A-Z][A-Z0-9_]{0,95}$/u.test(Code) && typeof SafeMessage === "string" && SafeMessage.length <= 512;
-          setServiceConfigurationPreview(undefined);
           setServiceConfigurationPreviewError(valid
             ? `Core-проекция недоступна. Код: ${Code}. ${SafeMessage}`
             : "Core-проекция недоступна: некорректная диагностика ответа.");
@@ -651,17 +665,24 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
           value.projectRevision === revision &&
           value.runtimeDigest === runtimeDigest
         )
-          setServiceConfigurationPreview({
-            value,
-            root,
-            selectionKind,
-            selectedHostId,
-            safeLabel,
+          setServiceConfigurationPreview((previous) => {
+            const deploymentTypes = Object.fromEntries(Object.entries(result.managed?.deployments || {}).map(([id, item]) => [id, item.serviceType]));
+            const displayServices = previous?.root === root && previous.projectId === result.project?.id
+              ? Object.fromEntries(Object.entries(previous.displayServices).filter(([id]) =>
+                  deploymentTypes[id] && deploymentTypes[id] === previous.deploymentTypes[id])) : {};
+            for (const [id, service] of Object.entries(value.services)) {
+              const old = displayServices[id];
+              const members = { ...old?.members };
+              for (const [member, settings] of Object.entries(service.members))
+                members[member] = retainResolvedPreviewValues(members[member], settings);
+              displayServices[id] = { configuration: retainResolvedPreviewValues(old?.configuration, service.configuration), members };
+            }
+            return { value, displayServices, deploymentTypes, projectId: result.project?.id,
+              root, selectionKind, selectedHostId, safeLabel };
           });
       })
       .catch((reason: unknown) => {
         if (live) {
-          setServiceConfigurationPreview(undefined);
           const safeCode = String(reason).match(
             /\b(SERVICE_CONFIGURATION_PREVIEW_(?:UNAVAILABLE|UNSUPPORTED|STALE|RESPONSE_INVALID|INPUT_INVALID)|PROJECT_REVISION_CHANGED|EXECUTION_RUNTIME_IDENTITY_UNCONFIRMED)\b/,
           )?.[1];
@@ -913,7 +934,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   const nodeReadiness = lastNodeCheck?.binding === nodeCheckBinding(executionNode)
     ? lastNodeCheck.readiness : { status: executionNode?.status || "NOT_CONFIGURED" };
   const nodeStatus = executionNodeCombinedStatus(nodeReadiness, currentPreparation);
-  const showCoreStatus = executionReady && !coreProjectionReady &&
+  const showCoreStatus = executionReady && (!coreProjectionReady || !!serviceConfigurationPreviewError) &&
     (!currentPreparation || ["PREPARED", "READY"].includes(currentPreparation.status));
   const coreUnavailable = !executionNode?.runtimeDigest || !managed?.projectRevision;
   const nodeDisplayStatus: ExecutionNodeCombinedStatus = showCoreStatus
@@ -2046,7 +2067,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
           }
         : current,
     );
-    if (readiness.status === "READY" && !coreProjectionReady) {
+    if (readiness.status === "READY" && (!coreProjectionReady || serviceConfigurationPreviewError)) {
       if (serviceConfigurationPreviewError)
         servicePreviewRequests.current.clear();
       setServicePreviewAttempt((value) => value + 1);
@@ -2707,7 +2728,6 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
                 managed={managed}
                 catalog={result.catalog}
                 effectivePreview={visibleServiceConfigurationPreview}
-                previewHasDraft={commandCount !== 0}
                 corePreviewNotice={serviceConfigurationPreviewNotice}
                 deploymentIntents={intents.filter(
                   (intent): intent is DeploymentIntent =>

@@ -878,7 +878,7 @@ func TestUnknownServiceSettingVerificationFindingNamesSafeProperty(t *testing.T)
 	if findings[0].Summary != "Неизвестный параметр конфигурации «healthcheckCredential» у сервиса «qa-postgresql»." {
 		t.Fatalf("safe property missing: %#v", findings[0])
 	}
-	if findings[1].Summary != fallback {
+	if findings[1].Summary != projectFindingMessagesRU["SERVICE_CONFIGURATION_PROPERTY_UNKNOWN"] {
 		t.Fatalf("unsafe property appeared in UI finding: %#v", findings[1])
 	}
 }
@@ -909,7 +909,7 @@ func TestMissingServiceSecretFindingNamesOnlySafeInstanceAndSetting(t *testing.T
 				if !strings.Contains(findings[0].Summary, "«kafka-two»") || !strings.Contains(findings[0].Summary, "«replicationCredential»") {
 					t.Fatal("instance or parameter hardcoded")
 				}
-			} else if findings[0].Summary != fallback {
+			} else if findings[0].Summary != projectFindingMessagesRU["RUNTIME_SECRET_REFERENCE_REQUIRED"] {
 				t.Fatalf("unsafe field reflected: %#v", findings[0])
 			}
 			if strings.Contains(findings[0].Summary, "must-not-appear") {

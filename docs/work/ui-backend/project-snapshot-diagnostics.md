@@ -265,3 +265,39 @@ Nonblocking SSR-N01 (duplicate intent on reopening) and SSR-N02 (promotion
 documentation wording) were resolved in this reviewed change. Real React/Wails
 acceptance with an updated bundle and visual inspection remain OPEN. Delivery
 requires updated Installer and runtime bundle for the mode-metadata correction.
+
+## Retain displayed Core values through refresh/errors and localize findings
+
+Owner requested that previously resolved data directories remain visible during
+Core refresh, invalid Project Verify and incomplete Core output, without adding
+last-calculation labels. App keeps display values alongside the unmodified latest
+Core response in the existing observation state. Successful resolved values
+replace the display value; absent/deferred fields retain previously resolved
+values. Deployment and member settings are both merged. Root/project identity
+and deployment type guard reuse; another project cannot inherit the displayed
+values. Explicit pending overrides retain precedence in the editor. The latest
+response, not the display merge, remains the basis of current-projection checks.
+No display cache is sent to Core or used to authorize plan approval/Start.
+Technical failures remain visible and retryable even if a matching earlier
+response exists. The existing Core notice now states only that values came
+from Core; it does not claim all displayed fields match the latest revision.
+
+Owner also requested code plus Russian description for every project finding.
+Existing desktop diagnostics now contain Russian descriptions for all literal
+finding codes published by the current Core module_utils/action sources and the
+generated HAProxy boolean/count codes. A coverage test fails when a published
+literal code lacks a translation. The code/severity remain unchanged. Safe
+logical field paths identify affected settings; malformed/private paths are
+excluded and output remains bounded. Native Russian stage/cause diagnostics
+are preserved; unknown future codes receive a Russian fallback with their code,
+without raw English/parser output. HAProxy's missing endpoint identity and
+certificate SAN mismatch retain distinct explanations.
+
+Validation: App98 PASS, including delayed and failed refresh, empty/deferred
+results retaining dataDirectory, new results replacing it, INVALID verification
+remaining visible and project isolation. Frontend typecheck/lint/build PASS.
+Go tests/vet PASS, including translation coverage, exact screenshot codes,
+unknown-code fallback, Russian stage preservation and safe setting details.
+Real React/Wails and visual acceptance remain OPEN. These presentation changes
+require an updated Installer only. TLS default/profile-selection policy is a
+separate owner discussion; it is not changed by this patch.

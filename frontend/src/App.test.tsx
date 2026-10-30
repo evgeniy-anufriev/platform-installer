@@ -2477,7 +2477,7 @@ describe("UI-01H2 services navigation and safe settings", () => {
     expect(await screen.findByText("По умолчанию: 5")).toBeTruthy();
     expect(
       screen.getByText(
-        "Значения получены из Core для текущей сохранённой ревизии. Это не проверка проекта.",
+        "Значения получены из Core. Это не проверка проекта.",
       ),
     ).toBeTruthy();
     expect(
@@ -2623,7 +2623,7 @@ describe("UI-01H2 services navigation and safe settings", () => {
     await userEvent.click(screen.getByRole("button", { name: "Проверить" }));
     await waitFor(() => expect(value.getServiceConfigurationPreview).toHaveBeenCalledTimes(2));
     expect(screen.getByRole("heading", { name: "Параметры сервиса" })).toBeTruthy();
-    expect(screen.queryByText("По умолчанию: 5")).toBeNull();
+    expect(screen.getByText("По умолчанию: 5")).toBeTruthy();
     for (const name of ["Сервисы", "Приложения", "Установка"])
       expect(screen.getByRole("button", { name })).toHaveProperty("disabled", false);
     await act(async () => complete({ diagnostic: { Code: "CORE_OPERATION_FAILED", SafeMessage: "Core operation failed" } }));
@@ -2647,9 +2647,12 @@ describe("UI-01H2 services navigation and safe settings", () => {
   });
 
   it("requires the first successful projection again when another project is opened", async () => {
+    let complete!: (result: unknown) => void;
     const value = api({ getServiceConfigurationPreview: vi.fn()
-      .mockResolvedValueOnce({ projectRevision: "sha256:old", runtimeDigest: "sha256:runtime-a", services: {} })
-      .mockImplementation(() => new Promise(() => {})) });
+      .mockResolvedValueOnce({ projectRevision: "sha256:old", runtimeDigest: "sha256:runtime-a", services: {
+        "kafka-main": { configuration: { replicaCount: { state: "RESOLVED", source: "ROLE_DEFAULT", value: 5 } }, members: {} },
+      } })
+      .mockImplementation(() => new Promise((resolve) => { complete = resolve; })) });
     value.chooseProject.mockResolvedValueOnce(project)
       .mockResolvedValueOnce({ ...project, root: "C:/Projects/another" });
     render(<App api={value} />);
@@ -2659,6 +2662,46 @@ describe("UI-01H2 services navigation and safe settings", () => {
     await waitFor(() => expect(value.getServiceConfigurationPreview).toHaveBeenCalledTimes(2));
     for (const name of ["Сервисы", "Приложения", "Установка"])
       expect(screen.getByRole("button", { name })).toHaveProperty("disabled", true);
+    await act(async () => complete({ projectRevision: "sha256:old", runtimeDigest: "sha256:runtime-a", services: {} }));
+    await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
+    await userEvent.click(screen.getByRole("button", { name: /^kafka-main/ }));
+    expect(screen.queryByText("По умолчанию: 5")).toBeNull();
+  });
+
+  it("retains dataDirectory through project errors and incomplete refreshes, then replaces it with a new Core value", async () => {
+    let digest = "sha256:runtime-a";
+    const pathProject = { ...project, catalog: { ...project.catalog, services: project.catalog.services.map((service) =>
+      service.id === "kafka" ? { ...service, configurationSettings: [...service.configurationSettings,
+        { id: "dataDirectory", label: "Каталог данных", kind: "MANAGED", scopes: ["deployment"], editorShape: "BOUNDED_STRING", minLength: 1, maxLength: 255, staticDefaultState: "DEFERRED" },
+      ] } : service) } };
+    const scope = (state: string, value?: string) => ({ "kafka-main": { configuration: { dataDirectory: { state, source: "ROLE_DEFAULT", value } }, members: {} } });
+    const value = api({
+      getExecutionNodeContext: vi.fn().mockImplementation(async () => ({ status: "READY", selectionKind: "PROJECT_SERVER", selectedHostId: "node1", runtimeDigest: digest })),
+      checkExecutionNode: vi.fn().mockResolvedValue({ status: "READY" }),
+      verifyProject: vi.fn().mockResolvedValue({ status: "INVALID", projectRevision: "sha256:old", findings: [{ code: "DNS_ZONE_INVALID", severity: "BLOCKED", summary: "Некорректная зона DNS" }] }),
+      getServiceConfigurationPreview: vi.fn()
+        .mockResolvedValueOnce({ projectRevision: "sha256:old", runtimeDigest: "sha256:runtime-a", services: scope("RESOLVED", "/var/lib/kafka") })
+        .mockResolvedValueOnce({ projectRevision: "sha256:old", runtimeDigest: "sha256:runtime-b", services: {} })
+        .mockResolvedValueOnce({ projectRevision: "sha256:old", runtimeDigest: "sha256:runtime-c", services: scope("DEFERRED") })
+        .mockResolvedValueOnce({ projectRevision: "sha256:old", runtimeDigest: "sha256:runtime-d", services: scope("RESOLVED", "/srv/kafka") }),
+    });
+    await openServers(value, pathProject as unknown as OpenResult);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Сервисы" })).toHaveProperty("disabled", false));
+    await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
+    await userEvent.click(screen.getByRole("button", { name: /^kafka-main/ }));
+    expect(screen.getByRole("textbox", { name: "Каталог данных" })).toHaveProperty("value", "/var/lib/kafka");
+    await userEvent.click(screen.getByRole("button", { name: "Проверить" }));
+    expect(await screen.findByRole("button", { name: "Ошибки проверки" })).toBeTruthy();
+    expect(screen.getByRole("textbox", { name: "Каталог данных" })).toHaveProperty("value", "/var/lib/kafka");
+    for (const [index, next] of ["b", "c", "d"].entries()) {
+      digest = `sha256:runtime-${next}`;
+      await userEvent.click(screen.getByRole("button", { name: "Серверы" }));
+      await userEvent.click(screen.getByRole("button", { name: "Проверить узел" }));
+      await waitFor(() => expect(value.getServiceConfigurationPreview).toHaveBeenCalledTimes(index + 2));
+      await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
+      expect(screen.getByRole("textbox", { name: "Каталог данных" })).toHaveProperty("value", next === "d" ? "/srv/kafka" : "/var/lib/kafka");
+      expect(screen.getByRole("button", { name: "Ошибки проверки" })).toBeTruthy();
+    }
   });
 
   it("keeps sections blocked on a stale Core projection and offers a retry", async () => {
@@ -3019,7 +3062,7 @@ describe("UI-01H2 services navigation and safe settings", () => {
     expect(screen.queryByText(/Ссылки добавлены в черновик/)).toBeNull();
     expect(screen.queryByText("not-persisted")).toBeNull();
     expect(screen.getByRole("textbox", { name: "Каталог данных" })).toHaveProperty("value", "/data/redis-main");
-    expect(screen.getByText(/Показан расчёт Core для сохранённой версии/)).toBeTruthy();
+    expect(screen.getByText("Значения получены из Core. Это не проверка проекта.")).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: "Секреты" }));
     await userEvent.type(screen.getByLabelText("Redis password"), "replacement-only-in-memory");
     await userEvent.click(screen.getByRole("button", { name: "Сохранить в сессии" }));

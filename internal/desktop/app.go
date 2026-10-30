@@ -229,6 +229,7 @@ type runtimeSecretDescriptorEvidence struct {
 var runtimeSecretDescriptorRequirement = regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`)
 var runtimeSecretUsername = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,62}$`)
 var verificationSettingName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]{0,127}$`)
+var verificationFindingField = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_.\[\]-]{0,255}$`)
 
 type App struct {
 	ctx              context.Context
@@ -705,7 +706,13 @@ func safeVerificationFindings(findings []map[string]any) ([]VerificationFinding,
 		if code == "" || message == "" {
 			continue
 		}
-		finding := VerificationFinding{Code: code, Summary: message, Severity: boundedFindingString(raw["status"], 32)}
+		finding := VerificationFinding{Code: code, Summary: projectFindingMessageRU(code, message), Severity: boundedFindingString(raw["status"], 32)}
+		if field := boundedFindingString(raw["field"], 256); code != "RUNTIME_SECRET_REFERENCE_REQUIRED" && verificationFindingField.MatchString(field) {
+			detail := " Параметр: «" + field + "»."
+			if len(finding.Summary)+len(detail) <= 512 {
+				finding.Summary += detail
+			}
+		}
 		if code == "RUNTIME_SECRET_REFERENCE_REQUIRED" {
 			// Core already identifies the missing setting. Render only its closed
 			// public field path; never include configuration values in diagnostics.

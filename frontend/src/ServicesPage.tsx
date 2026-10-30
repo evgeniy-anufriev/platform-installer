@@ -382,7 +382,6 @@ export function ServicesPage({
   managed,
   catalog,
   effectivePreview,
-  previewHasDraft = false,
   corePreviewNotice,
   deploymentIntents,
   placementIntents,
@@ -412,7 +411,6 @@ export function ServicesPage({
   managed: OpenResult["managed"];
   catalog: OpenResult["catalog"];
   effectivePreview?: ServiceConfigurationPreview;
-  previewHasDraft?: boolean;
   corePreviewNotice?: string;
   deploymentIntents: DeploymentIntent[];
   placementIntents: PlacementIntent[];
@@ -869,9 +867,7 @@ export function ServicesPage({
             )}
           {effectivePreview?.services[selected.deploymentId] && (
             <p className="muted" role="status">
-              {previewHasDraft
-                ? "Показан расчёт Core для сохранённой версии. Изменения черновика ещё не рассчитаны."
-                : "Значения получены из Core для текущей сохранённой ревизии. Это не проверка проекта."}
+              Значения получены из Core. Это не проверка проекта.
             </p>
           )}
           {!service ? (
