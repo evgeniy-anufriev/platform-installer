@@ -13422,7 +13422,7 @@ func (a *CommandAdapter) BuildSnapshot(ctx context.Context, projectRoot string, 
 }
 
 @@END
-@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":109705,"sha256":"b53650f7b79c90f49cb46a1ec56d1457af91b48cf4adc6ca0fb77543dda04f56","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48157}
+@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":110475,"sha256":"53b9ece3f6373793f1ca5649a08fea65affb6d44df8b6f737ebc2e6a9e870706","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48254}
 package desktop
 
 import (
@@ -14131,6 +14131,15 @@ func safeVerificationFindings(findings []map[string]any) ([]VerificationFinding,
 			continue
 		}
 		finding := VerificationFinding{Code: code, Summary: message, Severity: boundedFindingString(raw["status"], 32)}
+		if code == "RUNTIME_SECRET_REFERENCE_REQUIRED" {
+			// Core already identifies the missing setting. Render only its closed
+			// public field path; never include configuration values in diagnostics.
+			field := boundedFindingString(raw["field"], 256)
+			parts := strings.Split(field, ".")
+			if len(parts) == 4 && parts[0] == "serviceDeployments" && parts[2] == "configuration" && runtimeSecretDescriptorRequirement.MatchString(parts[1]) && verificationSettingName.MatchString(parts[3]) {
+				finding.Summary = "У экземпляра сервиса «" + parts[1] + "» не задана обязательная ссылка на секрет в параметре «" + parts[3] + "». Настройте секрет и сохраните проект."
+			}
+		}
 		if code == "SERVICE_CONFIGURATION_PROPERTY_UNKNOWN" {
 			if details, ok := raw["safeDetails"].(map[string]any); ok {
 				property := boundedFindingString(details["property"], 128)
@@ -14520,7 +14529,10 @@ func (a *App) pendingRuntimeSecretDescriptorsLocked(serviceDeployment string) ([
 }
 
 func (a *App) secretOutputEncryptionRequiredLocked() bool {
-	if a.current.Managed == nil || a.current.Catalog == nil || a.current.Catalog.Status != "READY" {
+	if a.current.Managed == nil
+@@END
+@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":110475,"sha256":"53b9ece3f6373793f1ca5649a08fea65affb6d44df8b6f737ebc2e6a9e870706","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":50268}
+ || a.current.Catalog == nil || a.current.Catalog.Status != "READY" {
 		return false
 	}
 	declared := make(map[string]bool, len(a.current.Catalog.Services))
@@ -14537,10 +14549,7 @@ func (a *App) secretOutputEncryptionRequiredLocked() bool {
 
 func (a *App) secretOutputEncryptionPasswordPresentLocked() bool {
 	binding, err := a.credentialBindingLocked()
-	return err == nil && a.secrets.HasOutputE
-@@END
-@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":109705,"sha256":"b53650f7b79c90f49cb46a1ec56d1457af91b48cf4adc6ca0fb77543dda04f56","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":50595}
-ncryptionPassword(binding)
+	return err == nil && a.secrets.HasOutputEncryptionPassword(binding)
 }
 
 // GetRuntimeSecretDescriptors is a target-free Core query. It exposes only
@@ -15498,7 +15507,10 @@ func projectErrorMessage(code string) string {
 	case "TARGET_HOST_KEY_APPROVAL_STALE":
 		return "Отпечаток целевого сервера устарел. Получите его снова и сверьте независимо."
 	case "TARGET_HOST_TRUST_REQUIRED":
-		return "Перед запуском подтвердите SSH-ключ каждого целевого сервера на странице Серверы."
+		return "Перед запуском подтвердите SSH-ключ
+@@END
+@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":110475,"sha256":"53b9ece3f6373793f1ca5649a08fea65affb6d44df8b6f737ebc2e6a9e870706","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":11953}
+ каждого целевого сервера на странице Серверы."
 	case "TARGET_HOST_TRUST_INVALID":
 		return "Подтверждённые SSH-ключи не соответствуют адресам текущего плана. Запуск заблокирован."
 	case "EXECUTION_NODE_BINDING_INVALID":
@@ -15509,10 +15521,7 @@ func projectErrorMessage(code string) string {
 		return "Сначала сохраните или отмените несохранённые изменения проекта."
 	case "PROJECT_REVISION_UNAVAILABLE":
 		return "Не удалось безопасно прочитать сохранённую ревизию проекта."
-	case "RUNTIME_SECRET_DESCRIPTOR_N
-@@END
-@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":109705,"sha256":"b53650f7b79c90f49cb46a1ec56d1457af91b48cf4adc6ca0fb77543dda04f56","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":10953}
-OT_FOUND":
+	case "RUNTIME_SECRET_DESCRIPTOR_NOT_FOUND":
 		return "Для выбранного сервиса в текущем режиме секреты не требуются."
 	case "RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE":
 		return "Не удалось получить требования к секретам от Core на узле выполнения. Проверьте доступность узла и повторите запуск этого плана; секреты не удалены."

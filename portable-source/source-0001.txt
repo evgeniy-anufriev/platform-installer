@@ -86472,7 +86472,7 @@ catalogLock:
 })();
 
 @@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":130479,"sha256":"388e531738eb43a755ab104714ad8f964074756e76ef0e8676cb62269239dd22","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49783}
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":130678,"sha256":"9a7ddcd0355c1a5a3cd8e804977913fa6e794ff1f8fbfb4adc794e7b54436b1c","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49783}
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   EditResult,
@@ -87842,7 +87842,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             void api
               .getInstall
 @@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":130479,"sha256":"388e531738eb43a755ab104714ad8f964074756e76ef0e8676cb62269239dd22","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49719}
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":130678,"sha256":"9a7ddcd0355c1a5a3cd8e804977913fa6e794ff1f8fbfb4adc794e7b54436b1c","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49750}
 ationRun(activeRunIdRef.current)
               .then(setInstallationRun)
               .catch(() => {});
@@ -88737,14 +88737,16 @@ ationRun(activeRunIdRef.current)
               </div>
             )}
             {projectOpen &&
-              (verification.error ? (
+              (verification.error || verification.status === "INVALID" ? (
                 <button
-                  className="readonly outline"
+                  className="status-chip status-chip--danger"
                   type="button"
                   onClick={() => requestPage("project")}
-                  title={verificationErrorMessage(verification.error.code)}
+                  title={verification.error
+                    ? verificationErrorMessage(verification.error.code)
+                    : "Открыть замечания проверки проекта"}
                 >
-                  {verificationLabel(verification.status, true)}
+                  {verificationLabel(verification.status, !!verification.error)}
                 </button>
               ) : (
                 <div className="readonly">
@@ -89180,12 +89182,12 @@ ationRun(activeRunIdRef.current)
                     intent.operation === "UpdateCertificateAuthority" ||
                     intent.operation === "DeleteCertificateAuthority" ||
                     intent.operation === "CreateCertificateProfile" ||
-                    intent.operation === "UpdateCertificateProfile" ||
-                    intent.operation === "DeleteCertificateProfile" ||
-                    intent.operation === "Crea
+                    
 @@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":130479,"sha256":"388e531738eb43a755ab104714ad8f964074756e76ef0e8676cb62269239dd22","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":30977}
-teTLSProfile" ||
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":130678,"sha256":"9a7ddcd0355c1a5a3cd8e804977913fa6e794ff1f8fbfb4adc794e7b54436b1c","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":31145}
+intent.operation === "UpdateCertificateProfile" ||
+                    intent.operation === "DeleteCertificateProfile" ||
+                    intent.operation === "CreateTLSProfile" ||
                     intent.operation === "UpdateTLSProfile" ||
                     intent.operation === "DeleteTLSProfile" ||
                     intent.operation === "CreateCertificateScope" ||
