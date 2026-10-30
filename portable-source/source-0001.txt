@@ -86472,7 +86472,7 @@ catalogLock:
 })();
 
 @@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":130047,"sha256":"e4ea0c8ae6b07c527de3fcb9e8ff5b2005029be8fb74c23b3b6e82c167ae9f86","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49783}
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":130479,"sha256":"388e531738eb43a755ab104714ad8f964074756e76ef0e8676cb62269239dd22","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49783}
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   EditResult,
@@ -87842,7 +87842,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             void api
               .getInstall
 @@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":130047,"sha256":"e4ea0c8ae6b07c527de3fcb9e8ff5b2005029be8fb74c23b3b6e82c167ae9f86","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49719}
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":130479,"sha256":"388e531738eb43a755ab104714ad8f964074756e76ef0e8676cb62269239dd22","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49719}
 ationRun(activeRunIdRef.current)
               .then(setInstallationRun)
               .catch(() => {});
@@ -89184,7 +89184,7 @@ ationRun(activeRunIdRef.current)
                     intent.operation === "DeleteCertificateProfile" ||
                     intent.operation === "Crea
 @@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":130047,"sha256":"e4ea0c8ae6b07c527de3fcb9e8ff5b2005029be8fb74c23b3b6e82c167ae9f86","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":30545}
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":130479,"sha256":"388e531738eb43a755ab104714ad8f964074756e76ef0e8676cb62269239dd22","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":30977}
 teTLSProfile" ||
                     intent.operation === "UpdateTLSProfile" ||
                     intent.operation === "DeleteTLSProfile" ||
@@ -89512,6 +89512,11 @@ function ProjectPage({
   exportAvailable: boolean;
   onExport: () => void;
 }) {
+  const checked =
+    ["VERIFIED", "INVALID"].includes(verification.status) &&
+    !!verification.projectRevision &&
+    verification.projectRevision === managed?.projectRevision;
+  const findings = checked || verification.error ? verification.findings || [] : [];
   const bundleCard = (
     <section className="card" aria-label="Набор установки">
       <h2>Набор установки</h2>
@@ -89686,10 +89691,8 @@ function ProjectPage({
         <Stat
           label="Замечания проверки"
           value={
-            snapshot?.projectRevision === managed?.projectRevision &&
-            ["VERIFIED", "INVALID"].includes(verification.status) &&
-            snapshot?.findings
-              ? snapshot.findings.length
+            checked
+              ? findings.length
               : "Не проверено"
           }
         />
@@ -89709,11 +89712,15 @@ function ProjectPage({
             {verificationErrorMessage(verification.error.code)}
           </p>
         )}
-        {verification.error && verification.findings?.map((finding, index) => (
-          <p className="field-error" role="status" key={`${finding.code}-${index}`}>
-            {finding.summary}
+        {findings.map((finding, index) => (
+          <p className={finding.severity === "BLOCKED" ? "field-error" : undefined} role="status" key={`${finding.code}-${index}`}>
+            [{finding.severity}] {finding.code}: {finding.summary}
+            {finding.subjectId && ` (${finding.subjectKind || "Объект"}: ${finding.subjectId})`}
           </p>
         ))}
+        {verification.findingsTruncated && findings.length > 0 && (
+          <p role="status">Показана часть замечаний проверки.</p>
+        )}
         <button onClick={onServers}>Открыть серверы</button>
         <button
           className="outline"

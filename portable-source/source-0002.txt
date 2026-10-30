@@ -13422,7 +13422,7 @@ func (a *CommandAdapter) BuildSnapshot(ctx context.Context, projectRoot string, 
 }
 
 @@END
-@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":109922,"sha256":"3883d06750155b81dc5e932bc085da218cbe44186146da07b83fb35923c39709","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48157}
+@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":109705,"sha256":"b53650f7b79c90f49cb46a1ec56d1457af91b48cf4adc6ca0fb77543dda04f56","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48157}
 package desktop
 
 import (
@@ -14539,7 +14539,7 @@ func (a *App) secretOutputEncryptionPasswordPresentLocked() bool {
 	binding, err := a.credentialBindingLocked()
 	return err == nil && a.secrets.HasOutputE
 @@END
-@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":109922,"sha256":"3883d06750155b81dc5e932bc085da218cbe44186146da07b83fb35923c39709","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":50487}
+@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":109705,"sha256":"b53650f7b79c90f49cb46a1ec56d1457af91b48cf4adc6ca0fb77543dda04f56","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":50595}
 ncryptionPassword(binding)
 }
 
@@ -14851,19 +14851,14 @@ func (a *App) GetExecutionNodeContext() (ExecutionNodeContext, error) {
 	if a.current.Status != "OPEN" || a.current.Project == nil {
 		return ExecutionNodeContext{}, errors.New("PROJECT_NOT_OPEN")
 	}
-	// A draft cannot authorize execution, but merely rendering its node panel
-	// must not revoke verification evidence for the still-saved revision.
-	if a.activeSession == "" && a.binding != nil && a.binding.dynamic {
-		_, _ = a.resolveSelectedExecutionNodeBindingLocked()
-	}
+	// Rendering a draft must retain evidence for the saved node, while still
+	// rejecting expired credentials or changed saved transport/runtime inputs.
+	binding, bindingErr := a.resolveSavedExecutionConnectionLocked()
+	binding, bindingErr = a.validateSelectedExecutionBundleLocked(binding, bindingErr)
 	context := a.execution.context
-	// Revalidating a dynamic binding while a draft is open may revoke the
-	// verification of the still-saved revision. The draft is not executable.
-	if a.activeSession == "" && context.Status == "READY" {
-		if binding, err := a.resolveSelectedExecutionNodeBindingLocked(); err == nil {
-			if digest, ok := binding.reader.runtimeRelease["bundleDigest"].(string); ok {
-				context.RuntimeDigest = digest
-			}
+	if bindingErr == nil && context.Status == "READY" {
+		if digest, ok := binding.reader.runtimeRelease["bundleDigest"].(string); ok {
+			context.RuntimeDigest = digest
 		}
 	}
 	return context, nil
@@ -15370,7 +15365,7 @@ func (a *App) GetServiceConfigurationPreview() (result executionnode.ServiceConf
 	a.editMu.Lock()
 	defer a.editMu.Unlock()
 	after, err := installer.ProjectRevision(root)
-	if err != nil || a.current.Status != "OPEN" || a.current.Root != root || a.current.Managed == nil || a.current.Catalog == nil || a.current.Catalog.Status != "READY" || a.current.Managed.ProjectRevision != revision || after != revision || preview.ProjectRevision != revision || !runtimeEvidenceMatchesExpected(preview.Runtime, binding.reader.runtimeRelease) || a.revalidateBindingBeforePublicationLocked(binding) != nil {
+	if err != nil || a.current.Status != "OPEN" || a.current.Root != root || a.current.Managed == nil || a.current.Catalog == nil || a.current.Catalog.Status != "READY" || a.current.Managed.ProjectRevision != revision || after != revision || preview.ProjectRevision != revision || !runtimeEvidenceMatchesExpected(preview.Runtime, binding.reader.runtimeRelease) || a.revalidateSavedPreviewBindingLocked(binding) != nil {
 		return executionnode.ServiceConfigurationPreview{}, errors.New("SERVICE_CONFIGURATION_PREVIEW_STALE")
 	}
 	for deploymentID, scoped := range preview.Services {
@@ -15511,13 +15506,13 @@ func projectErrorMessage(code string) string {
 	case "EXECUTION_BUNDLE_UNAVAILABLE":
 		return "Для проекта нет одного совместимого проверенного runtime bundle."
 	case "PROJECT_CHANGES_UNSAVED":
-	
-@@END
-@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":109922,"sha256":"3883d06750155b81dc5e932bc085da218cbe44186146da07b83fb35923c39709","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":11278}
-	return "Сначала сохраните или отмените несохранённые изменения проекта."
+		return "Сначала сохраните или отмените несохранённые изменения проекта."
 	case "PROJECT_REVISION_UNAVAILABLE":
 		return "Не удалось безопасно прочитать сохранённую ревизию проекта."
-	case "RUNTIME_SECRET_DESCRIPTOR_NOT_FOUND":
+	case "RUNTIME_SECRET_DESCRIPTOR_N
+@@END
+@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":109705,"sha256":"b53650f7b79c90f49cb46a1ec56d1457af91b48cf4adc6ca0fb77543dda04f56","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":10953}
+OT_FOUND":
 		return "Для выбранного сервиса в текущем режиме секреты не требуются."
 	case "RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE":
 		return "Не удалось получить требования к секретам от Core на узле выполнения. Проверьте доступность узла и повторите запуск этого плана; секреты не удалены."
@@ -17896,7 +17891,7 @@ func (s *executionNodeContextStore) selectProjectServer(hostID string) error {
 }
 
 @@END
-@@PORTABLE {"path":"internal/desktop/execution_node_readiness.go","mode":420,"size":15101,"sha256":"af39185b948abd28489a19305a394239323a585bf8bc06b881f4ec29d8474cd7","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":15101}
+@@PORTABLE {"path":"internal/desktop/execution_node_readiness.go","mode":420,"size":16204,"sha256":"21865d7007456def6b0d6444584b73fc869963ebc81e8aa93e9385e2b1e8da90","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":16204}
 package desktop
 
 import (
@@ -18005,7 +18000,11 @@ type verificationContinuation struct {
 
 func (a *App) resolveSelectedExecutionNodeBindingLocked(scope ...sshpassword.Scope) (*executionNodeBinding, error) {
 	binding, err := a.resolveTrustedExecutionConnectionLocked(scope...)
-	if err != nil || binding.bundleRoot == "" {
+	return a.validateSelectedExecutionBundleLocked(binding, err)
+}
+
+func (a *App) validateSelectedExecutionBundleLocked(binding *executionNodeBinding, err error) (*executionNodeBinding, error) {
+	if err != nil || binding == nil || binding.bundleRoot == "" {
 		return nil, errors.New("BINDING_REQUIRED")
 	}
 	if binding.dynamic {
@@ -18021,11 +18020,22 @@ func (a *App) resolveSelectedExecutionNodeBindingLocked(scope ...sshpassword.Sco
 // resolve an already-known run, but cannot authorize Core/plan/Start without
 // resolveSelectedExecutionNodeBindingLocked's runtime release check.
 func (a *App) resolveTrustedExecutionConnectionLocked(scope ...sshpassword.Scope) (*executionNodeBinding, error) {
+	// Editing blocks operations, but is not evidence that SSH trust or runtime
+	// preparation has been lost.
+	if a.activeSession != "" {
+		return nil, errors.New("BINDING_REQUIRED")
+	}
+	return a.resolveSavedExecutionConnectionLocked(scope...)
+}
+
+// For local presentation and publication of an already requested saved Core
+// preview only. All credential, endpoint and host-key checks remain mandatory.
+func (a *App) resolveSavedExecutionConnectionLocked(scope ...sshpassword.Scope) (*executionNodeBinding, error) {
 	if a.binding == nil || a.binding.service == nil || a.binding.reader.transport == nil || a.binding.node.ID == "" {
 		return nil, errors.New("BINDING_REQUIRED")
 	}
 	if a.binding.dynamic {
-		id, address, port, err := a.selectedSavedExecutionServerLocked()
+		id, address, port, err := a.savedExecutionServerLocked()
 		if err != nil || id != a.binding.node.ID || address != a.binding.node.Address || port != a.binding.node.Port {
 			a.invalidateDynamicBindingLocked()
 			return nil, errors.New("BINDING_REQUIRED")
@@ -18076,6 +18086,9 @@ func (a *App) resolveTrustedExecutionConnectionLocked(scope ...sshpassword.Scope
 // A long remote call may outlive its session credential. Never publish its
 // result unless the same private binding is still current after the call.
 func (a *App) revalidateBindingBeforePublicationLocked(binding *executionNodeBinding) error {
+	if a.activeSession != "" {
+		return errors.New("BINDING_REQUIRED")
+	}
 	if !binding.dynamic {
 		return nil
 	}
@@ -18085,6 +18098,15 @@ func (a *App) revalidateBindingBeforePublicationLocked(binding *executionNodeBin
 		if a.binding != binding || credentialErr != nil || !a.secrets.HasRunExecutionIdentityHold(credentialBinding) {
 			a.invalidateDynamicBindingLocked()
 		}
+		return errors.New("BINDING_REQUIRED")
+	}
+	return nil
+}
+
+func (a *App) revalidateSavedPreviewBindingLocked(binding *executionNodeBinding) error {
+	current, err := a.resolveSavedExecutionConnectionLocked()
+	current, err = a.validateSelectedExecutionBundleLocked(current, err)
+	if err != nil || current != binding {
 		return errors.New("BINDING_REQUIRED")
 	}
 	return nil
@@ -18259,7 +18281,7 @@ func (a *App) PrepareExecutionNode(planID string) ExecutionNodePreparation {
 }
 
 @@END
-@@PORTABLE {"path":"internal/desktop/execution_node_ui_binding.go","mode":420,"size":17462,"sha256":"226306860e2e7e6bf1ab6a201a319d890b4a63d2aa2374c24a89940d660a4c54","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":17462}
+@@PORTABLE {"path":"internal/desktop/execution_node_ui_binding.go","mode":420,"size":17780,"sha256":"88bcf3a8de8aaaa101801bed1ab046ff66d8286b49abb2d332d362bd6c038632","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":17780}
 package desktop
 
 import (
@@ -18338,7 +18360,16 @@ func validExecutionAddress(value string) bool {
 }
 
 func (a *App) selectedSavedExecutionServerLocked() (string, string, uint16, error) {
-	if a.current.Status != "OPEN" || a.current.Managed == nil || a.activeSession != "" || a.execution.context.SelectionKind != "PROJECT_SERVER" {
+	if a.activeSession != "" {
+		return "", "", 0, errors.New("BINDING_REQUIRED")
+	}
+	return a.savedExecutionServerLocked()
+}
+
+// Reads only the saved server, including while a local draft is open. This is
+// presentation evidence, not permission to execute the draft.
+func (a *App) savedExecutionServerLocked() (string, string, uint16, error) {
+	if a.current.Status != "OPEN" || a.current.Managed == nil || a.execution.context.SelectionKind != "PROJECT_SERVER" {
 		return "", "", 0, errors.New("BINDING_REQUIRED")
 	}
 	id := a.execution.context.SelectedHostID
