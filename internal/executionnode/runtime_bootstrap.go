@@ -27,8 +27,9 @@ func runtimePreparationScripts(bundle executionbundle.Verified) (string, string)
 }
 
 const runtimePreparationCommon = `set -eu
-stage=$1; root=$2; bundle_digest=$3; bundle_version=$4; core_version=$5; protocol=$6; platforms=$7; bootstrap=$8
 fail() { printf '%s\n' "$1" >&2; exit 78; }
+[ "$#" = 8 ] || fail EXECUTION_RUNTIME_ARGUMENTS_INVALID
+stage=$1; root=$2; bundle_digest=$3; bundle_version=$4; core_version=$5; protocol=$6; platforms=$7; bootstrap=$8
 case "$stage:$root" in /var/tmp/platform-installer-bootstrap-*:/var/lib/platform-installer/runtime) ;; *) fail EXECUTION_BUNDLE_STAGE_INVALID ;; esac
 nonce=${stage##*-}
 id=${bundle_digest#sha256:}
@@ -78,7 +79,8 @@ const runtimeBootstrapPhase = `
 [ -d "$stage" ] && [ ! -L "$stage" ] || fail EXECUTION_BUNDLE_STAGE_INVALID
 [ ! -e "$candidate" ] && [ ! -L "$candidate" ] || fail EXECUTION_RUNTIME_CANDIDATE_EXISTS
 success=0
-cleanup() { if [ "$success" = 0 ]; then rm -rf -- "$candidate"; fi; }
+diagnostic_code=EXECUTION_RUNTIME_CANDIDATE_COPY_FAILED
+cleanup() { if [ "$success" = 0 ]; then printf '%s\n' "$diagnostic_code" >&2; rm -rf -- "$candidate"; fi; }
 trap cleanup EXIT
 trap 'exit 130' HUP INT TERM
 install -d -m 0700 "$candidate"
@@ -89,6 +91,7 @@ find "$candidate" -type d -exec chmod 0750 {} +
 find "$candidate" -type f -exec chmod 0640 {} +
 verify_bundle "$candidate" || fail EXECUTION_RUNTIME_CANDIDATE_INVALID
 if [ "$bootstrap" = 1 ]; then
+    diagnostic_code=EXECUTION_BOOTSTRAP_COMMAND_FAILED
     sh "$candidate/ansible-core/tools/bootstrap_execution_runtime.sh" "$candidate" "$platforms"
 else
     # Legacy bundles remain usable with manually installed prerequisites.
@@ -100,10 +103,12 @@ success=1
 const runtimeActivationPhase = `
 verify_bundle "$candidate" || fail EXECUTION_RUNTIME_CANDIDATE_INVALID
 created=0; switching=0; success=0
+diagnostic_code=EXECUTION_RUNTIME_STATE_INITIALIZATION_FAILED
 backup=$root/state/.prepare-$nonce
 [ ! -e "$backup" ] && [ ! -L "$backup" ] || fail EXECUTION_RUNTIME_BACKUP_EXISTS
 install -d -m 0700 "$backup"
 cleanup() {
+    if [ "$success" = 0 ]; then printf '%s\n' "$diagnostic_code" >&2; fi
     if [ "$success" = 0 ] && [ "$switching" = 1 ]; then
         if [ -L "$backup/current" ]; then mv -Tf -- "$backup/current" "$root/current"; else rm -f -- "$root/current"; fi
         if [ -f "$backup/active" ]; then mv -f -- "$backup/active" "$root/state/active"; else rm -f -- "$root/state/active"; fi
@@ -129,10 +134,13 @@ else
     mv -- "$candidate" "$release"
     created=1
 fi
+diagnostic_code=EXECUTION_RUNTIME_PYTHON_INITIALIZATION_FAILED
 env PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$release/ansible-core/tools" python3 -c 'from execution_secret_output import _directory; from execution_lifecycle import EXECUTION_STATE_ROOT; exec("with _directory(EXECUTION_STATE_ROOT, create=True):\n    pass")'
+diagnostic_code=EXECUTION_RUNTIME_CAPABILITY_CHECK_FAILED
 env PYTHONDONTWRITEBYTECODE=1 ANSIBLE_CONFIG="$release/ansible-core/ansible.cfg" ANSIBLE_COLLECTIONS_PATH="$release/ansible-core/collections" ansible-playbook -i localhost, "$release/ansible-core/playbooks/execution-capabilities.yml" -e "platform_execution_runtime_root=$release" -e "platform_execution_bundle_digest=$bundle_digest" >/dev/null
 printf 'BUNDLE_VERSION=%s\nBUNDLE_DIGEST=%s\nCORE_VERSION=%s\nPROTOCOL=%s\nANSIBLE=yes\nCAPABILITIES=yes\n' "$bundle_version" "$bundle_digest" "$core_version" "$protocol" > "$backup/new-active"
 ln -s -- "$release" "$backup/new-current"
+diagnostic_code=EXECUTION_RUNTIME_SWITCH_FAILED
 switching=1
 mv -Tf -- "$backup/new-current" "$root/current"
 mv -f -- "$backup/new-active" "$root/state/active"

@@ -460,6 +460,7 @@ export type RuntimeSecretDescriptorOperation = {
   error?: { code: string; message: string };
 };
 export type ServiceConfigurationPreview = {
+  diagnostic?: { Code: string; SafeMessage: string };
   apiVersion: string;
   kind: string;
   projectRevision: string;

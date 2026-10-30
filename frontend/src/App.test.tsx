@@ -2658,6 +2658,22 @@ describe("UI-01H2 services navigation and safe settings", () => {
     expect(value.verifyProject).not.toHaveBeenCalled();
   });
 
+  it("shows the structured Core preview failure without admitting it as a ready projection", async () => {
+    const cause = "Этап: загрузка каталога сервисов. Отсутствует обязательный документ.";
+    const value = api({ getServiceConfigurationPreview: vi.fn().mockResolvedValue({
+      diagnostic: { Code: "PROJECT_SNAPSHOT_INPUT_INVALID", SafeMessage: cause },
+    }) });
+    value.chooseProject.mockResolvedValue(project);
+    render(<App api={value} />);
+    await userEvent.click(screen.getByRole("button", { name: "Открыть папку проекта" }));
+    await userEvent.click(screen.getByRole("button", { name: "Серверы" }));
+    expect(await screen.findByText(new RegExp(cause))).toBeTruthy();
+    for (const name of ["Сервисы", "Приложения", "Установка"])
+      expect(screen.getByRole("button", { name })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "Открыть узел выполнения" }).textContent).toContain("Ошибка получения данных Core");
+    expect(value.verifyProject).not.toHaveBeenCalled();
+  });
+
   it("does not present an empty READY Core projection as resolved values", async () => {
     const value = api({
       getExecutionNodeContext: vi.fn().mockResolvedValue({

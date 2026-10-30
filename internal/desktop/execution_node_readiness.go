@@ -287,7 +287,12 @@ func (a *App) PlanExecutionNodePreparation() ExecutionNodePreparation {
 
 func preparationFailure(err error) ExecutionNodePreparation {
 	code := projectErrorCode(err)
-	return ExecutionNodePreparation{Status: "BLOCKED", Error: &ProjectOpenError{Code: code, Message: projectErrorMessage(code)}}
+	message := projectErrorMessage(code)
+	var diagnostic *executionnode.RuntimePreparationError
+	if errors.As(err, &diagnostic) {
+		message = diagnostic.Phase + ": " + diagnostic.Finding.SafeMessage + " Код: " + diagnostic.Finding.Code + "."
+	}
+	return ExecutionNodePreparation{Status: "BLOCKED", Error: &ProjectOpenError{Code: code, Message: message}}
 }
 
 // PrepareExecutionNode continues only the exact preparation plan generated for

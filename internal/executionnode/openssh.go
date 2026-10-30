@@ -438,7 +438,12 @@ func (t OpenSSHTransport) ActivateStagedRuntime(ctx context.Context, node Node, 
 			bootstrap = "1"
 		}
 	}
-	args := []string{"-n", "sh", "-s", "--", stage, t.runtimeRoot(), bundle.Digest, bundle.Manifest.BundleVersion, bundle.Manifest.CoreVersion, bundle.Manifest.BootstrapProtocol, strings.Join(platforms, " "), bootstrap}
+	args := []string{"-n", "sh", "-s", "--"}
+	// OpenSSH joins remote argv into a shell command. Keep the platform list
+	// as one positional argument, including when sudo password wrapping is used.
+	for _, value := range []string{stage, t.runtimeRoot(), bundle.Digest, bundle.Manifest.BundleVersion, bundle.Manifest.CoreVersion, bundle.Manifest.BootstrapProtocol, strings.Join(platforms, " "), bootstrap} {
+		args = append(args, shellLiteral(value))
+	}
 	complete := false
 	defer func() {
 		if !complete {
@@ -447,14 +452,20 @@ func (t OpenSSHTransport) ActivateStagedRuntime(ctx context.Context, node Node, 
 			_, _ = t.ssh(cleanupCtx, node, "sudo", []string{"-n", "sh", "-s", "--", stage}, []byte(runtimeCandidateCleanupScript))
 		}
 	}()
-	if _, err := t.ssh(ctx, node, "sudo", args, []byte(bootstrapScript)); err != nil {
-		return Runtime{}, err
+	if output, err := t.sshBounded(ctx, node, "sudo", args, []byte(bootstrapScript), 16384); err != nil {
+		if ctx.Err() != nil {
+			err = ctx.Err()
+		}
+		return Runtime{}, runtimePreparationFailure("bootstrap", output, err)
 	}
 	if err := ctx.Err(); err != nil {
 		return Runtime{}, err
 	}
-	if _, err := t.ssh(ctx, node, "sudo", args, []byte(activationScript)); err != nil {
-		return Runtime{}, err
+	if output, err := t.sshBounded(ctx, node, "sudo", args, []byte(activationScript), 16384); err != nil {
+		if ctx.Err() != nil {
+			err = ctx.Err()
+		}
+		return Runtime{}, runtimePreparationFailure("activation", output, err)
 	}
 	complete = true
 	return Runtime{BundleVersion: bundle.Manifest.BundleVersion, BundleDigest: bundle.Digest, CoreVersion: bundle.Manifest.CoreVersion, Protocol: bundle.Manifest.BootstrapProtocol, Ansible: true, Capabilities: true}, nil

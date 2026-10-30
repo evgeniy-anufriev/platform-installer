@@ -46,7 +46,9 @@ print(data,end='')
             "dnf": """#!/usr/bin/python3
 import json, os, pathlib, sys
 pathlib.Path(os.environ['TEST_CALLS']).write_text(json.dumps(sys.argv[1:]))
-if os.environ.get('TEST_DNF_FAIL') == '1': sys.exit(1)
+if os.environ.get('TEST_DNF_FAIL') == '1':
+    print(os.environ.get('TEST_DNF_OUTPUT', ''), file=sys.stderr)
+    sys.exit(1)
 state=pathlib.Path(os.environ['TEST_STATE']); installed=json.loads(state.read_text())
 for item in sys.argv[sys.argv.index('install')+1:]:
     installed.append(pathlib.Path(item).read_text() if item.endswith('.rpm') else item)
@@ -118,6 +120,21 @@ state.write_text(json.dumps(installed))
         result = self.run_bootstrap("redos:unsupported:x86_64")
         self.assertNotEqual(0, result.returncode)
         self.assertFalse(self.calls.exists())
+
+    def test_ansible_is_installed_automatically_with_multiple_platforms(self):
+        self.missing('ansible-core')
+        result = self.run_bootstrap(self.platform + ' redos:extra:x86_64')
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn('ansible-core', json.loads(self.calls.read_text()))
+        self.assertIn('ansible-core', json.loads(self.state.read_text()))
+
+    def test_repository_error_is_classified_without_raw_output(self):
+        self.missing('ansible-core')
+        self.environment.update(TEST_DNF_FAIL='1', TEST_DNF_OUTPUT='Curl error PRIVATE_TEST_SENTINEL')
+        result = self.run_bootstrap()
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn('EXECUTION_BOOTSTRAP_REPOSITORY_DOWNLOAD_FAILED', result.stderr)
+        self.assertNotIn('PRIVATE_TEST_SENTINEL', result.stderr + result.stdout)
 
 
 if __name__ == "__main__":

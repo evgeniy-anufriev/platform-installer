@@ -382,6 +382,8 @@ type ServiceConfigurationPreview struct {
 	// Core response; this is Wails presentation metadata, not a Core field.
 	RuntimeDigest string          `json:"runtimeDigest,omitempty"`
 	Runtime       RuntimeEvidence `json:"-"`
+	// Wails/browser-only safe failure metadata; not accepted from Core JSON.
+	Diagnostic *Finding `json:"diagnostic,omitempty"`
 }
 
 type ServiceConfigurationScope struct {
@@ -400,7 +402,10 @@ func (t OpenSSHTransport) BuildServiceConfigurationPreview(ctx context.Context, 
 		return ServiceConfigurationPreview{}, errors.New("SERVICE_CONFIGURATION_PREVIEW_INPUT_INVALID")
 	}
 	capabilities, err := t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": "platform.installer/execution-runtime/v1alpha1", "operation": "GetCapabilities"})
-	if err != nil || (capabilities["apiVersion"] != "platform.installer/execution-capabilities/v1alpha5" && capabilities["apiVersion"] != "platform.installer/execution-capabilities/v1alpha6") || !validServiceConfigurationPreviewCapability(capabilities["serviceConfigurationPreview"], capabilities["supportedOperations"]) {
+	if err != nil {
+		return ServiceConfigurationPreview{}, err
+	}
+	if !serviceConfigurationPreviewSupported(capabilities) {
 		return ServiceConfigurationPreview{}, errors.New("SERVICE_CONFIGURATION_PREVIEW_UNSUPPORTED")
 	}
 	runID, err := newRunID()
@@ -421,7 +426,7 @@ func (t OpenSSHTransport) BuildServiceConfigurationPreview(ctx context.Context, 
 	var result ServiceConfigurationPreview
 	decoder := json.NewDecoder(strings.NewReader(string(data)))
 	decoder.DisallowUnknownFields()
-	if decoder.Decode(&result) != nil || decoder.Decode(new(any)) != io.EOF || result.RuntimeDigest != "" || result.APIVersion != "platform.installer/service-configuration-preview/v1alpha1" || result.Kind != "ServiceConfigurationPreview" || !validSHA256(result.ProjectRevision) || result.Services == nil || len(result.Services) > 512 {
+	if decoder.Decode(&result) != nil || decoder.Decode(new(any)) != io.EOF || result.RuntimeDigest != "" || result.Diagnostic != nil || result.APIVersion != "platform.installer/service-configuration-preview/v1alpha1" || result.Kind != "ServiceConfigurationPreview" || !validSHA256(result.ProjectRevision) || result.Services == nil || len(result.Services) > 512 {
 		return ServiceConfigurationPreview{}, errors.New("SERVICE_CONFIGURATION_PREVIEW_RESPONSE_INVALID")
 	}
 	for deploymentID, service := range result.Services {

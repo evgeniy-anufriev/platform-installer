@@ -1894,7 +1894,14 @@ func (a *App) CurrentProject() ProjectOpenResult {
 
 // GetServiceConfigurationPreview obtains a read-only Core projection for the
 // exact saved revision. It neither changes Verify state nor creates a plan.
-func (a *App) GetServiceConfigurationPreview() (executionnode.ServiceConfigurationPreview, error) {
+func (a *App) GetServiceConfigurationPreview() (result executionnode.ServiceConfigurationPreview, failure error) {
+	defer func() {
+		if failure != nil {
+			finding := servicePreviewFailureFinding(failure)
+			result = executionnode.ServiceConfigurationPreview{Diagnostic: &finding}
+			failure = nil
+		}
+	}()
 	a.editMu.Lock()
 	// A draft is not a change of SSH identity. Do not send this read-only
 	// request through transport revalidation while the saved binding is gated

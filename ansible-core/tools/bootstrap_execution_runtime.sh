@@ -4,6 +4,17 @@ set -eu
 release=$1
 platforms=$2
 fail() { printf '%s\n' "$1" >&2; exit 78; }
+dnf_failure() {
+    case "$dnf_output" in
+        *'No space left on device'*) fail EXECUTION_BOOTSTRAP_DISK_FULL ;;
+        *'GPG check FAILED'*|*'GPG verification'*|*'Public key for'*) fail EXECUTION_BOOTSTRAP_PACKAGE_SIGNATURE_FAILED ;;
+        *'No match for argument'*|*'Unable to find a match'*) fail EXECUTION_BOOTSTRAP_PACKAGE_UNAVAILABLE ;;
+        *'nothing provides'*|*'conflicting requests'*|*'cannot install'*|*'conflicts with'*) fail EXECUTION_BOOTSTRAP_DEPENDENCY_RESOLUTION_FAILED ;;
+        *'Curl error'*|*'Failed to download'*|*'Cannot download'*|*'All mirrors were tried'*) fail EXECUTION_BOOTSTRAP_REPOSITORY_DOWNLOAD_FAILED ;;
+        *'Could not obtain lock'*|*'Failed to obtain'*'lock'*|*'another copy is running'*) fail EXECUTION_BOOTSTRAP_PACKAGE_MANAGER_BUSY ;;
+    esac
+    fail "$1"
+}
 [ "$(id -u)" = 0 ] || fail EXECUTION_BOOTSTRAP_NOT_ROOT
 [ -r /etc/os-release ] || fail EXECUTION_BOOTSTRAP_OS_RELEASE_MISSING
 . /etc/os-release
@@ -39,11 +50,11 @@ for package in $missing; do
     case " $local_names " in *" $package "*) ;; *) repository="$repository $package" ;; esac
 done
 if [ -z "$repository" ]; then
-    dnf -q -y --disablerepo='*' --setopt=install_weak_deps=False install "$@" >/dev/null 2>&1 || fail EXECUTION_BOOTSTRAP_OFFLINE_INSTALL_FAILED
+    if dnf_output=$(LC_ALL=C dnf -q -y --disablerepo='*' --setopt=install_weak_deps=False install "$@" 2>&1); then :; else dnf_failure EXECUTION_BOOTSTRAP_OFFLINE_INSTALL_FAILED; fi
     source=OFFLINE_BUNDLE
 else
     for package in $repository; do set -- "$@" "$package"; done
-    dnf -q -y --setopt=install_weak_deps=False install "$@" >/dev/null 2>&1 || fail EXECUTION_BOOTSTRAP_REPOSITORY_INSTALL_FAILED
+    if dnf_output=$(LC_ALL=C dnf -q -y --setopt=install_weak_deps=False install "$@" 2>&1); then :; else dnf_failure EXECUTION_BOOTSTRAP_REPOSITORY_INSTALL_FAILED; fi
     source=REPOSITORY_OR_MIXED
 fi
 for package in $missing; do rpm -q "$package" >/dev/null 2>&1 || fail EXECUTION_BOOTSTRAP_PACKAGE_NOT_INSTALLED; done

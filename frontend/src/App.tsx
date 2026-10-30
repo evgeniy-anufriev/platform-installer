@@ -612,6 +612,15 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     }
     request
       .then((value) => {
+        if (live && value.diagnostic) {
+          const { Code, SafeMessage } = value.diagnostic;
+          const valid = /^[A-Z][A-Z0-9_]{0,95}$/u.test(Code) && typeof SafeMessage === "string" && SafeMessage.length <= 512;
+          setServiceConfigurationPreview(undefined);
+          setServiceConfigurationPreviewError(valid
+            ? `Core-проекция недоступна. Код: ${Code}. ${SafeMessage}`
+            : "Core-проекция недоступна: некорректная диагностика ответа.");
+          return;
+        }
         if (
           live &&
           (value.projectRevision !== revision ||

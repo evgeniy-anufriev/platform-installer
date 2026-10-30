@@ -109,9 +109,9 @@ func TestServiceConfigurationPreviewDuringDraftPreservesBinding(t *testing.T) {
 	app.activeSession = "draft"
 	app.current = ProjectOpenResult{Status: "OPEN", Managed: &installer.ManagedProjectView{}, Catalog: &projectlifecycle.ProjectCatalogView{Status: "READY"}}
 	app.execution.context.Status = "READY"
-	_, err := app.GetServiceConfigurationPreview()
-	if err == nil || err.Error() != "SERVICE_CONFIGURATION_PREVIEW_UNAVAILABLE" {
-		t.Fatalf("draft preview error = %v", err)
+	preview, err := app.GetServiceConfigurationPreview()
+	if err != nil || preview.Diagnostic == nil || preview.Diagnostic.Code != "SERVICE_CONFIGURATION_PREVIEW_UNAVAILABLE" {
+		t.Fatalf("draft preview result = %#v, error = %v", preview, err)
 	}
 	if app.binding != binding || app.execution.context.Status != "READY" {
 		t.Fatal("presentation request invalidated the trusted execution binding")
