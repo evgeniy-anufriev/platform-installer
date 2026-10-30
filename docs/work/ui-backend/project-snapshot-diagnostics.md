@@ -29,3 +29,34 @@ Verification:
   verified/published/bound runtime bundle are required to deliver both halves.
   No bundle build/publication/activation or installation run was performed.
 - No visual inspection PASS is claimed; unrelated dirty work is preserved.
+
+## Follow-up: callback fallback and owner no_log instruction
+
+The owner screenshot showed callback fallback `Project snapshot could not be
+built`, not an action finding. The resolution role's snapshot task used
+task-level `no_log: true`, which also censors safe findings before callbacks.
+The original correction did not cover this path.
+
+Owner explicitly requested removal of no_log from this task and an actual
+diagnostic without speculative alternatives. The task flag is removed. Private
+cached resolution objects are referenced by two fixed task-variable names inside
+the action, rather than templated into arguments. Successful private results
+retain `_ansible_no_log: true`; only the public snapshot is written to the
+existing output artifact. Failed results publish only the fixed safe finding,
+adding actual exception category and code basename/line within the 512-byte
+limit. Raw exception text, source excerpts, locals and private configuration
+are excluded. Callback preserves that finding. A failure before publication
+has a factual fallback without alternate guesses.
+
+Added tests for censored failures, private success result protection,
+malformed/oversized/symlink artifacts and native Ansible task failures with
+no_log both true and false. Core/native tests remain NOT EXECUTED: both RED OS
+101/102 strict SSH probes timed out again. Real Wails acceptance remains OPEN.
+
+Independent FULL DIFF of the initial filtered-publication change and one revised
+FULL DIFF after the owner's explicit task-no_log removal instruction both
+returned APPROVE_WITH_CHANGES, zero blockers. Revised review recommendation
+SDO-N02 (native successful private-register/output check) was incorporated into
+the test source; SDO-N01 negative artifact cases were also added. These added
+tests have not been executed. `git diff --check` PASS. No Go/React code changed
+in this follow-up, so their earlier results are not a native acceptance claim.

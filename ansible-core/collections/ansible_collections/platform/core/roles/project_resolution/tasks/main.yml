@@ -23,9 +23,8 @@
     service_catalog_path: "{{ platform_service_catalog_path }}"
     installer_owned_paths: "{{ platform_installer_owned_paths | default([]) }}"
     desired_only: true
-    resolved_result: "{{ _project_resolution_cache.result if _project_resolution_cache.hit else omit }}"
+    resolved_result_variable: _project_resolution_cache
   register: platform_project_resolution
-  no_log: true
 
 - name: Сохранение результата разрешения проекта
   platform.core.project_resolution:
@@ -36,5 +35,5 @@
 
 - name: Дополнение результата актуальными сведениями об образах
   platform.core.project_snapshot:
-    resolved_result: "{{ platform_project_resolution }}"
+    resolved_result_variable: platform_project_resolution
   register: platform_project_resolution

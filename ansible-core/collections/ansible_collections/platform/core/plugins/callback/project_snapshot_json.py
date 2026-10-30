@@ -2,11 +2,8 @@ from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
 
-import json
-import os
-import tempfile
-
 from ansible.plugins.callback import CallbackBase
+from ansible_collections.platform.core.plugins.module_utils.project_snapshot_output import write_snapshot_output, snapshot_failure_published
 
 
 class CallbackModule(CallbackBase):
@@ -18,22 +15,7 @@ class CallbackModule(CallbackBase):
     CALLBACK_NEEDS_ENABLED = True
 
     def _write(self, payload):
-        destination = os.environ.get("PLATFORM_PROJECT_SNAPSHOT_OUTPUT")
-        if not destination:
-            return
-        directory = os.path.dirname(os.path.realpath(destination))
-        if not os.path.isdir(directory):
-            return
-        descriptor, temporary = tempfile.mkstemp(prefix=".project-snapshot-", dir=directory)
-        try:
-            with os.fdopen(descriptor, "w", encoding="utf-8") as output:
-                json.dump(payload, output, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
-                output.flush()
-                os.fsync(output.fileno())
-            os.replace(temporary, destination)
-        finally:
-            if os.path.exists(temporary):
-                os.unlink(temporary)
+        write_snapshot_output(payload)
 
     def v2_runner_on_ok(self, result):
         if getattr(result._task, "action", "") == "platform.core.project_snapshot":
@@ -44,7 +26,9 @@ class CallbackModule(CallbackBase):
     def v2_runner_on_failed(self, result, ignore_errors=False):
         del ignore_errors
         if getattr(result._task, "action", "") == "platform.core.project_snapshot":
+            if snapshot_failure_published():
+                return
             self._write({"adapterError": result._result.get("finding", {
                 "code": "PROJECT_SNAPSHOT_INPUT_INVALID",
-                "safeMessage": "Project snapshot could not be built",
+                "safeMessage": "Задача platform.core.project_snapshot завершилась без диагностического результата action.",
             })})
