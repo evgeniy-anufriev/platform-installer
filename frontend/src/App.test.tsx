@@ -4159,8 +4159,58 @@ it("shows the structured snapshot failure reason on the Project page", async () 
   render(<App api={value} />);
   await userEvent.click(screen.getByRole("button", { name: "Открыть папку проекта" }));
   await userEvent.click(screen.getByRole("button", { name: "Проверить" }));
-  expect(await screen.findByText(reason)).toBeTruthy();
+  expect(await screen.findByText(`[BLOCKED] PROJECT_SNAPSHOT_INPUT_INVALID: ${reason}`)).toBeTruthy();
   expect(screen.queryByText("private parser output")).toBeNull();
+});
+
+it("shows current INVALID verification findings without a technical error or matching snapshot", async () => {
+  const value = api({ verifyProject: vi.fn().mockResolvedValue({
+    status: "INVALID", projectRevision: "sha256:old",
+    findings: [{ code: "PLACEMENT_INVALID", summary: "Проверьте размещение сервиса.", severity: "BLOCKED", subjectKind: "deployment", subjectId: "docker-extra" }],
+    findingsTruncated: true,
+  }) });
+  value.chooseProject.mockResolvedValue({ ...project, snapshot: undefined });
+  render(<App api={value} />);
+  await userEvent.click(screen.getByRole("button", { name: "Открыть папку проекта" }));
+  await userEvent.click(screen.getByRole("button", { name: "Проверить" }));
+  expect(await screen.findByText("[BLOCKED] PLACEMENT_INVALID: Проверьте размещение сервиса. (deployment: docker-extra)")).toBeTruthy();
+  expect(screen.queryByText("Не проверено")).toBeNull();
+  expect(screen.getByText("Показана часть замечаний проверки.")).toBeTruthy();
+});
+
+it("shows a Core warning without styling it as a verification error", async () => {
+  const value = api();
+  value.chooseProject.mockResolvedValue({ ...project, verification: {
+    status: "VERIFIED", projectRevision: "sha256:old",
+    findings: [{ code: "CORE_WARNING", summary: "Проверьте рекомендацию Core.", severity: "WARNING" }],
+  } });
+  render(<App api={value} />);
+  await userEvent.click(screen.getByRole("button", { name: "Открыть папку проекта" }));
+  expect(screen.getByText("[WARNING] CORE_WARNING: Проверьте рекомендацию Core.").classList.contains("field-error")).toBe(false);
+});
+
+it("does not treat evidence without a revision as a current project check", async () => {
+  const value = api();
+  value.chooseProject.mockResolvedValue({ ...project, managed: undefined, verification: {
+    status: "INVALID",
+    findings: [{ code: "NO_REVISION", summary: "Unbound finding", severity: "BLOCKED" }],
+  } });
+  render(<App api={value} />);
+  await userEvent.click(screen.getByRole("button", { name: "Открыть папку проекта" }));
+  expect(screen.queryByText(/Unbound finding/u)).toBeNull();
+  expect(screen.getByText("Не проверено")).toBeTruthy();
+});
+
+it("does not display verification findings for an older saved revision", async () => {
+  const value = api();
+  value.chooseProject.mockResolvedValue({ ...project, verification: {
+    status: "INVALID", projectRevision: "sha256:older",
+    findings: [{ code: "OLD_ERROR", summary: "Old finding", severity: "BLOCKED" }],
+  } });
+  render(<App api={value} />);
+  await userEvent.click(screen.getByRole("button", { name: "Открыть папку проекта" }));
+  expect(screen.queryByText(/Old finding/u)).toBeNull();
+  expect(screen.getByText("Не проверено")).toBeTruthy();
 });
 
 it("explains missing runtime identity after Project Verify", async () => {

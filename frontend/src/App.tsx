@@ -3031,6 +3031,11 @@ function ProjectPage({
   exportAvailable: boolean;
   onExport: () => void;
 }) {
+  const checked =
+    ["VERIFIED", "INVALID"].includes(verification.status) &&
+    !!verification.projectRevision &&
+    verification.projectRevision === managed?.projectRevision;
+  const findings = checked || verification.error ? verification.findings || [] : [];
   const bundleCard = (
     <section className="card" aria-label="Набор установки">
       <h2>Набор установки</h2>
@@ -3205,10 +3210,8 @@ function ProjectPage({
         <Stat
           label="Замечания проверки"
           value={
-            snapshot?.projectRevision === managed?.projectRevision &&
-            ["VERIFIED", "INVALID"].includes(verification.status) &&
-            snapshot?.findings
-              ? snapshot.findings.length
+            checked
+              ? findings.length
               : "Не проверено"
           }
         />
@@ -3228,11 +3231,15 @@ function ProjectPage({
             {verificationErrorMessage(verification.error.code)}
           </p>
         )}
-        {verification.error && verification.findings?.map((finding, index) => (
-          <p className="field-error" role="status" key={`${finding.code}-${index}`}>
-            {finding.summary}
+        {findings.map((finding, index) => (
+          <p className={finding.severity === "BLOCKED" ? "field-error" : undefined} role="status" key={`${finding.code}-${index}`}>
+            [{finding.severity}] {finding.code}: {finding.summary}
+            {finding.subjectId && ` (${finding.subjectKind || "Объект"}: ${finding.subjectId})`}
           </p>
         ))}
+        {verification.findingsTruncated && findings.length > 0 && (
+          <p role="status">Показана часть замечаний проверки.</p>
+        )}
         <button onClick={onServers}>Открыть серверы</button>
         <button
           className="outline"

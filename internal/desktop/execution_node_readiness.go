@@ -106,7 +106,11 @@ type verificationContinuation struct {
 
 func (a *App) resolveSelectedExecutionNodeBindingLocked(scope ...sshpassword.Scope) (*executionNodeBinding, error) {
 	binding, err := a.resolveTrustedExecutionConnectionLocked(scope...)
-	if err != nil || binding.bundleRoot == "" {
+	return a.validateSelectedExecutionBundleLocked(binding, err)
+}
+
+func (a *App) validateSelectedExecutionBundleLocked(binding *executionNodeBinding, err error) (*executionNodeBinding, error) {
+	if err != nil || binding == nil || binding.bundleRoot == "" {
 		return nil, errors.New("BINDING_REQUIRED")
 	}
 	if binding.dynamic {
@@ -122,11 +126,22 @@ func (a *App) resolveSelectedExecutionNodeBindingLocked(scope ...sshpassword.Sco
 // resolve an already-known run, but cannot authorize Core/plan/Start without
 // resolveSelectedExecutionNodeBindingLocked's runtime release check.
 func (a *App) resolveTrustedExecutionConnectionLocked(scope ...sshpassword.Scope) (*executionNodeBinding, error) {
+	// Editing blocks operations, but is not evidence that SSH trust or runtime
+	// preparation has been lost.
+	if a.activeSession != "" {
+		return nil, errors.New("BINDING_REQUIRED")
+	}
+	return a.resolveSavedExecutionConnectionLocked(scope...)
+}
+
+// For local presentation and publication of an already requested saved Core
+// preview only. All credential, endpoint and host-key checks remain mandatory.
+func (a *App) resolveSavedExecutionConnectionLocked(scope ...sshpassword.Scope) (*executionNodeBinding, error) {
 	if a.binding == nil || a.binding.service == nil || a.binding.reader.transport == nil || a.binding.node.ID == "" {
 		return nil, errors.New("BINDING_REQUIRED")
 	}
 	if a.binding.dynamic {
-		id, address, port, err := a.selectedSavedExecutionServerLocked()
+		id, address, port, err := a.savedExecutionServerLocked()
 		if err != nil || id != a.binding.node.ID || address != a.binding.node.Address || port != a.binding.node.Port {
 			a.invalidateDynamicBindingLocked()
 			return nil, errors.New("BINDING_REQUIRED")
@@ -177,6 +192,9 @@ func (a *App) resolveTrustedExecutionConnectionLocked(scope ...sshpassword.Scope
 // A long remote call may outlive its session credential. Never publish its
 // result unless the same private binding is still current after the call.
 func (a *App) revalidateBindingBeforePublicationLocked(binding *executionNodeBinding) error {
+	if a.activeSession != "" {
+		return errors.New("BINDING_REQUIRED")
+	}
 	if !binding.dynamic {
 		return nil
 	}
@@ -186,6 +204,15 @@ func (a *App) revalidateBindingBeforePublicationLocked(binding *executionNodeBin
 		if a.binding != binding || credentialErr != nil || !a.secrets.HasRunExecutionIdentityHold(credentialBinding) {
 			a.invalidateDynamicBindingLocked()
 		}
+		return errors.New("BINDING_REQUIRED")
+	}
+	return nil
+}
+
+func (a *App) revalidateSavedPreviewBindingLocked(binding *executionNodeBinding) error {
+	current, err := a.resolveSavedExecutionConnectionLocked()
+	current, err = a.validateSelectedExecutionBundleLocked(current, err)
+	if err != nil || current != binding {
 		return errors.New("BINDING_REQUIRED")
 	}
 	return nil

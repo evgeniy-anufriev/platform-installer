@@ -1423,19 +1423,14 @@ func (a *App) GetExecutionNodeContext() (ExecutionNodeContext, error) {
 	if a.current.Status != "OPEN" || a.current.Project == nil {
 		return ExecutionNodeContext{}, errors.New("PROJECT_NOT_OPEN")
 	}
-	// A draft cannot authorize execution, but merely rendering its node panel
-	// must not revoke verification evidence for the still-saved revision.
-	if a.activeSession == "" && a.binding != nil && a.binding.dynamic {
-		_, _ = a.resolveSelectedExecutionNodeBindingLocked()
-	}
+	// Rendering a draft must retain evidence for the saved node, while still
+	// rejecting expired credentials or changed saved transport/runtime inputs.
+	binding, bindingErr := a.resolveSavedExecutionConnectionLocked()
+	binding, bindingErr = a.validateSelectedExecutionBundleLocked(binding, bindingErr)
 	context := a.execution.context
-	// Revalidating a dynamic binding while a draft is open may revoke the
-	// verification of the still-saved revision. The draft is not executable.
-	if a.activeSession == "" && context.Status == "READY" {
-		if binding, err := a.resolveSelectedExecutionNodeBindingLocked(); err == nil {
-			if digest, ok := binding.reader.runtimeRelease["bundleDigest"].(string); ok {
-				context.RuntimeDigest = digest
-			}
+	if bindingErr == nil && context.Status == "READY" {
+		if digest, ok := binding.reader.runtimeRelease["bundleDigest"].(string); ok {
+			context.RuntimeDigest = digest
 		}
 	}
 	return context, nil
@@ -1942,7 +1937,7 @@ func (a *App) GetServiceConfigurationPreview() (result executionnode.ServiceConf
 	a.editMu.Lock()
 	defer a.editMu.Unlock()
 	after, err := installer.ProjectRevision(root)
-	if err != nil || a.current.Status != "OPEN" || a.current.Root != root || a.current.Managed == nil || a.current.Catalog == nil || a.current.Catalog.Status != "READY" || a.current.Managed.ProjectRevision != revision || after != revision || preview.ProjectRevision != revision || !runtimeEvidenceMatchesExpected(preview.Runtime, binding.reader.runtimeRelease) || a.revalidateBindingBeforePublicationLocked(binding) != nil {
+	if err != nil || a.current.Status != "OPEN" || a.current.Root != root || a.current.Managed == nil || a.current.Catalog == nil || a.current.Catalog.Status != "READY" || a.current.Managed.ProjectRevision != revision || after != revision || preview.ProjectRevision != revision || !runtimeEvidenceMatchesExpected(preview.Runtime, binding.reader.runtimeRelease) || a.revalidateSavedPreviewBindingLocked(binding) != nil {
 		return executionnode.ServiceConfigurationPreview{}, errors.New("SERVICE_CONFIGURATION_PREVIEW_STALE")
 	}
 	for deploymentID, scoped := range preview.Services {

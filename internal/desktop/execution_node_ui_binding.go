@@ -76,7 +76,16 @@ func validExecutionAddress(value string) bool {
 }
 
 func (a *App) selectedSavedExecutionServerLocked() (string, string, uint16, error) {
-	if a.current.Status != "OPEN" || a.current.Managed == nil || a.activeSession != "" || a.execution.context.SelectionKind != "PROJECT_SERVER" {
+	if a.activeSession != "" {
+		return "", "", 0, errors.New("BINDING_REQUIRED")
+	}
+	return a.savedExecutionServerLocked()
+}
+
+// Reads only the saved server, including while a local draft is open. This is
+// presentation evidence, not permission to execute the draft.
+func (a *App) savedExecutionServerLocked() (string, string, uint16, error) {
+	if a.current.Status != "OPEN" || a.current.Managed == nil || a.execution.context.SelectionKind != "PROJECT_SERVER" {
 		return "", "", 0, errors.New("BINDING_REQUIRED")
 	}
 	id := a.execution.context.SelectedHostID

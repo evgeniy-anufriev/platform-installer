@@ -92,3 +92,43 @@ Native Ansible Templar additionally evaluated all nine production expressions
 with undefined inventory_dir and explicit root, then with ordinary inventory
 fallback. Both branches passed. No target contact or installation was performed.
 Real React/Wails acceptance after delivery of a new runtime bundle remains OPEN.
+
+## Prepared-node retention during topology drafts and Verify findings
+
+Owner reported a prepared node reverting during topology edits and an INVALID
+Project Verify with an empty diagnostic area. Investigation found two separate
+presentation/lifecycle faults: a saved Core preview finishing after a draft opens
+could pass through operation-only binding validation and revoke the prepared
+binding; GetExecutionNodeContext omitted its runtime digest while editing.
+The draft operation guard now rejects operations without revoking trust merely
+because a draft exists. Saved-only presentation/publication checks retain the
+same endpoint, identity generation, credential availability, host-key pin,
+command guard, runtime bundle and saved revision checks. No new Core request is
+started for an open draft. Preparation does not authorize execution or retain
+an old approved deployment plan after Save.
+
+The Project page previously displayed findings only when Verification.error
+was present, hiding ordinary INVALID results. Its counter also depended on a
+separately loaded snapshot rather than the current verification evidence.
+It now displays current-revision verification findings with code, summary and
+subject and severity, including truncation notice; old-revision findings remain
+hidden. Warnings are not styled as blocking errors.
+The owner's screenshots compare different revisions: manual PASS 767dcc1f...
+and UI INVALID 6ae9d4ab.... They are not evidence of contradictory validation of
+the same saved bytes.
+
+Validation: desktop regression suite and go test ./... PASS; go vet ./... PASS;
+App frontend 93 tests PASS; frontend typecheck, lint and production build PASS;
+Windows Wails production build PASS. Tests cover draft operation rejection
+without readiness loss, repeated context reads retaining runtime digest,
+credential revocation during draft and late preview rejection after saved
+endpoint/credential/host-key/command guard/bundle/revision changes. Go race
+runner unavailable with this environment's CGO disabled. Real React/Wails
+prepared-node/topology/Verify acceptance remains OPEN, not replaced by these
+unit tests or compilation. No Core source or runtime bundle change is required
+for this desktop/UI correction. Independent FULL DIFF review of six source/test
+files at base fcbf4a02 returned APPROVE_WITH_CHANGES, zero blockers. Nonblocking
+DBR-N01 (require a nonempty verification revision) and DBR-N02 (distinguish
+warning presentation) were corrected with regression tests. The review
+fingerprint before these bounded corrections was
+d4c19952eb33a42be7fab9e3f807d01731071c72702dcad32d12eaebb72d7228.
