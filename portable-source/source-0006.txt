@@ -1,3 +1,1868 @@
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/transport/internal/common/common.go","mode":420,"size":12888,"sha256":"78d6138c9b6a586c1163de561fe8e7147c140928578fc738c5fd81e7816bbda9","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":12888}
+// Package common implements the git pack protocol with a pluggable transport.
+// This is a low-level package to implement new transports. Use a concrete
+// implementation instead (e.g. http, file, ssh).
+//
+// A simple example of usage can be found in the file package.
+package common
+
+import (
+	"bufio"
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"regexp"
+	"strings"
+	"time"
+
+	"github.com/go-git/go-git/v5/plumbing/format/pktline"
+	"github.com/go-git/go-git/v5/plumbing/protocol/packp"
+	"github.com/go-git/go-git/v5/plumbing/protocol/packp/capability"
+	"github.com/go-git/go-git/v5/plumbing/protocol/packp/sideband"
+	"github.com/go-git/go-git/v5/plumbing/transport"
+	"github.com/go-git/go-git/v5/utils/ioutil"
+)
+
+const (
+	readErrorSecondsTimeout = 10
+)
+
+var (
+	ErrTimeoutExceeded = errors.New("timeout exceeded")
+	// stdErrSkipPattern is used for skipping lines from a command's stderr output.
+	// Any line matching this pattern will be skipped from further
+	// processing and not be returned to calling code.
+	stdErrSkipPattern = regexp.MustCompile("^remote:( =*){0,1}$")
+)
+
+// Commander creates Command instances. This is the main entry point for
+// transport implementations.
+type Commander interface {
+	// Command creates a new Command for the given git command and
+	// endpoint. cmd can be git-upload-pack or git-receive-pack. An
+	// error should be returned if the endpoint is not supported or the
+	// command cannot be created (e.g. binary does not exist, connection
+	// cannot be established).
+	Command(cmd string, ep *transport.Endpoint, auth transport.AuthMethod) (Command, error)
+}
+
+// Command is used for a single command execution.
+// This interface is modeled after exec.Cmd and ssh.Session in the standard
+// library.
+type Command interface {
+	// StderrPipe returns a pipe that will be connected to the command's
+	// standard error when the command starts. It should not be called after
+	// Start.
+	StderrPipe() (io.Reader, error)
+	// StdinPipe returns a pipe that will be connected to the command's
+	// standard input when the command starts. It should not be called after
+	// Start. The pipe should be closed when no more input is expected.
+	StdinPipe() (io.WriteCloser, error)
+	// StdoutPipe returns a pipe that will be connected to the command's
+	// standard output when the command starts. It should not be called after
+	// Start.
+	StdoutPipe() (io.Reader, error)
+	// Start starts the specified command. It does not wait for it to
+	// complete.
+	Start() error
+	// Close closes the command and releases any resources used by it. It
+	// will block until the command exits.
+	Close() error
+}
+
+// CommandKiller expands the Command interface, enabling it for being killed.
+type CommandKiller interface {
+	// Kill and close the session whatever the state it is. It will block until
+	// the command is terminated.
+	Kill() error
+}
+
+type client struct {
+	cmdr Commander
+}
+
+// NewClient creates a new client using the given Commander.
+func NewClient(runner Commander) transport.Transport {
+	return &client{runner}
+}
+
+// NewUploadPackSession creates a new UploadPackSession.
+func (c *client) NewUploadPackSession(ep *transport.Endpoint, auth transport.AuthMethod) (
+	transport.UploadPackSession, error) {
+
+	return c.newSession(transport.UploadPackServiceName, ep, auth)
+}
+
+// NewReceivePackSession creates a new ReceivePackSession.
+func (c *client) NewReceivePackSession(ep *transport.Endpoint, auth transport.AuthMethod) (
+	transport.ReceivePackSession, error) {
+
+	return c.newSession(transport.ReceivePackServiceName, ep, auth)
+}
+
+type session struct {
+	Stdin   io.WriteCloser
+	Stdout  io.Reader
+	Command Command
+
+	isReceivePack bool
+	advRefs       *packp.AdvRefs
+	packRun       bool
+	finished      bool
+	firstErrLine  chan string
+}
+
+func (c *client) newSession(s string, ep *transport.Endpoint, auth transport.AuthMethod) (*session, error) {
+	cmd, err := c.cmdr.Command(s, ep, auth)
+	if err != nil {
+		return nil, err
+	}
+
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return nil, err
+	}
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, err
+	}
+
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, err
+	}
+
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+
+	return &session{
+		Stdin:         stdin,
+		Stdout:        stdout,
+		Command:       cmd,
+		firstErrLine:  c.listenFirstError(stderr),
+		isReceivePack: s == transport.ReceivePackServiceName,
+	}, nil
+}
+
+func (c *client) listenFirstError(r io.Reader) chan string {
+	if r == nil {
+		return nil
+	}
+
+	errLine := make(chan string, 1)
+	go func() {
+		s := bufio.NewScanner(r)
+		for {
+			if s.Scan() {
+				line := s.Text()
+				if !stdErrSkipPattern.MatchString(line) {
+					errLine <- line
+					break
+				}
+			} else {
+				close(errLine)
+				break
+			}
+		}
+
+		_, _ = io.Copy(io.Discard, r)
+	}()
+
+	return errLine
+}
+
+func (s *session) AdvertisedReferences() (*packp.AdvRefs, error) {
+	return s.AdvertisedReferencesContext(context.TODO())
+}
+
+// AdvertisedReferences retrieves the advertised references from the server.
+func (s *session) AdvertisedReferencesContext(ctx context.Context) (*packp.AdvRefs, error) {
+	if s.advRefs != nil {
+		return s.advRefs, nil
+	}
+
+	ar := packp.NewAdvRefs()
+	if err := ar.Decode(s.StdoutContext(ctx)); err != nil {
+		if err := s.handleAdvRefDecodeError(err); err != nil {
+			return nil, err
+		}
+	}
+
+	// Some servers like jGit, announce capabilities instead of returning an
+	// packp message with a flush. This verifies that we received a empty
+	// adv-refs, even it contains capabilities.
+	if !s.isReceivePack && ar.IsEmpty() {
+		return nil, transport.ErrEmptyRemoteRepository
+	}
+
+	transport.FilterUnsupportedCapabilities(ar.Capabilities)
+	s.advRefs = ar
+	return ar, nil
+}
+
+func (s *session) handleAdvRefDecodeError(err error) error {
+	var errLine *pktline.ErrorLine
+	if errors.As(err, &errLine) {
+		if isRepoNotFoundError(errLine.Text) {
+			return transport.ErrRepositoryNotFound
+		}
+
+		return errLine
+	}
+
+	// If repository is not found, we get empty stdout and server writes an
+	// error to stderr.
+	if errors.Is(err, packp.ErrEmptyInput) {
+		// TODO:(v6): handle this error in a better way.
+		// Instead of checking the stderr output for a specific error message,
+		// define an ExitError and embed the stderr output and exit (if one
+		// exists) in the error struct. Just like exec.ExitError.
+		s.finished = true
+		if err := s.checkNotFoundError(); err != nil {
+			return err
+		}
+
+		return io.ErrUnexpectedEOF
+	}
+
+	// For empty (but existing) repositories, we get empty advertised-references
+	// message. But valid. That is, it includes at least a flush.
+	if err == packp.ErrEmptyAdvRefs {
+		// Empty repositories are valid for git-receive-pack.
+		if s.isReceivePack {
+			return nil
+		}
+
+		if err := s.finish(); err != nil {
+			return err
+		}
+
+		return transport.ErrEmptyRemoteRepository
+	}
+
+	// Some server sends the errors as normal content (git protocol), so when
+	// we try to decode it fails, we need to check the content of it, to detect
+	// not found errors
+	if uerr, ok := err.(*packp.ErrUnexpectedData); ok {
+		if isRepoNotFoundError(string(uerr.Data)) {
+			return transport.ErrRepositoryNotFound
+		}
+	}
+
+	return err
+}
+
+// UploadPack performs a request to the server to fetch a packfile. A reader is
+// returned with the packfile content. The reader must be closed after reading.
+func (s *session) UploadPack(ctx context.Context, req *packp.UploadPackRequest) (*packp.UploadPackResponse, error) {
+	if req.IsEmpty() {
+		// XXX: IsEmpty means haves are a subset of wants, in that case we have
+		// everything we asked for. Close the connection and return nil.
+		if err := s.finish(); err != nil {
+			return nil, err
+		}
+		// TODO:(v6) return nil here
+		return nil, transport.ErrEmptyUploadPackRequest
+	}
+
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	if _, err := s.AdvertisedReferencesContext(ctx); err != nil {
+		return nil, err
+	}
+
+	s.packRun = true
+
+	in := s.StdinContext(ctx)
+	out := s.StdoutContext(ctx)
+
+	if err := uploadPack(in, out, req); err != nil {
+		return nil, err
+	}
+
+	r, err := ioutil.NonEmptyReader(out)
+	if err == ioutil.ErrEmptyReader {
+		if c, ok := s.Stdout.(io.Closer); ok {
+			_ = c.Close()
+		}
+
+		return nil, transport.ErrEmptyUploadPackRequest
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	rc := ioutil.NewReadCloser(r, s)
+	return DecodeUploadPackResponse(rc, req)
+}
+
+func (s *session) StdinContext(ctx context.Context) io.WriteCloser {
+	return ioutil.NewWriteCloserOnError(
+		ioutil.NewContextWriteCloser(ctx, s.Stdin),
+		s.onError,
+	)
+}
+
+func (s *session) StdoutContext(ctx context.Context) io.Reader {
+	return ioutil.NewReaderOnError(
+		ioutil.NewContextReader(ctx, s.Stdout),
+		s.onError,
+	)
+}
+
+func (s *session) onError(err error) {
+	if k, ok := s.Command.(CommandKiller); ok {
+		_ = k.Kill()
+	}
+
+	_ = s.Close()
+}
+
+func (s *session) ReceivePack(ctx context.Context, req *packp.ReferenceUpdateRequest) (*packp.ReportStatus, error) {
+	if _, err := s.AdvertisedReferences(); err != nil {
+		return nil, err
+	}
+
+	s.packRun = true
+
+	w := s.StdinContext(ctx)
+	if err := req.Encode(w); err != nil {
+		return nil, err
+	}
+
+	if err := w.Close(); err != nil {
+		return nil, err
+	}
+
+	if !req.Capabilities.Supports(capability.ReportStatus) {
+		// If we don't have report-status, we can only
+		// check return value error.
+		return nil, s.Command.Close()
+	}
+
+	r := s.StdoutContext(ctx)
+
+	var d *sideband.Demuxer
+	if req.Capabilities.Supports(capability.Sideband64k) {
+		d = sideband.NewDemuxer(sideband.Sideband64k, r)
+	} else if req.Capabilities.Supports(capability.Sideband) {
+		d = sideband.NewDemuxer(sideband.Sideband, r)
+	}
+	if d != nil {
+		d.Progress = req.Progress
+		r = d
+	}
+
+	report := packp.NewReportStatus()
+	if err := report.Decode(r); err != nil {
+		return nil, err
+	}
+
+	if err := report.Error(); err != nil {
+		defer s.Close()
+		return report, err
+	}
+
+	return report, s.Command.Close()
+}
+
+func (s *session) finish() error {
+	if s.finished {
+		return nil
+	}
+
+	s.finished = true
+
+	// If we did not run a upload/receive-pack, we close the connection
+	// gracefully by sending a flush packet to the server. If the server
+	// operates correctly, it will exit with status 0.
+	if !s.packRun {
+		_, err := s.Stdin.Write(pktline.FlushPkt)
+		return err
+	}
+
+	return nil
+}
+
+func (s *session) Close() (err error) {
+	err = s.finish()
+
+	defer ioutil.CheckClose(s.Command, &err)
+	return
+}
+
+func (s *session) checkNotFoundError() error {
+	t := time.NewTicker(time.Second * readErrorSecondsTimeout)
+	defer t.Stop()
+
+	select {
+	case <-t.C:
+		return ErrTimeoutExceeded
+	case line, ok := <-s.firstErrLine:
+		if !ok || len(line) == 0 {
+			return nil
+		}
+
+		if isRepoNotFoundError(line) {
+			return transport.ErrRepositoryNotFound
+		}
+
+		// TODO:(v6): return server error just as it is without a prefix
+		return fmt.Errorf("unknown error: %s", line)
+	}
+}
+
+const (
+	githubRepoNotFoundErr      = "Repository not found."
+	bitbucketRepoNotFoundErr   = "repository does not exist."
+	localRepoNotFoundErr       = "does not appear to be a git repository"
+	gitProtocolNotFoundErr     = "Repository not found."
+	gitProtocolNoSuchErr       = "no such repository"
+	gitProtocolAccessDeniedErr = "access denied"
+	gogsAccessDeniedErr        = "Repository does not exist or you do not have access"
+	gitlabRepoNotFoundErr      = "The project you were looking for could not be found"
+)
+
+func isRepoNotFoundError(s string) bool {
+	for _, err := range []string{
+		githubRepoNotFoundErr,
+		bitbucketRepoNotFoundErr,
+		localRepoNotFoundErr,
+		gitProtocolNotFoundErr,
+		gitProtocolNoSuchErr,
+		gitProtocolAccessDeniedErr,
+		gogsAccessDeniedErr,
+		gitlabRepoNotFoundErr,
+	} {
+		if strings.Contains(s, err) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// uploadPack implements the git-upload-pack protocol.
+func uploadPack(w io.WriteCloser, _ io.Reader, req *packp.UploadPackRequest) error {
+	// TODO support multi_ack mode
+	// TODO support multi_ack_detailed mode
+	// TODO support acks for common objects
+	// TODO build a proper state machine for all these processing options
+
+	if err := req.UploadRequest.Encode(w); err != nil {
+		return fmt.Errorf("sending upload-req message: %s", err)
+	}
+
+	if err := req.UploadHaves.Encode(w, true); err != nil {
+		return fmt.Errorf("sending haves message: %s", err)
+	}
+
+	if err := sendDone(w); err != nil {
+		return fmt.Errorf("sending done message: %s", err)
+	}
+
+	if err := w.Close(); err != nil {
+		return fmt.Errorf("closing input: %s", err)
+	}
+
+	return nil
+}
+
+func sendDone(w io.Writer) error {
+	e := pktline.NewEncoder(w)
+
+	return e.Encodef("done\n")
+}
+
+// DecodeUploadPackResponse decodes r into a new packp.UploadPackResponse
+func DecodeUploadPackResponse(r io.ReadCloser, req *packp.UploadPackRequest) (
+	*packp.UploadPackResponse, error,
+) {
+	res := packp.NewUploadPackResponse(req)
+	if err := res.Decode(r); err != nil {
+		return nil, fmt.Errorf("error decoding upload-pack response: %s", err)
+	}
+
+	return res, nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/transport/internal/common/mocks.go","mode":420,"size":870,"sha256":"d6c76eb4732b1df94caf920bb74df77982367138db550463cfa10ffb8eee5474","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":870}
+package common
+
+import (
+	"bytes"
+	"io"
+
+	gogitioutil "github.com/go-git/go-git/v5/utils/ioutil"
+
+	"github.com/go-git/go-git/v5/plumbing/transport"
+)
+
+type MockCommand struct {
+	stdin  bytes.Buffer
+	stdout bytes.Buffer
+	stderr bytes.Buffer
+}
+
+func (c MockCommand) StderrPipe() (io.Reader, error) {
+	return &c.stderr, nil
+}
+
+func (c MockCommand) StdinPipe() (io.WriteCloser, error) {
+	return gogitioutil.WriteNopCloser(&c.stdin), nil
+}
+
+func (c MockCommand) StdoutPipe() (io.Reader, error) {
+	return &c.stdout, nil
+}
+
+func (c MockCommand) Start() error {
+	return nil
+}
+
+func (c MockCommand) Close() error {
+	panic("not implemented")
+}
+
+type MockCommander struct {
+	stderr string
+}
+
+func (c MockCommander) Command(cmd string, ep *transport.Endpoint, auth transport.AuthMethod) (Command, error) {
+	return &MockCommand{
+		stderr: *bytes.NewBufferString(c.stderr),
+	}, nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/transport/internal/common/server.go","mode":420,"size":1613,"sha256":"3fa3601093c69c648fb275e211ed9b5430029c790599f59f4c789ece8f94e86d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1613}
+package common
+
+import (
+	"context"
+	"fmt"
+	"io"
+
+	"github.com/go-git/go-git/v5/plumbing/protocol/packp"
+	"github.com/go-git/go-git/v5/plumbing/transport"
+	"github.com/go-git/go-git/v5/utils/ioutil"
+)
+
+// ServerCommand is used for a single server command execution.
+type ServerCommand struct {
+	Stderr io.Writer
+	Stdout io.WriteCloser
+	Stdin  io.Reader
+}
+
+func ServeUploadPack(cmd ServerCommand, s transport.UploadPackSession) (err error) {
+	ioutil.CheckClose(cmd.Stdout, &err)
+
+	ar, err := s.AdvertisedReferences()
+	if err != nil {
+		return err
+	}
+
+	if err := ar.Encode(cmd.Stdout); err != nil {
+		return err
+	}
+
+	req := packp.NewUploadPackRequest()
+	if err := req.Decode(cmd.Stdin); err != nil {
+		return err
+	}
+
+	var resp *packp.UploadPackResponse
+	resp, err = s.UploadPack(context.TODO(), req)
+	if err != nil {
+		return err
+	}
+
+	return resp.Encode(cmd.Stdout)
+}
+
+func ServeReceivePack(cmd ServerCommand, s transport.ReceivePackSession) error {
+	ar, err := s.AdvertisedReferences()
+	if err != nil {
+		return fmt.Errorf("internal error in advertised references: %s", err)
+	}
+
+	if err := ar.Encode(cmd.Stdout); err != nil {
+		return fmt.Errorf("error in advertised references encoding: %s", err)
+	}
+
+	req := packp.NewReferenceUpdateRequest()
+	if err := req.Decode(cmd.Stdin); err != nil {
+		return fmt.Errorf("error decoding: %s", err)
+	}
+
+	rs, err := s.ReceivePack(context.TODO(), req)
+	if rs != nil {
+		if err := rs.Encode(cmd.Stdout); err != nil {
+			return fmt.Errorf("error in encoding report status %s", err)
+		}
+	}
+
+	if err != nil {
+		return fmt.Errorf("error in receive pack: %s", err)
+	}
+
+	return nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/transport/server/loader.go","mode":420,"size":2096,"sha256":"66d3a8f85d56ff941bd2505028c04a8f0b8d61860969ee4447586e750b74037e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2096}
+package server
+
+import (
+	"github.com/go-git/go-git/v5/plumbing/cache"
+	"github.com/go-git/go-git/v5/plumbing/storer"
+	"github.com/go-git/go-git/v5/plumbing/transport"
+	"github.com/go-git/go-git/v5/storage/filesystem"
+
+	"github.com/go-git/go-billy/v5"
+	"github.com/go-git/go-billy/v5/osfs"
+)
+
+// DefaultLoader is a filesystem loader ignoring host and resolving paths to /.
+var DefaultLoader = NewFilesystemLoader(osfs.New(""))
+
+// Loader loads repository's storer.Storer based on an optional host and a path.
+type Loader interface {
+	// Load loads a storer.Storer given a transport.Endpoint.
+	// Returns transport.ErrRepositoryNotFound if the repository does not
+	// exist.
+	Load(ep *transport.Endpoint) (storer.Storer, error)
+}
+
+type fsLoader struct {
+	base billy.Filesystem
+}
+
+// NewFilesystemLoader creates a Loader that ignores host and resolves paths
+// with a given base filesystem.
+func NewFilesystemLoader(base billy.Filesystem) Loader {
+	return &fsLoader{base}
+}
+
+// Load looks up the endpoint's path in the base file system and returns a
+// storer for it. Returns transport.ErrRepositoryNotFound if a repository does
+// not exist in the given path.
+func (l *fsLoader) Load(ep *transport.Endpoint) (storer.Storer, error) {
+	fs, err := l.base.Chroot(ep.Path)
+	if err != nil {
+		return nil, err
+	}
+
+	var bare bool
+	if _, err := fs.Stat("config"); err == nil {
+		bare = true
+	}
+
+	if !bare {
+		// do not use git.GitDirName due to import cycle
+		if _, err := fs.Stat(".git"); err != nil {
+			return nil, transport.ErrRepositoryNotFound
+		}
+	}
+
+	return filesystem.NewStorage(fs, cache.NewObjectLRUDefault()), nil
+}
+
+// MapLoader is a Loader that uses a lookup map of storer.Storer by
+// transport.Endpoint.
+type MapLoader map[string]storer.Storer
+
+// Load returns a storer.Storer for given a transport.Endpoint by looking it up
+// in the map. Returns transport.ErrRepositoryNotFound if the endpoint does not
+// exist.
+func (l MapLoader) Load(ep *transport.Endpoint) (storer.Storer, error) {
+	s, ok := l[ep.String()]
+	if !ok {
+		return nil, transport.ErrRepositoryNotFound
+	}
+
+	return s, nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/transport/server/server.go","mode":420,"size":9359,"sha256":"d36d9f87f5dc2a35a7ea674583c670ba78a3bd33fdf1211a4cad4793cebe124f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":9359}
+// Package server implements the git server protocol. For most use cases, the
+// transport-specific implementations should be used.
+package server
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"io"
+
+	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/format/packfile"
+	"github.com/go-git/go-git/v5/plumbing/protocol/packp"
+	"github.com/go-git/go-git/v5/plumbing/protocol/packp/capability"
+	"github.com/go-git/go-git/v5/plumbing/revlist"
+	"github.com/go-git/go-git/v5/plumbing/storer"
+	"github.com/go-git/go-git/v5/plumbing/transport"
+	"github.com/go-git/go-git/v5/utils/ioutil"
+)
+
+var DefaultServer = NewServer(DefaultLoader)
+
+type server struct {
+	loader  Loader
+	handler *handler
+}
+
+// NewServer returns a transport.Transport implementing a git server,
+// independent of transport. Each transport must wrap this.
+func NewServer(loader Loader) transport.Transport {
+	return &server{
+		loader,
+		&handler{asClient: false},
+	}
+}
+
+// NewClient returns a transport.Transport implementing a client with an
+// embedded server.
+func NewClient(loader Loader) transport.Transport {
+	return &server{
+		loader,
+		&handler{asClient: true},
+	}
+}
+
+func (s *server) NewUploadPackSession(ep *transport.Endpoint, auth transport.AuthMethod) (transport.UploadPackSession, error) {
+	sto, err := s.loader.Load(ep)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.handler.NewUploadPackSession(sto)
+}
+
+func (s *server) NewReceivePackSession(ep *transport.Endpoint, auth transport.AuthMethod) (transport.ReceivePackSession, error) {
+	sto, err := s.loader.Load(ep)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.handler.NewReceivePackSession(sto)
+}
+
+type handler struct {
+	asClient bool
+}
+
+func (h *handler) NewUploadPackSession(s storer.Storer) (transport.UploadPackSession, error) {
+	return &upSession{
+		session: session{storer: s, asClient: h.asClient},
+	}, nil
+}
+
+func (h *handler) NewReceivePackSession(s storer.Storer) (transport.ReceivePackSession, error) {
+	return &rpSession{
+		session:   session{storer: s, asClient: h.asClient},
+		cmdStatus: map[plumbing.ReferenceName]error{},
+	}, nil
+}
+
+type session struct {
+	storer   storer.Storer
+	caps     *capability.List
+	asClient bool
+}
+
+func (s *session) Close() error {
+	return nil
+}
+
+func (s *session) SetAuth(transport.AuthMethod) error {
+	//TODO: deprecate
+	return nil
+}
+
+func (s *session) checkSupportedCapabilities(cl *capability.List) error {
+	for _, c := range cl.All() {
+		if !s.caps.Supports(c) {
+			return fmt.Errorf("unsupported capability: %s", c)
+		}
+	}
+
+	return nil
+}
+
+type upSession struct {
+	session
+}
+
+func (s *upSession) AdvertisedReferences() (*packp.AdvRefs, error) {
+	return s.AdvertisedReferencesContext(context.TODO())
+}
+
+func (s *upSession) AdvertisedReferencesContext(ctx context.Context) (*packp.AdvRefs, error) {
+	ar := packp.NewAdvRefs()
+
+	if err := s.setSupportedCapabilities(ar.Capabilities); err != nil {
+		return nil, err
+	}
+
+	s.caps = ar.Capabilities
+
+	if err := setReferences(s.storer, ar); err != nil {
+		return nil, err
+	}
+
+	if err := setHEAD(s.storer, ar); err != nil {
+		return nil, err
+	}
+
+	if s.asClient && len(ar.References) == 0 {
+		return nil, transport.ErrEmptyRemoteRepository
+	}
+
+	return ar, nil
+}
+
+func (s *upSession) UploadPack(ctx context.Context, req *packp.UploadPackRequest) (*packp.UploadPackResponse, error) {
+	if req.IsEmpty() {
+		return nil, transport.ErrEmptyUploadPackRequest
+	}
+
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	if s.caps == nil {
+		s.caps = capability.NewList()
+		if err := s.setSupportedCapabilities(s.caps); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := s.checkSupportedCapabilities(req.Capabilities); err != nil {
+		return nil, err
+	}
+
+	s.caps = req.Capabilities
+
+	if len(req.Shallows) > 0 {
+		return nil, fmt.Errorf("shallow not supported")
+	}
+
+	objs, err := s.objectsToUpload(req)
+	if err != nil {
+		return nil, err
+	}
+
+	pr, pw := io.Pipe()
+	e := packfile.NewEncoder(pw, s.storer, false)
+	go func() {
+		// TODO: plumb through a pack window.
+		_, err := e.Encode(objs, 10)
+		pw.CloseWithError(err)
+	}()
+
+	return packp.NewUploadPackResponseWithPackfile(req,
+		ioutil.NewContextReadCloser(ctx, pr),
+	), nil
+}
+
+func (s *upSession) objectsToUpload(req *packp.UploadPackRequest) ([]plumbing.Hash, error) {
+	haves, err := revlist.Objects(s.storer, req.Haves, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return revlist.Objects(s.storer, req.Wants, haves)
+}
+
+func (*upSession) setSupportedCapabilities(c *capability.List) error {
+	if err := c.Set(capability.Agent, capability.DefaultAgent()); err != nil {
+		return err
+	}
+
+	if err := c.Set(capability.OFSDelta); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+type rpSession struct {
+	session
+	cmdStatus map[plumbing.ReferenceName]error
+	firstErr  error
+	unpackErr error
+}
+
+func (s *rpSession) AdvertisedReferences() (*packp.AdvRefs, error) {
+	return s.AdvertisedReferencesContext(context.TODO())
+}
+
+func (s *rpSession) AdvertisedReferencesContext(ctx context.Context) (*packp.AdvRefs, error) {
+	ar := packp.NewAdvRefs()
+
+	if err := s.setSupportedCapabilities(ar.Capabilities); err != nil {
+		return nil, err
+	}
+
+	s.caps = ar.Capabilities
+
+	if err := setReferences(s.storer, ar); err != nil {
+		return nil, err
+	}
+
+	if err := setHEAD(s.storer, ar); err != nil {
+		return nil, err
+	}
+
+	return ar, nil
+}
+
+var (
+	ErrUpdateReference = errors.New("failed to update ref")
+)
+
+func (s *rpSession) ReceivePack(ctx context.Context, req *packp.ReferenceUpdateRequest) (*packp.ReportStatus, error) {
+	if s.caps == nil {
+		s.caps = capability.NewList()
+		if err := s.setSupportedCapabilities(s.caps); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := s.checkSupportedCapabilities(req.Capabilities); err != nil {
+		return nil, err
+	}
+
+	s.caps = req.Capabilities
+
+	//TODO: Implement 'atomic' update of references.
+
+	if req.Packfile != nil {
+		r := ioutil.NewContextReadCloser(ctx, req.Packfile)
+		if err := s.writePackfile(r); err != nil {
+			s.unpackErr = err
+			s.firstErr = err
+			return s.reportStatus(), err
+		}
+	}
+
+	s.updateReferences(req)
+	return s.reportStatus(), s.firstErr
+}
+
+func (s *rpSession) updateReferences(req *packp.ReferenceUpdateRequest) {
+	for _, cmd := range req.Commands {
+		exists, err := referenceExists(s.storer, cmd.Name)
+		if err != nil {
+			s.setStatus(cmd.Name, err)
+			continue
+		}
+
+		switch cmd.Action() {
+		case packp.Create:
+			if exists {
+				s.setStatus(cmd.Name, ErrUpdateReference)
+				continue
+			}
+
+			ref := plumbing.NewHashReference(cmd.Name, cmd.New)
+			err := s.storer.SetReference(ref)
+			s.setStatus(cmd.Name, err)
+		case packp.Delete:
+			if !exists {
+				s.setStatus(cmd.Name, ErrUpdateReference)
+				continue
+			}
+
+			err := s.storer.RemoveReference(cmd.Name)
+			s.setStatus(cmd.Name, err)
+		case packp.Update:
+			if !exists {
+				s.setStatus(cmd.Name, ErrUpdateReference)
+				continue
+			}
+
+			ref := plumbing.NewHashReference(cmd.Name, cmd.New)
+			err := s.storer.SetReference(ref)
+			s.setStatus(cmd.Name, err)
+		}
+	}
+}
+
+func (s *rpSession) writePackfile(r io.ReadCloser) error {
+	if r == nil {
+		return nil
+	}
+
+	if err := packfile.UpdateObjectStorage(s.storer, r); err != nil {
+		_ = r.Close()
+		return err
+	}
+
+	return r.Close()
+}
+
+func (s *rpSession) setStatus(ref plumbing.ReferenceName, err error) {
+	s.cmdStatus[ref] = err
+	if s.firstErr == nil && err != nil {
+		s.firstErr = err
+	}
+}
+
+func (s *rpSession) reportStatus() *packp.ReportStatus {
+	if !s.caps.Supports(capability.ReportStatus) {
+		return nil
+	}
+
+	rs := packp.NewReportStatus()
+	rs.UnpackStatus = "ok"
+
+	if s.unpackErr != nil {
+		rs.UnpackStatus = s.unpackErr.Error()
+	}
+
+	if s.cmdStatus == nil {
+		return rs
+	}
+
+	for ref, err := range s.cmdStatus {
+		msg := "ok"
+		if err != nil {
+			msg = err.Error()
+		}
+		status := &packp.CommandStatus{
+			ReferenceName: ref,
+			Status:        msg,
+		}
+		rs.CommandStatuses = append(rs.CommandStatuses, status)
+	}
+
+	return rs
+}
+
+func (*rpSession) setSupportedCapabilities(c *capability.List) error {
+	if err := c.Set(capability.Agent, capability.DefaultAgent()); err != nil {
+		return err
+	}
+
+	if err := c.Set(capability.OFSDelta); err != nil {
+		return err
+	}
+
+	if err := c.Set(capability.DeleteRefs); err != nil {
+		return err
+	}
+
+	return c.Set(capability.ReportStatus)
+}
+
+func setHEAD(s storer.Storer, ar *packp.AdvRefs) error {
+	ref, err := s.Reference(plumbing.HEAD)
+	if err == plumbing.ErrReferenceNotFound {
+		return nil
+	}
+
+	if err != nil {
+		return err
+	}
+
+	if ref.Type() == plumbing.SymbolicReference {
+		if err := ar.AddReference(ref); err != nil {
+			return nil
+		}
+
+		ref, err = storer.ResolveReference(s, ref.Target())
+		if err == plumbing.ErrReferenceNotFound {
+			return nil
+		}
+
+		if err != nil {
+			return err
+		}
+	}
+
+	if ref.Type() != plumbing.HashReference {
+		return plumbing.ErrInvalidType
+	}
+
+	h := ref.Hash()
+	ar.Head = &h
+
+	return nil
+}
+
+func setReferences(s storer.Storer, ar *packp.AdvRefs) error {
+	//TODO: add peeled references.
+	iter, err := s.IterReferences()
+	if err != nil {
+		return err
+	}
+
+	return iter.ForEach(func(ref *plumbing.Reference) error {
+		if ref.Type() != plumbing.HashReference {
+			return nil
+		}
+
+		ar.References[ref.Name().String()] = ref.Hash()
+		return nil
+	})
+}
+
+func referenceExists(s storer.ReferenceStorer, n plumbing.ReferenceName) (bool, error) {
+	_, err := s.Reference(n)
+	if err == plumbing.ErrReferenceNotFound {
+		return false, nil
+	}
+
+	return err == nil, err
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/transport/ssh/auth_method.go","mode":420,"size":9728,"sha256":"f63ecfeac2e1eb21fdadda3e17ed992e6c1173a81f4e05f47bc477b5811f05a0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":9728}
+package ssh
+
+import (
+	"errors"
+	"fmt"
+	"os"
+	"os/user"
+	"path/filepath"
+
+	"github.com/go-git/go-git/v5/plumbing/transport"
+
+	"github.com/skeema/knownhosts"
+	sshagent "github.com/xanzy/ssh-agent"
+	"golang.org/x/crypto/ssh"
+)
+
+const DefaultUsername = "git"
+
+// AuthMethod is the interface all auth methods for the ssh client
+// must implement. The clientConfig method returns the ssh client
+// configuration needed to establish an ssh connection.
+type AuthMethod interface {
+	transport.AuthMethod
+	// ClientConfig should return a valid ssh.ClientConfig to be used to create
+	// a connection to the SSH server.
+	ClientConfig() (*ssh.ClientConfig, error)
+}
+
+// The names of the AuthMethod implementations. To be returned by the
+// Name() method. Most git servers only allow PublicKeysName and
+// PublicKeysCallbackName.
+const (
+	KeyboardInteractiveName = "ssh-keyboard-interactive"
+	PasswordName            = "ssh-password"
+	PasswordCallbackName    = "ssh-password-callback"
+	PublicKeysName          = "ssh-public-keys"
+	PublicKeysCallbackName  = "ssh-public-key-callback"
+)
+
+// KeyboardInteractive implements AuthMethod by using a
+// prompt/response sequence controlled by the server.
+type KeyboardInteractive struct {
+	User      string
+	Challenge ssh.KeyboardInteractiveChallenge
+	HostKeyCallbackHelper
+}
+
+func (a *KeyboardInteractive) Name() string {
+	return KeyboardInteractiveName
+}
+
+func (a *KeyboardInteractive) String() string {
+	return fmt.Sprintf("user: %s, name: %s", a.User, a.Name())
+}
+
+func (a *KeyboardInteractive) ClientConfig() (*ssh.ClientConfig, error) {
+	return a.SetHostKeyCallbackAndAlgorithms(&ssh.ClientConfig{
+		User: a.User,
+		Auth: []ssh.AuthMethod{
+			a.Challenge,
+		},
+	})
+}
+
+// Password implements AuthMethod by using the given password.
+type Password struct {
+	User     string
+	Password string
+	HostKeyCallbackHelper
+}
+
+func (a *Password) Name() string {
+	return PasswordName
+}
+
+func (a *Password) String() string {
+	return fmt.Sprintf("user: %s, name: %s", a.User, a.Name())
+}
+
+func (a *Password) ClientConfig() (*ssh.ClientConfig, error) {
+	return a.SetHostKeyCallbackAndAlgorithms(&ssh.ClientConfig{
+		User: a.User,
+		Auth: []ssh.AuthMethod{ssh.Password(a.Password)},
+	})
+}
+
+// PasswordCallback implements AuthMethod by using a callback
+// to fetch the password.
+type PasswordCallback struct {
+	User     string
+	Callback func() (pass string, err error)
+	HostKeyCallbackHelper
+}
+
+func (a *PasswordCallback) Name() string {
+	return PasswordCallbackName
+}
+
+func (a *PasswordCallback) String() string {
+	return fmt.Sprintf("user: %s, name: %s", a.User, a.Name())
+}
+
+func (a *PasswordCallback) ClientConfig() (*ssh.ClientConfig, error) {
+	return a.SetHostKeyCallbackAndAlgorithms(&ssh.ClientConfig{
+		User: a.User,
+		Auth: []ssh.AuthMethod{ssh.PasswordCallback(a.Callback)},
+	})
+}
+
+// PublicKeys implements AuthMethod by using the given key pairs.
+type PublicKeys struct {
+	User   string
+	Signer ssh.Signer
+	HostKeyCallbackHelper
+}
+
+// NewPublicKeys returns a PublicKeys from a PEM encoded private key. An
+// encryption password should be given if the pemBytes contains a password
+// encrypted PEM block otherwise password should be empty. It supports RSA
+// (PKCS#1), PKCS#8, DSA (OpenSSL), and ECDSA private keys.
+func NewPublicKeys(user string, pemBytes []byte, password string) (*PublicKeys, error) {
+	signer, err := ssh.ParsePrivateKey(pemBytes)
+	if _, ok := err.(*ssh.PassphraseMissingError); ok {
+		signer, err = ssh.ParsePrivateKeyWithPassphrase(pemBytes, []byte(password))
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &PublicKeys{User: user, Signer: signer}, nil
+}
+
+// NewPublicKeysFromFile returns a PublicKeys from a file containing a PEM
+// encoded private key. An encryption password should be given if the pemBytes
+// contains a password encrypted PEM block otherwise password should be empty.
+func NewPublicKeysFromFile(user, pemFile, password string) (*PublicKeys, error) {
+	bytes, err := os.ReadFile(pemFile)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewPublicKeys(user, bytes, password)
+}
+
+func (a *PublicKeys) Name() string {
+	return PublicKeysName
+}
+
+func (a *PublicKeys) String() string {
+	return fmt.Sprintf("user: %s, name: %s", a.User, a.Name())
+}
+
+func (a *PublicKeys) ClientConfig() (*ssh.ClientConfig, error) {
+	return a.SetHostKeyCallbackAndAlgorithms(&ssh.ClientConfig{
+		User: a.User,
+		Auth: []ssh.AuthMethod{ssh.PublicKeys(a.Signer)},
+	})
+}
+
+func username() (string, error) {
+	var username string
+	if user, err := user.Current(); err == nil {
+		username = user.Username
+	} else {
+		username = os.Getenv("USER")
+	}
+
+	if username == "" {
+		return "", errors.New("failed to get username")
+	}
+
+	return username, nil
+}
+
+// PublicKeysCallback implements AuthMethod by asking a
+// ssh.agent.Agent to act as a signer.
+type PublicKeysCallback struct {
+	User     string
+	Callback func() (signers []ssh.Signer, err error)
+	HostKeyCallbackHelper
+}
+
+// NewSSHAgentAuth returns a PublicKeysCallback based on a SSH agent, it opens
+// a pipe with the SSH agent and uses the pipe as the implementer of the public
+// key callback function.
+func NewSSHAgentAuth(u string) (*PublicKeysCallback, error) {
+	var err error
+	if u == "" {
+		u, err = username()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	a, _, err := sshagent.New()
+	if err != nil {
+		return nil, fmt.Errorf("error creating SSH agent: %q", err)
+	}
+
+	return &PublicKeysCallback{
+		User:     u,
+		Callback: a.Signers,
+	}, nil
+}
+
+func (a *PublicKeysCallback) Name() string {
+	return PublicKeysCallbackName
+}
+
+func (a *PublicKeysCallback) String() string {
+	return fmt.Sprintf("user: %s, name: %s", a.User, a.Name())
+}
+
+func (a *PublicKeysCallback) ClientConfig() (*ssh.ClientConfig, error) {
+	return a.SetHostKeyCallbackAndAlgorithms(&ssh.ClientConfig{
+		User: a.User,
+		Auth: []ssh.AuthMethod{ssh.PublicKeysCallback(a.Callback)},
+	})
+}
+
+// NewKnownHostsCallback returns ssh.HostKeyCallback based on a file based on a
+// known_hosts file. http://man.openbsd.org/sshd#SSH_KNOWN_HOSTS_FILE_FORMAT
+//
+// If list of files is empty, then it will be read from the SSH_KNOWN_HOSTS
+// environment variable, example:
+//
+//	/home/foo/custom_known_hosts_file:/etc/custom_known/hosts_file
+//
+// If SSH_KNOWN_HOSTS is not set the following file locations will be used:
+//
+//	~/.ssh/known_hosts
+//	/etc/ssh/ssh_known_hosts
+func NewKnownHostsCallback(files ...string) (ssh.HostKeyCallback, error) {
+	kh, err := NewKnownHostsDb(files...)
+	if err != nil {
+		return nil, err
+	}
+	return kh.HostKeyCallback(), nil
+}
+
+// NewKnownHostsDb returns knownhosts.HostKeyDB based on a file based on a
+// known_hosts file. http://man.openbsd.org/sshd#SSH_KNOWN_HOSTS_FILE_FORMAT
+//
+// If list of files is empty, then it will be read from the SSH_KNOWN_HOSTS
+// environment variable, example:
+//
+//	/home/foo/custom_known_hosts_file:/etc/custom_known/hosts_file
+//
+// If SSH_KNOWN_HOSTS is not set the following file locations will be used:
+//
+//	~/.ssh/known_hosts
+//	/etc/ssh/ssh_known_hosts
+func NewKnownHostsDb(files ...string) (*knownhosts.HostKeyDB, error) {
+	var err error
+
+	if len(files) == 0 {
+		if files, err = getDefaultKnownHostsFiles(); err != nil {
+			return nil, err
+		}
+	}
+
+	if files, err = filterKnownHostsFiles(files...); err != nil {
+		return nil, err
+	}
+
+	return knownhosts.NewDB(files...)
+}
+
+func getDefaultKnownHostsFiles() ([]string, error) {
+	files := filepath.SplitList(os.Getenv("SSH_KNOWN_HOSTS"))
+	if len(files) != 0 {
+		return files, nil
+	}
+
+	homeDirPath, err := os.UserHomeDir()
+	if err != nil {
+		return nil, err
+	}
+
+	return []string{
+		filepath.Join(homeDirPath, "/.ssh/known_hosts"),
+		"/etc/ssh/ssh_known_hosts",
+	}, nil
+}
+
+func filterKnownHostsFiles(files ...string) ([]string, error) {
+	var out []string
+	for _, file := range files {
+		_, err := os.Stat(file)
+		if err == nil {
+			out = append(out, file)
+			continue
+		}
+
+		if !os.IsNotExist(err) {
+			return nil, err
+		}
+	}
+
+	if len(out) == 0 {
+		return nil, fmt.Errorf("unable to find any valid known_hosts file, set SSH_KNOWN_HOSTS env variable")
+	}
+
+	return out, nil
+}
+
+// HostKeyCallbackHelper is a helper that provides common functionality to
+// configure HostKeyCallback and HostKeyAlgorithms into a ssh.ClientConfig.
+type HostKeyCallbackHelper struct {
+	// HostKeyCallback is the function type used for verifying server keys.
+	// If nil, a default callback will be created using NewKnownHostsDb
+	// without argument.
+	HostKeyCallback ssh.HostKeyCallback
+
+	// HostKeyAlgorithms is a list of supported host key algorithms that will
+	// be used for host key verification.
+	HostKeyAlgorithms []string
+
+	// fallback allows for injecting the fallback call, which is called
+	// when a HostKeyCallback is not set.
+	fallback func(files ...string) (ssh.HostKeyCallback, error)
+}
+
+// SetHostKeyCallbackAndAlgorithms sets the field HostKeyCallback and HostKeyAlgorithms in the given cfg.
+// If the host key callback or algorithms is empty it is left empty. It will be handled by the dial method,
+// falling back to knownhosts.
+func (m *HostKeyCallbackHelper) SetHostKeyCallbackAndAlgorithms(cfg *ssh.ClientConfig) (*ssh.ClientConfig, error) {
+	if cfg == nil {
+		cfg = &ssh.ClientConfig{}
+	}
+
+	if m.HostKeyCallback == nil {
+		if m.fallback == nil {
+			m.fallback = NewKnownHostsCallback
+		}
+
+		hkcb, err := m.fallback()
+		if err != nil {
+			return nil, fmt.Errorf("cannot create known hosts callback: %w", err)
+		}
+
+		cfg.HostKeyCallback = hkcb
+		cfg.HostKeyAlgorithms = m.HostKeyAlgorithms
+		return cfg, err
+	}
+
+	cfg.HostKeyCallback = m.HostKeyCallback
+	cfg.HostKeyAlgorithms = m.HostKeyAlgorithms
+	return cfg, nil
+}
+
+func (m *HostKeyCallbackHelper) SetHostKeyCallback(cfg *ssh.ClientConfig) (*ssh.ClientConfig, error) {
+	return m.SetHostKeyCallbackAndAlgorithms(cfg)
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/transport/ssh/common.go","mode":420,"size":7280,"sha256":"109fc3bf9a2b3f4ba3ef9ef2dac8f1e9c0185661b986def8e5393bf414fa4ebc","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7280}
+// Package ssh implements the SSH transport protocol.
+package ssh
+
+import (
+	"context"
+	"fmt"
+	"net"
+	"reflect"
+	"strconv"
+	"strings"
+
+	"github.com/go-git/go-git/v5/plumbing/transport"
+	"github.com/go-git/go-git/v5/plumbing/transport/internal/common"
+
+	"github.com/kevinburke/ssh_config"
+	"golang.org/x/crypto/ssh"
+	"golang.org/x/net/proxy"
+)
+
+// DefaultClient is the default SSH client.
+var DefaultClient = NewClient(nil)
+
+// DefaultSSHConfig is the reader used to access parameters stored in the
+// system's ssh_config files. If nil all the ssh_config are ignored.
+var DefaultSSHConfig sshConfig = ssh_config.DefaultUserSettings
+
+type sshConfig interface {
+	Get(alias, key string) string
+}
+
+// NewClient creates a new SSH client with an optional *ssh.ClientConfig.
+func NewClient(config *ssh.ClientConfig) transport.Transport {
+	return common.NewClient(&runner{config: config})
+}
+
+// DefaultAuthBuilder is the function used to create a default AuthMethod, when
+// the user doesn't provide any.
+var DefaultAuthBuilder = func(user string) (AuthMethod, error) {
+	return NewSSHAgentAuth(user)
+}
+
+const DefaultPort = 22
+
+type runner struct {
+	config *ssh.ClientConfig
+}
+
+func (r *runner) Command(cmd string, ep *transport.Endpoint, auth transport.AuthMethod) (common.Command, error) {
+	c := &command{command: cmd, endpoint: ep, config: r.config}
+	if auth != nil {
+		if err := c.setAuth(auth); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := c.connect(); err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
+type command struct {
+	*ssh.Session
+	connected bool
+	command   string
+	endpoint  *transport.Endpoint
+	client    *ssh.Client
+	auth      AuthMethod
+	config    *ssh.ClientConfig
+}
+
+func (c *command) setAuth(auth transport.AuthMethod) error {
+	a, ok := auth.(AuthMethod)
+	if !ok {
+		return transport.ErrInvalidAuthMethod
+	}
+
+	c.auth = a
+	return nil
+}
+
+func (c *command) Start() error {
+	return c.Session.Start(endpointToCommand(c.command, c.endpoint))
+}
+
+// Close closes the SSH session and connection.
+func (c *command) Close() error {
+	if !c.connected {
+		return nil
+	}
+
+	c.connected = false
+
+	//XXX: If did read the full packfile, then the session might be already
+	//     closed.
+	_ = c.Session.Close()
+	err := c.client.Close()
+
+	//XXX: in go1.16+ we can use errors.Is(err, net.ErrClosed)
+	if err != nil && strings.HasSuffix(err.Error(), "use of closed network connection") {
+		return nil
+	}
+
+	return err
+}
+
+// connect connects to the SSH server, unless a AuthMethod was set with
+// SetAuth method, by default uses an auth method based on PublicKeysCallback,
+// it connects to a SSH agent, using the address stored in the SSH_AUTH_SOCK
+// environment var.
+func (c *command) connect() error {
+	if c.connected {
+		return transport.ErrAlreadyConnected
+	}
+
+	if c.auth == nil {
+		if err := c.setAuthFromEndpoint(); err != nil {
+			return err
+		}
+	}
+
+	var err error
+	config, err := c.auth.ClientConfig()
+	if err != nil {
+		return err
+	}
+	hostWithPort := c.getHostWithPort()
+	if config.HostKeyCallback == nil {
+		db, err := NewKnownHostsDb()
+		if err != nil {
+			return err
+		}
+		config.HostKeyCallback = db.HostKeyCallback()
+		config.HostKeyAlgorithms = db.HostKeyAlgorithms(hostWithPort)
+	} else {
+		// If the user gave a custom HostKeyCallback, we do not try to detect host key algorithms
+		// based on knownhosts functionality, as the user may be requesting a FixedKey or using a
+		// different key approval strategy. In that case, the user is responsible for populating
+		// HostKeyAlgorithms appropriately
+	}
+
+	overrideConfig(c.config, config)
+
+	c.client, err = dial("tcp", hostWithPort, c.endpoint.Proxy, config)
+	if err != nil {
+		return err
+	}
+
+	c.Session, err = c.client.NewSession()
+	if err != nil {
+		_ = c.client.Close()
+		return err
+	}
+
+	c.connected = true
+	return nil
+}
+
+func dial(network, addr string, proxyOpts transport.ProxyOptions, config *ssh.ClientConfig) (*ssh.Client, error) {
+	var (
+		ctx    = context.Background()
+		cancel context.CancelFunc
+	)
+	if config.Timeout > 0 {
+		ctx, cancel = context.WithTimeout(ctx, config.Timeout)
+	} else {
+		ctx, cancel = context.WithCancel(ctx)
+	}
+	defer cancel()
+
+	var conn net.Conn
+	var dialErr error
+
+	if proxyOpts.URL != "" {
+		proxyUrl, err := proxyOpts.FullURL()
+		if err != nil {
+			return nil, err
+		}
+		dialer, err := proxy.FromURL(proxyUrl, proxy.Direct)
+		if err != nil {
+			return nil, err
+		}
+
+		// Try to use a ContextDialer, but fall back to a Dialer if that goes south.
+		ctxDialer, ok := dialer.(proxy.ContextDialer)
+		if !ok {
+			return nil, fmt.Errorf("expected ssh proxy dialer to be of type %s; got %s",
+				reflect.TypeOf(ctxDialer), reflect.TypeOf(dialer))
+		}
+		conn, dialErr = ctxDialer.DialContext(ctx, "tcp", addr)
+	} else {
+		conn, dialErr = proxy.Dial(ctx, network, addr)
+	}
+	if dialErr != nil {
+		return nil, dialErr
+	}
+
+	c, chans, reqs, err := ssh.NewClientConn(conn, addr, config)
+	if err != nil {
+		return nil, err
+	}
+	return ssh.NewClient(c, chans, reqs), nil
+}
+
+func (c *command) getHostWithPort() string {
+	if addr, found := c.doGetHostWithPortFromSSHConfig(); found {
+		return addr
+	}
+
+	host := c.endpoint.Host
+	port := c.endpoint.Port
+	if port <= 0 {
+		port = DefaultPort
+	}
+
+	return net.JoinHostPort(host, strconv.Itoa(port))
+}
+
+func (c *command) doGetHostWithPortFromSSHConfig() (addr string, found bool) {
+	if DefaultSSHConfig == nil {
+		return
+	}
+
+	host := c.endpoint.Host
+	port := c.endpoint.Port
+
+	configHost := DefaultSSHConfig.Get(c.endpoint.Host, "Hostname")
+	if configHost != "" {
+		host = configHost
+		found = true
+	}
+
+	if !found {
+		return
+	}
+
+	configPort := DefaultSSHConfig.Get(c.endpoint.Host, "Port")
+	if configPort != "" {
+		if i, err := strconv.Atoi(configPort); err == nil {
+			port = i
+		}
+	}
+
+	addr = net.JoinHostPort(host, strconv.Itoa(port))
+	return
+}
+
+func (c *command) setAuthFromEndpoint() error {
+	var err error
+	c.auth, err = DefaultAuthBuilder(c.endpoint.User)
+	return err
+}
+
+func endpointToCommand(cmd string, ep *transport.Endpoint) string {
+	var b strings.Builder
+	b.WriteString(cmd)
+	b.WriteByte(' ')
+	writeShellQuote(&b, ep.Path)
+	return b.String()
+}
+
+// writeShellQuote writes s to b, wrapped in single quotes with
+// embedded single quotes and exclamation marks escaped using the
+// POSIX close-escape-reopen idiom:
+//
+//	' becomes '\''
+//	! becomes '\!'
+//
+// It is a direct port of canonical Git's sq_quote_buf (quote.c).
+// The bang escape keeps the result safe when re-evaluated under
+// csh-derived shells that perform history expansion. The output is
+// safe to pass as a single argument through any POSIX shell and
+// round-trips through git-shell's sq_dequote_to_argv.
+func writeShellQuote(b *strings.Builder, s string) {
+	b.Grow(len(s) + 2)
+	b.WriteByte('\'')
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c == '\'' || c == '!' {
+			b.WriteString(`'\`)
+			b.WriteByte(c)
+			b.WriteByte('\'')
+			continue
+		}
+		b.WriteByte(c)
+	}
+	b.WriteByte('\'')
+}
+
+func overrideConfig(overrides *ssh.ClientConfig, c *ssh.ClientConfig) {
+	if overrides == nil {
+		return
+	}
+
+	t := reflect.TypeOf(*c)
+	vc := reflect.ValueOf(c).Elem()
+	vo := reflect.ValueOf(overrides).Elem()
+
+	for i := 0; i < t.NumField(); i++ {
+		f := t.Field(i)
+		vcf := vc.FieldByName(f.Name)
+		vof := vo.FieldByName(f.Name)
+		vcf.Set(vof)
+	}
+
+	*c = vc.Interface().(ssh.ClientConfig)
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/prune.go","mode":420,"size":1690,"sha256":"6cf33782619b6ff0af9c081e46323f423f8b49bf3d043887c0549bef47d60f55","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1690}
+package git
+
+import (
+	"errors"
+	"time"
+
+	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/storer"
+)
+
+type PruneHandler func(unreferencedObjectHash plumbing.Hash) error
+type PruneOptions struct {
+	// OnlyObjectsOlderThan if set to non-zero value
+	// selects only objects older than the time provided.
+	OnlyObjectsOlderThan time.Time
+	// Handler is called on matching objects
+	Handler PruneHandler
+}
+
+var ErrLooseObjectsNotSupported = errors.New("loose objects not supported")
+
+// DeleteObject deletes an object from a repository.
+// The type conveniently matches PruneHandler.
+func (r *Repository) DeleteObject(hash plumbing.Hash) error {
+	los, ok := r.Storer.(storer.LooseObjectStorer)
+	if !ok {
+		return ErrLooseObjectsNotSupported
+	}
+
+	return los.DeleteLooseObject(hash)
+}
+
+func (r *Repository) Prune(opt PruneOptions) error {
+	los, ok := r.Storer.(storer.LooseObjectStorer)
+	if !ok {
+		return ErrLooseObjectsNotSupported
+	}
+
+	pw := newObjectWalker(r.Storer)
+	err := pw.walkAllRefs()
+	if err != nil {
+		return err
+	}
+	// Now walk all (loose) objects in storage.
+	return los.ForEachObjectHash(func(hash plumbing.Hash) error {
+		// Get out if we have seen this object.
+		if pw.isSeen(hash) {
+			return nil
+		}
+		// Otherwise it is a candidate for pruning.
+		// Check out for too new objects next.
+		if !opt.OnlyObjectsOlderThan.IsZero() {
+			// Errors here are non-fatal. The object may be e.g. packed.
+			// Or concurrently deleted. Skip such objects.
+			t, err := los.LooseObjectTime(hash)
+			if err != nil {
+				return nil
+			}
+			// Skip too new objects.
+			if !t.Before(opt.OnlyObjectsOlderThan) {
+				return nil
+			}
+		}
+		return opt.Handler(hash)
+	})
+}
+
+@@END
 @@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/remote.go","mode":420,"size":36990,"sha256":"91f1e6c11e5a7b8dd88c62562887e392dc87c8fc179ac2a18220c00126cb8644","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":36990}
 package git
 
@@ -103165,639 +105030,5 @@ func As(err error, target interface{}) bool { return stderrors.As(err, target) }
 func Unwrap(err error) error {
 	return stderrors.Unwrap(err)
 }
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/pkg/errors/stack.go","mode":420,"size":4221,"sha256":"ee30b2b9525acc7749abb992f150e6d5673c63c1ef8c30620ec70eed11abec35","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4221}
-package errors
-
-import (
-	"fmt"
-	"io"
-	"path"
-	"runtime"
-	"strconv"
-	"strings"
-)
-
-// Frame represents a program counter inside a stack frame.
-// For historical reasons if Frame is interpreted as a uintptr
-// its value represents the program counter + 1.
-type Frame uintptr
-
-// pc returns the program counter for this frame;
-// multiple frames may have the same PC value.
-func (f Frame) pc() uintptr { return uintptr(f) - 1 }
-
-// file returns the full path to the file that contains the
-// function for this Frame's pc.
-func (f Frame) file() string {
-	fn := runtime.FuncForPC(f.pc())
-	if fn == nil {
-		return "unknown"
-	}
-	file, _ := fn.FileLine(f.pc())
-	return file
-}
-
-// line returns the line number of source code of the
-// function for this Frame's pc.
-func (f Frame) line() int {
-	fn := runtime.FuncForPC(f.pc())
-	if fn == nil {
-		return 0
-	}
-	_, line := fn.FileLine(f.pc())
-	return line
-}
-
-// name returns the name of this function, if known.
-func (f Frame) name() string {
-	fn := runtime.FuncForPC(f.pc())
-	if fn == nil {
-		return "unknown"
-	}
-	return fn.Name()
-}
-
-// Format formats the frame according to the fmt.Formatter interface.
-//
-//    %s    source file
-//    %d    source line
-//    %n    function name
-//    %v    equivalent to %s:%d
-//
-// Format accepts flags that alter the printing of some verbs, as follows:
-//
-//    %+s   function name and path of source file relative to the compile time
-//          GOPATH separated by \n\t (<funcname>\n\t<path>)
-//    %+v   equivalent to %+s:%d
-func (f Frame) Format(s fmt.State, verb rune) {
-	switch verb {
-	case 's':
-		switch {
-		case s.Flag('+'):
-			io.WriteString(s, f.name())
-			io.WriteString(s, "\n\t")
-			io.WriteString(s, f.file())
-		default:
-			io.WriteString(s, path.Base(f.file()))
-		}
-	case 'd':
-		io.WriteString(s, strconv.Itoa(f.line()))
-	case 'n':
-		io.WriteString(s, funcname(f.name()))
-	case 'v':
-		f.Format(s, 's')
-		io.WriteString(s, ":")
-		f.Format(s, 'd')
-	}
-}
-
-// MarshalText formats a stacktrace Frame as a text string. The output is the
-// same as that of fmt.Sprintf("%+v", f), but without newlines or tabs.
-func (f Frame) MarshalText() ([]byte, error) {
-	name := f.name()
-	if name == "unknown" {
-		return []byte(name), nil
-	}
-	return []byte(fmt.Sprintf("%s %s:%d", name, f.file(), f.line())), nil
-}
-
-// StackTrace is stack of Frames from innermost (newest) to outermost (oldest).
-type StackTrace []Frame
-
-// Format formats the stack of Frames according to the fmt.Formatter interface.
-//
-//    %s	lists source files for each Frame in the stack
-//    %v	lists the source file and line number for each Frame in the stack
-//
-// Format accepts flags that alter the printing of some verbs, as follows:
-//
-//    %+v   Prints filename, function, and line number for each Frame in the stack.
-func (st StackTrace) Format(s fmt.State, verb rune) {
-	switch verb {
-	case 'v':
-		switch {
-		case s.Flag('+'):
-			for _, f := range st {
-				io.WriteString(s, "\n")
-				f.Format(s, verb)
-			}
-		case s.Flag('#'):
-			fmt.Fprintf(s, "%#v", []Frame(st))
-		default:
-			st.formatSlice(s, verb)
-		}
-	case 's':
-		st.formatSlice(s, verb)
-	}
-}
-
-// formatSlice will format this StackTrace into the given buffer as a slice of
-// Frame, only valid when called with '%s' or '%v'.
-func (st StackTrace) formatSlice(s fmt.State, verb rune) {
-	io.WriteString(s, "[")
-	for i, f := range st {
-		if i > 0 {
-			io.WriteString(s, " ")
-		}
-		f.Format(s, verb)
-	}
-	io.WriteString(s, "]")
-}
-
-// stack represents a stack of program counters.
-type stack []uintptr
-
-func (s *stack) Format(st fmt.State, verb rune) {
-	switch verb {
-	case 'v':
-		switch {
-		case st.Flag('+'):
-			for _, pc := range *s {
-				f := Frame(pc)
-				fmt.Fprintf(st, "\n%+v", f)
-			}
-		}
-	}
-}
-
-func (s *stack) StackTrace() StackTrace {
-	f := make([]Frame, len(*s))
-	for i := 0; i < len(f); i++ {
-		f[i] = Frame((*s)[i])
-	}
-	return f
-}
-
-func callers() *stack {
-	const depth = 32
-	var pcs [depth]uintptr
-	n := runtime.Callers(3, pcs[:])
-	var st stack = pcs[0:n]
-	return &st
-}
-
-// funcname removes the path prefix component of a function's name reported by func.Name().
-func funcname(name string) string {
-	i := strings.LastIndex(name, "/")
-	name = name[i+1:]
-	i = strings.Index(name, ".")
-	return name[i+1:]
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/pterm/pterm/.gitignore","mode":420,"size":342,"sha256":"aa071fbb9ed9e1dae7cfc568d68d272e433bc421976779f1d77534bf73d7e887","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":342}
-# Binaries for programs and plugins
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
-
-# Test binary, built with `go test -c`
-*.test
-
-# Output of the go coverage tool, specifically when used with LiteIDE
-*.out
-
-# Dependency directories (remove the comment below to include it)
-vendor/
-
-# This is where we test stuff
-/experimenting/*
-
-/.history
-/.vscode
-/.idea
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/pterm/pterm/.golangci.yml","mode":420,"size":1850,"sha256":"56d22d9ba31f167939a3d86db03a9eb337bbab4da969d07bc7729942086e7eae","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1850}
-linters-settings:
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - experimental
-      - opinionated
-      - performance
-      - style
-    disabled-checks:
-      - dupImport
-      - ifElseChain
-      - octalLiteral
-      - whyNoLint
-      - wrapperFunc
-      - exitAfterDefer
-      - hugeParam
-      - ptrToRefParam
-      - paramTypeCombine
-      - unnamedResult
-  #  maligned:
-  #    suggest-new: true
-  misspell:
-    locale: US
-linters:
-  disable-all: true
-  enable:
-    - gocritic
-    - gosec
-    - govet
-    - ineffassign
-    - unconvert
-    - gosimple
-    - godox
-    - whitespace
-    - staticcheck
-  #    - bodyclose
-  #    - maligned
-  #    - godot
-  #    - deadcode
-  #    - depguard
-  #    - dogsled
-  #    - dupl
-  #    - errcheck
-  #    - exhaustive
-  #    - funlen
-  #    - gochecknoinits
-  #    - goconst
-  #    - gocyclo
-  #    - gofmt
-  #    - goimports
-  #    - golint
-  #    - gomnd
-  #    - goprintffuncname
-  #    - lll
-  #    - misspell
-  #    - nakedret
-  #    - noctx
-  #    - nolintlint
-  #    - rowserrcheck
-  #    - scopelint
-  #    - structcheck
-  #    - stylecheck
-  #    - typecheck
-  #    - unparam
-  #    - unused
-  #    - varcheck
-  #    - whitespace
-  #   - asciicheck
-  #   - gochecknoglobals
-  #   - gocognit
-  #   - goerr113
-  #   - nestif
-  #   - prealloc
-  #   - testpackage
-  #   - wsl
-issues:
-  # Excluding configuration per-path, per-linter, per-text and per-source
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - gocyclo
-        - errcheck
-        - dupl
-        - gosec
-        - gocritic
-    # https://github.com/go-critic/go-critic/issues/926
-    - linters:
-        - gocritic
-      text: "unnecessaryDefer:"
-    - linters:
-        - gocritic
-      text: "preferDecodeRune:"
-service:
-  golangci-lint-version: 1.31.x # use the fixed version to not introduce new linters unexpectedly
-
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/pterm/pterm/CODE_OF_CONDUCT.md","mode":420,"size":3354,"sha256":"9e8d978f4dbb0ee5d972febdfd06ff4308686eed86d064f177dcf9f29971981a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3354}
-# Contributor Covenant Code of Conduct
-
-## Our Pledge
-
-In the interest of fostering an open and welcoming environment, we as
-contributors and maintainers pledge to making participation in our project and
-our community a harassment-free experience for everyone, regardless of age, body
-size, disability, ethnicity, sex characteristics, gender identity and expression,
-level of experience, education, socio-economic status, nationality, personal
-appearance, race, religion, or sexual identity and orientation.
-
-## Our Standards
-
-Examples of behavior that contributes to creating a positive environment
-include:
-
-* Using welcoming and inclusive language
-* Being respectful of differing viewpoints and experiences
-* Gracefully accepting constructive criticism
-* Focusing on what is best for the community
-* Showing empathy towards other community members
-
-Examples of unacceptable behavior by participants include:
-
-* The use of sexualized language or imagery and unwelcome sexual attention or
- advances
-* Trolling, insulting/derogatory comments, and personal or political attacks
-* Public or private harassment
-* Publishing others' private information, such as a physical or electronic
- address, without explicit permission
-* Other conduct which could reasonably be considered inappropriate in a
- professional setting
-
-## Our Responsibilities
-
-Project maintainers are responsible for clarifying the standards of acceptable
-behavior and are expected to take appropriate and fair corrective action in
-response to any instances of unacceptable behavior.
-
-Project maintainers have the right and responsibility to remove, edit, or
-reject comments, commits, code, wiki edits, issues, and other contributions
-that are not aligned to this Code of Conduct, or to ban temporarily or
-permanently any contributor for other behaviors that they deem inappropriate,
-threatening, offensive, or harmful.
-
-## Scope
-
-This Code of Conduct applies both within project spaces and in public spaces
-when an individual is representing the project or its community. Examples of
-representing a project or community include using an official project e-mail
-address, posting via an official social media account, or acting as an appointed
-representative at an online or offline event. Representation of a project may be
-further defined and clarified by project maintainers.
-
-## Enforcement
-
-Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported by contacting the project team at pterm@marvinjwendt.com. All
-complaints will be reviewed and investigated and will result in a response that
-is deemed necessary and appropriate to the circumstances. The project team is
-obligated to maintain confidentiality with regard to the reporter of an incident.
-Further details of specific enforcement policies may be posted separately.
-
-Project maintainers who do not follow or enforce the Code of Conduct in good
-faith may face temporary or permanent repercussions as determined by other
-members of the project's leadership.
-
-## Attribution
-
-This Code of Conduct is adapted from the [Contributor Covenant][homepage], version 1.4,
-available at https://www.contributor-covenant.org/version/1/4/code-of-conduct.html
-
-[homepage]: https://www.contributor-covenant.org
-
-For answers to common questions about this code of conduct, see
-https://www.contributor-covenant.org/faq
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/pterm/pterm/CONTRIBUTING.md","mode":420,"size":5937,"sha256":"2e7200df1a60120e2d93d34b4203c83f201807db80ff6d310a4bc97bf418e723","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5937}
-# Contributing to PTerm
-
-> This document explains how to participate in the development of PTerm.\
-If your goal is to report a bug instead of programming PTerm, you can do so [here](https://github.com/pterm/pterm/issues?q=is%3Aissue+is%3Aopen+sort%3Aupdated-desc).
-
-## Best practise
-
-We enforce some best practises, especially made for PTerm, to provide a clean and consistent user experience.
-
-### Styles
-
-Styles should always be consumed as pointers. That way, the user can change the style of printers globally.
-
-## Creating a new printer
-
-> In this chapter we will show you how to create a new printer.
-
-### `TextPrinter` Template
-```go
-package pterm
-
-type TemplatePrinter struct{
-	// TODO: Add printer settings here
-}
-
-// Sprint formats using the default formats for its operands and returns the resulting string.
-// Spaces are added between operands when neither is a string.
-func (p TemplatePrinter) Sprint(a ...any) string {
-	panic("write printer code here")
-}
-
-// Sprintln formats using the default formats for its operands and returns the resulting string.
-// Spaces are always added between operands and a newline is appended.
-func (p TemplatePrinter) Sprintln(a ...any) string {
-	return Sprintln(p.Sprint(a...))
-}
-
-// Sprintf formats according to a format specifier and returns the resulting string.
-func (p TemplatePrinter) Sprintf(format string, a ...any) string {
-	return p.Sprint(Sprintf(format, a...))
-}
-
-// Print formats using the default formats for its operands and writes to standard output.
-// Spaces are added between operands when neither is a string.
-// It returns the number of bytes written and any write error encountered.
-func (p TemplatePrinter) Print(a ...any) *TextPrinter {
-	Print(p.Sprint(a...))
-	tp := TextPrinter(p)
-	return &tp
-}
-
-// Println formats using the default formats for its operands and writes to standard output.
-// Spaces are always added between operands and a newline is appended.
-// It returns the number of bytes written and any write error encountered.
-func (p TemplatePrinter) Println(a ...any) *TextPrinter {
-	Println(p.Sprint(a...))
-    tp := TextPrinter(p)
-    return &tp
-}
-
-// Printf formats according to a format specifier and writes to standard output.
-// It returns the number of bytes written and any write error encountered.
-func (p TemplatePrinter) Printf(format string, a ...any) *TextPrinter {
-	Print(p.Sprintf(format, a...))
-	tp := TextPrinter(p)
-	return &tp
-}
-```
-
-### `RenderablePrinter` Template
-
-```go
-package pterm
-
-type TemplatePrinter struct{
-	// TODO: Add printer settings here
-}
-
-// Srender renders the Template as a string.
-func (p TemplatePrinter) Srender() (string, error) {
-	var ret strings.Builder
-
-    return ret.String(), nil
-}
-
-// Render prints the Template to the terminal.
-func (p TemplatePrinter) Render() error {
-	s, err := p.Srender()
-    if err != nil {
-        return err
-    }
-    Println(s)
-
-    return nil
-}
-```
-
-### `LivePrinter` Template
-
-```go
-// Start the TemplatePrinter.
-package pterm
-import "github.com/pterm/pterm"
-
-type TemplatePrinter struct{
-
-}
-
-
-func (s TemplatePrinter) Start(text...any) (*TemplatePrinter, error) { // TODO: Replace Template with actual printer.
-	// TODO: start logic
-	return &s, nil
-}
-
-// Stop terminates the TemplatePrinter immediately.
-// The TemplatePrinter will not resolve into anything.
-func (s *TemplatePrinter) Stop() error {
-	// TODO: stop logic
-    return nil
-}
-
-// GenericStart runs Start, but returns a LivePrinter.
-// This is used for the interface LivePrinter.
-// You most likely want to use Start instead of this in your program.
-func (s *TemplatePrinter) GenericStart() (*LivePrinter, error) {
-	_, err := s.Start()
-	lp := LivePrinter(s)
-	return &lp, err
-}
-
-// GenericStop runs Stop, but returns a LivePrinter.
-// This is used for the interface LivePrinter.
-// You most likely want to use Stop instead of this in your program.
-func (s *TemplatePrinter) GenericStop() (*LivePrinter, error) {
-	err := s.Stop()
-	lp := LivePrinter(s)
-	return &lp, err
-}
-```
-
-## Writing Tests
-
-> Each method of PTerm must be tested.
-
-### Required tests for every printer
-
-#### Nil Check
-
-> This ensures that a printer without set values will not produce errors.
-
-```go
-func TestTemplatePrinterNilPrint(t *testing.T) { // TODO: Replace "Template" with actual printer name.
-	p := TemplatePrinter{} // TODO: Replace "Template" with actual printer name.
-	p.Println("Hello, World!")
-}
-```
-
-#### `WithXxx()` Methods
-
-> Each method, which starts with `With` can be tested by checking if it actually creates a new printer and sets the value.
-
-Example from `SectionPrinter`:
-
-```go
-func TestSectionPrinter_WithStyle(t *testing.T) {
-	p := SectionPrinter{}
-	s := NewStyle(FgRed, BgRed, Bold)
-	p2 := p.WithStyle(s)
-
-	assert.Equal(t, s, p2.Style)
-	assert.Empty(t, p.Style)
-}
-
-func TestSectionPrinter_WithTopPadding(t *testing.T) {
-	p := SectionPrinter{}
-	p2 := p.WithTopPadding(1337)
-
-	assert.Equal(t, 1337, p2.TopPadding)
-	assert.Empty(t, p.TopPadding)
-}
-```
-
-### `TextPrinter` Tests Template
-
-```go
-func TestTemplatePrinterPrintMethods(t *testing.T) { // TODO: Replace "Template" with actual printer name.
-	p := DefaultTemplate // TODO: Replace "Template" with actual printer name.
-
-	t.Run("Print", func(t *testing.T) {
-		testPrintContains(t, func(w io.Writer, a any) {
-			p.Print(a)
-		})
-	})
-
-	t.Run("Printf", func(t *testing.T) {
-		testPrintfContains(t, func(w io.Writer, format string, a any) {
-			p.Printf(format, a)
-		})
-	})
-
-	t.Run("Println", func(t *testing.T) {
-		testPrintlnContains(t, func(w io.Writer, a any) {
-			p.Println(a)
-		})
-	})
-
-	t.Run("Sprint", func(t *testing.T) {
-		testSprintContains(t, func(a any) string {
-			return p.Sprint(a)
-		})
-	})
-
-	t.Run("Sprintf", func(t *testing.T) {
-		testSprintfContains(t, func(format string, a any) string {
-			return p.Sprintf(format, a)
-		})
-	})
-
-	t.Run("Sprintln", func(t *testing.T) {
-		testSprintlnContains(t, func(a any) string {
-			return p.Sprintln(a)
-		})
-	})
-}
-```
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/pterm/pterm/LICENSE","mode":420,"size":1062,"sha256":"8702741675cad477d4035629bea08d87c2e043d278d872ff948cc93008397cfe","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1062}
-MIT License
-
-Copyright (c) 2020 pterm
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
 
 @@END
