@@ -13422,7 +13422,7 @@ func (a *CommandAdapter) BuildSnapshot(ctx context.Context, projectRoot string, 
 }
 
 @@END
-@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":110475,"sha256":"53b9ece3f6373793f1ca5649a08fea65affb6d44df8b6f737ebc2e6a9e870706","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48254}
+@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":110861,"sha256":"291ca720a3bba0c8674ee8dff1ab1391e650d4e7f301fc96525ae3569ee9f29e","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48383}
 package desktop
 
 import (
@@ -14138,6 +14138,9 @@ func safeVerificationFindings(findings []map[string]any) ([]VerificationFinding,
 			parts := strings.Split(field, ".")
 			if len(parts) == 4 && parts[0] == "serviceDeployments" && parts[2] == "configuration" && runtimeSecretDescriptorRequirement.MatchString(parts[1]) && verificationSettingName.MatchString(parts[3]) {
 				finding.Summary = "У экземпляра сервиса «" + parts[1] + "» не задана обязательная ссылка на секрет в параметре «" + parts[3] + "». Настройте секрет и сохраните проект."
+				if finding.Severity == "WARNING" {
+					finding.Summary = "У экземпляра сервиса «" + parts[1] + "» не задана ссылка на секрет в параметре «" + parts[3] + "». Проверка проекта выполнена; настройте секрет и сохраните проект перед одобрением плана."
+				}
 			}
 		}
 		if code == "SERVICE_CONFIGURATION_PROPERTY_UNKNOWN" {
@@ -14523,16 +14526,16 @@ func (a *App) pendingRuntimeSecretDescriptorsLocked(serviceDeployment string) ([
 		if !runtimeSecretDescriptorRequirement.MatchString(input.RequirementRef) || input.DisplayLabel == "" || (input.Purpose != secretfiles.PurposeAdminToken && input.Purpose != secretfiles.PurposeUnsealShares) || input.RequiredWhen == "" || len(input.Operations) == 0 {
 			return nil, errors.New("RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE")
 		}
-		result = append(result, RuntimeSecretDescriptorView{RequirementRef: input.RequirementRef, Purpose: input.Purpose, ServiceDeployment: serviceDeployment, DisplayLabel: input.DisplayLabel, RequiredWhen: input.RequiredWhen, Operations: append([]string(nil), input.Operations...)})
+		result = append(result, RuntimeSecretDescriptorView{RequirementRef: input.RequirementRef, Purpose: input.Purpose, ServiceDeployment: s
+@@END
+@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":110861,"sha256":"291ca720a3bba0c8674ee8dff1ab1391e650d4e7f301fc96525ae3569ee9f29e","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":50135}
+erviceDeployment, DisplayLabel: input.DisplayLabel, RequiredWhen: input.RequiredWhen, Operations: append([]string(nil), input.Operations...)})
 	}
 	return result, nil
 }
 
 func (a *App) secretOutputEncryptionRequiredLocked() bool {
-	if a.current.Managed == nil
-@@END
-@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":110475,"sha256":"53b9ece3f6373793f1ca5649a08fea65affb6d44df8b6f737ebc2e6a9e870706","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":50268}
- || a.current.Catalog == nil || a.current.Catalog.Status != "READY" {
+	if a.current.Managed == nil || a.current.Catalog == nil || a.current.Catalog.Status != "READY" {
 		return false
 	}
 	declared := make(map[string]bool, len(a.current.Catalog.Services))
@@ -15503,14 +15506,14 @@ func projectErrorMessage(code string) string {
 	case "TARGET_HOST_TRUST_SERVER_INVALID":
 		return "У сохранённого сервера нет допустимого адреса или SSH-порта."
 	case "TARGET_HOST_KEY_PROBE_FAILED":
-		return "Не удалось получить SSH-ключ целевого сервера. Подключение не подтверждено."
+		return "Не удалось получить SSH-ключ 
+@@END
+@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":110861,"sha256":"291ca720a3bba0c8674ee8dff1ab1391e650d4e7f301fc96525ae3569ee9f29e","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":12343}
+целевого сервера. Подключение не подтверждено."
 	case "TARGET_HOST_KEY_APPROVAL_STALE":
 		return "Отпечаток целевого сервера устарел. Получите его снова и сверьте независимо."
 	case "TARGET_HOST_TRUST_REQUIRED":
-		return "Перед запуском подтвердите SSH-ключ
-@@END
-@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":110475,"sha256":"53b9ece3f6373793f1ca5649a08fea65affb6d44df8b6f737ebc2e6a9e870706","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":11953}
- каждого целевого сервера на странице Серверы."
+		return "Перед запуском подтвердите SSH-ключ каждого целевого сервера на странице Серверы."
 	case "TARGET_HOST_TRUST_INVALID":
 		return "Подтверждённые SSH-ключи не соответствуют адресам текущего плана. Запуск заблокирован."
 	case "EXECUTION_NODE_BINDING_INVALID":

@@ -810,7 +810,7 @@ class ActionModule(ActionBase):
             return dict(failed=True, changed=False, msg=code, error_code=code)
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/project_snapshot.py","mode":420,"size":47548,"sha256":"3b66d4dc11723a90c6e4381cd8f522bf1fcc4ee88a76f6552812b99af0b78ebd","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":47548}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/project_snapshot.py","mode":420,"size":48144,"sha256":"437f715f2c358fb8143d0e0faa527f4f4afcd86961d33c75130882b41f9a0a66","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":48144}
 from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
@@ -1434,12 +1434,19 @@ class ActionModule(ActionBase):
             _, _, secret_findings = _service_runtime_secret_requirements(
                 deployments, definitions, sorted(hosts),
             )
+            # Project Verify is advisory about missing execution credentials.
+            # Keep the planner's original admission findings untouched.
+            secret_findings = [dict(item, status="WARNING", safeMessage=
+                                   "Required service credential reference is not saved; configure it before plan approval")
+                               if item.get("code") == "RUNTIME_SECRET_REFERENCE_REQUIRED" else item
+                               for item in secret_findings]
             if secret_findings:
                 configuration["findings"] = sorted(
                     list(configuration.get("findings", [])) + secret_findings,
                     key=lambda item: (item.get("field", ""), item.get("code", ""), item.get("safeMessage", "")),
                 )
-                configuration["status"] = "BLOCKED"
+                if any(item.get("status") != "WARNING" for item in secret_findings):
+                    configuration["status"] = "BLOCKED"
             stage = 'разрешение endpoints, DNS, PKI и HAProxy'
             endpoints = resolve_service_endpoints(materialized, catalog, configuration, inventory_deployments)
             dns = resolve_dns_zones(materialized, catalog, host_addresses, inventory_deployments)
@@ -27877,7 +27884,7 @@ def scope_name(project, runtime):
                                     sort_keys=True).encode()).hexdigest() + '.json'
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/project_snapshot.py","mode":420,"size":12538,"sha256":"4f1270f9952c20d42694836871e7f39fc59183a15ab63a5e440b9fdd28876b05","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":12538}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/project_snapshot.py","mode":420,"size":12703,"sha256":"2d7ae2da5d8fd7ddff80cc0aa2b52af79848155f6522855da8a98cb39a38ec0b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":12703}
 from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
@@ -28061,7 +28068,8 @@ def build_project_snapshot(project_id, project_name, documents, project_revision
         key = (finding.get("field", ""), finding.get("code", ""), finding.get("safeMessage", ""))
         unique[key] = finding
     findings = [unique[key] for key in sorted(unique)]
-    blocked = bool(findings)
+    blocking_findings = [item for item in findings if item.get("status") != "WARNING"]
+    blocked = bool(blocking_findings)
     topology = topology_result.get("resolvedTopology") if topology_result.get("status") == "PASS" else None
     configuration = _configuration_view(configuration_result, desired_state_path, role_default_paths, ownership)
     requests = pki_result.get("requests", []) if pki_result.get("status") == "PASS" else []
@@ -28071,7 +28079,7 @@ def build_project_snapshot(project_id, project_name, documents, project_revision
     deployments = desired_state.get("serviceDeployments", {}) if isinstance(desired_state, dict) else {}
     readiness = {}
     for deployment_id in sorted(deployments):
-        affected = any(deployment_id in finding.get("field", "") for finding in findings)
+        affected = any(deployment_id in finding.get("field", "") for finding in blocking_findings)
         readiness[deployment_id] = {
             "status": "BLOCKED" if affected else "REQUIRES_PREPARATION",
             "runtime": "NOT_CHECKED",
@@ -28080,7 +28088,7 @@ def build_project_snapshot(project_id, project_name, documents, project_revision
         "apiVersion": "platform.installer/validation-result/v1alpha1",
         "kind": "ValidationResult",
         "status": "BLOCKED" if blocked else "PASS",
-        "summary": {"blocked": len(findings), "pass": 0 if blocked else 1},
+        "summary": {"blocked": len(blocking_findings), "warning": len(findings) - len(blocking_findings), "pass": 0 if blocked else 1},
         "findings": findings,
     }
     snapshot = {
@@ -86472,7 +86480,7 @@ catalogLock:
 })();
 
 @@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":130678,"sha256":"9a7ddcd0355c1a5a3cd8e804977913fa6e794ff1f8fbfb4adc794e7b54436b1c","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49783}
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":131235,"sha256":"470b4fc348a6efe8642221ca42a304e9d20e1000f0d4a269da92b62d04598fab","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49809}
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   EditResult,
@@ -86612,11 +86620,11 @@ const exportExclusionLabels: Record<string, string> = {
 };
 const exportExclusionLabel = (category: string) =>
   exportExclusionLabels[category] ?? "другие служебные данные";
-const verificationLabel = (status: string, failed = false) => {
+const verificationLabel = (status: string, failed = false, warnings = false) => {
   if (status === "UNVERIFIED" && failed) return "Проверка недоступна";
   switch (status) {
     case "VERIFIED":
-      return "Проверено";
+      return warnings ? "Проверено с предупреждениями" : "Проверено";
     case "INVALID":
       return "Ошибки проверки";
     case "VERIFYING":
@@ -86865,6 +86873,10 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   const snapshot = result.snapshot;
   const managed = result.managed;
   const verification = result.verification || { status: "UNVERIFIED" };
+  const verificationWarnings = verification.status === "VERIFIED" &&
+    verification.projectRevision === result.managed?.projectRevision &&
+    !!verification.projectRevision &&
+    !!verification.findings?.some((finding) => finding.severity === "WARNING");
   const local = result.project;
   const project = snapshot?.project as Record<string, unknown> | undefined;
   const empty =
@@ -87829,7 +87841,10 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     if (!api.subscribeInstallationRunEvents) return undefined;
     return api.subscribeInstallationRunEvents(
       (value: {
-        subscriptionId?: string;
+        subscriptionId?: st
+@@END
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":131235,"sha256":"470b4fc348a6efe8642221ca42a304e9d20e1000f0d4a269da92b62d04598fab","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49750}
+ring;
         event?: InstallationEventView;
         errorCode?: string;
       }) => {
@@ -87840,10 +87855,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             api.getInstallationRun
           ) {
             void api
-              .getInstall
-@@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":130678,"sha256":"9a7ddcd0355c1a5a3cd8e804977913fa6e794ff1f8fbfb4adc794e7b54436b1c","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49750}
-ationRun(activeRunIdRef.current)
+              .getInstallationRun(activeRunIdRef.current)
               .then(setInstallationRun)
               .catch(() => {});
           }
@@ -88737,16 +88749,16 @@ ationRun(activeRunIdRef.current)
               </div>
             )}
             {projectOpen &&
-              (verification.error || verification.status === "INVALID" ? (
+              (verification.error || verification.status === "INVALID" || verificationWarnings ? (
                 <button
-                  className="status-chip status-chip--danger"
+                  className={`status-chip status-chip--${verification.error || verification.status === "INVALID" ? "danger" : "warning"}`}
                   type="button"
                   onClick={() => requestPage("project")}
                   title={verification.error
                     ? verificationErrorMessage(verification.error.code)
                     : "Открыть замечания проверки проекта"}
                 >
-                  {verificationLabel(verification.status, !!verification.error)}
+                  {verificationLabel(verification.status, !!verification.error, verificationWarnings)}
                 </button>
               ) : (
                 <div className="readonly">
@@ -89174,7 +89186,10 @@ ationRun(activeRunIdRef.current)
                   (intent): intent is PlacementIntent =>
                     intent.operation === "ReconcileDeploymentPlacement" ||
                     intent.operation ===
-                      "ReconcileHostScopedDeploymentPlacement",
+                      "ReconcileHostScopedDeploymentPlacemen
+@@END
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":131235,"sha256":"470b4fc348a6efe8642221ca42a304e9d20e1000f0d4a269da92b62d04598fab","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":31676}
+t",
                 )}
                 certificateIntents={intents.filter(
                   (intent): intent is CertificateIntent =>
@@ -89182,10 +89197,7 @@ ationRun(activeRunIdRef.current)
                     intent.operation === "UpdateCertificateAuthority" ||
                     intent.operation === "DeleteCertificateAuthority" ||
                     intent.operation === "CreateCertificateProfile" ||
-                    
-@@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":130678,"sha256":"9a7ddcd0355c1a5a3cd8e804977913fa6e794ff1f8fbfb4adc794e7b54436b1c","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":31145}
-intent.operation === "UpdateCertificateProfile" ||
+                    intent.operation === "UpdateCertificateProfile" ||
                     intent.operation === "DeleteCertificateProfile" ||
                     intent.operation === "CreateTLSProfile" ||
                     intent.operation === "UpdateTLSProfile" ||
@@ -89704,7 +89716,8 @@ function ProjectPage({
         <dl>
           <dt>Статус</dt>
           <dd>
-            {verificationLabel(verification.status, !!verification.error)}
+            {verificationLabel(verification.status, !!verification.error,
+              checked && !!findings.some((finding) => finding.severity === "WARNING"))}
           </dd>
           <dt>Ревизия</dt>
           <dd>{managed?.projectRevision || snapshot?.projectRevision}</dd>
