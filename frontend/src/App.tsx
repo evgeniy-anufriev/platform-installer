@@ -2259,14 +2259,16 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               </div>
             )}
             {projectOpen &&
-              (verification.error ? (
+              (verification.error || verification.status === "INVALID" ? (
                 <button
-                  className="readonly outline"
+                  className="status-chip status-chip--danger"
                   type="button"
                   onClick={() => requestPage("project")}
-                  title={verificationErrorMessage(verification.error.code)}
+                  title={verification.error
+                    ? verificationErrorMessage(verification.error.code)
+                    : "Открыть замечания проверки проекта"}
                 >
-                  {verificationLabel(verification.status, true)}
+                  {verificationLabel(verification.status, !!verification.error)}
                 </button>
               ) : (
                 <div className="readonly">

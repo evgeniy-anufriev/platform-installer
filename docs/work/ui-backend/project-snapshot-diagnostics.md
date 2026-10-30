@@ -132,3 +132,26 @@ DBR-N01 (require a nonempty verification revision) and DBR-N02 (distinguish
 warning presentation) were corrected with regression tests. The review
 fingerprint before these bounded corrections was
 d4c19952eb33a42be7fab9e3f807d01731071c72702dcad32d12eaebb72d7228.
+
+## Missing secret reference and header navigation
+
+For RUNTIME_SECRET_REFERENCE_REQUIRED, desktop presentation now names the
+service deployment and configuration setting from Core's existing `field`
+path. Only the closed `serviceDeployments.<id>.configuration.<setting>` shape
+with bounded validated identifiers is rendered. Invalid, oversized or deeper
+paths retain the safe Core summary; configuration and secret values are never
+read. No Core requirement semantics or public DTOs changed.
+
+INVALID and technical Verify errors share the existing status-chip--danger
+palette in the header and are buttons navigating to Project through the
+existing requestPage handler. Previously ordinary INVALID was a green readonly
+div; technical failure already navigated but used the green readonly class.
+This resolves a discrepancy with the shared findings/status visual language.
+
+Validation: go test ./... and go vet ./... PASS; App 95 tests PASS, including
+navigation from Servers through both failure badges to the detailed Project
+finding. Typecheck initially caught an unsupported test-query option; removed
+it, frontend typecheck/build and lint PASS. Go regressions check two different
+instance/setting pairs and reject unsafe/oversized/deeper diagnostic paths.
+Real React/Wails acceptance and visual inspection remain OPEN; mocked frontend
+tests and production compilation are supplementary evidence.

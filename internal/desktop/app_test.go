@@ -837,6 +837,42 @@ func TestUnknownServiceSettingVerificationFindingNamesSafeProperty(t *testing.T)
 	}
 }
 
+func TestMissingServiceSecretFindingNamesOnlySafeInstanceAndSetting(t *testing.T) {
+	const fallback = "Required service credential reference must be saved before planning"
+	for _, field := range []string{
+		"serviceDeployments.kafka-extra.configuration.adminCredential",
+		"serviceDeployments.kafka-two.configuration.replicationCredential",
+		"serviceDeployments.kafka\nsecret.configuration.adminCredential",
+		"serviceDeployments.kafka-extra.configuration.password\nsecret",
+		"serviceDeployments.kafka-extra.configuration.adminCredential.passwordSecretRef",
+		"/private/path/password", "", strings.Repeat("a", 257),
+	} {
+		t.Run(field, func(t *testing.T) {
+			findings, _ := safeVerificationFindings([]map[string]any{{
+				"code": "RUNTIME_SECRET_REFERENCE_REQUIRED", "status": "BLOCKED", "safeMessage": fallback, "field": field,
+				"configuration": map[string]any{"password": "must-not-appear"},
+			}})
+			if len(findings) != 1 {
+				t.Fatal("missing finding")
+			}
+			if field == "serviceDeployments.kafka-extra.configuration.adminCredential" {
+				if findings[0].Summary != "У экземпляра сервиса «kafka-extra» не задана обязательная ссылка на секрет в параметре «adminCredential». Настройте секрет и сохраните проект." {
+					t.Fatalf("missing instance/setting: %#v", findings[0])
+				}
+			} else if field == "serviceDeployments.kafka-two.configuration.replicationCredential" {
+				if !strings.Contains(findings[0].Summary, "«kafka-two»") || !strings.Contains(findings[0].Summary, "«replicationCredential»") {
+					t.Fatal("instance or parameter hardcoded")
+				}
+			} else if findings[0].Summary != fallback {
+				t.Fatalf("unsafe field reflected: %#v", findings[0])
+			}
+			if strings.Contains(findings[0].Summary, "must-not-appear") {
+				t.Fatal("secret value reflected")
+			}
+		})
+	}
+}
+
 func managedHeaderForTest() []byte {
 	return []byte("# Managed by Platform Installer.\n# This is standard Ansible YAML; formatting may be normalized.\n")
 }

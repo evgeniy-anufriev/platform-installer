@@ -4163,6 +4163,29 @@ it("shows the structured snapshot failure reason on the Project page", async () 
   expect(screen.queryByText("private parser output")).toBeNull();
 });
 
+it.each([
+  { status: "INVALID", label: "Ошибки проверки", error: undefined },
+  { status: "UNVERIFIED", label: "Проверка недоступна", error: { code: "PROJECT_SNAPSHOT_INPUT_INVALID", message: "hidden backend detail" } },
+])("opens Project from the red header status for $status", async ({ status, label, error }) => {
+  const reason = "У экземпляра сервиса «kafka-extra» не задана обязательная ссылка на секрет в параметре «adminCredential». Настройте секрет и сохраните проект.";
+  const value = api();
+  value.chooseProject.mockResolvedValue({ ...project, verification: {
+    status, error, projectRevision: "sha256:old",
+    findings: [{ code: "RUNTIME_SECRET_REFERENCE_REQUIRED", severity: "BLOCKED", summary: reason }],
+  } });
+  render(<App api={value} />);
+  await userEvent.click(screen.getByRole("button", { name: "Открыть папку проекта" }));
+  await userEvent.click(screen.getByRole("button", { name: "Серверы" }));
+  expect(screen.getByRole("heading", { name: "Серверы" })).toBeTruthy();
+  const badge = screen.getByRole("button", { name: label });
+  expect(badge.classList.contains("status-chip--danger")).toBe(true);
+  expect(badge.classList.contains("readonly")).toBe(false);
+  await userEvent.click(badge);
+  expect(screen.getByRole("heading", { name: "Состояние проекта" })).toBeTruthy();
+  expect(screen.getByText(`[BLOCKED] RUNTIME_SECRET_REFERENCE_REQUIRED: ${reason}`)).toBeTruthy();
+  expect(screen.queryByText("hidden backend detail")).toBeNull();
+});
+
 it("shows current INVALID verification findings without a technical error or matching snapshot", async () => {
   const value = api({ verifyProject: vi.fn().mockResolvedValue({
     status: "INVALID", projectRevision: "sha256:old",

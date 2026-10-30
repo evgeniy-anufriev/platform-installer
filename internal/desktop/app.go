@@ -706,6 +706,15 @@ func safeVerificationFindings(findings []map[string]any) ([]VerificationFinding,
 			continue
 		}
 		finding := VerificationFinding{Code: code, Summary: message, Severity: boundedFindingString(raw["status"], 32)}
+		if code == "RUNTIME_SECRET_REFERENCE_REQUIRED" {
+			// Core already identifies the missing setting. Render only its closed
+			// public field path; never include configuration values in diagnostics.
+			field := boundedFindingString(raw["field"], 256)
+			parts := strings.Split(field, ".")
+			if len(parts) == 4 && parts[0] == "serviceDeployments" && parts[2] == "configuration" && runtimeSecretDescriptorRequirement.MatchString(parts[1]) && verificationSettingName.MatchString(parts[3]) {
+				finding.Summary = "У экземпляра сервиса «" + parts[1] + "» не задана обязательная ссылка на секрет в параметре «" + parts[3] + "». Настройте секрет и сохраните проект."
+			}
+		}
 		if code == "SERVICE_CONFIGURATION_PROPERTY_UNKNOWN" {
 			if details, ok := raw["safeDetails"].(map[string]any); ok {
 				property := boundedFindingString(details["property"], 128)
