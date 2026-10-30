@@ -13419,7 +13419,7 @@ func (a *CommandAdapter) BuildSnapshot(ctx context.Context, projectRoot string, 
 }
 
 @@END
-@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":109246,"sha256":"bc918bb358911403b1ef760cbca7c7234fe0d332e5fc75266750226d92b356f3","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48157}
+@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":109715,"sha256":"2698fe8cdc9277dbbd200f018fc40bdd1da3aac5c945fa0829312cac259de32c","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48157}
 package desktop
 
 import (
@@ -14074,6 +14074,16 @@ func (a *App) setVerificationUnavailableLocked(err error, revision string) Proje
 	}
 	evidence := ProjectVerification{APIVersion: "platform.installer/project-verification/v1alpha1", Kind: "ProjectVerification", Status: "UNVERIFIED",
 		ProjectRevision: revision, CheckedAt: time.Now().UTC(), Error: &ProjectOpenError{Code: code, Message: projectErrorMessage(code)}}
+	var executionError *executionnode.ExecutionError
+	if code == "PROJECT_SNAPSHOT_INPUT_INVALID" && errors.As(err, &executionError) {
+		var findings []map[string]any
+		for _, finding := range executionError.Findings {
+			if finding.Code == code {
+				findings = append(findings, map[string]any{"code": finding.Code, "safeMessage": finding.SafeMessage, "status": "BLOCKED"})
+			}
+		}
+		evidence.Findings, evidence.FindingsTruncated = safeVerificationFindings(findings)
+	}
 	a.current.Verification = evidence
 	return evidence
 }
@@ -14524,7 +14534,10 @@ func (a *App) secretOutputEncryptionRequiredLocked() bool {
 
 func (a *App) secretOutputEncryptionPasswordPresentLocked() bool {
 	binding, err := a.credentialBindingLocked()
-	return err == nil && a.secrets.HasOutputEncryptionPassword(binding)
+	return err == nil && a.secrets.HasOutputE
+@@END
+@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":109715,"sha256":"2698fe8cdc9277dbbd200f018fc40bdd1da3aac5c945fa0829312cac259de32c","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":50595}
+ncryptionPassword(binding)
 }
 
 // GetRuntimeSecretDescriptors is a target-free Core query. It exposes only
@@ -14536,10 +14549,7 @@ func (a *App) GetRuntimeSecretDescriptors() RuntimeSecretDescriptorOperation {
 }
 
 // ListPendingSecretOutputs exposes only bounded package metadata. The remote
-// output protocol is consulted on
-@@END
-@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":109246,"sha256":"bc918bb358911403b1ef760cbca7c7234fe0d332e5fc75266750226d92b356f3","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":50855}
-ly for the currently READY, explicitly
+// output protocol is consulted only for the currently READY, explicitly
 // selected Execution Node; secret bytes remain in the dedicated delivery flow.
 func (a *App) ListPendingSecretOutputs(cursor *string) SecretOutputPackagesOperation {
 	a.editMu.Lock()
@@ -15494,15 +15504,15 @@ func projectErrorMessage(code string) string {
 		return "Сначала сохраните или отмените несохранённые изменения проекта."
 	case "PROJECT_REVISION_UNAVAILABLE":
 		return "Не удалось безопасно прочитать сохранённую ревизию проекта."
-	case "RUNTIME_SECRET_DESCRIPTOR_NOT_FOUND":
+	case "RUNTIME_SECRET_DE
+@@END
+@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":109715,"sha256":"2698fe8cdc9277dbbd200f018fc40bdd1da3aac5c945fa0829312cac259de32c","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":10963}
+SCRIPTOR_NOT_FOUND":
 		return "Для выбранного сервиса в текущем режиме секреты не требуются."
 	case "RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE":
 		return "Не удалось получить требования к секретам от Core на узле выполнения. Проверьте доступность узла и повторите запуск этого плана; секреты не удалены."
 	case "RUNTIME_SECRET_DESCRIPTORS_UNSUPPORTED":
-		return "Активный runtime узла выполнения не поддерживает проверку секретов сервисов. Обновите набор установки и подго
-@@END
-@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":109246,"sha256":"bc918bb358911403b1ef760cbca7c7234fe0d332e5fc75266750226d92b356f3","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":10234}
-товьте узел заново."
+		return "Активный runtime узла выполнения не поддерживает проверку секретов сервисов. Обновите набор установки и подготовьте узел заново."
 	case "RUNTIME_SECRET_DESCRIPTORS_RESPONSE_INVALID":
 		return "Узел выполнения вернул некорректный ответ о требованиях к секретам. Запуск не начат; проверьте активный runtime узла."
 	case "RUNTIME_SECRET_DESCRIPTORS_STALE", "RUNTIME_SECRET_INPUT_EXPIRED":
