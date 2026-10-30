@@ -13521,7 +13521,7 @@ func (a *CommandAdapter) BuildSnapshot(ctx context.Context, projectRoot string, 
 }
 
 @@END
-@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":110861,"sha256":"291ca720a3bba0c8674ee8dff1ab1391e650d4e7f301fc96525ae3569ee9f29e","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48383}
+@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":110987,"sha256":"f7008822f6eb6d164ce23fb7d09385daff060f0d80eaed8049f74f8c53fc1d22","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48363}
 package desktop
 
 import (
@@ -14236,9 +14236,9 @@ func safeVerificationFindings(findings []map[string]any) ([]VerificationFinding,
 			field := boundedFindingString(raw["field"], 256)
 			parts := strings.Split(field, ".")
 			if len(parts) == 4 && parts[0] == "serviceDeployments" && parts[2] == "configuration" && runtimeSecretDescriptorRequirement.MatchString(parts[1]) && verificationSettingName.MatchString(parts[3]) {
-				finding.Summary = "У экземпляра сервиса «" + parts[1] + "» не задана обязательная ссылка на секрет в параметре «" + parts[3] + "». Настройте секрет и сохраните проект."
+				finding.Summary = "У экземпляра сервиса «" + parts[1] + "» не задан пароль для параметра «" + parts[3] + "». Укажите пароль в разделе «Секреты» и сохраните проект."
 				if finding.Severity == "WARNING" {
-					finding.Summary = "У экземпляра сервиса «" + parts[1] + "» не задана ссылка на секрет в параметре «" + parts[3] + "». Проверка проекта выполнена; настройте секрет и сохраните проект перед одобрением плана."
+					finding.Summary = "У экземпляра сервиса «" + parts[1] + "» не задан пароль для параметра «" + parts[3] + "». Укажите пароль в разделе «Секреты» и сохраните проект перед одобрением плана."
 				}
 			}
 		}
@@ -14625,10 +14625,10 @@ func (a *App) pendingRuntimeSecretDescriptorsLocked(serviceDeployment string) ([
 		if !runtimeSecretDescriptorRequirement.MatchString(input.RequirementRef) || input.DisplayLabel == "" || (input.Purpose != secretfiles.PurposeAdminToken && input.Purpose != secretfiles.PurposeUnsealShares) || input.RequiredWhen == "" || len(input.Operations) == 0 {
 			return nil, errors.New("RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE")
 		}
-		result = append(result, RuntimeSecretDescriptorView{RequirementRef: input.RequirementRef, Purpose: input.Purpose, ServiceDeployment: s
+		result = append(result, RuntimeSecretDescriptorView{RequirementRef: input.RequirementRef, Purpose: input.Purpose, ServiceDeployment: serviceDeployment, Displ
 @@END
-@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":110861,"sha256":"291ca720a3bba0c8674ee8dff1ab1391e650d4e7f301fc96525ae3569ee9f29e","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":50135}
-erviceDeployment, DisplayLabel: input.DisplayLabel, RequiredWhen: input.RequiredWhen, Operations: append([]string(nil), input.Operations...)})
+@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":110987,"sha256":"f7008822f6eb6d164ce23fb7d09385daff060f0d80eaed8049f74f8c53fc1d22","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":50066}
+ayLabel: input.DisplayLabel, RequiredWhen: input.RequiredWhen, Operations: append([]string(nil), input.Operations...)})
 	}
 	return result, nil
 }
@@ -15022,10 +15022,14 @@ func (a *App) clearCredentialForReplacementLocked(root string, project *projectl
 	}
 }
 
-func (a *App) clearRuntimeSecretDescriptorEvidenceLocked() {
+func (a *App) clearRuntimeSecretDescriptorEvidenceLocked(keepPending ...bool) {
 	a.runtimeSecretEvidence = nil
 	if binding, err := a.credentialBindingLocked(); err == nil {
-		a.secrets.ClearRuntimeSecretValues(binding)
+		if len(keepPending) == 1 && keepPending[0] {
+			a.secrets.ClearAttachedRuntimeSecretValues(binding)
+		} else {
+			a.secrets.ClearRuntimeSecretValues(binding)
+		}
 	}
 }
 
@@ -15281,7 +15285,7 @@ func (a *App) CommitStructuralEditPlan(sessionID, planID string) StructuralEditO
 		a.pendingTargetHostKey = nil
 		clear(a.approvedTargetHostKeys)
 		previousVerification := a.current.Verification
-		a.clearRuntimeSecretDescriptorEvidenceLocked()
+		a.clearRuntimeSecretDescriptorEvidenceLocked(result.Status == "COMMITTED")
 		if !a.sessions.FinishCommit(sessionID, planID, true) {
 			return a.structuralEditFailure(errors.New("EDIT_SESSION_EXPIRED"))
 		}
@@ -15384,7 +15388,7 @@ func (a *App) refreshExecutionAfterSaveLocked(root string, project *projectlifec
 			if candidate, ok := a.execution.candidates[id]; ok {
 				a.execution.context.SafeLabel = candidate.label
 			}
-			a.clearRuntimeSecretDescriptorEvidenceLocked()
+			a.clearRuntimeSecretDescriptorEvidenceLocked(true)
 			a.installationGeneration++
 			a.continuation = nil
 			a.installationPlanID = ""
@@ -15603,12 +15607,12 @@ func projectErrorMessage(code string) string {
 	case "TARGET_HOST_TRUST_PROJECT_UNAVAILABLE", "TARGET_HOST_TRUST_PROJECT_STALE", "TARGET_HOST_TRUST_STALE":
 		return "Проект изменился. Сохраните изменения и повторно подтвердите SSH-ключи целевых серверов."
 	case "TARGET_HOST_TRUST_SERVER_INVALID":
-		return "У сохранённого сервера нет допустимого адреса или SSH-порта."
-	case "TARGET_HOST_KEY_PROBE_FAILED":
-		return "Не удалось получить SSH-ключ 
+		r
 @@END
-@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":110861,"sha256":"291ca720a3bba0c8674ee8dff1ab1391e650d4e7f301fc96525ae3569ee9f29e","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":12343}
-целевого сервера. Подключение не подтверждено."
+@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":110987,"sha256":"f7008822f6eb6d164ce23fb7d09385daff060f0d80eaed8049f74f8c53fc1d22","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":12558}
+eturn "У сохранённого сервера нет допустимого адреса или SSH-порта."
+	case "TARGET_HOST_KEY_PROBE_FAILED":
+		return "Не удалось получить SSH-ключ целевого сервера. Подключение не подтверждено."
 	case "TARGET_HOST_KEY_APPROVAL_STALE":
 		return "Отпечаток целевого сервера устарел. Получите его снова и сверьте независимо."
 	case "TARGET_HOST_TRUST_REQUIRED":
@@ -43231,7 +43235,7 @@ func ReadLocks(ctx context.Context, projectRoot string, _ executionbundle.Verifi
 }
 
 @@END
-@@PORTABLE {"path":"internal/runtimesecret/broker.go","mode":420,"size":43420,"sha256":"29f399488de3f794b34701b3d70182fd220040cce71ce24da5f8826f9eb032ac","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":43420}
+@@PORTABLE {"path":"internal/runtimesecret/broker.go","mode":420,"size":43459,"sha256":"26dc7c2f927a2bfb0f76dab92374ad57fa9878caa19ad9002f4e9a33fd1ae48d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":43459}
 // Package runtimesecret holds short-lived, application-local target session
 // credentials. It deliberately has no persistence or transport capability.
 package runtimesecret
@@ -43646,9 +43650,11 @@ func (b *Broker) SetPendingRuntimeSecretValuesForRequirements(binding Binding, r
 	return nil
 }
 
-// PromotePendingRuntimeSecretValues moves values into the target credential
+// PromotePendingRuntimeSecretValues copies values into the target credential
 // only after Core has produced the current descriptor set. Every pending key
 // must be in that set; stale or superseded local requirements fail closed.
+// Original inputs retain their existing project binding and expiry, like typed
+// inputs, so a later Save can revoke attached proof without asking again.
 func (b *Broker) PromotePendingRuntimeSecretValues(binding Binding, requirements []string) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -43690,11 +43696,6 @@ func (b *Broker) PromotePendingRuntimeSecretValues(binding Binding, requirements
 	}
 	zeroSecretMap(b.lease.runtimeSecretValues)
 	b.lease.runtimeSecretValues = next
-	zeroSecretMap(b.pending.values)
-	b.pending.values = nil
-	if len(b.pending.typed) == 0 {
-		b.clearPendingLocked()
-	}
 	return nil
 }
 

@@ -24724,7 +24724,7 @@ def assemble_authority(requirement, offline=None, repository=None, image=False):
     }
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/deployment_plan.py","mode":420,"size":65651,"sha256":"f9832afc47dbad1569218fc74d34af64268a5343f5123dfc558ef804aec525d3","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48011}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/deployment_plan.py","mode":420,"size":66094,"sha256":"d9dfbdea39e4ddcfab227bd0a817590f8fd3f3f4a4a9d326c44e3d552dff95f8","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48011}
 """Deterministic, target-free DeploymentPlan construction for UI-BE-04B."""
 
 from __future__ import absolute_import, division, print_function
@@ -25040,6 +25040,10 @@ def _service_runtime_secret_requirements(deployments, definitions, hosts):
         definition = definitions.get(service_type) if isinstance(definitions, dict) else None
         settings = ((definition.get("configuration") or {}).get("settings") if isinstance(definition, dict) else None)
         values = deployment.get("configuration") if isinstance(deployment, dict) else None
+        modes = definition.get("modes", {}) if isinstance(definition, dict) else {}
+        mode = modes.get(deployment.get("mode"), {}) if isinstance(modes, dict) and isinstance(deployment, dict) else {}
+        required_settings = mode.get("x-requiredRuntimeSecretSettings", []) if isinstance(mode, dict) else []
+        required_settings = required_settings if isinstance(required_settings, list) else []
         if not isinstance(settings, dict):
             continue
         values = values if isinstance(values, dict) else {}
@@ -25063,7 +25067,7 @@ def _service_runtime_secret_requirements(deployments, definitions, hosts):
                 findings.append(_finding("RUNTIME_SECRET_REQUIREMENT_SCHEMA_INVALID", "catalog.definitions.%s.configuration.settings.%s" % (service_type, setting_id), "Runtime secret requirement setting schema is incompatible"))
                 continue
             if value is None:
-                if setting.get('x-runtimeSecretRequired') is True:
+                if setting.get('x-runtimeSecretRequired') is True or setting_id in required_settings:
                     findings.append(_finding("RUNTIME_SECRET_REFERENCE_REQUIRED", "serviceDeployments.%s.configuration.%s" % (deployment_id, setting_id), "Required service credential reference must be saved before planning"))
                 continue
             reference = value.get("passwordSecretRef") if isinstance(value, dict) else None
@@ -25448,14 +25452,14 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
         required_credentials.extend({key: item[key] for key in ('requirementRef', 'purpose', 'hosts')}
                                     for item in application_model['runtimeSecretRequirements'] if item['source'] == 'RUNTIME_INPUT')
     runtime_secret_requirements = pki_private + service_private
-    if len({item["requirementRef"] for item in runtime_secret_requirements + service_input_private}) != len(runtime_secret_requirements) + len(service_input_private) or len({(item.get('serviceDeployment'), item["runtimeReference"]) for item in runtime_secret_requirements if "runtimeReference" in item}) != len([item for item in runtime_secret_requirements if "runtimeReference" in item]):
+    if len({item["requirementRef"] for item in runtime_secret_requirements + service_input_private}) != len(runtime_secret_requirements) + len(service_input_private) or len({(item.get('serviceDeployment'), item["runtimeReference"]) for item in runtime_secret_requirements if "r
+@@END
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/deployment_plan.py","mode":420,"size":66094,"sha256":"d9dfbdea39e4ddcfab227bd0a817590f8fd3f3f4a4a9d326c44e3d552dff95f8","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":18083}
+untimeReference" in item}) != len([item for item in runtime_secret_requirements if "runtimeReference" in item]):
         service_secret_findings.append(_finding("RUNTIME_SECRET_REQUIREMENT_DUPLICATE", "runtimeSecrets", "Runtime secret requirements must be unique"))
     findings.extend(pki_secret_findings + service_secret_findings + service_input_findings)
     required_credentials.sort(key=lambda item: item["requirementRef"])
-    if len({it
-@@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/deployment_plan.py","mode":420,"size":65651,"sha256":"f9832afc47dbad1569218fc74d34af64268a5343f5123dfc558ef804aec525d3","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":17640}
-em["requirementRef"] for item in required_credentials}) != len(required_credentials):
+    if len({item["requirementRef"] for item in required_credentials}) != len(required_credentials):
         findings.append(_finding("RUNTIME_SECRET_REQUIREMENT_DUPLICATE", "runtimeSecrets", "Runtime secret requirements must be unique"))
     runtime_secret_requirements.sort(key=lambda item: (item.get("serviceDeployment") or "", item["requirementRef"]))
     findings = _safe_findings(findings)
@@ -86480,7 +86484,7 @@ catalogLock:
 })();
 
 @@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":132195,"sha256":"74d8d4b351079e0f85a5e795dd28d4c821bb32c5edb8cd0146c1ab16f5569b59","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49805}
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":132215,"sha256":"c313f1b5adf55f45f9fc08c213f865b59faf75510579a9354450c0e539512943","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49805}
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   EditResult,
@@ -86963,7 +86967,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     ) &&
     ["UNVERIFIED", "STALE"].includes(verification.status);
   const visibleServiceConfigurationPreview =
-    commandCount === 0 ? savedServiceConfigurationPreview : undefined;
+    savedServiceConfigurationPreview;
   const serviceConfigurationPreviewNotice = coreProjectionReady
     ? ""
     : commandCount !== 0
@@ -87831,11 +87835,11 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
           subscription.status === "SUBSCRIBED" &&
           subscription.subscriptionId
         ) {
-          installationSubscriptionRef.current = subscription.
+          installationSubscriptionRef.current = subscription.subscriptionId;
+          setInst
 @@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":132195,"sha256":"74d8d4b351079e0f85a5e795dd28d4c821bb32c5edb8cd0146c1ab16f5569b59","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49750}
-subscriptionId;
-          setInstallationSubscription(subscription.subscriptionId);
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":132215,"sha256":"c313f1b5adf55f45f9fc08c213f865b59faf75510579a9354450c0e539512943","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49750}
+allationSubscription(subscription.subscriptionId);
         } else if (api.getInstallationRun) {
           setInstallationRun(await api.getInstallationRun(runId));
         }
@@ -89183,11 +89187,11 @@ subscriptionId;
                 }
               />
             )}
-          {!
+          {!loading &&
+            !creating 
 @@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":132195,"sha256":"74d8d4b351079e0f85a5e795dd28d4c821bb32c5edb8cd0146c1ab16f5569b59","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":32640}
-loading &&
-            !creating &&
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":132215,"sha256":"c313f1b5adf55f45f9fc08c213f865b59faf75510579a9354450c0e539512943","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":32660}
+&&
             projectOpen &&
             corePagesAvailable &&
             page === "services" && (
@@ -89196,6 +89200,7 @@ loading &&
                 managed={managed}
                 catalog={result.catalog}
                 effectivePreview={visibleServiceConfigurationPreview}
+                previewHasDraft={commandCount !== 0}
                 corePreviewNotice={serviceConfigurationPreviewNotice}
                 deploymentIntents={intents.filter(
                   (intent): intent is DeploymentIntent =>
@@ -102574,7 +102579,7 @@ function DeleteDialog({
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/ServicesPage.tsx","mode":420,"size":69721,"sha256":"bda2409ae6610e64511c76d3206869c711a92d80fe9be77c3b5db9506ea6e42e","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":50196}
+@@PORTABLE {"path":"frontend/src/ServicesPage.tsx","mode":420,"size":70330,"sha256":"7b8189c323f5296d4f2949e50b4e291df33c004f2313e79a4fde67d6e8b791ad","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":50196}
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   OpenResult,
@@ -102959,6 +102964,7 @@ export function ServicesPage({
   managed,
   catalog,
   effectivePreview,
+  previewHasDraft = false,
   corePreviewNotice,
   deploymentIntents,
   placementIntents,
@@ -102988,6 +102994,7 @@ export function ServicesPage({
   managed: OpenResult["managed"];
   catalog: OpenResult["catalog"];
   effectivePreview?: ServiceConfigurationPreview;
+  previewHasDraft?: boolean;
   corePreviewNotice?: string;
   deploymentIntents: DeploymentIntent[];
   placementIntents: PlacementIntent[];
@@ -103209,7 +103216,14 @@ export function ServicesPage({
     setSecretError("");
     try {
       const referencesAdded = descriptors.filter(
-        (descriptor) => !descriptor.referenceConfigured && descriptor.setting,
+        (descriptor) => !descriptor.referenceConfigured && descriptor.setting &&
+          !configurationIntents.some((intent) => intent.operation === "SetServiceConfigurationValue" &&
+            intent.deploymentId === selected.deploymentId && intent.scope === "DEPLOYMENT" &&
+            intent.setting === descriptor.setting && typeof intent.value === "object" &&
+            intent.value !== null && !Array.isArray(intent.value) &&
+            intent.value.passwordSecretRef === `runtime:${descriptor.requirementRef}` &&
+            (!settings.find((setting) => setting.id === descriptor.setting)?.runtimeSecretUsernameRequired ||
+              intent.value.username === secretUsernames[descriptor.requirementRef])),
       );
       if (
         referencesAdded.some((descriptor) => {
@@ -103250,13 +103264,6 @@ export function ServicesPage({
           );
           return;
         }
-      }
-      if (referencesAdded.length) {
-        setSecretValues({});
-        setSecretError(
-          "Ссылки добавлены в черновик. Сохраните проект и затем введите значения ещё раз.",
-        );
-        return;
       }
       await onSetPendingDeploymentRuntimeSecretValues({
         serviceDeployment: selected.deploymentId,
@@ -103444,8 +103451,9 @@ export function ServicesPage({
             )}
           {effectivePreview?.services[selected.deploymentId] && (
             <p className="muted" role="status">
-              Значения получены из Core для текущей сохранённой ревизии. Это не
-              проверка проекта.
+              {previewHasDraft
+                ? "Показан расчёт Core для сохранённой версии. Изменения черновика ещё не рассчитаны."
+                : "Значения получены из Core для текущей сохранённой ревизии. Это не проверка проекта."}
             </p>
           )}
           {!service ? (
@@ -103861,7 +103869,10 @@ export function ServicesPage({
                       {descriptor.displayLabel}
                       <input
                         type="password"
-                        autoComplete="new-password"
+                  
+@@END
+@@PORTABLE {"path":"frontend/src/ServicesPage.tsx","mode":420,"size":70330,"sha256":"7b8189c323f5296d4f2949e50b4e291df33c004f2313e79a4fde67d6e8b791ad","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":20134}
+      autoComplete="new-password"
                         value={secretValues[descriptor.requirementRef] || ""}
                         disabled={secretBusy}
                         onChange={(event) =>
@@ -103876,9 +103887,6 @@ export function ServicesPage({
                 ))}
               {(secretOperation.descriptors || [])
                 .filter(
-
-@@END
-@@PORTABLE {"path":"frontend/src/ServicesPage.tsx","mode":420,"size":69721,"sha256":"bda2409ae6610e64511c76d3206869c711a92d80fe9be77c3b5db9506ea6e42e","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":19525}
                   (descriptor) =>
                     descriptor.purpose === "SERVICE_ADMIN_TOKEN" ||
                     descriptor.purpose === "SERVICE_UNSEAL_SHARES",
