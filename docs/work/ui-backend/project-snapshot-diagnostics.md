@@ -66,3 +66,29 @@ SDO-N02 (native successful private-register/output check) was incorporated into
 the test source; SDO-N01 negative artifact cases were also added. These added
 tests now passed on RED OS101 as recorded above. `git diff --check` PASS. No Go/React code changed
 in this follow-up, so their earlier results are not a native acceptance claim.
+
+## Explicit root and implicit localhost regression
+
+Owner's manual project-snapshot run exposed a pre-action templating failure:
+`platform_project_root | default(inventory_dir | dirname)` evaluates its filter
+argument even when an explicit root is present. An implicit localhost does not
+have inventory_dir. The action cannot return its structured finding because it
+has not started, explaining the callback fallback shown by Project Verify.
+
+Use Ansible's lazy conditional at the nine equivalent root fallback expressions
+in resolution/validation and application provider/runtime tasks. Explicit root
+remains authoritative, ordinary inventory-root fallback remains available, and
+no new defaults, path discovery, persistence or precedence implementation is
+introduced. Existing fixtures explicitly declared localhost and therefore
+masked this issue.
+
+RED OS101 regression: remove localhost from the representative inventory and
+run the production project-snapshot.yml with an explicit relative project root,
+once with application libraries and once without. On the isolated baseline with
+the two old role expressions restored, both cases failed. Restoring current
+sources and verifying them with qa-sync produced37 PASS in36.436s, zero skips,
+for native resolution, bootstrap, snapshot action/output and preview tests.
+Native Ansible Templar additionally evaluated all nine production expressions
+with undefined inventory_dir and explicit root, then with ordinary inventory
+fallback. Both branches passed. No target contact or installation was performed.
+Real React/Wails acceptance after delivery of a new runtime bundle remains OPEN.

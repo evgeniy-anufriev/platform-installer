@@ -13,6 +13,71 @@ ROOT = Path(__file__).resolve().parents[2]
 
 @unittest.skipUnless(shutil.which('ansible-playbook'), 'native Ansible required')
 class NativeProjectResolutionTests(unittest.TestCase):
+    def test_project_snapshot_with_implicit_localhost_and_explicit_root(self):
+        for applications in (False, True):
+            with self.subTest(applications=applications), tempfile.TemporaryDirectory(prefix='snapshot-root-') as folder:
+                directory = Path(folder)
+                project = directory / 'project'
+                shutil.copytree(ROOT / 'examples/valid/application-libraries', project)
+                inventory_path = project / 'inventory/hosts.yml'
+                inventory = yaml.safe_load(inventory_path.read_text())
+                inventory['all']['hosts'].pop('localhost')
+                inventory_path.write_text(yaml.safe_dump(inventory))
+                variables_path = project / 'inventory/group_vars/all/platform-installer.yml'
+                variables = yaml.safe_load(variables_path.read_text())
+                if not applications:
+                    variables['platform_desired_state'].pop('applicationLibraryDeployments', None)
+                    variables_path.write_text(yaml.safe_dump(variables))
+                output = directory / 'snapshot.json'
+                collections = [str(ROOT / 'ansible-core/collections')] + [str(path)
+                    for path in sorted((ROOT / 'services').glob('*/ansible_collections'))]
+                environment = dict(os.environ, ANSIBLE_COLLECTIONS_PATH=os.pathsep.join(collections),
+                    ANSIBLE_CONFIG=str(ROOT / 'ansible-core/ansible.cfg'),
+                    ANSIBLE_CALLBACKS_ENABLED='platform.core.project_snapshot_json',
+                    PLATFORM_PROJECT_SNAPSHOT_OUTPUT=str(output))
+                completed = subprocess.run(['ansible-playbook', '-i', str(inventory_path),
+                    str(ROOT / 'ansible-core/playbooks/project-snapshot.yml'),
+                    '-e', 'platform_project_root=project',
+                    '-e', 'platform_service_catalog_path=' + str(ROOT / 'examples/catalog/service-catalog.yml')],
+                    cwd=directory, env=environment, capture_output=True, text=True, timeout=90)
+                self.assertEqual(0, completed.returncode, completed.stdout[-4000:] + completed.stderr[-1500:])
+                self.assertNotIn('UNREACHABLE', completed.stdout)
+                snapshot = json.loads(output.read_text())
+                self.assertTrue(snapshot['projectRevision'].startswith('sha256:'))
+                self.assertNotIn('adapterError', snapshot)
+
+    def test_root_expressions_are_lazy_and_keep_inventory_fallback(self):
+        from ansible.parsing.dataloader import DataLoader
+        from ansible.template import Templar
+        paths = [
+            'collections/ansible_collections/platform/core/roles/project_resolution/tasks/main.yml',
+            'collections/ansible_collections/platform/core/roles/resolve_application_libraries/tasks/main.yml',
+            'playbooks/validate.yml', 'playbooks/applications/stages/resolve-runtime.yml',
+            'playbooks/applications/stages/providers-resolve.yml',
+            'playbooks/applications/tasks/provider-batch.yml',
+            'playbooks/applications/tasks/provider-script.yml',
+        ]
+        def expressions(value):
+            if isinstance(value, dict):
+                for key, item in value.items():
+                    if key in ('project_root', 'workingDirectory') and isinstance(item, str) and 'platform_project_root' in item:
+                        yield item
+                    else:
+                        yield from expressions(item)
+            elif isinstance(value, list):
+                for item in value:
+                    yield from expressions(item)
+        for path in paths:
+            for expression in expressions(yaml.safe_load((ROOT / 'ansible-core' / path).read_text())):
+                with self.subTest(path=path):
+                    explicit = Templar(loader=DataLoader(), variables={'platform_project_root': '/explicit/project',
+                        'application_provider_script': {'runOn': 'execution_node'}})
+                    self.assertEqual('/explicit/project', explicit.template(expression).strip())
+                    fallback = Templar(loader=DataLoader(), variables={'inventory_dir': '/ordinary/project/inventory',
+                        'hostvars': {'localhost': {'inventory_dir': '/ordinary/project/inventory'}},
+                        'application_provider_script': {'runOn': 'execution_node'}})
+                    self.assertEqual('/ordinary/project', fallback.template(expression).strip())
+
     def test_real_resolver_runs_once_then_reuses_without_target_contact(self):
         with tempfile.TemporaryDirectory(prefix='project-resolution-') as folder:
             directory = Path(folder)

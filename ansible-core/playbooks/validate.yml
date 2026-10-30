@@ -16,7 +16,7 @@
 
     - name: Проверка проекции приложения через общий путь к снимку
       platform.core.project_snapshot:
-        project_root: "{{ platform_project_root | default(inventory_dir | dirname) }}"
+        project_root: "{{ platform_project_root if platform_project_root is defined else (inventory_dir | dirname) }}"
         service_catalog_path: "{{ platform_service_catalog_path }}"
       register: platform_application_validation
       when: platform_desired_state.applicationLibraryDeployments is defined

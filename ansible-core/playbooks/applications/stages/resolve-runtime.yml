@@ -11,7 +11,7 @@
         name: platform.core.resolve_application_libraries
     - name: Формирование снимка текущего проекта без внесения изменений
       platform.core.project_snapshot:
-        project_root: "{{ platform_project_root | default(inventory_dir | dirname) }}"
+        project_root: "{{ platform_project_root if platform_project_root is defined else (inventory_dir | dirname) }}"
         service_catalog_path: "{{ platform_service_catalog_path }}"
       register: application_snapshot
       no_log: true
@@ -54,7 +54,7 @@
       platform.core.prepare_application_providers:
         snapshot_result: "{{ application_snapshot }}"
         service_catalog_path: "{{ platform_service_catalog_path }}"
-        project_root: "{{ platform_project_root | default(inventory_dir | dirname) }}"
+        project_root: "{{ platform_project_root if platform_project_root is defined else (inventory_dir | dirname) }}"
       register: application_provider_inputs
       when: not platform_application_post_install_only | default(false)
       no_log: true
@@ -64,7 +64,7 @@
       no_log: true
     - name: "Подготовка параметров выполнения приложений без планировщика развёртывания"
       platform.core.prepare_application_runtime:
-        project_root: "{{ platform_project_root | default(inventory_dir | dirname) }}"
+        project_root: "{{ platform_project_root if platform_project_root is defined else (inventory_dir | dirname) }}"
         contracts_root: "{{ platform_contracts_root | default(playbook_dir ~ '/../../../../contracts') }}"
         snapshot: "{{ application_snapshot.snapshot }}"
         scripts_only: "{{ platform_application_post_install_only | default(false) }}"

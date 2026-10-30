@@ -1,7 +1,7 @@
 ---
 - name: "Проверка комплектности пакетов библиотек перед загрузкой значений по умолчанию"
   platform.core.prepare_application_libraries:
-    project_root: "{{ platform_project_root | default(inventory_dir | dirname) }}"
+    project_root: "{{ platform_project_root if platform_project_root is defined else (inventory_dir | dirname) }}"
     contracts_root: "{{ platform_contracts_root | default(role_path ~ '/../../../../../../../contracts') }}"
   register: _application_inputs
   no_log: true
