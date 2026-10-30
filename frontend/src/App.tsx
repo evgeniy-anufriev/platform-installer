@@ -480,7 +480,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     ) &&
     ["UNVERIFIED", "STALE"].includes(verification.status);
   const visibleServiceConfigurationPreview =
-    commandCount === 0 ? savedServiceConfigurationPreview : undefined;
+    savedServiceConfigurationPreview;
   const serviceConfigurationPreviewNotice = coreProjectionReady
     ? ""
     : commandCount !== 0
@@ -2707,6 +2707,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
                 managed={managed}
                 catalog={result.catalog}
                 effectivePreview={visibleServiceConfigurationPreview}
+                previewHasDraft={commandCount !== 0}
                 corePreviewNotice={serviceConfigurationPreviewNotice}
                 deploymentIntents={intents.filter(
                   (intent): intent is DeploymentIntent =>

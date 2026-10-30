@@ -27,6 +27,7 @@ class NativeProjectResolutionTests(unittest.TestCase):
                 variables = yaml.safe_load(variables_path.read_text())
                 if not applications:
                     variables['platform_desired_state'].pop('applicationLibraryDeployments', None)
+                    variables['platform_desired_state']['serviceDeployments']['clickhouse-main']['configuration'].pop('defaultCredential', None)
                 kafka = variables['platform_desired_state']['serviceDeployments']['kafka-main']['configuration']
                 kafka.pop('adminCredential', None)
                 if secret_reference is not None:
@@ -50,7 +51,8 @@ class NativeProjectResolutionTests(unittest.TestCase):
                 self.assertTrue(snapshot['projectRevision'].startswith('sha256:'))
                 self.assertNotIn('adapterError', snapshot)
                 code = 'RUNTIME_SECRET_REFERENCE_REQUIRED' if secret_reference is None else 'RUNTIME_SECRET_REFERENCE_INVALID'
-                findings = [item for item in snapshot['findings'] if item['code'] == code]
+                findings = [item for item in snapshot['findings'] if item['code'] == code and
+                            item.get('field') == 'serviceDeployments.kafka-main.configuration.adminCredential']
                 self.assertEqual(1, len(findings), snapshot['findings'])
                 self.assertEqual('serviceDeployments.kafka-main.configuration.adminCredential', findings[0]['field'])
                 self.assertEqual('WARNING' if secret_reference is None else 'BLOCKED', findings[0]['status'])
@@ -60,6 +62,11 @@ class NativeProjectResolutionTests(unittest.TestCase):
                     self.assertFalse(snapshot['partial'])
                 else:
                     self.assertEqual('PARTIAL', snapshot['status'])
+                if not applications:
+                    clickhouse = [item for item in snapshot['findings'] if
+                        item.get('field') == 'serviceDeployments.clickhouse-main.configuration.defaultCredential']
+                    self.assertEqual(1, len(clickhouse), snapshot['findings'])
+                    self.assertEqual('WARNING', clickhouse[0]['status'])
 
     def test_root_expressions_are_lazy_and_keep_inventory_fallback(self):
         from ansible.parsing.dataloader import DataLoader

@@ -2913,7 +2913,7 @@ describe("UI-01H2 services navigation and safe settings", () => {
     expect(value.verifyProject).not.toHaveBeenCalled();
   });
 
-  it("adds only runtime references before accepting Redis secret values into memory", async () => {
+  it("accepts the password once while adding its internal reference to the normal draft", async () => {
     const redisProject = {
       ...project,
       managed: {
@@ -2956,6 +2956,8 @@ describe("UI-01H2 services navigation and safe settings", () => {
                 editorShape: "RUNTIME_SECRET_REFERENCE_OBJECT",
                 runtimeSecretRequirementRef: "redis-password",
               },
+              { id: "dataDirectory", label: "Каталог данных", kind: "MANAGED", scopes: ["deployment"],
+                editorShape: "BOUNDED_STRING", minLength: 1, maxLength: 255, staticDefaultState: "DEFERRED" },
             ],
           },
         ],
@@ -2979,6 +2981,9 @@ describe("UI-01H2 services navigation and safe settings", () => {
     const value = api({
       getPendingRuntimeSecretDescriptors,
       setPendingDeploymentRuntimeSecretValues,
+      getServiceConfigurationPreview: vi.fn().mockResolvedValue({ projectRevision: "sha256:old", runtimeDigest: "sha256:runtime-a", services: {
+        "redis-main": { configuration: { dataDirectory: { state: "RESOLVED", source: "ROLE_DEFAULT", value: "/data/redis-main" } }, members: {} },
+      } }),
     });
     value.chooseProject.mockResolvedValue(redisProject);
     render(<App api={value} />);
@@ -2993,6 +2998,7 @@ describe("UI-01H2 services navigation and safe settings", () => {
     );
     await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
     await userEvent.click(screen.getByRole("button", { name: /^redis-main/ }));
+    expect(screen.getByRole("textbox", { name: "Каталог данных" })).toHaveProperty("value", "/data/redis-main");
     await userEvent.click(screen.getByRole("button", { name: "Секреты" }));
     await userEvent.type(
       screen.getByLabelText("Redis password"),
@@ -3008,9 +3014,19 @@ describe("UI-01H2 services navigation and safe settings", () => {
       setting: "redisCredential",
       value: { passwordSecretRef: "runtime:redis-password" },
     });
-    expect(setPendingDeploymentRuntimeSecretValues).not.toHaveBeenCalled();
-    expect(screen.getByText(/Ссылки добавлены в черновик/)).toBeTruthy();
+    expect(setPendingDeploymentRuntimeSecretValues).toHaveBeenCalledWith({ serviceDeployment: "redis-main", values: { "redis-password": "not-persisted" } });
+    expect(screen.queryByRole("dialog", { name: "Секреты сервиса" })).toBeNull();
+    expect(screen.queryByText(/Ссылки добавлены в черновик/)).toBeNull();
     expect(screen.queryByText("not-persisted")).toBeNull();
+    expect(screen.getByRole("textbox", { name: "Каталог данных" })).toHaveProperty("value", "/data/redis-main");
+    expect(screen.getByText(/Показан расчёт Core для сохранённой версии/)).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Секреты" }));
+    await userEvent.type(screen.getByLabelText("Redis password"), "replacement-only-in-memory");
+    await userEvent.click(screen.getByRole("button", { name: "Сохранить в сессии" }));
+    expect(value.appendEditCommand).toHaveBeenCalledOnce();
+    expect(setPendingDeploymentRuntimeSecretValues).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole("dialog", { name: "Секреты сервиса" })).toBeNull();
+    expect(value.getServiceConfigurationPreview).toHaveBeenCalledOnce();
   });
 
   it("requires the catalog-declared username when adding a runtime secret reference", async () => {

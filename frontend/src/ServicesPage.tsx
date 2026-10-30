@@ -382,6 +382,7 @@ export function ServicesPage({
   managed,
   catalog,
   effectivePreview,
+  previewHasDraft = false,
   corePreviewNotice,
   deploymentIntents,
   placementIntents,
@@ -411,6 +412,7 @@ export function ServicesPage({
   managed: OpenResult["managed"];
   catalog: OpenResult["catalog"];
   effectivePreview?: ServiceConfigurationPreview;
+  previewHasDraft?: boolean;
   corePreviewNotice?: string;
   deploymentIntents: DeploymentIntent[];
   placementIntents: PlacementIntent[];
@@ -632,7 +634,14 @@ export function ServicesPage({
     setSecretError("");
     try {
       const referencesAdded = descriptors.filter(
-        (descriptor) => !descriptor.referenceConfigured && descriptor.setting,
+        (descriptor) => !descriptor.referenceConfigured && descriptor.setting &&
+          !configurationIntents.some((intent) => intent.operation === "SetServiceConfigurationValue" &&
+            intent.deploymentId === selected.deploymentId && intent.scope === "DEPLOYMENT" &&
+            intent.setting === descriptor.setting && typeof intent.value === "object" &&
+            intent.value !== null && !Array.isArray(intent.value) &&
+            intent.value.passwordSecretRef === `runtime:${descriptor.requirementRef}` &&
+            (!settings.find((setting) => setting.id === descriptor.setting)?.runtimeSecretUsernameRequired ||
+              intent.value.username === secretUsernames[descriptor.requirementRef])),
       );
       if (
         referencesAdded.some((descriptor) => {
@@ -673,13 +682,6 @@ export function ServicesPage({
           );
           return;
         }
-      }
-      if (referencesAdded.length) {
-        setSecretValues({});
-        setSecretError(
-          "Ссылки добавлены в черновик. Сохраните проект и затем введите значения ещё раз.",
-        );
-        return;
       }
       await onSetPendingDeploymentRuntimeSecretValues({
         serviceDeployment: selected.deploymentId,
@@ -867,8 +869,9 @@ export function ServicesPage({
             )}
           {effectivePreview?.services[selected.deploymentId] && (
             <p className="muted" role="status">
-              Значения получены из Core для текущей сохранённой ревизии. Это не
-              проверка проекта.
+              {previewHasDraft
+                ? "Показан расчёт Core для сохранённой версии. Изменения черновика ещё не рассчитаны."
+                : "Значения получены из Core для текущей сохранённой ревизии. Это не проверка проекта."}
             </p>
           )}
           {!service ? (

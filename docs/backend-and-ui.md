@@ -54,8 +54,11 @@ late discovery results cannot replace a newer context's descriptors. Context
 entry may discover requirements once; periodic presence reads never rediscover.
 Explicit descriptor rediscovery keeps the existing attachment invalidation:
 it clears already-attached runtime inputs and reattests matching pending inputs.
-Page reentry can therefore require new input after earlier pending values have
-been promoted; presence polling alone neither clears inputs nor renews TTL.
+Promotion retains the original project-bound pending inputs and their original
+expiry for later reattestation. Save and page reentry do not themselves require
+retyping a retained password. Expiry, explicit clear, changed requirements or
+changed connection/project trust can require new input; presence polling alone
+neither clears inputs nor renews TTL.
 
 The managed Ansible project directory—`project.yml`, inventory, `group_vars` and `host_vars`—contains canonical desired state. SQLite, if retained, stores local operational data:
 

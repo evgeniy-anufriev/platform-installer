@@ -236,6 +236,52 @@ func TestPendingServiceSecretsUseSavedCatalogAndRequireNoExecutionNode(t *testin
 	}
 }
 
+func TestSaveRefreshRetainsPendingServiceInputsWithoutExtendingExpiry(t *testing.T) {
+	app := preparedDraftApp(t)
+	now := time.Now()
+	app.secrets.Close()
+	app.secrets = runtimesecret.NewBroker(runtimesecret.WithClock(func() time.Time { return now }), runtimesecret.WithTTL(time.Minute))
+	defer app.secrets.Close()
+	binding := runtimesecret.Binding{Root: app.current.Root, ID: app.current.Project.ID}
+	if _, err := app.secrets.Set(binding, runtimesecret.Input{Username: "installer", SSHMode: runtimesecret.SSHPassword, SSHPassword: "synthetic-transport"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.secrets.SetPendingServiceSecretInput(binding, "kafka", "SERVICE_PASSWORD", []byte("synthetic-password"), nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.secrets.SetPendingRuntimeSecretValuesForRequirements(binding, []string{"clickhouse-default-password"}, map[string]string{"clickhouse-default-password": "synthetic-other"}); err != nil {
+		t.Fatal(err)
+	}
+	requirements := []runtimesecret.RuntimeSecretInput{{ServiceDeployment: "kafka", Purpose: "SERVICE_PASSWORD"}, {RequirementRef: "clickhouse-default-password", ServiceDeployment: "clickhouse", Purpose: "SERVICE_PASSWORD"}}
+	app.clearRuntimeSecretDescriptorEvidenceLocked(true)
+	app.refreshExecutionAfterSaveLocked(app.current.Root, app.current.Project, managedSnapshotHosts(app.current.Managed))
+	if !app.secrets.ServiceSecretsPresent(binding, requirements) || app.runtimeSecretEvidence != nil {
+		t.Fatal("Save refresh lost pending inputs or retained Core evidence")
+	}
+	if err := app.secrets.WithTargetCredential(binding, func(value runtimesecret.TargetCredential) error {
+		if len(value.RuntimeSecretValues) != 0 || len(value.RuntimeSecretInputs) != 0 {
+			t.Fatal("Save attached pending inputs without fresh Core proof")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if app.secrets.ServiceSecretsPresent(runtimesecret.Binding{Root: binding.Root, ID: "other-project"}, requirements) {
+		t.Fatal("pending inputs crossed project identity")
+	}
+	now = now.Add(2 * time.Minute)
+	if app.secrets.ServiceSecretsPresent(binding, requirements) {
+		t.Fatal("Save extended pending input lifetime")
+	}
+	if err := app.secrets.SetPendingServiceSecretInput(binding, "kafka", "SERVICE_PASSWORD", []byte("synthetic-renewal"), nil); err != nil {
+		t.Fatal(err)
+	}
+	app.clearRuntimeSecretDescriptorEvidenceLocked()
+	if app.secrets.ServiceSecretsPresent(binding, requirements[:1]) {
+		t.Fatal("strict credential/trust cleanup retained inputs")
+	}
+}
+
 func TestPendingServiceSecretDescriptorAcceptsExactUsernameReference(t *testing.T) {
 	for _, test := range []struct {
 		name       string
@@ -856,7 +902,7 @@ func TestMissingServiceSecretFindingNamesOnlySafeInstanceAndSetting(t *testing.T
 				t.Fatal("missing finding")
 			}
 			if field == "serviceDeployments.kafka-extra.configuration.adminCredential" {
-				if findings[0].Summary != "У экземпляра сервиса «kafka-extra» не задана обязательная ссылка на секрет в параметре «adminCredential». Настройте секрет и сохраните проект." {
+				if findings[0].Summary != "У экземпляра сервиса «kafka-extra» не задан пароль для параметра «adminCredential». Укажите пароль в разделе «Секреты» и сохраните проект." {
 					t.Fatalf("missing instance/setting: %#v", findings[0])
 				}
 			} else if field == "serviceDeployments.kafka-two.configuration.replicationCredential" {
@@ -880,7 +926,7 @@ func TestMissingServiceSecretWarningKeepsCoreSeverity(t *testing.T) {
 		"field":       "serviceDeployments.kafka-extra.configuration.adminCredential",
 	}})
 	if len(findings) != 1 || findings[0].Severity != "WARNING" ||
-		findings[0].Summary != "У экземпляра сервиса «kafka-extra» не задана ссылка на секрет в параметре «adminCredential». Проверка проекта выполнена; настройте секрет и сохраните проект перед одобрением плана." {
+		findings[0].Summary != "У экземпляра сервиса «kafka-extra» не задан пароль для параметра «adminCredential». Укажите пароль в разделе «Секреты» и сохраните проект перед одобрением плана." {
 		t.Fatalf("warning changed or lost: %#v", findings)
 	}
 }

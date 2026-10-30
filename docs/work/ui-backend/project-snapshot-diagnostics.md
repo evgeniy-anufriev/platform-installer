@@ -214,3 +214,54 @@ scope-related notices that are absent for those fixtures; this task does not
 change that component or its tests. These failures are not reported as passed.
 Real React/Wails acceptance and visual inspection remain OPEN. This UI-only
 change requires an updated Installer, not a new runtime bundle.
+
+## One password entry, saved data paths and consistent required-secret metadata
+
+Owner reproduced a service secret dialog that appended an internal reference
+to the draft, discarded the entered password and stayed open asking for it
+again. Remove that early return: the existing catalog-authorized pending setter
+accepts the original password in the Broker and the dialog closes normally.
+The normal guarded project Save persists only the generated reference. Reopening
+the dialog before Save reuses a matching configuration intent, rather than
+adding duplicate references. Operator messages ask for a password through
+Secrets; operators do not configure runtime references manually.
+
+Use the existing ClearAttachedRuntimeSecretValues during successful Save and
+unchanged prepared-node refresh. It revokes previous Core descriptor evidence
+and attached target values while retaining project-bound pending inputs under
+their original expiry. Failed refresh, credential/trust replacement, project
+close and explicit strict clear retain the full cleanup. Legacy password
+promotion now keeps its original pending input for repeat Core attestation,
+as typed Kafka inputs already do. No new store, API, timer or Go file was added.
+Fresh Core requirements still gate every promotion; stale/removed requirement
+sets fail closed and may require clearing/re-entering session inputs.
+
+The service editor keeps the matched saved-revision Core preview visible while
+a local draft exists, with a clear saved-version/draft-not-calculated notice.
+An explicitly edited setting still uses its pending override instead of the
+saved projection. This prevents an unrelated secret-reference intent from
+blanking dataDirectory without treating draft values as resolved Core output.
+
+The shared secret requirement checker previously ignored mode-level
+x-requiredRuntimeSecretSettings and saw only Kafka's x-runtimeSecretRequired.
+It now reads the already-published mode metadata for all services. Core keeps
+Project Verify's WARNING mapping, while diagnostic plans retain blocking
+credential findings for approval. Tests read real Kafka/ClickHouse/Redis/
+PostgreSQL manifests across their modes and exercise native project snapshots
+with absent Kafka and ClickHouse credentials.
+
+Validation: RED OS101 current-source snapshot model/action, native resolution,
+deployment-plan and service-preview suite62 PASS in30.523s. Workspace
+/var/tmp/platform-installer-qa-e0f311f72bfa47a6b7e9b319c4793691 cleaned after QA.
+Go tests/vet PASS. App97/typecheck/lint PASS. Regressions cover one-entry password
+submission, reopening without duplicate edits, retained dataDirectory, pending
+scope/expiry, no attachment before Core proof, repeat legacy/typed promotion,
+changed requirements rejected and buffers wiped on strict clear/expiry.
+Frontend production build and Windows Wails production build PASS. Independent
+FULL DIFF review APPROVE, zero blockers; fingerprint of ten source/test files
+at base3bf0d036:
+46189c39fec5c87410b5ee5a71397eabdfa32eda13db309f588bdbd0c736e302.
+Nonblocking SSR-N01 (duplicate intent on reopening) and SSR-N02 (promotion
+documentation wording) were resolved in this reviewed change. Real React/Wails
+acceptance with an updated bundle and visual inspection remain OPEN. Delivery
+requires updated Installer and runtime bundle for the mode-metadata correction.

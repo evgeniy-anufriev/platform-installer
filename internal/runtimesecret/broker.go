@@ -412,9 +412,11 @@ func (b *Broker) SetPendingRuntimeSecretValuesForRequirements(binding Binding, r
 	return nil
 }
 
-// PromotePendingRuntimeSecretValues moves values into the target credential
+// PromotePendingRuntimeSecretValues copies values into the target credential
 // only after Core has produced the current descriptor set. Every pending key
 // must be in that set; stale or superseded local requirements fail closed.
+// Original inputs retain their existing project binding and expiry, like typed
+// inputs, so a later Save can revoke attached proof without asking again.
 func (b *Broker) PromotePendingRuntimeSecretValues(binding Binding, requirements []string) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -456,11 +458,6 @@ func (b *Broker) PromotePendingRuntimeSecretValues(binding Binding, requirements
 	}
 	zeroSecretMap(b.lease.runtimeSecretValues)
 	b.lease.runtimeSecretValues = next
-	zeroSecretMap(b.pending.values)
-	b.pending.values = nil
-	if len(b.pending.typed) == 0 {
-		b.clearPendingLocked()
-	}
 	return nil
 }
 

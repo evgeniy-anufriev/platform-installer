@@ -712,9 +712,9 @@ func safeVerificationFindings(findings []map[string]any) ([]VerificationFinding,
 			field := boundedFindingString(raw["field"], 256)
 			parts := strings.Split(field, ".")
 			if len(parts) == 4 && parts[0] == "serviceDeployments" && parts[2] == "configuration" && runtimeSecretDescriptorRequirement.MatchString(parts[1]) && verificationSettingName.MatchString(parts[3]) {
-				finding.Summary = "У экземпляра сервиса «" + parts[1] + "» не задана обязательная ссылка на секрет в параметре «" + parts[3] + "». Настройте секрет и сохраните проект."
+				finding.Summary = "У экземпляра сервиса «" + parts[1] + "» не задан пароль для параметра «" + parts[3] + "». Укажите пароль в разделе «Секреты» и сохраните проект."
 				if finding.Severity == "WARNING" {
-					finding.Summary = "У экземпляра сервиса «" + parts[1] + "» не задана ссылка на секрет в параметре «" + parts[3] + "». Проверка проекта выполнена; настройте секрет и сохраните проект перед одобрением плана."
+					finding.Summary = "У экземпляра сервиса «" + parts[1] + "» не задан пароль для параметра «" + parts[3] + "». Укажите пароль в разделе «Секреты» и сохраните проект перед одобрением плана."
 				}
 			}
 		}
@@ -1495,10 +1495,14 @@ func (a *App) clearCredentialForReplacementLocked(root string, project *projectl
 	}
 }
 
-func (a *App) clearRuntimeSecretDescriptorEvidenceLocked() {
+func (a *App) clearRuntimeSecretDescriptorEvidenceLocked(keepPending ...bool) {
 	a.runtimeSecretEvidence = nil
 	if binding, err := a.credentialBindingLocked(); err == nil {
-		a.secrets.ClearRuntimeSecretValues(binding)
+		if len(keepPending) == 1 && keepPending[0] {
+			a.secrets.ClearAttachedRuntimeSecretValues(binding)
+		} else {
+			a.secrets.ClearRuntimeSecretValues(binding)
+		}
 	}
 }
 
@@ -1754,7 +1758,7 @@ func (a *App) CommitStructuralEditPlan(sessionID, planID string) StructuralEditO
 		a.pendingTargetHostKey = nil
 		clear(a.approvedTargetHostKeys)
 		previousVerification := a.current.Verification
-		a.clearRuntimeSecretDescriptorEvidenceLocked()
+		a.clearRuntimeSecretDescriptorEvidenceLocked(result.Status == "COMMITTED")
 		if !a.sessions.FinishCommit(sessionID, planID, true) {
 			return a.structuralEditFailure(errors.New("EDIT_SESSION_EXPIRED"))
 		}
@@ -1857,7 +1861,7 @@ func (a *App) refreshExecutionAfterSaveLocked(root string, project *projectlifec
 			if candidate, ok := a.execution.candidates[id]; ok {
 				a.execution.context.SafeLabel = candidate.label
 			}
-			a.clearRuntimeSecretDescriptorEvidenceLocked()
+			a.clearRuntimeSecretDescriptorEvidenceLocked(true)
 			a.installationGeneration++
 			a.continuation = nil
 			a.installationPlanID = ""

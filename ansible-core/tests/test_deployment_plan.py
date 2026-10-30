@@ -3,6 +3,7 @@ import importlib.util
 import json
 import sys
 import unittest
+import yaml
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1] / "collections" / "ansible_collections" / "platform" / "core" / "plugins" / "module_utils"
@@ -67,6 +68,20 @@ def sources():
     return [{"serviceType": "consumer", "requirementId": "consumer", "name": "consumer", "version": "4.3.1", "os": "redos", "architecture": "x86_64", "digest": DIGEST, "ref": "runtime/artifacts/consumer/consumer.tgz", "sha256": DIGEST, "size": 1, "type": "archive"}]
 
 class DeploymentPlanTests(unittest.TestCase):
+    def test_required_service_passwords_follow_the_same_published_mode_metadata(self):
+        repository = Path(__file__).resolve().parents[2]
+        for service in ('kafka', 'clickhouse', 'redis', 'postgresql'):
+            definition = yaml.safe_load((repository / 'services' / service / 'service.yml').read_text())
+            for mode_id, mode in definition['modes'].items():
+                with self.subTest(service=service, mode=mode_id):
+                    required = mode.get('x-requiredRuntimeSecretSettings', [])
+                    _, _, findings = PLAN._service_runtime_secret_requirements(
+                        {'service-qa': {'serviceType': service, 'mode': mode_id, 'configuration': {}}},
+                        {service: definition}, ['node1'])
+                    self.assertEqual(set(required), {item['field'].split('.')[-1] for item in findings})
+                    self.assertTrue(all(item['code'] == 'RUNTIME_SECRET_REFERENCE_REQUIRED' and item['status'] == 'BLOCKED'
+                                        for item in findings))
+
     def test_service_actions_use_only_selected_hosts_for_member_and_host_scoped_placement(self):
         state = snapshot()
         state["hosts"] = {"node1": {}, "node2": {}, "node3": {}}

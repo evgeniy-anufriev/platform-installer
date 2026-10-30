@@ -313,6 +313,10 @@ def _service_runtime_secret_requirements(deployments, definitions, hosts):
         definition = definitions.get(service_type) if isinstance(definitions, dict) else None
         settings = ((definition.get("configuration") or {}).get("settings") if isinstance(definition, dict) else None)
         values = deployment.get("configuration") if isinstance(deployment, dict) else None
+        modes = definition.get("modes", {}) if isinstance(definition, dict) else {}
+        mode = modes.get(deployment.get("mode"), {}) if isinstance(modes, dict) and isinstance(deployment, dict) else {}
+        required_settings = mode.get("x-requiredRuntimeSecretSettings", []) if isinstance(mode, dict) else []
+        required_settings = required_settings if isinstance(required_settings, list) else []
         if not isinstance(settings, dict):
             continue
         values = values if isinstance(values, dict) else {}
@@ -336,7 +340,7 @@ def _service_runtime_secret_requirements(deployments, definitions, hosts):
                 findings.append(_finding("RUNTIME_SECRET_REQUIREMENT_SCHEMA_INVALID", "catalog.definitions.%s.configuration.settings.%s" % (service_type, setting_id), "Runtime secret requirement setting schema is incompatible"))
                 continue
             if value is None:
-                if setting.get('x-runtimeSecretRequired') is True:
+                if setting.get('x-runtimeSecretRequired') is True or setting_id in required_settings:
                     findings.append(_finding("RUNTIME_SECRET_REFERENCE_REQUIRED", "serviceDeployments.%s.configuration.%s" % (deployment_id, setting_id), "Required service credential reference must be saved before planning"))
                 continue
             reference = value.get("passwordSecretRef") if isinstance(value, dict) else None
