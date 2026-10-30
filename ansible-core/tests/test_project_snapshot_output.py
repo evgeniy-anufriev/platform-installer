@@ -63,7 +63,9 @@ class SnapshotOutputTests(unittest.TestCase):
                 self.assertNotIn('PRIVATE_TEST_SENTINEL', path.read_text())
                 write_snapshot_output({'snapshot': 'previous success'})
                 callback.v2_runner_on_failed(result)
-                self.assertIn('Ansible', json.loads(path.read_text())['adapterError']['safeMessage'])
+                fallback = json.loads(path.read_text())['adapterError']
+                self.assertEqual('PROJECT_SNAPSHOT_INPUT_INVALID', fallback['code'])
+                self.assertTrue(fallback['safeMessage'])
                 self.assertNotIn('PRIVATE_TEST_SENTINEL', path.read_text())
 
     @unittest.skipUnless(shutil.which('ansible-playbook'), 'native Ansible required')

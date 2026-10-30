@@ -50,13 +50,19 @@ has a factual fallback without alternate guesses.
 
 Added tests for censored failures, private success result protection,
 malformed/oversized/symlink artifacts and native Ansible task failures with
-no_log both true and false. Core/native tests remain NOT EXECUTED: both RED OS
-101/102 strict SSH probes timed out again. Real Wails acceptance remains OPEN.
+no_log both true and false. After owner startup of RED OS101, current-source
+combined bootstrap/snapshot action/output/native resolution/preview suite:
+35 PASS (35.115s), no skips, Python3.11.15/Ansible Core2.18.15. Native no_log
+failure publication and private-success register/output exclusion passed.
+Initial34 PASS/1 FAIL was an obsolete callback wording assertion, corrected
+to verify the stable diagnostic code and nonempty safe message. Production
+behavior was unchanged. Both qa-sync workspaces were removed and their absence
+confirmed. Previous SSH unavailability is historical. Real Wails acceptance OPEN.
 
 Independent FULL DIFF of the initial filtered-publication change and one revised
 FULL DIFF after the owner's explicit task-no_log removal instruction both
 returned APPROVE_WITH_CHANGES, zero blockers. Revised review recommendation
 SDO-N02 (native successful private-register/output check) was incorporated into
 the test source; SDO-N01 negative artifact cases were also added. These added
-tests have not been executed. `git diff --check` PASS. No Go/React code changed
+tests now passed on RED OS101 as recorded above. `git diff --check` PASS. No Go/React code changed
 in this follow-up, so their earlier results are not a native acceptance claim.

@@ -45,16 +45,24 @@ causes in UI, with source publication to GitHub.
   acceptance/rejection regressions PASS. Timeout-through-transport test PASS.
 - Affected frontend App/Servers tests: 96 PASS; typecheck PASS. Structured Core
   reason remains visible with dependent sections blocked.
-- Added RED OS bootstrap tests for automatic missing ansible-core installation
-  with multiple platforms and DNF failure category/private-output exclusion.
-  NOT EXECUTED: strict SSH probes to RED OS101/102 timed out on port 22.
+- After owner startup of RED OS101 on 2026-10-30, current-source combined
+  bootstrap/snapshot action/output/native resolution/preview suite: 35 PASS in
+  35.115s, no skips. Python3.11.15, Ansible Core2.18.15; strict SSH as
+  platform-automation with existing identity and sudo -n. Bootstrap covers
+  missing ansible-core with multiple platforms using isolated RPM/DNF fakes,
+  plus DNF error category/private-output exclusion. No actual RPM transaction.
+  Initial run: 34 PASS/1 FAIL from an obsolete expected callback wording;
+  the assertion now checks the stable diagnostic code and safe message.
+  Both source workspaces were verified and removed through qa-sync; their
+  absence was confirmed. Previous SSH unavailability is historical.
 - Real React/Wails -> Execution Node preparation/Core flow acceptance OPEN.
   No new package transaction, runtime activation, bundle build/publication or
   installation run was performed by this source task. New desktop and runtime
   bundle delivery are needed; do not claim actual target installation PASS.
 - Independent FULL DIFF: APPROVE_WITH_CHANGES, zero blockers. RCD-N01 deadline
   preservation corrected. RCD-N02 (actual OpenSSH/remote-shell multi-platform
-  test for both sudo modes and missing ansible-core) remains OPEN due QA-node
-  unavailability. Source review is not real runtime acceptance.
+  test for both sudo modes and missing ansible-core) remains OPEN: this isolated
+  suite does not exercise that complete transport/install boundary. Source
+  review is not real runtime acceptance.
 - `git diff --check`: PASS. Only scoped source/test/evidence files committed;
   pre-existing dirty work preserved.
