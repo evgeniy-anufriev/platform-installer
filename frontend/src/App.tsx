@@ -557,17 +557,14 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
 
   useEffect(() => {
     let live = true;
-    if (commandCount !== 0)
-      return () => {
-        live = false;
-      };
-    setServiceConfigurationPreview(undefined);
-    setServiceConfigurationPreviewError("");
+    if (commandCount === 0) {
+      setServiceConfigurationPreview(undefined);
+      setServiceConfigurationPreviewError("");
+    }
     const revision = result.managed?.projectRevision;
     const runtimeDigest = executionNode?.runtimeDigest;
     if (
       !projectOpen ||
-      commandCount !== 0 ||
       !revision ||
       !result.root ||
       executionNode?.status !== "READY" ||
@@ -590,6 +587,12 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       safeLabel,
     ]);
     let request = servicePreviewRequests.current.get(requestKey);
+    // A draft can reuse the saved revision's pending or completed request.
+    // Keep listening when commandCount changes; never start Core for a draft.
+    if (!request && commandCount !== 0)
+      return () => {
+        live = false;
+      };
     if (!request) {
       request = api.getServiceConfigurationPreview();
       servicePreviewRequests.current.clear();
