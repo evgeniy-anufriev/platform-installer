@@ -86461,7 +86461,7 @@ catalogLock:
 })();
 
 @@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":126959,"sha256":"8240fb2e8722e484a30d630f6cd94d309e0723b2b95f06c092d54b08111dfc56","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49661}
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":129474,"sha256":"5a674112bab883836f2dd51894fad2e4c7bb9cdf41e26bd871a37dbc48405f6c","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49715}
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   EditResult,
@@ -86517,7 +86517,7 @@ import {
   observeRunEvent,
   type RunProgress,
 } from "./installationPresentation";
-import { executionNodeStatusLabel } from "./executionNodeLabels";
+import { executionNodeCombinedStatus, type ExecutionNodeCombinedStatus } from "./executionNodeLabels";
 import "./edit.css";
 import {
   ApplicationsPage,
@@ -87315,6 +87315,8 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   const nodeCheckBinding = (context: ExecutionNodeContext | null) =>
     JSON.stringify([
       result.root,
+      context?.selectionKind,
+      context?.safeLabel,
       context?.selectedHostId,
       context?.runtimeDigest,
       credentialStatus?.expiresAt,
@@ -87338,9 +87340,28 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     credentialStatus?.status,
     credentialStatus?.sshMode,
     executionNode?.selectedHostId,
+    executionNode?.selectionKind,
+    executionNode?.safeLabel,
   ]);
   const informationBindingRef = useRef(informationBinding);
   informationBindingRef.current = informationBinding;
+  const [nodePreparation, setNodePreparation] = useState<{
+    binding: string; value: ExecutionNodePreparation;
+  } | null>(null);
+  const currentPreparation = nodePreparation?.binding === informationBinding
+    ? nodePreparation.value : null;
+  const nodeReadiness = lastNodeCheck?.binding === nodeCheckBinding(executionNode)
+    ? lastNodeCheck.readiness : { status: executionNode?.status || "NOT_CONFIGURED" };
+  const nodeStatus = executionNodeCombinedStatus(nodeReadiness, currentPreparation);
+  const showCoreStatus = executionReady && !coreProjectionReady &&
+    (!currentPreparation || ["PREPARED", "READY"].includes(currentPreparation.status));
+  const coreUnavailable = !executionNode?.runtimeDigest || !managed?.projectRevision;
+  const nodeDisplayStatus: ExecutionNodeCombinedStatus = showCoreStatus
+    ? {
+        label: serviceConfigurationPreviewError ? "Ошибка получения данных Core" : coreUnavailable ? "Данные Core недоступны" : "Получение данных Core…",
+        tone: serviceConfigurationPreviewError || coreUnavailable ? "danger" : "warning",
+      }
+    : nodeStatus;
   const probeServerInformation = useCallback(
     (hostId: string) => {
       if (!api.probeServerInformation)
@@ -87815,7 +87836,10 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
           return;
         }
         const subscriptionMatches =
-          value.subscriptionId === installationSubscriptionRef.current;
+          value.sub
+@@END
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":129474,"sha256":"5a674112bab883836f2dd51894fad2e4c7bb9cdf41e26bd871a37dbc48405f6c","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49719}
+scriptionId === installationSubscriptionRef.current;
         if (
           !subscriptionMatches &&
           value.event.runId !== activeRunIdRef.current
@@ -87850,9 +87874,6 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
         ) {
           void api
             .getInstallationRun(value.event.runId)
-
-@@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":126959,"sha256":"8240fb2e8722e484a30d630f6cd94d309e0723b2b95f06c092d54b08111dfc56","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49682}
             .then((next) => {
               setInstallationRun(next);
               if (next.reconnected) {
@@ -88452,6 +88473,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     if (!api.checkExecutionNode)
       throw new Error("EXECUTION_NODE_CHECK_UNAVAILABLE");
     const binding = informationBindingRef.current;
+    setNodePreparation(null);
     const readiness = await api.checkExecutionNode();
     const refreshed = await api
       .getExecutionNodeContext?.()
@@ -88524,14 +88546,38 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     async (): Promise<ExecutionNodePreparation> => {
       if (!api.planExecutionNodePreparation)
         throw new Error("EXECUTION_NODE_PREPARATION_UNAVAILABLE");
-      return api.planExecutionNodePreparation();
+      const binding = informationBindingRef.current;
+      let preparation: ExecutionNodePreparation;
+      try {
+        preparation = await api.planExecutionNodePreparation();
+      } catch (error) {
+        setNodePreparation({ binding, value: { status: "BLOCKED", error: { code: "EXECUTION_NODE_PREPARATION_UNAVAILABLE", message: "Не удалось спланировать подготовку узла." } } });
+        throw error;
+      }
+      const refreshed = await api.getExecutionNodeContext?.().catch(() => undefined);
+      if (binding !== informationBindingRef.current)
+        throw new Error("SERVER_INFORMATION_BINDING_CHANGED");
+      if (refreshed) setExecutionNode(refreshed);
+      setNodePreparation({ binding, value: preparation });
+      return preparation;
     };
   const prepareExecutionNode = async (
     planId: string,
   ): Promise<ExecutionNodePreparation> => {
     if (!api.prepareExecutionNode)
       throw new Error("EXECUTION_NODE_PREPARATION_UNAVAILABLE");
-    const preparation = await api.prepareExecutionNode(planId);
+    const binding = informationBindingRef.current;
+    setNodePreparation({ binding, value: { status: "PREPARING" } });
+    let preparation: ExecutionNodePreparation;
+    try {
+      preparation = await api.prepareExecutionNode(planId);
+    } catch (error) {
+      setNodePreparation({ binding, value: { status: "BLOCKED", error: { code: "EXECUTION_NODE_PREPARATION_UNAVAILABLE", message: "Не удалось выполнить подготовку узла." } } });
+      throw error;
+    }
+    if (binding !== informationBindingRef.current)
+      throw new Error("SERVER_INFORMATION_BINDING_CHANGED");
+    setNodePreparation({ binding, value: preparation });
     if (preparation.verification) {
       setResult(
         (current) =>
@@ -88688,19 +88734,13 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
           </div>
           {projectOpen && (
             <button
-              className="execution-node-badge"
+              className={`execution-node-badge status-chip--${nodeDisplayStatus.tone}`}
               aria-label="Открыть узел выполнения"
               onClick={() => requestPage("servers")}
               title="Открыть узел выполнения на странице «Серверы»"
             >
               Узел выполнения:{" "}
-              {executionReady && !coreProjectionReady
-                ? serviceConfigurationPreviewError
-                  ? "Ошибка получения данных Core"
-                  : "Получение данных Core…"
-                : executionNodeStatusLabel(
-                    executionNode?.status || "NOT_CONFIGURED",
-                  )}
+              {nodeDisplayStatus.label.replace(/^Проверен: /, "")}
               {executionNode?.safeLabel
                 ? ` · ${executionNode.safeLabel.split(" · ")[0]}`
                 : ""}
@@ -88891,7 +88931,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               )}
               serverTypes={serverTypes}
               configError={configError}
-              busy={editBusy}
+              busy={editBusy || currentPreparation?.status === "PREPARING"}
               structuralDisabled={refreshRequired}
               onAppend={appendStructuralIntent}
               onReview={review}
@@ -88913,6 +88953,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
                   : null
               }
               executionNode={executionNode}
+              nodeDisplayStatus={nodeDisplayStatus}
               coreProjectionNotice={
                 !coreProjectionReady
                   ? serviceConfigurationPreviewNotice
@@ -89130,7 +89171,10 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
                 )}
                 configurationIntents={intents.filter(
                   (intent): intent is ConfigurationIntent =>
-                    intent.operation === "SetServiceConfigurationValue" ||
+                    int
+@@END
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":129474,"sha256":"5a674112bab883836f2dd51894fad2e4c7bb9cdf41e26bd871a37dbc48405f6c","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":30040}
+ent.operation === "SetServiceConfigurationValue" ||
                     intent.operation === "RemoveServiceConfigurationOverride",
                 )}
                 busy={editBusy}
@@ -89183,10 +89227,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               intents={intents.filter(
                 (intent): intent is CertificateIntent =>
                   intent.operation === "CreateCertificateAuthority" ||
-                  intent.operati
-@@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":126959,"sha256":"8240fb2e8722e484a30d630f6cd94d309e0723b2b95f06c092d54b08111dfc56","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":27616}
-on === "UpdateCertificateAuthority" ||
+                  intent.operation === "UpdateCertificateAuthority" ||
                   intent.operation === "DeleteCertificateAuthority" ||
                   intent.operation === "CreateCertificateProfile" ||
                   intent.operation === "UpdateCertificateProfile" ||
@@ -100841,7 +100882,7 @@ export function ServerInformationDialog({ hostId, onProbe, onCheck, onResult, on
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/ServersPage.tsx","mode":420,"size":57130,"sha256":"f65f531aa2ccfb81a84220c3e90fa0f772e99ccd2d90f69b989b9edf19a2bac9","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":51118}
+@@PORTABLE {"path":"frontend/src/ServersPage.tsx","mode":420,"size":57400,"sha256":"bae49e3e6f7458d2d221a3b0e5fc783700ac3b781941aa2dc49115c337b61a66","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":51118}
 import { useEffect, useState, type ReactNode } from "react";
 import type {
   ExecutionNodeContext,
@@ -100858,6 +100899,7 @@ import {
   executionNodeCombinedStatus,
   executionNodeSelectionLabel,
   executionNodeStatusLabel,
+  type ExecutionNodeCombinedStatus,
 } from "./executionNodeLabels";
 
 const verificationLabel = (status: string): string => {
@@ -101094,6 +101136,7 @@ export function ServersPage({
   onClearCredential,
   executionNode,
   coreProjectionNotice,
+  nodeDisplayStatus,
   onSelectExecutionNode,
   onCheckExecutionNode,
   onProbeExecutionNodeHostKey,
@@ -101129,6 +101172,7 @@ export function ServersPage({
   onClearCredential: () => Promise<SessionCredentialStatus>;
   executionNode: ExecutionNodeContext | null;
   coreProjectionNotice?: string;
+  nodeDisplayStatus?: ExecutionNodeCombinedStatus;
   onSelectExecutionNode: (hostId: string) => Promise<ExecutionNodeContext>;
   onCheckExecutionNode: () => Promise<ExecutionNodeReadiness>;
   onProbeExecutionNodeHostKey?: () => Promise<HostKeyProbeResult>;
@@ -101292,6 +101336,7 @@ export function ServersPage({
         <ExecutionNodePanel
           context={executionNode}
           coreProjectionNotice={coreProjectionNotice}
+          nodeDisplayStatus={nodeDisplayStatus}
           rows={visible.filter((row) => row.state !== "deleting")}
           disabled={busy}
           onSelect={onSelectExecutionNode}
@@ -101496,6 +101541,7 @@ function TargetHostKeyDialog({
 function ExecutionNodePanel({
   context,
   coreProjectionNotice,
+  nodeDisplayStatus,
   rows,
   disabled,
   onSelect,
@@ -101513,6 +101559,7 @@ function ExecutionNodePanel({
 }: {
   context: ExecutionNodeContext | null;
   coreProjectionNotice?: string;
+  nodeDisplayStatus?: ExecutionNodeCombinedStatus;
   rows: Row[];
   disabled: boolean;
   onSelect: (hostId: string) => Promise<ExecutionNodeContext>;
@@ -101560,8 +101607,8 @@ function ExecutionNodePanel({
     status: "NOT_CONFIGURED",
     selectionSource: "NONE",
   };
-  const combinedStatus = executionNodeCombinedStatus(readiness || cachedReadiness, preparation);
-  const headingStatus = readiness || cachedReadiness || preparation
+  const combinedStatus = nodeDisplayStatus || executionNodeCombinedStatus(readiness || cachedReadiness, preparation);
+  const headingStatus = nodeDisplayStatus || readiness || cachedReadiness || preparation
     ? { ...combinedStatus, label: combinedStatus.label.replace(/^Проверен: /, "") }
     : {
         tone: executionNodeTone(effective.status),
@@ -101731,7 +101778,7 @@ function ExecutionNodePanel({
       >
         Статус:{" "}
         <StatusChip tone={combinedStatus.tone}>{combinedStatus.label}</StatusChip>
-        {coreProjectionNotice ? ` · ${coreProjectionNotice}` : combinedStatus.detail ? ` · ${combinedStatus.detail}` : ""}
+        {combinedStatus.detail ? ` · ${combinedStatus.detail}` : coreProjectionNotice ? ` · ${coreProjectionNotice}` : ""}
         {preparation?.verification
           ? ` · Проверка проекта: ${verificationLabel(preparation.verification.status)}`
           : ""}
@@ -102290,7 +102337,10 @@ function ServerDialog({
     }
     if (mode === "add") {
       const intent: ServerIntent = {
-        operation: "CreateServer",
+        operati
+@@END
+@@PORTABLE {"path":"frontend/src/ServersPage.tsx","mode":420,"size":57400,"sha256":"bae49e3e6f7458d2d221a3b0e5fc783700ac3b781941aa2dc49115c337b61a66","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":6282}
+on: "CreateServer",
         hostId,
         type,
         desiredHostname,
@@ -102300,10 +102350,7 @@ function ServerDialog({
       await onAppend(intent);
       return;
     }
-    const intent: ServerIntent = { operation: "UpdateS
-@@END
-@@PORTABLE {"path":"frontend/src/ServersPage.tsx","mode":420,"size":57130,"sha256":"f65f531aa2ccfb81a84220c3e90fa0f772e99ccd2d90f69b989b9edf19a2bac9","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":6012}
-erver", hostId };
+    const intent: ServerIntent = { operation: "UpdateServer", hostId };
     if (type !== row?.type) intent.type = type;
     if (desiredHostname !== row?.desiredHostname)
       intent.desiredHostname = desiredHostname;
