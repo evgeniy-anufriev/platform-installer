@@ -1970,9 +1970,56 @@ describe("UI-01F3 deployment editor", () => {
     });
     expect(await screen.findByText("Новый черновик")).toBeTruthy();
     expect(screen.getByText("1 / 16 изменений")).toBeTruthy();
+    expect(value.getServiceConfigurationPreview).toHaveBeenCalledOnce();
+    for (const name of ["Сервисы", "Приложения"]) {
+      expect(screen.getByRole("button", { name })).toHaveProperty("disabled", false);
+    }
     expect(
       screen.getByRole("button", { name: "Удалить экземпляр" }),
     ).toHaveProperty("disabled", true);
+  });
+
+  it("keeps the pending saved Core projection when topology adds a draft", async () => {
+    let complete!: (value: unknown) => void;
+    const value = api({
+      getServiceConfigurationPreview: vi.fn().mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            complete = resolve;
+          }),
+      ),
+    });
+    await openTopology(value);
+    await waitFor(() =>
+      expect(value.getServiceConfigurationPreview).toHaveBeenCalledOnce(),
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Добавить экземпляр" }),
+    );
+    await userEvent.type(
+      screen.getByLabelText("Технический ID экземпляра сервиса"),
+      "kafka-extra",
+    );
+    await userEvent.selectOptions(screen.getByLabelText("Режим"), "single");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Добавить в черновик" }),
+    );
+    expect(value.appendEditCommand).toHaveBeenCalledOnce();
+    await act(async () =>
+      complete({
+        projectRevision: "sha256:old",
+        runtimeDigest: "sha256:runtime-a",
+        services: {},
+      }),
+    );
+    for (const name of ["Сервисы", "Приложения"]) {
+      expect(screen.getByRole("button", { name })).toHaveProperty(
+        "disabled",
+        false,
+      );
+    }
+    expect(value.getServiceConfigurationPreview).toHaveBeenCalledOnce();
+    expect(value.verifyProject).not.toHaveBeenCalled();
   });
 
   it("rejects a duplicate deployment ID before calling the backend", async () => {
