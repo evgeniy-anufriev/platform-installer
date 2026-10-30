@@ -12,3 +12,10 @@ ansible-playbook \
   -e "platform_project_root=$project" \
   -e "platform_service_catalog_path=$runtime/catalog/service-catalog.yml"
 '
+sudo sh -c '
+r=$(readlink -f /var/lib/platform-installer/runtime/current)
+p="$r/ansible-core/collections/ansible_collections/platform/core/plugins"
+
+sha256sum "$p/action/project_snapshot.py" "$p/module_utils/project_snapshot.py"
+sed -n "1,28p" "$p/module_utils/project_snapshot.py"
+'
