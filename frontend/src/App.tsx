@@ -53,7 +53,7 @@ import {
   observeRunEvent,
   type RunProgress,
 } from "./installationPresentation";
-import { executionNodeStatusLabel } from "./executionNodeLabels";
+import { executionNodeCombinedStatus, type ExecutionNodeCombinedStatus } from "./executionNodeLabels";
 import "./edit.css";
 import {
   ApplicationsPage,
@@ -851,6 +851,8 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   const nodeCheckBinding = (context: ExecutionNodeContext | null) =>
     JSON.stringify([
       result.root,
+      context?.selectionKind,
+      context?.safeLabel,
       context?.selectedHostId,
       context?.runtimeDigest,
       credentialStatus?.expiresAt,
@@ -874,9 +876,28 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     credentialStatus?.status,
     credentialStatus?.sshMode,
     executionNode?.selectedHostId,
+    executionNode?.selectionKind,
+    executionNode?.safeLabel,
   ]);
   const informationBindingRef = useRef(informationBinding);
   informationBindingRef.current = informationBinding;
+  const [nodePreparation, setNodePreparation] = useState<{
+    binding: string; value: ExecutionNodePreparation;
+  } | null>(null);
+  const currentPreparation = nodePreparation?.binding === informationBinding
+    ? nodePreparation.value : null;
+  const nodeReadiness = lastNodeCheck?.binding === nodeCheckBinding(executionNode)
+    ? lastNodeCheck.readiness : { status: executionNode?.status || "NOT_CONFIGURED" };
+  const nodeStatus = executionNodeCombinedStatus(nodeReadiness, currentPreparation);
+  const showCoreStatus = executionReady && !coreProjectionReady &&
+    (!currentPreparation || ["PREPARED", "READY"].includes(currentPreparation.status));
+  const coreUnavailable = !executionNode?.runtimeDigest || !managed?.projectRevision;
+  const nodeDisplayStatus: ExecutionNodeCombinedStatus = showCoreStatus
+    ? {
+        label: serviceConfigurationPreviewError ? "Ошибка получения данных Core" : coreUnavailable ? "Данные Core недоступны" : "Получение данных Core…",
+        tone: serviceConfigurationPreviewError || coreUnavailable ? "danger" : "warning",
+      }
+    : nodeStatus;
   const probeServerInformation = useCallback(
     (hostId: string) => {
       if (!api.probeServerInformation)
@@ -1985,6 +2006,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     if (!api.checkExecutionNode)
       throw new Error("EXECUTION_NODE_CHECK_UNAVAILABLE");
     const binding = informationBindingRef.current;
+    setNodePreparation(null);
     const readiness = await api.checkExecutionNode();
     const refreshed = await api
       .getExecutionNodeContext?.()
@@ -2057,14 +2079,38 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     async (): Promise<ExecutionNodePreparation> => {
       if (!api.planExecutionNodePreparation)
         throw new Error("EXECUTION_NODE_PREPARATION_UNAVAILABLE");
-      return api.planExecutionNodePreparation();
+      const binding = informationBindingRef.current;
+      let preparation: ExecutionNodePreparation;
+      try {
+        preparation = await api.planExecutionNodePreparation();
+      } catch (error) {
+        setNodePreparation({ binding, value: { status: "BLOCKED", error: { code: "EXECUTION_NODE_PREPARATION_UNAVAILABLE", message: "Не удалось спланировать подготовку узла." } } });
+        throw error;
+      }
+      const refreshed = await api.getExecutionNodeContext?.().catch(() => undefined);
+      if (binding !== informationBindingRef.current)
+        throw new Error("SERVER_INFORMATION_BINDING_CHANGED");
+      if (refreshed) setExecutionNode(refreshed);
+      setNodePreparation({ binding, value: preparation });
+      return preparation;
     };
   const prepareExecutionNode = async (
     planId: string,
   ): Promise<ExecutionNodePreparation> => {
     if (!api.prepareExecutionNode)
       throw new Error("EXECUTION_NODE_PREPARATION_UNAVAILABLE");
-    const preparation = await api.prepareExecutionNode(planId);
+    const binding = informationBindingRef.current;
+    setNodePreparation({ binding, value: { status: "PREPARING" } });
+    let preparation: ExecutionNodePreparation;
+    try {
+      preparation = await api.prepareExecutionNode(planId);
+    } catch (error) {
+      setNodePreparation({ binding, value: { status: "BLOCKED", error: { code: "EXECUTION_NODE_PREPARATION_UNAVAILABLE", message: "Не удалось выполнить подготовку узла." } } });
+      throw error;
+    }
+    if (binding !== informationBindingRef.current)
+      throw new Error("SERVER_INFORMATION_BINDING_CHANGED");
+    setNodePreparation({ binding, value: preparation });
     if (preparation.verification) {
       setResult(
         (current) =>
@@ -2221,19 +2267,13 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
           </div>
           {projectOpen && (
             <button
-              className="execution-node-badge"
+              className={`execution-node-badge status-chip--${nodeDisplayStatus.tone}`}
               aria-label="Открыть узел выполнения"
               onClick={() => requestPage("servers")}
               title="Открыть узел выполнения на странице «Серверы»"
             >
               Узел выполнения:{" "}
-              {executionReady && !coreProjectionReady
-                ? serviceConfigurationPreviewError
-                  ? "Ошибка получения данных Core"
-                  : "Получение данных Core…"
-                : executionNodeStatusLabel(
-                    executionNode?.status || "NOT_CONFIGURED",
-                  )}
+              {nodeDisplayStatus.label.replace(/^Проверен: /, "")}
               {executionNode?.safeLabel
                 ? ` · ${executionNode.safeLabel.split(" · ")[0]}`
                 : ""}
@@ -2424,7 +2464,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               )}
               serverTypes={serverTypes}
               configError={configError}
-              busy={editBusy}
+              busy={editBusy || currentPreparation?.status === "PREPARING"}
               structuralDisabled={refreshRequired}
               onAppend={appendStructuralIntent}
               onReview={review}
@@ -2446,6 +2486,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
                   : null
               }
               executionNode={executionNode}
+              nodeDisplayStatus={nodeDisplayStatus}
               coreProjectionNotice={
                 !coreProjectionReady
                   ? serviceConfigurationPreviewNotice

@@ -396,6 +396,9 @@ it("shows the previous-run failure and retries bundle detection after confirming
     chooseRuntimeBundleUpdate,
     inspectOrphanRun,
     checkExecutionNode,
+    getServiceConfigurationPreview: vi.fn().mockResolvedValue({
+      projectRevision: "sha256:old", runtimeDigest: "sha256:runtime", services: {},
+    }),
     getExecutionNodeContext: vi.fn().mockResolvedValue({
       status: "READY",
       selectionKind: "PROJECT_SERVER",
@@ -1417,11 +1420,11 @@ describe("UI-01E2 server editor", () => {
         .getByRole("button", { name: "Топология" })
         .classList.contains("future"),
     ).toBe(false);
-    expect(
+    await waitFor(() => expect(
       screen
         .getByRole("button", { name: "Установка" })
         .classList.contains("future"),
-    ).toBe(false);
+    ).toBe(false));
     expect(screen.queryByText("Есть несохранённые изменения")).toBeNull();
   });
 
@@ -1477,6 +1480,10 @@ describe("UI-01E2 server editor", () => {
       selectionSource: "EXPLICIT",
       safeLabel: "desktop-qa · 192.0.2.10",
       locked: true,
+    });
+    vi.mocked(value.getServiceConfigurationPreview!).mockResolvedValue({
+      apiVersion: "platform.installer/service-configuration-preview/v1alpha1", kind: "ServiceConfigurationPreview",
+      projectRevision: "sha256:old", runtimeDigest: "sha256:new", services: {},
     });
     vi.spyOn(window, "confirm").mockReturnValue(true);
     await userEvent.click(
@@ -1544,6 +1551,32 @@ describe("UI-01E2 server editor", () => {
     await waitFor(() => expect(verify.classList.contains("next-step-hint")).toBe(true));
     await userEvent.click(verify);
     await waitFor(() => expect(verify.classList.contains("next-step-hint")).toBe(false));
+  });
+
+  it("keeps all node indicators synchronized during preparation and page navigation", async () => {
+    let finish!: (result: { status: string }) => void;
+    const context = { status: "PREPARATION_REQUIRED", selectionKind: "EXPLICIT_EXTERNAL", selectionSource: "EXPLICIT", safeLabel: "execution-node", locked: false };
+    const value = api({
+      getExecutionNodeContext: vi.fn().mockResolvedValue(context),
+      checkExecutionNode: vi.fn().mockResolvedValue({ status: "READY" }),
+      planExecutionNodePreparation: vi.fn().mockResolvedValue({ status: "CONFIRMATION_REQUIRED", planId: "prepare-1", steps: [{ id: "activate", action: "ACTIVATE", mutates: true }] }),
+      prepareExecutionNode: vi.fn().mockImplementation(() => new Promise((resolve) => { finish = resolve; })),
+    });
+    await openServers(value);
+    await userEvent.click(screen.getByRole("button", { name: "Спланировать подготовку" }));
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    await userEvent.click(await screen.findByRole("button", { name: "Подтвердить подготовку" }));
+    expect(screen.getByRole("button", { name: "Открыть узел выполнения" }).textContent).toContain("Выполняется подготовка");
+    expect(screen.getAllByText("Выполняется подготовка")).toHaveLength(2);
+    await userEvent.click(screen.getByRole("button", { name: "Проект" }));
+    await userEvent.click(screen.getByRole("button", { name: "Серверы" }));
+    expect(screen.getAllByText("Выполняется подготовка")).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "Спланировать подготовку" })).toHaveProperty("disabled", true);
+    vi.mocked(value.getExecutionNodeContext!).mockResolvedValue({ ...context, status: "READY", runtimeDigest: "sha256:runtime-a" });
+    await act(async () => finish({ status: "PREPARED" }));
+    expect(await screen.findByText("Проверен: Подготовлен")).toBeTruthy();
+    expect(screen.getByText("Подготовлен")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Открыть узел выполнения" }).textContent).toContain("Подготовлен");
   });
 
   it("suggests the server check used by a selected project Execution Node", async () => {
@@ -2539,6 +2572,8 @@ describe("UI-01H2 services navigation and safe settings", () => {
       );
     }
     expect(screen.getByText(/Тайм-аут запроса — 90 секунд/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Открыть узел выполнения" }).textContent).toContain("Получение данных Core…");
+    expect(screen.getAllByText("Получение данных Core…")).toHaveLength(2);
     await act(async () =>
       complete({
         projectRevision: "sha256:old",
@@ -2590,9 +2625,10 @@ describe("UI-01H2 services navigation and safe settings", () => {
       }),
       getServiceConfigurationPreview: vi
         .fn()
-        .mockRejectedValue(
+        .mockRejectedValueOnce(
           new Error("SERVICE_CONFIGURATION_PREVIEW_UNSUPPORTED"),
-        ),
+        ).mockResolvedValue({ projectRevision: "sha256:old", runtimeDigest: "sha256:runtime-a", services: {} }),
+      checkExecutionNode: vi.fn().mockResolvedValue({ status: "READY" }),
     });
     value.chooseProject.mockResolvedValue(project);
     render(<App api={value} />);
@@ -2609,6 +2645,16 @@ describe("UI-01H2 services navigation and safe settings", () => {
         /Core-проекция недоступна для текущей сохранённой ревизии.*SERVICE_CONFIGURATION_PREVIEW_UNSUPPORTED/,
       ),
     ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Открыть узел выполнения" }).textContent).toContain("Ошибка получения данных Core");
+    const errorChips = screen.getAllByText("Ошибка получения данных Core");
+    expect(errorChips).toHaveLength(2);
+    errorChips.forEach((chip) => expect(chip.classList.contains("status-chip--danger")).toBe(true));
+    expect(screen.queryByText("Ожидание данных Core")).toBeNull();
+    expect(screen.queryByText("Проверен: Подготовлен")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Проверить узел" }));
+    expect(await screen.findByText("Проверен: Подготовлен")).toBeTruthy();
+    expect(screen.getByText("Подготовлен")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Открыть узел выполнения" }).textContent).toContain("Подготовлен");
     expect(value.verifyProject).not.toHaveBeenCalled();
   });
 

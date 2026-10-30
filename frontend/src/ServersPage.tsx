@@ -14,6 +14,7 @@ import {
   executionNodeCombinedStatus,
   executionNodeSelectionLabel,
   executionNodeStatusLabel,
+  type ExecutionNodeCombinedStatus,
 } from "./executionNodeLabels";
 
 const verificationLabel = (status: string): string => {
@@ -250,6 +251,7 @@ export function ServersPage({
   onClearCredential,
   executionNode,
   coreProjectionNotice,
+  nodeDisplayStatus,
   onSelectExecutionNode,
   onCheckExecutionNode,
   onProbeExecutionNodeHostKey,
@@ -285,6 +287,7 @@ export function ServersPage({
   onClearCredential: () => Promise<SessionCredentialStatus>;
   executionNode: ExecutionNodeContext | null;
   coreProjectionNotice?: string;
+  nodeDisplayStatus?: ExecutionNodeCombinedStatus;
   onSelectExecutionNode: (hostId: string) => Promise<ExecutionNodeContext>;
   onCheckExecutionNode: () => Promise<ExecutionNodeReadiness>;
   onProbeExecutionNodeHostKey?: () => Promise<HostKeyProbeResult>;
@@ -448,6 +451,7 @@ export function ServersPage({
         <ExecutionNodePanel
           context={executionNode}
           coreProjectionNotice={coreProjectionNotice}
+          nodeDisplayStatus={nodeDisplayStatus}
           rows={visible.filter((row) => row.state !== "deleting")}
           disabled={busy}
           onSelect={onSelectExecutionNode}
@@ -652,6 +656,7 @@ function TargetHostKeyDialog({
 function ExecutionNodePanel({
   context,
   coreProjectionNotice,
+  nodeDisplayStatus,
   rows,
   disabled,
   onSelect,
@@ -669,6 +674,7 @@ function ExecutionNodePanel({
 }: {
   context: ExecutionNodeContext | null;
   coreProjectionNotice?: string;
+  nodeDisplayStatus?: ExecutionNodeCombinedStatus;
   rows: Row[];
   disabled: boolean;
   onSelect: (hostId: string) => Promise<ExecutionNodeContext>;
@@ -716,8 +722,8 @@ function ExecutionNodePanel({
     status: "NOT_CONFIGURED",
     selectionSource: "NONE",
   };
-  const combinedStatus = executionNodeCombinedStatus(readiness || cachedReadiness, preparation);
-  const headingStatus = readiness || cachedReadiness || preparation
+  const combinedStatus = nodeDisplayStatus || executionNodeCombinedStatus(readiness || cachedReadiness, preparation);
+  const headingStatus = nodeDisplayStatus || readiness || cachedReadiness || preparation
     ? { ...combinedStatus, label: combinedStatus.label.replace(/^Проверен: /, "") }
     : {
         tone: executionNodeTone(effective.status),
@@ -887,7 +893,7 @@ function ExecutionNodePanel({
       >
         Статус:{" "}
         <StatusChip tone={combinedStatus.tone}>{combinedStatus.label}</StatusChip>
-        {coreProjectionNotice ? ` · ${coreProjectionNotice}` : combinedStatus.detail ? ` · ${combinedStatus.detail}` : ""}
+        {combinedStatus.detail ? ` · ${combinedStatus.detail}` : coreProjectionNotice ? ` · ${coreProjectionNotice}` : ""}
         {preparation?.verification
           ? ` · Проверка проекта: ${verificationLabel(preparation.verification.status)}`
           : ""}
