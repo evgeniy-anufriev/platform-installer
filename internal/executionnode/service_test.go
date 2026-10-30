@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"platform-installer/internal/executionbundle"
+	"strings"
 	"testing"
 	"time"
 )
@@ -87,6 +88,11 @@ func TestPrepareReconcilesWorkspaceEvenWhenRuntimeIsAlreadyReady(t *testing.T) {
 	if err != nil || result.State != Ready || !result.Changed || transport.workspaceCalls != 1 {
 		t.Fatalf("result=%+v err=%v workspace reconciliations=%d", result, err, transport.workspaceCalls)
 	}
+	transport.inspection.OSVersion = "8.0"
+	incompatible, err := service.PlanExecutionNodePreparation(context.Background(), testNode(), root)
+	if err != nil || incompatible.State != Incompatible || len(incompatible.Findings) != 1 || incompatible.Findings[0].Code != "EXECUTION_NODE_PLATFORM_INCOMPATIBLE" {
+		t.Fatalf("incompatible plan missing finding: plan=%+v err=%v", incompatible, err)
+	}
 }
 func (f *fakeTransport) ActivateStagedRuntime(context.Context, Node, string, executionbundle.Verified) (Runtime, error) {
 	return f.inspection.Runtime, nil
@@ -125,5 +131,13 @@ func TestRequiredStateRejectsIncompatibleBundle(t *testing.T) {
 	inspection := Inspection{OS: "redos", OSVersion: "8.0.3", Architecture: "x86_64", Elevation: true, FreeBytes: 1}
 	if got := requiredState(inspection, bundle); got != Incompatible {
 		t.Fatalf("expected incompatible, got %s", got)
+	}
+	finding := platformMismatchFinding(inspection, bundle.Manifest.Platforms)
+	if finding.Code != "EXECUTION_NODE_PLATFORM_INCOMPATIBLE" || !strings.Contains(finding.SafeMessage, "redos/8.0.3/x86_64") || !strings.Contains(finding.SafeMessage, "alt/10/x86_64") {
+		t.Fatalf("missing safe platform details: %+v", finding)
+	}
+	inspection.OSVersion = "8.0\r"
+	if finding = platformMismatchFinding(inspection, bundle.Manifest.Platforms); finding.Code != "EXECUTION_NODE_PLATFORM_INCOMPATIBLE" || strings.Contains(finding.SafeMessage, "\r") {
+		t.Fatalf("unsafe platform detail: %+v", finding)
 	}
 }

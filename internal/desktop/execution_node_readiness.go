@@ -279,7 +279,7 @@ func (a *App) PlanExecutionNodePreparation() ExecutionNodePreparation {
 	a.execution.setStatus(string(plan.State))
 	if plan.State == executionnode.Incompatible || plan.State == executionnode.Broken || plan.State == executionnode.Unreachable || plan.ID == "" || plan.Digest == "" {
 		a.continuation = nil
-		return ExecutionNodePreparation{Status: string(plan.State), Steps: safeNodeSteps(plan.Steps)}
+		return ExecutionNodePreparation{Status: string(plan.State), Steps: safeNodeSteps(plan.Steps), Findings: safeNodeFindings(plan.Findings)}
 	}
 	a.continuation = &verificationContinuation{root: a.current.Root, projectID: a.current.Project.ID, revision: revision, bindingID: binding.node.ID, planID: plan.ID, planDigest: plan.Digest, expiresAt: plan.ExpiresAt}
 	return ExecutionNodePreparation{Status: "CONFIRMATION_REQUIRED", PlanID: plan.ID, ExpiresAt: plan.ExpiresAt.UTC().Format(time.RFC3339), Steps: safeNodeSteps(plan.Steps)}

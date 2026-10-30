@@ -1032,6 +1032,11 @@ func TestE5TrustedBindingAndPreparationContinuation(t *testing.T) {
 	if completed.Status != "PREPARED" || completed.Verification == nil || completed.Verification.Status != "VERIFIED" || stub.prepareCalls != 1 || stub.inspectCalls < 2 {
 		t.Fatalf("completed=%#v prepareCalls=%d inspectCalls=%d", completed, stub.prepareCalls, stub.inspectCalls)
 	}
+	stub.plan = executionnode.Plan{State: executionnode.Incompatible, Findings: []executionnode.Finding{{Code: "EXECUTION_NODE_PLATFORM_INCOMPATIBLE", SafeMessage: "Платформа узла не поддерживается."}}}
+	incompatible := app.PlanExecutionNodePreparation()
+	if incompatible.Status != "INCOMPATIBLE" || len(incompatible.Findings) != 1 || incompatible.Findings[0].Code != "EXECUTION_NODE_PLATFORM_INCOMPATIBLE" {
+		t.Fatalf("incompatible preparation lost finding: %#v", incompatible)
+	}
 }
 
 func TestExecutionNodeReadinessRequiresProjectBundle(t *testing.T) {

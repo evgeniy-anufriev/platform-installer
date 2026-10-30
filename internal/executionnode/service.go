@@ -7,6 +7,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -56,6 +58,7 @@ type Plan struct {
 	State                                State
 	BundleDigest                         string
 	Steps                                []Step
+	Findings                             []Finding
 	ExpiresAt                            time.Time
 }
 type Result struct {
@@ -226,14 +229,60 @@ func (s *Service) PlanExecutionNodePreparation(ctx context.Context, node Node, b
 	}
 	bundle, err := s.resolveBundle(bundleRoot, inspection)
 	if err != nil {
-		return Plan{APIVersion: APIVersion, Kind: "ExecutionNodePreparationPlan", NodeID: node.ID, State: inspection.State, Steps: []Step{{"bundle-invalid", "BLOCKED", false}}}, nil
+		findings := append([]Finding(nil), inspection.Findings...)
+		findings = append(findings, Finding{"EXECUTION_NODE_BUNDLE_UNAVAILABLE", "Проверенный набор установки недоступен для планирования."})
+		return Plan{APIVersion: APIVersion, Kind: "ExecutionNodePreparationPlan", NodeID: node.ID, State: inspection.State, Steps: []Step{{"bundle-invalid", "BLOCKED", false}}, Findings: findings}, nil
 	}
-	plan := Plan{APIVersion: APIVersion, Kind: "ExecutionNodePreparationPlan", NodeID: node.ID, State: requiredState(inspection, bundle), BundleDigest: bundle.Digest, Steps: preparationSteps(requiredState(inspection, bundle)), ExpiresAt: s.now().UTC().Add(s.ttl)}
+	state := requiredState(inspection, bundle)
+	findings := append([]Finding(nil), inspection.Findings...)
+	if state == Incompatible && inspection.State != Incompatible {
+		findings = append(findings, platformMismatchFinding(inspection, bundle.Manifest.Platforms))
+	}
+	plan := Plan{APIVersion: APIVersion, Kind: "ExecutionNodePreparationPlan", NodeID: node.ID, State: state, BundleDigest: bundle.Digest, Steps: preparationSteps(state), Findings: findings, ExpiresAt: s.now().UTC().Add(s.ttl)}
 	plan.Digest, plan.ID = planDigest(plan), planDigest(plan)
 	s.mu.Lock()
 	s.plans[plan.ID] = plan
 	s.mu.Unlock()
 	return plan, nil
+}
+
+func platformMismatchFinding(inspection Inspection, platforms []executionbundle.Platform) Finding {
+	const code = "EXECUTION_NODE_PLATFORM_INCOMPATIBLE"
+	actual := []string{inspection.OS, inspection.OSVersion, inspection.Architecture}
+	for _, value := range actual {
+		if !safePlatformToken(value) {
+			return Finding{code, "Платформа узла содержит недопустимое или слишком длинное значение OS, VERSION_ID либо ARCH."}
+		}
+	}
+	supported := make([]string, 0, 4)
+	for _, platform := range platforms {
+		if len(supported) == 4 {
+			break
+		}
+		if safePlatformToken(platform.OS) && safePlatformToken(platform.Version) && safePlatformToken(platform.Architecture) {
+			supported = append(supported, platform.OS+"/"+platform.Version+"/"+platform.Architecture)
+		}
+	}
+	message := fmt.Sprintf("Платформа узла %s не указана в наборе установки; поддерживаются: %s.", strings.Join(actual, "/"), strings.Join(supported, ", "))
+	if len(platforms) > len(supported) {
+		message += " Список сокращён."
+	}
+	if len(message) > 512 {
+		message = "Платформа узла не указана в наборе установки; значения OS, VERSION_ID и ARCH слишком длинные для отображения."
+	}
+	return Finding{code, message}
+}
+
+func safePlatformToken(value string) bool {
+	if value == "" || len(value) > 64 {
+		return false
+	}
+	for _, character := range value {
+		if !(character >= 'a' && character <= 'z' || character >= 'A' && character <= 'Z' || character >= '0' && character <= '9' || character == '.' || character == '_' || character == '-') {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *Service) Prepare(ctx context.Context, node Node, bundleRoot, planID string) (Result, error) {

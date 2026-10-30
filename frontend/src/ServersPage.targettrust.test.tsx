@@ -79,6 +79,18 @@ describe("target host trust on the Servers page", () => {
     expect(await screen.findByText(/Активный runtime bundle на узле не совпадает/)).toBeTruthy();
   });
 
+  it("shows the platform finding returned by preparation planning", async () => {
+    render(<ServersPage {...props} onPlanExecutionNodePreparation={vi.fn().mockResolvedValue({
+      status: "INCOMPATIBLE",
+      findings: [{ code: "EXECUTION_NODE_PLATFORM_INCOMPATIBLE", safeMessage: "Платформа узла redos/8.0/x86_64 не указана в наборе установки; поддерживаются: redos/8.0.3/x86_64." }],
+    })} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Спланировать подготовку" }));
+
+    expect(await screen.findByText("Проверен: Несовместим")).toBeTruthy();
+    expect(await screen.findByText(/Платформа узла redos\/8\.0\/x86_64 не указана/)).toBeTruthy();
+  });
+
   it("clears the stale update-required check after preparation succeeds", async () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
     const onCheckExecutionNode = vi.fn().mockResolvedValue({
