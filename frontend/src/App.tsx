@@ -3178,6 +3178,11 @@ function ProjectPage({
             {verificationErrorMessage(verification.error.code)}
           </p>
         )}
+        {verification.error && verification.findings?.map((finding, index) => (
+          <p className="field-error" role="status" key={`${finding.code}-${index}`}>
+            {finding.summary}
+          </p>
+        ))}
         <button onClick={onServers}>Открыть серверы</button>
         <button
           className="outline"

@@ -1,17 +1,53 @@
 import sys
 import tempfile
 import unittest
+from types import SimpleNamespace
+from ansible.errors import AnsibleError
 from pathlib import Path
 
 
 COLLECTIONS = Path(__file__).resolve().parents[1] / "collections"
 sys.path.insert(0, str(COLLECTIONS))
 
-from ansible_collections.platform.core.plugins.action.project_snapshot import ActionModule, snapshot_execution_connection, snapshot_host, validate_host_desired_values
+from ansible_collections.platform.core.plugins.action.project_snapshot import ActionModule, snapshot_execution_connection, snapshot_host, validate_host_desired_values, snapshot_input_message
 from ansible_collections.platform.core.plugins.module_utils.schema_validation import SchemaValidator
 
 
 class ProjectSnapshotActionTests(unittest.TestCase):
+    def test_snapshot_failure_reports_stage_and_missing_document(self):
+        action = object.__new__(ActionModule)
+        with tempfile.TemporaryDirectory() as root:
+            action._task = SimpleNamespace(args={'project_root': root})
+            result = action.run(task_vars={})
+        self.assertTrue(result['failed'])
+        self.assertFalse(result['changed'])
+        self.assertEqual('PROJECT_SNAPSHOT_INPUT_INVALID', result['error_code'])
+        message = result['finding']['safeMessage']
+        self.assertIn('Отсутствует обязательный документ', message)
+        self.assertIn('inventory', message)
+        self.assertNotIn(root, message)
+
+    def test_snapshot_yaml_failure_never_returns_parser_content(self):
+        action = object.__new__(ActionModule)
+        def fail_parse(path):
+            raise AnsibleError('password=PRIVATE_TEST_SENTINEL /private/input.yml')
+        action._loader = SimpleNamespace(load_from_file=fail_parse)
+        with tempfile.TemporaryDirectory() as root:
+            inventory = Path(root) / 'inventory'
+            inventory.mkdir()
+            (inventory / 'hosts.yml').write_text('invalid')
+            action._task = SimpleNamespace(args={'project_root': root})
+            result = action.run(task_vars={})
+        self.assertIn('YAML/JSON', result['finding']['safeMessage'])
+        self.assertNotIn('PRIVATE_TEST_SENTINEL', str(result))
+        self.assertNotIn('/private/', str(result))
+
+    def test_snapshot_reason_vocabulary_is_closed(self):
+        for error in (ValueError('password=PRIVATE_TEST_SENTINEL'), KeyError('PRIVATE_TEST_SENTINEL'),
+                      TypeError('PRIVATE_TEST_SENTINEL'), OSError('PRIVATE_TEST_SENTINEL')):
+            self.assertNotIn('PRIVATE_TEST_SENTINEL', snapshot_input_message('сборка снимка', error))
+        self.assertIn('platform_artifact_lock', snapshot_input_message('artifact lock', ValueError('APPLICATION_ARTIFACT_LOCK_CONFLICT')))
+
     def test_server_desired_values_and_port_are_projected(self):
         self.assertEqual(
             ({"ansibleHost": "192.0.2.10", "ansiblePort": 22, "type": "infra", "desiredHostname": "node1.example.internal"}, None),

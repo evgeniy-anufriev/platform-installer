@@ -60,6 +60,25 @@ func TestProjectVerifyPublishesOnlyBoundedDiagnosticCodes(t *testing.T) {
 	}
 }
 
+func TestProjectVerifyPublishesStructuredSnapshotFailure(t *testing.T) {
+	app := NewApp(snapshotReaderStub{}, lifecycleStub{})
+	result := app.setVerificationUnavailableLocked(&executionnode.ExecutionError{
+		Code: "PROJECT_SNAPSHOT_INPUT_INVALID",
+		Findings: []executionnode.Finding{
+			{Code: "PROJECT_SNAPSHOT_INPUT_INVALID", SafeMessage: "Не найден обязательный документ inventory."},
+			{Code: "OTHER_CODE", SafeMessage: "ignored"},
+			{Code: "PROJECT_SNAPSHOT_INPUT_INVALID", SafeMessage: strings.Repeat("x", 513)},
+		},
+	}, "revision")
+	if result.Status != "UNVERIFIED" || len(result.Findings) != 1 || result.Findings[0].Summary != "Не найден обязательный документ inventory." {
+		t.Fatalf("snapshot diagnostic lost or unbounded: %#v", result)
+	}
+	result = app.setVerificationUnavailableLocked(errors.New("private parser output"), "revision")
+	if len(result.Findings) != 0 {
+		t.Fatalf("untyped error published findings: %#v", result)
+	}
+}
+
 type snapshotReaderStub struct {
 	snapshot *coreadapter.Snapshot
 	err      error

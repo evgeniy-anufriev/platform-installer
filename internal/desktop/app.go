@@ -652,6 +652,16 @@ func (a *App) setVerificationUnavailableLocked(err error, revision string) Proje
 	}
 	evidence := ProjectVerification{APIVersion: "platform.installer/project-verification/v1alpha1", Kind: "ProjectVerification", Status: "UNVERIFIED",
 		ProjectRevision: revision, CheckedAt: time.Now().UTC(), Error: &ProjectOpenError{Code: code, Message: projectErrorMessage(code)}}
+	var executionError *executionnode.ExecutionError
+	if code == "PROJECT_SNAPSHOT_INPUT_INVALID" && errors.As(err, &executionError) {
+		var findings []map[string]any
+		for _, finding := range executionError.Findings {
+			if finding.Code == code {
+				findings = append(findings, map[string]any{"code": finding.Code, "safeMessage": finding.SafeMessage, "status": "BLOCKED"})
+			}
+		}
+		evidence.Findings, evidence.FindingsTruncated = safeVerificationFindings(findings)
+	}
 	a.current.Verification = evidence
 	return evidence
 }

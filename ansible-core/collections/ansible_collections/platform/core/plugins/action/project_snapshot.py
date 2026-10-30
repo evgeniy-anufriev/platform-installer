@@ -35,6 +35,42 @@ _CANONICAL_PORT = re.compile(r"^(0|[1-9][0-9]*)$")
 _SAFE_DATA_ROOT = re.compile(r"^/(?:[A-Za-z0-9][A-Za-z0-9_.-]{0,95}/)*[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$")
 
 
+class SnapshotInputError(AnsibleError):
+    """Closed reason token; parser text and input values stay private."""
+
+
+def snapshot_input_message(stage, error):
+    reasons = {
+        'INPUT_MISSING': 'Отсутствует обязательный документ.',
+        'INPUT_PARSE_FAILED': 'Не удалось прочитать YAML/JSON документа.',
+        'PROJECT_ROOT_MISSING': 'Папка проекта не существует.',
+        'INVENTORY_OUTSIDE_PROJECT': 'Inventory находится вне папки проекта.',
+        'INVENTORY_SELECTION_MISMATCH': 'Ansible загрузил другой inventory.',
+        'CATALOG_REFERENCE_MISSING': 'Не найден файл, указанный в каталоге сервисов.',
+        'CATALOG_MANIFEST_MISSING': 'Не найдены исходные манифесты сервисов набора.',
+        'APPLICATION_ARTIFACT_LOCK_CONFLICT': 'artifactLock проекта конфликтует с platform_artifact_lock.',
+        'APPLICATION_EXECUTION_MODEL_MISMATCH': 'Модель приложений не совпадает с ожидаемой.',
+        'APPLICATION_BUNDLE_DIGEST_INVALID': 'Некорректный digest набора приложений.',
+        'APPLICATION_BUNDLE_MANIFEST_INVALID': 'Некорректный манифест набора приложений.',
+        'PROJECT_RESOLUTION_INVALID': 'Разрешённая проекция проекта отсутствует или некорректна.',
+        'Canonical project variable directories must not contain symlinks': 'Каталоги переменных проекта содержат запрещённые символические ссылки.',
+        'Canonical project documents must not be symlinks': 'Документы проекта содержат запрещённые символические ссылки.',
+        'Application resolve role must run before snapshot': 'Не выполнено разрешение библиотек приложений.',
+        'Application projection placement identity mismatch': 'Размещение приложений изменилось во время разрешения.',
+        'Application package inputs changed during resolution': 'Пакеты приложений изменились во время разрешения.',
+    }
+    # Exact vocabulary lookup only. Never interpolate str(error), parser output,
+    # paths, hostvars or missing dictionary keys into public diagnostics.
+    reason = reasons.get(str(error)) if isinstance(error, (SnapshotInputError, ValueError)) else None
+    if reason is None:
+        reason = ('Недостаточно прав для чтения входных данных.' if isinstance(error, PermissionError)
+                  else 'Ошибка чтения входных данных.' if isinstance(error, OSError)
+                  else 'Отсутствует обязательное поле входных данных.' if isinstance(error, KeyError)
+                  else 'Ошибка вычисления переменных Ansible.' if isinstance(error, AnsibleError)
+                  else 'Некорректный тип или структура входных данных.')
+    return 'Не удалось построить снимок проекта. Этап: %s. %s' % (stage, reason)
+
+
 def _materialize_resolved_members(desired_state, topology, inventory_deployments, target_ids):
     """Keep topology identity and inventory-owned member settings together."""
     materialized = copy.deepcopy(desired_state)
@@ -315,9 +351,12 @@ class ActionModule(ActionBase):
     def _load(self, path, required=True):
         if not os.path.isfile(path):
             if required:
-                raise AnsibleError("Required snapshot input is missing: %s" % os.path.basename(path))
+                raise SnapshotInputError('INPUT_MISSING')
             return {}
-        value = self._loader.load_from_file(path)
+        try:
+            value = self._loader.load_from_file(path)
+        except AnsibleError as error:
+            raise SnapshotInputError('INPUT_PARSE_FAILED') from error
         return value if isinstance(value, dict) else {}
 
     def _catalog_reference(self, root, catalog_path, reference):
@@ -336,7 +375,7 @@ class ActionModule(ActionBase):
         for candidate in candidates:
             if os.path.commonpath((root, candidate)) == root and os.path.isfile(candidate):
                 return candidate
-        raise AnsibleError("Published catalog reference cannot be resolved")
+        raise SnapshotInputError('CATALOG_REFERENCE_MISSING')
 
     def _repo_root(self, catalog_path, catalog):
         sources = [item.get("x-sourceManifest") for item in catalog.get("definitions", {}).values() if isinstance(item, dict)]
@@ -353,7 +392,7 @@ class ActionModule(ActionBase):
                 return current
             parent = os.path.dirname(current)
             if parent == current:
-                raise AnsibleError("Published catalog source manifests cannot be resolved locally")
+                raise SnapshotInputError('CATALOG_MANIFEST_MISSING')
             current = parent
 
     def _service_inputs(self, root, catalog_path, catalog, service_types):
@@ -437,22 +476,25 @@ class ActionModule(ActionBase):
     def run(self, tmp=None, task_vars=None):
         del tmp
         task_vars = task_vars or {}
+        stage = 'загрузка проекта и inventory'
         try:
             if self._task.args.get('resolved_result') is not None:
+                stage = 'построение из разрешённой проекции Core'
                 from ansible_collections.platform.core.plugins.module_utils.project_resolution import enrich
                 return enrich(self._task.args['resolved_result'],
                               None if self._task.args.get('desired_only') else task_vars.get('platform_prepared_application_images'))
             requested_root = self._task.args.get("project_root")
             if requested_root and not os.path.isdir(os.path.realpath(requested_root)):
-                raise AnsibleError("Selected project directory does not exist")
+                raise SnapshotInputError('PROJECT_ROOT_MISSING')
             inventory_dir = os.path.realpath(task_vars.get("inventory_dir") or os.path.join(requested_root, "inventory"))
             project_root = os.path.realpath(requested_root or os.path.dirname(inventory_dir))
             if os.path.commonpath((project_root, inventory_dir)) != project_root:
-                raise AnsibleError("Inventory is outside the selected project root")
+                raise SnapshotInputError('INVENTORY_OUTSIDE_PROJECT')
             inventory_path = os.path.join(project_root, "inventory", "hosts.yml")
             self._load(inventory_path)
             if os.path.realpath(os.path.dirname(inventory_path)) != inventory_dir:
-                raise AnsibleError("Selected project inventory is not the inventory loaded by Ansible")
+                raise SnapshotInputError('INVENTORY_SELECTION_MISMATCH')
+            stage = 'загрузка каталога сервисов'
             catalog_path = os.path.realpath(self._task.args.get("service_catalog_path") or task_vars.get("platform_service_catalog_path", ""))
             catalog_file = self._load(catalog_path)
             catalog = catalog_file.get("platform_service_catalog", catalog_file)
@@ -467,6 +509,7 @@ class ActionModule(ActionBase):
                     return dict(changed=False, snapshot=_safe_configuration_preview(
                         cached['execution_configuration'], catalog, expected['revision'], task_vars.get('hostvars', {})))
             repo_root = self._repo_root(catalog_path, catalog)
+            stage = 'чтение desired state и библиотек приложений'
             desired_state = task_vars.get("platform_desired_state", {})
             application_desired_state = desired_state
             desired_schema_version = schema_version(desired_state, task_vars.get("platform_desired_state_contract"))
@@ -482,10 +525,12 @@ class ActionModule(ActionBase):
                 for item in desired_state.get("serviceDeployments", {}).values()
                 if isinstance(item, dict)
             )
+            stage = 'загрузка defaults и схем сервисов'
             role_defaults, schemas, role_paths = self._service_inputs(
                 repo_root, catalog_path, catalog, service_types
             )
 
+            stage = 'чтение project.yml и переменных серверов'
             manifest = self._load(os.path.join(project_root, "project.yml"), required=False)
             groups = task_vars.get("groups", {})
             hostvars = task_vars.get("hostvars", {})
@@ -506,6 +551,7 @@ class ActionModule(ActionBase):
                 execution_connections[host_id] = snapshot_execution_connection(values, hosts[host_id])
 
             host_addresses = {host_id: {"ansible_host": hosts[host_id]["ansibleHost"]} for host_id in target_ids}
+            stage = 'разрешение топологии'
             topology = resolve_topology(
                 manifest, {}, target_ids, catalog,
                 inventory_deployments_by_host=inventory_deployments,
@@ -541,6 +587,7 @@ class ActionModule(ActionBase):
                     "safeMessage": "Published project schemas could not be evaluated",
                 }]
                 topology["status"] = "BLOCKED"
+            stage = 'разрешение конфигурации сервисов'
             materialized = _materialize_resolved_members(
                 desired_state, topology, inventory_deployments, target_ids,
             )
@@ -561,6 +608,7 @@ class ActionModule(ActionBase):
                     key=lambda item: (item.get("field", ""), item.get("code", ""), item.get("safeMessage", "")),
                 )
                 configuration["status"] = "BLOCKED"
+            stage = 'разрешение endpoints, DNS, PKI и HAProxy'
             endpoints = resolve_service_endpoints(materialized, catalog, configuration, inventory_deployments)
             dns = resolve_dns_zones(materialized, catalog, host_addresses, inventory_deployments)
             pki_defaults_path = os.path.join(
@@ -577,6 +625,7 @@ class ActionModule(ActionBase):
                 pki.get("requests", []) if pki.get("status") == "PASS" else [],
             )
             owned = self._task.args.get("installer_owned_paths", [])
+            stage = 'чтение документов и ревизии проекта'
             documents, revision = project_documents(project_root, owned)
             document_ownership = {item["logicalPath"]: item["ownership"] for item in documents}
             desired_path, placement_paths = self._provenance_sources(project_root, documents, target_ids)
@@ -591,6 +640,7 @@ class ActionModule(ActionBase):
                                    else "READ_ONLY_UNRESOLVED" if not placement_path else "READ_ONLY"),
                 }
             metadata = manifest.get("metadata", {})
+            stage = 'сборка снимка проекта'
             snapshot = build_project_snapshot(
                 metadata.get("id", os.path.basename(project_root)),
                 metadata.get("name", metadata.get("id", os.path.basename(project_root))),
@@ -600,6 +650,7 @@ class ActionModule(ActionBase):
                 identity_source="PROJECT_MANIFEST" if metadata.get("id") else "PATH_FALLBACK",
             )
             if applications_enabled:
+                stage = 'разрешение библиотек приложений'
                 rechecked = prepare(project_root, application_desired_state,
                                     {host: hostvars[host].get("platform_application_libraries", {}) for host in target_ids},
                                     task_vars.get("platform_desired_state_contract"), self._load, os.path.join(repo_root, "contracts"))
@@ -636,6 +687,7 @@ class ActionModule(ActionBase):
                     snapshot["readiness"]["status"] = "BLOCKED"
                 snapshot["apiVersion"] = "platform.installer/project-snapshot/v2alpha1"
                 snapshot["applicationLibraries"] = applications
+                stage = 'проверка artifact lock приложений'
                 private_image_lock = resolve_image_lock(task_vars.get('platform_artifact_lock'),
                                                         (manifest or {}).get('artifactLock'),
                                                         None if self._task.args.get('desired_only') else task_vars.get('platform_prepared_application_images'))
@@ -661,7 +713,7 @@ class ActionModule(ActionBase):
                     "application_image_lock": private_image_lock if applications_enabled else {},
                     "execution_configuration": configuration,
                     "execution_connections": execution_connections}
-        except (AnsibleError, KeyError, OSError, TypeError, ValueError):
+        except (AnsibleError, KeyError, OSError, TypeError, ValueError) as error:
             return {
                 "failed": True,
                 "changed": False,
@@ -671,6 +723,6 @@ class ActionModule(ActionBase):
                     "apiVersion": "platform.installer/finding/v1alpha1",
                     "kind": "Finding", "code": "PROJECT_SNAPSHOT_INPUT_INVALID",
                     "status": "BLOCKED", "category": "project-snapshot",
-                    "field": "project", "safeMessage": "Project snapshot inputs could not be loaded",
+                    "field": "project", "safeMessage": snapshot_input_message(stage, error),
                 },
             }

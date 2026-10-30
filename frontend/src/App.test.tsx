@@ -4081,6 +4081,21 @@ it("shows a safe Project Verify diagnostic code without exposing backend detail"
   expect(screen.queryByText(/private path and command output/u)).toBeNull();
 });
 
+it("shows the structured snapshot failure reason on the Project page", async () => {
+  const reason = "Не удалось построить снимок проекта. Этап: загрузка каталога сервисов. Отсутствует обязательный документ.";
+  const value = api({ verifyProject: vi.fn().mockResolvedValue({
+    status: "UNVERIFIED",
+    error: { code: "PROJECT_SNAPSHOT_INPUT_INVALID", message: "private parser output" },
+    findings: [{ code: "PROJECT_SNAPSHOT_INPUT_INVALID", summary: reason, severity: "BLOCKED" }],
+  }) });
+  value.chooseProject.mockResolvedValue(project);
+  render(<App api={value} />);
+  await userEvent.click(screen.getByRole("button", { name: "Открыть папку проекта" }));
+  await userEvent.click(screen.getByRole("button", { name: "Проверить" }));
+  expect(await screen.findByText(reason)).toBeTruthy();
+  expect(screen.queryByText("private parser output")).toBeNull();
+});
+
 it("explains missing runtime identity after Project Verify", async () => {
   const value = api({
     verifyProject: vi.fn().mockResolvedValue({
