@@ -181,7 +181,8 @@ def build_project_snapshot(project_id, project_name, documents, project_revision
         key = (finding.get("field", ""), finding.get("code", ""), finding.get("safeMessage", ""))
         unique[key] = finding
     findings = [unique[key] for key in sorted(unique)]
-    blocked = bool(findings)
+    blocking_findings = [item for item in findings if item.get("status") != "WARNING"]
+    blocked = bool(blocking_findings)
     topology = topology_result.get("resolvedTopology") if topology_result.get("status") == "PASS" else None
     configuration = _configuration_view(configuration_result, desired_state_path, role_default_paths, ownership)
     requests = pki_result.get("requests", []) if pki_result.get("status") == "PASS" else []
@@ -191,7 +192,7 @@ def build_project_snapshot(project_id, project_name, documents, project_revision
     deployments = desired_state.get("serviceDeployments", {}) if isinstance(desired_state, dict) else {}
     readiness = {}
     for deployment_id in sorted(deployments):
-        affected = any(deployment_id in finding.get("field", "") for finding in findings)
+        affected = any(deployment_id in finding.get("field", "") for finding in blocking_findings)
         readiness[deployment_id] = {
             "status": "BLOCKED" if affected else "REQUIRES_PREPARATION",
             "runtime": "NOT_CHECKED",
@@ -200,7 +201,7 @@ def build_project_snapshot(project_id, project_name, documents, project_revision
         "apiVersion": "platform.installer/validation-result/v1alpha1",
         "kind": "ValidationResult",
         "status": "BLOCKED" if blocked else "PASS",
-        "summary": {"blocked": len(findings), "pass": 0 if blocked else 1},
+        "summary": {"blocked": len(blocking_findings), "warning": len(findings) - len(blocking_findings), "pass": 0 if blocked else 1},
         "findings": findings,
     }
     snapshot = {

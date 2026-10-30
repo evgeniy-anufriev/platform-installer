@@ -621,12 +621,19 @@ class ActionModule(ActionBase):
             _, _, secret_findings = _service_runtime_secret_requirements(
                 deployments, definitions, sorted(hosts),
             )
+            # Project Verify is advisory about missing execution credentials.
+            # Keep the planner's original admission findings untouched.
+            secret_findings = [dict(item, status="WARNING", safeMessage=
+                                   "Required service credential reference is not saved; configure it before plan approval")
+                               if item.get("code") == "RUNTIME_SECRET_REFERENCE_REQUIRED" else item
+                               for item in secret_findings]
             if secret_findings:
                 configuration["findings"] = sorted(
                     list(configuration.get("findings", [])) + secret_findings,
                     key=lambda item: (item.get("field", ""), item.get("code", ""), item.get("safeMessage", "")),
                 )
-                configuration["status"] = "BLOCKED"
+                if any(item.get("status") != "WARNING" for item in secret_findings):
+                    configuration["status"] = "BLOCKED"
             stage = 'разрешение endpoints, DNS, PKI и HAProxy'
             endpoints = resolve_service_endpoints(materialized, catalog, configuration, inventory_deployments)
             dns = resolve_dns_zones(materialized, catalog, host_addresses, inventory_deployments)

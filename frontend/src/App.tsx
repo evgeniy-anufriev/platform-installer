@@ -137,11 +137,11 @@ const exportExclusionLabels: Record<string, string> = {
 };
 const exportExclusionLabel = (category: string) =>
   exportExclusionLabels[category] ?? "другие служебные данные";
-const verificationLabel = (status: string, failed = false) => {
+const verificationLabel = (status: string, failed = false, warnings = false) => {
   if (status === "UNVERIFIED" && failed) return "Проверка недоступна";
   switch (status) {
     case "VERIFIED":
-      return "Проверено";
+      return warnings ? "Проверено с предупреждениями" : "Проверено";
     case "INVALID":
       return "Ошибки проверки";
     case "VERIFYING":
@@ -390,6 +390,10 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   const snapshot = result.snapshot;
   const managed = result.managed;
   const verification = result.verification || { status: "UNVERIFIED" };
+  const verificationWarnings = verification.status === "VERIFIED" &&
+    verification.projectRevision === result.managed?.projectRevision &&
+    !!verification.projectRevision &&
+    !!verification.findings?.some((finding) => finding.severity === "WARNING");
   const local = result.project;
   const project = snapshot?.project as Record<string, unknown> | undefined;
   const empty =
@@ -2259,16 +2263,16 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               </div>
             )}
             {projectOpen &&
-              (verification.error || verification.status === "INVALID" ? (
+              (verification.error || verification.status === "INVALID" || verificationWarnings ? (
                 <button
-                  className="status-chip status-chip--danger"
+                  className={`status-chip status-chip--${verification.error || verification.status === "INVALID" ? "danger" : "warning"}`}
                   type="button"
                   onClick={() => requestPage("project")}
                   title={verification.error
                     ? verificationErrorMessage(verification.error.code)
                     : "Открыть замечания проверки проекта"}
                 >
-                  {verificationLabel(verification.status, !!verification.error)}
+                  {verificationLabel(verification.status, !!verification.error, verificationWarnings)}
                 </button>
               ) : (
                 <div className="readonly">
@@ -3223,7 +3227,8 @@ function ProjectPage({
         <dl>
           <dt>Статус</dt>
           <dd>
-            {verificationLabel(verification.status, !!verification.error)}
+            {verificationLabel(verification.status, !!verification.error,
+              checked && !!findings.some((finding) => finding.severity === "WARNING"))}
           </dd>
           <dt>Ревизия</dt>
           <dd>{managed?.projectRevision || snapshot?.projectRevision}</dd>

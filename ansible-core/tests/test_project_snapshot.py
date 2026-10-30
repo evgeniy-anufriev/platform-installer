@@ -128,6 +128,27 @@ class ProjectSnapshotTests(unittest.TestCase):
         self.assertTrue(partial["partial"])
         self.assertEqual("PARTIAL", partial["status"])
 
+        warning = {"code": "RUNTIME_SECRET_REFERENCE_REQUIRED", "status": "WARNING",
+                   "field": "serviceDeployments.kafka-main.configuration.adminCredential",
+                   "safeMessage": "Required service credential reference must be saved before planning"}
+        warning_args = list(args)
+        warning_args[8] = dict(configuration, findings=[warning])
+        warned = SNAPSHOT.build_project_snapshot(*warning_args)
+        self.assertEqual("PASS", warned["status"])
+        self.assertFalse(warned["partial"])
+        self.assertEqual("PASS", warned["validation"]["status"])
+        self.assertEqual(0, warned["validation"]["summary"]["blocked"])
+        self.assertEqual(1, warned["validation"]["summary"]["warning"])
+        self.assertEqual([warning], warned["findings"])
+        self.assertEqual("REQUIRES_PREPARATION", warned["readiness"]["services"]["kafka-main"]["status"])
+        self.assertEqual([], SCHEMA.SchemaValidator(contracts).validate(warned, schema_path))
+        warning_args[7] = blocked
+        mixed = SNAPSHOT.build_project_snapshot(*warning_args)
+        self.assertEqual("PARTIAL", mixed["status"])
+        self.assertEqual(1, mixed["validation"]["summary"]["blocked"])
+        self.assertEqual(1, mixed["validation"]["summary"]["warning"])
+        self.assertEqual("BLOCKED", mixed["readiness"]["services"]["kafka-main"]["status"])
+
         unknown_args = list(args)
         unknown_args[13] = None
         unknown = SNAPSHOT.build_project_snapshot(*unknown_args)

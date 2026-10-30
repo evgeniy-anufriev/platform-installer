@@ -80,6 +80,14 @@ transport/readiness/runtime evidence failure returns a typed error while the
 project remains `UNVERIFIED`.
 A failed/cancelled Verify never undoes Save.
 
+During Project Verify, a missing required service secret reference is a Core
+`WARNING`, not a blocking configuration error. A complete snapshot containing
+only warnings remains `PASS` / `VERIFIED`; the UI displays the yellow
+“Проверено с предупреждениями” status and retains the instance/setting finding.
+Malformed references remain blocking. This does not change DeploymentPlan
+generation or its existing approval admission: missing required credentials
+must still prevent approval. Warning-only Verify does not authorize execution.
+
 Verify may automatically run a read-only readiness check. If preparation is
 required, E5 may continue the same revision/node/runtime-bound Verify request
 only after explicit confirmation and successful re-inspection. Failure/cancel

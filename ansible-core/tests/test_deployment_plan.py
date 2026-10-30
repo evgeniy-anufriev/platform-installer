@@ -325,6 +325,16 @@ class DeploymentPlanTests(unittest.TestCase):
         private = next(item for item in result["executionManifest"]["runtimeSecretRequirements"] if item["requirementRef"] == "provider-password")
         self.assertEqual(("provider", "runtime:provider-password"), (private["serviceDeployment"], private["runtimeReference"]))
         self.assertNotIn("runtime:provider-password", json.dumps(result["deploymentPlan"]))
+        value['definitions']['provider']['configuration']['settings']['credential']['x-runtimeSecretRequired'] = True
+        state['serviceDeployments']['provider']['configuration'].pop('credential')
+        missing = PLAN.build_deployment_plan(state, value, runtime(), bundle_artifact_sources=sources())
+        # A diagnostic plan is still returned; its blocking finding continues
+        # to prevent approval. Project Verify's warning cannot weaken this gate.
+        self.assertIn('deploymentPlan', missing)
+        required = [item for item in missing['deploymentPlan']['findings']
+                    if item['code'] == 'RUNTIME_SECRET_REFERENCE_REQUIRED']
+        self.assertEqual(1, len(required))
+        self.assertEqual('BLOCKED', required[0]['status'])
 
     def test_required_password_identity_and_descriptors_are_deployment_bound(self):
         definition = {'configuration': {'settings': {'adminCredential': {
@@ -347,6 +357,7 @@ class DeploymentPlanTests(unittest.TestCase):
         deployments['kafka-two'].pop('configuration')
         _, _, findings = PLAN._service_runtime_secret_requirements(deployments, {'kafka': definition}, ['node1'])
         self.assertEqual(['RUNTIME_SECRET_REFERENCE_REQUIRED'], [item['code'] for item in findings])
+        self.assertEqual('BLOCKED', findings[0]['status'])
         self.assertIn('kafka-two', findings[0]['field'])
 
     def test_typed_service_inputs_are_target_free_opaque_and_bound_to_deployment_hosts(self):

@@ -873,6 +873,18 @@ func TestMissingServiceSecretFindingNamesOnlySafeInstanceAndSetting(t *testing.T
 	}
 }
 
+func TestMissingServiceSecretWarningKeepsCoreSeverity(t *testing.T) {
+	findings, _ := safeVerificationFindings([]map[string]any{{
+		"code": "RUNTIME_SECRET_REFERENCE_REQUIRED", "status": "WARNING",
+		"safeMessage": "Required service credential reference must be saved before planning",
+		"field":       "serviceDeployments.kafka-extra.configuration.adminCredential",
+	}})
+	if len(findings) != 1 || findings[0].Severity != "WARNING" ||
+		findings[0].Summary != "У экземпляра сервиса «kafka-extra» не задана ссылка на секрет в параметре «adminCredential». Проверка проекта выполнена; настройте секрет и сохраните проект перед одобрением плана." {
+		t.Fatalf("warning changed or lost: %#v", findings)
+	}
+}
+
 func managedHeaderForTest() []byte {
 	return []byte("# Managed by Platform Installer.\n# This is standard Ansible YAML; formatting may be normalized.\n")
 }

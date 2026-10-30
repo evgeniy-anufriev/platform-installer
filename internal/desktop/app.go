@@ -713,6 +713,9 @@ func safeVerificationFindings(findings []map[string]any) ([]VerificationFinding,
 			parts := strings.Split(field, ".")
 			if len(parts) == 4 && parts[0] == "serviceDeployments" && parts[2] == "configuration" && runtimeSecretDescriptorRequirement.MatchString(parts[1]) && verificationSettingName.MatchString(parts[3]) {
 				finding.Summary = "У экземпляра сервиса «" + parts[1] + "» не задана обязательная ссылка на секрет в параметре «" + parts[3] + "». Настройте секрет и сохраните проект."
+				if finding.Severity == "WARNING" {
+					finding.Summary = "У экземпляра сервиса «" + parts[1] + "» не задана ссылка на секрет в параметре «" + parts[3] + "». Проверка проекта выполнена; настройте секрет и сохраните проект перед одобрением плана."
+				}
 			}
 		}
 		if code == "SERVICE_CONFIGURATION_PROPERTY_UNKNOWN" {

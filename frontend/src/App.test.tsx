@@ -4210,6 +4210,13 @@ it("shows a Core warning without styling it as a verification error", async () =
   render(<App api={value} />);
   await userEvent.click(screen.getByRole("button", { name: "Открыть папку проекта" }));
   expect(screen.getByText("[WARNING] CORE_WARNING: Проверьте рекомендацию Core.").classList.contains("field-error")).toBe(false);
+  const badge = screen.getByRole("button", { name: "Проверено с предупреждениями" });
+  expect(badge.classList.contains("status-chip--warning")).toBe(true);
+  expect(badge.classList.contains("status-chip--danger")).toBe(false);
+  await userEvent.click(screen.getByRole("button", { name: "Серверы" }));
+  await userEvent.click(badge);
+  expect(screen.getByRole("heading", { name: "Состояние проекта" })).toBeTruthy();
+  expect(screen.getByText("Проверено с предупреждениями", { selector: "dd" })).toBeTruthy();
 });
 
 it("does not treat evidence without a revision as a current project check", async () => {

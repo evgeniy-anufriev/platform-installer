@@ -155,3 +155,36 @@ it, frontend typecheck/build and lint PASS. Go regressions check two different
 instance/setting pairs and reject unsafe/oversized/deeper diagnostic paths.
 Real React/Wails acceptance and visual inspection remain OPEN; mocked frontend
 tests and production compilation are supplementary evidence.
+
+## Project Verify warns about missing service secret references
+
+Owner clarified that missing service secrets are advisory during Project Verify;
+the existing plan generation and approval admission must remain unchanged.
+The snapshot action copies only RUNTIME_SECRET_REFERENCE_REQUIRED findings to
+WARNING. Invalid references and other findings keep their original severity.
+Snapshot aggregation retains warnings and counts them without treating them as
+partial/blocking or blocking per-service readiness. A complete warning-only
+snapshot remains PASS, with validation PASS, and Go retains VERIFIED evidence.
+No new status enum or DTO was added. UI projects current-revision VERIFIED
+evidence containing WARNING as the existing yellow status palette with
+“Проверено с предупреждениями”; the badge still opens Project details. The
+instance/setting diagnostic advises configuring the reference before plan
+approval. Plan implementation and approval guards were not changed.
+
+Current-source RED OS101 suite: 51 PASS in32.096s (snapshot model/action, native
+project resolution and deployment plan). Actual standalone project-snapshot.yml
+cases cover absent Kafka adminCredential with and without application libraries
+(WARNING, complete PASS) and malformed reference (BLOCKED, PARTIAL). Snapshot
+tests cover warning-only and mixed blocking/warning counts/readiness and schema
+validation. Plan regression confirms a diagnostic plan is returned with its
+existing BLOCKED credential finding; missing references are not downgraded by
+the planner. No target installation or contact was performed. Final workspace:
+/var/tmp/platform-installer-qa-19a62593b80249b99baf29f36e82d864; initial workspace:
+/var/tmp/platform-installer-qa-da5c9477c25548a7a70a02c30315ba3b. Both cleaned and
+absence checked after QA.
+
+Go tests/vet PASS; App95 tests PASS; frontend typecheck/lint/build and Windows
+Wails production build PASS. Real React/Wails acceptance of the updated runtime
+bundle and visual inspection remain OPEN. Delivery needs both the updated
+Installer and a rebuilt, validated/published/rebound runtime bundle; this task
+does not publish a bundle or change a production node.

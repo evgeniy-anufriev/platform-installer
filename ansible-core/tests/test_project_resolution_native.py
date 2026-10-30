@@ -14,8 +14,8 @@ ROOT = Path(__file__).resolve().parents[2]
 @unittest.skipUnless(shutil.which('ansible-playbook'), 'native Ansible required')
 class NativeProjectResolutionTests(unittest.TestCase):
     def test_project_snapshot_with_implicit_localhost_and_explicit_root(self):
-        for applications in (False, True):
-            with self.subTest(applications=applications), tempfile.TemporaryDirectory(prefix='snapshot-root-') as folder:
+        for applications, secret_reference in ((False, None), (True, None), (False, 'invalid-reference')):
+            with self.subTest(applications=applications, reference=secret_reference), tempfile.TemporaryDirectory(prefix='snapshot-root-') as folder:
                 directory = Path(folder)
                 project = directory / 'project'
                 shutil.copytree(ROOT / 'examples/valid/application-libraries', project)
@@ -27,7 +27,11 @@ class NativeProjectResolutionTests(unittest.TestCase):
                 variables = yaml.safe_load(variables_path.read_text())
                 if not applications:
                     variables['platform_desired_state'].pop('applicationLibraryDeployments', None)
-                    variables_path.write_text(yaml.safe_dump(variables))
+                kafka = variables['platform_desired_state']['serviceDeployments']['kafka-main']['configuration']
+                kafka.pop('adminCredential', None)
+                if secret_reference is not None:
+                    kafka['adminCredential'] = {'passwordSecretRef': secret_reference}
+                variables_path.write_text(yaml.safe_dump(variables))
                 output = directory / 'snapshot.json'
                 collections = [str(ROOT / 'ansible-core/collections')] + [str(path)
                     for path in sorted((ROOT / 'services').glob('*/ansible_collections'))]
@@ -45,6 +49,17 @@ class NativeProjectResolutionTests(unittest.TestCase):
                 snapshot = json.loads(output.read_text())
                 self.assertTrue(snapshot['projectRevision'].startswith('sha256:'))
                 self.assertNotIn('adapterError', snapshot)
+                code = 'RUNTIME_SECRET_REFERENCE_REQUIRED' if secret_reference is None else 'RUNTIME_SECRET_REFERENCE_INVALID'
+                findings = [item for item in snapshot['findings'] if item['code'] == code]
+                self.assertEqual(1, len(findings), snapshot['findings'])
+                self.assertEqual('serviceDeployments.kafka-main.configuration.adminCredential', findings[0]['field'])
+                self.assertEqual('WARNING' if secret_reference is None else 'BLOCKED', findings[0]['status'])
+                if secret_reference is None:
+                    self.assertIn('before plan approval', findings[0]['safeMessage'])
+                    self.assertEqual('PASS', snapshot['status'], snapshot['findings'])
+                    self.assertFalse(snapshot['partial'])
+                else:
+                    self.assertEqual('PARTIAL', snapshot['status'])
 
     def test_root_expressions_are_lazy_and_keep_inventory_fallback(self):
         from ansible.parsing.dataloader import DataLoader
