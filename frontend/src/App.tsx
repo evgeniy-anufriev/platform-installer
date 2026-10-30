@@ -310,6 +310,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   const [serviceConfigurationPreview, setServiceConfigurationPreview] =
     useState<ServicePreviewObservation | undefined>(undefined);
   const [servicePreviewAttempt, setServicePreviewAttempt] = useState(0);
+  const [coreAdmittedProject, setCoreAdmittedProject] = useState("");
   const [
     serviceConfigurationPreviewError,
     setServiceConfigurationPreviewError,
@@ -381,7 +382,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     if (page === next) return;
     if (
       ["services", "applications", "installation"].includes(next) &&
-      !coreProjectionReady
+      !corePagesAvailable
     )
       return;
     if (page === "applications" && !confirmApplicationExit()) return;
@@ -454,6 +455,16 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       ? serviceConfigurationPreview.value
       : undefined;
   const coreProjectionReady = !!savedServiceConfigurationPreview;
+  const coreProjectKey = projectOpen && result.root
+    ? JSON.stringify([result.root, result.project?.id]) : "";
+  // Navigation admission survives saved-revision/runtime refreshes. It is
+  // neither current Core evidence nor permission to approve or start a plan.
+  const corePagesAvailable = coreProjectionReady ||
+    (!!coreProjectKey && coreAdmittedProject === coreProjectKey);
+  useEffect(() => setCoreAdmittedProject(""), [coreProjectKey]);
+  useEffect(() => {
+    if (coreProjectionReady) setCoreAdmittedProject(coreProjectKey);
+  }, [coreProjectionReady, coreProjectKey]);
   const projectVerificationIsNext =
     projectOpen &&
     !!managed &&
@@ -481,7 +492,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
           : !managed?.projectRevision
             ? "Core-проекция недоступна: ревизия проекта не определена. Сохраните проект."
             : serviceConfigurationPreviewError ||
-              "Получение Core-проекции для сохранённой ревизии. Тайм-аут запроса — 90 секунд. Сервисы, приложения и установка станут доступны после получения значений.";
+              "Получение Core-проекции для сохранённой ревизии. Тайм-аут запроса — 90 секунд. Актуальные вычисленные значения появятся после получения проекции.";
 
   useEffect(() => {
     let live = true;
@@ -2186,7 +2197,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
                 (!["services", "applications", "installation"].includes(
                   item.id,
                 ) ||
-                  coreProjectionReady) &&
+                  corePagesAvailable) &&
                 (item.id === "project" ||
                   (item.id === "servers" && projectOpen) ||
                   (item.id === "topology" && topologyAvailable) ||
@@ -2298,7 +2309,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             <button
               type="button"
               className={`installation-global-status ${installationView.tone}`}
-              disabled={!coreProjectionReady}
+              disabled={!corePagesAvailable}
               onClick={() => {
                 if (page === "applications" && !confirmApplicationExit())
                   return;
@@ -2387,6 +2398,12 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
           </div>
         </header>
         <div className="workspace-content">
+          {!loading && !creating && corePagesAvailable && !coreProjectionReady &&
+            ["services", "applications", "installation"].includes(page) && (
+              <section className="card topology-warning" role="status">
+                {serviceConfigurationPreviewNotice}
+              </section>
+            )}
           {refreshRequired && (
             <section className="card refresh-required" role="alert">
               <h2>Проект сохранён, но текущее представление не обновлено</h2>
@@ -2639,7 +2656,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
           {!loading &&
             !creating &&
             projectOpen &&
-            coreProjectionReady &&
+            corePagesAvailable &&
             page === "applications" && (
               <ApplicationsPage
                 managed={managed}
@@ -2683,7 +2700,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
           {!loading &&
             !creating &&
             projectOpen &&
-            coreProjectionReady &&
+            corePagesAvailable &&
             page === "services" && (
               <ServicesPage
                 key={serviceFormEpoch}
@@ -2816,7 +2833,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
           {!loading &&
             !creating &&
             projectOpen &&
-            coreProjectionReady &&
+            corePagesAvailable &&
             page === "installation" && (
               <InstallationPage
                 key={result.root}

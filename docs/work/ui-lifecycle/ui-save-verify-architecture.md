@@ -80,6 +80,16 @@ transport/readiness/runtime evidence failure returns a typed error while the
 project remains `UNVERIFIED`.
 A failed/cancelled Verify never undoes Save.
 
+Services, Applications and Installation initially require one successfully
+received, revision/runtime-matched Core configuration projection for the open
+project. After that first success, navigation and mounted screens remain
+available while a later projection refresh is pending or fails. Admission is
+in-memory and scoped to the open project root/identity; another project starts
+with its own first-projection gate. A refresh notice replaces blocking the
+whole screen. Previous projection values do not become current evidence for
+a changed revision/runtime, and existing Verify/Plan/approval/Start checks
+retain their authority.
+
 During Project Verify, a missing required service secret reference is a Core
 `WARNING`, not a blocking configuration error. A complete snapshot containing
 only warnings remains `PASS` / `VERIFIED`; the UI displays the yellow

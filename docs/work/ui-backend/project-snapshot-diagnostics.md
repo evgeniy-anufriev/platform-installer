@@ -188,3 +188,29 @@ Wails production build PASS. Real React/Wails acceptance of the updated runtime
 bundle and visual inspection remain OPEN. Delivery needs both the updated
 Installer and a rebuilt, validated/published/rebound runtime bundle; this task
 does not publish a bundle or change a production node.
+
+## Keep editor screens available after the first Core projection
+
+Owner requested that Services, Applications and Installation be gated only
+until the first successful Core projection for the open project. App now
+separates in-memory navigation admission (project root/identity) from current
+revision/runtime-matched Core evidence. Subsequent Save, refresh waits and
+preview errors do not disable navigation or unmount the selected screen.
+Opening another project resets first-projection admission. Initial failed,
+diagnostic-only or mismatched responses still cannot open these screens.
+Pending/error notices remain visible; service effective values are still passed
+only from a current matching preview. Existing backend Plan/approval/Start
+authority and editor structural safety guards are unchanged. Background
+projection requests still refresh saved revisions.
+
+App97 tests PASS; after adding the recovery assertion, focused Save/initial
+gate/admission/failure/recovery/project-switch4 tests PASS. Frontend typecheck,
+lint and production build PASS. Supplementary ApplicationsPage/InstallationPage
+suites:77 PASS,2 FAIL. Both failures are in unchanged InstallationPage.b4.test.tsx
+(`B4 excludes infrastructure, leaves libraries Apply/Verify and requests only
+that scope`, and `B4 hides approval for a plan from a different selected scope`),
+which directly imports unchanged InstallationPage, not App. They expect existing
+scope-related notices that are absent for those fixtures; this task does not
+change that component or its tests. These failures are not reported as passed.
+Real React/Wails acceptance and visual inspection remain OPEN. This UI-only
+change requires an updated Installer, not a new runtime bundle.
