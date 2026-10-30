@@ -86340,7 +86340,7 @@ catalogLock:
 })();
 
 @@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":126043,"sha256":"b661118852d6aa8e075b5b8246ff5fab1c3e4bd83742905977caf2216907e63a","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49661}
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":126558,"sha256":"1e285281c5d7ff20f5e1ee50b51953208decd35369363bdd88893a2491fab0bd","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49661}
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   EditResult,
@@ -86793,6 +86793,20 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       ? serviceConfigurationPreview.value
       : undefined;
   const coreProjectionReady = !!savedServiceConfigurationPreview;
+  const projectVerificationIsNext =
+    projectOpen &&
+    !!managed &&
+    !!api.verifyProject &&
+    result.catalog?.status === "READY" &&
+    executionReady &&
+    !!executionNode?.runtimeDigest &&
+    !sessionId &&
+    !editBusy &&
+    !refreshRequired &&
+    !["STARTING", "RUNNING", "CANCELLING"].includes(
+      installationRun?.run?.state || "",
+    ) &&
+    ["UNVERIFIED", "STALE"].includes(verification.status);
   const visibleServiceConfigurationPreview =
     commandCount === 0 ? savedServiceConfigurationPreview : undefined;
   const serviceConfigurationPreviewNotice = coreProjectionReady
@@ -87716,7 +87730,10 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               setInstallationRun(next);
               if (next.reconnected) {
                 if (next.result) setInstallationTab("result");
-              } else {
+        
+@@END
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":126558,"sha256":"1e285281c5d7ff20f5e1ee50b51953208decd35369363bdd88893a2491fab0bd","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49682}
+      } else {
                 void collectAndDeliverSecretOutputs(value.event!.runId).catch(
                   () => setOutputDelivery(secretOutputDeliveryUnavailable()),
                 );
@@ -87733,10 +87750,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     recoverInstallationRunEvents,
   ]);
   useEffect(
-    () =>
-@@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":126043,"sha256":"b661118852d6aa8e075b5b8246ff5fab1c3e4bd83742905977caf2216907e63a","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49682}
- () => {
+    () => () => {
       if (installationSubscriptionRef.current && api.unsubscribeInstallationRun)
         void api.unsubscribeInstallationRun(
           installationSubscriptionRef.current,
@@ -88618,7 +88632,9 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             )}
             {projectOpen && (
               <button
-                className="outline"
+                className={
+                  projectVerificationIsNext ? "outline next-step-hint" : "outline"
+                }
                 onClick={verify}
                 disabled={
                   editBusy ||
@@ -89046,6 +89062,9 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
                   intent.operation === "UpdateCertificateAuthority" ||
                   intent.operation === "DeleteCertificateAuthority" ||
                   intent.operation === "CreateCertificateProfile" ||
+
+@@END
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":126558,"sha256":"1e285281c5d7ff20f5e1ee50b51953208decd35369363bdd88893a2491fab0bd","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":27215}
                   intent.operation === "UpdateCertificateProfile" ||
                   intent.operation === "DeleteCertificateProfile" ||
                   intent.operation === "CreateTLSProfile" ||
@@ -89053,10 +89072,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
                   intent.operation === "DeleteTLSProfile" ||
                   intent.operation === "CreateCertificateScope" ||
                   intent.operation === "UpdateCertificateScope" ||
-                  intent.operation === "DeleteCertificateSco
-@@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":126043,"sha256":"b661118852d6aa8e075b5b8246ff5fab1c3e4bd83742905977caf2216907e63a","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":26700}
-pe",
+                  intent.operation === "DeleteCertificateScope",
               )}
               busy={editBusy}
               structuralDisabled={refreshRequired}
@@ -100696,7 +100712,7 @@ export function ServerInformationDialog({ hostId, onProbe, onCheck, onResult, on
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/ServersPage.tsx","mode":420,"size":55574,"sha256":"a970737ea3dccfc722bc4ae40a6be5c4c42352b93bdc68a6b6e422c22f5a402b","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":51167}
+@@PORTABLE {"path":"frontend/src/ServersPage.tsx","mode":420,"size":56863,"sha256":"a3165e900be88d240402f4bb5c530efd283327f7af9efdb21a5908b0594a3ca2","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":51110}
 import { useEffect, useState, type ReactNode } from "react";
 import type {
   ExecutionNodeContext,
@@ -101416,6 +101432,31 @@ function ExecutionNodePanel({
     selectionSource: "NONE",
   };
   const combinedStatus = executionNodeCombinedStatus(readiness || cachedReadiness, preparation);
+  const checkedNode = readiness || cachedReadiness;
+  const useServerInformation =
+    !!onInformationCheck && context?.selectionKind === "PROJECT_SERVER";
+  const canSuggestAction =
+    !disabled && !busy && !changing && !context?.locked;
+  const checkIsNext =
+    canSuggestAction &&
+    !!context?.safeLabel &&
+    context.status !== "READY" &&
+    !(useServerInformation ? information?.status === "CHECKED" : checkedNode) &&
+    !preparation &&
+    (context.selectionKind !== "PROJECT_SERVER" ||
+      credentialStatus?.status === "PRESENT");
+  const preparationIsNeeded = [
+    "PREPARATION_REQUIRED",
+    "UPDATE_REQUIRED",
+    "UNPREPARED",
+    "NOT_PREPARED",
+  ].includes(checkedNode?.status || "");
+  const planPreparationIsNext =
+    canSuggestAction && preparationIsNeeded && !preparation;
+  const confirmPreparationIsNext =
+    canSuggestAction &&
+    preparation?.status === "CONFIRMATION_REQUIRED" &&
+    !!preparation.steps?.some((step) => step.mutates);
   const choose = async () => {
     if (!selected) return;
     setBusy(true);
@@ -101574,10 +101615,18 @@ function ExecutionNodePanel({
       )}
       <div className="actions">
         {recoveryAction}
-        {onInformationCheck && <button className="outline" onClick={onInformationCheck} disabled={disabled || busy || credentialStatus?.status !== "PRESENT"}>Проверить сервер</button>}
-        {!onInformationCheck &&
+        {useServerInformation && (
+          <button
+            className={checkIsNext ? "outline next-step-hint" : "outline"}
+            onClick={onInformationCheck}
+            disabled={disabled || busy || credentialStatus?.status !== "PRESENT"}
+          >
+            Проверить сервер
+          </button>
+        )}
+        {!useServerInformation &&
         <button
-          className="outline"
+          className={checkIsNext ? "outline next-step-hint" : "outline"}
           onClick={async () => {
             setBusy(true);
             setError("");
@@ -101596,7 +101645,7 @@ function ExecutionNodePanel({
         </button>
         }
         <button
-          className="outline"
+          className={planPreparationIsNext ? "outline next-step-hint" : "outline"}
           onClick={async () => {
             setBusy(true);
             setError("");
@@ -101615,6 +101664,7 @@ function ExecutionNodePanel({
         {preparation?.status === "CONFIRMATION_REQUIRED" &&
           preparation.planId && (
             <button
+              className={confirmPreparationIsNext ? "next-step-hint" : undefined}
               onClick={async () => {
                 const planId = preparation.planId;
                 if (!planId) return;
@@ -102118,7 +102168,10 @@ function ServerDialog({
     if (desiredHostname !== row?.desiredHostname)
       intent.desiredHostname = desiredHostname;
     if (address !== row?.address) intent.address = address;
-    if (portMode === "explicit") intent.sshPort = numericPort;
+    if (portMode === "explicit") in
+@@END
+@@PORTABLE {"path":"frontend/src/ServersPage.tsx","mode":420,"size":56863,"sha256":"a3165e900be88d240402f4bb5c530efd283327f7af9efdb21a5908b0594a3ca2","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":5753}
+tent.sshPort = numericPort;
     if (portMode === "clear") intent.clearSSHPort = true;
     if (Object.keys(intent).length === 2) {
       onClose();
@@ -102160,10 +102213,7 @@ function ServerDialog({
               disabled={typeDisabled}
               required={mode === "add" || !type}
             >
-              <option value="">Выбер
-@@END
-@@PORTABLE {"path":"frontend/src/ServersPage.tsx","mode":420,"size":55574,"sha256":"a970737ea3dccfc722bc4ae40a6be5c4c42352b93bdc68a6b6e422c22f5a402b","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":4407}
-ите тип</option>
+              <option value="">Выберите тип</option>
               {unknownCurrentType && (
                 <option value={type}>Неизвестный тип ({type})</option>
               )}

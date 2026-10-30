@@ -3686,7 +3686,7 @@ const qaE4 =
 renderApplication(qaE4 ? qaE4Backend : backend);
 
 @@END
-@@PORTABLE {"path":"frontend/src/production-ui.css","mode":420,"size":72791,"sha256":"b87f73c2cddc59d1c14e064ae91e19d200dcf626b9983c3fd938759629382198","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48107}
+@@PORTABLE {"path":"frontend/src/production-ui.css","mode":420,"size":73391,"sha256":"8c4c5bb5f63cec0b4771a524ed5c2f1322d7dbebdd0943180360f898e92c23d0","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48107}
 /* Desktop target from UI-DESIGN-01. Work regions, not the window, own overflow. */
 :root {
   --ui-font-page-title: 22px;
@@ -3856,6 +3856,26 @@ body {
   padding: 6px 9px;
   font-size: 12px;
   white-space: nowrap;
+}
+.execution-node-panel button.next-step-hint:not(:disabled),
+.app-header-actions button.next-step-hint:not(:disabled) {
+  border-color: #79bd98;
+  animation: next-step-outline 3s ease-in-out infinite;
+}
+@keyframes next-step-outline {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgb(75 164 111 / 8%);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgb(75 164 111 / 22%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .execution-node-panel button.next-step-hint:not(:disabled),
+  .app-header-actions button.next-step-hint:not(:disabled) {
+    animation: none;
+    box-shadow: 0 0 0 2px rgb(75 164 111 / 18%);
+  }
 }
 .app-banner {
   flex: 0 0 auto;
@@ -5790,7 +5810,10 @@ button:disabled {
 .services-list > .services-session-actions .muted {
   font-size: 12px;
 }
-.services-detail {
+.service
+@@END
+@@PORTABLE {"path":"frontend/src/production-ui.css","mode":420,"size":73391,"sha256":"8c4c5bb5f63cec0b4771a524ed5c2f1322d7dbebdd0943180360f898e92c23d0","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":25284}
+s-detail {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -5822,9 +5845,6 @@ button:disabled {
 }
 .services-detail-empty {
   display: flex;
-@@END
-@@PORTABLE {"path":"frontend/src/production-ui.css","mode":420,"size":72791,"sha256":"b87f73c2cddc59d1c14e064ae91e19d200dcf626b9983c3fd938759629382198","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":24684}
-
   flex-direction: column;
   justify-content: center;
   gap: 8px;
