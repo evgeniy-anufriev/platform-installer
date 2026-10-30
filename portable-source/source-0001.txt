@@ -86340,7 +86340,7 @@ catalogLock:
 })();
 
 @@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":126558,"sha256":"1e285281c5d7ff20f5e1ee50b51953208decd35369363bdd88893a2491fab0bd","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49661}
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":126737,"sha256":"e695918351ea57e857899c8f86979288e3943903c3b2f4f7d59cc821d6515002","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49661}
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   EditResult,
@@ -86900,17 +86900,14 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
 
   useEffect(() => {
     let live = true;
-    if (commandCount !== 0)
-      return () => {
-        live = false;
-      };
-    setServiceConfigurationPreview(undefined);
-    setServiceConfigurationPreviewError("");
+    if (commandCount === 0) {
+      setServiceConfigurationPreview(undefined);
+      setServiceConfigurationPreviewError("");
+    }
     const revision = result.managed?.projectRevision;
     const runtimeDigest = executionNode?.runtimeDigest;
     if (
       !projectOpen ||
-      commandCount !== 0 ||
       !revision ||
       !result.root ||
       executionNode?.status !== "READY" ||
@@ -86933,6 +86930,12 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       safeLabel,
     ]);
     let request = servicePreviewRequests.current.get(requestKey);
+    // A draft can reuse the saved revision's pending or completed request.
+    // Keep listening when commandCount changes; never start Core for a draft.
+    if (!request && commandCount !== 0)
+      return () => {
+        live = false;
+      };
     if (!request) {
       request = api.getServiceConfigurationPreview();
       servicePreviewRequests.current.clear();
@@ -87726,14 +87729,14 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
         ) {
           void api
             .getInstallationRun(value.event.runId)
+
+@@END
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":126737,"sha256":"e695918351ea57e857899c8f86979288e3943903c3b2f4f7d59cc821d6515002","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49682}
             .then((next) => {
               setInstallationRun(next);
               if (next.reconnected) {
                 if (next.result) setInstallationTab("result");
-        
-@@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":126558,"sha256":"1e285281c5d7ff20f5e1ee50b51953208decd35369363bdd88893a2491fab0bd","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49682}
-      } else {
+              } else {
                 void collectAndDeliverSecretOutputs(value.event!.runId).catch(
                   () => setOutputDelivery(secretOutputDeliveryUnavailable()),
                 );
@@ -89059,12 +89062,12 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               intents={intents.filter(
                 (intent): intent is CertificateIntent =>
                   intent.operation === "CreateCertificateAuthority" ||
-                  intent.operation === "UpdateCertificateAuthority" ||
+                  intent.operati
+@@END
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":126737,"sha256":"e695918351ea57e857899c8f86979288e3943903c3b2f4f7d59cc821d6515002","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":27394}
+on === "UpdateCertificateAuthority" ||
                   intent.operation === "DeleteCertificateAuthority" ||
                   intent.operation === "CreateCertificateProfile" ||
-
-@@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":126558,"sha256":"1e285281c5d7ff20f5e1ee50b51953208decd35369363bdd88893a2491fab0bd","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":27215}
                   intent.operation === "UpdateCertificateProfile" ||
                   intent.operation === "DeleteCertificateProfile" ||
                   intent.operation === "CreateTLSProfile" ||
