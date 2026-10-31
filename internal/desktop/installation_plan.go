@@ -208,6 +208,13 @@ func (a *App) ApproveInstallationPlan(planID string, acknowledgements []string) 
 	approvalFailure := func(err *ProjectOpenError) InstallationPlanOperation {
 		return InstallationPlanOperation{Status: installationPlanStateFor(record), Plan: &view, Error: err}
 	}
+	if record.Plan.Status == "EXECUTABLE" {
+		// Reuse confirmed pins locally; probing SSH remains an explicit server action.
+		if _, err := a.approvedTargetKeysForPlanLocked(record.Plan); err != nil {
+			code := projectErrorCode(err)
+			return approvalFailure(&ProjectOpenError{Code: code, Message: projectErrorMessage(code)})
+		}
+	}
 	if a.secretOutputEncryptionRequiredLocked() {
 		credentialBinding, bindingErr := a.credentialBindingLocked()
 		if bindingErr != nil || !a.secrets.HasOutputEncryptionPassword(credentialBinding) {

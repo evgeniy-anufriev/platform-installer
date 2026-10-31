@@ -561,3 +561,44 @@ Generated QA passwords stayed in memory without screenshots/payload logging.
 Safe controller/results are .runtime/qa/installation-secret-diagnostics/
 acceptance.cjs and results-accepted.txt. Owned processes stopped and previous
 local cache restored with standard publisher; runtime bundle itself unchanged.
+
+## Target trust before approval — 2026-10-31
+
+Desktop approval of an executable plan now checks the existing confirmed target
+key pins before marking the plan approved. It uses only the Core plan's action
+targets and the existing project/revision/address/port validator. The locked
+helper avoids acquiring editMu twice. No SSH probe/login, remote staging or Core
+Build is added to approval. Plans without target hosts require no target pins;
+unselected inventory hosts do not block approval. The existing final Start
+validation and trust staging remain unchanged, including fail-closed behavior
+after a later session/project/endpoint change.
+
+Focused regressions cover confirmed/missing/old-revision/changed-endpoint pins,
+unselected hosts and a target-free plan. Counters require zero probes, staging,
+Start calls and additional Core builds during approval. Full Go test/vet and
+frontend production build PASS.
+
+Independent FULL DIFF APPROVE, blocking0; base
+53a1ada5b44e565751563144fdffc89f3a7421b9, reviewed three-file source diff
+671140e1e06dbbd602facfb03616e06b0f65d3a3af62a558a57ff9938da4e6d6.
+Design check: existing server-key confirmation and Plan approval controls are
+reused; no new control or material design discrepancy.
+
+Actual React/Wails acceptance used existing verified bundle b64e552cb9d11a535ff4f6cb6ae7ba53212d70f010206a9434ee128fd0b62a93
+on RED OS101. UI server edit/save produced revision
+3bd8b9fb75f4b421d115b272f7249e44906e2441685499ff740f904354d8c09f;
+Core plan-7995a8bf240e80ce9d38bb2e was EXECUTABLE, but UI approval returned
+TARGET_HOST_TRUST_REQUIRED with approved=false and retained the plan. Explicit
+server fingerprint confirmation in the next UI session allowed that same
+revision/plan to be approved. A final clean session at revision
+7c76b55d7c3be352ba1766a4f80da65fef12066497552e9b8a0e008fe9e3c5b6
+confirmed the server, set runtime-only passwords and approved executable
+plan-7d32fe083836eb5818942098: PLAN_APPROVED, ERRORS=[], no Start. Only native
+folder selection was substituted with real OpenProject; no business response
+was substituted. Visual acceptance is not claimed. Earlier combined scripts
+stopped after successful negative/positive assertions because a server recheck
+invalidated the old plan or frontend rebuild reloaded the page; final positive
+flow completed separately. Safe results/controllers are under
+.runtime/qa/approval-target-trust/. Windows Wails production build PASS.
+Owned QA processes stopped; prior local cache restored through standard
+publisher. Runtime bundle and target services were not changed.

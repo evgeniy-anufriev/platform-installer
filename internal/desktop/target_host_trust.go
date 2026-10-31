@@ -136,6 +136,10 @@ func (a *App) configureTargetHostTrust() {
 func (a *App) approvedTargetKeysForPlan(plan executionnode.DeploymentPlan) ([]executionnode.TargetHostKeyApproval, error) {
 	a.editMu.Lock()
 	defer a.editMu.Unlock()
+	return a.approvedTargetKeysForPlanLocked(plan)
+}
+
+func (a *App) approvedTargetKeysForPlanLocked(plan executionnode.DeploymentPlan) ([]executionnode.TargetHostKeyApproval, error) {
 	targets := map[string]bool{}
 	for _, phase := range plan.Phases {
 		for _, action := range phase.Actions {
@@ -149,6 +153,9 @@ func (a *App) approvedTargetKeysForPlan(plan executionnode.DeploymentPlan) ([]ex
 		ids = append(ids, hostID)
 	}
 	sort.Strings(ids)
+	if len(ids) == 0 {
+		return nil, nil
+	}
 	return a.approvedTargetKeysForHostsLocked(plan.ProjectIdentity, plan.ProjectRevision, ids)
 }
 

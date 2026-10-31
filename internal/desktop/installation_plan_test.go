@@ -134,7 +134,7 @@ func TestOutputCapabilityGateBlocksBeforeStart(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			app, _, client := installationPlanApp(t, false)
 			created := app.CreateInstallationPlan([]string{})
-			app.current.Managed = &installer.ManagedProjectView{Deployments: map[string]installer.ManagedDeployment{"vault-ha": {ServiceType: "vault"}}}
+			app.current.Managed.Deployments = map[string]installer.ManagedDeployment{"vault-ha": {ServiceType: "vault"}}
 			app.current.Catalog = &projectlifecycle.ProjectCatalogView{Status: "READY", Services: []projectlifecycle.ProjectCatalogService{{ID: "vault", SecretOutputEntries: []string{"admin-token", "unseal-shares"}}}}
 			if err := app.secrets.SetOutputEncryptionPassword(runtimesecret.Binding{Root: app.current.Root, ID: app.current.Project.ID}, []byte("synthetic-session-password")); err != nil {
 				t.Fatal(err)
@@ -167,6 +167,7 @@ type installationPlanBuilder struct {
 	calls               int
 	onBuild             func()
 	requiredCredentials []executionnode.RequiredCredential
+	noTargets           bool
 }
 
 func (b *installationPlanBuilder) BuildDeploymentPlan(_ context.Context, _ executionnode.Node, root string, release map[string]any, _ []string) (executionnode.DeploymentPlan, error) {
@@ -185,11 +186,15 @@ func (b *installationPlanBuilder) BuildDeploymentPlan(_ context.Context, _ execu
 		status, identity = "BLOCKED", ""
 		findings = []executionnode.Finding{{Code: "PROJECT_VALIDATION_BLOCKED", SafeMessage: "Authoritative project validation is blocked"}}
 	}
+	targets := []string{"node1"}
+	if b.noTargets {
+		targets = nil
+	}
 	return executionnode.DeploymentPlan{
 		ID: "plan-1", Status: status, ProjectIdentity: identity, ProjectRevision: revision,
 		PlanFingerprint: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", RuntimeRelease: release,
 		Acknowledgements: []string{"ACK_RISK"}, AcknowledgementDetails: []executionnode.PlanAcknowledgement{{Code: "ACK_RISK", Summary: "Review the planned change"}},
-		Phases: []executionnode.DeploymentPlanPhase{{ID: "apply", Order: 0, Actions: []executionnode.DeploymentPlanAction{{ID: "apply:kafka-main", Type: "SERVICE_APPLY", ServiceDeployment: "kafka-main", Targets: []string{"node1"}, DependsOn: []string{}, Mutating: true, Reboot: "NONE", Summary: "Apply Kafka"}}}}, Findings: findings, RequiredCredentials: b.requiredCredentials,
+		Phases: []executionnode.DeploymentPlanPhase{{ID: "apply", Order: 0, Actions: []executionnode.DeploymentPlanAction{{ID: "apply:kafka-main", Type: "SERVICE_APPLY", ServiceDeployment: "kafka-main", Targets: targets, DependsOn: []string{}, Mutating: true, Reboot: "NONE", Summary: "Apply Kafka"}}}}, Findings: findings, RequiredCredentials: b.requiredCredentials,
 	}, nil
 }
 
@@ -263,7 +268,7 @@ func TestApprovalResolvesOpaqueSecretNamesAndPendingDeploymentValues(t *testing.
 			deployments := []string{"queue-one", "queue-two"}
 			transport := &countingSecretDescriptorTransport{}
 			app.binding.reader.transport = transport
-			app.current.Managed = &installer.ManagedProjectView{Deployments: map[string]installer.ManagedDeployment{}}
+			app.current.Managed.Deployments = map[string]installer.ManagedDeployment{}
 			app.current.Catalog = &projectlifecycle.ProjectCatalogView{Status: "READY", Services: []projectlifecycle.ProjectCatalogService{{
 				ID: "generic-service", Modes: []projectlifecycle.ProjectCatalogMode{{ID: "single", RequiredRuntimeSecretSettings: []string{"adminCredential"}}},
 				ConfigurationSettings: []projectlifecycle.ProjectCatalogSetting{{ID: "adminCredential", EditorShape: "RUNTIME_SECRET_REFERENCE_OBJECT", RuntimeSecretRequirementRef: "admin-password", RuntimeSecretDeploymentBound: true, Label: "Пароль администратора"}},
@@ -508,6 +513,78 @@ func TestInstallationPlanRejectsUnknownPlanIDWithoutNodeCall(t *testing.T) {
 	}
 }
 
+type approvalTrustTransport struct {
+	installationPlanTransport
+	probes, stages int
+}
+
+func (s *approvalTrustTransport) ProbeTargetHostKey(context.Context, executionnode.Node, string, uint16) ([]byte, error) {
+	s.probes++
+	return nil, errors.New("approval must not probe SSH")
+}
+
+func (s *approvalTrustTransport) StageTargetHostTrust(context.Context, executionnode.Node, executionnode.DeploymentPlan, []executionnode.TargetHostKeyApproval) error {
+	s.stages++
+	return errors.New("approval must not stage target trust")
+}
+
+func TestApprovalChecksExistingTargetTrustWithoutSSH(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		code string
+	}{
+		{"confirmed", ""},
+		{"missing", "TARGET_HOST_TRUST_REQUIRED"},
+		{"old_revision", "TARGET_HOST_TRUST_REQUIRED"},
+		{"changed_endpoint", "TARGET_HOST_TRUST_STALE"},
+		{"unselected_server", ""},
+		{"no_targets", ""},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			app, builder, client := installationPlanApp(t, false)
+			defer app.secrets.Close()
+			transport := &approvalTrustTransport{}
+			app.binding.reader.transport = transport
+			switch test.name {
+			case "missing":
+				delete(app.approvedTargetHostKeys, "node1")
+			case "old_revision":
+				pin := app.approvedTargetHostKeys["node1"]
+				pin.revision = "old-revision"
+				app.approvedTargetHostKeys["node1"] = pin
+			case "changed_endpoint":
+				server := app.current.Managed.Servers["node1"]
+				server.Address = "192.0.2.11"
+				app.current.Managed.Servers["node1"] = server
+			case "unselected_server":
+				app.current.Managed.Servers["unused"] = installer.ManagedServer{HostID: "unused", Address: "192.0.2.12"}
+			case "no_targets":
+				builder.noTargets = true
+				app.current.Managed = nil
+				app.approvedTargetHostKeys = nil
+			}
+			created := app.CreateInstallationPlan(nil)
+			if created.Error != nil || created.Plan == nil {
+				t.Fatalf("create=%+v", created)
+			}
+			approved := app.ApproveInstallationPlan(created.Plan.ID, []string{"ACK_RISK"})
+			if approved.Plan == nil || approved.Plan.Approved != (test.code == "") {
+				t.Fatalf("approval=%+v", approved)
+			}
+			if test.code == "" {
+				if approved.Error != nil {
+					t.Fatal(approved.Error)
+				}
+			} else if approved.Error == nil || approved.Error.Code != test.code {
+				t.Fatalf("approval=%+v want=%s", approved, test.code)
+			}
+			if transport.probes != 0 || transport.stages != 0 || client.starts != 0 || builder.calls != 1 {
+				t.Fatalf("approval caused remote work: probes=%d stages=%d starts=%d builds=%d", transport.probes, transport.stages, client.starts, builder.calls)
+			}
+		})
+	}
+}
+
 func TestV02PlanDoesNotPublishAfterInFlightBindingInvalidation(t *testing.T) {
 	app, builder, _ := installationPlanApp(t, false)
 	builder.onBuild = func() { app.binding.dynamic = true }
@@ -562,6 +639,12 @@ func installationPlanApp(t *testing.T, blocked bool) (*App, *installationPlanBui
 	binding := executionNodeBinding{node: node, reader: projectReader{transport: installationPlanTransport{}, node: node, runtimeRelease: release}, service: &executionLifecycleStub{}, plans: plans, bundleRoot: "bundle"}
 	app := NewApp(snapshotReaderStub{}, lifecycleStub{}, WithTrustedExecutionNodeBinding(binding))
 	app.current = ProjectOpenResult{Status: "OPEN", Root: root, Project: &projectlifecycle.Project{ID: "project-aaaaaaaaaaaaaaaa"}}
+	revision, err := installer.ProjectRevision(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	app.current.Managed = &installer.ManagedProjectView{ProjectRevision: revision, Servers: map[string]installer.ManagedServer{"node1": {HostID: "node1", Address: node.Address}}}
+	app.approvedTargetHostKeys["node1"] = approvedTargetHostKey{root: root, projectID: app.current.Project.ID, revision: revision, hostID: "node1", address: node.Address, port: node.Port, keyType: "ssh-ed25519", publicKey: "synthetic-confirmed-key"}
 	app.execution.external = &executionNodeCandidate{hostID: node.ID, label: "node-1 · 192.0.2.10"}
 	app.execution.context = ExecutionNodeContext{Status: "READY", SelectionKind: "EXPLICIT_EXTERNAL", SelectionSource: "EXPLICIT", SafeLabel: "node-1 · 192.0.2.10", Locked: true}
 	return app, builder, client
