@@ -22,37 +22,44 @@ sed -n "1,28p" "$p/module_utils/project_snapshot.py"
 
 
 sudo python3 - <<'PY'
-import os, json, subprocess
+import os, json, tarfile, tempfile, subprocess
 from pathlib import Path
 import yaml
 
-base = Path("/var/lib/platform-installer/execution/runs")
-projects = []
-for manifest in base.glob("*/project/project.yml"):
-    doc = yaml.safe_load(manifest.read_text()) or {}
-    if doc.get("metadata", {}).get("name") == "installer-5s":
-        projects.append(manifest)
+base = Path("/var/lib/platform-installer/execution/project-archives")
+matches = []
+for archive in base.glob("*/project.tar"):
+    with tarfile.open(archive) as tar:
+        stream = tar.extractfile("project.yml")
+        doc = yaml.safe_load(stream) if stream else {}
+        if (doc or {}).get("metadata", {}).get("name") == "installer-5s":
+            matches.append(archive)
 
-if not projects:
-    raise SystemExit("Копия installer-5s на узле не найдена.")
+if not matches:
+    raise SystemExit("Архив installer-5s не найден. Нажмите «Проверить» в UI и повторите.")
 
-project = max(projects, key=lambda p: p.stat().st_mtime).parent
+archive = max(matches, key=lambda p: p.stat().st_mtime)
 runtime = Path("/var/lib/platform-installer/runtime/current").resolve()
-print("Проверяется копия:", project, flush=True)
 
-env = os.environ.copy()
-env["ANSIBLE_CONFIG"] = str(runtime / "ansible-core/ansible.cfg")
-env["ANSIBLE_COLLECTIONS_PATH"] = ":".join(
-    [str(runtime / "ansible-core/collections")] +
-    [str(p) for p in sorted(runtime.glob("services/*/ansible_collections"))]
-)
-variables = {
-    "platform_project_root": str(project),
-    "platform_service_catalog_path": str(runtime / "catalog/service-catalog.yml"),
-}
-subprocess.run([
-    "ansible-playbook", "-i", str(project / "inventory/hosts.yml"),
-    str(runtime / "ansible-core/playbooks/project-snapshot-machine.yml"),
-    "-e", json.dumps(variables),
-], env=env)
+with tempfile.TemporaryDirectory(prefix="platform-core-diag-") as work:
+    project = Path(work)
+    with tarfile.open(archive) as tar:
+        tar.extractall(project, filter="data")
+
+    print("Проверяется архив:", archive, flush=True)
+    env = os.environ.copy()
+    env["ANSIBLE_CONFIG"] = str(runtime / "ansible-core/ansible.cfg")
+    env["ANSIBLE_COLLECTIONS_PATH"] = ":".join(
+        [str(runtime / "ansible-core/collections")] +
+        [str(p) for p in sorted(runtime.glob("services/*/ansible_collections"))]
+    )
+    variables = {
+        "platform_project_root": str(project),
+        "platform_service_catalog_path": str(runtime / "catalog/service-catalog.yml"),
+    }
+    subprocess.run([
+        "ansible-playbook", "-i", str(project / "inventory/hosts.yml"),
+        str(runtime / "ansible-core/playbooks/project-snapshot-machine.yml"),
+        "-e", json.dumps(variables),
+    ], env=env)
 PY
