@@ -38854,7 +38854,7 @@ for package in $missing; do rpm -q "$package" >/dev/null 2>&1 || fail EXECUTION_
 printf 'BOOTSTRAP_SOURCE=%s\n' "$source"
 
 @@END
-@@PORTABLE {"path":"ansible-core/tools/build_execution_runtime_bundle.py","mode":420,"size":18318,"sha256":"d4ac8602cf338a2663b9cabebda219b4eb84f3d202d6c6217d34d20b8df50afa","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":18318}
+@@PORTABLE {"path":"ansible-core/tools/build_execution_runtime_bundle.py","mode":420,"size":29605,"sha256":"ab2b71f299a5d5508c64075fc33ec6037859397f553905a900c3de25c93f2d67","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":29605}
 #!/usr/bin/env python3
 """Build a deterministic, versioned offline Execution Node runtime directory.
 
@@ -38867,8 +38867,11 @@ import argparse
 import hashlib
 import json
 import os
+import posixpath
 import re
 import shlex
+import subprocess
+import tarfile
 from pathlib import Path
 import shutil
 import sys
@@ -38878,7 +38881,7 @@ import yaml
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from service_catalog import build_catalog
+from service_catalog import build_catalog, expand_artifact_references, load_yaml
 sys.path.insert(0, str(REPOSITORY / "ansible-core" / "collections"))
 from ansible_collections.platform.core.plugins.module_utils.service_configuration_preview import ordinary_presentation_value
 from ansible_collections.platform.core.plugins.module_utils.application_images import docker_save_image
@@ -39090,6 +39093,181 @@ def artifact_type(media_type):
     }.get(media_type)
 
 
+class BoundedTarInfo(tarfile.TarInfo):
+    def _proc_pax(self, archive):
+        archive.projection_metadata_bytes = getattr(archive, 'projection_metadata_bytes', 0) + self.size
+        if self.size > 1024 * 1024 or archive.projection_metadata_bytes > 16 * 1024 * 1024:
+            raise ValueError('service archive metadata exceeds limit')
+        return super()._proc_pax(archive)
+
+    def _proc_gnulong(self, archive):
+        if self.size > 1024:
+            raise ValueError('service archive long name exceeds limit')
+        return super()._proc_gnulong(archive)
+
+
+def kafka_archive(path):
+    """Inspect names/markers only; never extract or run supplied programs."""
+    members, roots, metadata_bytes, expanded_size = {}, set(), 0, 0
+    try:
+        with tarfile.open(path, 'r:gz', tarinfo=BoundedTarInfo) as archive:
+            for member in archive:
+                name = member.name.removeprefix('./').rstrip('/')
+                parts = name.split('/')
+                metadata_bytes += len(name.encode('utf-8')) + len(member.linkname.encode('utf-8')) + 512
+                expanded_size += max(member.size, 0)
+                if (not name or len(name) > 1024 or len(members) >= 100000 or metadata_bytes > 64 * 1024 * 1024 or
+                        expanded_size > 16 * 1024 ** 3 or name.startswith('/') or '\\' in name or
+                        any(part in ('', '.', '..') for part in parts) or name in members or
+                        not (member.isfile() or member.isdir() or member.issym() or member.islnk()) or member.sparse):
+                    raise ValueError('unsafe or oversized service archive')
+                roots.add(parts[0])
+                if member.issym() or member.islnk():
+                    target = member.linkname
+                    resolved = posixpath.normpath(posixpath.join(posixpath.dirname(name), target) if member.issym() else target)
+                    if (len(target) > 1024 or target.startswith('/') or '\\' in target or
+                            not resolved.startswith(parts[0] + '/')):
+                        raise ValueError('service archive link escapes root')
+                members[name] = member
+    except (tarfile.TarError, OSError, EOFError) as error:
+        raise ValueError('invalid service archive: %s' % path.name) from error
+    if len(roots) != 1:
+        raise ValueError('service archive requires one distribution root')
+    root = next(iter(roots))
+    match = re.fullmatch(r'(kafka_[0-9.]+|confluent)-([0-9]+(?:\.[0-9]+)+(?:[-+][A-Za-z0-9.]+)?)', root)
+    if not match:
+        raise ValueError('unsupported Kafka distribution root: %s' % root)
+
+    def regular(name):
+        seen = set()
+        while name in members and name not in seen:
+            seen.add(name)
+            member = members[name]
+            if member.isfile():
+                return True
+            if not (member.issym() or member.islnk()):
+                return False
+            name = posixpath.normpath(posixpath.join(posixpath.dirname(name), member.linkname) if member.issym() else member.linkname)
+        return False
+
+    version = match[2]
+    extension = '.sh' if regular(root + '/bin/kafka-server-start.sh') else ''
+    kafka = regular(root + '/bin/kafka-server-start' + extension)
+    registry = (regular(root + '/bin/schema-registry-start') and
+                regular(root + '/share/java/schema-registry/kafka-schema-registry-' + version + '.jar'))
+    if match[1].startswith('kafka_'):
+        if not kafka or not regular(root + '/libs/' + match[1] + '-' + version + '.jar'):
+            raise ValueError('Kafka distribution markers do not match version')
+    elif not registry:
+        raise ValueError('Confluent distribution markers do not match version')
+    return dict(path=path, version=version, root=root, extension=extension, kafka=kafka, registry=registry)
+
+
+def rpm_identity(path):
+    try:
+        result = subprocess.run(['rpm', '-qp', '--qf', '%{NAME}\t%{VERSION}\t%{RELEASE}', str(path)],
+                                capture_output=True, text=True, timeout=20, check=True)
+    except (OSError, subprocess.SubprocessError) as error:
+        raise ValueError('cannot read RPM metadata: %s' % path.name) from error
+    parts = result.stdout.split('\t')
+    if len(result.stdout) > 1024 or len(parts) != 3 or any(re.fullmatch(r'[A-Za-z0-9._+~-]+', part) is None for part in parts):
+        raise ValueError('invalid RPM identity: %s' % path.name)
+    return dict(name=parts[0], version=parts[1], release=parts[2], path=path)
+
+
+def project_service_artifacts(root, declared_platforms):
+    """Only rewrite staged metadata/defaults, before derived catalog hashing."""
+    for source in sorted((root / 'services').glob('*/service.yml')):
+        service = source.parent.name
+        directory = root / 'runtime/artifacts' / service
+        if not directory.is_dir():
+            continue
+        authored = load_yaml(source)
+        compiled = expand_artifact_references(authored, source, root)
+        requirements = compiled.get('artifacts', []) + compiled.get('runtimeRequirements', [])
+        by_name = {item.get('name', item['id']): item for item in requirements}
+        selected = {}
+        for path in sorted(directory.glob('*.rpm')):
+            identity = rpm_identity(path)
+            requirement = by_name.get(identity['name'])
+            if requirement is None:
+                continue  # dependency closure stays in components
+            key = requirement['id']
+            if key in selected:
+                raise ValueError('ambiguous service RPM: %s/%s' % (service, key))
+            selected[key] = identity
+        archives = [path for path in sorted(directory.iterdir()) if path.name.endswith(('.tar.gz', '.tgz'))]
+        if archives and service != 'kafka':
+            raise ValueError('unsupported service archive layout: %s' % service)
+        distributions = [kafka_archive(path) for path in archives]
+        kafka = [entry for entry in distributions if entry['kafka'] and not entry['registry']]
+        registry = [entry for entry in distributions if entry['registry']]
+        if len(kafka) > 1 or len(registry) > 1:
+            raise ValueError('ambiguous Kafka/Confluent distributions')
+        shared = not kafka and registry and registry[0]['kafka']
+        if kafka or shared:
+            selected['kafka-binary'] = (kafka or registry)[0]
+        if registry:
+            selected['schema-registry-binary'] = registry[0]
+        if not selected:
+            continue
+        platforms = {(entry['os'], entry['architecture']) for entry in map(parse_platform, declared_platforms or [])}
+        if len(platforms) != 1:
+            raise ValueError('service artifacts require one explicit --platform OS/architecture pair')
+        platform_os, architecture = next(iter(platforms))
+        if service == 'clickhouse' and (set(selected) != {'clickhouse-common-static', 'clickhouse-client', 'clickhouse-server'} or
+                                       len({entry['version'] for entry in selected.values()}) != 1):
+            raise ValueError('ClickHouse requires a complete RPM trio with one VERSION')
+        metadata_path = source.parent / 'artifacts.yml'
+        metadata = load_yaml(metadata_path) if metadata_path.is_file() else dict(apiVersion='platform.installer/artifacts/v1alpha1', service=service, artifacts=[])
+        entries = {entry['id']: entry for entry in metadata.get('artifacts', [])}
+        if len(entries) != len(metadata.get('artifacts', [])):
+            raise ValueError('duplicate service artifact metadata ID')
+        policies = {item['id']: item for item in requirements}
+        for key, identity in selected.items():
+            if key not in policies:
+                raise ValueError('undeclared service artifact: %s/%s' % (service, key))
+            path = identity['path']
+            entries[key] = dict(id=key, name=policies[key].get('name', key), version=identity['version'],
+                                os=platform_os, architecture=architecture, filename=path.name,
+                                mediaType='application/x-rpm' if path.suffix == '.rpm' else 'application/gzip',
+                                sha256=digest_file(path).removeprefix('sha256:'))
+        # Preserve policies in their authored order and retain one authority per ID.
+        authored['apiVersion'] = 'platform.installer/service-manifest/v1alpha2'
+        authored['artifacts'] = [dict(artifactRef=item['id'], **{key: value for key, value in item.items()
+                                if key == 'requiredOffline' or key.startswith('x-')}) for item in requirements
+                                if item in compiled.get('artifacts', []) or item['id'] in selected]
+        authored['runtimeRequirements'] = [item for item in compiled.get('runtimeRequirements', []) if item['id'] not in selected]
+        metadata['artifacts'] = [entries[key] for key in sorted(entries)]
+        parts = compiled['roleEntrypoints']['apply']['fqcn'].split('.')
+        defaults_path = source.parent / 'ansible_collections' / parts[0] / parts[1] / 'roles' / parts[2] / 'defaults/main.yml'
+        if not defaults_path.resolve().is_relative_to(root.resolve()):
+            raise ValueError('role defaults path escapes bundle staging')
+        defaults = load_yaml(defaults_path)
+        if service == 'clickhouse':
+            defaults['platform_clickhouse_package_version'] = next(iter(selected.values()))['version']
+            defaults['platform_clickhouse_package_releases'] = {key: entry['release'] for key, entry in selected.items()}
+            defaults['platform_clickhouse_package_architecture'] = architecture
+            defaults['platform_clickhouse_expected_rpm_digests'] = {key: entries[key]['sha256'] for key in selected}
+        if service == 'redis' and 'redis-runtime' in selected:
+            identity = selected['redis-runtime']
+            defaults['platform_redis_version'] = identity['version'] + '-' + identity['release']
+        if 'kafka-binary' in selected and service == 'kafka':
+            identity = selected['kafka-binary']
+            defaults.update(platform_kafka_version=identity['version'], platform_kafka_archive_directory=identity['root'],
+                            platform_kafka_script_extension=identity['extension'],
+                            platform_kafka_schema_registry_use_kafka_distribution=bool(shared))
+            if shared:
+                defaults['platform_kafka_install_directory'] = '/opt/' + identity['root']
+        if 'schema-registry-binary' in selected and service == 'kafka':
+            identity = selected['schema-registry-binary']
+            defaults.update(platform_kafka_schema_registry_version=identity['version'],
+                            platform_kafka_schema_registry_archive_directory=identity['root'],
+                            platform_kafka_schema_registry_install_directory='/opt/' + identity['root'])
+        for path, value in ((source, authored), (metadata_path, metadata), (defaults_path, defaults)):
+            path.write_text(yaml.safe_dump(value, allow_unicode=True, sort_keys=False), encoding='utf-8', newline='\n')
+
+
 def artifact_sources(root):
     """Build the verified offline-source index from service metadata.
 
@@ -39186,6 +39364,7 @@ def build(output, runtime, bundle_version, core_version, platforms=None, applica
         copy_tree(runtime, temporary / "runtime")
         for directory in ("packages", "python"):
             (temporary / "runtime" / directory).mkdir(parents=True, exist_ok=True)
+        project_service_artifacts(temporary, platforms)
         write_service_catalog(temporary)
         validate_catalog_layout(temporary)
         write_ui_static_defaults(temporary)
@@ -45723,7 +45902,7 @@ def encode_fetch(metadata, token, shares, validator, schema_path):
         raise OutputWireError("OUTPUT_TRANSFER_FAILED") from None
 
 @@END
-@@PORTABLE {"path":"ansible-core/tools/service_catalog.py","mode":420,"size":2392,"sha256":"6efe9037593408484a90d543d7e39a7846a79a0a30801d455dcb4a5caceadc2e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2392}
+@@PORTABLE {"path":"ansible-core/tools/service_catalog.py","mode":420,"size":4836,"sha256":"a730ae2dcf961d36ffd70972c06fadf75ce4b5feb2553d9e7fbb7bc247aecd5b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4836}
 """Generate a derived service catalog from an explicit set of manifests."""
 
 import copy
@@ -45731,8 +45910,12 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import sys
 
 import yaml
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "collections"))
+from ansible_collections.platform.core.plugins.module_utils.schema_validation import SchemaValidator
 
 
 def canonical_bytes(value):
@@ -45770,6 +45953,46 @@ def relocate_manifest_references(manifest, source, output):
     return relocated
 
 
+def expand_artifact_references(manifest, source, repository):
+    """Compile authored references into the established expanded runtime DTO."""
+    version = manifest.get("apiVersion")
+    if version != "platform.installer/service-manifest/v1alpha2":
+        raise ValueError("unsupported service manifest version")
+    contracts = repository / "contracts"
+    validator = SchemaValidator(contracts)
+    if validator.validate(manifest, contracts / "service-manifest/v1alpha2/schema.json"):
+        raise ValueError("invalid referenced service manifest")
+    compiled = copy.deepcopy(manifest)
+    compiled["apiVersion"] = "platform.installer/service-manifest/v1alpha1"
+    references = manifest.get("artifacts", [])
+    metadata = (load_yaml(source.parent / "artifacts.yml") if references else
+                dict(apiVersion="platform.installer/artifacts/v1alpha1", service=manifest["metadata"]["id"], artifacts=[]))
+    if (validator.validate(metadata, contracts / "artifacts/v1alpha1/schema.json") or
+            metadata.get("service") != manifest["metadata"]["id"]):
+        raise ValueError("invalid service artifact metadata")
+    by_id = {}
+    for artifact in metadata["artifacts"]:
+        if artifact["id"] in by_id:
+            raise ValueError("duplicate service artifact metadata ID")
+        by_id[artifact["id"]] = artifact
+    if "artifacts" in manifest:
+        compiled["artifacts"] = []
+    seen = set()
+    for reference in references:
+        key = reference["artifactRef"]
+        if key not in by_id or key in seen:
+            raise ValueError("missing or duplicate service artifact reference")
+        seen.add(key)
+        metadata_entry = by_id[key]
+        artifact = {key: metadata_entry[key] for key in ("id", "name", "version", "os", "architecture")}
+        artifact["digest"] = "sha256:" + metadata_entry["sha256"].removeprefix("sha256:")
+        artifact.update({key: copy.deepcopy(value) for key, value in reference.items() if key != "artifactRef"})
+        compiled["artifacts"].append(artifact)
+    if validator.validate(compiled, contracts / "service-manifest/v1alpha1/schema.json"):
+        raise ValueError("invalid compiled service manifest")
+    return compiled
+
+
 def build_catalog(repository, sources, output):
     definitions = {}
     for service_type, source in sources:
@@ -45778,7 +46001,7 @@ def build_catalog(repository, sources, output):
             raise ValueError("%s metadata.id must be %s" % (source, service_type))
         if service_type in definitions:
             raise ValueError("duplicate catalog service: %s" % service_type)
-        definition = relocate_manifest_references(manifest, source, output)
+        definition = relocate_manifest_references(expand_artifact_references(manifest, source, repository), source, output)
         definition["x-definitionDigest"] = digest(definition)
         definition["x-sourceManifest"] = source.relative_to(repository).as_posix()
         definitions[service_type] = definition
@@ -50543,6 +50766,43 @@ libraryExecutionPriorities:
     "targetNode": {"type": "string"}, "source": {"enum": ["REPOSITORY", "OFFLINE_BUNDLE", "BLOCKED"]},
     "reason": {"type": "string"}, "artifacts": {"type": "array", "maxItems": 1, "items": {"type": "object"}}
   }
+}
+
+@@END
+@@PORTABLE {"path":"contracts/artifacts/v1alpha1/schema.json","mode":420,"size":1566,"sha256":"d7e09e5e984279b45fddd7986378e657314eeb1ddf2a7c972cb268e17ca3f79d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1566}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/artifacts/v1alpha1/schema.json",
+  "title": "Local service artifact metadata",
+  "type": "object",
+  "required": ["apiVersion", "service", "artifacts"],
+  "properties": {
+    "apiVersion": {"const": "platform.installer/artifacts/v1alpha1"},
+    "service": {"type": "string", "pattern": "^[a-z][a-z0-9-]*$"},
+    "artifacts": {
+      "type": "array", "maxItems": 256,
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "version", "os", "architecture", "filename", "mediaType", "sha256"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[a-z][a-z0-9-]*$"},
+          "name": {"type": "string", "minLength": 1, "maxLength": 128},
+          "version": {"type": "string", "minLength": 1, "maxLength": 128},
+          "os": {"type": "string", "pattern": "^[A-Za-z0-9._-]+$"},
+          "architecture": {"type": "string", "pattern": "^[A-Za-z0-9._-]+$"},
+          "filename": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]*$"},
+          "mediaType": {"enum": ["application/gzip", "application/x-gzip", "application/x-rpm", "application/octet-stream"]},
+          "sha256": {"type": "string", "pattern": "^(sha256:)?[0-9a-f]{64}$"},
+          "source": {"type": "string"}
+        },
+        "additionalProperties": false
+      }
+    },
+    "packageSource": {"type": "object"},
+    "testedPackageSets": {"type": "array"},
+    "status": {"type": "string"}
+  },
+  "additionalProperties": false
 }
 
 @@END
@@ -63498,6 +63758,557 @@ libraryExecutionPriorities:
 }
 
 @@END
+@@PORTABLE {"path":"contracts/service-manifest/v1alpha2/schema.json","mode":420,"size":12980,"sha256":"f5e5d661c0be282204eb01af0a81ca23ba1cd036c2858c59b71f9b61d54adc86","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":12980}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/service-manifest/v1alpha2/schema.json",
+  "title": "Authored service manifest with local artifact references",
+  "type": "object",
+  "required": [
+    "apiVersion",
+    "kind",
+    "metadata",
+    "modes",
+    "configurationSchema",
+    "roleEntrypoints"
+  ],
+  "properties": {
+    "apiVersion": {
+      "const": "platform.installer/service-manifest/v1alpha2"
+    },
+    "kind": {
+      "const": "ServiceManifest"
+    },
+    "metadata": {
+      "type": "object",
+      "required": [
+        "id",
+        "version",
+        "displayName"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "version": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "displayName": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "description": {
+          "type": "string"
+        },
+        "category": {
+          "$ref": "#/$defs/identifier"
+        }
+      },
+      "patternProperties": {
+        "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true
+      },
+      "additionalProperties": false
+    },
+    "modes": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "$ref": "#/$defs/identifier"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/mode"
+      }
+    },
+    "listeners": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/identifier"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/listener"
+      },
+      "default": {}
+    },
+    "endpoint": {
+      "$ref": "#/$defs/genericEndpoint"
+    },
+    "endpointProvider": {
+      "$ref": "#/$defs/genericEndpoint"
+    },
+    "capabilities": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/identifier"
+      },
+      "default": []
+    },
+    "dependencies": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/dependencyKind"
+      },
+      "default": []
+    },
+    "configurationSchema": {
+      "type": "object",
+      "description": "Embedded or referenced JSON Schema for supported desired overrides.",
+      "required": [
+        "$ref"
+      ],
+      "properties": {
+        "$ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "configurationMapping": {
+      "type": "object",
+      "description": "Versioned logical configuration property to ordinary role variable mapping.",
+      "propertyNames": {
+        "type": "string",
+        "minLength": 1
+      },
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "roleVariable"
+        ],
+        "properties": {
+          "roleVariable": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "deployment",
+                "member"
+              ]
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "configuration": {
+      "type": "object",
+      "required": [
+        "settings"
+      ],
+      "properties": {
+        "additionalProperties": {
+          "type": "boolean"
+        },
+        "unevaluatedProperties": {
+          "type": "boolean"
+        },
+        "settings": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/configurationSetting"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "roleEntrypoints": {
+      "type": "object",
+      "required": [
+        "apply",
+        "verify"
+      ],
+      "properties": {
+        "validate": {
+          "$ref": "#/$defs/roleEntrypoint"
+        },
+        "apply": {
+          "$ref": "#/$defs/roleEntrypoint"
+        },
+        "verify": {
+          "$ref": "#/$defs/roleEntrypoint"
+        }
+      },
+      "patternProperties": {
+        "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true
+      },
+      "additionalProperties": false
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/artifactRequirement"
+      },
+      "default": []
+    },
+    "runtimeRequirements": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/runtimeRequirement"
+      },
+      "default": []
+    },
+    "compatibilityRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "ui": {
+      "type": "object",
+      "description": "Optional presentation hints; never changes service semantics.",
+      "properties": {
+        "icon": {
+          "type": "string"
+        },
+        "order": {
+          "type": "integer"
+        },
+        "documentationTopic": {
+          "type": "string"
+        }
+      },
+      "patternProperties": {
+        "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true
+      },
+      "additionalProperties": false
+    }
+  },
+  "allOf": [
+    {
+      "not": {
+        "required": [
+          "configuration",
+          "configurationMapping"
+        ]
+      }
+    }
+  ],
+  "patternProperties": {
+    "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$"
+    },
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "mode": {
+      "type": "object",
+      "required": [
+        "displayName",
+        "placement"
+      ],
+      "properties": {
+        "displayName": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "description": {
+          "type": "string"
+        },
+        "memberRoles": {
+          "type": "array",
+          "minItems": 0,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/identifier"
+          }
+        },
+        "placement": {
+          "type": "object",
+          "required": [
+            "explicit",
+            "minMembers"
+          ],
+          "properties": {
+            "explicit": {
+              "const": true
+            },
+            "minMembers": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "maxMembers": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "distinctHosts": {
+              "type": "boolean",
+              "default": false
+            },
+            "hostScoped": {
+              "description": "Participants are inventory hosts with deployment-scoped host configuration, not logical members.",
+              "type": "boolean",
+              "default": false
+            },
+            "roleCardinality": {
+              "type": "object",
+              "propertyNames": {
+                "$ref": "#/$defs/identifier"
+              },
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "minimum": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "maximum": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "configurationSchemaRef": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "patternProperties": {
+        "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true
+      },
+      "additionalProperties": false
+    },
+    "listener": {
+      "type": "object",
+      "required": [
+        "protocol"
+      ],
+      "properties": {
+        "protocol": {
+          "enum": [
+            "tcp",
+            "udp",
+            "http",
+            "https"
+          ]
+        },
+        "defaultPort": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "tlsCapable": {
+          "type": "boolean",
+          "default": false
+        },
+        "scope": {
+          "enum": [
+            "member",
+            "deployment"
+          ]
+        }
+      },
+      "patternProperties": {
+        "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true
+      },
+      "additionalProperties": false
+    },
+    "genericEndpoint": {
+      "type": "object",
+      "description": "Opt-in to NET-01 logical endpoint resolution. Transport and routing are deferred to NET-03.",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "dependencyKind": {
+      "type": "object",
+      "required": [
+        "capability"
+      ],
+      "properties": {
+        "capability": {
+          "$ref": "#/$defs/identifier"
+        },
+        "required": {
+          "type": "boolean",
+          "default": true
+        },
+        "listener": {
+          "$ref": "#/$defs/identifier"
+        }
+      },
+      "patternProperties": {
+        "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true
+      },
+      "additionalProperties": false
+    },
+    "roleEntrypoint": {
+      "type": "object",
+      "required": [
+        "fqcn"
+      ],
+      "properties": {
+        "fqcn": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+\\.[a-z0-9_]+\\.[a-z0-9_]+$"
+        },
+        "variablesPrefix": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*_$"
+        }
+      },
+      "patternProperties": {
+        "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true
+      },
+      "additionalProperties": false
+    },
+    "artifactRequirement": {
+      "type": "object",
+      "required": [
+        "artifactRef"
+      ],
+      "properties": {
+        "artifactRef": {
+          "$ref": "#/$defs/identifier"
+        },
+        "requiredOffline": {
+          "default": true,
+          "type": "boolean"
+        }
+      },
+      "patternProperties": {
+        "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true
+      },
+      "additionalProperties": false
+    },
+    "runtimeRequirement": {
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "os",
+        "architecture"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "name": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "version": {
+          "type": "string"
+        },
+        "os": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "architecture": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "requiredOffline": {
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "configurationSetting": {
+      "type": "object",
+      "required": [
+        "kind",
+        "roleVariable",
+        "type",
+        "scopes",
+        "validation"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "MANAGED",
+            "ADVANCED"
+          ]
+        },
+        "roleVariable": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "type": {
+          "enum": [
+            "string",
+            "integer",
+            "number",
+            "boolean",
+            "object",
+            "array",
+            "null"
+          ]
+        },
+        "scopes": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "deployment",
+              "member"
+            ]
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "validation": {
+          "type": "object"
+        },
+        "schema": {
+          "type": "object"
+        },
+        "x-memberInputOnly": {
+          "type": "boolean",
+          "description": "Keep member values in ordinary member input; do not flatten them into host-wide execution variables."
+        },
+        "x-runtimeSecretRequired": {
+          "type": "boolean",
+          "description": "Require a saved catalog-declared runtime credential reference before planning."
+        },
+        "x-runtimeSecretDeploymentBound": {
+          "type": "boolean",
+          "description": "Bind the public service-password requirement identity to its deployment; the logical desired reference is unchanged."
+        },
+        "ui": {
+          "type": "object",
+          "properties": {
+            "label": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": {
+              "type": "string"
+            },
+            "section": {
+              "type": "string",
+              "minLength": 1
+            },
+            "order": {
+              "type": "integer"
+            }
+          },
+          "patternProperties": {
+            "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
+
+@@END
 @@PORTABLE {"path":"contracts/service-secret-inputs/v1alpha1/schema.json","mode":420,"size":1509,"sha256":"9a27ebb868b149fba6ff6958b4b6b066bf2c17794ed24c5b5f0eea71dcd922c1","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1509}
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -64189,8 +65000,8 @@ func main() {
 }
 
 @@END
-@@PORTABLE {"path":"examples/catalog/manifests/etcd.yml","mode":420,"size":762,"sha256":"69549ca233601f03ee91154503f68aed352ed4a481f764e7b8d8feeb24fae791","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":762}
-apiVersion: platform.installer/service-manifest/v1alpha1
+@@PORTABLE {"path":"examples/catalog/manifests/etcd.yml","mode":420,"size":762,"sha256":"b21d3715fcc304942764d41d96366a4458cbcaacf37663746f34a852beb2bed2","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":762}
+apiVersion: platform.installer/service-manifest/v1alpha2
 kind: ServiceManifest
 metadata:
   id: etcd
@@ -64215,8 +65026,8 @@ artifacts: []
 x-conformanceOnly: true
 
 @@END
-@@PORTABLE {"path":"examples/catalog/manifests/postgresql.yml","mode":420,"size":1167,"sha256":"dd977fda299b4373b920e77b1b0fe38918bd000af1502b6c7ab8cdd0aae6f656","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1167}
-apiVersion: platform.installer/service-manifest/v1alpha1
+@@PORTABLE {"path":"examples/catalog/manifests/postgresql.yml","mode":420,"size":1167,"sha256":"2ca7476f60449497e6a7b70315b330317ecb1e7da3d3dce5ce126acb4286a279","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1167}
+apiVersion: platform.installer/service-manifest/v1alpha2
 kind: ServiceManifest
 metadata:
   id: postgresql
@@ -105927,1342 +106738,4 @@ function DeleteDeploymentDialog({
   );
 }
 
-@@END
-@@PORTABLE {"path":"frontend/src/UtilityPages.tsx","mode":420,"size":67854,"sha256":"c12fdcbd6ead013efaf64f28be32743d53d6a75d98098ca3c438b4f34f5a701d","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":62487}
-import { useEffect, useMemo, useState } from "react";
-import type {
-  EditResult,
-  InstallationEventView,
-  ManagedProjectView,
-} from "./backend";
-import { eventTimestampLabel, taskNameWithoutRole } from "./event-format";
-import "./utility-pages.css";
-
-type HelpPageId =
-  | "project"
-  | "servers"
-  | "topology"
-  | "services"
-  | "certificates"
-  | "installation"
-  | "logs";
-
-type HelpArticle = {
-  id: string;
-  title: string;
-  summary: string;
-  intro: string;
-  sections: { title: string; steps?: string[]; text?: string }[];
-  warning?: string;
-  targetPage?: HelpPageId;
-};
-
-const helpCategories = [
-  {
-    id: "project",
-    title: "Проект и набор",
-    description: "Создание, сохранение и совместимость набора установки.",
-  },
-  {
-    id: "servers",
-    title: "Серверы",
-    description: "Подключение к серверам и подготовка узла выполнения.",
-  },
-  {
-    id: "services",
-    title: "Сервисы и топология",
-    description: "Настройки сервисов, роли и размещение.",
-  },
-  {
-    id: "certificates",
-    title: "Сертификаты",
-    description: "Профили PKI, проверка имён и пароль Java-хранилищ.",
-  },
-  {
-    id: "installation",
-    title: "Проверка и установка",
-    description: "Проверка проекта, план и выполнение.",
-  },
-  {
-    id: "logs",
-    title: "Журналы",
-    description: "Поиск событий и чтение результата запуска.",
-  },
-  {
-    id: "errors",
-    title: "Ошибки",
-    description: "Причины блокировок и безопасные шаги восстановления.",
-  },
-] as const;
-
-const helpPageLabels: Record<HelpPageId, string> = {
-  project: "Проект",
-  servers: "Серверы",
-  topology: "Топология",
-  services: "Сервисы",
-  certificates: "Сертификаты",
-  installation: "Установка",
-  logs: "Журналы",
-};
-
-const helpArticles: (HelpArticle & {
-  category: (typeof helpCategories)[number]["id"];
-})[] = [
-  {
-    id: "certificate-authority-settings",
-    category: "certificates",
-    title: "Управляемые центры сертификации",
-    summary:
-      "Что задаётся в форме редактирования центра и как он связан с профилем сертификата.",
-    intro:
-      "Центр сертификации — исходная точка цепочки PKI. В текущем интерфейсе поддерживается управляемый центр; созданный центр выбирается в профиле сертификата.",
-    sections: [
-      {
-        title: "Поля формы «Изменить»",
-        steps: [
-          "ID — уникальный идентификатор центра; у существующей записи он недоступен для изменения.",
-          "Отображаемое имя — необязательная подпись в интерфейсе.",
-          "Общее имя (CN) — обязательное имя центра в субъекте сертификата.",
-          "Срок действия (дней) — необязательное переопределение; пустое значение наследуется.",
-        ],
-      },
-      {
-        title: "После изменения",
-        text: "Изменение добавляется в черновик проекта. Сохраните проект и запустите проверку Core, чтобы проверить итоговую конфигурацию.",
-      },
-    ],
-    targetPage: "certificates",
-  },
-  {
-    id: "certificate-profile-settings",
-    category: "certificates",
-    title: "Профили сертификатов",
-    summary:
-      "Как редактировать алгоритм и назначение ключа, правила SAN и поля субъекта.",
-    intro:
-      "Профиль сертификата связывает центр сертификации с параметрами выпуска. На него ссылаются TLS-профили и области применения.",
-    sections: [
-      {
-        title: "Основные поля формы",
-        steps: [
-          "ID — уникальный идентификатор профиля; для существующей записи он фиксирован. Отображаемое имя необязательно.",
-          "Центр сертификации — обязательная ссылка на существующую запись.",
-          "Алгоритм ключа — RSA или EC; пустое значение наследует настройку роли.",
-          "Размер ключа и срок действия в днях — необязательные переопределения.",
-          "Назначение сертификата — отметьте серверную и/или клиентскую аутентификацию.",
-        ],
-      },
-      {
-        title: "Правила SAN и субъект",
-        text: "Для DNS-имён серверов, IP-адресов серверов, FQDN и wildcard-имён точек входа, а также виртуальных IP можно выбрать «Наследуется», «Включено» или «Выключено». Поля субъекта C, ST, L, O и OU задают необязательные переопределения страны, региона, города, организации и подразделения. Оставляйте наследование, если проекту не требуется явное значение.",
-      },
-    ],
-    warning:
-      "Правила SAN являются настройкой профиля. Фактические имена сертификатов рассчитывает и показывает Core после проверки сохранённого проекта.",
-    targetPage: "certificates",
-  },
-  {
-    id: "certificate-tls-settings",
-    category: "certificates",
-    title: "Профили TLS",
-    summary:
-      "Как связать профиль сертификата с областью и ссылкой на runtime-секрет.",
-    intro:
-      "Профиль TLS связывает профиль сертификата с параметрами использования TLS. Его можно назначить сервису или использовать при настройке области применения.",
-    sections: [
-      {
-        title: "Поля формы «Изменить»",
-        steps: [
-          "ID — уникальный идентификатор профиля TLS; у существующей записи его нельзя изменить.",
-          "Профиль сертификата — обязательная ссылка на созданный профиль сертификата.",
-          "Область применения — «Наследуется», «Сервер», «Экземпляр» или «Развёртывание».",
-          "Ссылка на runtime-секрет — укажите ссылку на секрет пароля хранилища; сам пароль здесь не вводится.",
-        ],
-      },
-      {
-        title: "Безопасность секрета",
-        text: "В проект сохраняется ссылка, а не значение пароля. Уже сохранённая ссылка не показывается как пароль; чтобы заменить её, введите новую ссылку.",
-      },
-    ],
-    targetPage: "certificates",
-  },
-  {
-    id: "certificate-scope-settings",
-    category: "certificates",
-    title: "Области применения сертификатов",
-    summary:
-      "Как выбрать профиль, целевые серверы и сервисы и добавить явные DNS/IP.",
-    intro:
-      "Область применения указывает, где использовать профиль сертификата и откуда собирать идентичности. Источники выбираются из серверов и размещённых сервисов текущего черновика.",
-    sections: [
-      {
-        title: "Поля формы «Изменить»",
-        steps: [
-          "ID — уникальный идентификатор области; существующий ID фиксирован. Отображаемое имя необязательно.",
-          "Профиль сертификата — обязательная ссылка на профиль.",
-          "Область применения — наследуемая, для сервера, экземпляра или развёртывания.",
-          "В списках «Серверы», «Развёртывания» и «Экземпляры» отметьте необходимые источники. Экземпляр обозначен парой «развёртывание/экземпляр».",
-          "При необходимости укажите явные DNS-имена и IP-адреса; несколько значений можно разделить запятыми или переносами строк.",
-        ],
-      },
-      {
-        title: "Если список пуст",
-        text: "Нет доступных записей, когда соответствующих серверов или размещённых экземпляров нет в текущем черновике. Сначала настройте серверы или размещение сервиса, затем вернитесь к области применения.",
-      },
-    ],
-    warning:
-      "Явные DNS/IP дополняют источники области. Итоговые имена и SAN проверьте в блоке «Проверка Core» после сохранения проекта.",
-    targetPage: "certificates",
-  },
-  {
-    id: "certificate-profiles",
-    category: "certificates",
-    title: "Как настроить профили сертификатов",
-    summary:
-      "В каком порядке связать центр сертификации, профиль сертификата и его потребителей.",
-    intro:
-      "Страница «Сертификаты» описывает желаемые параметры PKI. Сертификаты выпускаются и применяются отдельно, во время установки.",
-    sections: [
-      {
-        title: "Порядок настройки",
-        steps: [
-          "Создайте управляемый центр сертификации.",
-          "Создайте профиль сертификата и укажите центр, назначение ключа и правила SAN.",
-          "При необходимости создайте профиль TLS и область применения: обе сущности ссылаются на профиль сертификата независимо друг от друга.",
-          "Сохраните проект и проверьте сохранённую версию через Core.",
-        ],
-      },
-      {
-        title: "Пустые поля",
-        text: "Пустые поля наследуют значения по умолчанию роли и не записываются в проект. DNS-имена и IP-адреса, которые нужно задать явно, указываются в настройках области применения.",
-      },
-    ],
-    targetPage: "certificates",
-  },
-  {
-    id: "certificate-identities",
-    category: "certificates",
-    title: "Откуда берутся имена и SAN",
-    summary:
-      "Почему итоговые DNS-имена и SAN показываются только после актуальной проверки Core.",
-    intro:
-      "Поля DNS/IP задают явные значения. Итоговые идентичности сертификатов Core рассчитывает с учётом конфигурации проекта и показывает по актуальным данным проверки.",
-    sections: [
-      {
-        title: "Проверить результат",
-        steps: [
-          "Сохраните изменения проекта.",
-          "Запустите проверку Core для сохранённой версии.",
-          "На странице «Сертификаты» откройте блок «Проверка Core» и просмотрите рассчитанные имена и SAN.",
-        ],
-      },
-      {
-        title: "Если проект изменился",
-        text: "Результат предыдущей проверки может относиться к старой версии. Сохраните актуальные изменения и повторите проверку; итоговое влияние виртуального IP также определяет Core.",
-      },
-    ],
-    targetPage: "certificates",
-  },
-  {
-    id: "certificate-store-password",
-    category: "certificates",
-    title: "Пароль Java-хранилищ PKCS#12",
-    summary: "Как задаётся пароль keystore и truststore и где он хранится.",
-    intro:
-      "Пароль защищает Java-хранилища PKCS#12 (keystore/truststore). Его можно задать или заменить в верхнем блоке страницы «Сертификаты».",
-    sections: [
-      {
-        title: "Задать пароль",
-        steps: [
-          "Сначала сохраните учётные данные выбранного узла выполнения.",
-          "Введите новый пароль хранилищ и сохраните его в сеансе Installer.",
-          "Перед установкой убедитесь, что пароль задан в текущем сеансе.",
-        ],
-      },
-      {
-        title: "Срок действия и восстановление",
-        text: "Пароль не входит в файлы проекта и хранится только в активном сеансе Installer. Если пароль существующего хранилища неизвестен, Core пересоздаст его из текущих PEM-сертификатов и ключа при применении.",
-      },
-    ],
-    warning:
-      "Не записывайте пароль в проект, журналы или диагностику. Экран сертификатов не выпускает и не перевыпускает сертификаты.",
-    targetPage: "certificates",
-  },
-  {
-    id: "save-project",
-    category: "project",
-    title: "Создание, открытие и сохранение проекта",
-    summary:
-      "Как сохранить желаемую конфигурацию и проверить именно сохранённую версию.",
-    intro:
-      "Проект хранит желаемую конфигурацию: серверы, настройки сервисов и их размещение. Черновые изменения применяются не сразу — сначала просмотрите их и сохраните проект.",
-    sections: [
-      {
-        title: "Порядок работы",
-        steps: [
-          "Откройте существующий проект или создайте новый.",
-          "Внесите изменения на нужных страницах.",
-          "Просмотрите изменения и нажмите «Сохранить проект».",
-          "Запустите проверку Core для сохранённой версии.",
-        ],
-      },
-    ],
-    warning:
-      "Проверка оценивает сохранённую версию проекта. Несохранённый черновик в неё не входит.",
-    targetPage: "project",
-  },
-  {
-    id: "bundle-catalog",
-    category: "project",
-    title: "Что такое набор установки",
-    summary:
-      "Почему каталог сервисов зависит от привязанного проверенного набора.",
-    intro:
-      "Набор установки содержит проверенное окружение Core и каталог возможностей сервисов. Проект закреплён за определённым набором и каталогом.",
-    sections: [
-      {
-        title: "Если набор недоступен",
-        text: "Настройки проекта сохраняются, но редактирование сервисов, проверка Core и создание плана могут быть недоступны. Используйте набор из доверенного источника и сравнивайте digest перед привязкой.",
-        steps: [
-          "Откройте страницу «Проект».",
-          "Проверьте наличие и совместимость набора.",
-          "Сравните версии и digest до подтверждения привязки.",
-        ],
-      },
-    ],
-    targetPage: "project",
-  },
-  {
-    id: "add-server",
-    category: "servers",
-    title: "Добавление сервера",
-    summary: "Как задать целевой узел и параметры подключения.",
-    intro:
-      "Добавьте сервер проекта, чтобы указать целевой узел, куда планируется установка.",
-    sections: [
-      {
-        title: "Добавить сервер",
-        steps: [
-          "Откройте страницу «Серверы» и нажмите «Добавить сервер».",
-          "Укажите имя узла, адрес и SSH-параметры.",
-          "Выберите сохранённую ссылку на учётные данные или задайте их в предусмотренном интерфейсе.",
-          "Сохраните изменение в черновик, затем сохраните проект целиком.",
-        ],
-      },
-    ],
-    warning:
-      "Пароль и закрытый ключ не записываются в файлы проекта. Для нового узла проверьте SSH-ключ и сравните отпечаток с доверенным источником.",
-    targetPage: "servers",
-  },
-  {
-    id: "execution-node",
-    category: "servers",
-    title: "Подключение и подготовка узла выполнения",
-    summary:
-      "Чем Execution Node отличается от целевых серверов и как проверить его готовность.",
-    intro:
-      "Execution Node — узел, на котором запускаются Core, Python и Ansible. Это отдельная роль от серверов, на которые устанавливаются сервисы.",
-    sections: [
-      {
-        title: "Проверить готовность",
-        steps: [
-          "Выберите нужный узел выполнения.",
-          "Проверьте доступ по SSH и доверие к ключу узла.",
-          "Запустите проверку готовности.",
-          "Устраните показанную ошибку и повторите проверку.",
-        ],
-      },
-    ],
-    warning:
-      "Подготовка узла не означает, что проект проверен или установка запущена. Не подтверждайте неизвестный SSH-отпечаток.",
-    targetPage: "servers",
-  },
-  {
-    id: "service-catalog",
-    category: "services",
-    title: "Каталог и настройки сервисов",
-    summary: "Как добавить в проект возможность из каталога и настроить её.",
-    intro:
-      "Каталог показывает возможности, поддерживаемые текущим набором установки. Наличие сервиса в каталоге не означает, что он включён в проект.",
-    sections: [
-      {
-        title: "Добавить сервис",
-        steps: [
-          "Создайте экземпляр сервиса в проекте.",
-          "Задайте параметры экземпляра.",
-          "Сохраните проект и выполните проверку Core.",
-        ],
-      },
-    ],
-    warning:
-      "Несколько экземпляров одного типа могут иметь разные имена и настройки.",
-    targetPage: "services",
-  },
-  {
-    id: "placement",
-    category: "services",
-    title: "Размещение ролей на серверах",
-    summary: "Как назначить серверы участникам сервисов.",
-    intro:
-      "Топология определяет, какие экземпляры сервисов и роли должны размещаться на серверах проекта.",
-    sections: [
-      {
-        title: "Изменить размещение",
-        steps: [
-          "Откройте страницу «Топология».",
-          "Выберите представление по сервисам или серверам.",
-          "Назначьте участникам подходящие серверы и роли.",
-          "Сохраните проект и проверьте результат через Core.",
-        ],
-      },
-    ],
-    warning:
-      "Размещение — желаемая конфигурация. Итоговые зависимости вычисляет Core при проверке.",
-    targetPage: "topology",
-  },
-  {
-    id: "entry-points",
-    category: "services",
-    title: "Точки входа и адреса сервисов",
-    summary: "Как связать сервисы-поставщики с компонентами-потребителями.",
-    intro:
-      "Точки входа связывают сервисы-поставщики с компонентами, которым нужны их адреса. Настраивайте назначения, поддерживаемые выбранным каталогом.",
-    sections: [
-      {
-        title: "Если назначение не проходит проверку",
-        text: "Итоговые адреса, имена и параметры доступа рассчитывает Core из конфигурации проекта. Исправьте несовместимое или отсутствующее назначение в проекте и повторите проверку.",
-        steps: [
-          "Откройте «Топология» и найдите нужное назначение.",
-          "Проверьте выбранные сервис и потребителя.",
-          "Сохраните проект и повторите проверку Core.",
-        ],
-      },
-    ],
-    warning:
-      "Не подставляйте предполагаемые адреса вручную вместо результата Core.",
-    targetPage: "topology",
-  },
-  {
-    id: "verify-plan",
-    category: "installation",
-    title: "Проверка проекта и план установки",
-    summary:
-      "Почему проверка проекта не запускает установку и что требуется для выполнения.",
-    intro:
-      "Проверка Core анализирует сохранённый проект. Она не запускает Ansible на целевых серверах и не разрешает установку.",
-    sections: [
-      {
-        title: "Подготовить выполнение",
-        steps: [
-          "Сохраните проект.",
-          "Выполните проверку и устраните найденные ошибки.",
-          "Создайте свежий план для текущей версии проекта и узла выполнения.",
-          "Просмотрите действия и обязательные подтверждения, затем одобрите план.",
-          "Запустите выполнение.",
-        ],
-      },
-    ],
-    warning:
-      "Изменение проекта или узла выполнения может сделать проверку или план устаревшими. Повторите соответствующий шаг.",
-    targetPage: "installation",
-  },
-  {
-    id: "review-plan",
-    category: "installation",
-    title: "Просмотр и запуск плана",
-    summary: "Что проверить перед одобрением плана и как оценивать результат.",
-    intro:
-      "План описывает конкретные действия для сохранённой версии проекта и выбранного узла выполнения.",
-    sections: [
-      {
-        title: "Перед запуском",
-        steps: [
-          "Проверьте сервисы, серверы и действия в плане.",
-          "Прочитайте обязательные подтверждения.",
-          "Одобрите актуальный план.",
-          "Запустите выполнение и дождитесь терминального результата.",
-          "Учитывайте результат проверки сервисов отдельно от успешного применения изменений.",
-        ],
-      },
-    ],
-    warning:
-      "Одобрение относится к конкретному плану. После изменения проекта создайте и проверьте новый план.",
-    targetPage: "installation",
-  },
-  {
-    id: "read-logs",
-    category: "logs",
-    title: "Как читать журнал выполнения",
-    summary: "Как найти проблемный этап, узел и код ошибки.",
-    intro:
-      "Журнал показывает события выбранного запуска: этапы, действия, узлы, статусы и безопасные сообщения.",
-    sections: [
-      {
-        title: "Найти нужное событие",
-        steps: [
-          "Откройте «Журналы».",
-          "Выберите запуск по ID и времени.",
-          "Просмотрите статус и сообщения событий.",
-          "Если указана ошибка, найдите её код или описание в разделе «Ошибки».",
-        ],
-      },
-    ],
-    warning:
-      "Сообщения могут быть сокращены или очищены от чувствительных данных. Проверяйте журналы перед передачей другим людям.",
-    targetPage: "logs",
-  },
-  {
-    id: "catalog-unavailable",
-    category: "errors",
-    title: "Почему каталог может быть недоступен?",
-    summary: "Что проверить, если набор или каталог не соответствует проекту.",
-    intro:
-      "Проект закреплён за набором установки и каталогом сервисов. Если проверенный набор отсутствует или его каталог не соответствует проекту, настройки остаются на месте, но некоторые действия недоступны.",
-    sections: [
-      {
-        title: "Что проверить",
-        steps: [
-          "Откройте страницу «Проект» и проверьте состояние привязки.",
-          "Убедитесь, что нужный проверенный набор доступен.",
-          "Сравните версию и digest перед привязкой.",
-        ],
-      },
-    ],
-    warning: "Не меняйте digest вручную.",
-    targetPage: "project",
-  },
-  {
-    id: "refresh-bundle",
-    category: "errors",
-    title: "Как обновить привязку существующего проекта?",
-    summary:
-      "Безопасная последовательность проверки и подтверждения нового набора.",
-    intro:
-      "Обнаружение нового набора само по себе не меняет привязку проекта. Сначала сравните его с текущей привязкой и убедитесь, что набор получен из доверенного источника.",
-    sections: [
-      {
-        title: "Обновить привязку",
-        steps: [
-          "Создайте резервную копию через «Экспортировать проект».",
-          "Поместите полученный набор целиком в папку bundle внутри проекта.",
-          "На странице «Проект» нажмите «Проверить новый набор».",
-          "Сравните текущий и новый digest, версии набора и каталога.",
-          "Если значения ожидаемые, нажмите «Привязать».",
-          "Откройте проект заново, проверьте его через Core и создайте свежий план перед установкой.",
-        ],
-      },
-    ],
-    warning:
-      "Не редактируйте digest вручную в project.yml и не выбирайте набор только по признаку «последний».",
-    targetPage: "project",
-  },
-  {
-    id: "bundle-rebind-after-interrupted-run",
-    category: "errors",
-    title: "Кнопка «Проверить новый набор» не срабатывает после прерывания",
-    summary:
-      "Как проверить прежний запуск и безопасно повторить обнаружение набора.",
-    intro:
-      "Перепривязка набора блокируется, пока предыдущий запуск не подтверждён как завершённый. Поэтому вместо проверки может появиться общее сообщение: «Не удалось открыть проект в режиме только для чтения. Проект на диске не изменён.»",
-    sections: [
-      {
-        title: "Проверить прежний запуск",
-        steps: [
-          "После перезапуска приложения при необходимости заново задайте SSH-учётные данные и подтвердите доверие к отпечатку узла.",
-          "Откройте «Серверы» и в блоке узла выполнения нажмите «Проверить прежний запуск», чтобы получить его фактический статус.",
-          "Если запуск ещё активен, сверьте его ID и нажмите «Подключиться», чтобы восстановить наблюдение. Дождитесь завершения; подключение не запускает установку повторно.",
-          "Когда запуск подтверждён как завершённый, проверьте, что полный проверенный набор находится в папке bundle внутри проекта, и снова нажмите «Проверить новый набор» на странице «Проект».",
-        ],
-      },
-    ],
-    warning:
-      "Не удаляйте записи или журналы запуска и не редактируйте блокировки проекта вручную.",
-    targetPage: "servers",
-  },
-  {
-    id: "execution-not-updating",
-    category: "errors",
-    title: "Если страница «Выполнение» перестала обновляться",
-    summary: "Потеря связи не доказывает, что запущенный процесс остановился.",
-    intro:
-      "Потеря связи с Execution Node не означает, что выполнение завершилось. Сначала проверьте состояние исходного запуска.",
-    sections: [
-      {
-        title: "Проверить состояние",
-        steps: [
-          "Запишите ID выполнения со страницы установки или из журнала.",
-          "Откройте исходный проект. На странице «Серверы» выберите тот же узел выполнения, на котором запускалась установка.",
-          "Если SSH-сессия истекла или приложение перезапускалось, заново задайте учётные данные исходного технического пользователя. Проверьте сервер и подтвердите доверие после независимой сверки отпечатка SSH-ключа.",
-          "В блоке узла выполнения нажмите «Проверить прежний запуск». Сверьте показанные ID запуска, ревизию проекта и фактическое состояние.",
-          "Если запуск найден и доступна кнопка «Подключиться», нажмите её. Приложение откроет «Установка → Выполнение» и восстановит наблюдение за тем же запуском и его событиями. Новый план, утверждение и повторный Start не требуются.",
-          "Сверьте последние события и их время, затем дождитесь терминального результата. Если запуск уже завершён, используйте его фактический результат; повторно запускать установку для восстановления наблюдения не нужно.",
-          "Если запуск недоступен или его состояние не подтверждено, проверьте SSH-доступ и исходный узел выполнения, затем повторите проверку прежнего запуска.",
-        ],
-      },
-    ],
-    warning:
-      "Не запускайте операцию повторно, не удаляйте данные запуска и не считайте результат успешным или ошибочным только по замершему экрану.",
-    targetPage: "servers",
-  },
-  {
-    id: "blocked-plan",
-    category: "errors",
-    title: "Если проверка или план заблокированы",
-    summary: "Как действовать по finding и повторно проверить конфигурацию.",
-    intro:
-      "Найдите сообщение Core или finding, который блокирует действие. В нём указаны причина и область конфигурации, требующая внимания.",
-    sections: [
-      {
-        title: "Устранить блокировку",
-        steps: [
-          "Запишите код и текст ошибки.",
-          "Перейдите к указанному серверу, сервису или настройке.",
-          "Исправьте желаемую конфигурацию и сохраните проект.",
-          "Повторите проверку Core.",
-          "После успешной проверки создайте свежий план.",
-        ],
-      },
-    ],
-    warning:
-      "Не обходите блокировку ручным запуском ролей и не используйте старый план после изменения проекта.",
-    targetPage: "installation",
-  },
-];
-
-const LOGS_PAGE_SIZE = 512;
-const LOGS_VISIBLE_COLUMNS_KEY = "platform-installer.logs.visible-columns";
-
-type EventColumn = {
-  key: string;
-  label: string;
-  value: (event: InstallationEventView) => string;
-};
-
-const eventColumns: EventColumn[] = [
-  { key: "sequence", label: "№", value: (event) => String(event.sequence) },
-  {
-    key: "timestamp",
-    label: "Время",
-    value: (event) => eventTimestampLabel(event.timestamp),
-  },
-  {
-    key: "eventType",
-    label: "Тип события",
-    value: (event) => eventTypeLabel(event.eventType),
-  },
-  {
-    key: "status",
-    label: "Статус",
-    value: (event) => eventStatusLabel(event.status),
-  },
-  {
-    key: "safeMessage",
-    label: "Сообщение",
-    value: (event) => event.safeMessage,
-  },
-  { key: "phaseId", label: "Этап", value: (event) => event.phaseId || "—" },
-  {
-    key: "actionId",
-    label: "Действие",
-    value: (event) => event.actionId || "—",
-  },
-  {
-    key: "serviceDeployment",
-    label: "Развёртывание сервиса",
-    value: (event) => event.serviceDeployment || "—",
-  },
-  { key: "host", label: "Узел", value: (event) => event.host || "—" },
-  {
-    key: "taskRole",
-    label: "Роль задачи",
-    value: (event) => event.task?.role || "—",
-  },
-  {
-    key: "taskName",
-    label: "Задача",
-    value: (event) =>
-      taskNameWithoutRole(event) || (event.task ? "Скрыто" : "—"),
-  },
-  {
-    key: "taskUUID",
-    label: "ID задачи",
-    value: (event) => event.task?.uuid || "—",
-  },
-  {
-    key: "elapsed",
-    label: "Длительность",
-    value: (event) =>
-      event.elapsedMilliseconds === undefined
-        ? "—"
-        : `${event.elapsedMilliseconds} мс`,
-  },
-  {
-    key: "errorCode",
-    label: "Код ошибки",
-    value: (event) => event.errorCode || "—",
-  },
-  {
-    key: "errorSummary",
-    label: "Описание ошибки",
-    value: (event) => event.errorSummary || "—",
-  },
-  {
-    key: "redacted",
-    label: "Редакция данных",
-    value: (event) => (event.redacted ? "Применена" : "Нет"),
-  },
-  { key: "runId", label: "ID запуска", value: (event) => event.runId },
-];
-
-const defaultVisibleColumns = [
-  "timestamp",
-  "eventType",
-  "safeMessage",
-  "serviceDeployment",
-  "host",
-  "status",
-];
-
-function initialVisibleColumns(): string[] {
-  try {
-    const saved = window.sessionStorage.getItem(LOGS_VISIBLE_COLUMNS_KEY);
-    if (saved !== null) {
-      const parsed: unknown = JSON.parse(saved);
-      if (Array.isArray(parsed)) {
-        const selected = new Set(
-          parsed.filter((key): key is string => typeof key === "string"),
-        );
-        return eventColumns
-          .filter((column) => selected.has(column.key))
-          .map((column) => column.key);
-      }
-    }
-  } catch {
-    // Storage may be unavailable in restricted WebView contexts.
-  }
-  return defaultVisibleColumns;
-}
-
-function eventTypeLabel(value: string): string {
-  const labels: Record<string, string> = {
-    RUN_STARTED: "Запуск начат",
-    PHASE_STARTED: "Этап начат",
-    ACTION_STARTED: "Действие начато",
-    TASK_STARTED: "Задача начата",
-    TASK_COMPLETED: "Задача завершена",
-    ACTION_COMPLETED: "Действие завершено",
-    PHASE_COMPLETED: "Этап завершён",
-    RUN_COMPLETED: "Запуск завершён",
-    DIAGNOSTIC: "Диагностика",
-  };
-  return labels[value] || value;
-}
-
-function eventStatusLabel(value: string): string {
-  const labels: Record<string, string> = {
-    PENDING: "Ожидает",
-    RUNNING: "Выполняется",
-    SUCCESS: "Успешно",
-    CHANGED: "Изменено",
-    SKIPPED: "Пропущено",
-    FAILED: "Ошибка",
-    CANCELLED: "Отменено",
-    INTERRUPTED: "Прервано",
-  };
-  return labels[value] || value;
-}
-
-function EventLog({
-  events,
-  runId,
-}: {
-  events: InstallationEventView[];
-  runId?: string;
-}) {
-  const [query, setQuery] = useState("");
-  const [page, setPage] = useState(0);
-  const [selectedSequence, setSelectedSequence] = useState<number>();
-  const [visibleColumns, setVisibleColumns] = useState<string[]>(
-    initialVisibleColumns,
-  );
-  useEffect(() => {
-    try {
-      window.sessionStorage.setItem(
-        LOGS_VISIBLE_COLUMNS_KEY,
-        JSON.stringify(visibleColumns),
-      );
-    } catch {
-      // Keep the selection in component state if storage is unavailable.
-    }
-  }, [visibleColumns]);
-  useEffect(() => {
-    setPage(0);
-    setSelectedSequence(undefined);
-  }, [runId]);
-  const orderedEvents = useMemo(
-    () => [...events].sort((a, b) => b.sequence - a.sequence),
-    [events],
-  );
-  const filteredEvents = useMemo(() => {
-    const needle = query.trim().toLocaleLowerCase("ru");
-    if (!needle) return orderedEvents;
-    return orderedEvents.filter((event) =>
-      eventColumns.some((column) =>
-        column.value(event).toLocaleLowerCase("ru").includes(needle),
-      ),
-    );
-  }, [orderedEvents, query]);
-  const pageCount = Math.max(
-    1,
-    Math.ceil(filteredEvents.length / LOGS_PAGE_SIZE),
-  );
-  const currentPage = Math.min(page, pageCount - 1);
-  const pageEvents = filteredEvents.slice(
-    currentPage * LOGS_PAGE_SIZE,
-    (currentPage + 1) * LOGS_PAGE_SIZE,
-  );
-  const selectedEvent =
-    filteredEvents.find((event) => event.sequence === selectedSequence) ||
-    filteredEvents[0];
-  const visible = eventColumns.filter((column) =>
-    visibleColumns.includes(column.key),
-  );
-
-  return (
-    <>
-      <div className="event-log-toolbar">
-        <label className="event-log-search">
-          Поиск по событиям
-          <input
-            value={query}
-            onChange={(event) => {
-              setQuery(event.target.value);
-              setPage(0);
-            }}
-            placeholder="Сообщение, задача, узел…"
-          />
-        </label>
-        <details className="event-log-columns">
-          <summary>
-            Колонки ({visible.length} из {eventColumns.length})
-          </summary>
-          <fieldset>
-            <legend>Показывать колонки</legend>
-            {eventColumns.map((column) => (
-              <label key={column.key}>
-                <input
-                  type="checkbox"
-                  checked={visibleColumns.includes(column.key)}
-                  onChange={(event) =>
-                    setVisibleColumns((current) =>
-                      event.target.checked
-                        ? [...current, column.key]
-                        : current.filter((key) => key !== column.key),
-                    )
-                  }
-                />
-                {column.label}
-              </label>
-            ))}
-          </fieldset>
-        </details>
-      </div>
-      <div className="event-log-layout">
-        <section
-          className="event-log-table-panel"
-          aria-label="События текущего запуска"
-        >
-          <div className="event-log-table-scroll">
-            <table className="event-log-table">
-              <thead>
-                <tr>
-                  {visible.map((column) => (
-                    <th key={column.key} scope="col">
-                      {column.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {pageEvents.map((event) => (
-                  <tr
-                    key={`${event.runId}-${event.sequence}`}
-                    className={
-                      selectedEvent?.sequence === event.sequence
-                        ? "is-selected"
-                        : ""
-                    }
-                    onClick={() => setSelectedSequence(event.sequence)}
-                  >
-                    {visible.map((column) => (
-                      <td key={column.key} title={column.value(event)}>
-                        {column.value(event)}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {pageEvents.length === 0 && (
-              <p className="event-log-empty">
-                {events.length
-                  ? "По заданным условиям события не найдены."
-                  : "События появятся здесь после запуска плана."}
-              </p>
-            )}
-          </div>
-          <footer className="event-log-pagination">
-            <span>
-              {filteredEvents.length
-                ? `Показаны ${currentPage * LOGS_PAGE_SIZE + 1}–${Math.min((currentPage + 1) * LOGS_PAGE_SIZE, filteredEvents.length)} из ${filteredEvents.length}`
-                : "Нет событий"}
-            </span>
-            <button
-              type="button"
-              onClick={() => setPage((value) => Math.max(0, value - 1))}
-              disabled={currentPage === 0}
-            >
-              Назад
-            </button>
-            <span>
-              Страница {currentPage + 1} из {pageCount}
-            </span>
-            <button
-              type="button"
-              onClick={() =>
-                setPage((value) => Math.min(pageCount - 1, value + 1))
-              }
-              disabled={currentPage >= pageCount - 1}
-            >
-              Далее
-            </button>
-          </footer>
-        </section>
-        <aside className="event-log-details" aria-label="Подробности события">
-          <h2>Детали события</h2>
-          {selectedEvent ? (
-            <>
-              <strong>
-                {eventTypeLabel(selectedEvent.eventType)} ·{" "}
-                {eventStatusLabel(selectedEvent.status)}
-              </strong>
-              <p>{selectedEvent.safeMessage}</p>
-              <dl>
-                <dt>Время</dt>
-                <dd>{eventTimestampLabel(selectedEvent.timestamp)}</dd>
-                <dt>Этап / действие</dt>
-                <dd>
-                  {[selectedEvent.phaseId, selectedEvent.actionId]
-                    .filter(Boolean)
-                    .join(" · ") || "—"}
-                </dd>
-                <dt>Развёртывание сервиса</dt>
-                <dd>{selectedEvent.serviceDeployment || "—"}</dd>
-                <dt>Узел</dt>
-                <dd>{selectedEvent.host || "—"}</dd>
-                <dt>Роль задачи</dt>
-                <dd>{selectedEvent.task?.role || "—"}</dd>
-                <dt>Задача</dt>
-                <dd>
-                  {taskNameWithoutRole(selectedEvent) ||
-                    (selectedEvent.task ? "Скрыто" : "—")}
-                </dd>
-                <dt>ID задачи</dt>
-                <dd>{selectedEvent.task?.uuid || "—"}</dd>
-                <dt>Длительность</dt>
-                <dd>
-                  {selectedEvent.elapsedMilliseconds === undefined
-                    ? "—"
-                    : `${selectedEvent.elapsedMilliseconds} мс`}
-                </dd>
-                <dt>Ошибка</dt>
-                <dd>
-                  {[selectedEvent.errorCode, selectedEvent.errorSummary]
-                    .filter(Boolean)
-                    .join(" · ") || "—"}
-                </dd>
-                <dt>Редакция данных</dt>
-                <dd>{selectedEvent.redacted ? "Применена" : "Нет"}</dd>
-                <dt>ID запуска</dt>
-                <dd>{selectedEvent.runId || runId || "—"}</dd>
-              </dl>
-            </>
-          ) : (
-            <p>Выберите событие, чтобы увидеть подробности.</p>
-          )}
-        </aside>
-      </div>
-    </>
-  );
-}
-
-type Props = {
-  page: string;
-  managed?: ManagedProjectView;
-  projectSettingDraftValues?: Partial<
-    Record<"platform_data_root_directory" | "platform_name_prefix", string>
-  >;
-  onAppendProjectSetting?: (intent: {
-    operation: "SetProjectSetting";
-    setting: "platform_data_root_directory" | "platform_name_prefix";
-    value: string;
-  }) => Promise<boolean>;
-  editError?: EditResult["error"] | null;
-  events: InstallationEventView[];
-  runId?: string;
-  configVersion?: number;
-  serverTypes: Array<{ id: string; displayName: string }>;
-  configError: string | null;
-  onNavigate?: (page: HelpPageId) => void;
-};
-
-function HelpPage({ onNavigate }: { onNavigate?: (page: HelpPageId) => void }) {
-  const [query, setQuery] = useState("");
-  const [categoryId, setCategoryId] = useState<string>();
-  const [articleId, setArticleId] = useState<string>();
-  const normalizedQuery = query.trim().toLocaleLowerCase("ru");
-  const matches = useMemo(() => {
-    const candidates = helpArticles.filter(
-      (article) =>
-        !categoryId || normalizedQuery || article.category === categoryId,
-    );
-    if (!normalizedQuery) return candidates;
-    return candidates.filter((article) => {
-      const category = helpCategories.find(
-        (item) => item.id === article.category,
-      );
-      const searchable = [
-        category?.title,
-        article.title,
-        article.summary,
-        article.intro,
-        article.warning,
-        ...article.sections.flatMap((section) => [
-          section.title,
-          section.text,
-          ...(section.steps || []),
-        ]),
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLocaleLowerCase("ru");
-      return searchable.includes(normalizedQuery);
-    });
-  }, [categoryId, normalizedQuery]);
-  const selectedArticle = matches.find((article) => article.id === articleId);
-  const selectedCategory = helpCategories.find(
-    (item) => item.id === categoryId,
-  );
-
-  const openCategory = (id: string) => {
-    const firstArticle = helpArticles.find(
-      (article) => article.category === id,
-    );
-    setQuery("");
-    setCategoryId(id);
-    setArticleId(firstArticle?.id);
-  };
-  const openArticle = (article: (typeof helpArticles)[number]) => {
-    setCategoryId(article.category);
-    setArticleId(article.id);
-  };
-
-  return (
-    <section className="utility-page help-page" aria-labelledby="help-title">
-      <header className="utility-page-title">
-        <div>
-          <h1 id="help-title">Справка</h1>
-          <p>Инструкции по проекту, настройке и устранению ошибок.</p>
-        </div>
-      </header>
-      <label className="help-search">
-        <span className="visually-hidden">Поиск по справке</span>
-        <input
-          type="search"
-          value={query}
-          onChange={(event) => {
-            setQuery(event.target.value);
-            setArticleId(undefined);
-          }}
-          placeholder="Например: каталог недоступен"
-        />
-      </label>
-
-      {selectedArticle ? (
-        <div className="help-reading-layout">
-          <aside className="help-article-list" aria-label="Статьи раздела">
-            <div className="help-list-heading">
-              <button
-                type="button"
-                className="help-back-link"
-                onClick={() => {
-                  setArticleId(undefined);
-                  setCategoryId(undefined);
-                }}
-              >
-                Все разделы
-              </button>
-              <h2>
-                {normalizedQuery
-                  ? "Результаты поиска"
-                  : selectedCategory?.title}
-              </h2>
-            </div>
-            {matches.map((article) => (
-              <button
-                type="button"
-                key={article.id}
-                className={`help-article-link${article.id === selectedArticle.id ? " is-selected" : ""}`}
-                onClick={() => openArticle(article)}
-              >
-                {article.title}
-              </button>
-            ))}
-          </aside>
-          <article
-            className="utility-card help-article"
-            aria-labelledby="help-article-title"
-          >
-            <div className="help-breadcrumb">
-              <button
-                type="button"
-                className="help-back-link"
-                onClick={() => {
-                  setArticleId(undefined);
-                  setCategoryId(undefined);
-                }}
-              >
-                Справка
-              </button>
-              <span aria-hidden="true">›</span>
-              <button
-                type="button"
-                className="help-back-link"
-                onClick={() => setArticleId(undefined)}
-              >
-                {selectedCategory?.title}
-              </button>
-            </div>
-            <h2 id="help-article-title">{selectedArticle.title}</h2>
-            <p className="help-article-intro">{selectedArticle.intro}</p>
-            {selectedArticle.sections.map((section) => (
-              <section className="help-article-section" key={section.title}>
-                <h3>{section.title}</h3>
-                {section.text && <p>{section.text}</p>}
-                {section.steps && (
-                  <ol>
-                    {section.steps.map((step) => (
-                      <li key={step}>{step}</li>
-                    ))}
-                  </ol>
-                )}
-              </section>
-            ))}
-            {selectedArticle.warning && (
-              <p className="help-warning" role="note">
-                {selectedArticle.warning}
-              </p>
-            )}
-            {selectedArticle.targetPage && onNavigate && (
-              <button
-                type="button"
-                className="help-open-page"
-                onClick={() => onNavigate(selectedArticle.targetPage!)}
-              >
-                Открыть страницу «{helpPageLabels[selectedArticle.targetPage]}»
-              </button>
-            )}
-          </article>
-        </div>
-      ) : normalizedQuery ? (
-        <section
-          className="help-search-results"
-          aria-live="polite"
-          aria-label="Результаты поиска"
-        >
-          <h2>Результаты поиска</h2>
-          {matches.length ? (
-            matches.map((article) => {
-              const category = helpCategories.find(
-                (item) => item.id === article.category,
-              );
-              return (
-                <button
-                  type="button"
-                  className="help-search-result"
-                  key={article.id}
-                  onClick={() => openArticle(article)}
-                >
-                  <span>{category?.title}</span>
-                  <strong>{article.title}</strong>
-                  <small>{article.summary}</small>
-                </button>
-              );
-            })
-          ) : (
-            <p role="status">По этому запросу статьи не найдены.</p>
-          )}
-        </section>
-      ) : categoryId && selectedCategory ? (
-        <section
-          className="help-search-results"
-          aria-labelledby="help-category-title"
-        >
-          <button
-            type="button"
-            className="help-back-link"
-            onClick={() => setCategoryId(undefined)}
-          >
-            Все разделы
-          </button>
-          <h2 id="help-category-title">{selectedCategory.title}</h2>
-          {matches.map((article) => (
-            <button
-              type="button"
-              className="help-search-result"
-              key={article.id}
-              onClick={() => openArticle(article)}
-            >
-              <strong>{article.title}</strong>
-              <small>{article.summary}</small>
-            </button>
-          ))}
-        </section>
-      ) : (
-        <section
-          className="help-category-grid"
-          aria-labelledby="help-categories-title"
-        >
-          <h2 id="help-categories-title">Темы</h2>
-          <div className="help-category-cards">
-            {helpCategories.map((category) => (
-              <button
-                type="button"
-                className="help-category-card"
-                key={category.id}
-                onClick={() => openCategory(category.id)}
-              >
-                <span className="help-category-card-heading">
-                  <strong>{category.title}</strong>
-                  <span aria-hidden="true">›</span>
-                </span>
-                <span className="help-category-description">
-                  {category.description}
-                </span>
-                <small>
-                  Статей:{" "}
-                  {
-                    helpArticles.filter(
-                      (article) => article.category === category.id,
-                    ).length
-                  }
-                </small>
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
-    </section>
-  );
-}
-
-export function UtilityPages({
-  page,
-  managed,
-  projectSettingDraftValues,
-  onAppendProjectSetting,
-  editError,
-  events,
-  runId,
-  configVersion,
-  serverTypes,
-  configError,
-  onNavigate,
-}: Props) {
-  const savedDataRootDirectory = managed?.dataRootDirectory || "/var/lib";
-  const savedNamePrefix = managed?.namePrefix || "";
-  const draftDataRootDirectory =
-    projectSettingDraftValues?.platform_data_root_directory;
-  const draftNamePrefix = projectSettingDraftValues?.platform_name_prefix;
-  const dataRootDirectoryChanged =
-    draftDataRootDirectory !== undefined &&
-    draftDataRootDirectory !== savedDataRootDirectory;
-  const namePrefixChanged =
-    draftNamePrefix !== undefined && draftNamePrefix !== savedNamePrefix;
-  const [dataRootDirectory, setDataRootDirectory] = useState(
-    draftDataRootDirectory || savedDataRootDirectory,
-  );
-  const [namePrefix, setNamePrefix] = useState(
-    draftNamePrefix ?? savedNamePrefix,
-  );
-  const [settingBusy, setSettingBusy] = useState(false);
-  useEffect(() => {
-    setDataRootDirectory(draftDataRootDirectory || savedDataRootDirectory);
-    setNamePrefix(draftNamePrefix ?? savedNamePrefix);
-  }, [
-    managed?.projectRevision,
-    savedDataRootDirectory,
-    savedNamePrefix,
-    draftDataRootDirectory,
-    draftNamePrefix,
-  ]);
-  const stageSetting = async (
-    setting: "platform_data_root_directory" | "platform_name_prefix",
-    value: string,
-  ) => {
-    if (!onAppendProjectSetting || !managed) return;
-    setSettingBusy(true);
-    try {
-      await onAppendProjectSetting({
-        operation: "SetProjectSetting",
-        setting,
-        value,
-      });
-    } finally {
-      setSettingBusy(false);
-    }
-  };
-  if (page === "help") return <HelpPage onNavigate={onNavigate} />;
-
-  if (page === "logs")
-    return (
-      <section className="utility-page" aria-labelledby="logs-title">
-        <header className="utility-page-title">
-          <div>
-            <h1 id="logs-title">Журналы</h1>
-            <p>События текущего выполнения в безопасном представлении.</p>
-          </div>
-          {runId && <span className="utility-status">Выполнение {runId}</span>}
-        </header>
-        <EventLog events={events} runId={runId} />
-      </section>
-    );
-
-  if (page === "about")
-    if (page === "about")
-      return (
-        <section className="utility-page" aria-labelledby="about-title">
-          <header className="utility-page-title">
-            <div>
-              <h1 id="about-title">О программе</h1>
-              <p>Platform Installer V2</p>
-            </div>
-          </header>
-          <section className="utility-card">
-            <h2>Сведения о программе</h2>
-            <dl className="about-details">
-              <dt>Продукт</dt>
-              <dd>Platform Installer V2</dd>
-              <dt>Интерфейс</dt>
-              <dd>Wails · React</dd>
-              <dt>Схема конфигурации приложения</dt>
-              <dd>
-                {configVersion === undefined
-                  ? "Недоступна"
-                  : `v${configVersion}`}
-              </dd>
-              <dt>Типы серверов</dt>
-              <dd>
-                {serverTypes.length
-                  ? serverTypes.m
 @@END

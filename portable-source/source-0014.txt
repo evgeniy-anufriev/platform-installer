@@ -1,3 +1,2290 @@
+@@PORTABLE {"path":"vendor/golang.org/x/net/idna/tables17.0.0.go","mode":420,"size":312250,"sha256":"c1a0162f154cb63bab4de125817927c1d1d8a19326ad7c6adbb69d9d249b9cf3","index":5,"count":7,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
+89, hi: 0x89},
+	{value: 0x0008, lo: 0x8a, hi: 0x8a},
+	{value: 0x0040, lo: 0x8b, hi: 0x8f},
+	{value: 0x05bd, lo: 0x90, hi: 0xba},
+	{value: 0x0040, lo: 0xbb, hi: 0xbc},
+	{value: 0x05bd, lo: 0xbd, hi: 0xbf},
+	// Block 0x44, offset 0x265
+	{value: 0x0000, lo: 0x10},
+	{value: 0x0018, lo: 0x80, hi: 0x87},
+	{value: 0x0040, lo: 0x88, hi: 0x8f},
+	{value: 0x3308, lo: 0x90, hi: 0x92},
+	{value: 0x0018, lo: 0x93, hi: 0x93},
+	{value: 0x3308, lo: 0x94, hi: 0xa0},
+	{value: 0x3008, lo: 0xa1, hi: 0xa1},
+	{value: 0x3308, lo: 0xa2, hi: 0xa8},
+	{value: 0x0008, lo: 0xa9, hi: 0xac},
+	{value: 0x3308, lo: 0xad, hi: 0xad},
+	{value: 0x0008, lo: 0xae, hi: 0xb3},
+	{value: 0x3308, lo: 0xb4, hi: 0xb4},
+	{value: 0x0008, lo: 0xb5, hi: 0xb6},
+	{value: 0x3008, lo: 0xb7, hi: 0xb7},
+	{value: 0x3308, lo: 0xb8, hi: 0xb9},
+	{value: 0x0008, lo: 0xba, hi: 0xba},
+	{value: 0x0040, lo: 0xbb, hi: 0xbf},
+	// Block 0x45, offset 0x276
+	{value: 0x0000, lo: 0x0a},
+	{value: 0x0008, lo: 0x80, hi: 0x87},
+	{value: 0xe045, lo: 0x88, hi: 0x8f},
+	{value: 0x0008, lo: 0x90, hi: 0x95},
+	{value: 0x0040, lo: 0x96, hi: 0x97},
+	{value: 0xe045, lo: 0x98, hi: 0x9d},
+	{value: 0x0040, lo: 0x9e, hi: 0x9f},
+	{value: 0x0008, lo: 0xa0, hi: 0xa7},
+	{value: 0xe045, lo: 0xa8, hi: 0xaf},
+	{value: 0x0008, lo: 0xb0, hi: 0xb7},
+	{value: 0xe045, lo: 0xb8, hi: 0xbf},
+	// Block 0x46, offset 0x281
+	{value: 0x0000, lo: 0x04},
+	{value: 0x0018, lo: 0x80, hi: 0x81},
+	{value: 0x0040, lo: 0x82, hi: 0x8f},
+	{value: 0x3318, lo: 0x90, hi: 0xb0},
+	{value: 0x0040, lo: 0xb1, hi: 0xbf},
+	// Block 0x47, offset 0x286
+	{value: 0x0000, lo: 0x08},
+	{value: 0x0018, lo: 0x80, hi: 0x82},
+	{value: 0xe03d, lo: 0x83, hi: 0x83},
+	{value: 0x0008, lo: 0x84, hi: 0x84},
+	{value: 0x0018, lo: 0x85, hi: 0x88},
+	{value: 0x0851, lo: 0x89, hi: 0x89},
+	{value: 0x0018, lo: 0x8a, hi: 0x8b},
+	{value: 0x0040, lo: 0x8c, hi: 0x8f},
+	{value: 0x0018, lo: 0x90, hi: 0xbf},
+	// Block 0x48, offset 0x28f
+	{value: 0x0000, lo: 0x07},
+	{value: 0x0018, lo: 0x80, hi: 0xab},
+	{value: 0x0859, lo: 0xac, hi: 0xac},
+	{value: 0x0861, lo: 0xad, hi: 0xad},
+	{value: 0x0018, lo: 0xae, hi: 0xae},
+	{value: 0x0869, lo: 0xaf, hi: 0xaf},
+	{value: 0x0871, lo: 0xb0, hi: 0xb0},
+	{value: 0x0018, lo: 0xb1, hi: 0xbf},
+	// Block 0x49, offset 0x297
+	{value: 0x0000, lo: 0x04},
+	{value: 0x0018, lo: 0x80, hi: 0xa8},
+	{value: 0x0a15, lo: 0xa9, hi: 0xa9},
+	{value: 0x0a35, lo: 0xaa, hi: 0xaa},
+	{value: 0x0018, lo: 0xab, hi: 0xbf},
+	// Block 0x4a, offset 0x29c
+	{value: 0x0000, lo: 0x02},
+	{value: 0x0018, lo: 0x80, hi: 0xa9},
+	{value: 0x0040, lo: 0xaa, hi: 0xbf},
+	// Block 0x4b, offset 0x29f
+	{value: 0x0000, lo: 0x03},
+	{value: 0x0018, lo: 0x80, hi: 0x8b},
+	{value: 0x0929, lo: 0x8c, hi: 0x8c},
+	{value: 0x0018, lo: 0x8d, hi: 0xbf},
+	// Block 0x4c, offset 0x2a3
+	{value: 0x0000, lo: 0x05},
+	{value: 0x0018, lo: 0x80, hi: 0xb3},
+	{value: 0x0eb5, lo: 0xb4, hi: 0xb4},
+	{value: 0x0931, lo: 0xb5, hi: 0xb5},
+	{value: 0x0ed5, lo: 0xb6, hi: 0xb6},
+	{value: 0x0018, lo: 0xb7, hi: 0xbf},
+	// Block 0x4d, offset 0x2a9
+	{value: 0x0000, lo: 0x03},
+	{value: 0x0018, lo: 0x80, hi: 0x9b},
+	{value: 0x0939, lo: 0x9c, hi: 0x9c},
+	{value: 0x0018, lo: 0x9d, hi: 0xbf},
+	// Block 0x4e, offset 0x2ad
+	{value: 0x0000, lo: 0x03},
+	{value: 0x0018, lo: 0x80, hi: 0xb3},
+	{value: 0x0040, lo: 0xb4, hi: 0xb5},
+	{value: 0x0018, lo: 0xb6, hi: 0xbf},
+	// Block 0x4f, offset 0x2b1
+	{value: 0x0000, lo: 0x04},
+	{value: 0xe185, lo: 0x80, hi: 0x8f},
+	{value: 0x03f5, lo: 0x90, hi: 0x9f},
+	{value: 0x0ef5, lo: 0xa0, hi: 0xaf},
+	{value: 0x0008, lo: 0xb0, hi: 0xbf},
+	// Block 0x50, offset 0x2b6
+	{value: 0x0000, lo: 0x07},
+	{value: 0x0008, lo: 0x80, hi: 0xa5},
+	{value: 0x0040, lo: 0xa6, hi: 0xa6},
+	{value: 0x0008, lo: 0xa7, hi: 0xa7},
+	{value: 0x0040, lo: 0xa8, hi: 0xac},
+	{value: 0x0008, lo: 0xad, hi: 0xad},
+	{value: 0x0040, lo: 0xae, hi: 0xaf},
+	{value: 0x0008, lo: 0xb0, hi: 0xbf},
+	// Block 0x51, offset 0x2be
+	{value: 0x0000, lo: 0x06},
+	{value: 0x0008, lo: 0x80, hi: 0xa7},
+	{value: 0x0040, lo: 0xa8, hi: 0xae},
+	{value: 0xe075, lo: 0xaf, hi: 0xaf},
+	{value: 0x0018, lo: 0xb0, hi: 0xb0},
+	{value: 0x0040, lo: 0xb1, hi: 0xbe},
+	{value: 0x3b08, lo: 0xbf, hi: 0xbf},
+	// Block 0x52, offset 0x2c5
+	{value: 0x0000, lo: 0x0a},
+	{value: 0x0008, lo: 0x80, hi: 0x96},
+	{value: 0x0040, lo: 0x97, hi: 0x9f},
+	{value: 0x0008, lo: 0xa0, hi: 0xa6},
+	{value: 0x0040, lo: 0xa7, hi: 0xa7},
+	{value: 0x0008, lo: 0xa8, hi: 0xae},
+	{value: 0x0040, lo: 0xaf, hi: 0xaf},
+	{value: 0x0008, lo: 0xb0, hi: 0xb6},
+	{value: 0x0040, lo: 0xb7, hi: 0xb7},
+	{value: 0x0008, lo: 0xb8, hi: 0xbe},
+	{value: 0x0040, lo: 0xbf, hi: 0xbf},
+	// Block 0x53, offset 0x2d0
+	{value: 0x0000, lo: 0x09},
+	{value: 0x0008, lo: 0x80, hi: 0x86},
+	{value: 0x0040, lo: 0x87, hi: 0x87},
+	{value: 0x0008, lo: 0x88, hi: 0x8e},
+	{value: 0x0040, lo: 0x8f, hi: 0x8f},
+	{value: 0x0008, lo: 0x90, hi: 0x96},
+	{value: 0x0040, lo: 0x97, hi: 0x97},
+	{value: 0x0008, lo: 0x98, hi: 0x9e},
+	{value: 0x0040, lo: 0x9f, hi: 0x9f},
+	{value: 0x3308, lo: 0xa0, hi: 0xbf},
+	// Block 0x54, offset 0x2da
+	{value: 0x0000, lo: 0x03},
+	{value: 0x0018, lo: 0x80, hi: 0xae},
+	{value: 0x0008, lo: 0xaf, hi: 0xaf},
+	{value: 0x0018, lo: 0xb0, hi: 0xbf},
+	// Block 0x55, offset 0x2de
+	{value: 0x0000, lo: 0x02},
+	{value: 0x0018, lo: 0x80, hi: 0x9d},
+	{value: 0x0040, lo: 0x9e, hi: 0xbf},
+	// Block 0x56, offset 0x2e1
+	{value: 0x0000, lo: 0x05},
+	{value: 0x0018, lo: 0x80, hi: 0x99},
+	{value: 0x0040, lo: 0x9a, hi: 0x9a},
+	{value: 0x0018, lo: 0x9b, hi: 0x9e},
+	{value: 0x0f2d, lo: 0x9f, hi: 0x9f},
+	{value: 0x0018, lo: 0xa0, hi: 0xbf},
+	// Block 0x57, offset 0x2e7
+	{value: 0x0000, lo: 0x03},
+	{value: 0x0018, lo: 0x80, hi: 0xb2},
+	{value: 0x0f4d, lo: 0xb3, hi: 0xb3},
+	{value: 0x0040, lo: 0xb4, hi: 0xbf},
+	// Block 0x58, offset 0x2eb
+	{value: 0x0020, lo: 0x01},
+	{value: 0x0f6d, lo: 0x80, hi: 0xbf},
+	// Block 0x59, offset 0x2ed
+	{value: 0x0020, lo: 0x02},
+	{value: 0x176d, lo: 0x80, hi: 0x8f},
+	{value: 0x194d, lo: 0x90, hi: 0xbf},
+	// Block 0x5a, offset 0x2f0
+	{value: 0x0020, lo: 0x01},
+	{value: 0x1f4d, lo: 0x80, hi: 0xbf},
+	// Block 0x5b, offset 0x2f2
+	{value: 0x0000, lo: 0x02},
+	{value: 0x0040, lo: 0x80, hi: 0x80},
+	{value: 0x0008, lo: 0x81, hi: 0xbf},
+	// Block 0x5c, offset 0x2f5
+	{value: 0x0000, lo: 0x09},
+	{value: 0x0008, lo: 0x80, hi: 0x96},
+	{value: 0x0040, lo: 0x97, hi: 0x98},
+	{value: 0x3308, lo: 0x99, hi: 0x9a},
+	{value: 0x0969, lo: 0x9b, hi: 0x9b},
+	{value: 0x0971, lo: 0x9c, hi: 0x9c},
+	{value: 0x0008, lo: 0x9d, hi: 0x9e},
+	{value: 0x0979, lo: 0x9f, hi: 0x9f},
+	{value: 0x0018, lo: 0xa0, hi: 0xa0},
+	{value: 0x0008, lo: 0xa1, hi: 0xbf},
+	// Block 0x5d, offset 0x2ff
+	{value: 0x0000, lo: 0x02},
+	{value: 0x0008, lo: 0x80, hi: 0xbe},
+	{value: 0x0981, lo: 0xbf, hi: 0xbf},
+	// Block 0x5e, offset 0x302
+	{value: 0x0000, lo: 0x0e},
+	{value: 0x0040, lo: 0x80, hi: 0x84},
+	{value: 0x0008, lo: 0x85, hi: 0xaf},
+	{value: 0x0040, lo: 0xb0, hi: 0xb0},
+	{value: 0x2a6d, lo: 0xb1, hi: 0xb1},
+	{value: 0x2a8d, lo: 0xb2, hi: 0xb2},
+	{value: 0x2aad, lo: 0xb3, hi: 0xb3},
+	{value: 0x2acd, lo: 0xb4, hi: 0xb4},
+	{value: 0x2aad, lo: 0xb5, hi: 0xb5},
+	{value: 0x2aed, lo: 0xb6, hi: 0xb6},
+	{value: 0x2b0d, lo: 0xb7, hi: 0xb7},
+	{value: 0x2b2d, lo: 0xb8, hi: 0xb9},
+	{value: 0x2b4d, lo: 0xba, hi: 0xbb},
+	{value: 0x2b6d, lo: 0xbc, hi: 0xbd},
+	{value: 0x2b4d, lo: 0xbe, hi: 0xbf},
+	// Block 0x5f, offset 0x311
+	{value: 0x0000, lo: 0x03},
+	{value: 0x0018, lo: 0x80, hi: 0xa5},
+	{value: 0x0040, lo: 0xa6, hi: 0xaf},
+	{value: 0x0008, lo: 0xb0, hi: 0xbf},
+	// Block 0x60, offset 0x315
+	{value: 0x0008, lo: 0x03},
+	{value: 0x0989, lo: 0x80, hi: 0x9e},
+	{value: 0x0040, lo: 0x9f, hi: 0x9f},
+	{value: 0x0a81, lo: 0xa0, hi: 0xbf},
+	// Block 0x61, offset 0x319
+	{value: 0x0008, lo: 0x01},
+	{value: 0x0d19, lo: 0x80, hi: 0xbf},
+	// Block 0x62, offset 0x31b
+	{value: 0x0008, lo: 0x08},
+	{value: 0x0f19, lo: 0x80, hi: 0xb0},
+	{value: 0x407d, lo: 0xb1, hi: 0xb1},
+	{value: 0x10a1, lo: 0xb2, hi: 0xb3},
+	{value: 0x409d, lo: 0xb4, hi: 0xb4},
+	{value: 0x10b1, lo: 0xb5, hi: 0xb7},
+	{value: 0x40bd, lo: 0xb8, hi: 0xb8},
+	{value: 0x40bd, lo: 0xb9, hi: 0xb9},
+	{value: 0x10c9, lo: 0xba, hi: 0xbf},
+	// Block 0x63, offset 0x324
+	{value: 0x0000, lo: 0x03},
+	{value: 0x0008, lo: 0x80, hi: 0x8c},
+	{value: 0x0040, lo: 0x8d, hi: 0x8f},
+	{value: 0x0018, lo: 0x90, hi: 0xbf},
+	// Block 0x64, offset 0x328
+	{value: 0x0000, lo: 0x04},
+	{value: 0x0018, lo: 0x80, hi: 0x86},
+	{value: 0x0040, lo: 0x87, hi: 0x8f},
+	{value: 0x0008, lo: 0x90, hi: 0xbd},
+	{value: 0x0018, lo: 0xbe, hi: 0xbf},
+	// Block 0x65, offset 0x32d
+	{value: 0x0000, lo: 0x04},
+	{value: 0x0008, lo: 0x80, hi: 0x8c},
+	{value: 0x0018, lo: 0x8d, hi: 0x8f},
+	{value: 0x0008, lo: 0x90, hi: 0xab},
+	{value: 0x0040, lo: 0xac, hi: 0xbf},
+	// Block 0x66, offset 0x332
+	{value: 0x0000, lo: 0x05},
+	{value: 0x0008, lo: 0x80, hi: 0xa5},
+	{value: 0x0018, lo: 0xa6, hi: 0xaf},
+	{value: 0x3308, lo: 0xb0, hi: 0xb1},
+	{value: 0x0018, lo: 0xb2, hi: 0xb7},
+	{value: 0x0040, lo: 0xb8, hi: 0xbf},
+	// Block 0x67, offset 0x338
+	{value: 0x0000, lo: 0x0f},
+	{value: 0x0008, lo: 0x80, hi: 0x81},
+	{value: 0x3308, lo: 0x82, hi: 0x82},
+	{value: 0x0008, lo: 0x83, hi: 0x85},
+	{value: 0x3b08, lo: 0x86, hi: 0x86},
+	{value: 0x0008, lo: 0x87, hi: 0x8a},
+	{value: 0x3308, lo: 0x8b, hi: 0x8b},
+	{value: 0x0008, lo: 0x8c, hi: 0xa2},
+	{value: 0x3008, lo: 0xa3, hi: 0xa4},
+	{value: 0x3308, lo: 0xa5, hi: 0xa6},
+	{value: 0x3008, lo: 0xa7, hi: 0xa7},
+	{value: 0x0018, lo: 0xa8, hi: 0xab},
+	{value: 0x3b08, lo: 0xac, hi: 0xac},
+	{value: 0x0040, lo: 0xad, hi: 0xaf},
+	{value: 0x0018, lo: 0xb0, hi: 0xb9},
+	{value: 0x0040, lo: 0xba, hi: 0xbf},
+	// Block 0x68, offset 0x348
+	{value: 0x0000, lo: 0x05},
+	{value: 0x0208, lo: 0x80, hi: 0xb1},
+	{value: 0x0108, lo: 0xb2, hi: 0xb2},
+	{value: 0x0008, lo: 0xb3, hi: 0xb3},
+	{value: 0x0018, lo: 0xb4, hi: 0xb7},
+	{value: 0x0040, lo: 0xb8, hi: 0xbf},
+	// Block 0x69, offset 0x34e
+	{value: 0x0000, lo: 0x03},
+	{value: 0x3008, lo: 0x80, hi: 0x81},
+	{value: 0x0008, lo: 0x82, hi: 0xb3},
+	{value: 0x3008, lo: 0xb4, hi: 0xbf},
+	// Block 0x6a, offset 0x352
+	{value: 0x0000, lo: 0x0e},
+	{value: 0x3008, lo: 0x80, hi: 0x83},
+	{value: 0x3b08, lo: 0x84, hi: 0x84},
+	{value: 0x3308, lo: 0x85, hi: 0x85},
+	{value: 0x0040, lo: 0x86, hi: 0x8d},
+	{value: 0x0018, lo: 0x8e, hi: 0x8f},
+	{value: 0x0008, lo: 0x90, hi: 0x99},
+	{value: 0x0040, lo: 0x9a, hi: 0x9f},
+	{value: 0x3308, lo: 0xa0, hi: 0xb1},
+	{value: 0x0008, lo: 0xb2, hi: 0xb7},
+	{value: 0x0018, lo: 0xb8, hi: 0xba},
+	{value: 0x0008, lo: 0xbb, hi: 0xbb},
+	{value: 0x0018, lo: 0xbc, hi: 0xbc},
+	{value: 0x0008, lo: 0xbd, hi: 0xbe},
+	{value: 0x3308, lo: 0xbf, hi: 0xbf},
+	// Block 0x6b, offset 0x361
+	{value: 0x0000, lo: 0x04},
+	{value: 0x0008, lo: 0x80, hi: 0xa5},
+	{value: 0x3308, lo: 0xa6, hi: 0xad},
+	{value: 0x0018, lo: 0xae, hi: 0xaf},
+	{value: 0x0008, lo: 0xb0, hi: 0xbf},
+	// Block 0x6c, offset 0x366
+	{value: 0x0000, lo: 0x07},
+	{value: 0x0008, lo: 0x80, hi: 0x86},
+	{value: 0x3308, lo: 0x87, hi: 0x91},
+	{value: 0x3008, lo: 0x92, hi: 0x92},
+	{value: 0x3808, lo: 0x93, hi: 0x93},
+	{value: 0x0040, lo: 0x94, hi: 0x9e},
+	{value: 0x0018, lo: 0x9f, hi: 0xbc},
+	{value: 0x0040, lo: 0xbd, hi: 0xbf},
+	// Block 0x6d, offset 0x36e
+	{value: 0x0000, lo: 0x09},
+	{value: 0x3308, lo: 0x80, hi: 0x82},
+	{value: 0x3008, lo: 0x83, hi: 0x83},
+	{value: 0x0008, lo: 0x84, hi: 0xb2},
+	{value: 0x3308, lo: 0xb3, hi: 0xb3},
+	{value: 0x3008, lo: 0xb4, hi: 0xb5},
+	{value: 0x3308, lo: 0xb6, hi: 0xb9},
+	{value: 0x3008, lo: 0xba, hi: 0xbb},
+	{value: 0x3308, lo: 0xbc, hi: 0xbd},
+	{value: 0x3008, lo: 0xbe, hi: 0xbf},
+	// Block 0x6e, offset 0x378
+	{value: 0x0000, lo: 0x0a},
+	{value: 0x3808, lo: 0x80, hi: 0x80},
+	{value: 0x0018, lo: 0x81, hi: 0x8d},
+	{value: 0x0040, lo: 0x8e, hi: 0x8e},
+	{value: 0x0008, lo: 0x8f, hi: 0x99},
+	{value: 0x0040, lo: 0x9a, hi: 0x9d},
+	{value: 0x0018, lo: 0x9e, hi: 0x9f},
+	{value: 0x0008, lo: 0xa0, hi: 0xa4},
+	{value: 0x3308, lo: 0xa5, hi: 0xa5},
+	{value: 0x0008, lo: 0xa6, hi: 0xbe},
+	{value: 0x0040, lo: 0xbf, hi: 0xbf},
+	// Block 0x6f, offset 0x383
+	{value: 0x0000, lo: 0x07},
+	{value: 0x0008, lo: 0x80, hi: 0xa8},
+	{value: 0x3308, lo: 0xa9, hi: 0xae},
+	{value: 0x3008, lo: 0xaf, hi: 0xb0},
+	{value: 0x3308, lo: 0xb1, hi: 0xb2},
+	{value: 0x3008, lo: 0xb3, hi: 0xb4},
+	{value: 0x3308, lo: 0xb5, hi: 0xb6},
+	{value: 0x0040, lo: 0xb7, hi: 0xbf},
+	// Block 0x70, offset 0x38b
+	{value: 0x0000, lo: 0x10},
+	{value: 0x0008, lo: 0x80, hi: 0x82},
+	{value: 0x3308, lo: 0x83, hi: 0x83},
+	{value: 0x0008, lo: 0x84, hi: 0x8b},
+	{value: 0x3308, lo: 0x8c, hi: 0x8c},
+	{value: 0x3008, lo: 0x8d, hi: 0x8d},
+	{value: 0x0040, lo: 0x8e, hi: 0x8f},
+	{value: 0x0008, lo: 0x90, hi: 0x99},
+	{value: 0x0040, lo: 0x9a, hi: 0x9b},
+	{value: 0x0018, lo: 0x9c, hi: 0x9f},
+	{value: 0x0008, lo: 0xa0, hi: 0xb6},
+	{value: 0x0018, lo: 0xb7, hi: 0xb9},
+	{value: 0x0008, lo: 0xba, hi: 0xba},
+	{value: 0x3008, lo: 0xbb, hi: 0xbb},
+	{value: 0x3308, lo: 0xbc, hi: 0xbc},
+	{value: 0x3008, lo: 0xbd, hi: 0xbd},
+	{value: 0x0008, lo: 0xbe, hi: 0xbf},
+	// Block 0x71, offset 0x39c
+	{value: 0x0000, lo: 0x08},
+	{value: 0x0008, lo: 0x80, hi: 0xaf},
+	{value: 0x3308, lo: 0xb0, hi: 0xb0},
+	{value: 0x0008, lo: 0xb1, hi: 0xb1},
+	{value: 0x3308, lo: 0xb2, hi: 0xb4},
+	{value: 0x0008, lo: 0xb5, hi: 0xb6},
+	{value: 0x3308, lo: 0xb7, hi: 0xb8},
+	{value: 0x0008, lo: 0xb9, hi: 0xbd},
+	{value: 0x3308, lo: 0xbe, hi: 0xbf},
+	// Block 0x72, offset 0x3a5
+	{value: 0x0000, lo: 0x0f},
+	{value: 0x0008, lo: 0x80, hi: 0x80},
+	{value: 0x3308, lo: 0x81, hi: 0x81},
+	{value: 0x0008, lo: 0x82, hi: 0x82},
+	{value: 0x0040, lo: 0x83, hi: 0x9a},
+	{value: 0x0008, lo: 0x9b, hi: 0x9d},
+	{value: 0x0018, lo: 0x9e, hi: 0x9f},
+	{value: 0x0008, lo: 0xa0, hi: 0xaa},
+	{value: 0x3008, lo: 0xab, hi: 0xab},
+	{value: 0x3308, lo: 0xac, hi: 0xad},
+	{value: 0x3008, lo: 0xae, hi: 0xaf},
+	{value: 0x0018, lo: 0xb0, hi: 0xb1},
+	{value: 0x0008, lo: 0xb2, hi: 0xb4},
+	{value: 0x3008, lo: 0xb5, hi: 0xb5},
+	{value: 0x3b08, lo: 0xb6, hi: 0xb6},
+	{value: 0x0040, lo: 0xb7, hi: 0xbf},
+	// Block 0x73, offset 0x3b5
+	{value: 0x0000, lo: 0x0c},
+	{value: 0x0040, lo: 0x80, hi: 0x80},
+	{value: 0x0008, lo: 0x81, hi: 0x86},
+	{value: 0x0040, lo: 0x87, hi: 0x88},
+	{value: 0x0008, lo: 0x89, hi: 0x8e},
+	{value: 0x0040, lo: 0x8f, hi: 0x90},
+	{value: 0x0008, lo: 0x91, hi: 0x96},
+	{value: 0x0040, lo: 0x97, hi: 0x9f},
+	{value: 0x0008, lo: 0xa0, hi: 0xa6},
+	{value: 0x0040, lo: 0xa7, hi: 0xa7},
+	{value: 0x0008, lo: 0xa8, hi: 0xae},
+	{value: 0x0040, lo: 0xaf, hi: 0xaf},
+	{value: 0x0008, lo: 0xb0, hi: 0xbf},
+	// Block 0x74, offset 0x3c2
+	{value: 0x0000, lo: 0x0b},
+	{value: 0x0008, lo: 0x80, hi: 0x9a},
+	{value: 0x0018, lo: 0x9b, hi: 0x9b},
+	{value: 0x44d5, lo: 0x9c, hi: 0x9c},
+	{value: 0x44ed, lo: 0x9d, hi: 0x9d},
+	{value: 0x0941, lo: 0x9e, hi: 0x9e},
+	{value: 0xe06d, lo: 0x9f, hi: 0x9f},
+	{value: 0x0008, lo: 0xa0, hi: 0xa8},
+	{value: 0x1409, lo: 0xa9, hi: 0xa9},
+	{value: 0x0018, lo: 0xaa, hi: 0xab},
+	{value: 0x0040, lo: 0xac, hi: 0xaf},
+	{value: 0x4505, lo: 0xb0, hi: 0xbf},
+	// Block 0x75, offset 0x3ce
+	{value: 0x0000, lo: 0x04},
+	{value: 0x4525, lo: 0x80, hi: 0x8f},
+	{value: 0x4545, lo: 0x90, hi: 0x9f},
+	{value: 0x4565, lo: 0xa0, hi: 0xaf},
+	{value: 0x4545, lo: 0xb0, hi: 0xbf},
+	// Block 0x76, offset 0x3d3
+	{value: 0x0000, lo: 0x0c},
+	{value: 0x0008, lo: 0x80, hi: 0xa2},
+	{value: 0x3008, lo: 0xa3, hi: 0xa4},
+	{value: 0x3308, lo: 0xa5, hi: 0xa5},
+	{value: 0x3008, lo: 0xa6, hi: 0xa7},
+	{value: 0x3308, lo: 0xa8, hi: 0xa8},
+	{value: 0x3008, lo: 0xa9, hi: 0xaa},
+	{value: 0x0018, lo: 0xab, hi: 0xab},
+	{value: 0x3008, lo: 0xac, hi: 0xac},
+	{value: 0x3b08, lo: 0xad, hi: 0xad},
+	{value: 0x0040, lo: 0xae, hi: 0xaf},
+	{value: 0x0008, lo: 0xb0, hi: 0xb9},
+	{value: 0x0040, lo: 0xba, hi: 0xbf},
+	// Block 0x77, offset 0x3e0
+	{value: 0x0000, lo: 0x03},
+	{value: 0x0008, lo: 0x80, hi: 0xa3},
+	{value: 0x0040, lo: 0xa4, hi: 0xaf},
+	{value: 0x0018, lo: 0xb0, hi: 0xbf},
+	// Block 0x78, offset 0x3e4
+	{value: 0x0000, lo: 0x04},
+	{value: 0x0018, lo: 0x80, hi: 0x86},
+	{value: 0x0040, lo: 0x87, hi: 0x8a},
+	{value: 0x0018, lo: 0x8b, hi: 0xbb},
+	{value: 0x0040, lo: 0xbc, hi: 0xbf},
+	// Block 0x79, offset 0x3e9
+	{value: 0x0000, lo: 0x01},
+	{value: 0x0040, lo: 0x80, hi: 0xbf},
+	// Block 0x7a, offset 0x3eb
+	{value: 0x0020, lo: 0x01},
+	{value: 0x4585, lo: 0x80, hi: 0xbf},
+	// Block 0x7b, offset 0x3ed
+	{value: 0x0020, lo: 0x03},
+	{value: 0x4d85, lo: 0x80, hi: 0x94},
+	{value: 0x4b45, lo: 0x95, hi: 0x95},
+	{value: 0x5025, lo: 0x96, hi: 0xbf},
+	// Block 0x7c, offset 0x3f1
+	{value: 0x0020, lo: 0x01},
+	{value: 0x5565, lo: 0x80, hi: 0xbf},
+	// Block 0x7d, offset 0x3f3
+	{value: 0x0020, lo: 0x03},
+	{value: 0x5d65, lo: 0x80, hi: 0x84},
+	{value: 0x56c5, lo: 0x85, hi: 0x85},
+	{value: 0x5e05, lo: 0x86, hi: 0xbf},
+	// Block 0x7e, offset 0x3f7
+	{value: 0x0020, lo: 0x08},
+	{value: 0x6bc5, lo: 0x80, hi: 0x8f},
+	{value: 0x6d85, lo: 0x90, hi: 0x90},
+	{value: 0x6dc5, lo: 0x91, hi: 0xab},
+	{value: 0x1411, lo: 0xac, hi: 0xac},
+	{value: 0x7125, lo: 0xad, hi: 0xad},
+	{value: 0x0040, lo: 0xae, hi: 0xae},
+	{value: 0x0040, lo: 0xaf, hi: 0xaf},
+	{value: 0x7145, lo: 0xb0, hi: 0xbf},
+	// Block 0x7f, offset 0x400
+	{value: 0x0020, lo: 0x05},
+	{value: 0x7345, lo: 0x80, hi: 0xad},
+	{value: 0x65a5, lo: 0xae, hi: 0xae},
+	{value: 0x7905, lo: 0xaf, hi: 0xb5},
+	{value: 0x6fc5, lo: 0xb6, hi: 0xb6},
+	{value: 0x79e5, lo: 0xb7, hi: 0xbf},
+	// Block 0x80, offset 0x406
+	{value: 0x0008, lo: 0x03},
+	{value: 0x1761, lo: 0x80, hi: 0x82},
+	{value: 0x1751, lo: 0x83, hi: 0x83},
+	{value: 0x1779, lo: 0x84, hi: 0xbf},
+	// Block 0x81, offset 0x40a
+	{value: 0x0008, lo: 0x0f},
+	{value: 0x1d91, lo: 0x80, hi: 0x83},
+	{value: 0x1da9, lo: 0x84, hi: 0x85},
+	{value: 0x1db1, lo: 0x86, hi: 0x87},
+	{value: 0x1db9, lo: 0x88, hi: 0x8f},
+	{value: 0x0018, lo: 0x90, hi: 0x90},
+	{value: 0x0018, lo: 0x91, hi: 0x91},
+	{value: 0x1df9, lo: 0x92, hi: 0x97},
+	{value: 0x1e21, lo: 0x98, hi: 0x9c},
+	{value: 0x1e41, lo: 0x9d, hi: 0xb3},
+	{value: 0x1d81, lo: 0xb4, hi: 0xb4},
+	{value: 0x1d91, lo: 0xb5, hi: 0xb5},
+	{value: 0x1ef9, lo: 0xb6, hi: 0xbb},
+	{value: 0x1f19, lo: 0xbc, hi: 0xbc},
+	{value: 0x1f09, lo: 0xbd, hi: 0xbd},
+	{value: 0x1f29, lo: 0xbe, hi: 0xbf},
+	// Block 0x82, offset 0x41a
+	{value: 0x0000, lo: 0x09},
+	{value: 0x0008, lo: 0x80, hi: 0x8b},
+	{value: 0x0040, lo: 0x8c, hi: 0x8c},
+	{value: 0x0008, lo: 0x8d, hi: 0xa6},
+	{value: 0x0040, lo: 0xa7, hi: 0xa7},
+	{value: 0x0008, lo: 0xa8, hi: 0xba},
+	{value: 0x0040, lo: 0xbb, hi: 0xbb},
+	{value: 0x0008, lo: 0xbc, hi: 0xbd},
+	{value: 0x0040, lo: 0xbe, hi: 0xbe},
+	{value: 0x0008, lo: 0xbf, hi: 0xbf},
+	// Block 0x83, offset 0x424
+	{value: 0x0000, lo: 0x04},
+	{value: 0x0008, lo: 0x80, hi: 0x8d},
+	{value: 0x0040, lo: 0x8e, hi: 0x8f},
+	{value: 0x0008, lo: 0x90, hi: 0x9d},
+	{value: 0x0040, lo: 0x9e, hi: 0xbf},
+	// Block 0x84, offset 0x429
+	{value: 0x0000, lo: 0x02},
+	{value: 0x0008, lo: 0x80, hi: 0xba},
+	{value: 0x0040, lo: 0xbb, hi: 0xbf},
+	// Block 0x85, offset 0x42c
+	{value: 0x0000, lo: 0x05},
+	{value: 0x0018, lo: 0x80, hi: 0x82},
+	{value: 0x0040, lo: 0x83, hi: 0x86},
+	{value: 0x0018, lo: 0x87, hi: 0xb3},
+	{value: 0x0040, lo: 0xb4, hi: 0xb6},
+	{value: 0x0018, lo: 0xb7, hi: 0xbf},
+	// Block 0x86, offset 0x432
+	{value: 0x0000, lo: 0x06},
+	{value: 0x0018, lo: 0x80, hi: 0x8e},
+	{value: 0x0040, lo: 0x8f, hi: 0x8f},
+	{value: 0x0018, lo: 0x90, hi: 0x9c},
+	{value: 0x0040, lo: 0x9d, hi: 0x9f},
+	{value: 0x0018, lo: 0xa0, hi: 0xa0},
+	{value: 0x0040, lo: 0xa1, hi: 0xbf},
+	// Block 0x87, offset 0x439
+	{value: 0x0000, lo: 0x04},
+	{value: 0x0040, lo: 0x80, hi: 0x8f},
+	{value: 0x0018, lo: 0x90, hi: 0xbc},
+	{value: 0x3308, lo: 0xbd, hi: 0xbd},
+	{value: 0x0040, lo: 0xbe, hi: 0xbf},
+	// Block 0x88, offset 0x43e
+	{value: 0x0000, lo: 0x03},
+	{value: 0x0008, lo: 0x80, hi: 0x9c},
+	{value: 0x0040, lo: 0x9d, hi: 0x9f},
+	{value: 0x0008, lo: 0xa0, hi: 0xbf},
+	// Block 0x89, offset 0x442
+	{value: 0x0000, lo: 0x05},
+	{value: 0x0008, lo: 0x80, hi: 0x90},
+	{value: 0x0040, lo: 0x91, hi: 0x9f},
+	{value: 0x3308, lo: 0xa0, hi: 0xa0},
+	{value: 0x0018, lo: 0xa1, hi: 0xbb},
+	{value: 0x0040, lo: 0xbc, hi: 0xbf},
+	// Block 0x8a, offset 0x448
+	{value: 0x0000, lo: 0x04},
+	{value: 0x0008, lo: 0x80, hi: 0x9f},
+	{value: 0x0018, lo: 0xa0, hi: 0xa3},
+	{value: 0x0040, lo: 0xa4, hi: 0xac},
+	{value: 0x0008, lo: 0xad, hi: 0xbf},
+	// Block 0x8b, offset 0x44d
+	{value: 0x0000, lo: 0x08},
+	{value: 0x0008, lo: 0x80, hi: 0x80},
+	{value: 0x0018, lo: 0x81, hi: 0x81},
+	{value: 0x0008, lo: 0x82, hi: 0x89},
+	{value: 0x0018, lo: 0x8a, hi: 0x8a},
+	{value: 0x0040, lo: 0x8b, hi: 0x8f},
+	{value: 0x0008, lo: 0x90, hi: 0xb5},
+	{value: 0x3308, lo: 0xb6, hi: 0xba},
+	{value: 0x0040, lo: 0xbb, hi: 0xbf},
+	// Block 0x8c, offset 0x456
+	{value: 0x0000, lo: 0x04},
+	{value: 0x0008, lo: 0x80, hi: 0x9d},
+	{value: 0x0040, lo: 0x9e, hi: 0x9e},
+	{value: 0x0018, lo: 0x9f, hi: 0x9f},
+	{value: 0x0008, lo: 0xa0, hi: 0xbf},
+	// Block 0x8d, offset 0x45b
+	{value: 0x0000, lo: 0x05},
+	{value: 0x0008, lo: 0x80, hi: 0x83},
+	{value: 0x0040, lo: 0x84, hi: 0x87},
+	{value: 0x0008, lo: 0x88, hi: 0x8f},
+	{value: 0x0018, lo: 0x90, hi: 0x95},
+	{value: 0x0040, lo: 0x96, hi: 0xbf},
+	// Block 0x8e, offset 0x461
+	{value: 0x0000, lo: 0x06},
+	{value: 0xe145, lo: 0x80, hi: 0x87},
+	{value: 0xe1c5, lo: 0x88, hi: 0x8f},
+	{value: 0xe145, lo: 0x90, hi: 0x97},
+	{value: 0x8b45, lo: 0x98, hi: 0x9f},
+	{value: 0x8b5d, lo: 0xa0, hi: 0xa7},
+	{value: 0x0008, lo: 0xa8, hi: 0xbf},
+	// Block 0x8f, offset 0x468
+	{value: 0x0000, lo: 0x06},
+	{value: 0x0008, lo: 0x80, hi: 0x9d},
+	{value: 0x0040, lo: 0x9e, hi: 0x9f},
+	{value: 0x0008, lo: 0xa0, hi: 0xa9},
+	{value: 0x0040, lo: 0xaa, hi: 0xaf},
+	{value: 0x8b5d, lo: 0xb0, hi: 0xb7},
+	{value: 0x8b45, lo: 0xb8, hi: 0xbf},
+	// Block 0x90, offset 0x46f
+	{value: 0x0000, lo: 0x06},
+	{value: 0xe145, lo: 0x80, hi: 0x87},
+	{value: 0xe1c5, lo: 0x88, hi: 0x8f},
+	{value: 0xe145, lo: 0x90, hi: 0x93},
+	{value: 0x0040, lo: 0x94, hi: 0x97},
+	{value: 0x0008, lo: 0x98, hi: 0xbb},
+	{value: 0x0040, lo: 0xbc, hi: 0xbf},
+	// Block 0x91, offset 0x476
+	{value: 0x0000, lo: 0x03},
+	{value: 0x0008, lo: 0x80, hi: 0xa7},
+	{value: 0x0040, lo: 0xa8, hi: 0xaf},
+	{value: 0x0008, lo: 0xb0, hi: 0xbf},
+	// Block 0x92, offset 0x47a
+	{value: 0x0000, lo: 0x02},
+	{value: 0x0008, lo: 0x80, hi: 0xb3},
+	{value: 0x0040, lo: 0xb4, hi: 0xbf},
+	// Block 0x93, offset 0x47d
+	{value: 0x0000, lo: 0x02},
+	{value: 0x0008, lo: 0x80, hi: 0xb6},
+	{value: 0x0040, lo: 0xb7, hi: 0xbf},
+	// Block 0x94, offset 0x480
+	{value: 0x0000, lo: 0x04},
+	{value: 0x0008, lo: 0x80, hi: 0x95},
+	{value: 0x0040, lo: 0x96, hi: 0x9f},
+	{value: 0x0008, lo: 0xa0, hi: 0xa7},
+	{value: 0x0040, lo: 0xa8, hi: 0xbf},
+	// Block 0x95, offset 0x485
+	{value: 0x0000, lo: 0x0b},
+	{value: 0x0808, lo: 0x80, hi: 0x85},
+	{value: 0x0040, lo: 0x86, hi: 0x87},
+	{value: 0x0808, lo: 0x88, hi: 0x88},
+	{value: 0x0040, lo: 0x89, hi: 0x89},
+	{value: 0x0808, lo: 0x8a, hi: 0xb5},
+	{value: 0x0040, lo: 0xb6, hi: 0xb6},
+	{value: 0x0808, lo: 0xb7, hi: 0xb8},
+	{value: 0x0040, lo: 0xb9, hi: 0xbb},
+	{value: 0x0808, lo: 0xbc, hi: 0xbc},
+	{value: 0x0040, lo: 0xbd, hi: 0xbe},
+	{value: 0x0808, lo: 0xbf, hi: 0xbf},
+	// Block 0x96, offset 0x491
+	{value: 0x0000, lo: 0x05},
+	{value: 0x0808, lo: 0x80, hi: 0x95},
+	{value: 0x0040, lo: 0x96, hi: 0x96},
+	{value: 0x0818, lo: 0x97, hi: 0x9f},
+	{value: 0x0808, lo: 0xa0, hi: 0xb6},
+	{value: 0x0818, lo: 0xb7, hi: 0xbf},
+	// Block 0x97, offset 0x497
+	{value: 0x0000, lo: 0x04},
+	{value: 0x0808, lo: 0x80, hi: 0x9e},
+	{value: 0x0040, lo: 0x9f, hi: 0xa6},
+	{value: 0x0818, lo: 0xa7, hi: 0xaf},
+	{value: 0x0040, lo: 0xb0, hi: 0xbf},
+	// Block 0x98, offset 0x49c
+	{value: 0x0000, lo: 0x06},
+	{value: 0x0040, lo: 0x80, hi: 0x9f},
+	{value: 0x0808, lo: 0xa0, hi: 0xb2},
+	{value: 0x0040, lo: 0xb3, hi: 0xb3},
+	{value: 0x0808, lo: 0xb4, hi: 0xb5},
+	{value: 0x0040, lo: 0xb6, hi: 0xba},
+	{value: 0x0818, lo: 0xbb, hi: 0xbf},
+	// Block 0x99, offset 0x4a3
+	{value: 0x0000, lo: 0x07},
+	{value: 0x0808, lo: 0x80, hi: 0x95},
+	{value: 0x0818, lo: 0x96, hi: 0x9b},
+	{value: 0x0040, lo: 0x9c, hi: 0x9e},
+	{value: 0x0018, lo: 0x9f, hi: 0x9f},
+	{value: 0x0808, lo: 0xa0, hi: 0xb9},
+	{value: 0x0040, lo: 0xba, hi: 0xbe},
+	{value: 0x0818, lo: 0xbf, hi: 0xbf},
+	// Block 0x9a, offset 0x4ab
+	{value: 0x0000, lo: 0x02},
+	{value: 0x0808, lo: 0x80, hi: 0x99},
+	{value: 0x0040, lo: 0x9a, hi: 0xbf},
+	// Block 0x9b, offset 0x4ae
+	{value: 0x0000, lo: 0x04},
+	{value: 0x0808, lo: 0x80, hi: 0xb7},
+	{value: 0x0040, lo: 0xb8, hi: 0xbb},
+	{value: 0x0818, lo: 0xbc, hi: 0xbd},
+	{value: 0x0808, lo: 0xbe, hi: 0xbf},
+	// Block 0x9c, offset 0x4b3
+	{value: 0x0000, lo: 0x03},
+	{value: 0x0818, lo: 0x80, hi: 0x8f},
+	{value: 0x0040, lo: 0x90, hi: 0x91},
+	{value: 0x0818, lo: 0x92, hi: 0xbf},
+	// Block 0x9d, offset 0x4b7
+	{value: 0x0000, lo: 0x0f},
+	{value: 0x0808, lo: 0x80, hi: 0x80},
+	{value: 0x3308, lo: 0x81, hi: 0x83},
+	{value: 0x0040, lo: 0x84, hi: 0x84},
+	{value: 0x3308, lo: 0x85, hi: 0x86},
+	{value: 0x0040, lo: 0x87, hi: 0x8b},
+	{value: 0x3308, lo: 0x8c, hi: 0x8f},
+	{value: 0x0808, lo: 0x90, hi: 0x93},
+	{value: 0x0040, lo: 0x94, hi: 0x94},
+	{value: 0x0808, lo: 0x95, hi: 0x97},
+	{value: 0x0040, lo: 0x98, hi: 0x98},
+	{value: 0x0808, lo: 0x99, hi: 0xb5},
+	{value: 0x0040, lo: 0xb6, hi: 0xb7},
+	{value: 0x3308, lo: 0xb8, hi: 0xba},
+	{value: 0x0040, lo: 0xbb, hi: 0xbe},
+	{value: 0x3b08, lo: 0xbf, hi: 0xbf},
+	// Block 0x9e, offset 0x4c7
+	{value: 0x0000, lo: 0x06},
+	{value: 0x0818, lo: 0x80, hi: 0x88},
+	{value: 0x0040, lo: 0x89, hi: 0x8f},
+	{value: 0x0818, lo: 0x90, hi: 0x98},
+	{value: 0x0040, lo: 0x99, hi: 0x9f},
+	{value: 0x0808, lo: 0xa0, hi: 0xbc},
+	{value: 0x0818, lo: 0xbd, hi: 0xbf},
+	// Block 0x9f, offset 0x4ce
+	{value: 0x0000, lo: 0x03},
+	{value: 0x0808, lo: 0x80, hi: 0x9c},
+	{value: 0x0818, lo: 0x9d, hi: 0x9f},
+	{value: 0x0040, lo: 0xa0, hi: 0xbf},
+	// Block 0xa0, offset 0x4d2
+	{value: 0x0000, lo: 0x03},
+	{value: 0x0808, lo: 0x80, hi: 0xb5},
+	{value: 0x0040, lo: 0xb6, hi: 0xb8},
+	{value: 0x0018, lo: 0xb9, hi: 0xbf},
+	// Block 0xa1, offset 0x4d6
+	{value: 0x0000, lo: 0x06},
+	{value: 0x0808, lo: 0x80, hi: 0x95},
+	{value: 0x0040, lo: 0x96, hi: 0x97},
+	{value: 0x0818, lo: 0x98, hi: 0x9f},
+	{value: 0x0808, lo: 0xa0, hi: 0xb2},
+	{value: 0x0040, lo: 0xb3, hi: 0xb7},
+	{value: 0x0818, lo: 0xb8, hi: 0xbf},
+	// Block 0xa2, offset 0x4dd
+	{value: 0x0000, lo: 0x01},
+	{value: 0x0808, lo: 0x80, hi: 0xbf},
+	// Block 0xa3, offset 0x4df
+	{value: 0x0000, lo: 0x02},
+	{value: 0x0808, lo: 0x80, hi: 0x88},
+	{value: 0x0040, lo: 0x89, hi: 0xbf},
+	// Block 0xa4, offset 0x4e2
+	{value: 0x0000, lo: 0x02},
+	{value: 0x03dd, lo: 0x80, hi: 0xb2},
+	{value: 0x0040, lo: 0xb3, hi: 0xbf},
+	// Block 0xa5, offset 0x4e5
+	{value: 0x0000, lo: 0x03},
+	{value: 0x0808, lo: 0x80, hi: 0xb2},
+	{value: 0x0040, lo: 0xb3, hi: 0xb9},
+	{value: 0x0818, lo: 0xba, hi: 0xbf},
+	// Block 0xa6, offset 0x4e9
+	{value: 0x0000, lo: 0x08},
+	{value: 0x0908, lo: 0x80, hi: 0x80},
+	{value: 0x0a08, lo: 0x81, hi: 0xa1},
+	{value: 0x0c08, lo: 0xa2, hi: 0xa2},
+	{value: 0x0a08, lo: 0xa3, hi: 0xa3},
+	{value: 0x3308, lo: 0xa4, hi: 0xa7},
+	{value: 0x0040, lo: 0xa8, hi: 0xaf},
+	{value: 0x0808, lo: 0xb0, hi: 0xb9},
+	{value: 0x0040, lo: 0xba, hi: 0xbf},
+	// Block 0xa7, offset 0x4f2
+	{value: 0x0000, lo: 0x07},
+	{value: 0x0808, lo: 0x80, hi: 0x8f},
+	{value: 0xe105, lo: 0x90, hi: 0x9f},
+	{value: 0x8cdd, lo: 0xa0, hi: 0xa5},
+	{value: 0x0040, lo: 0xa6, hi: 0xa8},
+	{value: 0x3308, lo: 0xa9, hi: 0xad},
+	{value: 0x0018, lo: 0xae, hi: 0xae},
+	{value: 0x0808, lo: 0xaf, hi: 0xbf},
+	// Block 0xa8, offset 0x4fa
+	{value: 0x0000, lo: 0x04},
+	{value: 0x0808, lo: 0x80, hi: 0x85},
+	{value: 0x0040, lo: 0x86, hi: 0x8d},
+	{value: 0x0818, lo: 0x8e, hi: 0x8f},
+	{value: 0x0040, lo: 0x90, hi: 0xbf},
+	// Block 0xa9, offset 0x4ff
+	{value: 0x0000, lo: 0x03},
+	{value: 0x0040, lo: 0x80, hi: 0x9f},
+	{value: 0x0818, lo: 0xa0, hi: 0xbe},
+	{value: 0x0040, lo: 0xbf, hi: 0xbf},
+	// Block 0xaa, offset 0x503
+	{value: 0x0000, lo: 0x07},
+	{value: 0x0808, lo: 0x80, hi: 0xa9},
+	{value: 0x0040, lo: 0xaa, hi: 0xaa},
+	{value: 0x3308, lo: 0xab, hi: 0xac},
+	{value: 0x0818, lo: 0xad, hi: 0xad},
+	{value: 0x0040, lo: 0xae, hi: 0xaf},
+	{value: 0x0808, lo: 0xb0, hi: 0xb1},
+	{value: 0x0040, lo: 0xb2, hi: 0xbf},
+	// Block 0xab, offset 0x50b
+	{value: 0x0000, lo: 0x09},
+	{value: 0x0040, lo: 0x80, hi: 0x81},
+	{value: 0x0c08, lo: 0x82, hi: 0x82},
+	{value: 0x0a08, lo: 0x83, hi: 0x84},
+	{value: 0x0808, lo: 0x85, hi: 0x85},
+	{value: 0x0a08, lo: 0x86, hi: 0x87},
+	{value: 0x0040, lo: 0x88, hi: 0x8f},
+	{value: 0x0018, lo: 0x90, hi: 0x98},
+	{value: 0x0040, lo: 0x99, hi: 0xb9},
+	{value: 0x3308, lo: 0xba, hi: 0xbf},
+	// Block 0xac, offset 0x515
+	{value: 0x0000, lo: 0x07},
+	{value: 0x0808, lo: 0x80, hi: 0x9c},
+	{value: 0x0818, lo: 0x9d, hi: 0xa6},
+	{value: 0x0808, lo: 0xa7, hi: 0xa7},
+	{value: 0x0040, lo: 0xa8, hi: 0xaf},
+	{value: 0x0a08, lo: 0xb0, hi: 0xb2},
+	{value: 0x0c08, lo: 0xb3, hi: 0xb3},
+	{value: 0x0a08, lo: 0xb4, hi: 0xbf},
+	// Block 0xad, offset 0x51d
+	{value: 0x0000, lo: 0x0a},
+	{value: 0x0a08, lo: 0x80, hi: 0x84},
+	{value: 0x0808, lo: 0x85, hi: 0x85},
+	{value: 0x3308, lo: 0x86, hi: 0x90},
+	{value: 0x0a18, lo: 0x91, hi: 0x93},
+	{value: 0x0c18, lo: 0x94, hi: 0x94},
+	{value: 0x0818, lo: 0x95, hi: 0x99},
+	{value: 0x0040, lo: 0x9a, hi: 0xaf},
+	{value: 0x0a08, lo: 0xb0, hi: 0xb3},
+	{value: 0x0c08, lo: 0xb4, hi: 0xb5},
+	{value: 0x0a08, lo: 0xb6, hi: 0xbf},
+	// Block 0xae, offset 0x528
+	{value: 0x0000, lo: 0x0e},
+	{value: 0x0a08, lo: 0x80, hi: 0x81},
+	{value: 0x3308, lo: 0x82, hi: 0x85},
+	{value: 0x0818, lo: 0x86, hi: 0x89},
+	{value: 0x0040, lo: 0x8a, hi: 0xaf},
+	{value: 0x0a08, lo: 0xb0, hi: 0xb0},
+	{value: 0x0808, lo: 0xb1, hi: 0xb1},
+	{value: 0x0a08, lo: 0xb2, hi: 0xb3},
+	{value: 0x0c08, lo: 0xb4, hi: 0xb6},
+	{value: 0x0808, lo: 0xb7, hi: 0xb7},
+	{value: 0x0a08, lo: 0xb8, hi: 0xb8},
+	{value: 0x0c08, lo: 0xb9, hi: 0xba},
+	{value: 0x0a08, lo: 0xbb, hi: 0xbc},
+	{value: 0x0c08, lo: 0xbd, hi: 0xbd},
+	{value: 0x0a08, lo: 0xbe, hi: 0xbf},
+	// Block 0xaf, offset 0x537
+	{value: 0x0000, lo: 0x0b},
+	{value: 0x0808, lo: 0x80, hi: 0x80},
+	{value: 0x0a08, lo: 0x81, hi: 0x81},
+	{value: 0x0c08, lo: 0x82, hi: 0x83},
+	{value: 0x0a08, lo: 0x84, hi: 0x84},
+	{value: 0x0818, lo: 0x85, hi: 0x88},
+	{value: 0x0c18, lo: 0x89, hi: 0x89},
+	{value: 0x0a18, lo: 0x8a, hi: 0x8a},
+	{value: 0x0918, lo: 0x8b, hi: 0x8b},
+	{value: 0x0040, lo: 0x8c, hi: 0x9f},
+	{value: 0x0808, lo: 0xa0, hi: 0xb6},
+	{value: 0x0040, lo: 0xb7, hi: 0xbf},
+	// Block 0xb0, offset 0x543
+	{value: 0x0000, lo: 0x05},
+	{value: 0x3008, lo: 0x80, hi: 0x80},
+	{value: 0x3308, lo: 0x81, hi: 0x81},
+	{value: 0x3008, lo: 0x82, hi: 0x82},
+	{value: 0x0008, lo: 0x83, hi: 0xb7},
+	{value: 0x3308, lo: 0xb8, hi: 0xbf},
+	// Block 0xb1, offset 0x549
+	{value: 0x0000, lo: 0x0c},
+	{value: 0x3308, lo: 0x80, hi: 0x85},
+	{value: 0x3b08, lo: 0x86, hi: 0x86},
+	{value: 0x0018, lo: 0x87, hi: 0x8d},
+	{value: 0x0040, lo: 0x8e, hi: 0x91},
+	{value: 0x0018, lo: 0x92, hi: 0xa5},
+	{value: 0x0008, lo: 0xa6, hi: 0xaf},
+	{value: 0x3b08, lo: 0xb0, hi: 0xb0},
+	{value: 0x0008, lo: 0xb1, hi: 0xb2},
+	{value: 0x3308, lo: 0xb3, hi: 0xb4},
+	{value: 0x0008, lo: 0xb5, hi: 0xb5},
+	{value: 0x0040, lo: 0xb6, hi: 0xbe},
+	{value: 0x3b08, lo: 0xbf, hi: 0xbf},
+	// Block 0xb2, offset 0x556
+	{value: 0x0000, lo: 0x0b},
+	{value: 0x3308, lo: 0x80, hi: 0x81},
+	{value: 0x3008, lo: 0x82, hi: 0x82},
+	{value: 0x0008, lo: 0x83, hi: 0xaf},
+	{value: 0x3008, lo: 0xb0, hi: 0xb2},
+	{value: 0x3308, lo: 0xb3, hi: 0xb6},
+	{value: 0x3008, lo: 0xb7, hi: 0xb8},
+	{value: 0x3b08, lo: 0xb9, hi: 0xb9},
+	{value: 0x3308, lo: 0xba, hi: 0xba},
+	{value: 0x0018, lo: 0xbb, hi: 0xbc},
+	{value: 0x0040, lo: 0xbd, hi: 0xbd},
+	{value: 0x0018, lo: 0xbe, hi: 0xbf},
+	// Block 0xb3, offset 0x562
+	{value: 0x0000, lo: 0x07},
+	{value: 0x0018, lo: 0x80, hi: 0x81},
+	{value: 0x3308, lo: 0x82, hi: 0x82},
+	{value: 0x0040, lo: 0x83, hi: 0x8f},
+	{value: 0x0008, lo: 0x90, hi: 0xa8},
+	{value: 0x0040, lo: 0xa9, hi: 0xaf},
+	{value: 0x0008, lo: 0xb0, hi: 0xb9},
+	{value: 0x0040, lo: 0xba, hi: 0xbf},
+	// Block 0xb4, offset 0x56a
+	{value: 0x0000, lo: 0x08},
+	{value: 0x3308, lo: 0x80, hi: 0x82},
+	{value: 0x0008, lo: 0x83, hi: 0xa6},
+	{value: 0x3308, lo: 0xa7, hi: 0xab},
+	{value: 0x3008, lo: 0xac, hi: 0xac},
+	{value: 0x3308, lo: 0xad, hi: 0xb2},
+	{value: 0x3b08, lo: 0xb3, hi: 0xb4},
+	{value: 0x0040, lo: 0xb5, hi: 0xb5},
+	{value: 0x0008, lo: 0xb6, hi: 0xbf},
+	// Block 0xb5, offset 0x573
+	{value: 0x0000, lo: 0x0a},
+	{value: 0x0018, lo: 0x80, hi: 0x83},
+	{value: 0x0008, lo: 0x84, hi: 0x84},
+	{value: 0x3008, lo: 0x85, hi: 0x86},
+	{value: 0x0008, lo: 0x87, hi: 0x87},
+	{value: 0x0040, lo: 0x88, hi: 0x8f},
+	{value: 0x0008, lo: 0x90, hi: 0xb2},
+	{value: 0x3308, lo: 0xb3, hi: 0xb3},
+	{value: 0x0018, lo: 0xb4, hi: 0xb5},
+	{value: 0x0008, lo: 0xb6, hi: 0xb6},
+	{value: 0x0040, lo: 0xb7, hi: 0xbf},
+	// Block 0xb6, offset 0x57e
+	{value: 0x0000, lo: 0x06},
+	{value: 0x3308, lo: 0x80, hi: 0x81},
+	{value: 0x3008, lo: 0x82, hi: 0x82},
+	{value: 0x0008, lo: 0x83, hi: 0xb2},
+	{value: 0x3008, lo: 0xb3, hi: 0xb5},
+	{value: 0x3308, lo: 0xb6, hi: 0xbe},
+	{value: 0x3008, lo: 0xbf, hi: 0xbf},
+	// Block 0xb7, offset 0x585
+	{value: 0x0000, lo: 0x0e},
+	{value: 0x3808, lo: 0x80, hi: 0x80},
+	{value: 0x0008, lo: 0x81, hi: 0x84},
+	{value: 0x0018, lo: 0x85, hi: 0x88},
+	{value: 0x3308, lo: 0x89, hi: 0x8c},
+	{value: 0x0018, lo: 0x8d, hi: 0x8d},
+	{value: 0x3008, lo: 0x8e, hi: 0x8e},
+	{value: 0x3308, lo: 0x8f, hi: 0x8f},
+	{value: 0x0008, lo: 0x90, hi: 0x9a},
+	{value: 0x0018, lo: 0x9b, hi: 0x9b},
+	{value: 0x0008, lo: 0x9c, hi: 0x9c},
+	{value: 0x0018, lo: 0x9d, hi: 0x9f},
+	{value: 0x0040, lo: 0xa0, hi: 0xa0},
+	{value: 0x0018, lo: 0xa1, hi: 0xb4},
+	{value: 0x0040, lo: 0xb5, hi: 0xbf},
+	// Block 0xb8, offset 0x594
+	{value: 0x0000, lo: 0x0c},
+	{value: 0x0008, lo: 0x80, hi: 0x91},
+	{value: 0x0040, lo: 0x92, hi: 0x92},
+	{value: 0x0008, lo: 0x93, hi: 0xab},
+	{value: 0x3008, lo: 0xac, hi: 0xae},
+	{value: 0x3308, lo: 0xaf, hi: 0xb1},
+	{value: 0x3008, lo: 0xb2, hi: 0xb3},
+	{value: 0x3308, lo: 0xb4, hi: 0xb4},
+	{value: 0x3808, lo: 0xb5, hi: 0xb5},
+	{value: 0x3308, lo: 0xb6, hi: 0xb7},
+	{value: 0x0018, lo: 0xb8, hi: 0xbd},
+	{value: 0x3308, lo: 0xbe, hi: 0xbe},
+	{value: 0x0008, lo: 0xbf, hi: 0xbf},
+	// Block 0xb9, offset 0x5a1
+	{value: 0x0000, lo: 0x03},
+	{value: 0x0008, lo: 0x80, hi: 0x80},
+	{value: 0x3308, lo: 0x81, hi: 0x81},
+	{value: 0x0040, lo: 0x82, hi: 0xbf},
+	// Block 0xba, offset 0x5a5
+	{value: 0x0000, lo: 0x0c},
+	{value: 0x0008, lo: 0x80, hi: 0x86},
+	{value: 0x0040, lo: 0x87, hi: 0x87},
+	{value: 0x0008, lo: 0x88, hi: 0x88},
+	{value: 0x0040, lo: 0x89, hi: 0x89},
+	{value: 0x0008, lo: 0x8a, hi: 0x8d},
+	{value: 0x0040, lo: 0x8e, hi: 0x8e},
+	{value: 0x0008, lo: 0x8f, hi: 0x9d},
+	{value: 0x0040, lo: 0x9e, hi: 0x9e},
+	{value: 0x0008, lo: 0x9f, hi: 0xa8},
+	{value: 0x0018, lo: 0xa9, hi: 0xa9},
+	{value: 0x0040, lo: 0xaa, hi: 0xaf},
+	{value: 0x0008, lo: 0xb0, hi: 0xbf},
+	// Block 0xbb, offset 0x5b2
+	{value: 0x0000, lo: 0x08},
+	{value: 0x0008, lo: 0x80, hi: 0x9e},
+	{value: 0x3308, lo: 0x9f, hi: 0x9f},
+	{value: 0x3008, lo: 0xa0, hi: 0xa2},
+	{value: 0x3308, lo: 0xa3, hi: 0xa9},
+	{value: 0x3b08, lo: 0xaa, hi: 0xaa},
+	{value: 0x0040, lo: 0xab, hi: 0xaf},
+	{value: 0x0008, lo: 0xb0, hi: 0xb9},
+	{value: 0x0040, lo: 0xba, hi: 0xbf},
+	// Block 0xbc, offset 0x5bb
+	{value: 0x0000, lo: 0x0b},
+	{value: 0x0008, lo: 0x80, hi: 0x89},
+	{value: 0x0040, lo: 0x8a, hi: 0x8a},
+	{value: 0x0008, lo: 0x8b, hi: 0x8b},
+	{value: 0x0040, lo: 0x8c, hi: 0x8d},
+	{value: 0x0008, lo: 0x8e, hi: 0x8e},
+	{value: 0x0040, lo: 0x8f, hi: 0x8f},
+	{value: 0x0008, lo: 0x90, hi: 0xb5},
+	{value: 0x0040, lo: 0xb6, hi: 0xb6},
+	{value: 0x0008, lo: 0xb7, hi: 0xb7},
+	{value: 0x3008, lo: 0xb8, hi: 0xba},
+	{value: 0x3308, lo: 0xbb, hi: 0xbf},
+	// Block 0xbd, offset 0x5c7
+	{value: 0x0000, lo: 0x03},
+	{value: 0x0008, lo: 0x80, hi: 0xb4},
+	{value: 0x3008, lo: 0xb5, hi: 0xb7},
+	{value: 0x3308, lo: 0xb8, hi: 0xbf},
+	// Block 0xbe, offset 0x5cb
+	{value: 0x0000, lo: 0x0e},
+	{value: 0x3008, lo: 0x80, hi: 0x81},
+	{value: 0x3b08, lo: 0x82, hi: 0x82},
+	{value: 0x3308, lo: 0x83, hi: 0x84},
+	{value: 0x3008, lo: 0x85, hi: 0x85},
+	{value: 0x3308, lo: 0x86, hi: 0x86},
+	{value: 0x0008, lo: 0x87, hi: 0x8a},
+	{value: 0x0018, lo: 0x8b, hi: 0x8f},
+	{value: 0x0008, lo: 0x90, hi: 0x99},
+	{value: 0x0018, lo: 0x9a, hi: 0x9b},
+	{value: 0x0040, lo: 0x9c, hi: 0x9c},
+	{value: 0x0018, lo: 0x9d, hi: 0x9d},
+	{value: 0x3308, lo: 0x9e, hi: 0x9e},
+	{value: 0x0008, lo: 0x9f, hi: 0xa1},
+	{value: 0x0040, lo: 0xa2, hi: 0xbf},
+	// Block 0xbf, offset 0x5da
+	{value: 0x0000, lo: 0x07},
+	{value: 0x0008, lo: 0x80, hi: 0xaf},
+	{value: 0x3008, lo: 0xb0, hi: 0xb2},
+	{value: 0x3308, lo: 0xb3, hi: 0xb8},
+	{value: 0x3008, lo: 0xb9, hi: 0xb9},
+	{value: 0x3308, lo: 0xba, hi: 0xba},
+	{value: 0x3008, lo: 0xbb, hi: 0xbe},
+	{value: 0x3308, lo: 0xbf, hi: 0xbf},
+	// Block 0xc0, offset 0x5e2
+	{value: 0x0000, lo: 0x0a},
+	{value: 0x3308, lo: 0x80, hi: 0x80},
+	{value: 0x3008, lo: 0x81, hi: 0x81},
+	{value: 0x3b08, lo: 0x82, hi: 0x82},
+	{value: 0x3308, lo: 0x83, hi: 0x83},
+	{value: 0x0008, lo: 0x84, hi: 0x85},
+	{value: 0x0018, lo: 0x86, hi: 0x86},
+	{value: 0x0008, lo: 0x87, hi: 0x87},
+	{value: 0x0040, lo: 0x88, hi: 0x8f},
+	{value: 0x0008, lo: 0x90, hi: 0x99},
+	{value: 0x0040, lo: 0x9a, hi: 0xbf},
+	// Block 0xc1, offset 0x5ed
+	{value: 0x0000, lo: 0x08},
+	{value: 0x0008, lo: 0x80, hi: 0xae},
+	{value: 0x3008, lo: 0xaf, hi: 0xb1},
+	{value: 0x3308, lo: 0xb2, hi: 0xb5},
+	{value: 0x0040, lo: 0xb6, hi: 0xb7},
+	{value: 0x3008, lo: 0xb8, hi: 0xbb},
+	{value: 0x3308, lo: 0xbc, hi: 0xbd},
+	{value: 0x3008, lo: 0xbe, hi: 0xbe},
+	{value: 0x3b08, lo: 0xbf, hi: 0xbf},
+	// Block 0xc2, offset 0x5f6
+	{value: 0x0000, lo: 0x05},
+	{value: 0x3308, lo: 0x80, hi: 0x80},
+	{value: 0x0018, lo: 0x81, hi: 0x97},
+	{value: 0x0008, lo: 0x98, hi: 0x9b},
+	{value: 0x3308, lo: 0x9c, hi: 0x9d},
+	{value: 0x0040, lo: 0x9e, hi: 0xbf},
+	// Block 0xc3, offset 0x5fc
+	{value: 0x0000, lo: 0x07},
+	{value: 0x0008, lo: 0x80, hi: 0xaf},
+	{value: 0x3008, lo: 0xb0, hi: 0xb2},
+	{value: 0x3308, lo: 0xb3, hi: 0xba},
+	{value: 0x3008, lo: 0xbb, hi: 0xbc},
+	{value: 0x3308, lo: 0xbd, hi: 0xbd},
+	{value: 0x3008, lo: 0xbe, hi: 0xbe},
+	{value: 0x3b08, lo: 0xbf, hi: 0xbf},
+	// Block 0xc4, offset 0x604
+	{value: 0x0000, lo: 0x08},
+	{value: 0x3308, lo: 0x80, hi: 0x80},
+	{value: 0x0018, lo: 0x81, hi: 0x83},
+	{value: 0x0008, lo: 0x84, hi: 0x84},
+	{value: 0x0040, lo: 0x85, hi: 0x8f},
+	{value: 0x0008, lo: 0x90, hi: 0x99},
+	{value: 0x0040, lo: 0x9a, hi: 0x9f},
+	{value: 0x0018, lo: 0xa0, hi: 0xac},
+	{value: 0x0040, lo: 0xad, hi: 0xbf},
+	// Block 0xc5, offset 0x60d
+	{value: 0x0000, lo: 0x0b},
+	{value: 0x0008, lo: 0x80, hi: 0xaa},
+	{value: 0x3308, lo: 0xab, hi: 0xab},
+	{value: 0x3008, lo: 0xac, hi: 0xac},
+	{value: 0x3308, lo: 0xad, hi: 0xad},
+	{value: 0x3008, lo: 0xae, hi: 0xaf},
+	{value: 0x3308, lo: 0xb0, hi: 0xb5},
+	{value: 0x3808, lo: 0xb6, hi: 0xb6},
+	{value: 0x3308, lo: 0xb7, hi: 0xb7},
+	{value: 0x0008, lo: 0xb8, hi: 0xb8},
+	{value: 0x0018, lo: 0xb9, hi: 0xb9},
+	{value: 0x0040, lo: 0xba, hi: 0xbf},
+	// Block 0xc6, offset 0x619
+	{value: 0x0000, lo: 0x04},
+	{value: 0x0008, lo: 0x80, hi: 0x89},
+	{value: 0x0040, lo: 0x8a, hi: 0x8f},
+	{value: 0x0008, lo: 0x90, hi: 0xa3},
+	{value: 0x0040, lo: 0xa4, hi: 0xbf},
+	// Block 0xc7, offset 0x61e
+	{value: 0x0000, lo: 0x0d},
+	{value: 0x0008, lo: 0x80, hi: 0x9a},
+	{value: 0x0040, lo: 0x9b, hi: 0x9c},
+	{value: 0x3308, lo: 0x9d, hi: 0x9d},
+	{value: 0x3008, lo: 0x9e, hi: 0x9e},
+	{value: 0x3308, lo: 0x9f, hi: 0x9f},
+	{value: 0x3008, lo: 0xa0, hi: 0xa1},
+	{value: 0x3308, lo: 0xa2, hi: 0xa5},
+	{value: 0x3008, lo: 0xa6, hi: 0xa6},
+	{value: 0x3308, lo: 0xa7, hi: 0xaa},
+	{value: 0x3b08, lo: 0xab, hi: 0xab},
+	{value: 0x0040, lo: 0xac, hi: 0xaf},
+	{value: 0x0008, lo: 0xb0, hi: 0xb9},
+	{value: 0x0018, lo: 0xba, hi: 0xbf},
+	// Block 0xc8, offset 0x62c
+	{value: 0x0000, lo: 0x02},
+	{value: 0x0008, lo: 0x80, hi: 0x86},
+	{value: 0x0040, lo: 0x87, hi: 0xbf},
+	// Block 0xc9, offset 0x62f
+	{value: 0x0000, lo: 0x08},
+	{value: 0x0008, lo: 0x80, hi: 0xab},
+	{value: 0x3008, lo: 0xac, hi: 0xae},
+	{value: 0x3308, lo: 0xaf, hi: 0xb7},
+	{value: 0x3008, lo: 0xb8, hi: 0xb8},
+	{value: 0x3b08, lo: 0xb9, hi: 0xb9},
+	{value: 0x3308, lo: 0xba, hi: 0xba},
+	{value: 0x0018, lo: 0xbb, hi: 0xbb},
+	{value: 0x0040, lo: 0xbc, hi: 0xbf},
+	// Block 0xca, offset 0x638
+	{value: 0x0000, lo: 0x02},
+	{value: 0x0040, lo: 0x80, hi: 0x9f},
+	{value: 0x049d, lo: 0xa0, hi: 0xbf},
+	// Block 0xcb, offset 0x63b
+	{value: 0x0000, lo: 0x04},
+	{value: 0x0008, lo: 0x80, hi: 0xa9},
+	{value: 0x0018, lo: 0xaa, hi: 0xb2},
+	{value: 0x0040, lo: 0xb3, hi: 0xbe},
+	{value: 0x0008, lo: 0xbf, hi: 0xbf},
+	// Block 0xcc, offset 0x640
+	{value: 0x0000, lo: 0x08},
+	{value: 0x3008, lo: 0x80, hi: 0x80},
+	{value: 0x0008, lo: 0x81, hi: 0x81},
+	{value: 0x3008, lo: 0x82, hi: 0x82},
+	{value: 0x3308, lo: 0x83, hi: 0x83},
+	{value: 0x0018, lo: 0x84, hi: 0x86},
+	{value: 0x0040, lo: 0x87, hi: 0x8f},
+	{value: 0x0008, lo: 0x90, hi: 0x99},
+	{value: 0x0040, lo: 0x9a, hi: 0xbf},
+	// Block 0xcd, offset 0x649
+	{value: 0x0000, lo: 0x04},
+	{value: 0x0040, lo: 0x80, hi: 0x9f},
+	{value: 0x0008, lo: 0xa0, hi: 0xa7},
+	{value: 0x0040, lo: 0xa8, hi: 0xa9},
+	{value: 0x0008, lo: 0xaa, hi: 0xbf},
+	// Block 0xce, offset 0x64e
+	{value: 0x0000, lo: 0x0c},
+	{value: 0x0008, lo: 0x80, hi: 0x90},
+	{value: 0x3008, lo: 0x91, hi: 0x93},
+	{value: 0x3308, lo: 0x94, hi: 0x97},
+	{value: 0x0040, lo: 0x98, hi: 0x99},
+	{value: 0x3308, lo: 0x9a, hi: 0x9b},
+	{value: 0x3008, lo: 0x9c, hi: 0x9f},
+	{value: 0x3b08, lo: 0xa0, hi: 0xa0},
+	{value: 0x0008, lo: 0xa1, hi: 0xa1},
+	{value: 0x0018, lo: 0xa2, hi: 0xa2},
+	{value: 0x0008, lo: 0xa3, hi: 0xa3},
+	{value: 0x3008, lo: 0xa4, hi: 0xa4},
+	{value: 0x0040, lo: 0xa5, hi: 0xbf},
+	// Block 0xcf, offset 0x65b
+	{value: 0x0000, lo: 0x0a},
+	{value: 0x0008, lo: 0x80, hi: 0x80},
+	{value: 0x3308, lo: 0x81, hi: 0x8a},
+	{value: 0x0008, lo: 0x8b, hi: 0xb2},
+	{value: 0x3308, lo: 0xb3, hi: 0xb3},
+	{value: 0x3b08, lo: 0xb4, hi: 0xb4},
+	{value: 0x3308, lo: 0xb5, hi: 0xb8},
+	{value: 0x3008, lo: 0xb9, hi: 0xb9},
+	{value: 0x0008, lo: 0xba, hi: 0xba},
+	{value: 0x3308, lo: 0xbb, hi: 0xbe},
+	{value: 0x0018, lo: 0xbf, hi: 0xbf},
+	// Block 0xd0, offset 0x666
+	{value: 0x0000, lo: 0x08},
+	{value: 0x0018, lo: 0x80, hi: 0x86},
+	{value: 0x3b08, lo: 0x87, hi: 0x87},
+	{value: 0x0040, lo: 0x88, hi: 0x8f},
+	{value: 0x0008, lo: 0x90, hi: 0x90},
+	{value: 0x3308, lo: 0x91, hi: 0x96},
+	{value: 0x3008, lo: 0x97, hi: 0x98},
+	{value: 0x3308, lo: 0x99, hi: 0x9b},
+	{value: 0x0008, lo: 0x9c, hi: 0xbf},
+	// Block 0xd1, offset 0x66f
+	{value: 0x0000, lo: 0x0a},
+	{value: 0x0008, lo: 0x80, hi: 0x89},
+	{value: 0x3308, lo: 0x8a, hi: 0x96},
+	{value: 0x3008, lo: 0x97, hi: 0x97},
+	{value: 0x3308, lo: 0x98, hi: 0x98},
+	{value: 0x3b08, lo: 0x99, hi: 0x99},
+	{value: 0x0018, lo: 0x9a, hi: 0x9c},
+	{value: 0x0008, lo: 0x9d, hi: 0x9d},
+	{value: 0x0018, lo: 0x9e, hi: 0xa2},
+	{value: 0x0040, lo: 0xa3, hi: 0xaf},
+	{value: 0x0008, lo: 0xb0, hi: 0xbf},
+	// Block 0xd2, offset 0x67a
+	{value: 0x0000, lo: 0x02},
+	{value: 0x0008, lo: 0x80, hi: 0xb8},
+	{value: 0x0040, lo: 0xb9, hi: 0xbf},
+	// Block 0xd3, offset 0x67d
+	{value: 0x0000, lo: 0x02},
+	{value: 0x0018, lo: 0x80, hi: 0x89},
+	{value: 0x0040, lo: 0x8a, hi: 0xbf},
+	// Block 0xd4, offset 0x680
+	{value: 0x0000, lo: 0x08},
+	{value: 0x0040, lo: 0x80, hi: 0x9f},
+	{value: 0x3308, lo: 0xa0, hi: 0xa0},
+	{value: 0x3008, lo: 0xa1, hi: 0xa1},
+	{value: 0x3308, lo: 0xa2, hi: 0xa4},
+	{value: 0x3008, lo: 0xa5, hi: 0xa5},
+	{value: 0x3308, lo: 0xa6, hi: 0xa6},
+	{value: 0x3008, lo: 0xa7, hi: 0xa7},
+	{value: 0x0040, lo: 0xa8, hi: 0xbf},
+	// Block 0xd5, offset 0x689
+	{value: 0x0000, lo: 0x05},
+	{value: 0x0008, lo: 0x80, hi: 0xa0},
+	{value: 0x0018, lo: 0xa1, hi: 0xa1},
+	{value: 0x0040, lo: 0xa2, hi: 0xaf},
+	{value: 0x0008, lo: 0xb0, hi: 0xb9},
+	{value: 0x0040, lo: 0xba, hi: 0xbf},
+	// Block 0xd6, offset 0x68f
+	{value: 0x0000, lo: 0x09},
+	{value: 0x0008, lo: 0x80, hi: 0x88},
+	{value: 0x0040, lo: 0x89, hi: 0x89},
+	{value: 0x0008, lo: 0x8a, hi: 0xae},
+	{value: 0x3008, lo: 0xaf, hi: 0xaf},
+	{value: 0x3308, lo: 0xb0, hi: 0xb6},
+	{value: 0x0040, lo: 0xb7, hi: 0xb7},
+	{value: 0x3308, lo: 0xb8, hi: 0xbd},
+	{value: 0x3008, lo: 0xbe, hi: 0xbe},
+	{value: 0x3b08, lo: 0xbf, hi: 0xbf},
+	// Block 0xd7, offset 0x699
+	{value: 0x0000, lo: 0x08},
+	{value: 0x0008, lo: 0x80, hi: 0x80},
+	{value: 0x0018, lo: 0x81, hi: 0x85},
+	{value: 0x0040, lo: 0x86, hi: 0x8f},
+	{value: 0x0008, lo: 0x90, hi: 0x99},
+	{value: 0x0018, lo: 0x9a, hi: 0xac},
+	{value: 0x0040, lo: 0xad, hi: 0xaf},
+	{value: 0x0018, lo: 0xb0, hi: 0xb1},
+	{value: 0x0008, lo: 0xb2, hi: 0xbf},
+	// Block 0xd8, offset 0x6a2
+	{value: 0x0000, lo: 0x0b},
+	{value: 0x0008, lo: 0x80, hi: 0x8f},
+	{value: 0x0040, lo: 0x90, hi: 0x91},
+	{value: 0x3308, lo: 0x92, hi: 0xa7},
+	{value: 0x0040, lo: 0xa8, hi: 0xa8},
+	{value: 0x3008, lo: 0xa9, hi: 0xa9},
+	{value: 0x3308, lo: 0xaa, hi: 0xb0},
+	{value: 0x3008, lo: 0xb1, hi: 0xb1},
+	{value: 0x3308, lo: 0xb2, hi: 0xb3},
+	{value: 0x3008, lo: 0xb4, hi: 0xb4},
+	{value: 0x3308, lo: 0xb5, hi: 0xb6},
+	{value: 0x0040, lo: 0xb7, hi: 0xbf},
+	// Block 0xd9, offset 0x6ae
+	{value: 0x0000, lo: 0x0c},
+	{value: 0x0008, lo: 0x80, hi: 0x86},
+	{value: 0x0040, lo: 0x87, hi: 0x87},
+	{value: 0x0008, lo: 0x88, hi: 0x89},
+	{value: 0x0040, lo: 0x8a, hi: 0x8a},
+	{value: 0x0008, lo: 0x8b, hi: 0xb0},
+	{value: 0x3308, lo: 0xb1, hi: 0xb6},
+	{value: 0x0040, lo: 0xb7, hi: 0xb9},
+	{value: 0x3308, lo: 0xba, hi: 0xba},
+	{value: 0x0040, lo: 0xbb, hi: 0xbb},
+	{value: 0x3308, lo: 0xbc, hi: 0xbd},
+	{value: 0x0040, lo: 0xbe, hi: 0xbe},
+	{value: 0x3308, lo: 0xbf, hi: 0xbf},
+	// Block 0xda, offset 0x6bb
+	{value: 0x0000, lo: 0x0c},
+	{value: 0x3308, lo: 0x80, hi: 0x83},
+	{value: 0x3b08, lo: 0x84, hi: 0x85},
+	{value: 0x0008, lo: 0x86, hi: 0x86},
+	{value: 0x3308, lo: 0x87, hi: 0x87},
+	{value: 0x0040, lo: 0x88, hi: 0x8f},
+	{value: 0x0008, lo: 0x90, hi: 0x99},
+	{value: 0x0040, lo: 0x9a, hi: 0x9f},
+	{value: 0x0008, lo: 0xa0, hi: 0xa5},
+	{value: 0x0040, lo: 0xa6, hi: 0xa6},
+	{value: 0x0008, lo: 0xa7, hi: 0xa8},
+	{value: 0x0040, lo: 0xa9, hi: 0xa9},
+	{value: 0x0008, lo: 0xaa, hi: 0xbf},
+	// Block 0xdb, offset 0x6c8
+	{value: 0x0000, lo: 0x0e},
+	{value: 0x0008, lo: 0x80, hi: 0x89},
+	{value: 0x3008, lo: 0x8a, hi: 0x8e},
+	{value: 0x0040, lo: 0x8f, hi: 0x8f},
+	{value: 0x3308, lo: 0x90, hi: 0x91},
+	{value: 0x0040, lo: 0x92, hi: 0x92},
+	{value: 0x3008, lo: 0x93, hi: 0x94},
+	{value: 0x3308, lo: 0x95, hi: 0x95},
+	{value: 0x3008, lo: 0x96, hi: 0x96},
+	{value: 0x3b08, lo: 0x97, hi: 0x97},
+	{value: 0x0008, lo: 0x98, hi: 0x98},
+	{value: 0x0040, lo: 0x99, hi: 0x9f},
+	{value: 0x0008, lo: 0xa0, hi: 0xa9},
+	{value: 0x0040, lo: 0xaa, hi: 0xaf},
+	{value: 0x0008, lo: 0xb0, hi: 0xbf},
+	// Block 0xdc, offset 0x6d7
+	{value: 0x0000, lo: 0x04},
+	{value: 0x0008, lo: 0x80, hi: 0x9b},
+	{value: 0x0040, lo: 0x9c, hi: 0x9f},
+	{value: 0x0008, lo: 0xa0, hi: 0xa9},
+	{value: 0x0040, lo: 0xaa, hi: 0xbf},
+	// Block 0xdd, offset 0x6dc
+	{value: 0x0000, lo: 0x06},
+	{value: 0x0040, lo: 0x80, hi: 0x9f},
+	{value: 0x0008, lo: 0xa0, hi: 0xb2},
+	{value: 0x3308, lo: 0xb3, hi: 0xb4},
+	{value: 0x3008, lo: 0xb5, hi: 0xb6},
+	{value: 0x0018, lo: 0xb7, hi: 0xb8},
+	{value: 0x0040, lo: 0xb9, hi: 0xbf},
+	// Block 0xde, offset 0x6e3
+	{value: 0x0000, lo: 0x0a},
+	{value: 0x3308, lo: 0x80, hi: 0x81},
+	{value: 0x0008, lo: 0x82, hi: 0x82},
+	{value: 0x3008, lo: 0x83, hi: 0x83},
+	{value: 0x0008, lo: 0x84, hi: 0x90},
+	{value: 0x0040, lo: 0x91, hi: 0x91},
+	{value: 0x0008, lo: 0x92, hi: 0xb3},
+	{value: 0x3008, lo: 0xb4, hi: 0xb5},
+	{value: 0x3308, lo: 0xb6, hi: 0xba},
+	{value: 0x0040, lo: 0xbb, hi: 0xbd},
+	{value: 0x3008, lo: 0xbe, hi: 0xbf},
+	// Block 0xdf, offset 0x6ee
+	{value: 0x0000, lo: 0x07},
+	{value: 0x3308, lo: 0x80, hi: 0x80},
+	{value: 0x3808, lo: 0x81, hi: 0x81},
+	{value: 0x3b08, lo: 0x82, hi: 0x82},
+	{value: 0x0018, lo: 0x83, hi: 0x8f},
+	{value: 0x0008, lo: 0x90, hi: 0x99},
+	{value: 0x3308, lo: 0x9a, hi: 0x9a},
+	{value: 0x0040, lo: 0x9b, hi: 0xbf},
+	// Block 0xe0, offset 0x6f6
+	{value: 0x0000, lo: 0x03},
+	{value: 0x0040, lo: 0x80, hi: 0xaf},
+	{value: 0x0008, lo: 0xb0, hi: 0xb0},
+	{value: 0x0040, lo: 0xb1, hi: 0xbf},
+	// Block 0xe1, offset 0x6fa
+	{value: 0x0000, lo: 0x03},
+	{value: 0x0018, lo: 0x80, hi: 0xb1},
+	{value: 0x0040, lo: 0xb2, hi: 0xbe},
+	{value: 0x0018, lo: 0xbf, hi: 0xbf},
+	// Block 0xe2, offset 0x6fe
+	{value: 0x0000, lo: 0x02},
+	{value: 0
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/net/idna/tables17.0.0.go","mode":420,"size":312250,"sha256":"c1a0162f154cb63bab4de125817927c1d1d8a19326ad7c6adbb69d9d249b9cf3","index":6,"count":7,"newline":"lf","encoding":"utf-8","payloadBytes":20670}
+x0008, lo: 0x80, hi: 0x99},
+	{value: 0x0040, lo: 0x9a, hi: 0xbf},
+	// Block 0xe3, offset 0x701
+	{value: 0x0000, lo: 0x04},
+	{value: 0x0018, lo: 0x80, hi: 0xae},
+	{value: 0x0040, lo: 0xaf, hi: 0xaf},
+	{value: 0x0018, lo: 0xb0, hi: 0xb4},
+	{value: 0x0040, lo: 0xb5, hi: 0xbf},
+	// Block 0xe4, offset 0x706
+	{value: 0x0000, lo: 0x02},
+	{value: 0x0008, lo: 0x80, hi: 0x83},
+	{value: 0x0040, lo: 0x84, hi: 0xbf},
+	// Block 0xe5, offset 0x709
+	{value: 0x0000, lo: 0x02},
+	{value: 0x0040, lo: 0x80, hi: 0x8f},
+	{value: 0x0008, lo: 0x90, hi: 0xbf},
+	// Block 0xe6, offset 0x70c
+	{value: 0x0000, lo: 0x03},
+	{value: 0x0008, lo: 0x80, hi: 0xb0},
+	{value: 0x0018, lo: 0xb1, hi: 0xb2},
+	{value: 0x0040, lo: 0xb3, hi: 0xbf},
+	// Block 0xe7, offset 0x710
+	{value: 0x0000, lo: 0x02},
+	{value: 0x0008, lo: 0x80, hi: 0xaf},
+	{value: 0x0340, lo: 0xb0, hi: 0xbf},
+	// Block 0xe8, offset 0x713
+	{value: 0x0000, lo: 0x05},
+	{value: 0x3308, lo: 0x80, hi: 0x80},
+	{value: 0x0008, lo: 0x81, hi: 0x86},
+	{value: 0x3308, lo: 0x87, hi: 0x95},
+	{value: 0x0040, lo: 0x96, hi: 0x9f},
+	{value: 0x0008, lo: 0xa0, hi: 0xbf},
+	// Block 0xe9, offset 0x719
+	{value: 0x0000, lo: 0x07},
+	{value: 0x0008, lo: 0x80, hi: 0x9d},
+	{value: 0x3308, lo: 0x9e, hi: 0xa9},
+	{value: 0x3008, lo: 0xaa, hi: 0xac},
+	{value: 0x3308, lo: 0xad, hi: 0xae},
+	{value: 0x3b08, lo: 0xaf, hi: 0xaf},
+	{value: 0x0008, lo: 0xb0, hi: 0xb9},
+	{value: 0x0040, lo: 0xba, hi: 0xbf},
+	// Block 0xea, offset 0x721
+	{value: 0x0000, lo: 0x06},
+	{value: 0x0008, lo: 0x80, hi: 0x9e},
+	{value: 0x0040, lo: 0x9f, hi: 0x9f},
+	{value: 0x0008, lo: 0xa0, hi: 0xa9},
+	{value: 0x0040, lo: 0xaa, hi: 0xad},
+	{value: 0x0018, lo: 0xae, hi: 0xaf},
+	{value: 0x0008, lo: 0xb0, hi: 0xbf},
+	// Block 0xeb, offset 0x728
+	{value: 0x0000, lo: 0x02},
+	{value: 0x0008, lo: 0x80, hi: 0xbe},
+	{value: 0x0040, lo: 0xbf, hi: 0xbf},
+	// Block 0xec, offset 0x72b
+	{value: 0x0000, lo: 0x07},
+	{value: 0x0008, lo: 0x80, hi: 0x89},
+	{value: 0x0040, lo: 0x8a, hi: 0x8f},
+	{value: 0x0008, lo: 0x90, hi: 0xad},
+	{value: 0x0040, lo: 0xae, hi: 0xaf},
+	{value: 0x3308, lo: 0xb0, hi: 0xb4},
+	{value: 0x0018, lo: 0xb5, hi: 0xb5},
+	{value: 0x0040, lo: 0xb6, hi: 0xbf},
+	// Block 0xed, offset 0x733
+	{value: 0x0000, lo: 0x03},
+	{value: 0x0008, lo: 0x80, hi: 0xaf},
+	{value: 0x3308, lo: 0xb0, hi: 0xb6},
+	{value: 0x0018, lo: 0xb7, hi: 0xbf},
+	// Block 0xee, offset 0x737
+	{value: 0x0000, lo: 0x0a},
+	{value: 0x0008, lo: 0x80, hi: 0x83},
+	{value: 0x0018, lo: 0x84, hi: 0x85},
+	{value: 0x0040, lo: 0x86, hi: 0x8f},
+	{value: 0x0008, lo: 0x90, hi: 0x99},
+	{value: 0x0040, lo: 0x9a, hi: 0x9a},
+	{value: 0x0018, lo: 0x9b, hi: 0xa1},
+	{value: 0x0040, lo: 0xa2, hi: 0xa2},
+	{value: 0x0008, lo: 0xa3, hi: 0xb7},
+	{value: 0x0040, lo: 0xb8, hi: 0xbc},
+	{value: 0x0008, lo: 0xbd, hi: 0xbf},
+	// Block 0xef, offset 0x742
+	{value: 0x0000, lo: 0x02},
+	{value: 0x0008, lo: 0x80, hi: 0x8f},
+	{value: 0x0040, lo: 0x90, hi: 0xbf},
+	// Block 0xf0, offset 0x745
+	{value: 0x0000, lo: 0x06},
+	{value: 0x0008, lo: 0x80, hi: 0xa6},
+	{value: 0x2008, lo: 0xa7, hi: 0xa8},
+	{value: 0x0008, lo: 0xa9, hi: 0xac},
+	{value: 0x0018, lo: 0xad, hi: 0xaf},
+	{value: 0x0008, lo: 0xb0, hi: 0xb9},
+	{value: 0x0040, lo: 0xba, hi: 0xbf},
+	// Block 0xf1, offset 0x74c
+	{value: 0x0000, lo: 0x02},
+	{value: 0xe105, lo: 0x80, hi: 0x9f},
+	{value: 0x0008, lo: 0xa0, hi: 0xbf},
+	// Block 0xf2, offset 0x74f
+	{value: 0x0000, lo: 0x02},
+	{value: 0x0008, lo: 0x80, hi: 0x93},
+	{value: 0x0040, lo: 0x94, hi: 0xbf},
+	// Block 0xf3, offset 0x752
+	{value: 0x0000, lo: 0x05},
+	{value: 0x0008, lo: 0x80, hi: 0x8a},
+	{value: 0x0040, lo: 0x8b, hi: 0x8e},
+	{value: 0x3308, lo: 0x8f, hi: 0x8f},
+	{value: 0x0008, lo: 0x90, hi: 0x90},
+	{value: 0x3008, lo: 0x91, hi: 0xbf},
+	// Block 0xf4, offset 0x758
+	{value: 0x0000, lo: 0x05},
+	{value: 0x3008, lo: 0x80, hi: 0x87},
+	{value: 0x0040, lo: 0x88, hi: 0x8e},
+	{value: 0x3308, lo: 0x8f, hi: 0x92},
+	{value: 0x0008, lo: 0x93, hi: 0x9f},
+	{value: 0x0040, lo: 0xa0, hi: 0xbf},
+	// Block 0xf5, offset 0x75e
+	{value: 0x0000, lo: 0x0a},
+	{value: 0x0040, lo: 0x80, hi: 0x9f},
+	{value: 0x0008, lo: 0xa0, hi: 0xa1},
+	{value: 0x0018, lo: 0xa2, hi: 0xa2},
+	{value: 0x0008, lo: 0xa3, hi: 0xa3},
+	{value: 0x3308, lo: 0xa4, hi: 0xa4},
+	{value: 0x0040, lo: 0xa5, hi: 0xaf},
+	{value: 0x3008, lo: 0xb0, hi: 0xb1},
+	{value: 0x0008, lo: 0xb2, hi: 0xb3},
+	{value: 0x0018, lo: 0xb4, hi: 0xb6},
+	{value: 0x0040, lo: 0xb7, hi: 0xbf},
+	// Block 0xf6, offset 0x769
+	{value: 0x0000, lo: 0x03},
+	{value: 0x0008, lo: 0x80, hi: 0x95},
+	{value: 0x0040, lo: 0x96, hi: 0xbe},
+	{value: 0x0008, lo: 0xbf, hi: 0xbf},
+	// Block 0xf7, offset 0x76d
+	{value: 0x0000, lo: 0x02},
+	{value: 0x0008, lo: 0x80, hi: 0x9e},
+	{value: 0x0040, lo: 0x9f, hi: 0xbf},
+	// Block 0xf8, offset 0x770
+	{value: 0x0000, lo: 0x02},
+	{value: 0x0008, lo: 0x80, hi: 0xb2},
+	{value: 0x0040, lo: 0xb3, hi: 0xbf},
+	// Block 0xf9, offset 0x773
+	{value: 0x0000, lo: 0x07},
+	{value: 0x0040, lo: 0x80, hi: 0xaf},
+	{value: 0x0008, lo: 0xb0, hi: 0xb3},
+	{value: 0x0040, lo: 0xb4, hi: 0xb4},
+	{value: 0x0008, lo: 0xb5, hi: 0xbb},
+	{value: 0x0040, lo: 0xbc, hi: 0xbc},
+	{value: 0x0008, lo: 0xbd, hi: 0xbe},
+	{value: 0x0040, lo: 0xbf, hi: 0xbf},
+	// Block 0xfa, offset 0x77b
+	{value: 0x0000, lo: 0x04},
+	{value: 0x0008, lo: 0x80, hi: 0xa2},
+	{value: 0x0040, lo: 0xa3, hi: 0xb1},
+	{value: 0x0008, lo: 0xb2, hi: 0xb2},
+	{value: 0x0040, lo: 0xb3, hi: 0xbf},
+	// Block 0xfb, offset 0x780
+	{value: 0x0000, lo: 0x08},
+	{value: 0x0040, lo: 0x80, hi: 0x8f},
+	{value: 0x0008, lo: 0x90, hi: 0x92},
+	{value: 0x0040, lo: 0x93, hi: 0x94},
+	{value: 0x0008, lo: 0x95, hi: 0x95},
+	{value: 0x0040, lo: 0x96, hi: 0xa3},
+	{value: 0x0008, lo: 0xa4, hi: 0xa7},
+	{value: 0x0040, lo: 0xa8, hi: 0xaf},
+	{value: 0x0008, lo: 0xb0, hi: 0xbf},
+	// Block 0xfc, offset 0x789
+	{value: 0x0000, lo: 0x02},
+	{value: 0x0008, lo: 0x80, hi: 0xbb},
+	{value: 0x0040, lo: 0xbc, hi: 0xbf},
+	// Block 0xfd, offset 0x78c
+	{value: 0x0000, lo: 0x04},
+	{value: 0x0008, lo: 0x80, hi: 0xaa},
+	{value: 0x0040, lo: 0xab, hi: 0xaf},
+	{value: 0x0008, lo: 0xb0, hi: 0xbc},
+	{value: 0x0040, lo: 0xbd, hi: 0xbf},
+	// Block 0xfe, offset 0x791
+	{value: 0x0000, lo: 0x09},
+	{value: 0x0008, lo: 0x80, hi: 0x88},
+	{value: 0x0040, lo: 0x89, hi: 0x8f},
+	{value: 0x0008, lo: 0x90, hi: 0x99},
+	{value: 0x0040, lo: 0x9a, hi: 0x9b},
+	{value: 0x0018, lo: 0x9c, hi: 0x9c},
+	{value: 0x3308, lo: 0x9d, hi: 0x9e},
+	{value: 0x0018, lo: 0x9f, hi: 0x9f},
+	{value: 0x03c0, lo: 0xa0, hi: 0xa3},
+	{value: 0x0040, lo: 0xa4, hi: 0xbf},
+	// Block 0xff, offset 0x79b
+	{value: 0x0000, lo: 0x03},
+	{value: 0x0018, lo: 0x80, hi: 0xb3},
+	{value: 0x0040, lo: 0xb4, hi: 0xb9},
+	{value: 0x0018, lo: 0xba, hi: 0xbf},
+	// Block 0x100, offset 0x79f
+	{value: 0x0000, lo: 0x04},
+	{value: 0x0018, lo: 0x80, hi: 0x90},
+	{value: 0x0040, lo: 0x91, hi: 0x9f},
+	{value: 0x0018, lo: 0xa0, hi: 0xb0},
+	{value: 0x0040, lo: 0xb1, hi: 0xbf},
+	// Block 0x101, offset 0x7a4
+	{value: 0x0000, lo: 0x03},
+	{value: 0x3308, lo: 0x80, hi: 0xad},
+	{value: 0x0040, lo: 0xae, hi: 0xaf},
+	{value: 0x3308, lo: 0xb0, hi: 0xbf},
+	// Block 0x102, offset 0x7a8
+	{value: 0x0000, lo: 0x03},
+	{value: 0x3308, lo: 0x80, hi: 0x86},
+	{value: 0x0040, lo: 0x87, hi: 0x8f},
+	{value: 0x0018, lo: 0x90, hi: 0xbf},
+	// Block 0x103, offset 0x7ac
+	{value: 0x0000, lo: 0x02},
+	{value: 0x0018, lo: 0x80, hi: 0x83},
+	{value: 0x0040, lo: 0x84, hi: 0xbf},
+	// Block 0x104, offset 0x7af
+	{value: 0x0000, lo: 0x02},
+	{value: 0x0018, lo: 0x80, hi: 0xb5},
+	{value: 0x0040, lo: 0xb6, hi: 0xbf},
+	// Block 0x105, offset 0x7b2
+	{value: 0x0000, lo: 0x03},
+	{value: 0x0018, lo: 0x80, hi: 0xa6},
+	{value: 0x0040, lo: 0xa7, hi: 0xa8},
+	{value: 0x0018, lo: 0xa9, hi: 0xbf},
+	// Block 0x106, offset 0x7b6
+	{value: 0x0000, lo: 0x0e},
+	{value: 0x0018, lo: 0x80, hi: 0x9d},
+	{value: 0x2381, lo: 0x9e, hi: 0x9e},
+	{value: 0x2389, lo: 0x9f, hi: 0x9f},
+	{value: 0x2391, lo: 0xa0, hi: 0xa0},
+	{value: 0x2399, lo: 0xa1, hi: 0xa1},
+	{value: 0x23a1, lo: 0xa2, hi: 0xa2},
+	{value: 0x23a9, lo: 0xa3, hi: 0xa3},
+	{value: 0x23b1, lo: 0xa4, hi: 0xa4},
+	{value: 0x3018, lo: 0xa5, hi: 0xa6},
+	{value: 0x3318, lo: 0xa7, hi: 0xa9},
+	{value: 0x0018, lo: 0xaa, hi: 0xac},
+	{value: 0x3018, lo: 0xad, hi: 0xb2},
+	{value: 0x03c0, lo: 0xb3, hi: 0xba},
+	{value: 0x3318, lo: 0xbb, hi: 0xbf},
+	// Block 0x107, offset 0x7c5
+	{value: 0x0000, lo: 0x0b},
+	{value: 0x3318, lo: 0x80, hi: 0x82},
+	{value: 0x0018, lo: 0x83, hi: 0x84},
+	{value: 0x3318, lo: 0x85, hi: 0x8b},
+	{value: 0x0018, lo: 0x8c, hi: 0xa9},
+	{value: 0x3318, lo: 0xaa, hi: 0xad},
+	{value: 0x0018, lo: 0xae, hi: 0xba},
+	{value: 0x23b9, lo: 0xbb, hi: 0xbb},
+	{value: 0x23c1, lo: 0xbc, hi: 0xbc},
+	{value: 0x23c9, lo: 0xbd, hi: 0xbd},
+	{value: 0x23d1, lo: 0xbe, hi: 0xbe},
+	{value: 0x23d9, lo: 0xbf, hi: 0xbf},
+	// Block 0x108, offset 0x7d1
+	{value: 0x0000, lo: 0x03},
+	{value: 0x23e1, lo: 0x80, hi: 0x80},
+	{value: 0x0018, lo: 0x81, hi: 0xaa},
+	{value: 0x0040, lo: 0xab, hi: 0xbf},
+	// Block 0x109, offset 0x7d5
+	{value: 0x0000, lo: 0x04},
+	{value: 0x0018, lo: 0x80, hi: 0x81},
+	{value: 0x3318, lo: 0x82, hi: 0x84},
+	{value: 0x0018, lo: 0x85, hi: 0x85},
+	{value: 0x0040, lo: 0x86, hi: 0xbf},
+	// Block 0x10a, offset 0x7da
+	{value: 0x0000, lo: 0x04},
+	{value: 0x0018, lo: 0x80, hi: 0x93},
+	{value: 0x0040, lo: 0x94, hi: 0x9f},
+	{value: 0x0018, lo: 0xa0, hi: 0xb3},
+	{value: 0x0040, lo: 0xb4, hi: 0xbf},
+	// Block 0x10b, offset 0x7df
+	{value: 0x0000, lo: 0x04},
+	{value: 0x0018, lo: 0x80, hi: 0x96},
+	{value: 0x0040, lo: 0x97, hi: 0x9f},
+	{value: 0x0018, lo: 0xa0, hi: 0xb8},
+	{value: 0x0040, lo: 0xb9, hi: 0xbf},
+	// Block 0x10c, offset 0x7e4
+	{value: 0x0000, lo: 0x03},
+	{value: 0x3308, lo: 0x80, hi: 0xb6},
+	{value: 0x0018, lo: 0xb7, hi: 0xba},
+	{value: 0x3308, lo: 0xbb, hi: 0xbf},
+	// Block 0x10d, offset 0x7e8
+	{value: 0x0000, lo: 0x04},
+	{value: 0x3308, lo: 0x80, hi: 0xac},
+	{value: 0x0018, lo: 0xad, hi: 0xb4},
+	{value: 0x3308, lo: 0xb5, hi: 0xb5},
+	{value: 0x0018, lo: 0xb6, hi: 0xbf},
+	// Block 0x10e, offset 0x7ed
+	{value: 0x0000, lo: 0x08},
+	{value: 0x0018, lo: 0x80, hi: 0x83},
+	{value: 0x3308, lo: 0x84, hi: 0x84},
+	{value: 0x0018, lo: 0x85, hi: 0x8b},
+	{value: 0x0040, lo: 0x8c, hi: 0x9a},
+	{value: 0x3308, lo: 0x9b, hi: 0x9f},
+	{value: 0x0040, lo: 0xa0, hi: 0xa0},
+	{value: 0x3308, lo: 0xa1, hi: 0xaf},
+	{value: 0x0040, lo: 0xb0, hi: 0xbf},
+	// Block 0x10f, offset 0x7f6
+	{value: 0x0000, lo: 0x04},
+	{value: 0x0008, lo: 0x80, hi: 0x9e},
+	{value: 0x0040, lo: 0x9f, hi: 0xa4},
+	{value: 0x0008, lo: 0xa5, hi: 0xaa},
+	{value: 0x0040, lo: 0xab, hi: 0xbf},
+	// Block 0x110, offset 0x7fb
+	{value: 0x0000, lo: 0x03},
+	{value: 0x0040, lo: 0x80, hi: 0x8e},
+	{value: 0x3308, lo: 0x8f, hi: 0x8f},
+	{value: 0x0040, lo: 0x90, hi: 0xbf},
+	// Block 0x111, offset 0x7ff
+	{value: 0x0000, lo: 0x05},
+	{value: 0x0008, lo: 0x80, hi: 0xac},
+	{value: 0x0040, lo: 0xad, hi: 0xaf},
+	{value: 0x3308, lo: 0xb0, hi: 0xb6},
+	{value: 0x0008, lo: 0xb7, hi: 0xbd},
+	{value: 0x0040, lo: 0xbe, hi: 0xbf},
+	// Block 0x112, offset 0x805
+	{value: 0x0000, lo: 0x05},
+	{value: 0x0008, lo: 0x80, hi: 0x89},
+	{value: 0x0040, lo: 0x8a, hi: 0x8d},
+	{value: 0x0008, lo: 0x8e, hi: 0x8e},
+	{value: 0x0018, lo: 0x8f, hi: 0x8f},
+	{value: 0x0040, lo: 0x90, hi: 0xbf},
+	// Block 0x113, offset 0x80b
+	{value: 0x0000, lo: 0x04},
+	{value: 0x0040, lo: 0x80, hi: 0x8f},
+	{value: 0x0008, lo: 0x90, hi: 0xad},
+	{value: 0x3308, lo: 0xae, hi: 0xae},
+	{value: 0x0040, lo: 0xaf, hi: 0xbf},
+	// Block 0x114, offset 0x810
+	{value: 0x0000, lo: 0x05},
+	{value: 0x0008, lo: 0x80, hi: 0xab},
+	{value: 0x3308, lo: 0xac, hi: 0xaf},
+	{value: 0x0008, lo: 0xb0, hi: 0xb9},
+	{value: 0x0040, lo: 0xba, hi: 0xbe},
+	{value: 0x0018, lo: 0xbf, hi: 0xbf},
+	// Block 0x115, offset 0x816
+	{value: 0x0000, lo: 0x05},
+	{value: 0x0040, lo: 0x80, hi: 0x8f},
+	{value: 0x0008, lo: 0x90, hi: 0xab},
+	{value: 0x3308, lo: 0xac, hi: 0xaf},
+	{value: 0x0008, lo: 0xb0, hi: 0xb9},
+	{value: 0x0040, lo: 0xba, hi: 0xbf},
+	// Block 0x116, offset 0x81c
+	{value: 0x0000, lo: 0x06},
+	{value: 0x0040, lo: 0x80, hi: 0x8f},
+	{value: 0x0008, lo: 0x90, hi: 0xad},
+	{value: 0x3308, lo: 0xae, hi: 0xaf},
+	{value: 0x0008, lo: 0xb0, hi: 0xba},
+	{value: 0x0040, lo: 0xbb, hi: 0xbe},
+	{value: 0x0018, lo: 0xbf, hi: 0xbf},
+	// Block 0x117, offset 0x823
+	{value: 0x0000, lo: 0x0c},
+	{value: 0x0008, lo: 0x80, hi: 0x9e},
+	{value: 0x0040, lo: 0x9f, hi: 0x9f},
+	{value: 0x0008, lo: 0xa0, hi: 0xa2},
+	{value: 0x3308, lo: 0xa3, hi: 0xa3},
+	{value: 0x0008, lo: 0xa4, hi: 0xa5},
+	{value: 0x3308, lo: 0xa6, hi: 0xa6},
+	{value: 0x0008, lo: 0xa7, hi: 0xad},
+	{value: 0x3308, lo: 0xae, hi: 0xaf},
+	{value: 0x0008, lo: 0xb0, hi: 0xb4},
+	{value: 0x3308, lo: 0xb5, hi: 0xb5},
+	{value: 0x0040, lo: 0xb6, hi: 0xbd},
+	{value: 0x0008, lo: 0xbe, hi: 0xbf},
+	// Block 0x118, offset 0x830
+	{value: 0x0000, lo: 0x09},
+	{value: 0x0040, lo: 0x80, hi: 0x9f},
+	{value: 0x0008, lo: 0xa0, hi: 0xa6},
+	{value: 0x0040, lo: 0xa7, hi: 0xa7},
+	{value: 0x0008, lo: 0xa8, hi: 0xab},
+	{value: 0x0040, lo: 0xac, hi: 0xac},
+	{value: 0x0008, lo: 0xad, hi: 0xae},
+	{value: 0x0040, lo: 0xaf, hi: 0xaf},
+	{value: 0x0008, lo: 0xb0, hi: 0xbe},
+	{value: 0x0040, lo: 0xbf, hi: 0xbf},
+	// Block 0x119, offset 0x83a
+	{value: 0x0000, lo: 0x05},
+	{value: 0x0808, lo: 0x80, hi: 0x84},
+	{value: 0x0040, lo: 0x85, hi: 0x86},
+	{value: 0x0818, lo: 0x87, hi: 0x8f},
+	{value: 0x3308, lo: 0x90, hi: 0x96},
+	{value: 0x0040, lo: 0x97, hi: 0xbf},
+	// Block 0x11a, offset 0x840
+	{value: 0x0000, lo: 0x08},
+	{value: 0x0a08, lo: 0x80, hi: 0x83},
+	{value: 0x3308, lo: 0x84, hi: 0x8a},
+	{value: 0x0b08, lo: 0x8b, hi: 0x8b},
+	{value: 0x0040, lo: 0x8c, hi: 0x8f},
+	{value: 0x0808, lo: 0x90, hi: 0x99},
+	{value: 0x0040, lo: 0x9a, hi: 0x9d},
+	{value: 0x0818, lo: 0x9e, hi: 0x9f},
+	{value: 0x0040, lo: 0xa0, hi: 0xbf},
+	// Block 0x11b, offset 0x849
+	{value: 0x0000, lo: 0x02},
+	{value: 0x0040, lo: 0x80, hi: 0xb0},
+	{value: 0x0818, lo: 0xb1, hi: 0xbf},
+	// Block 0x11c, offset 0x84c
+	{value: 0x0000, lo: 0x02},
+	{value: 0x0818, lo: 0x80, hi: 0xb4},
+	{value: 0x0040, lo: 0xb5, hi: 0xbf},
+	// Block 0x11d, offset 0x84f
+	{value: 0x0000, lo: 0x03},
+	{value: 0x0040, lo: 0x80, hi: 0x80},
+	{value: 0x0818, lo: 0x81, hi: 0xbd},
+	{value: 0x0040, lo: 0xbe, hi: 0xbf},
+	// Block 0x11e, offset 0x853
+	{value: 0x0000, lo: 0x03},
+	{value: 0x0040, lo: 0x80, hi: 0xaf},
+	{value: 0x0018, lo: 0xb0, hi: 0xb1},
+	{value: 0x0040, lo: 0xb2, hi: 0xbf},
+	// Block 0x11f, offset 0x857
+	{value: 0x0000, lo: 0x03},
+	{value: 0x0018, lo: 0x80, hi: 0xab},
+	{value: 0x0040, lo: 0xac, hi: 0xaf},
+	{value: 0x0018, lo: 0xb0, hi: 0xbf},
+	// Block 0x120, offset 0x85b
+	{value: 0x0000, lo: 0x05},
+	{value: 0x0018, lo: 0x80, hi: 0x93},
+	{value: 0x0040, lo: 0x94, hi: 0x9f},
+	{value: 0x0018, lo: 0xa0, hi: 0xae},
+	{value: 0x0040, lo: 0xaf, hi: 0xb0},
+	{value: 0x0018, lo: 0xb1, hi: 0xbf},
+	// Block 0x121, offset 0x861
+	{value: 0x0000, lo: 0x05},
+	{value: 0x0040, lo: 0x80, hi: 0x80},
+	{value: 0x0018, lo: 0x81, hi: 0x8f},
+	{value: 0x0040, lo: 0x90, hi: 0x90},
+	{value: 0x0018, lo: 0x91, hi: 0xb5},
+	{value: 0x0040, lo: 0xb6, hi: 0xbf},
+	// Block 0x122, offset 0x867
+	{value: 0x0000, lo: 0x04},
+	{value: 0x0018, lo: 0x80, hi: 0x8f},
+	{value: 0x2719, lo: 0x90, hi: 0x90},
+	{value: 0x0018, lo: 0x91, hi: 0xad},
+	{value: 0x0040, lo: 0xae, hi: 0xbf},
+	// Block 0x123, offset 0x86c
+	{value: 0x0000, lo: 0x02},
+	{value: 0x0040, lo: 0x80, hi: 0xa5},
+	{value: 0x0018, lo: 0xa6, hi: 0xbf},
+	// Block 0x124, offset 0x86f
+	{value: 0x0000, lo: 0x0f},
+	{value: 0x2899, lo: 0x80, hi: 0x80},
+	{value: 0x28a1, lo: 0x81, hi: 0x81},
+	{value: 0x28a9, lo: 0x82, hi: 0x82},
+	{value: 0x28b1, lo: 0x83, hi: 0x83},
+	{value: 0x28b9, lo: 0x84, hi: 0x84},
+	{value: 0x28c1, lo: 0x85, hi: 0x85},
+	{value: 0x28c9, lo: 0x86, hi: 0x86},
+	{value: 0x28d1, lo: 0x87, hi: 0x87},
+	{value: 0x28d9, lo: 0x88, hi: 0x88},
+	{value: 0x0040, lo: 0x89, hi: 0x8f},
+	{value: 0x28e1, lo: 0x90, hi: 0x90},
+	{value: 0x28e9, lo: 0x91, hi: 0x91},
+	{value: 0x0040, lo: 0x92, hi: 0x9f},
+	{value: 0x0018, lo: 0xa0, hi: 0xa5},
+	{value: 0x0040, lo: 0xa6, hi: 0xbf},
+	// Block 0x125, offset 0x87f
+	{value: 0x0000, lo: 0x06},
+	{value: 0x0018, lo: 0x80, hi: 0x98},
+	{value: 0x0040, lo: 0x99, hi: 0x9b},
+	{value: 0x0018, lo: 0x9c, hi: 0xac},
+	{value: 0x0040, lo: 0xad, hi: 0xaf},
+	{value: 0x0018, lo: 0xb0, hi: 0xbc},
+	{value: 0x0040, lo: 0xbd, hi: 0xbf},
+	// Block 0x126, offset 0x886
+	{value: 0x0000, lo: 0x06},
+	{value: 0x0018, lo: 0x80, hi: 0x99},
+	{value: 0x0040, lo: 0x9a, hi: 0x9f},
+	{value: 0x0018, lo: 0xa0, hi: 0xab},
+	{value: 0x0040, lo: 0xac, hi: 0xaf},
+	{value: 0x0018, lo: 0xb0, hi: 0xb0},
+	{value: 0x0040, lo: 0xb1, hi: 0xbf},
+	// Block 0x127, offset 0x88d
+	{value: 0x0000, lo: 0x03},
+	{value: 0x0018, lo: 0x80, hi: 0x8b},
+	{value: 0x0040, lo: 0x8c, hi: 0x8f},
+	{value: 0x0018, lo: 0x90, hi: 0xbf},
+	// Block 0x128, offset 0x891
+	{value: 0x0000, lo: 0x05},
+	{value: 0x0018, lo: 0x80, hi: 0x87},
+	{value: 0x0040, lo: 0x88, hi: 0x8f},
+	{value: 0x0018, lo: 0x90, hi: 0x99},
+	{value: 0x0040, lo: 0x9a, hi: 0x9f},
+	{value: 0x0018, lo: 0xa0, hi: 0xbf},
+	// Block 0x129, offset 0x897
+	{value: 0x0000, lo: 0x06},
+	{value: 0x0018, lo: 0x80, hi: 0x87},
+	{value: 0x0040, lo: 0x88, hi: 0x8f},
+	{value: 0x0018, lo: 0x90, hi: 0xad},
+	{value: 0x0040, lo: 0xae, hi: 0xaf},
+	{value: 0x0018, lo: 0xb0, hi: 0xbb},
+	{value: 0x0040, lo: 0xbc, hi: 0xbf},
+	// Block 0x12a, offset 0x89e
+	{value: 0x0000, lo: 0x04},
+	{value: 0x0018, lo: 0x80, hi: 0x81},
+	{value: 0x0040, lo: 0x82, hi: 0x8f},
+	{value: 0x0018, lo: 0x90, hi: 0x98},
+	{value: 0x0040, lo: 0x99, hi: 0xbf},
+	// Block 0x12b, offset 0x8a3
+	{value: 0x0000, lo: 0x06},
+	{value: 0x0018, lo: 0x80, hi: 0x97},
+	{value: 0x0040, lo: 0x98, hi: 0x9f},
+	{value: 0x0018, lo: 0xa0, hi: 0xad},
+	{value: 0x0040, lo: 0xae, hi: 0xaf},
+	{value: 0x0018, lo: 0xb0, hi: 0xbc},
+	{value: 0x0040, lo: 0xbd, hi: 0xbf},
+	// Block 0x12c, offset 0x8aa
+	{value: 0x0000, lo: 0x03},
+	{value: 0x0018, lo: 0x80, hi: 0x8a},
+	{value: 0x0040, lo: 0x8b, hi: 0x8d},
+	{value: 0x0018, lo: 0x8e, hi: 0xbf},
+	// Block 0x12d, offset 0x8ae
+	{value: 0x0000, lo: 0x0a},
+	{value: 0x0018, lo: 0x80, hi: 0x86},
+	{value: 0x0040, lo: 0x87, hi: 0x87},
+	{value: 0x0018, lo: 0x88, hi: 0x88},
+	{value: 0x0040, lo: 0x89, hi: 0x8c},
+	{value: 0x0018, lo: 0x8d, hi: 0x9c},
+	{value: 0x0040, lo: 0x9d, hi: 0x9e},
+	{value: 0x0018, lo: 0x9f, hi: 0xaa},
+	{value: 0x0040, lo: 0xab, hi: 0xae},
+	{value: 0x0018, lo: 0xaf, hi: 0xb8},
+	{value: 0x0040, lo: 0xb9, hi: 0xbf},
+	// Block 0x12e, offset 0x8b9
+	{value: 0x0000, lo: 0x03},
+	{value: 0x0018, lo: 0x80, hi: 0x92},
+	{value: 0x0040, lo: 0x93, hi: 0x93},
+	{value: 0x0018, lo: 0x94, hi: 0xbf},
+	// Block 0x12f, offset 0x8bd
+	{value: 0x0000, lo: 0x0d},
+	{value: 0x0018, lo: 0x80, hi: 0xaf},
+	{value: 0x06e1, lo: 0xb0, hi: 0xb0},
+	{value: 0x0049, lo: 0xb1, hi: 0xb1},
+	{value: 0x0029, lo: 0xb2, hi: 0xb2},
+	{value: 0x0031, lo: 0xb3, hi: 0xb3},
+	{value: 0x06e9, lo: 0xb4, hi: 0xb4},
+	{value: 0x06f1, lo: 0xb5, hi: 0xb5},
+	{value: 0x06f9, lo: 0xb6, hi: 0xb6},
+	{value: 0x0701, lo: 0xb7, hi: 0xb7},
+	{value: 0x0709, lo: 0xb8, hi: 0xb8},
+	{value: 0x0711, lo: 0xb9, hi: 0xb9},
+	{value: 0x0018, lo: 0xba, hi: 0xba},
+	{value: 0x0040, lo: 0xbb, hi: 0xbf},
+	// Block 0x130, offset 0x8cb
+	{value: 0x0000, lo: 0x02},
+	{value: 0x0008, lo: 0x80, hi: 0x9f},
+	{value: 0x0040, lo: 0xa0, hi: 0xbf},
+	// Block 0x131, offset 0x8ce
+	{value: 0x0000, lo: 0x03},
+	{value: 0x0008, lo: 0x80, hi: 0x9d},
+	{value: 0x0040, lo: 0x9e, hi: 0x9f},
+	{value: 0x0008, lo: 0xa0, hi: 0xbf},
+	// Block 0x132, offset 0x8d2
+	{value: 0x0000, lo: 0x03},
+	{value: 0x0008, lo: 0x80, hi: 0xad},
+	{value: 0x0040, lo: 0xae, hi: 0xaf},
+	{value: 0x0008, lo: 0xb0, hi: 0xbf},
+	// Block 0x133, offset 0x8d6
+	{value: 0x0000, lo: 0x03},
+	{value: 0x0008, lo: 0x80, hi: 0xa0},
+	{value: 0x0040, lo: 0xa1, hi: 0xaf},
+	{value: 0x0008, lo: 0xb0, hi: 0xbf},
+	// Block 0x134, offset 0x8da
+	{value: 0x0000, lo: 0x02},
+	{value: 0x0008, lo: 0x80, hi: 0x9d},
+	{value: 0x0040, lo: 0x9e, hi: 0xbf},
+	// Block 0x135, offset 0x8dd
+	{value: 0x0000, lo: 0x03},
+	{value: 0x0008, lo: 0x80, hi: 0x8a},
+	{value: 0x0040, lo: 0x8b, hi: 0x8f},
+	{value: 0x0008, lo: 0x90, hi: 0xbf},
+	// Block 0x136, offset 0x8e1
+	{value: 0x0000, lo: 0x02},
+	{value: 0x0008, lo: 0x80, hi: 0xb9},
+	{value: 0x0040, lo: 0xba, hi: 0xbf},
+	// Block 0x137, offset 0x8e4
+	{value: 0x0000, lo: 0x04},
+	{value: 0x0040, lo: 0x80, hi: 0x80},
+	{value: 0x0340, lo: 0x81, hi: 0x81},
+	{value: 0x0040, lo: 0x82, hi: 0x9f},
+	{value: 0x0340, lo: 0xa0, hi: 0xbf},
+	// Block 0x138, offset 0x8e9
+	{value: 0x0000, lo: 0x01},
+	{value: 0x0340, lo: 0x80, hi: 0xbf},
+	// Block 0x139, offset 0x8eb
+	{value: 0x0000, lo: 0x01},
+	{value: 0x33c0, lo: 0x80, hi: 0xbf},
+	// Block 0x13a, offset 0x8ed
+	{value: 0x0000, lo: 0x02},
+	{value: 0x33c0, lo: 0x80, hi: 0xaf},
+	{value: 0x0040, lo: 0xb0, hi: 0xbf},
+}
+
+// Total table size 47629 bytes (46KiB); checksum: 2D372017
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/net/idna/trie.go","mode":420,"size":1288,"sha256":"8d2a16a56e4cab9d23a7afb49443bfe7a5ff0d74e885acc9121b4a9c598825eb","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1288}
+// Code generated by running "go generate" in golang.org/x/text. DO NOT EDIT.
+
+// Copyright 2016 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package idna
+
+// Sparse block handling code.
+
+type valueRange struct {
+	value  uint16 // header: value:stride
+	lo, hi byte   // header: lo:n
+}
+
+type sparseBlocks struct {
+	values []valueRange
+	offset []uint16
+}
+
+var idnaSparse = sparseBlocks{
+	values: idnaSparseValues[:],
+	offset: idnaSparseOffset[:],
+}
+
+// Don't use newIdnaTrie to avoid unconditional linking in of the table.
+var trie = &idnaTrie{}
+
+// lookup determines the type of block n and looks up the value for b.
+// For n < t.cutoff, the block is a simple lookup table. Otherwise, the block
+// is a list of ranges with an accompanying value. Given a matching range r,
+// the value for b is by r.value + (b - r.lo) * stride.
+func (t *sparseBlocks) lookup(n uint32, b byte) uint16 {
+	offset := t.offset[n]
+	header := t.values[offset]
+	lo := offset + 1
+	hi := lo + uint16(header.lo)
+	for lo < hi {
+		m := lo + (hi-lo)/2
+		r := t.values[m]
+		if r.lo <= b && b <= r.hi {
+			return r.value + uint16(b-r.lo)*header.value
+		}
+		if b < r.lo {
+			hi = m
+		} else {
+			lo = m + 1
+		}
+	}
+	return 0
+}
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/net/idna/trieval.go","mode":420,"size":3035,"sha256":"7e2c4893145e4b3b4d7984d70244af9c358da4973915085a42689ed1f3ce5159","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3035}
+// Code generated by running "go generate" in golang.org/x/text. DO NOT EDIT.
+
+package idna
+
+// This file contains definitions for interpreting the trie value of the idna
+// trie generated by "go run gen*.go". It is shared by both the generator
+// program and the resultant package. Sharing is achieved by the generator
+// copying gen_trieval.go to trieval.go and changing what's above this comment.
+
+// info holds information from the IDNA mapping table for a single rune. It is
+// the value returned by a trie lookup. In most cases, all information fits in
+// a 16-bit value. For mappings, this value may contain an index into a slice
+// with the mapped string. Such mappings can consist of the actual mapped value
+// or an XOR pattern to be applied to the bytes of the UTF8 encoding of the
+// input rune. This technique is used by the cases packages and reduces the
+// table size significantly.
+//
+// The per-rune values have the following format:
+//
+//	if mapped {
+//	  if inlinedXOR {
+//	    15..13 inline XOR marker
+//	    12..11 unused
+//	    10..3  inline XOR mask
+//	  } else {
+//	    15..3  index into xor or mapping table
+//	  }
+//	} else {
+//	    15..14 unused
+//	    13     mayNeedNorm
+//	    12..11 attributes
+//	    10..8  joining type
+//	     7..3  category type
+//	}
+//	   2  use xor pattern
+//	1..0  mapped category
+//
+// See the definitions below for a more detailed description of the various
+// bits.
+type info uint16
+
+const (
+	catSmallMask = 0x3
+	catBigMask   = 0xF8
+	indexShift   = 3
+	xorBit       = 0x4    // interpret the index as an xor pattern
+	inlineXOR    = 0xE000 // These bits are set if the XOR pattern is inlined.
+
+	joinShift = 8
+	joinMask  = 0x07
+
+	// Attributes
+	attributesMask = 0x1800
+	viramaModifier = 0x1800
+	modifier       = 0x1000
+	rtl            = 0x0800
+
+	mayNeedNorm = 0x2000
+)
+
+// A category corresponds to a category defined in the IDNA mapping table.
+type category uint16
+
+const (
+	unknown              category = 0 // not currently defined in unicode.
+	mapped               category = 1
+	disallowedSTD3Mapped category = 2
+	deviation            category = 3
+)
+
+const (
+	valid               category = 0x08
+	validNV8            category = 0x18
+	validXV8            category = 0x28
+	disallowed          category = 0x40
+	disallowedSTD3Valid category = 0x80
+	ignored             category = 0xC0
+)
+
+// join types and additional rune information
+const (
+	joiningL = (iota + 1)
+	joiningD
+	joiningT
+	joiningR
+
+	//the following types are derived during processing
+	joinZWJ
+	joinZWNJ
+	joinVirama
+	numJoinTypes
+)
+
+func (c info) isMapped() bool {
+	return c&0x3 != 0
+}
+
+func (c info) category() category {
+	small := c & catSmallMask
+	if small != 0 {
+		return category(small)
+	}
+	return category(c & catBigMask)
+}
+
+func (c info) joinType() info {
+	if c.isMapped() {
+		return 0
+	}
+	return (c >> joinShift) & joinMask
+}
+
+func (c info) isModifier() bool {
+	return c&(modifier|catSmallMask) == modifier
+}
+
+func (c info) isViramaModifier() bool {
+	return c&(attributesMask|catSmallMask) == viramaModifier
+}
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/net/internal/httpcommon/ascii.go","mode":420,"size":1383,"sha256":"7446cfcfe70f682d5ad3102ca0aeef3bfbef86c799f0c61af9be9e942fe950dd","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1383}
+// Copyright 2025 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package httpcommon
+
+import "strings"
+
+// The HTTP protocols are defined in terms of ASCII, not Unicode. This file
+// contains helper functions which may use Unicode-aware functions which would
+// otherwise be unsafe and could introduce vulnerabilities if used improperly.
+
+// asciiEqualFold is strings.EqualFold, ASCII only. It reports whether s and t
+// are equal, ASCII-case-insensitively.
+func asciiEqualFold(s, t string) bool {
+	if len(s) != len(t) {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if lower(s[i]) != lower(t[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// lower returns the ASCII lowercase version of b.
+func lower(b byte) byte {
+	if 'A' <= b && b <= 'Z' {
+		return b + ('a' - 'A')
+	}
+	return b
+}
+
+// isASCIIPrint returns whether s is ASCII and printable according to
+// https://tools.ietf.org/html/rfc20#section-4.2.
+func isASCIIPrint(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] < ' ' || s[i] > '~' {
+			return false
+		}
+	}
+	return true
+}
+
+// asciiToLower returns the lowercase version of s if s is ASCII and printable,
+// and whether or not it was.
+func asciiToLower(s string) (lower string, ok bool) {
+	if !isASCIIPrint(s) {
+		return "", false
+	}
+	return strings.ToLower(s), true
+}
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/net/internal/httpcommon/headermap.go","mode":420,"size":2641,"sha256":"ee95dbc37a39a5a9ac3bc048ba3233f13d3f5e18e2faa8ba44d588218a888ade","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2641}
+// Copyright 2025 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package httpcommon
+
+import (
+	"net/textproto"
+	"sync"
+)
+
+var (
+	commonBuildOnce   sync.Once
+	commonLowerHeader map[string]string // Go-Canonical-Case -> lower-case
+	commonCanonHeader map[string]string // lower-case -> Go-Canonical-Case
+)
+
+func buildCommonHeaderMapsOnce() {
+	commonBuildOnce.Do(buildCommonHeaderMaps)
+}
+
+func buildCommonHeaderMaps() {
+	common := []string{
+		"accept",
+		"accept-charset",
+		"accept-encoding",
+		"accept-language",
+		"accept-ranges",
+		"age",
+		"access-control-allow-credentials",
+		"access-control-allow-headers",
+		"access-control-allow-methods",
+		"access-control-allow-origin",
+		"access-control-expose-headers",
+		"access-control-max-age",
+		"access-control-request-headers",
+		"access-control-request-method",
+		"allow",
+		"authorization",
+		"cache-control",
+		"content-disposition",
+		"content-encoding",
+		"content-language",
+		"content-length",
+		"content-location",
+		"content-range",
+		"content-type",
+		"cookie",
+		"date",
+		"etag",
+		"expect",
+		"expires",
+		"from",
+		"host",
+		"if-match",
+		"if-modified-since",
+		"if-none-match",
+		"if-unmodified-since",
+		"last-modified",
+		"link",
+		"location",
+		"max-forwards",
+		"origin",
+		"proxy-authenticate",
+		"proxy-authorization",
+		"range",
+		"referer",
+		"refresh",
+		"retry-after",
+		"server",
+		"set-cookie",
+		"strict-transport-security",
+		"trailer",
+		"transfer-encoding",
+		"user-agent",
+		"vary",
+		"via",
+		"www-authenticate",
+		"x-forwarded-for",
+		"x-forwarded-proto",
+	}
+	commonLowerHeader = make(map[string]string, len(common))
+	commonCanonHeader = make(map[string]string, len(common))
+	for _, v := range common {
+		chk := textproto.CanonicalMIMEHeaderKey(v)
+		commonLowerHeader[chk] = v
+		commonCanonHeader[v] = chk
+	}
+}
+
+// LowerHeader returns the lowercase form of a header name,
+// used on the wire for HTTP/2 and HTTP/3 requests.
+func LowerHeader(v string) (lower string, ascii bool) {
+	buildCommonHeaderMapsOnce()
+	if s, ok := commonLowerHeader[v]; ok {
+		return s, true
+	}
+	return asciiToLower(v)
+}
+
+// CanonicalHeader canonicalizes a header name. (For example, "host" becomes "Host".)
+func CanonicalHeader(v string) string {
+	buildCommonHeaderMapsOnce()
+	if s, ok := commonCanonHeader[v]; ok {
+		return s
+	}
+	return textproto.CanonicalMIMEHeaderKey(v)
+}
+
+// CachedCanonicalHeader returns the canonical form of a well-known header name.
+func CachedCanonicalHeader(v string) (string, bool) {
+	buildCommonHeaderMapsOnce()
+	s, ok := commonCanonHeader[v]
+	return s, ok
+}
+
+@@END
 @@PORTABLE {"path":"vendor/golang.org/x/net/internal/httpcommon/request.go","mode":420,"size":14355,"sha256":"ba011a886d277d17f10f5d2828cd4da7c920b63801ec6912cfdb99877787bc4f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":14355}
 // Copyright 2025 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
@@ -137861,3140 +140148,5 @@ TEXT libc_unveil_trampoline<>(SB),NOSPLIT,$0-0
 	JMP	libc_unveil(SB)
 GLOBL	·libc_unveil_trampoline_addr(SB), RODATA, $4
 DATA	·libc_unveil_trampoline_addr(SB)/4, $libc_unveil_trampoline<>(SB)
-
-@@END
-@@PORTABLE {"path":"vendor/golang.org/x/sys/unix/zsyscall_openbsd_arm64.go","mode":420,"size":61635,"sha256":"0a528ad67bdcea83f4d412411978bf6978972c79114cc6447b63bb1a5b304049","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
-// go run mksyscall.go -openbsd -libc -tags openbsd,arm64 syscall_bsd.go syscall_openbsd.go syscall_openbsd_arm64.go
-// Code generated by the command above; see README.md. DO NOT EDIT.
-
-//go:build openbsd && arm64
-
-package unix
-
-import (
-	"syscall"
-	"unsafe"
-)
-
-var _ syscall.Errno
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func getgroups(ngid int, gid *_Gid_t) (n int, err error) {
-	r0, _, e1 := syscall_rawSyscall(libc_getgroups_trampoline_addr, uintptr(ngid), uintptr(unsafe.Pointer(gid)), 0)
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_getgroups_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_getgroups getgroups "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func setgroups(ngid int, gid *_Gid_t) (err error) {
-	_, _, e1 := syscall_rawSyscall(libc_setgroups_trampoline_addr, uintptr(ngid), uintptr(unsafe.Pointer(gid)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_setgroups_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_setgroups setgroups "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func wait4(pid int, wstatus *_C_int, options int, rusage *Rusage) (wpid int, err error) {
-	r0, _, e1 := syscall_syscall6(libc_wait4_trampoline_addr, uintptr(pid), uintptr(unsafe.Pointer(wstatus)), uintptr(options), uintptr(unsafe.Pointer(rusage)), 0, 0)
-	wpid = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_wait4_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_wait4 wait4 "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func accept(s int, rsa *RawSockaddrAny, addrlen *_Socklen) (fd int, err error) {
-	r0, _, e1 := syscall_syscall(libc_accept_trampoline_addr, uintptr(s), uintptr(unsafe.Pointer(rsa)), uintptr(unsafe.Pointer(addrlen)))
-	fd = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_accept_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_accept accept "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func bind(s int, addr unsafe.Pointer, addrlen _Socklen) (err error) {
-	_, _, e1 := syscall_syscall(libc_bind_trampoline_addr, uintptr(s), uintptr(addr), uintptr(addrlen))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_bind_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_bind bind "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func connect(s int, addr unsafe.Pointer, addrlen _Socklen) (err error) {
-	_, _, e1 := syscall_syscall(libc_connect_trampoline_addr, uintptr(s), uintptr(addr), uintptr(addrlen))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_connect_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_connect connect "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func socket(domain int, typ int, proto int) (fd int, err error) {
-	r0, _, e1 := syscall_rawSyscall(libc_socket_trampoline_addr, uintptr(domain), uintptr(typ), uintptr(proto))
-	fd = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_socket_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_socket socket "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func getsockopt(s int, level int, name int, val unsafe.Pointer, vallen *_Socklen) (err error) {
-	_, _, e1 := syscall_syscall6(libc_getsockopt_trampoline_addr, uintptr(s), uintptr(level), uintptr(name), uintptr(val), uintptr(unsafe.Pointer(vallen)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_getsockopt_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_getsockopt getsockopt "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func setsockopt(s int, level int, name int, val unsafe.Pointer, vallen uintptr) (err error) {
-	_, _, e1 := syscall_syscall6(libc_setsockopt_trampoline_addr, uintptr(s), uintptr(level), uintptr(name), uintptr(val), uintptr(vallen), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_setsockopt_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_setsockopt setsockopt "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func getpeername(fd int, rsa *RawSockaddrAny, addrlen *_Socklen) (err error) {
-	_, _, e1 := syscall_rawSyscall(libc_getpeername_trampoline_addr, uintptr(fd), uintptr(unsafe.Pointer(rsa)), uintptr(unsafe.Pointer(addrlen)))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_getpeername_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_getpeername getpeername "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func getsockname(fd int, rsa *RawSockaddrAny, addrlen *_Socklen) (err error) {
-	_, _, e1 := syscall_rawSyscall(libc_getsockname_trampoline_addr, uintptr(fd), uintptr(unsafe.Pointer(rsa)), uintptr(unsafe.Pointer(addrlen)))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_getsockname_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_getsockname getsockname "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Shutdown(s int, how int) (err error) {
-	_, _, e1 := syscall_syscall(libc_shutdown_trampoline_addr, uintptr(s), uintptr(how), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_shutdown_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_shutdown shutdown "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func socketpair(domain int, typ int, proto int, fd *[2]int32) (err error) {
-	_, _, e1 := syscall_rawSyscall6(libc_socketpair_trampoline_addr, uintptr(domain), uintptr(typ), uintptr(proto), uintptr(unsafe.Pointer(fd)), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_socketpair_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_socketpair socketpair "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func recvfrom(fd int, p []byte, flags int, from *RawSockaddrAny, fromlen *_Socklen) (n int, err error) {
-	var _p0 unsafe.Pointer
-	if len(p) > 0 {
-		_p0 = unsafe.Pointer(&p[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	r0, _, e1 := syscall_syscall6(libc_recvfrom_trampoline_addr, uintptr(fd), uintptr(_p0), uintptr(len(p)), uintptr(flags), uintptr(unsafe.Pointer(from)), uintptr(unsafe.Pointer(fromlen)))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_recvfrom_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_recvfrom recvfrom "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func sendto(s int, buf []byte, flags int, to unsafe.Pointer, addrlen _Socklen) (err error) {
-	var _p0 unsafe.Pointer
-	if len(buf) > 0 {
-		_p0 = unsafe.Pointer(&buf[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	_, _, e1 := syscall_syscall6(libc_sendto_trampoline_addr, uintptr(s), uintptr(_p0), uintptr(len(buf)), uintptr(flags), uintptr(to), uintptr(addrlen))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_sendto_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_sendto sendto "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func recvmsg(s int, msg *Msghdr, flags int) (n int, err error) {
-	r0, _, e1 := syscall_syscall(libc_recvmsg_trampoline_addr, uintptr(s), uintptr(unsafe.Pointer(msg)), uintptr(flags))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_recvmsg_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_recvmsg recvmsg "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func sendmsg(s int, msg *Msghdr, flags int) (n int, err error) {
-	r0, _, e1 := syscall_syscall(libc_sendmsg_trampoline_addr, uintptr(s), uintptr(unsafe.Pointer(msg)), uintptr(flags))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_sendmsg_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_sendmsg sendmsg "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func kevent(kq int, change unsafe.Pointer, nchange int, event unsafe.Pointer, nevent int, timeout *Timespec) (n int, err error) {
-	r0, _, e1 := syscall_syscall6(libc_kevent_trampoline_addr, uintptr(kq), uintptr(change), uintptr(nchange), uintptr(event), uintptr(nevent), uintptr(unsafe.Pointer(timeout)))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_kevent_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_kevent kevent "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func utimes(path string, timeval *[2]Timeval) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_utimes_trampoline_addr, uintptr(unsafe.Pointer(_p0)), uintptr(unsafe.Pointer(timeval)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_utimes_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_utimes utimes "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func futimes(fd int, timeval *[2]Timeval) (err error) {
-	_, _, e1 := syscall_syscall(libc_futimes_trampoline_addr, uintptr(fd), uintptr(unsafe.Pointer(timeval)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_futimes_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_futimes futimes "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func poll(fds *PollFd, nfds int, timeout int) (n int, err error) {
-	r0, _, e1 := syscall_syscall(libc_poll_trampoline_addr, uintptr(unsafe.Pointer(fds)), uintptr(nfds), uintptr(timeout))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_poll_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_poll poll "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Madvise(b []byte, behav int) (err error) {
-	var _p0 unsafe.Pointer
-	if len(b) > 0 {
-		_p0 = unsafe.Pointer(&b[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	_, _, e1 := syscall_syscall(libc_madvise_trampoline_addr, uintptr(_p0), uintptr(len(b)), uintptr(behav))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_madvise_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_madvise madvise "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mlock(b []byte) (err error) {
-	var _p0 unsafe.Pointer
-	if len(b) > 0 {
-		_p0 = unsafe.Pointer(&b[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	_, _, e1 := syscall_syscall(libc_mlock_trampoline_addr, uintptr(_p0), uintptr(len(b)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_mlock_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_mlock mlock "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mlockall(flags int) (err error) {
-	_, _, e1 := syscall_syscall(libc_mlockall_trampoline_addr, uintptr(flags), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_mlockall_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_mlockall mlockall "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mprotect(b []byte, prot int) (err error) {
-	var _p0 unsafe.Pointer
-	if len(b) > 0 {
-		_p0 = unsafe.Pointer(&b[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	_, _, e1 := syscall_syscall(libc_mprotect_trampoline_addr, uintptr(_p0), uintptr(len(b)), uintptr(prot))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_mprotect_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_mprotect mprotect "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Msync(b []byte, flags int) (err error) {
-	var _p0 unsafe.Pointer
-	if len(b) > 0 {
-		_p0 = unsafe.Pointer(&b[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	_, _, e1 := syscall_syscall(libc_msync_trampoline_addr, uintptr(_p0), uintptr(len(b)), uintptr(flags))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_msync_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_msync msync "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Munlock(b []byte) (err error) {
-	var _p0 unsafe.Pointer
-	if len(b) > 0 {
-		_p0 = unsafe.Pointer(&b[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	_, _, e1 := syscall_syscall(libc_munlock_trampoline_addr, uintptr(_p0), uintptr(len(b)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_munlock_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_munlock munlock "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Munlockall() (err error) {
-	_, _, e1 := syscall_syscall(libc_munlockall_trampoline_addr, 0, 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_munlockall_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_munlockall munlockall "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func pipe2(p *[2]_C_int, flags int) (err error) {
-	_, _, e1 := syscall_rawSyscall(libc_pipe2_trampoline_addr, uintptr(unsafe.Pointer(p)), uintptr(flags), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_pipe2_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_pipe2 pipe2 "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getdents(fd int, buf []byte) (n int, err error) {
-	var _p0 unsafe.Pointer
-	if len(buf) > 0 {
-		_p0 = unsafe.Pointer(&buf[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	r0, _, e1 := syscall_syscall(libc_getdents_trampoline_addr, uintptr(fd), uintptr(_p0), uintptr(len(buf)))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_getdents_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_getdents getdents "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getcwd(buf []byte) (n int, err error) {
-	var _p0 unsafe.Pointer
-	if len(buf) > 0 {
-		_p0 = unsafe.Pointer(&buf[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	r0, _, e1 := syscall_syscall(libc_getcwd_trampoline_addr, uintptr(_p0), uintptr(len(buf)), 0)
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_getcwd_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_getcwd getcwd "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func getresuid(ruid *_C_int, euid *_C_int, suid *_C_int) {
-	syscall_rawSyscall(libc_getresuid_trampoline_addr, uintptr(unsafe.Pointer(ruid)), uintptr(unsafe.Pointer(euid)), uintptr(unsafe.Pointer(suid)))
-	return
-}
-
-var libc_getresuid_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_getresuid getresuid "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func getresgid(rgid *_C_int, egid *_C_int, sgid *_C_int) {
-	syscall_rawSyscall(libc_getresgid_trampoline_addr, uintptr(unsafe.Pointer(rgid)), uintptr(unsafe.Pointer(egid)), uintptr(unsafe.Pointer(sgid)))
-	return
-}
-
-var libc_getresgid_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_getresgid getresgid "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func ioctl(fd int, req uint, arg uintptr) (err error) {
-	_, _, e1 := syscall_syscall(libc_ioctl_trampoline_addr, uintptr(fd), uintptr(req), uintptr(arg))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_ioctl_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_ioctl ioctl "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func ioctlPtr(fd int, req uint, arg unsafe.Pointer) (err error) {
-	_, _, e1 := syscall_syscall(libc_ioctl_trampoline_addr, uintptr(fd), uintptr(req), uintptr(arg))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func sysctl(mib []_C_int, old *byte, oldlen *uintptr, new *byte, newlen uintptr) (err error) {
-	var _p0 unsafe.Pointer
-	if len(mib) > 0 {
-		_p0 = unsafe.Pointer(&mib[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	_, _, e1 := syscall_syscall6(libc_sysctl_trampoline_addr, uintptr(_p0), uintptr(len(mib)), uintptr(unsafe.Pointer(old)), uintptr(unsafe.Pointer(oldlen)), uintptr(unsafe.Pointer(new)), uintptr(newlen))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_sysctl_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_sysctl sysctl "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func fcntl(fd int, cmd int, arg int) (n int, err error) {
-	r0, _, e1 := syscall_syscall(libc_fcntl_trampoline_addr, uintptr(fd), uintptr(cmd), uintptr(arg))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_fcntl_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_fcntl fcntl "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func fcntlPtr(fd int, cmd int, arg unsafe.Pointer) (n int, err error) {
-	r0, _, e1 := syscall_syscall(libc_fcntl_trampoline_addr, uintptr(fd), uintptr(cmd), uintptr(arg))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func ppoll(fds *PollFd, nfds int, timeout *Timespec, sigmask *Sigset_t) (n int, err error) {
-	r0, _, e1 := syscall_syscall6(libc_ppoll_trampoline_addr, uintptr(unsafe.Pointer(fds)), uintptr(nfds), uintptr(unsafe.Pointer(timeout)), uintptr(unsafe.Pointer(sigmask)), 0, 0)
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_ppoll_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_ppoll ppoll "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Access(path string, mode uint32) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_access_trampoline_addr, uintptr(unsafe.Pointer(_p0)), uintptr(mode), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_access_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_access access "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Adjtime(delta *Timeval, olddelta *Timeval) (err error) {
-	_, _, e1 := syscall_syscall(libc_adjtime_trampoline_addr, uintptr(unsafe.Pointer(delta)), uintptr(unsafe.Pointer(olddelta)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_adjtime_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_adjtime adjtime "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Chdir(path string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_chdir_trampoline_addr, uintptr(unsafe.Pointer(_p0)), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_chdir_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_chdir chdir "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Chflags(path string, flags int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_chflags_trampoline_addr, uintptr(unsafe.Pointer(_p0)), uintptr(flags), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_chflags_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_chflags chflags "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Chmod(path string, mode uint32) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_chmod_trampoline_addr, uintptr(unsafe.Pointer(_p0)), uintptr(mode), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_chmod_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_chmod chmod "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Chown(path string, uid int, gid int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_chown_trampoline_addr, uintptr(unsafe.Pointer(_p0)), uintptr(uid), uintptr(gid))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_chown_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_chown chown "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Chroot(path string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_chroot_trampoline_addr, uintptr(unsafe.Pointer(_p0)), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_chroot_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_chroot chroot "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func ClockGettime(clockid int32, time *Timespec) (err error) {
-	_, _, e1 := syscall_syscall(libc_clock_gettime_trampoline_addr, uintptr(clockid), uintptr(unsafe.Pointer(time)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_clock_gettime_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_clock_gettime clock_gettime "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Close(fd int) (err error) {
-	_, _, e1 := syscall_syscall(libc_close_trampoline_addr, uintptr(fd), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_close_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_close close "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Dup(fd int) (nfd int, err error) {
-	r0, _, e1 := syscall_syscall(libc_dup_trampoline_addr, uintptr(fd), 0, 0)
-	nfd = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_dup_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_dup dup "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Dup2(from int, to int) (err error) {
-	_, _, e1 := syscall_syscall(libc_dup2_trampoline_addr, uintptr(from), uintptr(to), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_dup2_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_dup2 dup2 "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Dup3(from int, to int, flags int) (err error) {
-	_, _, e1 := syscall_syscall(libc_dup3_trampoline_addr, uintptr(from), uintptr(to), uintptr(flags))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_dup3_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_dup3 dup3 "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Exit(code int) {
-	syscall_syscall(libc_exit_trampoline_addr, uintptr(code), 0, 0)
-	return
-}
-
-var libc_exit_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_exit exit "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Faccessat(dirfd int, path string, mode uint32, flags int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall6(libc_faccessat_trampoline_addr, uintptr(dirfd), uintptr(unsafe.Pointer(_p0)), uintptr(mode), uintptr(flags), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_faccessat_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_faccessat faccessat "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fchdir(fd int) (err error) {
-	_, _, e1 := syscall_syscall(libc_fchdir_trampoline_addr, uintptr(fd), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_fchdir_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_fchdir fchdir "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fchflags(fd int, flags int) (err error) {
-	_, _, e1 := syscall_syscall(libc_fchflags_trampoline_addr, uintptr(fd), uintptr(flags), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_fchflags_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_fchflags fchflags "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fchmod(fd int, mode uint32) (err error) {
-	_, _, e1 := syscall_syscall(libc_fchmod_trampoline_addr, uintptr(fd), uintptr(mode), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_fchmod_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_fchmod fchmod "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fchmodat(dirfd int, path string, mode uint32, flags int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall6(libc_fchmodat_trampoline_addr, uintptr(dirfd), uintptr(unsafe.Pointer(_p0)), uintptr(mode), uintptr(flags), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_fchmodat_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_fchmodat fchmodat "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fchown(fd int, uid int, gid int) (err error) {
-	_, _, e1 := syscall_syscall(libc_fchown_trampoline_addr, uintptr(fd), uintptr(uid), uintptr(gid))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_fchown_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_fchown fchown "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fchownat(dirfd int, path string, uid int, gid int, flags int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall6(libc_fchownat_trampoline_addr, uintptr(dirfd), uintptr(unsafe.Pointer(_p0)), uintptr(uid), uintptr(gid), uintptr(flags), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_fchownat_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_fchownat fchownat "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Flock(fd int, how int) (err error) {
-	_, _, e1 := syscall_syscall(libc_flock_trampoline_addr, uintptr(fd), uintptr(how), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_flock_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_flock flock "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fpathconf(fd int, name int) (val int, err error) {
-	r0, _, e1 := syscall_syscall(libc_fpathconf_trampoline_addr, uintptr(fd), uintptr(name), 0)
-	val = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_fpathconf_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_fpathconf fpathconf "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fstat(fd int, stat *Stat_t) (err error) {
-	_, _, e1 := syscall_syscall(libc_fstat_trampoline_addr, uintptr(fd), uintptr(unsafe.Pointer(stat)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_fstat_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_fstat fstat "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fstatat(fd int, path string, stat *Stat_t, flags int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall6(libc_fstatat_trampoline_addr, uintptr(fd), uintptr(unsafe.Pointer(_p0)), uintptr(unsafe.Pointer(stat)), uintptr(flags), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_fstatat_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_fstatat fstatat "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fstatfs(fd int, stat *Statfs_t) (err error) {
-	_, _, e1 := syscall_syscall(libc_fstatfs_trampoline_addr, uintptr(fd), uintptr(unsafe.Pointer(stat)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_fstatfs_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_fstatfs fstatfs "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fsync(fd int) (err error) {
-	_, _, e1 := syscall_syscall(libc_fsync_trampoline_addr, uintptr(fd), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_fsync_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_fsync fsync "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Ftruncate(fd int, length int64) (err error) {
-	_, _, e1 := syscall_syscall(libc_ftruncate_trampoline_addr, uintptr(fd), uintptr(length), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_ftruncate_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_ftruncate ftruncate "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getegid() (egid int) {
-	r0, _, _ := syscall_rawSyscall(libc_getegid_trampoline_addr, 0, 0, 0)
-	egid = int(r0)
-	return
-}
-
-var libc_getegid_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_getegid getegid "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Geteuid() (uid int) {
-	r0, _, _ := syscall_rawSyscall(libc_geteuid_trampoline_addr, 0, 0, 0)
-	uid = int(r0)
-	return
-}
-
-var libc_geteuid_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_geteuid geteuid "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getgid() (gid int) {
-	r0, _, _ := syscall_rawSyscall(libc_getgid_trampoline_addr, 0, 0, 0)
-	gid = int(r0)
-	return
-}
-
-var libc_getgid_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_getgid getgid "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getpgid(pid int) (pgid int, err error) {
-	r0, _, e1 := syscall_rawSyscall(libc_getpgid_trampoline_addr, uintptr(pid), 0, 0)
-	pgid = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_getpgid_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_getpgid getpgid "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getpgrp() (pgrp int) {
-	r0, _, _ := syscall_rawSyscall(libc_getpgrp_trampoline_addr, 0, 0, 0)
-	pgrp = int(r0)
-	return
-}
-
-var libc_getpgrp_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_getpgrp getpgrp "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getpid() (pid int) {
-	r0, _, _ := syscall_rawSyscall(libc_getpid_trampoline_addr, 0, 0, 0)
-	pid = int(r0)
-	return
-}
-
-var libc_getpid_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_getpid getpid "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getppid() (ppid int) {
-	r0, _, _ := syscall_rawSyscall(libc_getppid_trampoline_addr, 0, 0, 0)
-	ppid = int(r0)
-	return
-}
-
-var libc_getppid_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_getppid getppid "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getpriority(which int, who int) (prio int, err error) {
-	r0, _, e1 := syscall_syscall(libc_getpriority_trampoline_addr, uintptr(which), uintptr(who), 0)
-	prio = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_getpriority_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_getpriority getpriority "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getrlimit(which int, lim *Rlimit) (err error) {
-	_, _, e1 := syscall_rawSyscall(libc_getrlimit_trampoline_addr, uintptr(which), uintptr(unsafe.Pointer(lim)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_getrlimit_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_getrlimit getrlimit "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getrtable() (rtable int, err error) {
-	r0, _, e1 := syscall_rawSyscall(libc_getrtable_trampoline_addr, 0, 0, 0)
-	rtable = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_getrtable_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_getrtable getrtable "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getrusage(who int, rusage *Rusage) (err error) {
-	_, _, e1 := syscall_rawSyscall(libc_getrusage_trampoline_addr, uintptr(who), uintptr(unsafe.Pointer(rusage)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_getrusage_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_getrusage getrusage "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getsid(pid int) (sid int, err error) {
-	r0, _, e1 := syscall_rawSyscall(libc_getsid_trampoline_addr, uintptr(pid), 0, 0)
-	sid = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_getsid_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_getsid getsid "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Gettimeofday(tv *Timeval) (err error) {
-	_, _, e1 := syscall_rawSyscall(libc_gettimeofday_trampoline_addr, uintptr(unsafe.Pointer(tv)), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_gettimeofday_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_gettimeofday gettimeofday "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getuid() (uid int) {
-	r0, _, _ := syscall_rawSyscall(libc_getuid_trampoline_addr, 0, 0, 0)
-	uid = int(r0)
-	return
-}
-
-var libc_getuid_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_getuid getuid "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Issetugid() (tainted bool) {
-	r0, _, _ := syscall_syscall(libc_issetugid_trampoline_addr, 0, 0, 0)
-	tainted = bool(r0 != 0)
-	return
-}
-
-var libc_issetugid_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_issetugid issetugid "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Kill(pid int, signum syscall.Signal) (err error) {
-	_, _, e1 := syscall_syscall(libc_kill_trampoline_addr, uintptr(pid), uintptr(signum), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_kill_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_kill kill "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Kqueue() (fd int, err error) {
-	r0, _, e1 := syscall_syscall(libc_kqueue_trampoline_addr, 0, 0, 0)
-	fd = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_kqueue_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_kqueue kqueue "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Lchown(path string, uid int, gid int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_lchown_trampoline_addr, uintptr(unsafe.Pointer(_p0)), uintptr(uid), uintptr(gid))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_lchown_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_lchown lchown "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Link(path string, link string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	var _p1 *byte
-	_p1, err = BytePtrFromString(link)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_link_trampoline_addr, uintptr(unsafe.Pointer(_p0)), uintptr(unsafe.Pointer(_p1)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_link_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_link link "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Linkat(pathfd int, path string, linkfd int, link string, flags int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	var _p1 *byte
-	_p1, err = BytePtrFromString(link)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall6(libc_linkat_trampoline_addr, uintptr(pathfd), uintptr(unsafe.Pointer(_p0)), uintptr(linkfd), uintptr(unsafe.Pointer(_p1)), uintptr(flags), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_linkat_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_linkat linkat "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Listen(s int, backlog int) (err error) {
-	_, _, e1 := syscall_syscall(libc_listen_trampoline_addr, uintptr(s), uintptr(backlog), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_listen_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_listen listen "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Lstat(path string, stat *Stat_t) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_lstat_trampoline_addr, uintptr(unsafe.Pointer(_p0)), uintptr(unsafe.Pointer(stat)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_lstat_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_lstat lstat "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mkdir(path string, mode uint32) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_mkdir_trampoline_addr, uintptr(unsafe.Pointer(_p0)), uintptr(mode), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_mkdir_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_mkdir mkdir "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mkdirat(dirfd int, path string, mode uint32) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_mkdirat_trampoline_addr, uintptr(dirfd), uintptr(unsafe.Pointer(_p0)), uintptr(mode))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_mkdirat_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_mkdirat mkdirat "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mkfifo(path string, mode uint32) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_mkfifo_trampoline_addr, uintptr(unsafe.Pointer(_p0)), uintptr(mode), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_mkfifo_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_mkfifo mkfifo "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mkfifoat(dirfd int, path string, mode uint32) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_mkfifoat_trampoline_addr, uintptr(dirfd), uintptr(unsafe.Pointer(_p0)), uintptr(mode))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_mkfifoat_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_mkfifoat mkfifoat "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mknod(path string, mode uint32, dev int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_mknod_trampoline_addr, uintptr(unsafe.Pointer(_p0)), uintptr(mode), uintptr(dev))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_mknod_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_mknod mknod "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mknodat(dirfd int, path string, mode uint32, dev int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall6(libc_mknodat_trampoline_addr, uintptr(dirfd), uintptr(unsafe.Pointer(_p0)), uintptr(mode), uintptr(dev), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_mknodat_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_mknodat mknodat "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mount(fsType string, dir string, flags int, data unsafe.Pointer) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(fsType)
-	if err != nil {
-		return
-	}
-	var _p1 *byte
-	_p1, err = BytePtrFromString(dir)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall6(libc_mount_trampoline_addr, uintptr(unsafe.Pointer(_p0)), uintptr(unsafe.Pointer(_p1)), uintptr(flags), uintptr(data), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_mount_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_mount mount "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Nanosleep(time *Timespec, leftover *Timespec) (err error) {
-	_, _, e1 := syscall_syscall(libc_nanosleep_trampoline_addr, uintptr(unsafe.Pointer(time)), uintptr(unsafe.Pointer(leftover)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_nanosleep_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_nanosleep nanosleep "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Open(path string, mode int, perm uint32) (fd int, err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	r0, _, e1 := syscall_syscall(libc_open_trampoline_addr, uintptr(unsafe.Pointer(_p0)), uintptr(mode), uintptr(perm))
-	fd = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_open_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_open open "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Openat(dirfd int, path string, mode int, perm uint32) (fd int, err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	r0, _, e1 := syscall_syscall6(libc_openat_trampoline_addr, uintptr(dirfd), uintptr(unsafe.Pointer(_p0)), uintptr(mode), uintptr(perm), 0, 0)
-	fd = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_openat_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_openat openat "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Pathconf(path string, name int) (val int, err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	r0, _, e1 := syscall_syscall(libc_pathconf_trampoline_addr, uintptr(unsafe.Pointer(_p0)), uintptr(name), 0)
-	val = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_pathconf_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_pathconf pathconf "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func pread(fd int, p []byte, offset int64) (n int, err error) {
-	var _p0 unsafe.Pointer
-	if len(p) > 0 {
-		_p0 = unsafe.Pointer(&p[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	r0, _, e1 := syscall_syscall6(libc_pread_trampoline_addr, uintptr(fd), uintptr(_p0), uintptr(len(p)), uintptr(offset), 0, 0)
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_pread_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_pread pread "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func pwrite(fd int, p []byte, offset int64) (n int, err error) {
-	var _p0 unsafe.Pointer
-	if len(p) > 0 {
-		_p0 = unsafe.Pointer(&p[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	r0, _, e1 := syscall_syscall6(libc_pwrite_trampoline_addr, uintptr(fd), uintptr(_p0), uintptr(len(p)), uintptr(offset), 0, 0)
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_pwrite_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_pwrite pwrite "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func readv(fd int, iovecs []Iovec) (n int, err error) {
-	var _p0 unsafe.Pointer
-	if len(iovecs) > 0 {
-		_p0 = unsafe.Pointer(&iovecs[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	r0, _, e1 := syscall_syscall(libc_readv_trampoline_addr, uintptr(fd), uintptr(_p0), uintptr(len(iovecs)))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_readv_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_readv readv "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func writev(fd int, iovecs []Iovec) (n int, err error) {
-	var _p0 unsafe.Pointer
-	if len(iovecs) > 0 {
-		_p0 = unsafe.Pointer(&iovecs[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	r0, _, e1 := syscall_syscall(libc_writev_trampoline_addr, uintptr(fd), uintptr(_p0), uintptr(len(iovecs)))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_writev_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_writev writev "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func preadv(fd int, iovecs []Iovec, offset int64) (n int, err error) {
-	var _p0 unsafe.Pointer
-	if len(iovecs) > 0 {
-		_p0 = unsafe.Pointer(&iovecs[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	r0, _, e1 := syscall_syscall6(libc_preadv_trampoline_addr, uintptr(fd), uintptr(_p0), uintptr(len(iovecs)), uintptr(offset), 0, 0)
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_preadv_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_preadv preadv "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func pwritev(fd int, iovecs []Iovec, offset int64) (n int, err error) {
-	var _p0 unsafe.Pointer
-	if len(iovecs) > 0 {
-		_p0 = unsafe.Pointer(&iovecs[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	r0, _, e1 := syscall_syscall6(libc_pwritev_trampoline_addr, uintptr(fd), uintptr(_p0), uintptr(len(iovecs)), uintptr(offset), 0, 0)
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_pwritev_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_pwritev pwritev "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func read(fd int, p []byte) (n int, err error) {
-	var _p0 unsafe.Pointer
-	if len(p) > 0 {
-		_p0 = unsafe.Pointer(&p[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	r0, _, e1 := syscall_syscall(libc_read_trampoline_addr, uintptr(fd), uintptr(_p0), uintptr(len(p)))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_read_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_read read "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Readlink(path string, buf []byte) (n int, err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	var _p1 unsafe.Pointer
-	if len(buf) > 0 {
-		_p1 = unsafe.Pointer(&buf[0])
-	} else {
-		_p1 = unsafe.Pointer(&_zero)
-	}
-	r0, _, e1 := syscall_syscall(libc_readlink_trampoline_addr, uintptr(unsafe.Pointer(_p0)), uintptr(_p1), uintptr(len(buf)))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_readlink_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_readlink readlink "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Readlinkat(dirfd int, path string, buf []byte) (n int, err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	var _p1 unsafe.Pointer
-	if len(buf) > 0 {
-		_p1 = unsafe.Pointer(&buf[0])
-	} else {
-		_p1 = unsafe.Pointer(&_zero)
-	}
-	r0, _, e1 := syscall_syscall6(libc_readlinkat_trampoline_addr, uintptr(dirfd), uintptr(unsafe.Pointer(_p0)), uintptr(_p1), uintptr(len(buf)), 0, 0)
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_readlinkat_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_readlinkat readlinkat "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Rename(from string, to string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(from)
-	if err != nil {
-		return
-	}
-	var _p1 *byte
-	_p1, err = BytePtrFromString(to)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_rename_trampoline_addr, uintptr(unsafe.Pointer(_p0)), uintptr(unsafe.Pointer(_p1)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_rename_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_rename rename "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Renameat(fromfd int, from string, tofd int, to string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(from)
-	if err != nil {
-		return
-	}
-	var _p1 *byte
-	_p1, err = BytePtrFromString(to)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall6(libc_renameat_trampoline_addr, uintptr(fromfd), uintptr(unsafe.Pointer(_p0)), uintptr(tofd), uintptr(unsafe.Pointer(_p1)), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_renameat_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_renameat renameat "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Revoke(path string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_revoke_trampoline_addr, uintptr(unsafe.Pointer(_p0)), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_revoke_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_revoke revoke "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Rmdir(path string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_rmdir_trampoline_addr, uintptr(unsafe.Pointer(_p0)), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_r
-@@END
-@@PORTABLE {"path":"vendor/golang.org/x/sys/unix/zsyscall_openbsd_arm64.go","mode":420,"size":61635,"sha256":"0a528ad67bdcea83f4d412411978bf6978972c79114cc6447b63bb1a5b304049","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":13635}
-mdir_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_rmdir rmdir "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Seek(fd int, offset int64, whence int) (newoffset int64, err error) {
-	r0, _, e1 := syscall_syscall(libc_lseek_trampoline_addr, uintptr(fd), uintptr(offset), uintptr(whence))
-	newoffset = int64(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_lseek_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_lseek lseek "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Select(nfd int, r *FdSet, w *FdSet, e *FdSet, timeout *Timeval) (n int, err error) {
-	r0, _, e1 := syscall_syscall6(libc_select_trampoline_addr, uintptr(nfd), uintptr(unsafe.Pointer(r)), uintptr(unsafe.Pointer(w)), uintptr(unsafe.Pointer(e)), uintptr(unsafe.Pointer(timeout)), 0)
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_select_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_select select "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setegid(egid int) (err error) {
-	_, _, e1 := syscall_rawSyscall(libc_setegid_trampoline_addr, uintptr(egid), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_setegid_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_setegid setegid "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Seteuid(euid int) (err error) {
-	_, _, e1 := syscall_rawSyscall(libc_seteuid_trampoline_addr, uintptr(euid), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_seteuid_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_seteuid seteuid "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setgid(gid int) (err error) {
-	_, _, e1 := syscall_rawSyscall(libc_setgid_trampoline_addr, uintptr(gid), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_setgid_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_setgid setgid "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setlogin(name string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(name)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_setlogin_trampoline_addr, uintptr(unsafe.Pointer(_p0)), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_setlogin_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_setlogin setlogin "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setpgid(pid int, pgid int) (err error) {
-	_, _, e1 := syscall_rawSyscall(libc_setpgid_trampoline_addr, uintptr(pid), uintptr(pgid), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_setpgid_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_setpgid setpgid "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setpriority(which int, who int, prio int) (err error) {
-	_, _, e1 := syscall_syscall(libc_setpriority_trampoline_addr, uintptr(which), uintptr(who), uintptr(prio))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_setpriority_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_setpriority setpriority "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setregid(rgid int, egid int) (err error) {
-	_, _, e1 := syscall_rawSyscall(libc_setregid_trampoline_addr, uintptr(rgid), uintptr(egid), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_setregid_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_setregid setregid "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setreuid(ruid int, euid int) (err error) {
-	_, _, e1 := syscall_rawSyscall(libc_setreuid_trampoline_addr, uintptr(ruid), uintptr(euid), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_setreuid_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_setreuid setreuid "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setresgid(rgid int, egid int, sgid int) (err error) {
-	_, _, e1 := syscall_rawSyscall(libc_setresgid_trampoline_addr, uintptr(rgid), uintptr(egid), uintptr(sgid))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_setresgid_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_setresgid setresgid "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setresuid(ruid int, euid int, suid int) (err error) {
-	_, _, e1 := syscall_rawSyscall(libc_setresuid_trampoline_addr, uintptr(ruid), uintptr(euid), uintptr(suid))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_setresuid_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_setresuid setresuid "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setrtable(rtable int) (err error) {
-	_, _, e1 := syscall_rawSyscall(libc_setrtable_trampoline_addr, uintptr(rtable), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_setrtable_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_setrtable setrtable "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setsid() (pid int, err error) {
-	r0, _, e1 := syscall_rawSyscall(libc_setsid_trampoline_addr, 0, 0, 0)
-	pid = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_setsid_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_setsid setsid "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Settimeofday(tp *Timeval) (err error) {
-	_, _, e1 := syscall_rawSyscall(libc_settimeofday_trampoline_addr, uintptr(unsafe.Pointer(tp)), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_settimeofday_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_settimeofday settimeofday "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setuid(uid int) (err error) {
-	_, _, e1 := syscall_rawSyscall(libc_setuid_trampoline_addr, uintptr(uid), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_setuid_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_setuid setuid "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Stat(path string, stat *Stat_t) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_stat_trampoline_addr, uintptr(unsafe.Pointer(_p0)), uintptr(unsafe.Pointer(stat)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_stat_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_stat stat "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Statfs(path string, stat *Statfs_t) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_statfs_trampoline_addr, uintptr(unsafe.Pointer(_p0)), uintptr(unsafe.Pointer(stat)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_statfs_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_statfs statfs "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Symlink(path string, link string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	var _p1 *byte
-	_p1, err = BytePtrFromString(link)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_symlink_trampoline_addr, uintptr(unsafe.Pointer(_p0)), uintptr(unsafe.Pointer(_p1)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_symlink_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_symlink symlink "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Symlinkat(oldpath string, newdirfd int, newpath string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(oldpath)
-	if err != nil {
-		return
-	}
-	var _p1 *byte
-	_p1, err = BytePtrFromString(newpath)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_symlinkat_trampoline_addr, uintptr(unsafe.Pointer(_p0)), uintptr(newdirfd), uintptr(unsafe.Pointer(_p1)))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_symlinkat_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_symlinkat symlinkat "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Sync() (err error) {
-	_, _, e1 := syscall_syscall(libc_sync_trampoline_addr, 0, 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_sync_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_sync sync "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Truncate(path string, length int64) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_truncate_trampoline_addr, uintptr(unsafe.Pointer(_p0)), uintptr(length), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_truncate_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_truncate truncate "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Umask(newmask int) (oldmask int) {
-	r0, _, _ := syscall_syscall(libc_umask_trampoline_addr, uintptr(newmask), 0, 0)
-	oldmask = int(r0)
-	return
-}
-
-var libc_umask_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_umask umask "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Unlink(path string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_unlink_trampoline_addr, uintptr(unsafe.Pointer(_p0)), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_unlink_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_unlink unlink "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Unlinkat(dirfd int, path string, flags int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_unlinkat_trampoline_addr, uintptr(dirfd), uintptr(unsafe.Pointer(_p0)), uintptr(flags))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_unlinkat_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_unlinkat unlinkat "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Unmount(path string, flags int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_unmount_trampoline_addr, uintptr(unsafe.Pointer(_p0)), uintptr(flags), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_unmount_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_unmount unmount "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func write(fd int, p []byte) (n int, err error) {
-	var _p0 unsafe.Pointer
-	if len(p) > 0 {
-		_p0 = unsafe.Pointer(&p[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	r0, _, e1 := syscall_syscall(libc_write_trampoline_addr, uintptr(fd), uintptr(_p0), uintptr(len(p)))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_write_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_write write "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func mmap(addr uintptr, length uintptr, prot int, flag int, fd int, pos int64) (ret uintptr, err error) {
-	r0, _, e1 := syscall_syscall6(libc_mmap_trampoline_addr, uintptr(addr), uintptr(length), uintptr(prot), uintptr(flag), uintptr(fd), uintptr(pos))
-	ret = uintptr(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_mmap_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_mmap mmap "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func munmap(addr uintptr, length uintptr) (err error) {
-	_, _, e1 := syscall_syscall(libc_munmap_trampoline_addr, uintptr(addr), uintptr(length), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_munmap_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_munmap munmap "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func getfsstat(stat *Statfs_t, bufsize uintptr, flags int) (n int, err error) {
-	r0, _, e1 := syscall_syscall(libc_getfsstat_trampoline_addr, uintptr(unsafe.Pointer(stat)), uintptr(bufsize), uintptr(flags))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_getfsstat_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_getfsstat getfsstat "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func utimensat(dirfd int, path string, times *[2]Timespec, flags int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall6(libc_utimensat_trampoline_addr, uintptr(dirfd), uintptr(unsafe.Pointer(_p0)), uintptr(unsafe.Pointer(times)), uintptr(flags), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_utimensat_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_utimensat utimensat "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func pledge(promises *byte, execpromises *byte) (err error) {
-	_, _, e1 := syscall_syscall(libc_pledge_trampoline_addr, uintptr(unsafe.Pointer(promises)), uintptr(unsafe.Pointer(execpromises)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_pledge_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_pledge pledge "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func unveil(path *byte, flags *byte) (err error) {
-	_, _, e1 := syscall_syscall(libc_unveil_trampoline_addr, uintptr(unsafe.Pointer(path)), uintptr(unsafe.Pointer(flags)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_unveil_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_unveil unveil "libc.so"
-
-@@END
-@@PORTABLE {"path":"vendor/golang.org/x/sys/unix/zsyscall_openbsd_arm64.s","mode":420,"size":28303,"sha256":"58194af14490f313be3b8830d64035964d78097e0cd02291796565e1d6f69748","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":28303}
-// go run mkasm.go openbsd arm64
-// Code generated by the command above; DO NOT EDIT.
-
-#include "textflag.h"
-
-TEXT libc_getgroups_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_getgroups(SB)
-GLOBL	·libc_getgroups_trampoline_addr(SB), RODATA, $8
-DATA	·libc_getgroups_trampoline_addr(SB)/8, $libc_getgroups_trampoline<>(SB)
-
-TEXT libc_setgroups_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_setgroups(SB)
-GLOBL	·libc_setgroups_trampoline_addr(SB), RODATA, $8
-DATA	·libc_setgroups_trampoline_addr(SB)/8, $libc_setgroups_trampoline<>(SB)
-
-TEXT libc_wait4_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_wait4(SB)
-GLOBL	·libc_wait4_trampoline_addr(SB), RODATA, $8
-DATA	·libc_wait4_trampoline_addr(SB)/8, $libc_wait4_trampoline<>(SB)
-
-TEXT libc_accept_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_accept(SB)
-GLOBL	·libc_accept_trampoline_addr(SB), RODATA, $8
-DATA	·libc_accept_trampoline_addr(SB)/8, $libc_accept_trampoline<>(SB)
-
-TEXT libc_bind_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_bind(SB)
-GLOBL	·libc_bind_trampoline_addr(SB), RODATA, $8
-DATA	·libc_bind_trampoline_addr(SB)/8, $libc_bind_trampoline<>(SB)
-
-TEXT libc_connect_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_connect(SB)
-GLOBL	·libc_connect_trampoline_addr(SB), RODATA, $8
-DATA	·libc_connect_trampoline_addr(SB)/8, $libc_connect_trampoline<>(SB)
-
-TEXT libc_socket_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_socket(SB)
-GLOBL	·libc_socket_trampoline_addr(SB), RODATA, $8
-DATA	·libc_socket_trampoline_addr(SB)/8, $libc_socket_trampoline<>(SB)
-
-TEXT libc_getsockopt_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_getsockopt(SB)
-GLOBL	·libc_getsockopt_trampoline_addr(SB), RODATA, $8
-DATA	·libc_getsockopt_trampoline_addr(SB)/8, $libc_getsockopt_trampoline<>(SB)
-
-TEXT libc_setsockopt_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_setsockopt(SB)
-GLOBL	·libc_setsockopt_trampoline_addr(SB), RODATA, $8
-DATA	·libc_setsockopt_trampoline_addr(SB)/8, $libc_setsockopt_trampoline<>(SB)
-
-TEXT libc_getpeername_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_getpeername(SB)
-GLOBL	·libc_getpeername_trampoline_addr(SB), RODATA, $8
-DATA	·libc_getpeername_trampoline_addr(SB)/8, $libc_getpeername_trampoline<>(SB)
-
-TEXT libc_getsockname_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_getsockname(SB)
-GLOBL	·libc_getsockname_trampoline_addr(SB), RODATA, $8
-DATA	·libc_getsockname_trampoline_addr(SB)/8, $libc_getsockname_trampoline<>(SB)
-
-TEXT libc_shutdown_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_shutdown(SB)
-GLOBL	·libc_shutdown_trampoline_addr(SB), RODATA, $8
-DATA	·libc_shutdown_trampoline_addr(SB)/8, $libc_shutdown_trampoline<>(SB)
-
-TEXT libc_socketpair_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_socketpair(SB)
-GLOBL	·libc_socketpair_trampoline_addr(SB), RODATA, $8
-DATA	·libc_socketpair_trampoline_addr(SB)/8, $libc_socketpair_trampoline<>(SB)
-
-TEXT libc_recvfrom_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_recvfrom(SB)
-GLOBL	·libc_recvfrom_trampoline_addr(SB), RODATA, $8
-DATA	·libc_recvfrom_trampoline_addr(SB)/8, $libc_recvfrom_trampoline<>(SB)
-
-TEXT libc_sendto_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_sendto(SB)
-GLOBL	·libc_sendto_trampoline_addr(SB), RODATA, $8
-DATA	·libc_sendto_trampoline_addr(SB)/8, $libc_sendto_trampoline<>(SB)
-
-TEXT libc_recvmsg_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_recvmsg(SB)
-GLOBL	·libc_recvmsg_trampoline_addr(SB), RODATA, $8
-DATA	·libc_recvmsg_trampoline_addr(SB)/8, $libc_recvmsg_trampoline<>(SB)
-
-TEXT libc_sendmsg_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_sendmsg(SB)
-GLOBL	·libc_sendmsg_trampoline_addr(SB), RODATA, $8
-DATA	·libc_sendmsg_trampoline_addr(SB)/8, $libc_sendmsg_trampoline<>(SB)
-
-TEXT libc_kevent_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_kevent(SB)
-GLOBL	·libc_kevent_trampoline_addr(SB), RODATA, $8
-DATA	·libc_kevent_trampoline_addr(SB)/8, $libc_kevent_trampoline<>(SB)
-
-TEXT libc_utimes_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_utimes(SB)
-GLOBL	·libc_utimes_trampoline_addr(SB), RODATA, $8
-DATA	·libc_utimes_trampoline_addr(SB)/8, $libc_utimes_trampoline<>(SB)
-
-TEXT libc_futimes_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_futimes(SB)
-GLOBL	·libc_futimes_trampoline_addr(SB), RODATA, $8
-DATA	·libc_futimes_trampoline_addr(SB)/8, $libc_futimes_trampoline<>(SB)
-
-TEXT libc_poll_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_poll(SB)
-GLOBL	·libc_poll_trampoline_addr(SB), RODATA, $8
-DATA	·libc_poll_trampoline_addr(SB)/8, $libc_poll_trampoline<>(SB)
-
-TEXT libc_madvise_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_madvise(SB)
-GLOBL	·libc_madvise_trampoline_addr(SB), RODATA, $8
-DATA	·libc_madvise_trampoline_addr(SB)/8, $libc_madvise_trampoline<>(SB)
-
-TEXT libc_mlock_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_mlock(SB)
-GLOBL	·libc_mlock_trampoline_addr(SB), RODATA, $8
-DATA	·libc_mlock_trampoline_addr(SB)/8, $libc_mlock_trampoline<>(SB)
-
-TEXT libc_mlockall_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_mlockall(SB)
-GLOBL	·libc_mlockall_trampoline_addr(SB), RODATA, $8
-DATA	·libc_mlockall_trampoline_addr(SB)/8, $libc_mlockall_trampoline<>(SB)
-
-TEXT libc_mprotect_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_mprotect(SB)
-GLOBL	·libc_mprotect_trampoline_addr(SB), RODATA, $8
-DATA	·libc_mprotect_trampoline_addr(SB)/8, $libc_mprotect_trampoline<>(SB)
-
-TEXT libc_msync_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_msync(SB)
-GLOBL	·libc_msync_trampoline_addr(SB), RODATA, $8
-DATA	·libc_msync_trampoline_addr(SB)/8, $libc_msync_trampoline<>(SB)
-
-TEXT libc_munlock_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_munlock(SB)
-GLOBL	·libc_munlock_trampoline_addr(SB), RODATA, $8
-DATA	·libc_munlock_trampoline_addr(SB)/8, $libc_munlock_trampoline<>(SB)
-
-TEXT libc_munlockall_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_munlockall(SB)
-GLOBL	·libc_munlockall_trampoline_addr(SB), RODATA, $8
-DATA	·libc_munlockall_trampoline_addr(SB)/8, $libc_munlockall_trampoline<>(SB)
-
-TEXT libc_pipe2_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_pipe2(SB)
-GLOBL	·libc_pipe2_trampoline_addr(SB), RODATA, $8
-DATA	·libc_pipe2_trampoline_addr(SB)/8, $libc_pipe2_trampoline<>(SB)
-
-TEXT libc_getdents_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_getdents(SB)
-GLOBL	·libc_getdents_trampoline_addr(SB), RODATA, $8
-DATA	·libc_getdents_trampoline_addr(SB)/8, $libc_getdents_trampoline<>(SB)
-
-TEXT libc_getcwd_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_getcwd(SB)
-GLOBL	·libc_getcwd_trampoline_addr(SB), RODATA, $8
-DATA	·libc_getcwd_trampoline_addr(SB)/8, $libc_getcwd_trampoline<>(SB)
-
-TEXT libc_getresuid_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_getresuid(SB)
-GLOBL	·libc_getresuid_trampoline_addr(SB), RODATA, $8
-DATA	·libc_getresuid_trampoline_addr(SB)/8, $libc_getresuid_trampoline<>(SB)
-
-TEXT libc_getresgid_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_getresgid(SB)
-GLOBL	·libc_getresgid_trampoline_addr(SB), RODATA, $8
-DATA	·libc_getresgid_trampoline_addr(SB)/8, $libc_getresgid_trampoline<>(SB)
-
-TEXT libc_ioctl_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_ioctl(SB)
-GLOBL	·libc_ioctl_trampoline_addr(SB), RODATA, $8
-DATA	·libc_ioctl_trampoline_addr(SB)/8, $libc_ioctl_trampoline<>(SB)
-
-TEXT libc_sysctl_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_sysctl(SB)
-GLOBL	·libc_sysctl_trampoline_addr(SB), RODATA, $8
-DATA	·libc_sysctl_trampoline_addr(SB)/8, $libc_sysctl_trampoline<>(SB)
-
-TEXT libc_fcntl_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_fcntl(SB)
-GLOBL	·libc_fcntl_trampoline_addr(SB), RODATA, $8
-DATA	·libc_fcntl_trampoline_addr(SB)/8, $libc_fcntl_trampoline<>(SB)
-
-TEXT libc_ppoll_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_ppoll(SB)
-GLOBL	·libc_ppoll_trampoline_addr(SB), RODATA, $8
-DATA	·libc_ppoll_trampoline_addr(SB)/8, $libc_ppoll_trampoline<>(SB)
-
-TEXT libc_access_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_access(SB)
-GLOBL	·libc_access_trampoline_addr(SB), RODATA, $8
-DATA	·libc_access_trampoline_addr(SB)/8, $libc_access_trampoline<>(SB)
-
-TEXT libc_adjtime_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_adjtime(SB)
-GLOBL	·libc_adjtime_trampoline_addr(SB), RODATA, $8
-DATA	·libc_adjtime_trampoline_addr(SB)/8, $libc_adjtime_trampoline<>(SB)
-
-TEXT libc_chdir_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_chdir(SB)
-GLOBL	·libc_chdir_trampoline_addr(SB), RODATA, $8
-DATA	·libc_chdir_trampoline_addr(SB)/8, $libc_chdir_trampoline<>(SB)
-
-TEXT libc_chflags_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_chflags(SB)
-GLOBL	·libc_chflags_trampoline_addr(SB), RODATA, $8
-DATA	·libc_chflags_trampoline_addr(SB)/8, $libc_chflags_trampoline<>(SB)
-
-TEXT libc_chmod_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_chmod(SB)
-GLOBL	·libc_chmod_trampoline_addr(SB), RODATA, $8
-DATA	·libc_chmod_trampoline_addr(SB)/8, $libc_chmod_trampoline<>(SB)
-
-TEXT libc_chown_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_chown(SB)
-GLOBL	·libc_chown_trampoline_addr(SB), RODATA, $8
-DATA	·libc_chown_trampoline_addr(SB)/8, $libc_chown_trampoline<>(SB)
-
-TEXT libc_chroot_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_chroot(SB)
-GLOBL	·libc_chroot_trampoline_addr(SB), RODATA, $8
-DATA	·libc_chroot_trampoline_addr(SB)/8, $libc_chroot_trampoline<>(SB)
-
-TEXT libc_clock_gettime_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_clock_gettime(SB)
-GLOBL	·libc_clock_gettime_trampoline_addr(SB), RODATA, $8
-DATA	·libc_clock_gettime_trampoline_addr(SB)/8, $libc_clock_gettime_trampoline<>(SB)
-
-TEXT libc_close_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_close(SB)
-GLOBL	·libc_close_trampoline_addr(SB), RODATA, $8
-DATA	·libc_close_trampoline_addr(SB)/8, $libc_close_trampoline<>(SB)
-
-TEXT libc_dup_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_dup(SB)
-GLOBL	·libc_dup_trampoline_addr(SB), RODATA, $8
-DATA	·libc_dup_trampoline_addr(SB)/8, $libc_dup_trampoline<>(SB)
-
-TEXT libc_dup2_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_dup2(SB)
-GLOBL	·libc_dup2_trampoline_addr(SB), RODATA, $8
-DATA	·libc_dup2_trampoline_addr(SB)/8, $libc_dup2_trampoline<>(SB)
-
-TEXT libc_dup3_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_dup3(SB)
-GLOBL	·libc_dup3_trampoline_addr(SB), RODATA, $8
-DATA	·libc_dup3_trampoline_addr(SB)/8, $libc_dup3_trampoline<>(SB)
-
-TEXT libc_exit_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_exit(SB)
-GLOBL	·libc_exit_trampoline_addr(SB), RODATA, $8
-DATA	·libc_exit_trampoline_addr(SB)/8, $libc_exit_trampoline<>(SB)
-
-TEXT libc_faccessat_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_faccessat(SB)
-GLOBL	·libc_faccessat_trampoline_addr(SB), RODATA, $8
-DATA	·libc_faccessat_trampoline_addr(SB)/8, $libc_faccessat_trampoline<>(SB)
-
-TEXT libc_fchdir_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_fchdir(SB)
-GLOBL	·libc_fchdir_trampoline_addr(SB), RODATA, $8
-DATA	·libc_fchdir_trampoline_addr(SB)/8, $libc_fchdir_trampoline<>(SB)
-
-TEXT libc_fchflags_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_fchflags(SB)
-GLOBL	·libc_fchflags_trampoline_addr(SB), RODATA, $8
-DATA	·libc_fchflags_trampoline_addr(SB)/8, $libc_fchflags_trampoline<>(SB)
-
-TEXT libc_fchmod_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_fchmod(SB)
-GLOBL	·libc_fchmod_trampoline_addr(SB), RODATA, $8
-DATA	·libc_fchmod_trampoline_addr(SB)/8, $libc_fchmod_trampoline<>(SB)
-
-TEXT libc_fchmodat_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_fchmodat(SB)
-GLOBL	·libc_fchmodat_trampoline_addr(SB), RODATA, $8
-DATA	·libc_fchmodat_trampoline_addr(SB)/8, $libc_fchmodat_trampoline<>(SB)
-
-TEXT libc_fchown_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_fchown(SB)
-GLOBL	·libc_fchown_trampoline_addr(SB), RODATA, $8
-DATA	·libc_fchown_trampoline_addr(SB)/8, $libc_fchown_trampoline<>(SB)
-
-TEXT libc_fchownat_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_fchownat(SB)
-GLOBL	·libc_fchownat_trampoline_addr(SB), RODATA, $8
-DATA	·libc_fchownat_trampoline_addr(SB)/8, $libc_fchownat_trampoline<>(SB)
-
-TEXT libc_flock_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_flock(SB)
-GLOBL	·libc_flock_trampoline_addr(SB), RODATA, $8
-DATA	·libc_flock_trampoline_addr(SB)/8, $libc_flock_trampoline<>(SB)
-
-TEXT libc_fpathconf_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_fpathconf(SB)
-GLOBL	·libc_fpathconf_trampoline_addr(SB), RODATA, $8
-DATA	·libc_fpathconf_trampoline_addr(SB)/8, $libc_fpathconf_trampoline<>(SB)
-
-TEXT libc_fstat_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_fstat(SB)
-GLOBL	·libc_fstat_trampoline_addr(SB), RODATA, $8
-DATA	·libc_fstat_trampoline_addr(SB)/8, $libc_fstat_trampoline<>(SB)
-
-TEXT libc_fstatat_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_fstatat(SB)
-GLOBL	·libc_fstatat_trampoline_addr(SB), RODATA, $8
-DATA	·libc_fstatat_trampoline_addr(SB)/8, $libc_fstatat_trampoline<>(SB)
-
-TEXT libc_fstatfs_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_fstatfs(SB)
-GLOBL	·libc_fstatfs_trampoline_addr(SB), RODATA, $8
-DATA	·libc_fstatfs_trampoline_addr(SB)/8, $libc_fstatfs_trampoline<>(SB)
-
-TEXT libc_fsync_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_fsync(SB)
-GLOBL	·libc_fsync_trampoline_addr(SB), RODATA, $8
-DATA	·libc_fsync_trampoline_addr(SB)/8, $libc_fsync_trampoline<>(SB)
-
-TEXT libc_ftruncate_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_ftruncate(SB)
-GLOBL	·libc_ftruncate_trampoline_addr(SB), RODATA, $8
-DATA	·libc_ftruncate_trampoline_addr(SB)/8, $libc_ftruncate_trampoline<>(SB)
-
-TEXT libc_getegid_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_getegid(SB)
-GLOBL	·libc_getegid_trampoline_addr(SB), RODATA, $8
-DATA	·libc_getegid_trampoline_addr(SB)/8, $libc_getegid_trampoline<>(SB)
-
-TEXT libc_geteuid_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_geteuid(SB)
-GLOBL	·libc_geteuid_trampoline_addr(SB), RODATA, $8
-DATA	·libc_geteuid_trampoline_addr(SB)/8, $libc_geteuid_trampoline<>(SB)
-
-TEXT libc_getgid_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_getgid(SB)
-GLOBL	·libc_getgid_trampoline_addr(SB), RODATA, $8
-DATA	·libc_getgid_trampoline_addr(SB)/8, $libc_getgid_trampoline<>(SB)
-
-TEXT libc_getpgid_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_getpgid(SB)
-GLOBL	·libc_getpgid_trampoline_addr(SB), RODATA, $8
-DATA	·libc_getpgid_trampoline_addr(SB)/8, $libc_getpgid_trampoline<>(SB)
-
-TEXT libc_getpgrp_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_getpgrp(SB)
-GLOBL	·libc_getpgrp_trampoline_addr(SB), RODATA, $8
-DATA	·libc_getpgrp_trampoline_addr(SB)/8, $libc_getpgrp_trampoline<>(SB)
-
-TEXT libc_getpid_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_getpid(SB)
-GLOBL	·libc_getpid_trampoline_addr(SB), RODATA, $8
-DATA	·libc_getpid_trampoline_addr(SB)/8, $libc_getpid_trampoline<>(SB)
-
-TEXT libc_getppid_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_getppid(SB)
-GLOBL	·libc_getppid_trampoline_addr(SB), RODATA, $8
-DATA	·libc_getppid_trampoline_addr(SB)/8, $libc_getppid_trampoline<>(SB)
-
-TEXT libc_getpriority_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_getpriority(SB)
-GLOBL	·libc_getpriority_trampoline_addr(SB), RODATA, $8
-DATA	·libc_getpriority_trampoline_addr(SB)/8, $libc_getpriority_trampoline<>(SB)
-
-TEXT libc_getrlimit_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_getrlimit(SB)
-GLOBL	·libc_getrlimit_trampoline_addr(SB), RODATA, $8
-DATA	·libc_getrlimit_trampoline_addr(SB)/8, $libc_getrlimit_trampoline<>(SB)
-
-TEXT libc_getrtable_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_getrtable(SB)
-GLOBL	·libc_getrtable_trampoline_addr(SB), RODATA, $8
-DATA	·libc_getrtable_trampoline_addr(SB)/8, $libc_getrtable_trampoline<>(SB)
-
-TEXT libc_getrusage_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_getrusage(SB)
-GLOBL	·libc_getrusage_trampoline_addr(SB), RODATA, $8
-DATA	·libc_getrusage_trampoline_addr(SB)/8, $libc_getrusage_trampoline<>(SB)
-
-TEXT libc_getsid_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_getsid(SB)
-GLOBL	·libc_getsid_trampoline_addr(SB), RODATA, $8
-DATA	·libc_getsid_trampoline_addr(SB)/8, $libc_getsid_trampoline<>(SB)
-
-TEXT libc_gettimeofday_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_gettimeofday(SB)
-GLOBL	·libc_gettimeofday_trampoline_addr(SB), RODATA, $8
-DATA	·libc_gettimeofday_trampoline_addr(SB)/8, $libc_gettimeofday_trampoline<>(SB)
-
-TEXT libc_getuid_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_getuid(SB)
-GLOBL	·libc_getuid_trampoline_addr(SB), RODATA, $8
-DATA	·libc_getuid_trampoline_addr(SB)/8, $libc_getuid_trampoline<>(SB)
-
-TEXT libc_issetugid_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_issetugid(SB)
-GLOBL	·libc_issetugid_trampoline_addr(SB), RODATA, $8
-DATA	·libc_issetugid_trampoline_addr(SB)/8, $libc_issetugid_trampoline<>(SB)
-
-TEXT libc_kill_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_kill(SB)
-GLOBL	·libc_kill_trampoline_addr(SB), RODATA, $8
-DATA	·libc_kill_trampoline_addr(SB)/8, $libc_kill_trampoline<>(SB)
-
-TEXT libc_kqueue_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_kqueue(SB)
-GLOBL	·libc_kqueue_trampoline_addr(SB), RODATA, $8
-DATA	·libc_kqueue_trampoline_addr(SB)/8, $libc_kqueue_trampoline<>(SB)
-
-TEXT libc_lchown_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_lchown(SB)
-GLOBL	·libc_lchown_trampoline_addr(SB), RODATA, $8
-DATA	·libc_lchown_trampoline_addr(SB)/8, $libc_lchown_trampoline<>(SB)
-
-TEXT libc_link_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_link(SB)
-GLOBL	·libc_link_trampoline_addr(SB), RODATA, $8
-DATA	·libc_link_trampoline_addr(SB)/8, $libc_link_trampoline<>(SB)
-
-TEXT libc_linkat_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_linkat(SB)
-GLOBL	·libc_linkat_trampoline_addr(SB), RODATA, $8
-DATA	·libc_linkat_trampoline_addr(SB)/8, $libc_linkat_trampoline<>(SB)
-
-TEXT libc_listen_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_listen(SB)
-GLOBL	·libc_listen_trampoline_addr(SB), RODATA, $8
-DATA	·libc_listen_trampoline_addr(SB)/8, $libc_listen_trampoline<>(SB)
-
-TEXT libc_lstat_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_lstat(SB)
-GLOBL	·libc_lstat_trampoline_addr(SB), RODATA, $8
-DATA	·libc_lstat_trampoline_addr(SB)/8, $libc_lstat_trampoline<>(SB)
-
-TEXT libc_mkdir_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_mkdir(SB)
-GLOBL	·libc_mkdir_trampoline_addr(SB), RODATA, $8
-DATA	·libc_mkdir_trampoline_addr(SB)/8, $libc_mkdir_trampoline<>(SB)
-
-TEXT libc_mkdirat_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_mkdirat(SB)
-GLOBL	·libc_mkdirat_trampoline_addr(SB), RODATA, $8
-DATA	·libc_mkdirat_trampoline_addr(SB)/8, $libc_mkdirat_trampoline<>(SB)
-
-TEXT libc_mkfifo_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_mkfifo(SB)
-GLOBL	·libc_mkfifo_trampoline_addr(SB), RODATA, $8
-DATA	·libc_mkfifo_trampoline_addr(SB)/8, $libc_mkfifo_trampoline<>(SB)
-
-TEXT libc_mkfifoat_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_mkfifoat(SB)
-GLOBL	·libc_mkfifoat_trampoline_addr(SB), RODATA, $8
-DATA	·libc_mkfifoat_trampoline_addr(SB)/8, $libc_mkfifoat_trampoline<>(SB)
-
-TEXT libc_mknod_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_mknod(SB)
-GLOBL	·libc_mknod_trampoline_addr(SB), RODATA, $8
-DATA	·libc_mknod_trampoline_addr(SB)/8, $libc_mknod_trampoline<>(SB)
-
-TEXT libc_mknodat_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_mknodat(SB)
-GLOBL	·libc_mknodat_trampoline_addr(SB), RODATA, $8
-DATA	·libc_mknodat_trampoline_addr(SB)/8, $libc_mknodat_trampoline<>(SB)
-
-TEXT libc_mount_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_mount(SB)
-GLOBL	·libc_mount_trampoline_addr(SB), RODATA, $8
-DATA	·libc_mount_trampoline_addr(SB)/8, $libc_mount_trampoline<>(SB)
-
-TEXT libc_nanosleep_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_nanosleep(SB)
-GLOBL	·libc_nanosleep_trampoline_addr(SB), RODATA, $8
-DATA	·libc_nanosleep_trampoline_addr(SB)/8, $libc_nanosleep_trampoline<>(SB)
-
-TEXT libc_open_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_open(SB)
-GLOBL	·libc_open_trampoline_addr(SB), RODATA, $8
-DATA	·libc_open_trampoline_addr(SB)/8, $libc_open_trampoline<>(SB)
-
-TEXT libc_openat_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_openat(SB)
-GLOBL	·libc_openat_trampoline_addr(SB), RODATA, $8
-DATA	·libc_openat_trampoline_addr(SB)/8, $libc_openat_trampoline<>(SB)
-
-TEXT libc_pathconf_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_pathconf(SB)
-GLOBL	·libc_pathconf_trampoline_addr(SB), RODATA, $8
-DATA	·libc_pathconf_trampoline_addr(SB)/8, $libc_pathconf_trampoline<>(SB)
-
-TEXT libc_pread_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_pread(SB)
-GLOBL	·libc_pread_trampoline_addr(SB), RODATA, $8
-DATA	·libc_pread_trampoline_addr(SB)/8, $libc_pread_trampoline<>(SB)
-
-TEXT libc_pwrite_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_pwrite(SB)
-GLOBL	·libc_pwrite_trampoline_addr(SB), RODATA, $8
-DATA	·libc_pwrite_trampoline_addr(SB)/8, $libc_pwrite_trampoline<>(SB)
-
-TEXT libc_readv_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_readv(SB)
-GLOBL	·libc_readv_trampoline_addr(SB), RODATA, $8
-DATA	·libc_readv_trampoline_addr(SB)/8, $libc_readv_trampoline<>(SB)
-
-TEXT libc_writev_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_writev(SB)
-GLOBL	·libc_writev_trampoline_addr(SB), RODATA, $8
-DATA	·libc_writev_trampoline_addr(SB)/8, $libc_writev_trampoline<>(SB)
-
-TEXT libc_preadv_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_preadv(SB)
-GLOBL	·libc_preadv_trampoline_addr(SB), RODATA, $8
-DATA	·libc_preadv_trampoline_addr(SB)/8, $libc_preadv_trampoline<>(SB)
-
-TEXT libc_pwritev_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_pwritev(SB)
-GLOBL	·libc_pwritev_trampoline_addr(SB), RODATA, $8
-DATA	·libc_pwritev_trampoline_addr(SB)/8, $libc_pwritev_trampoline<>(SB)
-
-TEXT libc_read_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_read(SB)
-GLOBL	·libc_read_trampoline_addr(SB), RODATA, $8
-DATA	·libc_read_trampoline_addr(SB)/8, $libc_read_trampoline<>(SB)
-
-TEXT libc_readlink_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_readlink(SB)
-GLOBL	·libc_readlink_trampoline_addr(SB), RODATA, $8
-DATA	·libc_readlink_trampoline_addr(SB)/8, $libc_readlink_trampoline<>(SB)
-
-TEXT libc_readlinkat_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_readlinkat(SB)
-GLOBL	·libc_readlinkat_trampoline_addr(SB), RODATA, $8
-DATA	·libc_readlinkat_trampoline_addr(SB)/8, $libc_readlinkat_trampoline<>(SB)
-
-TEXT libc_rename_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_rename(SB)
-GLOBL	·libc_rename_trampoline_addr(SB), RODATA, $8
-DATA	·libc_rename_trampoline_addr(SB)/8, $libc_rename_trampoline<>(SB)
-
-TEXT libc_renameat_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_renameat(SB)
-GLOBL	·libc_renameat_trampoline_addr(SB), RODATA, $8
-DATA	·libc_renameat_trampoline_addr(SB)/8, $libc_renameat_trampoline<>(SB)
-
-TEXT libc_revoke_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_revoke(SB)
-GLOBL	·libc_revoke_trampoline_addr(SB), RODATA, $8
-DATA	·libc_revoke_trampoline_addr(SB)/8, $libc_revoke_trampoline<>(SB)
-
-TEXT libc_rmdir_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_rmdir(SB)
-GLOBL	·libc_rmdir_trampoline_addr(SB), RODATA, $8
-DATA	·libc_rmdir_trampoline_addr(SB)/8, $libc_rmdir_trampoline<>(SB)
-
-TEXT libc_lseek_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_lseek(SB)
-GLOBL	·libc_lseek_trampoline_addr(SB), RODATA, $8
-DATA	·libc_lseek_trampoline_addr(SB)/8, $libc_lseek_trampoline<>(SB)
-
-TEXT libc_select_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_select(SB)
-GLOBL	·libc_select_trampoline_addr(SB), RODATA, $8
-DATA	·libc_select_trampoline_addr(SB)/8, $libc_select_trampoline<>(SB)
-
-TEXT libc_setegid_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_setegid(SB)
-GLOBL	·libc_setegid_trampoline_addr(SB), RODATA, $8
-DATA	·libc_setegid_trampoline_addr(SB)/8, $libc_setegid_trampoline<>(SB)
-
-TEXT libc_seteuid_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_seteuid(SB)
-GLOBL	·libc_seteuid_trampoline_addr(SB), RODATA, $8
-DATA	·libc_seteuid_trampoline_addr(SB)/8, $libc_seteuid_trampoline<>(SB)
-
-TEXT libc_setgid_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_setgid(SB)
-GLOBL	·libc_setgid_trampoline_addr(SB), RODATA, $8
-DATA	·libc_setgid_trampoline_addr(SB)/8, $libc_setgid_trampoline<>(SB)
-
-TEXT libc_setlogin_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_setlogin(SB)
-GLOBL	·libc_setlogin_trampoline_addr(SB), RODATA, $8
-DATA	·libc_setlogin_trampoline_addr(SB)/8, $libc_setlogin_trampoline<>(SB)
-
-TEXT libc_setpgid_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_setpgid(SB)
-GLOBL	·libc_setpgid_trampoline_addr(SB), RODATA, $8
-DATA	·libc_setpgid_trampoline_addr(SB)/8, $libc_setpgid_trampoline<>(SB)
-
-TEXT libc_setpriority_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_setpriority(SB)
-GLOBL	·libc_setpriority_trampoline_addr(SB), RODATA, $8
-DATA	·libc_setpriority_trampoline_addr(SB)/8, $libc_setpriority_trampoline<>(SB)
-
-TEXT libc_setregid_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_setregid(SB)
-GLOBL	·libc_setregid_trampoline_addr(SB), RODATA, $8
-DATA	·libc_setregid_trampoline_addr(SB)/8, $libc_setregid_trampoline<>(SB)
-
-TEXT libc_setreuid_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_setreuid(SB)
-GLOBL	·libc_setreuid_trampoline_addr(SB), RODATA, $8
-DATA	·libc_setreuid_trampoline_addr(SB)/8, $libc_setreuid_trampoline<>(SB)
-
-TEXT libc_setresgid_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_setresgid(SB)
-GLOBL	·libc_setresgid_trampoline_addr(SB), RODATA, $8
-DATA	·libc_setresgid_trampoline_addr(SB)/8, $libc_setresgid_trampoline<>(SB)
-
-TEXT libc_setresuid_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_setresuid(SB)
-GLOBL	·libc_setresuid_trampoline_addr(SB), RODATA, $8
-DATA	·libc_setresuid_trampoline_addr(SB)/8, $libc_setresuid_trampoline<>(SB)
-
-TEXT libc_setrtable_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_setrtable(SB)
-GLOBL	·libc_setrtable_trampoline_addr(SB), RODATA, $8
-DATA	·libc_setrtable_trampoline_addr(SB)/8, $libc_setrtable_trampoline<>(SB)
-
-TEXT libc_setsid_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_setsid(SB)
-GLOBL	·libc_setsid_trampoline_addr(SB), RODATA, $8
-DATA	·libc_setsid_trampoline_addr(SB)/8, $libc_setsid_trampoline<>(SB)
-
-TEXT libc_settimeofday_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_settimeofday(SB)
-GLOBL	·libc_settimeofday_trampoline_addr(SB), RODATA, $8
-DATA	·libc_settimeofday_trampoline_addr(SB)/8, $libc_settimeofday_trampoline<>(SB)
-
-TEXT libc_setuid_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_setuid(SB)
-GLOBL	·libc_setuid_trampoline_addr(SB), RODATA, $8
-DATA	·libc_setuid_trampoline_addr(SB)/8, $libc_setuid_trampoline<>(SB)
-
-TEXT libc_stat_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_stat(SB)
-GLOBL	·libc_stat_trampoline_addr(SB), RODATA, $8
-DATA	·libc_stat_trampoline_addr(SB)/8, $libc_stat_trampoline<>(SB)
-
-TEXT libc_statfs_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_statfs(SB)
-GLOBL	·libc_statfs_trampoline_addr(SB), RODATA, $8
-DATA	·libc_statfs_trampoline_addr(SB)/8, $libc_statfs_trampoline<>(SB)
-
-TEXT libc_symlink_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_symlink(SB)
-GLOBL	·libc_symlink_trampoline_addr(SB), RODATA, $8
-DATA	·libc_symlink_trampoline_addr(SB)/8, $libc_symlink_trampoline<>(SB)
-
-TEXT libc_symlinkat_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_symlinkat(SB)
-GLOBL	·libc_symlinkat_trampoline_addr(SB), RODATA, $8
-DATA	·libc_symlinkat_trampoline_addr(SB)/8, $libc_symlinkat_trampoline<>(SB)
-
-TEXT libc_sync_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_sync(SB)
-GLOBL	·libc_sync_trampoline_addr(SB), RODATA, $8
-DATA	·libc_sync_trampoline_addr(SB)/8, $libc_sync_trampoline<>(SB)
-
-TEXT libc_truncate_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_truncate(SB)
-GLOBL	·libc_truncate_trampoline_addr(SB), RODATA, $8
-DATA	·libc_truncate_trampoline_addr(SB)/8, $libc_truncate_trampoline<>(SB)
-
-TEXT libc_umask_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_umask(SB)
-GLOBL	·libc_umask_trampoline_addr(SB), RODATA, $8
-DATA	·libc_umask_trampoline_addr(SB)/8, $libc_umask_trampoline<>(SB)
-
-TEXT libc_unlink_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_unlink(SB)
-GLOBL	·libc_unlink_trampoline_addr(SB), RODATA, $8
-DATA	·libc_unlink_trampoline_addr(SB)/8, $libc_unlink_trampoline<>(SB)
-
-TEXT libc_unlinkat_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_unlinkat(SB)
-GLOBL	·libc_unlinkat_trampoline_addr(SB), RODATA, $8
-DATA	·libc_unlinkat_trampoline_addr(SB)/8, $libc_unlinkat_trampoline<>(SB)
-
-TEXT libc_unmount_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_unmount(SB)
-GLOBL	·libc_unmount_trampoline_addr(SB), RODATA, $8
-DATA	·libc_unmount_trampoline_addr(SB)/8, $libc_unmount_trampoline<>(SB)
-
-TEXT libc_write_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_write(SB)
-GLOBL	·libc_write_trampoline_addr(SB), RODATA, $8
-DATA	·libc_write_trampoline_addr(SB)/8, $libc_write_trampoline<>(SB)
-
-TEXT libc_mmap_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_mmap(SB)
-GLOBL	·libc_mmap_trampoline_addr(SB), RODATA, $8
-DATA	·libc_mmap_trampoline_addr(SB)/8, $libc_mmap_trampoline<>(SB)
-
-TEXT libc_munmap_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_munmap(SB)
-GLOBL	·libc_munmap_trampoline_addr(SB), RODATA, $8
-DATA	·libc_munmap_trampoline_addr(SB)/8, $libc_munmap_trampoline<>(SB)
-
-TEXT libc_getfsstat_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_getfsstat(SB)
-GLOBL	·libc_getfsstat_trampoline_addr(SB), RODATA, $8
-DATA	·libc_getfsstat_trampoline_addr(SB)/8, $libc_getfsstat_trampoline<>(SB)
-
-TEXT libc_utimensat_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_utimensat(SB)
-GLOBL	·libc_utimensat_trampoline_addr(SB), RODATA, $8
-DATA	·libc_utimensat_trampoline_addr(SB)/8, $libc_utimensat_trampoline<>(SB)
-
-TEXT libc_pledge_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_pledge(SB)
-GLOBL	·libc_pledge_trampoline_addr(SB), RODATA, $8
-DATA	·libc_pledge_trampoline_addr(SB)/8, $libc_pledge_trampoline<>(SB)
-
-TEXT libc_unveil_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_unveil(SB)
-GLOBL	·libc_unveil_trampoline_addr(SB), RODATA, $8
-DATA	·libc_unveil_trampoline_addr(SB)/8, $libc_unveil_trampoline<>(SB)
 
 @@END
