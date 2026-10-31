@@ -10,7 +10,7 @@ platform_redis_data_root: "{{ platform_data_root_directory | default('/var/lib')
 platform_redis_member_data_directory: "{{ platform_redis_data_root }}"
 platform_redis_config_root: "/etc/{{ platform_redis_name }}"
 platform_redis_log_root: "/var/log/{{ platform_redis_name }}"
-platform_redis_tls_profile: infrastructure-tls
+platform_redis_tls_profile: ""
 platform_redis_credential:
   passwordSecretRef: ''
 platform_redis_sentinel_credential:

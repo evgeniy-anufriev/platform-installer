@@ -12,7 +12,7 @@ import (
 )
 
 func TestProjectFindingRussianDescriptionsCoverPublishedCoreCodes(t *testing.T) {
-	pattern := regexp.MustCompile(`(?:_finding\(\s*|["']code["']\s*:\s*)["']([A-Z][A-Z0-9_]+)["']`)
+	pattern := regexp.MustCompile(`(?:(?:_finding|_issue)\(\s*|["']code["']\s*:\s*)["']([A-Z][A-Z0-9_]+)["']`)
 	count := 0
 	for _, directory := range []string{"module_utils", "action"} {
 		files, err := filepath.Glob(filepath.Join("..", "..", "ansible-core", "collections", "ansible_collections", "platform", "core", "plugins", directory, "*.py"))

@@ -98,6 +98,110 @@ func h1TopologyCommands(revision string) []EditCommand {
 	return []EditCommand{server, deployment, placement}
 }
 
+func TestTLSProfileAutoSelectionUsesStableProjectOrderAndKeepsExplicitChoice(t *testing.T) {
+	for _, names := range [][]string{nil, {"z-profile"}, {"z-profile", "a-profile"}} {
+		t.Run(strings.Join(names, ","), func(t *testing.T) {
+			root, revision := emptyManagedProject(t)
+			catalog := h1CatalogWithTLSProfileSetting("securityProfile")
+			backend := f2Backend(catalog)
+			commands := h1TopologyCommands(revision)
+			if len(names) > 0 {
+				commands = append(commands,
+					pkiCommand(revision, "CreateCertificateAuthority", "ca", map[string]any{"mode": "MANAGED", "commonName": "Test CA"}),
+					pkiCommand(revision, "CreateCertificateProfile", "server", map[string]any{"authorityRef": "ca", "sanPolicy": map[string]any{}}))
+				for _, name := range names {
+					commands = append(commands, pkiCommand(revision, "CreateTLSProfile", name, map[string]any{"certificateProfileRef": "server", "storePasswordSecretRef": "runtime:tls-store"}))
+				}
+			}
+			before := mustRead(t, filepath.Join(root, "project.yml"))
+			plan, err := backend.PlanStructuralSave(context.Background(), root, projectlifecycle.ClassificationEmpty, revision, commands)
+			if err != nil || plan.Status != "READY" || !plan.SaveAllowed || string(before) != string(mustRead(t, filepath.Join(root, "project.yml"))) {
+				t.Fatalf("review mutated source or failed: finding=%+v %v", plan.Finding, err)
+			}
+			result := backend.CommitStructuralSave(context.Background(), plan.PlanID)
+			if result.Status != "COMMITTED" || result.Managed == nil {
+				t.Fatalf("commit=%#v", result)
+			}
+			view, readErr := ReadManagedProjectViewWithCatalog(root, catalog)
+			if readErr != nil {
+				t.Fatal(readErr)
+			}
+			wanted := ""
+			if len(names) > 0 {
+				wanted = "z-profile"
+			}
+			if len(names) > 1 {
+				wanted = "a-profile"
+			}
+			found := ""
+			for _, value := range view.Deployments["kafka-main"].Configuration {
+				if value.Setting == "securityProfile" {
+					found, _ = value.Value.(string)
+				}
+			}
+			if found != wanted {
+				t.Fatalf("selected=%q want=%q", found, wanted)
+			}
+			if len(names) == 1 {
+				add := pkiCommand(result.NewProjectRevision, "CreateTLSProfile", "a-profile", map[string]any{"certificateProfileRef": "server", "storePasswordSecretRef": "runtime:tls-store"})
+				commitStructuralForTest(t, backend, root, projectlifecycle.ClassificationManaged, result.NewProjectRevision, []EditCommand{add})
+				view, readErr = ReadManagedProjectViewWithCatalog(root, catalog)
+				if readErr != nil {
+					t.Fatal(readErr)
+				}
+				for _, value := range view.Deployments["kafka-main"].Configuration {
+					if value.Setting == "securityProfile" && value.Value != "z-profile" {
+						t.Fatal("new profile replaced an existing selection")
+					}
+				}
+			}
+			if len(names) == 0 {
+				commands = []EditCommand{
+					pkiCommand(result.NewProjectRevision, "CreateCertificateAuthority", "ca", map[string]any{"mode": "MANAGED", "commonName": "Test CA"}),
+					pkiCommand(result.NewProjectRevision, "CreateCertificateProfile", "server", map[string]any{"authorityRef": "ca", "sanPolicy": map[string]any{}}),
+					pkiCommand(result.NewProjectRevision, "CreateTLSProfile", "later-profile", map[string]any{"certificateProfileRef": "server", "storePasswordSecretRef": "runtime:tls-store"}),
+				}
+				commitStructuralForTest(t, backend, root, projectlifecycle.ClassificationManaged, result.NewProjectRevision, commands)
+				view, readErr = ReadManagedProjectViewWithCatalog(root, catalog)
+				if readErr != nil {
+					t.Fatal(readErr)
+				}
+				if len(view.Deployments["kafka-main"].Configuration) != 1 || view.Deployments["kafka-main"].Configuration[0].Value != "later-profile" {
+					t.Fatal("first profile did not bind the existing unconfigured service")
+				}
+			}
+			if len(names) > 1 {
+				manual := h1Command(result.NewProjectRevision, "SetServiceConfigurationValue")
+				manual.DeploymentID, manual.Scope, manual.Setting, manual.Value = "kafka-main", "DEPLOYMENT", "securityProfile", "z-profile"
+				commitStructuralForTest(t, backend, root, projectlifecycle.ClassificationManaged, result.NewProjectRevision, []EditCommand{manual})
+				view, readErr = ReadManagedProjectViewWithCatalog(root, catalog)
+				if readErr != nil {
+					t.Fatal(readErr)
+				}
+				if view.Deployments["kafka-main"].Configuration[0].Value != "z-profile" {
+					t.Fatal("manual choice was replaced by the first profile")
+				}
+			}
+		})
+	}
+}
+
+func TestTLSAutoSelectionDoesNotRequireCatalogForServerOnlySave(t *testing.T) {
+	for _, status := range []string{"UNAVAILABLE", "INCOMPATIBLE"} {
+		t.Run(status, func(t *testing.T) {
+			root, revision := emptyManagedProject(t)
+			backend := f2Backend(h1Catalog())
+			saved := commitStructuralForTest(t, backend, root, projectlifecycle.ClassificationEmpty, revision, h1TopologyCommands(revision))
+			backend.catalogResolver = func(context.Context, string) (*projectlifecycle.ProjectCatalogView, error) {
+				return &projectlifecycle.ProjectCatalogView{Status: status}, nil
+			}
+			command := h1Command(saved.NewProjectRevision, "UpdateServer")
+			command.HostID, command.ServerType, command.DesiredHostname, command.Address = "node1", "infra", "changed.example.test", "192.0.2.10"
+			commitStructuralForTest(t, backend, root, projectlifecycle.ClassificationManaged, saved.NewProjectRevision, []EditCommand{command})
+		})
+	}
+}
+
 func TestH1V8DeploymentAndMemberConfigurationSaveReopen(t *testing.T) {
 	root, revision := emptyManagedProject(t)
 	commands := h1TopologyCommands(revision)

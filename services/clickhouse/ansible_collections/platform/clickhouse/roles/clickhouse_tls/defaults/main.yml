@@ -2,7 +2,7 @@
 platform_clickhouse_mode: standalone
 platform_clickhouse_deployment_id: "{{ platform_execution_service_deployment | default('clickhouse', true) }}"
 platform_clickhouse_instances: []
-platform_clickhouse_tls_profile: infrastructure-tls
+platform_clickhouse_tls_profile: ""
 platform_clickhouse_tls_directory: ''
 platform_clickhouse_port: 8443
 platform_clickhouse_native_port: 9440

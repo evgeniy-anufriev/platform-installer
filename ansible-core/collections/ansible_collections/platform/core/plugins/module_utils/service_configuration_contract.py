@@ -151,6 +151,10 @@ def validate_defaults(definition, defaults, is_literal):
         if role_variable not in defaults:
             continue
         value = defaults[role_variable]
+        # An empty TLS reference is a required input awaiting project selection,
+        # not a business default. Authored overrides still obey minLength.
+        if value == "" and entry.get("type") == "string" and isinstance(entry.get("ui"), dict) and entry["ui"].get("x-referenceKind") == "TLS_PROFILE":
+            continue
         if not is_literal(value):
             continue
         expected = entry.get("type")

@@ -10,6 +10,19 @@ import (
 
 // Presentation only: Core codes and validation severity remain authoritative.
 var projectFindingMessagesRU = map[string]string{
+	"ROLE_DEFAULT_TYPE_INVALID":                               "Тип значения роли по умолчанию не соответствует описанию настройки.",
+	"ROLE_DEFAULT_VALIDATION_INVALID":                         "Значение роли по умолчанию нарушает ограничения настройки.",
+	"SERVICE_CONFIGURATION_ADVANCED_TYPE_INVALID":             "Расширенные настройки сервиса должны иметь допустимый объектный тип.",
+	"SERVICE_CONFIGURATION_CONTRACT_CONFLICT":                 "В пакете сервиса одновременно заданы конфликтующие форматы описания настроек.",
+	"SERVICE_CONFIGURATION_KIND_INVALID":                      "Недопустим вид настройки сервиса.",
+	"SERVICE_CONFIGURATION_LOGICAL_ID_INVALID":                "Некорректен логический идентификатор настройки сервиса.",
+	"SERVICE_CONFIGURATION_ROLE_VARIABLE_DUPLICATE":           "Несколько настроек сервиса ссылаются на одну переменную роли.",
+	"SERVICE_CONFIGURATION_ROLE_VARIABLE_INVALID":             "Некорректно имя переменной роли в описании настройки.",
+	"SERVICE_CONFIGURATION_SCOPES_INVALID":                    "Недопустима область применения настройки сервиса.",
+	"SERVICE_CONFIGURATION_SETTINGS_INVALID":                  "Описание настроек сервиса должно быть объектом.",
+	"SERVICE_CONFIGURATION_SETTING_INVALID":                   "Некорректна структура описания настройки сервиса.",
+	"SERVICE_CONFIGURATION_VALIDATION_INVALID":                "Некорректно описание ограничений настройки сервиса.",
+	"SERVICE_CONFIGURATION_VALIDATION_TYPE_INVALID":           "Тип ограничения настройки не соответствует типу её значения.",
 	"ADVANCED_SETTING_RESERVED":                               "Расширенная настройка использует зарезервированное имя.",
 	"APPLICATION_BOOTSTRAP_PROVIDER_INVALID":                  "Для начальной настройки приложения выбран недопустимый поставщик секретов.",
 	"APPLICATION_INFRASTRUCTURE_BARRIER_REQUIRED":             "Перед приложениями требуется проверка готовности инфраструктуры.",
@@ -184,6 +197,7 @@ var projectFindingMessagesRU = map[string]string{
 	"STATIC_REFERENCE_NOT_FOUND":                              "Не найдена переменная, на которую ссылается настройка.",
 	"TLS_PROFILES_INVALID":                                    "Некорректно описание профилей TLS.",
 	"TLS_PROFILE_NOT_FOUND":                                   "Указанный профиль TLS не найден.",
+	"TLS_PROFILE_REQUIRED":                                    "Не выбран TLS-профиль сервиса. Создайте профиль TLS и сохраните проект; первый доступный профиль будет выбран автоматически.",
 	"VARIABLE_DOCUMENT_BINDING_INVALID":                       "Некорректна привязка переменной к документу проекта.",
 	"VARIABLE_DOCUMENT_ORIGIN_INVALID":                        "Некорректно указан источник документа с переменными.",
 	"VIRTUAL_ADDRESS_DUPLICATE":                               "Виртуальный адрес указан повторно.",

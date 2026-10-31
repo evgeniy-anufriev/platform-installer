@@ -65,6 +65,26 @@ This is a required Platform Installer convention: partial map values in
 
 ## User-owned desired state
 
+### TLS profile selection during Installer Save
+
+For a deployment setting declared by the service catalogue as a managed
+`TLS_PROFILE` reference, ordinary project Review/Save assigns the first
+available project TLS profile in alphabetical ID order when the setting is
+absent. The existing guarded writer persists that value in the deployment's
+canonical `configuration`. This also applies when a profile is added after
+the service. Existing authored selections remain unchanged; the operator may
+select another profile through the same editor.
+
+The selection uses local compatible catalogue metadata and requires no Core
+request or Execution Node. An unavailable catalogue does not block unrelated
+local Save. Save without any TLS profile remains structurally valid; Project
+Verify reports `TLS_PROFILE_REQUIRED` for an unresolved TLS-profile setting.
+This requirement applies to service modes declaring that reference. Verify
+and Core preview never select or persist a profile. Role defaults declare an
+empty string as an unset input instead of a particular profile name; explicit
+authored values retain the usual validation. Standalone Docker/ClickHouse
+roles retain their existing prepared TLS-directory input path.
+
 `inventory/group_vars/all/platform.yml` owns logical desired state:
 
 ```yaml

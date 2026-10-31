@@ -581,6 +581,18 @@ def resolve_service_configuration(
             scoped_members[member_id] = {"variableContext": context, "configuration": member_values, "opaqueVariables": member_opaque_variables, "configurationFingerprint": member_fingerprint, "opaqueVariablesFingerprint": canonical_digest(sorted(member_opaque_variables, key=lambda item: (item["name"], item["origin"]["source"], item["origin"]["path"]))) }
         service["members"] = scoped_members
 
+        for logical, setting in sorted(mapping.items()):
+            ui = setting.get("ui") if isinstance(setting, dict) else None
+            if not isinstance(ui, dict) or ui.get("x-referenceKind") != "TLS_PROFILE":
+                continue
+            contexts = {member_id: value["configuration"] for member_id, value in scoped_members.items()} or {None: deployment_configuration}
+            for member_id, values in contexts.items():
+                profile = values.get(logical, {})
+                if not isinstance(profile, dict) or profile.get("state") != "RESOLVED" or not isinstance(profile.get("value"), str) or not profile["value"]:
+                    field = ("serviceDeployments.%s.members.%s.configuration.%s" % (deployment_id, member_id, logical)
+                             if member_id is not None else field_prefix + "." + logical)
+                    findings.append(_finding("TLS_PROFILE_REQUIRED", field, "Select a TLS profile for this service and save the project"))
+
         service.update({
             "serviceType": service_type,
             "definitionVersion": service_definition_version,

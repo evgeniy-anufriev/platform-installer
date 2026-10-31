@@ -301,3 +301,102 @@ unknown-code fallback, Russian stage preservation and safe setting details.
 Real React/Wails and visual acceptance remain OPEN. These presentation changes
 require an updated Installer only. TLS default/profile-selection policy is a
 separate owner discussion; it is not changed by this patch.
+
+## Explicit TLS profile selection through ordinary Save
+
+Owner-approved auto-selection uses the existing structural candidate and
+configuration command: an absent managed deployment TLS-profile setting gets
+the alphabetically first project profile. It is included in the ordinary
+review diff and committed by the guarded writer. Existing selections remain
+unchanged, including when an earlier profile is later added. Profile creation
+after service creation also fills absent bindings on Save. Metadata is read
+locally; unrelated Save remains possible without an available catalogue.
+No new Go file, DTO, persistence mechanism or runtime selection is introduced.
+
+Seven role defaults now declare an empty TLS-profile string rather than a
+hardcoded name. Package-default validation recognizes only a string TLS
+reference as unset; authored constraints remain enforced. Core reports
+TLS_PROFILE_REQUIRED for service modes declaring that reference without a
+resolved selection. Its Russian description instructs creation of a profile
+and ordinary Save. Verify/preview do not mutate desired state. Docker and
+ClickHouse retain standalone prepared TLS-directory support; actual Ansible
+Templar guards are covered by tests.
+
+Validation: current-tree RED OS101 contract/resolution/preview/snapshot/native
+resolution/PKI/HAProxy/plan/catalog/bundle-fixture suite136 PASS in41.578s.
+Temporary workspace fc7d9230ebb54d28984e68a093b0686e cleaned with qa-sync.
+Frontend production build and Windows Wails production build PASS.
+Independent FULL DIFF: no open implementation defect or unnecessary abstraction;
+BLOCK TLSA-02 because mandatory real React/Wails Save/reopen/late-profile/Verify
+acceptance remains OPEN. TLSA-01 standalone undefined-variable regression was
+resolved before final review. Fifteen-file source/test fingerprint at base
+befc88459e27ab179924410ac47b8ffc39e1e4ee:
+9d6d07c181c06893f159aa0fdea0138de6c9ed31aa3106e7c7ee9dcc4cec0926.
+No complete acceptance or updated runtime-bundle publication is claimed.
+
+### Owner-authorized real React/Wails acceptance, 2026-10-31
+
+The owner explicitly requested closure of TLSA-02. A separate standard Wails
+development bridge34147 with Vite4187 exercised actual React handlers and
+bound main.App methods using the installed headless Edge. Only the native
+project folder picker was substituted by original OpenProject at the known
+QA root. No business response, Save, Verify or Core method was mocked. The
+already-running Installer in another worktree was preserved.
+
+Current sources were synced with qa-sync to RED OS101 workspace
+/var/tmp/platform-installer-qa-d8d7b7b44e3245508a4fc8e0013c50d9. This existing
+Python3.11/Ansible2.18 host built the bounded empty-package QA bundle; no fresh
+target bootstrap or SI11 installation was performed. Node102 was unreachable;
+the failed transfer did not produce a confirmed QA workspace there. The bundle
+was verified/published by the standard publisher into active cache before the
+Wails flow, with the previous cache preserved by that publisher in
+.runtime/qa/tls-autoselect/prior-cache. Project lock and READY runtime matched
+sha256:ec04b2241e197d6dd497ece6eb352a07b4a2b2d2e40c1b97a26b6d8460424ba1.
+The real credentials form used only the established private-key path; SSH
+approval followed an independent match with trusted known_hosts. Existing
+prerequisites were reused. No deployment plan approval, Start or service
+installation occurred.
+
+Results in .runtime/qa/tls-autoselect/exercise-results.txt and
+late-resume-results.txt (controller acceptance.cjs):
+
+- tls-ui-project3: two profiles created through React, alphabetical a-tls
+  selected by ordinary Review/Save at revision
+  sha256:7361beabb2132b628d0437020a304a7172da9de42252198b71cee27d631f48b3.
+- Manual selection z-tls persisted at revision
+  sha256:664a06b1eae315924d677e117bb56c762bf9976221b7fd5e27303c81535d83ba.
+  Adding earlier aa-tls preserved z-tls at revision
+  sha256:e69c22506da9b6d91ac0c408e375b6dab8d8f2ea813071c90566db3d3093b101;
+  actual Close/Open controls preserved it after reopening.
+- tls-ui-late: local Save without profiles succeeded. After supplying valid
+  host placement, UI Project Verify at revision
+  sha256:8197a0b233be8069e2acc819c815cd5ec334f41b9765d8fcb93527f64be11cb9
+  displayed BLOCKED TLS_PROFILE_REQUIRED, a Russian description and
+  serviceDeployments.haproxy-qa.configuration.tlsProfile. Verify did not
+  author a selection. The earlier unplaced fixture correctly reported
+  topology errors before configuration evaluation; placement fixed the
+  fixture without changing production code.
+- Adding the first z-tls profile later and ordinary Review/Save persisted
+  the binding at revision
+  sha256:c83e37cd5e05febbf596368168a7b1f640fe366ba788f9c62af3b2f28c3a781b.
+  Adding a-tls preserved z-tls at revision
+  sha256:083935fafe659db860b43572c898fc2028e58020de845b4bc0643763ad5bc7da.
+
+Both successful flows recorded zero React page exceptions. These are nonvisual
+React/Wails acceptance results; visual layout and native-picker acceptance
+are not claimed. Full installation/offline-artifact completeness is outside
+this authoring/Verify test. The established development seam excludes the known
+Wails IPC startup exception from React failure accounting.
+
+Independent TARGETED_RECHECK APPROVE: TLSA-02 RESOLVED, zero open blockers;
+the original fifteen-file source fingerprint remained unchanged at HEAD
+2011b7516f5a1f456d55495d50e8e91393f832be. The reviewer directly inspected the
+controller, both successful logs and canonical project selections/lock. This
+closes the earlier nonvisual acceptance block; visual/native-picker and full
+installation acceptance remain outside scope. Owned Wails/Vite/browser
+processes were stopped, the node101 source workspace cleaned with qa-sync,
+and the previous local active cache restored through the standard publisher.
+The verified QA runtime release remains installed on node101; no service
+deployment was changed. QA source bundle and safe local evidence remain under
+.runtime/qa/tls-autoselect for reproduction. Final Go tests/vet, frontend
+production build and Windows Wails production build PASS.

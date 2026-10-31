@@ -98,6 +98,13 @@ func (b *Backend) planStructuralCandidate(ctx context.Context, root, classificat
 		}
 		break
 	}
+	// Optional local metadata enables authoring defaults without making Save
+	// depend on a runtime or blocking unrelated edits when a bundle is absent.
+	if catalog == nil && b.catalogResolver != nil {
+		if available, readErr := b.catalogResolver(ctx, root); readErr == nil && available != nil && available.Status == "READY" {
+			catalog = available
+		}
+	}
 	candidate, err := loadStructuralCandidate(root, classification)
 	if err != nil {
 		return blockedStructuralPlan(revision, err), nil
@@ -426,6 +433,42 @@ func (candidate *structuralCandidate) reduce(commands []EditCommand, catalog *pr
 			return nil, mutations, err
 		}
 		changes = append(changes, commandSummary(command))
+	}
+	if profiles := asMap(state["tlsProfiles"]); len(profiles) > 0 && catalog != nil && catalog.Status == "READY" {
+		profileIDs, deploymentIDs := make([]string, 0, len(profiles)), make([]string, 0, len(deployments))
+		for id := range profiles {
+			profileIDs = append(profileIDs, id)
+		}
+		for id := range deployments {
+			deploymentIDs = append(deploymentIDs, id)
+		}
+		sort.Strings(profileIDs)
+		sort.Strings(deploymentIDs)
+		for _, id := range deploymentIDs {
+			deployment := asMap(deployments[id])
+			serviceType, _ := deployment["serviceType"].(string)
+			modeID, _ := deployment["mode"].(string)
+			service, mode := catalogServiceMode(catalog, serviceType, modeID)
+			if service == nil || mode == nil {
+				continue
+			}
+			for _, setting := range service.ConfigurationSettings {
+				if setting.ReferenceKind != "TLS_PROFILE" || setting.EditorShape != "TLS_PROFILE" || setting.Kind != "MANAGED" || !settingAllowsScope(&setting, "DEPLOYMENT") {
+					continue
+				}
+				if _, present := asMap(deployment["configuration"])[setting.ID]; present {
+					continue
+				}
+				auto := EditCommand{Operation: "SetServiceConfigurationValue", DeploymentID: id, Scope: "DEPLOYMENT", Setting: setting.ID, Value: profileIDs[0]}
+				changed, applyErr := candidate.applyConfigurationCommand(auto, deployments, catalog)
+				if applyErr != nil {
+					return nil, mutations, applyErr
+				}
+				if changed {
+					changes = append(changes, commandSummary(auto))
+				}
+			}
+		}
 	}
 	if len(inventory.hosts) > maxManagedEntities || len(deployments) > maxManagedEntities || len(groups) > maxManagedEntities {
 		return nil, mutations, blocked("INVALID_EDIT_COMMAND", "Managed entity collection exceeds its limit", "command")

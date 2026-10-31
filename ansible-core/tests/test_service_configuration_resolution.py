@@ -95,6 +95,23 @@ def resolved(topology_value):
 
 
 class ServiceConfigurationResolutionTests(unittest.TestCase):
+    def test_tls_profile_is_required_without_a_role_default_and_explicit_choice_resolves(self):
+        selected = catalog(canonical=True)
+        selected['definitions']['kafka']['configuration']['settings']['tlsProfile'] = {
+            'kind': 'MANAGED', 'roleVariable': 'platform_kafka_tls_profile', 'type': 'string',
+            'scopes': ['deployment', 'member'], 'validation': {'minLength': 1},
+            'ui': {'x-referenceKind': 'TLS_PROFILE'}}
+        absent = self.resolve(topology(), service_catalog=selected)
+        self.assertEqual('BLOCKED', absent['status'])
+        self.assertTrue(any(item['code'] == 'TLS_PROFILE_REQUIRED' for item in absent['findings']))
+        unset = self.resolve(topology(), defaults={'platform_kafka_tls_profile': ''}, service_catalog=selected)
+        self.assertTrue(any(item['code'] == 'TLS_PROFILE_REQUIRED' for item in unset['findings']))
+        explicit = self.resolve(topology({'tlsProfile': 'custom-profile'}), service_catalog=selected)
+        self.assertEqual('PASS', explicit['status'], explicit['findings'])
+        self.assertEqual('custom-profile', explicit['services']['kafka-main']['configuration']['tlsProfile']['value'])
+        for member in explicit['services']['kafka-main']['members'].values():
+            self.assertEqual('custom-profile', member['configuration']['tlsProfile']['value'])
+
     def test_snapshot_materialization_keeps_three_colocated_inventory_overrides(self):
         desired = {"serviceDeployments": {"kafka-main": {
             "serviceType": "kafka", "definitionVersion": "1", "mode": "kraft-standalone",

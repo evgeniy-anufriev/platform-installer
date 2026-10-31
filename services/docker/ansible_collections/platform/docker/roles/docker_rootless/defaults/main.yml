@@ -6,7 +6,7 @@ platform_docker_data_root: "/home/{{ platform_docker_account_name }}/.local/shar
 platform_docker_account_credential:
   passwordSecretRef: ''
 platform_docker_secret_files: {}
-platform_docker_tls_profile: infrastructure-tls
+platform_docker_tls_profile: ""
 platform_docker_tls_directory: ''
 platform_docker_api_bind_address: 0.0.0.0
 platform_docker_api_port: 2376

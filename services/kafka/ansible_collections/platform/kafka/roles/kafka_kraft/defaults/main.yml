@@ -28,7 +28,7 @@ platform_kafka_data_directory: "{{ platform_data_root_directory | default('/var/
 platform_kafka_user: kafka
 platform_kafka_group: kafka
 platform_kafka_java_package: java-21-openjdk-headless
-platform_kafka_tls_profile: infrastructure-tls
+platform_kafka_tls_profile: ""
 # Named listeners are the Kafka service baseline. Deployment and member
 # configuration may override this mapping only for non-default listener ports
 # or topology.

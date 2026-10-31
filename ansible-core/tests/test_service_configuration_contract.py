@@ -1,6 +1,8 @@
 import importlib.util
 import os
 import unittest
+from pathlib import Path
+import yaml
 
 
 ROOT = os.path.join(os.path.dirname(__file__), "..", "collections", "ansible_collections", "platform", "core", "plugins", "module_utils")
@@ -14,6 +16,40 @@ def definition(settings):
 
 
 class ServiceConfigurationContractTests(unittest.TestCase):
+    def test_tls_profile_unset_default_is_not_a_selected_profile(self):
+        setting = {'kind': 'MANAGED', 'roleVariable': 'platform_tls_profile', 'type': 'string',
+                   'scopes': ['deployment'], 'validation': {'minLength': 1},
+                   'ui': {'x-referenceKind': 'TLS_PROFILE'}}
+        self.assertEqual([], CONTRACT.validate_defaults(definition({'tlsProfile': setting}), {'platform_tls_profile': ''}, lambda value: True))
+        setting['ui'] = {}
+        self.assertIn('ROLE_DEFAULT_VALIDATION_INVALID', {item['code'] for item in
+            CONTRACT.validate_defaults(definition({'name': setting}), {'platform_tls_profile': ''}, lambda value: True)})
+        setting.update(type='number', validation={}, ui={'x-referenceKind': 'TLS_PROFILE'})
+        self.assertIn('ROLE_DEFAULT_TYPE_INVALID', {item['code'] for item in
+            CONTRACT.validate_defaults(definition({'tlsProfile': setting}), {'platform_tls_profile': ''}, lambda value: True)})
+
+    def test_service_tls_defaults_are_unset_and_manual_tls_directories_still_work(self):
+        from ansible.parsing.dataloader import DataLoader
+        from ansible.template import Templar
+        repository = Path(__file__).resolve().parents[2]
+        for service in ('docker', 'clickhouse', 'kafka', 'postgresql', 'redis', 'vault', 'haproxy'):
+            found = False
+            for path in (repository / 'services' / service / 'ansible_collections' / 'platform' / service / 'roles').glob('*/defaults/main.yml'):
+                defaults = yaml.safe_load(path.read_text())
+                key = 'platform_%s_tls_profile' % service
+                if key not in defaults:
+                    continue
+                found = True
+                self.assertEqual('', defaults[key], path)
+                if service in ('docker', 'clickhouse'):
+                    defaults['platform_%s_tls_directory' % service] = '/existing/tls'
+                    tasks = yaml.safe_load((path.parents[1] / 'tasks/validate.yml').read_text())
+                    templar = Templar(loader=DataLoader(), variables=defaults)
+                    for expression in tasks[0]['ansible.builtin.assert']['that']:
+                        if key in expression:
+                            self.assertTrue(templar.template('{{ ' + expression + ' }}'), expression)
+            self.assertTrue(found, service)
+
     def test_generates_deterministic_schema_without_defaults(self):
         value = definition({"clientPort": {"kind": "MANAGED", "roleVariable": "platform_kafka_client_port", "type": "integer", "scopes": ["deployment"], "validation": {"minimum": 1}}})
         schema = CONTRACT.generated_schema(value)
