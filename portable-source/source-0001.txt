@@ -810,7 +810,7 @@ class ActionModule(ActionBase):
             return dict(failed=True, changed=False, msg=code, error_code=code)
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/project_snapshot.py","mode":420,"size":48144,"sha256":"437f715f2c358fb8143d0e0faa527f4f4afcd86961d33c75130882b41f9a0a66","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":48144}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/project_snapshot.py","mode":420,"size":50074,"sha256":"d1f54b98703abd7d12774cd7a26c1f4b41a4a552e23d86b19d689fb67ddc2d1d","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":49131}
 from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
@@ -1046,9 +1046,43 @@ def _project_effective_data_directories(configuration, catalog, hostvars):
     return configuration
 
 
-def _safe_configuration_preview(configuration, catalog, revision, hostvars=None):
+def _project_docker_defaults(configuration, catalog, templar):
+    """Render the two ordinary Docker defaults with Ansible, for display only."""
+    configuration = copy.deepcopy(configuration)
+    if templar is None:
+        return configuration
+    for service in configuration.get("services", {}).values():
+        if service.get("serviceType") != "docker":
+            continue
+        settings = catalog.get("definitions", {}).get("docker", {}).get("configuration", {}).get("settings", {})
+        values = service.get("configuration", {})
+        variables = {"platform_name_prefix": templar.available_variables.get("platform_name_prefix", "")}
+        for name in ("accountName", "dataRoot"):
+            item, descriptor = values.get(name, {}), settings.get(name, {})
+            variable = descriptor.get("roleVariable")
+            if not isinstance(variable, str):
+                continue
+            if item.get("state") == "RESOLVED" and ordinary_presentation_value(descriptor, item.get("value")):
+                variables[variable] = item["value"]
+                continue
+            if (item.get("state") != "DEFERRED" or item.get("source") != "RUNTIME_DEFERRED"
+                    or item.get("reason") != "NON_LITERAL_ROLE_DEFAULT" or not isinstance(item.get("expression"), str)):
+                continue
+            try:
+                value = templar.copy_with_new_env(available_variables=variables).template(
+                    item["expression"], fail_on_undefined=True, disable_lookups=True)
+            except AnsibleError:
+                continue
+            if ordinary_presentation_value(descriptor, value):
+                variables[variable] = value
+                values[name] = {"state": "RESOLVED", "source": "ROLE_DEFAULT", "value": value}
+    return configuration
+
+
+def _safe_configuration_preview(configuration, catalog, revision, hostvars=None, templar=None):
     """Project only bounded, manifest-mapped ordinary values for the UI."""
     configuration = _project_effective_data_directories(configuration, catalog, hostvars)
+    configuration = _project_docker_defaults(configuration, catalog, templar)
     definitions = catalog.get("definitions", {}) if isinstance(catalog, dict) else {}
     services = configuration.get("services", {}) if isinstance(configuration, dict) else {}
     if not isinstance(services, dict) or len(services) > 512:
@@ -1339,7 +1373,7 @@ class ActionModule(ActionBase):
                                                 reuse.scope_name(project_root, runtime)), expected)
                 if cached is not None:
                     return self._public_result(dict(changed=False, snapshot=_safe_configuration_preview(
-                        cached['execution_configuration'], catalog, expected['revision'], task_vars.get('hostvars', {}))))
+                        cached['execution_configuration'], catalog, expected['revision'], task_vars.get('hostvars', {}), self._templar)))
             repo_root = self._repo_root(catalog_path, catalog)
             stage = 'чтение desired state и библиотек приложений'
             desired_state = task_vars.get("platform_desired_state", {})
@@ -1428,7 +1462,7 @@ class ActionModule(ActionBase):
             )
             if self._task.args.get("configuration_only") is True:
                 _, revision = project_documents(project_root, [])
-                return self._public_result({"changed": False, "snapshot": _safe_configuration_preview(configuration, catalog, revision, hostvars)})
+                return self._public_result({"changed": False, "snapshot": _safe_configuration_preview(configuration, catalog, revision, hostvars, self._templar)})
             deployments = materialized.get("serviceDeployments", {}) if isinstance(materialized, dict) else {}
             definitions = catalog.get("definitions", {}) if isinstance(catalog, dict) else {}
             _, _, secret_findings = _service_runtime_secret_requirements(
@@ -1571,7 +1605,10 @@ class ActionModule(ActionBase):
             module = os.path.basename(frame.filename)
             if re.fullmatch(r'[A-Za-z0-9_]+\.py', module):
                 location = '%s:%s' % (module, frame.lineno)
-                kind = next((name for cls, name in (
+                kind = next((name for cls, nam
+@@END
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/project_snapshot.py","mode":420,"size":50074,"sha256":"d1f54b98703abd7d12774cd7a26c1f4b41a4a552e23d86b19d689fb67ddc2d1d","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":943}
+e in (
                     (AnsibleError, 'AnsibleError'), (KeyError, 'KeyError'),
                     (OSError, 'OSError'), (TypeError, 'TypeError'), (ValueError, 'ValueError'),
                     (AttributeError, 'AttributeError'), (RuntimeError, 'RuntimeError'))
@@ -25759,7 +25796,7 @@ def recover_dns_lifecycle(generated_state, zones, recovery):
     return {"status": "BLOCKED" if findings else "PASS", "generatedState": state, "findings": findings}
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/dns_resolution.py","mode":420,"size":13658,"sha256":"b14fa1820bbc3dd7f0225e1fec8066a9cbcd80667c2a126389a969116be2baa0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":13658}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/dns_resolution.py","mode":420,"size":14168,"sha256":"e9d6505cc0c0b5bfb6da78b1ceacda5d6992ed21c56b53e6939d8815b35c1cf2","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":14168}
 from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
@@ -25781,6 +25818,17 @@ except ImportError:
 
 
 API_VERSION = "platform.installer/resolved-dns-zone/v1alpha1"
+
+
+def dns_client_server_reference(deployment, deployments):
+    """Use an authored reference, otherwise the first BIND deployment by ID."""
+    configuration = deployment.get("configuration", {})
+    if not isinstance(configuration, dict):
+        return None
+    if "dnsServerRef" in configuration:
+        return configuration["dnsServerRef"]
+    return next((name for name, value in sorted(deployments.items())
+                 if isinstance(value, dict) and value.get("serviceType") == "bind"), None)
 
 
 def _finding(code, field, message, details=None):
@@ -25889,7 +25937,7 @@ def resolve_dns_zones(desired_state, service_catalog, inventory_hosts, inventory
         prefix = "serviceDeployments.%s" % deployment_id
         configuration = deployment.get("configuration", {}) if isinstance(deployment.get("configuration"), dict) else {}
         zone = configuration.get("zone")
-        ttl = configuration.get("defaultTtl")
+        ttl = configuration.get("defaultTtl", 300)
         if not isinstance(zone, str) or not DNS_DOMAIN.match(zone):
             findings.append(_finding("DNS_ZONE_INVALID", prefix + ".configuration.zone", "Managed DNS zone must be a lowercase fully qualified domain"))
             continue
@@ -28388,7 +28436,7 @@ def topology_with_inventory_members(desired_state, inventory_members):
     return result
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/project_validation.py","mode":420,"size":42975,"sha256":"01bb3f522ae68de3a97deac742521e14dbd0a8284f992259d04cb96e3d76f65c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":42975}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/project_validation.py","mode":420,"size":42943,"sha256":"f182b36453176c19101941d83346fa019099627ad27b38a719b970f86276ffeb","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":42943}
 from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
@@ -29128,9 +29176,9 @@ def validate_project(manifest, topology, desired_hosts, service_catalog, invento
     ]
     if bind_deployments or dns_client_deployments:
         try:
-            from .dns_resolution import resolve_dns_zones
+            from .dns_resolution import resolve_dns_zones, dns_client_server_reference
         except ImportError:
-            from dns_resolution import resolve_dns_zones
+            from dns_resolution import resolve_dns_zones, dns_client_server_reference
         dns_inventory_deployments = {}
         for deployment_id, participants in (host_scoped_deployments or {}).items():
             if not isinstance(participants, dict):
@@ -29143,8 +29191,7 @@ def validate_project(manifest, topology, desired_hosts, service_catalog, invento
         findings.extend(dns_result["findings"])
         for deployment_id, deployment in sorted(dns_client_deployments):
             prefix = "serviceDeployments.%s.configuration.dnsServerRef" % deployment_id
-            configuration = deployment.get("configuration", {})
-            reference = configuration.get("dnsServerRef") if isinstance(configuration, dict) else None
+            reference = dns_client_server_reference(deployment, deployments)
             referenced = deployments.get(reference) if isinstance(reference, str) else None
             if not isinstance(referenced, dict):
                 findings.append(_finding(
@@ -29785,7 +29832,7 @@ def ordinary_presentation_value(setting, value):
     return False
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/service_configuration_resolution.py","mode":420,"size":33570,"sha256":"ff5966333eb6e6505801613aa389dae7a12ee672dc8925bd09af744a1d026a5f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":33570}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/service_configuration_resolution.py","mode":420,"size":34283,"sha256":"0f9d67cafd60639bdd49de79438083f0e4cd531d66aa4fd1a719160fdd0006f7","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":34283}
 from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
@@ -29798,10 +29845,12 @@ try:
     from .project_validation import canonical_digest
     from .service_configuration_contract import canonical_settings, validate_settings
     from .kafka_schema_registry import configuration_registry_findings
+    from .dns_resolution import dns_client_server_reference
 except ImportError:
     from project_validation import canonical_digest
     from service_configuration_contract import canonical_settings, validate_settings
     from kafka_schema_registry import configuration_registry_findings
+    from dns_resolution import dns_client_server_reference
 
 
 API_VERSION = "platform.installer/resolved-service-configuration/v1alpha1"
@@ -30219,6 +30268,14 @@ def resolve_service_configuration(
                     return "DEPLOYMENT_OVERRIDE", _merge_mapping_defaults(default_value, document_overrides[logical]), document_origins[logical]
                 if role_variable in defaults:
                     return "ROLE_DEFAULT", defaults[role_variable], None
+                if service_type == "dns-client" and logical == "dnsServerRef":
+                    reference = dns_client_server_reference(desired, desired_deployments)
+                    if reference is not None:
+                        return "ROLE_DEFAULT", reference, None
+                if service_type == "kafka" and logical == "nodeId" and scope_member is not None:
+                    suffix = re.search(r"-([0-9]{1,10})$", scope_member.get("id", ""))
+                    if suffix and int(suffix[1]) <= 2147483647:
+                        return "ROLE_DEFAULT", int(suffix[1]), None
                 return None
 
             def resolve_variable(name):
@@ -31479,12 +31536,12 @@ if __name__ == "__main__":
     main()
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/modules/resolve_dns_zones.py","mode":420,"size":1533,"sha256":"bf73fc2ba7667db645b59bcf7b84d178c705d7147ea5395f16161ac4258fa36b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1533}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/modules/resolve_dns_zones.py","mode":420,"size":1896,"sha256":"97eb203d12c70de42a2184fd830282d64bf3b3b110ed8d3dd379620215732d10","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1896}
 #!/usr/bin/python
 from __future__ import absolute_import, division, print_function
 
 from ansible.module_utils.basic import AnsibleModule
-from ansible_collections.platform.core.plugins.module_utils.dns_resolution import resolve_dns_zones
+from ansible_collections.platform.core.plugins.module_utils.dns_resolution import resolve_dns_zones, dns_client_server_reference
 
 
 def main():
@@ -31507,7 +31564,11 @@ def main():
     )
     if result["status"] != "PASS":
         module.fail_json(msg="DNS resolution is blocked", error_code="DNS_RESOLUTION_BLOCKED", findings=result["findings"])
-    module.exit_json(changed=False, resolved_dns_zones=result)
+    deployments = module.params["desired_state"].get("serviceDeployments", {})
+    references = {name: dns_client_server_reference(value, deployments)
+                  for name, value in deployments.items()
+                  if isinstance(value, dict) and value.get("serviceType") == "dns-client"}
+    module.exit_json(changed=False, resolved_dns_zones=result, dns_client_server_refs=references)
 
 
 if __name__ == "__main__":
@@ -86500,7 +86561,7 @@ catalogLock:
 })();
 
 @@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":134153,"sha256":"cb9af110dc859aeafe238fad38cdab888839cb090be8c7c960eb07c4897fcb2a","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49805}
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":134121,"sha256":"40919b24a5622a7f2e7afeccc103d744783d21d42f359b0fc9b164c9d2a617e9","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49805}
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   EditResult,
@@ -87821,7 +87882,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
         }
         if (next.statu
 @@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":134153,"sha256":"cb9af110dc859aeafe238fad38cdab888839cb090be8c7c960eb07c4897fcb2a","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49750}
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":134121,"sha256":"40919b24a5622a7f2e7afeccc103d744783d21d42f359b0fc9b164c9d2a617e9","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49750}
 s !== "READY") break;
         candidates.push(...(next.packages || []));
         cursor = next.nextCursor;
@@ -89178,7 +89239,7 @@ s !== "READY") break;
               }}
    
 @@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":134153,"sha256":"cb9af110dc859aeafe238fad38cdab888839cb090be8c7c960eb07c4897fcb2a","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":34598}
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":134121,"sha256":"40919b24a5622a7f2e7afeccc103d744783d21d42f359b0fc9b164c9d2a617e9","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":34566}
            preview={endpointPreview}
               verificationStatus={verification.status}
             />
@@ -89342,7 +89403,6 @@ s !== "READY") break;
               onSetPKIStorePassword={setPKIStorePassword}
               onReview={review}
               onDiscard={discard}
-              onVerify={verify}
               onReturnToServices={
                 certificateReturn
                   ? () => {
@@ -96390,7 +96450,7 @@ sabled={busy}
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/CertificatesPage.tsx","mode":420,"size":40181,"sha256":"ea851c3b1b4674cb2b99f876e8546ca332ea5e2f029f79aa6dbc3d5e30db12fd","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":40181}
+@@PORTABLE {"path":"frontend/src/CertificatesPage.tsx","mode":420,"size":38024,"sha256":"cb5a98ea2d7c4cdffd880e3d0bacf4f135b80afe558d7578987ae7423cd1ff6c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":38024}
 import { useMemo, useState } from "react";
 import type {
   OpenResult,
@@ -96537,7 +96597,6 @@ export function CertificatesPage({
   onSetPKIStorePassword,
   onReview,
   onDiscard,
-  onVerify,
   onReturnToServices,
 }: {
   managed: OpenResult["managed"];
@@ -96553,7 +96612,6 @@ export function CertificatesPage({
   onSetPKIStorePassword?: (value: string) => Promise<SessionCredentialStatus>;
   onReview: () => void;
   onDiscard: () => void;
-  onVerify?: () => void;
   onReturnToServices?: () => void;
 }) {
   const [editor, setEditor] = useState<{ kind: PKIKind; id?: string } | null>(
@@ -96694,16 +96752,9 @@ export function CertificatesPage({
           )}
         </article>
       </div>
-      <CoreVerification
+      <CertificateIdentities
         verification={verification || { status: "UNVERIFIED" }}
         view={verifiedPKI}
-        disabled={
-          busy ||
-          commandCount > 0 ||
-          verification?.status === "VERIFYING" ||
-          !onVerify
-        }
-        onVerify={onVerify || (() => undefined)}
       />
       {editor && (
         <CertificateDialog
@@ -96737,50 +96788,29 @@ export function CertificatesPage({
   );
 }
 
-function CoreVerification({
+function CertificateIdentities({
   verification,
   view,
-  disabled,
-  onVerify,
 }: {
   verification: VerificationStatus;
   view?: VerifiedPKIView;
-  disabled: boolean;
-  onVerify: () => void;
 }) {
-  const status =
-    verification.status === "INVALID"
-      ? "INVALID"
-      : verification.status === "UNAVAILABLE"
-        ? "UNAVAILABLE"
-        : verification.status === "STALE"
-          ? "STALE"
-          : verification.status === "VERIFIED"
-            ? view?.status === "CURRENT"
-              ? "CURRENT"
-              : "STALE"
-            : verification.status === "VERIFYING"
-              ? "NOT_VERIFIED"
-              : view?.status || "NOT_VERIFIED";
-  const findings = view?.findings || verification.findings || [];
+  if (verification.status !== "VERIFIED" || view?.status !== "CURRENT") return null;
   return (
     <article className="card certificate-verification">
       <div className="section-head">
         <div>
-          <h2>Проверка Core</h2>
+          <h2>Имена сертификатов и SAN</h2>
           <small>
             Имена и SAN отображаются только по актуальным данным проверки Core.
           </small>
         </div>
-        <button disabled={disabled} onClick={onVerify}>
-          {verification.status === "VERIFYING" ? "Проверка…" : "Проверить"}
-        </button>
       </div>
       <p className="muted">
         Влияние виртуального IP поставщика определяет Core после сохранения и
         проверки. Этот экран не выпускает и не перевыпускает сертификаты.
       </p>
-      {status === "CURRENT" && view?.identities?.length ? (
+      {view.identities?.length ? (
         <div className="verified-identities">
           {view.identities.map((identity) => (
             <section key={identity.id} className="verified-identity">
@@ -96808,43 +96838,13 @@ function CoreVerification({
             </section>
           ))}
         </div>
-      ) : status === "CURRENT" ? (
+      ) : (
         <p className="muted">
           Core подтвердил проект; потребителей сертификатов нет.
         </p>
-      ) : (
-        <p className={status === "INVALID" ? "field-error" : "muted"}>
-          {verificationMessage(
-            status,
-            view?.error?.message || verification.error?.message,
-          )}
-        </p>
-      )}
-      {!!findings.length && (
-        <ul className="verification-findings">
-          {findings.map((finding, index) => (
-            <li key={`${finding.code}:${finding.subjectId || index}`}>
-              <b>{finding.code}</b>: {finding.summary}
-              {finding.subjectId ? ` (${finding.subjectId})` : ""}
-            </li>
-          ))}
-        </ul>
       )}
     </article>
   );
-}
-
-function verificationMessage(status: string, error?: string) {
-  switch (status) {
-    case "INVALID":
-      return "Core обнаружил ошибки проверки. Сохранённый проект не откатывается.";
-    case "STALE":
-      return "Проверка устарела: запустите проверку сохранённой ревизии снова.";
-    case "UNAVAILABLE":
-      return error || "Для проверки нужен готовый узел выполнения.";
-    default:
-      return error || "Проект ещё не проверен Core.";
-  }
 }
 
 function sectionHint(kind: PKIKind) {
@@ -97638,7 +97638,7 @@ function entityFor(
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/EntryPointsView.tsx","mode":420,"size":31738,"sha256":"a42abbce7579c52840cd13668fba7db82f6b924f6508e10f42f0bc1298d53cc7","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":31738}
+@@PORTABLE {"path":"frontend/src/EntryPointsView.tsx","mode":420,"size":30818,"sha256":"baafa2fd5cfc6b3e6c405e76b3997b508f70b516d2013872f4c397d0b2c727c2","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":30818}
 import { useMemo, useState } from "react";
 import type { EndpointPreview, OpenResult, VerificationStatus } from "./backend";
 import type { DeploymentIntent } from "./TopologyPage";
@@ -97803,8 +97803,6 @@ export function EntryPointsView({
   intents,
   providerIntents,
   deploymentIntents,
-  preview,
-  verificationStatus,
   busy,
   disabled,
   commandCount,
@@ -97868,26 +97866,9 @@ export function EntryPointsView({
   );
   return (
     <>
-      {preview?.status === "INVALID" && (
-        <section className="entry-findings" role="alert">
-          <strong>Адреса и provider/VIP не показаны: проверка Core выявила ошибки.</strong>
-          {preview.findings?.map((finding) => (
-            <p key={`${finding.code}-${finding.subjectId || ""}`}>
-              {finding.code}: {finding.summary}
-            </p>
-          ))}
-        </section>
-      )}
       {providerIntents.length > 0 && (
         <p className="entry-draft-notice" role="status">
           Конфигурация provider изменена в черновике; влияние на PKI/SAN определяет только Core.
-        </p>
-      )}
-      {!preview && verificationStatus !== "VERIFIED" && (
-        <p className="entry-draft-notice" role="status">
-          {verificationStatus === "UNAVAILABLE"
-            ? "Core сейчас недоступен; проект не изменён."
-            : "Актуальные данные Core пока не получены; сохраните проект и выполните проверку."}
         </p>
       )}
       <section className="title topology-title">
@@ -102615,7 +102596,7 @@ function DeleteDialog({
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/ServicesPage.tsx","mode":420,"size":70007,"sha256":"9bae5745764aed2fdf9d22f41c6e1a6ec5522c59fdead102d759bba75ab599e6","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":50102}
+@@PORTABLE {"path":"frontend/src/ServicesPage.tsx","mode":420,"size":70101,"sha256":"54296c988776e5f05c8d1d357a62500c6720b2818391ff69a84ea8848f3b7cf9","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":50102}
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   OpenResult,
@@ -103107,7 +103088,8 @@ export function ServicesPage({
   const visibleSettings = settings.filter(
     (setting) =>
       !setting.runtimeSecretRequirementRef &&
-      setting.editorShape !== "RUNTIME_SECRET_REFERENCE_OBJECT",
+      setting.editorShape !== "RUNTIME_SECRET_REFERENCE_OBJECT" &&
+      isEditable(setting, true),
   );
   const hasConfigurableSecrets =
     settings.some((setting) => !!setting.runtimeSecretRequirementRef) ||
@@ -103510,7 +103492,7 @@ export function ServicesPage({
             </>
           ) : (
             <div className="services-setting-list">
-              {visibleSettings.map((setting) => {
+              {visibleSettings.filter((setting) => setting.scopes.includes("deployment")).map((setting) => {
                 const current = settingValue(
                   savedOverrides,
                   selected.deploymentId,
@@ -103903,12 +103885,12 @@ export function ServicesPage({
                         type="password"
                         autoComplete="new-password"
                         value={secretValues[descriptor.requirementRef] || ""}
-                        disabled={secretBusy}
-                        onChange={(event) =>
-                          
+                       
 @@END
-@@PORTABLE {"path":"frontend/src/ServicesPage.tsx","mode":420,"size":70007,"sha256":"9bae5745764aed2fdf9d22f41c6e1a6ec5522c59fdead102d759bba75ab599e6","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":19905}
-setSecretValues((current) => ({
+@@PORTABLE {"path":"frontend/src/ServicesPage.tsx","mode":420,"size":70101,"sha256":"54296c988776e5f05c8d1d357a62500c6720b2818391ff69a84ea8848f3b7cf9","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":19999}
+ disabled={secretBusy}
+                        onChange={(event) =>
+                          setSecretValues((current) => ({
                             ...current,
                             [descriptor.requirementRef]: event.target.value,
                           }))
@@ -104435,7 +104417,7 @@ function SessionActions({
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/TopologyPage.tsx","mode":420,"size":52692,"sha256":"dcce10acd48b6dd938f4bf7f489207977e1c732695b35f31356c61a059e079a9","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":50543}
+@@PORTABLE {"path":"frontend/src/TopologyPage.tsx","mode":420,"size":52460,"sha256":"d4b9b1a8837e25a3154459bb0866a73d26d2918507bd35d6eac1e337bb90d531","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":50478}
 import { useEffect, useMemo, useState } from "react";
 import type { EndpointPreview, OpenResult } from "./backend";
 import {
@@ -105084,8 +105066,6 @@ export function TopologyPage({
               <dd>{commandCount} / 16 изменений</dd>
               <dt>Размещение</dt>
               <dd>Настраивается здесь</dd>
-              <dt>Проверка Core</dt>
-              <dd>Запускается отдельно после сохранения</dd>
             </dl>
             <p className="muted">
               Размещение и роли задаются в проекте; итоговую проверку выполняет Core после сохранения.
@@ -105358,8 +105338,6 @@ function ByServersView({
           <dd>{selected?.label.split(" · ").slice(1).join(" · ") || "—"}</dd>
           <dt>Размещений</dt>
           <dd>{assignments.length}</dd>
-          <dt>Проверка Core</dt>
-          <dd>После сохранения</dd>
         </dl>
         <p className="muted">
           Настраивайте размещение и параметры сервиса или участника в центральном
@@ -105871,17 +105849,17 @@ function AddDeploymentDialog({
         <p className="muted">
           Размещение, группы точек входа и настройки сервиса здесь не создаются.
         </p>
-        <div className=
-@@END
-@@PORTABLE {"path":"frontend/src/TopologyPage.tsx","mode":420,"size":52692,"sha256":"dcce10acd48b6dd938f4bf7f489207977e1c732695b35f31356c61a059e079a9","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":2149}
-"actions">
+        <div className="actions">
           <button
             type="button"
             className="outline"
             onClick={onClose}
             disabled={busy}
           >
-            Отмена
+          
+@@END
+@@PORTABLE {"path":"frontend/src/TopologyPage.tsx","mode":420,"size":52460,"sha256":"d4b9b1a8837e25a3154459bb0866a73d26d2918507bd35d6eac1e337bb90d531","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":1982}
+  Отмена
           </button>
           <button type="submit" disabled={busy || services.length === 0}>
             Добавить в черновик

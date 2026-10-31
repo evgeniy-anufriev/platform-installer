@@ -46843,8 +46843,9 @@ description: Platform authoritative BIND DNS role
 license: [Apache-2.0]
 
 @@END
-@@PORTABLE {"path":"services/bind/ansible_collections/platform/bind/roles/bind/defaults/main.yml","mode":420,"size":1657,"sha256":"87a7ba7d5950b8443dcbf349cdbba7332551f32bc08e2425ff9f4479b73954ad","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1657}
+@@PORTABLE {"path":"services/bind/ansible_collections/platform/bind/roles/bind/defaults/main.yml","mode":420,"size":1688,"sha256":"4f4ac47fce91fb9b0efae71c24bf218cfc4e819ed78e94e9dc1d0bbf334b4292","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1688}
 platform_bind_package: bind
+platform_bind_default_ttl: 300
 platform_bind_utils_package: bind-utils
 platform_bind_service_name: named
 platform_bind_binary: /usr/sbin/named
@@ -50934,7 +50935,7 @@ platforms:
       platform_dns_client_phase: apply
 
 @@END
-@@PORTABLE {"path":"services/dns-client/playbooks/projection.yml","mode":420,"size":3041,"sha256":"808009e4dcc65cf9df094864c846e829bccb9da48a053c0becfdda62d467daf8","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3041}
+@@PORTABLE {"path":"services/dns-client/playbooks/projection.yml","mode":420,"size":3141,"sha256":"177989ad428d6afb5a8b214af471ad85ecfb90bd3dc9c3e5de0c7566da43f048","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3141}
 ---
 - import_playbook: ../../../ansible-core/playbooks/validate-infrastructure.yml
 
@@ -50974,10 +50975,10 @@ platforms:
         platform_dns_client_runtime_projection: >-
           {{ platform_dns_client_runtime_projection | combine({'clients': {
                item.key: {
-                 'dnsServerRef': item.value.configuration.dnsServerRef,
-                 'managedZone': _platform_dns_client_dns.resolved_dns_zones.zones[item.value.configuration.dnsServerRef].zone,
-                 'servers': (([_platform_dns_client_dns.resolved_dns_zones.zones[item.value.configuration.dnsServerRef].primary] + _platform_dns_client_dns.resolved_dns_zones.zones[item.value.configuration.dnsServerRef].secondaries) | map(attribute='address') | list),
-                 'hostRecord': _platform_dns_client_dns.resolved_dns_zones.zones[item.value.configuration.dnsServerRef].primary.fqdn
+                 'dnsServerRef': _platform_dns_client_dns.dns_client_server_refs[item.key],
+                 'managedZone': _platform_dns_client_dns.resolved_dns_zones.zones[_platform_dns_client_dns.dns_client_server_refs[item.key]].zone,
+                 'servers': (([_platform_dns_client_dns.resolved_dns_zones.zones[_platform_dns_client_dns.dns_client_server_refs[item.key]].primary] + _platform_dns_client_dns.resolved_dns_zones.zones[_platform_dns_client_dns.dns_client_server_refs[item.key]].secondaries) | map(attribute='address') | list),
+                 'hostRecord': _platform_dns_client_dns.resolved_dns_zones.zones[_platform_dns_client_dns.dns_client_server_refs[item.key]].primary.fqdn
                }
              }}, recursive=True) }}
       loop: "{{ platform_desired_state.serviceDeployments | dict2items | selectattr('value.serviceType', 'equalto', 'dns-client') | list }}"
