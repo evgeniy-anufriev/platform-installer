@@ -50861,7 +50861,7 @@ platform_clickhouse_expected_rpm_digests:
     label: "{{ item.item.0.id }}/{{ item.item.1 }}"
 
 @@END
-@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/tasks/preflight.yml","mode":420,"size":11180,"sha256":"ea462c27e7ca78d947b32f9ec08e81b4be7baddb61ef0575d6fcb7701e22b433","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":11180}
+@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/tasks/preflight.yml","mode":420,"size":10215,"sha256":"86958601d0e0b456c9175c2acabef4c0a8cf1137aab836e2ce960cceb9629316","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":10215}
 ---
 - name: Проверка происхождения управляемого пути ClickHouse перед привилегированной модификацией
   ansible.builtin.include_tasks: path_safety.yml
@@ -50913,27 +50913,6 @@ platform_clickhouse_expected_rpm_digests:
        product(['server', 'keeper'] if platform_clickhouse_mode == 'raft-ha' else ['server']) | list }}
   register: _platform_clickhouse_unit_path_stats
   no_log: true
-
-- name: Проверка устаревших путей к службам systemd с хеш-именами ClickHouse
-  ansible.builtin.stat:
-    path: "/etc/systemd/system/{{ item }}"
-    follow: false
-    get_mime: false
-    get_attributes: false
-    get_checksum: false
-  loop: >-
-    {{ (_platform_clickhouse_local_instances | map(attribute='legacy_server_unit_name') | list)
-       + ((_platform_clickhouse_local_instances | map(attribute='legacy_keeper_unit_name') | list)
-          if platform_clickhouse_mode == 'raft-ha' else []) }}
-  register: _platform_clickhouse_legacy_unit_path_stats
-
-- name: Отклонение устаревших имён служб ClickHouse без автоматического принятия
-  ansible.builtin.assert:
-    that: not item.stat.exists
-    fail_msg: CLICKHOUSE_LEGACY_UNIT_REQUIRES_S11_CLEANUP
-  loop: "{{ _platform_clickhouse_legacy_unit_path_stats.results }}"
-  loop_control:
-    label: "{{ item.item }}"
 
 - name: Отклонение путей к символическим ссылкам службы экземпляра systemd
   ansible.builtin.assert:
@@ -56968,7 +56947,7 @@ dependencies: []
       changed_when: false
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/apply.yml","mode":420,"size":24416,"sha256":"72079af3631ef6b38ab1ab180945ab572557974c80c75d7fd5ca03618404a58d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":24416}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/apply.yml","mode":420,"size":22337,"sha256":"aab54224248fa1a244dcdfac47da1e366ef168140c94eccab215d8de6ac5493c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":22337}
 ---
 - name: Проверка настроек ресурсов переносимой службы
   ansible.builtin.include_role:
@@ -57088,50 +57067,6 @@ dependencies: []
     loop_var: platform_managed_data_path_instance
     label: "{{ platform_managed_data_path_instance.id }}"
   when: not (platform_kafka_verify_only | bool)
-
-- name: Проверка устаревших шаблонов служб systemd Kafka перед изменением
-  ansible.builtin.stat:
-    path: "/etc/systemd/system/{{ item }}"
-    follow: false
-    get_mime: false
-    get_attributes: false
-  loop: >-
-    {{ [platform_kafka_service_name ~ '@.service',
-        platform_kafka_service_name ~ '.service',
-        platform_kafka_service_name ~ '-standalone.service'] }}
-  register: _platform_kafka_legacy_unit_files
-  when:
-    - not (platform_kafka_verify_only | bool) and platform_kafka_phase != 'schema_registry'
-    - _platform_kafka_local_instances | length > 0
-
-- name: Отклонение устаревших имён служб Kafka без автоматического принятия
-  ansible.builtin.assert:
-    that: not item.stat.exists
-    fail_msg: KAFKA_LEGACY_UNIT_REQUIRES_S11_CLEANUP
-  loop: "{{ _platform_kafka_legacy_unit_files.results | default([]) }}"
-  loop_control:
-    label: "{{ item.item }}"
-  when:
-    - not (platform_kafka_verify_only | bool) and platform_kafka_phase != 'schema_registry'
-    - _platform_kafka_local_instances | length > 0
-
-- name: Проверка того, что службы systemd предыдущего экземпляра службы Kafka еще не активны
-  ansible.builtin.command:
-    argv: [systemctl, is-active, "{{ item.legacy_systemd_unit_name }}"]
-  loop: "{{ _platform_kafka_local_instances }}"
-  register: _platform_kafka_legacy_unit_states
-  changed_when: false
-  failed_when: false
-  when: not (platform_kafka_verify_only | bool) and platform_kafka_phase != 'schema_registry'
-
-- name: Отклонение активных служб прежнего экземпляра Kafka
-  ansible.builtin.assert:
-    that: item.stdout | trim != 'active'
-    fail_msg: KAFKA_LEGACY_UNIT_REQUIRES_S11_CLEANUP
-  loop: "{{ _platform_kafka_legacy_unit_states.results | default([]) }}"
-  loop_control:
-    label: "{{ item.item.legacy_systemd_unit_name }}"
-  when: not (platform_kafka_verify_only | bool) and platform_kafka_phase != 'schema_registry'
 
 - name: Проверка путей служб экземпляра Kafka перед формированием файлов
   ansible.builtin.stat:
@@ -63371,7 +63306,7 @@ platform_postgresql_pgpass_file: "/var/lib/pgsql/.pgpass"
     fail_msg: POSTGRES_TLS_FILES_NOT_DEPLOYED
 
 @@END
-@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/postgresql/tasks/main.yml","mode":420,"size":7776,"sha256":"2fec7bfa5022a434f4c6edbb50c828a0265418b44cd9bffa1c45b50d083cab0f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7776}
+@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/postgresql/tasks/main.yml","mode":420,"size":7071,"sha256":"b51533ef862d560d1ffe68f1f84d4a50293704529210929760b41d7ff13747b4","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7071}
 ---
 - name: Проверка настроек ресурсов переносимой службы
   ansible.builtin.include_role:
@@ -63449,22 +63384,6 @@ platform_postgresql_pgpass_file: "/var/lib/pgsql/.pgpass"
     _platform_postgresql_unit_name: >-
       {{ platform_postgresql_name ~ '@' ~ platform_postgresql_deployment_id ~ '-'
          ~ ((_platform_postgresql_local_members | first).id | string | regex_replace('^.*-', '')) ~ '.service' }}
-
-- name: Проверка устаревшего пути службы systemd PostgreSQL перед изменением
-  ansible.builtin.stat:
-    path: /etc/systemd/system/postgresql.service
-    follow: false
-    get_mime: false
-    get_attributes: false
-    get_checksum: false
-  register: _platform_postgresql_legacy_unit
-  when: not (platform_postgresql_verify_only | bool)
-
-- name: Отклонение устаревшей службы PostgreSQL без автоматического принятия
-  ansible.builtin.assert:
-    that: not _platform_postgresql_legacy_unit.stat.exists
-    fail_msg: POSTGRES_LEGACY_UNIT_REQUIRES_S11_CLEANUP
-  when: not (platform_postgresql_verify_only | bool)
 
 - name: Проверка точного пути к службе systemd PostgreSQL перед изменением
   ansible.builtin.stat:
@@ -66123,7 +66042,7 @@ platform_redis_install_from_system_repo: true
     daemon_reload: true
 
 @@END
-@@PORTABLE {"path":"services/redis/ansible_collections/platform/redis/roles/redis_tls/tasks/preflight.yml","mode":420,"size":22246,"sha256":"22514f4b024be2f11427601c7fe0b4e42b5f06477272a89cd9289098774b8c06","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":22246}
+@@PORTABLE {"path":"services/redis/ansible_collections/platform/redis/roles/redis_tls/tasks/preflight.yml","mode":420,"size":21058,"sha256":"0b3aa6825f31332cf7f4cbad475bced7cf9634f8e1109528f23096bca103cd9b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":21058}
 ---
 # A listener may be reused only by the exact already-active instance that this
 # role owns. This makes repeat apply idempotent while refusing an unrelated
@@ -66207,32 +66126,6 @@ platform_redis_install_from_system_repo: true
   when: not (item.skipped | default(false))
   loop_control:
     label: "{{ item.item.item.id }}"
-
-- name: Проверка служебных файлов systemd Redis и Sentinel на уровне экземпляра предыдущей службы
-  ansible.builtin.stat:
-    path: "/etc/systemd/system/{{ item }}"
-    follow: false
-    get_mime: false
-    get_attributes: false
-    get_checksum: false
-  loop: >-
-    {{ (_platform_redis_local_instances
-        | map(attribute='legacy_instance_name')
-        | map('regex_replace', '^', platform_redis_name ~ '@')
-        | map('regex_replace', '$', '.service') | list)
-       + (_platform_redis_local_instances | selectattr('roles', 'contains', 'sentinel')
-          | map(attribute='legacy_instance_name')
-          | map('regex_replace', '^', platform_redis_name ~ '-sentinel@')
-          | map('regex_replace', '$', '.service') | list) }}
-  register: _platform_redis_legacy_unit_files
-
-- name: Отклонение прежних имён служб Redis без автоматического принятия
-  ansible.builtin.assert:
-    that: not item.stat.exists
-    fail_msg: REDIS_LEGACY_UNIT_REQUIRES_S11_CLEANUP
-  loop: "{{ _platform_redis_legacy_unit_files.results }}"
-  loop_control:
-    label: "{{ item.item }}"
 
 - name: Проверка существующего маркера состояния экземпляра службы Redis
   ansible.builtin.stat:
@@ -69282,7 +69175,7 @@ platform_vault_bootstrap_lock_root: "/run/lock/{{ platform_vault_name }}"
   loop: "{{ _platform_vault_instances | map(attribute='host') | unique | list }}"
 
 @@END
-@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/roles/vault_tls/tasks/preflight.yml","mode":420,"size":13947,"sha256":"826b10baf1f740b06a105fb04af1acbe19e8abb83ec216406a7dda70ff6df6f5","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":13947}
+@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/roles/vault_tls/tasks/preflight.yml","mode":420,"size":13169,"sha256":"8a92b608453cbcaeafe2865c52b6e31384179d9509324b76c9f6c4f1679ae117","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":13169}
 ---
 - name: Сбор экземпляров Vault, назначенных узлу inventory
   ansible.builtin.set_fact:
@@ -69460,24 +69353,6 @@ platform_vault_bootstrap_lock_root: "/run/lock/{{ platform_vault_name }}"
   register: _platform_vault_unit_files
   loop_control:
     label: "{{ item.id }}"
-
-- name: Проверка устаревших системных служб с хэш-именами Vault без перехода по ссылкам
-  ansible.builtin.stat:
-    path: "/etc/systemd/system/{{ item.legacy_instance_name }}.service"
-    follow: false
-    get_mime: false
-    get_attributes: false
-    get_checksum: false
-  loop: "{{ _platform_vault_local_instances }}"
-  register: _platform_vault_legacy_unit_files
-
-- name: Отклонение устаревших имён служб Vault без автоматического принятия
-  ansible.builtin.assert:
-    that: not item.stat.exists
-    fail_msg: VAULT_LEGACY_UNIT_REQUIRES_S11_CLEANUP
-  loop: "{{ _platform_vault_legacy_unit_files.results }}"
-  loop_control:
-    label: "{{ item.item.id }}"
 
 - name: Проверка файлов ротации аудита Vault без перехода по символическим ссылкам
   ansible.builtin.stat:
