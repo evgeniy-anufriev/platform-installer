@@ -72,7 +72,7 @@ class Service01BContractTests(unittest.TestCase):
         self.assertIn("_platform_kafka_normalized_runtime_directory ~ '/systemd.env'", source)
         self.assertIn("legacy_systemd_unit_name", source)
         main = (ROLE / "tasks" / "apply.yml").read_text(encoding="utf-8")
-        self.assertIn("KAFKA_LEGACY_UNIT_REQUIRES_S11_CLEANUP", main)
+        self.assertNotIn("KAFKA_LEGACY_UNIT_REQUIRES_S11_CLEANUP", main)
         self.assertIn("KAFKA_UNIT_NAME_COLLISION", main)
         self.assertIn("KAFKA_UNIT_OWNERSHIP_UNKNOWN", main)
         self.assertLess(main.index("Проверка общих входных данных экземпляра службы Kafka"), main.index("Доставка выбранных автономных артефактов Kafka"))

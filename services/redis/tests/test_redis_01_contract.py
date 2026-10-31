@@ -106,7 +106,7 @@ class RedisContractTests(unittest.TestCase):
         projection = (role.parents[1] / 'plugins/module_utils/member_projection.py').read_text(encoding='utf-8')
         self.assertIn("source['id'].rsplit('-', 1)[-1]", projection)
         self.assertIn("^.+-[1-9][0-9]*$", validate)
-        self.assertIn("REDIS_LEGACY_UNIT_REQUIRES_S11_CLEANUP", preflight)
+        self.assertNotIn("REDIS_LEGACY_UNIT_REQUIRES_S11_CLEANUP", preflight)
         self.assertIn("REDIS_UNIT_OWNERSHIP_UNKNOWN", preflight)
         self.assertIn("REDIS_UNIT_PATH_UNSAFE", preflight)
         self.assertIn("# {{ platform_redis_name }}-managed:", (role / "templates/redis.service.j2").read_text(encoding="utf-8"))

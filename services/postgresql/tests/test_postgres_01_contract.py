@@ -47,11 +47,11 @@ class PostgreSQLHaLifecycleContractTests(unittest.TestCase):
         self.assertIn("Инициализация PostgreSQL ровно один раз", self.main)
         self.assertIn("platform_postgresql_mode == 'standalone'", self.main)
 
-    def test_postgresql_unit_is_member_scoped_and_legacy_unit_is_not_adopted(self):
+    def test_postgresql_unit_is_member_scoped_without_legacy_blocker(self):
         self.assertIn("platform_postgresql_name ~ '@' ~ platform_postgresql_deployment_id", self.main)
         self.assertIn("dest: \"/etc/systemd/system/{{ _platform_postgresql_unit_name }}\"", self.main)
         self.assertIn("argv: [systemctl, is-active, \"{{ _platform_postgresql_unit_name }}\"]", self.main)
-        self.assertIn("POSTGRES_LEGACY_UNIT_REQUIRES_S11_CLEANUP", self.main)
+        self.assertNotIn("POSTGRES_LEGACY_UNIT_REQUIRES_S11_CLEANUP", self.main)
         self.assertIn("POSTGRES_UNIT_NAME_COLLISION", (ROLE / "tasks/validate.yml").read_text(encoding="utf-8"))
         self.assertIn("{{ platform_postgresql_name }}-managed:", (ROLE / "templates/postgresql.service.j2").read_text(encoding="utf-8"))
 

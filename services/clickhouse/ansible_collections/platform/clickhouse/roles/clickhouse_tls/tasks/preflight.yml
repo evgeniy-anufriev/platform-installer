@@ -50,27 +50,6 @@
   register: _platform_clickhouse_unit_path_stats
   no_log: true
 
-- name: Проверка устаревших путей к службам systemd с хеш-именами ClickHouse
-  ansible.builtin.stat:
-    path: "/etc/systemd/system/{{ item }}"
-    follow: false
-    get_mime: false
-    get_attributes: false
-    get_checksum: false
-  loop: >-
-    {{ (_platform_clickhouse_local_instances | map(attribute='legacy_server_unit_name') | list)
-       + ((_platform_clickhouse_local_instances | map(attribute='legacy_keeper_unit_name') | list)
-          if platform_clickhouse_mode == 'raft-ha' else []) }}
-  register: _platform_clickhouse_legacy_unit_path_stats
-
-- name: Отклонение устаревших имён служб ClickHouse без автоматического принятия
-  ansible.builtin.assert:
-    that: not item.stat.exists
-    fail_msg: CLICKHOUSE_LEGACY_UNIT_REQUIRES_S11_CLEANUP
-  loop: "{{ _platform_clickhouse_legacy_unit_path_stats.results }}"
-  loop_control:
-    label: "{{ item.item }}"
-
 - name: Отклонение путей к символическим ссылкам службы экземпляра systemd
   ansible.builtin.assert:
     that: >-

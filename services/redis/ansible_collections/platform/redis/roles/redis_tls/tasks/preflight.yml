@@ -82,32 +82,6 @@
   loop_control:
     label: "{{ item.item.item.id }}"
 
-- name: Проверка служебных файлов systemd Redis и Sentinel на уровне экземпляра предыдущей службы
-  ansible.builtin.stat:
-    path: "/etc/systemd/system/{{ item }}"
-    follow: false
-    get_mime: false
-    get_attributes: false
-    get_checksum: false
-  loop: >-
-    {{ (_platform_redis_local_instances
-        | map(attribute='legacy_instance_name')
-        | map('regex_replace', '^', platform_redis_name ~ '@')
-        | map('regex_replace', '$', '.service') | list)
-       + (_platform_redis_local_instances | selectattr('roles', 'contains', 'sentinel')
-          | map(attribute='legacy_instance_name')
-          | map('regex_replace', '^', platform_redis_name ~ '-sentinel@')
-          | map('regex_replace', '$', '.service') | list) }}
-  register: _platform_redis_legacy_unit_files
-
-- name: Отклонение прежних имён служб Redis без автоматического принятия
-  ansible.builtin.assert:
-    that: not item.stat.exists
-    fail_msg: REDIS_LEGACY_UNIT_REQUIRES_S11_CLEANUP
-  loop: "{{ _platform_redis_legacy_unit_files.results }}"
-  loop_control:
-    label: "{{ item.item }}"
-
 - name: Проверка существующего маркера состояния экземпляра службы Redis
   ansible.builtin.stat:
     path: "{{ item.data_directory }}/.{{ platform_redis_name }}-mode"

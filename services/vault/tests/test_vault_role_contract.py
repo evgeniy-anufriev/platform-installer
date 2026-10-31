@@ -8,14 +8,14 @@ ROLE = ROOT / "services/vault/ansible_collections/platform/vault/roles/vault_tls
 
 
 class VaultRoleContractTests(unittest.TestCase):
-    def test_instance_unit_uses_deployment_numeric_member_and_legacy_is_fail_closed(self):
+    def test_instance_unit_uses_deployment_numeric_member_without_legacy_blocker(self):
         normalize = (ROLE / "tasks/normalize.yml").read_text(encoding="utf-8")
         validate = (ROLE / "tasks/validate.yml").read_text(encoding="utf-8")
         preflight = (ROLE / "tasks/preflight.yml").read_text(encoding="utf-8")
         clear = (ROOT / "services/vault/ansible_collections/platform/vault/plugins/modules/clear_member.py").read_text(encoding="utf-8")
         self.assertIn("(platform_vault_name ~ '@') ~ platform_vault_deployment_id", normalize)
         self.assertIn("^.+-[1-9][0-9]*$", validate)
-        self.assertIn("VAULT_LEGACY_UNIT_REQUIRES_S11_CLEANUP", preflight)
+        self.assertNotIn("VAULT_LEGACY_UNIT_REQUIRES_S11_CLEANUP", preflight)
         self.assertIn("service_name + '@'", clear)
         self.assertNotIn("hashlib", clear)
 

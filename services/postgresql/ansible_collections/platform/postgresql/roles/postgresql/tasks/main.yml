@@ -76,22 +76,6 @@
       {{ platform_postgresql_name ~ '@' ~ platform_postgresql_deployment_id ~ '-'
          ~ ((_platform_postgresql_local_members | first).id | string | regex_replace('^.*-', '')) ~ '.service' }}
 
-- name: Проверка устаревшего пути службы systemd PostgreSQL перед изменением
-  ansible.builtin.stat:
-    path: /etc/systemd/system/postgresql.service
-    follow: false
-    get_mime: false
-    get_attributes: false
-    get_checksum: false
-  register: _platform_postgresql_legacy_unit
-  when: not (platform_postgresql_verify_only | bool)
-
-- name: Отклонение устаревшей службы PostgreSQL без автоматического принятия
-  ansible.builtin.assert:
-    that: not _platform_postgresql_legacy_unit.stat.exists
-    fail_msg: POSTGRES_LEGACY_UNIT_REQUIRES_S11_CLEANUP
-  when: not (platform_postgresql_verify_only | bool)
-
 - name: Проверка точного пути к службе systemd PostgreSQL перед изменением
   ansible.builtin.stat:
     path: "/etc/systemd/system/{{ _platform_postgresql_unit_name }}"

@@ -12,6 +12,51 @@ TASKS = Path(__file__).resolve().parents[1] / "ansible_collections/platform/redi
 
 
 class RedisUnitOwnershipRuntimeTests(unittest.TestCase):
+    def test_owned_units_repeat_when_current_and_former_names_coincide(self):
+        executable = shutil.which("ansible-playbook")
+        if not executable:
+            self.skipTest("Ansible runtime required")
+        source = yaml.safe_load(TASKS.read_text(encoding="utf-8"))
+        end = next(index for index, task in enumerate(source) if task.get("name") ==
+                   "Проверка существующего маркера состояния экземпляра службы Redis")
+        with tempfile.TemporaryDirectory(prefix="platform-redis-repeat-") as directory:
+            root = Path(directory)
+            headers = {"redis@redis-3.service": "# redis-managed: redis/redis-3/redis\n",
+                       "redis-sentinel@redis-3.service": "# redis-managed: redis/redis-3/sentinel\n"}
+            for name, header in headers.items():
+                (root / name).write_text(header + "[Unit]\n", encoding="utf-8")
+            checks = yaml.safe_load(yaml.safe_dump(source[:end]).replace("/etc/systemd/system", str(root)))
+            normalize = {"ansible.builtin.include_tasks": str(TASKS.parent / "normalize.yml")}
+            tasks = [normalize, {"ansible.builtin.set_fact": {
+                "_platform_redis_local_instances": "{{ _platform_redis_instances }}"}}] + checks + checks
+            variables = dict(platform_redis_name="redis", platform_redis_deployment_id="redis",
+                             platform_redis_port=6379, platform_redis_sentinel_port=26379,
+                             platform_redis_data_root=str(root / "data"),
+                             platform_redis_config_root=str(root / "config"),
+                             platform_redis_log_root=str(root / "logs"),
+                             platform_redis_instances=[dict(id="redis-3", host="localhost", roles=["redis", "sentinel"])])
+            play = root / "repeat.yml"
+            play.write_text(yaml.safe_dump([dict(hosts="localhost", connection="local", gather_facts=False,
+                                                vars=variables, tasks=tasks)]), encoding="utf-8")
+            result = subprocess.run([executable, "-i", "localhost,", str(play)],
+                                    capture_output=True, text=True, timeout=60)
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            self.assertIn("changed=0", result.stdout)
+            for name, header in headers.items():
+                self.assertEqual(header + "[Unit]\n", (root / name).read_text(encoding="utf-8"))
+
+    def test_services_have_no_legacy_installation_blockers(self):
+        repository = TASKS.parents[7]
+        roles = {"redis": "redis_tls/tasks/preflight.yml", "vault": "vault_tls/tasks/preflight.yml",
+                 "clickhouse": "clickhouse_tls/tasks/preflight.yml", "kafka": "kafka_kraft/tasks/apply.yml",
+                 "postgresql": "postgresql/tasks/main.yml"}
+        for service, role in roles.items():
+            path = repository / service / "ansible_collections/platform" / service / "roles" / role
+            text = path.read_text(encoding="utf-8")
+            with self.subTest(service=service):
+                self.assertNotIn("LEGACY_UNIT_REQUIRES_S11_CLEANUP", text)
+                self.assertNotIn("_legacy_unit", text)
+
     def test_acl_overwrite_gate_requires_all_markers_and_exact_deployment_units(self):
         executable = shutil.which("ansible-playbook")
         if not executable:

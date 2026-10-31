@@ -176,24 +176,6 @@
   loop_control:
     label: "{{ item.id }}"
 
-- name: Проверка устаревших системных служб с хэш-именами Vault без перехода по ссылкам
-  ansible.builtin.stat:
-    path: "/etc/systemd/system/{{ item.legacy_instance_name }}.service"
-    follow: false
-    get_mime: false
-    get_attributes: false
-    get_checksum: false
-  loop: "{{ _platform_vault_local_instances }}"
-  register: _platform_vault_legacy_unit_files
-
-- name: Отклонение устаревших имён служб Vault без автоматического принятия
-  ansible.builtin.assert:
-    that: not item.stat.exists
-    fail_msg: VAULT_LEGACY_UNIT_REQUIRES_S11_CLEANUP
-  loop: "{{ _platform_vault_legacy_unit_files.results }}"
-  loop_control:
-    label: "{{ item.item.id }}"
-
 - name: Проверка файлов ротации аудита Vault без перехода по символическим ссылкам
   ansible.builtin.stat:
     path: "/etc/logrotate.d/{{ item.instance_name }}"

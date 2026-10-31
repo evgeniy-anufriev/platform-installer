@@ -118,50 +118,6 @@
     label: "{{ platform_managed_data_path_instance.id }}"
   when: not (platform_kafka_verify_only | bool)
 
-- name: Проверка устаревших шаблонов служб systemd Kafka перед изменением
-  ansible.builtin.stat:
-    path: "/etc/systemd/system/{{ item }}"
-    follow: false
-    get_mime: false
-    get_attributes: false
-  loop: >-
-    {{ [platform_kafka_service_name ~ '@.service',
-        platform_kafka_service_name ~ '.service',
-        platform_kafka_service_name ~ '-standalone.service'] }}
-  register: _platform_kafka_legacy_unit_files
-  when:
-    - not (platform_kafka_verify_only | bool) and platform_kafka_phase != 'schema_registry'
-    - _platform_kafka_local_instances | length > 0
-
-- name: Отклонение устаревших имён служб Kafka без автоматического принятия
-  ansible.builtin.assert:
-    that: not item.stat.exists
-    fail_msg: KAFKA_LEGACY_UNIT_REQUIRES_S11_CLEANUP
-  loop: "{{ _platform_kafka_legacy_unit_files.results | default([]) }}"
-  loop_control:
-    label: "{{ item.item }}"
-  when:
-    - not (platform_kafka_verify_only | bool) and platform_kafka_phase != 'schema_registry'
-    - _platform_kafka_local_instances | length > 0
-
-- name: Проверка того, что службы systemd предыдущего экземпляра службы Kafka еще не активны
-  ansible.builtin.command:
-    argv: [systemctl, is-active, "{{ item.legacy_systemd_unit_name }}"]
-  loop: "{{ _platform_kafka_local_instances }}"
-  register: _platform_kafka_legacy_unit_states
-  changed_when: false
-  failed_when: false
-  when: not (platform_kafka_verify_only | bool) and platform_kafka_phase != 'schema_registry'
-
-- name: Отклонение активных служб прежнего экземпляра Kafka
-  ansible.builtin.assert:
-    that: item.stdout | trim != 'active'
-    fail_msg: KAFKA_LEGACY_UNIT_REQUIRES_S11_CLEANUP
-  loop: "{{ _platform_kafka_legacy_unit_states.results | default([]) }}"
-  loop_control:
-    label: "{{ item.item.legacy_systemd_unit_name }}"
-  when: not (platform_kafka_verify_only | bool) and platform_kafka_phase != 'schema_registry'
-
 - name: Проверка путей служб экземпляра Kafka перед формированием файлов
   ansible.builtin.stat:
     path: "{{ item.systemd_unit_destination }}"
