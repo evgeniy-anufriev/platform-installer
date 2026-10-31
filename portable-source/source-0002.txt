@@ -21520,7 +21520,7 @@ func (a *App) CancelInstallationRun(runID string) InstallationRunOperation {
 }
 
 @@END
-@@PORTABLE {"path":"internal/desktop/installation_plan.go","mode":420,"size":23748,"sha256":"54331803548f17ad87a4eedb48737c36fdc4ddf24d43882693a7ffcf58a3a4c8","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":23748}
+@@PORTABLE {"path":"internal/desktop/installation_plan.go","mode":420,"size":24080,"sha256":"0a9e5d754fa4f33d5eaaf5eaed56b6d7cf2587c1d7e8b665d6920c270fd2ad2c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":24080}
 package desktop
 
 import (
@@ -21730,6 +21730,13 @@ func (a *App) ApproveInstallationPlan(planID string, acknowledgements []string) 
 	view.SecretOutputEncryptionPasswordPresent = a.secretOutputEncryptionPasswordPresentLocked()
 	approvalFailure := func(err *ProjectOpenError) InstallationPlanOperation {
 		return InstallationPlanOperation{Status: installationPlanStateFor(record), Plan: &view, Error: err}
+	}
+	if record.Plan.Status == "EXECUTABLE" {
+		// Reuse confirmed pins locally; probing SSH remains an explicit server action.
+		if _, err := a.approvedTargetKeysForPlanLocked(record.Plan); err != nil {
+			code := projectErrorCode(err)
+			return approvalFailure(&ProjectOpenError{Code: code, Message: projectErrorMessage(code)})
+		}
 	}
 	if a.secretOutputEncryptionRequiredLocked() {
 		credentialBinding, bindingErr := a.credentialBindingLocked()
@@ -23614,7 +23621,7 @@ func (a *App) CheckServerInformation(probeID string) ServerInformationResult {
 }
 
 @@END
-@@PORTABLE {"path":"internal/desktop/target_host_trust.go","mode":420,"size":6972,"sha256":"07463ceb38df711d5c114e68a97c10396b6b8e820490a470b3bf558457bc342a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":6972}
+@@PORTABLE {"path":"internal/desktop/target_host_trust.go","mode":420,"size":7194,"sha256":"e7057de84159d0dd29ab4caa2dfc66f5685a1a0e40d992a81b6b50892e39b7a1","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7194}
 package desktop
 
 import (
@@ -23753,6 +23760,10 @@ func (a *App) configureTargetHostTrust() {
 func (a *App) approvedTargetKeysForPlan(plan executionnode.DeploymentPlan) ([]executionnode.TargetHostKeyApproval, error) {
 	a.editMu.Lock()
 	defer a.editMu.Unlock()
+	return a.approvedTargetKeysForPlanLocked(plan)
+}
+
+func (a *App) approvedTargetKeysForPlanLocked(plan executionnode.DeploymentPlan) ([]executionnode.TargetHostKeyApproval, error) {
 	targets := map[string]bool{}
 	for _, phase := range plan.Phases {
 		for _, action := range phase.Actions {
@@ -23766,6 +23777,9 @@ func (a *App) approvedTargetKeysForPlan(plan executionnode.DeploymentPlan) ([]ex
 		ids = append(ids, hostID)
 	}
 	sort.Strings(ids)
+	if len(ids) == 0 {
+		return nil, nil
+	}
 	return a.approvedTargetKeysForHostsLocked(plan.ProjectIdentity, plan.ProjectRevision, ids)
 }
 
