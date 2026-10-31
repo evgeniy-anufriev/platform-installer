@@ -48724,7 +48724,7 @@ platform_bind_lifecycle_recovery: {}
       (platform_bind_full_reconcile | default(false) | bool)
 
 @@END
-@@PORTABLE {"path":"services/bind/ansible_collections/platform/bind/roles/bind/tasks/prepare_a_record.yml","mode":420,"size":5421,"sha256":"06acbde929ab2f8a354348b24b9f73f070c42184b368c5f25f1ab259ad94d503","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5421}
+@@PORTABLE {"path":"services/bind/ansible_collections/platform/bind/roles/bind/tasks/prepare_a_record.yml","mode":420,"size":5428,"sha256":"e41b11adb472cb88890bcbc1ee799bf05e32513550bbc216bf6c498486d55cbb","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5428}
 ---
 - name: Проверка разрешенных входных данных обновления A-записи DNS
   ansible.builtin.assert:
@@ -48733,7 +48733,7 @@ platform_bind_lifecycle_recovery: {}
       - platform_bind_a_record.zone is string
       - platform_bind_a_record.zone is match('^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$')
       - platform_bind_a_record.owner is string
-      - platform_bind_a_record.owner is match('^(?=.{1,254}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}\.$')
+      - platform_bind_a_record.owner is match('^(?=.{1,254}$)(\*\.)?([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}\.$')
       - platform_bind_a_record.owner.endswith('.' ~ platform_bind_a_record.zone ~ '.')
       - platform_bind_a_record.addresses is sequence
       - platform_bind_a_record.addresses is not string
