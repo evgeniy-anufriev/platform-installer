@@ -323,6 +323,11 @@ only when absent from both. Service source rules remain unchanged. See the
 [journal](work/runtime-bundle/empty-packages-bootstrap-journal.md); current
 implementation/acceptance status belongs only to CURRENT_STATE.
 
+Owner-requested service-artifact authoring removes duplicate metadata through
+local refs and bundle-local input projection. Source v2 compiles to the existing
+runtime catalog v1; runtime source authority and package checks stay intact.
+See [scope/evidence](work/runtime-bundle/artifact-input-projection-plan.md).
+
 Historical checkpoint: [source record](history/roadmap-checkpoints-20261012.md#exec-01-execution-node-and-target-bootstrap). Current status is in [CURRENT_STATE](../CURRENT_STATE.md).
 
 Ready when:

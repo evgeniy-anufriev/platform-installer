@@ -34,7 +34,7 @@
 - name: Копирование проверенного локального RPM на целевой узел при прямом запуске Ansible
   ansible.builtin.copy:
     src: "{{ platform_clickhouse_rpm_paths[clickhouse_package_id] }}"
-    dest: "/var/tmp/platform-installer/artifacts/clickhouse-direct/{{ clickhouse_package_id }}-{{ platform_clickhouse_package_version }}-1.x86_64.rpm"
+    dest: "/var/tmp/platform-installer/artifacts/clickhouse-direct/{{ clickhouse_package_id }}-{{ platform_clickhouse_package_version }}-{{ (platform_clickhouse_package_releases | default({})).get(clickhouse_package_id, '1') }}.{{ platform_clickhouse_package_architecture | default('x86_64') }}.rpm"
     owner: root
     group: root
     mode: '0600'
@@ -42,7 +42,7 @@
 
 - name: Повторная проверка локального RPM после передачи для прямого запуска Ansible
   ansible.builtin.stat:
-    path: "/var/tmp/platform-installer/artifacts/clickhouse-direct/{{ clickhouse_package_id }}-{{ platform_clickhouse_package_version }}-1.x86_64.rpm"
+    path: "/var/tmp/platform-installer/artifacts/clickhouse-direct/{{ clickhouse_package_id }}-{{ platform_clickhouse_package_version }}-{{ (platform_clickhouse_package_releases | default({})).get(clickhouse_package_id, '1') }}.{{ platform_clickhouse_package_architecture | default('x86_64') }}.rpm"
     checksum_algorithm: sha256
     get_mime: false
     get_attributes: false
@@ -62,7 +62,7 @@
     name: >-
       {{ (platform_offline_artifact_paths[clickhouse_package_id] | first)
          if platform_resolved_artifact_sources is defined
-         else '/var/tmp/platform-installer/artifacts/clickhouse-direct/' ~ clickhouse_package_id ~ '-' ~ platform_clickhouse_package_version ~ '-1.x86_64.rpm' }}
+         else '/var/tmp/platform-installer/artifacts/clickhouse-direct/' ~ clickhouse_package_id ~ '-' ~ platform_clickhouse_package_version ~ '-' ~ (platform_clickhouse_package_releases | default({})).get(clickhouse_package_id, '1') ~ '.' ~ (platform_clickhouse_package_architecture | default('x86_64')) ~ '.rpm' }}
     state: present
     disablerepo: '*'
     disable_gpg_check: true
@@ -73,7 +73,7 @@
 
 - name: Установка точно закрепленного RPM из утвержденного настроенного репозитория
   ansible.builtin.dnf:
-    name: "{{ clickhouse_package_id }}-{{ platform_clickhouse_package_version }}-1"
+    name: "{{ clickhouse_package_id }}-{{ platform_clickhouse_package_version }}-{{ (platform_clickhouse_package_releases | default({})).get(clickhouse_package_id, '1') }}"
     state: present
     disable_gpg_check: false
   no_log: true

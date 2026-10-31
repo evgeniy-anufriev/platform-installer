@@ -1,4 +1,4 @@
-apiVersion: platform.installer/service-manifest/v1alpha1
+apiVersion: platform.installer/service-manifest/v1alpha2
 kind: ServiceManifest
 metadata:
   id: kafka
@@ -204,21 +204,11 @@ roleEntrypoints:
     fqcn: platform.kafka.kafka_kraft
     variablesPrefix: platform_kafka_
 artifacts:
-  - id: schema-registry-binary
-    name: confluent-schema-registry
-    version: "8.3.2"
-    os: redos
-    architecture: noarch
-    digest: sha256:dc4d6234e0f7e1a91b369f9cf1d27d7c9885edb9f6440170c3a6f00ba68fcc81
+  - artifactRef: schema-registry-binary
     requiredOffline: true
     x-enabledBy: schemaRegistryEnabled
     x-memberRole: broker
-  - id: kafka-binary
-    name: kafka
-    version: "4.3.1"
-    os: redos
-    architecture: x86_64
-    digest: sha256:f118328b2d053497350d5befd82c08db7ffd710327ff52943dd5caaa1b25db21
+  - artifactRef: kafka-binary
     requiredOffline: true
 runtimeRequirements:
   - id: kafka-java

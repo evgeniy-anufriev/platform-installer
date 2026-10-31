@@ -22,7 +22,7 @@
   ansible.builtin.assert:
     that:
       - _platform_clickhouse_stock_unit_owner.rc == 0
-      - _platform_clickhouse_stock_unit_owner.stdout == 'clickhouse-server-' ~ platform_clickhouse_package_version ~ '-1.x86_64'
+      - _platform_clickhouse_stock_unit_owner.stdout == 'clickhouse-server-' ~ platform_clickhouse_package_version ~ '-' ~ (platform_clickhouse_package_releases | default({})).get('clickhouse-server', '1') ~ '.' ~ (platform_clickhouse_package_architecture | default('x86_64'))
     fail_msg: CLICKHOUSE_STOCK_UNIT_OWNERSHIP_UNCONFIRMED
 
 - name: Проверка стандартной активности сервера ClickHouse после установки RPM

@@ -17,7 +17,7 @@
         (item == 'clickhouse-keeper' and _platform_clickhouse_package_lines | length == 0) or
         (item != 'clickhouse-keeper' and
          (_platform_clickhouse_package_lines | length == 0 or
-          _platform_clickhouse_package_lines == [item ~ '\t' ~ platform_clickhouse_package_version ~ '-1.x86_64']))
+          _platform_clickhouse_package_lines == [item ~ '\t' ~ platform_clickhouse_package_version ~ '-' ~ (platform_clickhouse_package_releases | default({})).get(item, '1') ~ '.' ~ (platform_clickhouse_package_architecture | default('x86_64'))]))
     fail_msg: CLICKHOUSE_PACKAGE_VERSION_CONFLICT
   vars:
     _platform_clickhouse_package_lines: "{{ _platform_clickhouse_installed_packages.stdout_lines | select('match', '^' ~ item ~ '\\t') | list }}"

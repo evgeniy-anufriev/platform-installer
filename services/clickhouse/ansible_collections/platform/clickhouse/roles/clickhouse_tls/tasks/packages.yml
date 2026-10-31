@@ -34,6 +34,6 @@
 
 - name: Отклонение неуправляемого или отсутствующего исполняемого файла Keeper в режиме HA
   ansible.builtin.assert:
-    that: _platform_clickhouse_keeper_binary_owner.stdout == 'clickhouse-server-' ~ platform_clickhouse_package_version ~ '-1.x86_64'
+    that: _platform_clickhouse_keeper_binary_owner.stdout == 'clickhouse-server-' ~ platform_clickhouse_package_version ~ '-' ~ (platform_clickhouse_package_releases | default({})).get('clickhouse-server', '1') ~ '.' ~ (platform_clickhouse_package_architecture | default('x86_64'))
     fail_msg: CLICKHOUSE_KEEPER_BINARY_NOT_PINNED
   when: platform_clickhouse_mode == 'raft-ha'

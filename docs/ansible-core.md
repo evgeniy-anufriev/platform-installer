@@ -586,6 +586,31 @@ digests. The development fixture catalog under `examples/catalog/` remains
 separate and is not a runtime-bundle input. A new bundle catalog digest belongs
 to that bundle; this does not rewrite existing project locks or active bundles.
 
+Authored `service-manifest/v1alpha2` uses `artifacts[].artifactRef`, a local ID
+in the fixed sibling `artifacts.yml`. Only policy (`requiredOffline`, activation
+extensions) belongs in the service manifest. Artifact names/versions/platforms,
+filenames and SHA-256 belong in the metadata file. The shared catalog generator
+validates both documents and expands them into the existing runtime v1 catalog
+definition; authored v1 input is rejected. Missing/duplicate refs
+never turn into empty requirements.
+
+The bundle builder projects supplied `runtime-input/artifacts/<service>/` files
+into staged metadata and native role defaults before generating the catalog.
+RPM NAME/VERSION/RELEASE come from `rpm -qp`; artifact OS/architecture come from
+one explicit `--platform` OS/architecture pair. Extra dependency RPMs stay bundle
+components. Kafka archive roots, launcher and JAR markers identify Apache or
+Confluent distributions without extraction or program execution. One combined
+Confluent archive supplies both logical refs and enables the existing shared
+distribution mode in staged defaults. Apache plus separate Confluent remains
+supported. Repository source files and runtime-input are never rewritten.
+
+ClickHouse staged defaults include per-package
+`platform_clickhouse_package_releases` and
+`platform_clickhouse_package_architecture`; existing ownership and install
+checks consume these instead of a hard-coded `-1.x86_64`. Manual inventories
+without these variables retain the previous `1`/`x86_64` defaults. No release
+restriction or additional target assertion is introduced.
+
 ### Automatic application image metadata
 
 Application `defaults.image` remains the packaged image selection. An installation

@@ -10,6 +10,15 @@ catalog under repository-root `examples/`. The required source roots are
 `ansible-core/`, `services/` and `contracts/`, plus the explicit runtime input.
 Service schema/compatibility references and bundle checksums remain mandatory.
 
+Service payloads supplied under `runtime-input/artifacts/<service>/` are
+inspected before catalog generation. The builder rewrites only staged copies
+of artifact metadata/defaults, then compiles local artifact refs into the
+existing runtime catalog. Explicit `--platform` supplies the artifact OS and
+architecture; conflicting OS/architecture pairs cannot select one metadata
+identity. Kafka supports Apache plus separate Registry and a single combined
+Confluent archive. No downloads or source/defaults mutation occur. See
+[artifact projection](../work/runtime-bundle/artifact-input-projection-plan.md).
+
 EMPTY-PACKAGES-BOOTSTRAP-01 allows an existing empty `--runtime-input` directory.
 Compatibility then comes from repeatable `--platform OS:VERSION:ARCH`, or from
 the Linux build host's `/etc/os-release` and `uname -m`. The output retains the

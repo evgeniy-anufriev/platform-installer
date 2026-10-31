@@ -10,8 +10,11 @@ import argparse
 import hashlib
 import json
 import os
+import posixpath
 import re
 import shlex
+import subprocess
+import tarfile
 from pathlib import Path
 import shutil
 import sys
@@ -21,7 +24,7 @@ import yaml
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from service_catalog import build_catalog
+from service_catalog import build_catalog, expand_artifact_references, load_yaml
 sys.path.insert(0, str(REPOSITORY / "ansible-core" / "collections"))
 from ansible_collections.platform.core.plugins.module_utils.service_configuration_preview import ordinary_presentation_value
 from ansible_collections.platform.core.plugins.module_utils.application_images import docker_save_image
@@ -233,6 +236,181 @@ def artifact_type(media_type):
     }.get(media_type)
 
 
+class BoundedTarInfo(tarfile.TarInfo):
+    def _proc_pax(self, archive):
+        archive.projection_metadata_bytes = getattr(archive, 'projection_metadata_bytes', 0) + self.size
+        if self.size > 1024 * 1024 or archive.projection_metadata_bytes > 16 * 1024 * 1024:
+            raise ValueError('service archive metadata exceeds limit')
+        return super()._proc_pax(archive)
+
+    def _proc_gnulong(self, archive):
+        if self.size > 1024:
+            raise ValueError('service archive long name exceeds limit')
+        return super()._proc_gnulong(archive)
+
+
+def kafka_archive(path):
+    """Inspect names/markers only; never extract or run supplied programs."""
+    members, roots, metadata_bytes, expanded_size = {}, set(), 0, 0
+    try:
+        with tarfile.open(path, 'r:gz', tarinfo=BoundedTarInfo) as archive:
+            for member in archive:
+                name = member.name.removeprefix('./').rstrip('/')
+                parts = name.split('/')
+                metadata_bytes += len(name.encode('utf-8')) + len(member.linkname.encode('utf-8')) + 512
+                expanded_size += max(member.size, 0)
+                if (not name or len(name) > 1024 or len(members) >= 100000 or metadata_bytes > 64 * 1024 * 1024 or
+                        expanded_size > 16 * 1024 ** 3 or name.startswith('/') or '\\' in name or
+                        any(part in ('', '.', '..') for part in parts) or name in members or
+                        not (member.isfile() or member.isdir() or member.issym() or member.islnk()) or member.sparse):
+                    raise ValueError('unsafe or oversized service archive')
+                roots.add(parts[0])
+                if member.issym() or member.islnk():
+                    target = member.linkname
+                    resolved = posixpath.normpath(posixpath.join(posixpath.dirname(name), target) if member.issym() else target)
+                    if (len(target) > 1024 or target.startswith('/') or '\\' in target or
+                            not resolved.startswith(parts[0] + '/')):
+                        raise ValueError('service archive link escapes root')
+                members[name] = member
+    except (tarfile.TarError, OSError, EOFError) as error:
+        raise ValueError('invalid service archive: %s' % path.name) from error
+    if len(roots) != 1:
+        raise ValueError('service archive requires one distribution root')
+    root = next(iter(roots))
+    match = re.fullmatch(r'(kafka_[0-9.]+|confluent)-([0-9]+(?:\.[0-9]+)+(?:[-+][A-Za-z0-9.]+)?)', root)
+    if not match:
+        raise ValueError('unsupported Kafka distribution root: %s' % root)
+
+    def regular(name):
+        seen = set()
+        while name in members and name not in seen:
+            seen.add(name)
+            member = members[name]
+            if member.isfile():
+                return True
+            if not (member.issym() or member.islnk()):
+                return False
+            name = posixpath.normpath(posixpath.join(posixpath.dirname(name), member.linkname) if member.issym() else member.linkname)
+        return False
+
+    version = match[2]
+    extension = '.sh' if regular(root + '/bin/kafka-server-start.sh') else ''
+    kafka = regular(root + '/bin/kafka-server-start' + extension)
+    registry = (regular(root + '/bin/schema-registry-start') and
+                regular(root + '/share/java/schema-registry/kafka-schema-registry-' + version + '.jar'))
+    if match[1].startswith('kafka_'):
+        if not kafka or not regular(root + '/libs/' + match[1] + '-' + version + '.jar'):
+            raise ValueError('Kafka distribution markers do not match version')
+    elif not registry:
+        raise ValueError('Confluent distribution markers do not match version')
+    return dict(path=path, version=version, root=root, extension=extension, kafka=kafka, registry=registry)
+
+
+def rpm_identity(path):
+    try:
+        result = subprocess.run(['rpm', '-qp', '--qf', '%{NAME}\t%{VERSION}\t%{RELEASE}', str(path)],
+                                capture_output=True, text=True, timeout=20, check=True)
+    except (OSError, subprocess.SubprocessError) as error:
+        raise ValueError('cannot read RPM metadata: %s' % path.name) from error
+    parts = result.stdout.split('\t')
+    if len(result.stdout) > 1024 or len(parts) != 3 or any(re.fullmatch(r'[A-Za-z0-9._+~-]+', part) is None for part in parts):
+        raise ValueError('invalid RPM identity: %s' % path.name)
+    return dict(name=parts[0], version=parts[1], release=parts[2], path=path)
+
+
+def project_service_artifacts(root, declared_platforms):
+    """Only rewrite staged metadata/defaults, before derived catalog hashing."""
+    for source in sorted((root / 'services').glob('*/service.yml')):
+        service = source.parent.name
+        directory = root / 'runtime/artifacts' / service
+        if not directory.is_dir():
+            continue
+        authored = load_yaml(source)
+        compiled = expand_artifact_references(authored, source, root)
+        requirements = compiled.get('artifacts', []) + compiled.get('runtimeRequirements', [])
+        by_name = {item.get('name', item['id']): item for item in requirements}
+        selected = {}
+        for path in sorted(directory.glob('*.rpm')):
+            identity = rpm_identity(path)
+            requirement = by_name.get(identity['name'])
+            if requirement is None:
+                continue  # dependency closure stays in components
+            key = requirement['id']
+            if key in selected:
+                raise ValueError('ambiguous service RPM: %s/%s' % (service, key))
+            selected[key] = identity
+        archives = [path for path in sorted(directory.iterdir()) if path.name.endswith(('.tar.gz', '.tgz'))]
+        if archives and service != 'kafka':
+            raise ValueError('unsupported service archive layout: %s' % service)
+        distributions = [kafka_archive(path) for path in archives]
+        kafka = [entry for entry in distributions if entry['kafka'] and not entry['registry']]
+        registry = [entry for entry in distributions if entry['registry']]
+        if len(kafka) > 1 or len(registry) > 1:
+            raise ValueError('ambiguous Kafka/Confluent distributions')
+        shared = not kafka and registry and registry[0]['kafka']
+        if kafka or shared:
+            selected['kafka-binary'] = (kafka or registry)[0]
+        if registry:
+            selected['schema-registry-binary'] = registry[0]
+        if not selected:
+            continue
+        platforms = {(entry['os'], entry['architecture']) for entry in map(parse_platform, declared_platforms or [])}
+        if len(platforms) != 1:
+            raise ValueError('service artifacts require one explicit --platform OS/architecture pair')
+        platform_os, architecture = next(iter(platforms))
+        if service == 'clickhouse' and (set(selected) != {'clickhouse-common-static', 'clickhouse-client', 'clickhouse-server'} or
+                                       len({entry['version'] for entry in selected.values()}) != 1):
+            raise ValueError('ClickHouse requires a complete RPM trio with one VERSION')
+        metadata_path = source.parent / 'artifacts.yml'
+        metadata = load_yaml(metadata_path) if metadata_path.is_file() else dict(apiVersion='platform.installer/artifacts/v1alpha1', service=service, artifacts=[])
+        entries = {entry['id']: entry for entry in metadata.get('artifacts', [])}
+        if len(entries) != len(metadata.get('artifacts', [])):
+            raise ValueError('duplicate service artifact metadata ID')
+        policies = {item['id']: item for item in requirements}
+        for key, identity in selected.items():
+            if key not in policies:
+                raise ValueError('undeclared service artifact: %s/%s' % (service, key))
+            path = identity['path']
+            entries[key] = dict(id=key, name=policies[key].get('name', key), version=identity['version'],
+                                os=platform_os, architecture=architecture, filename=path.name,
+                                mediaType='application/x-rpm' if path.suffix == '.rpm' else 'application/gzip',
+                                sha256=digest_file(path).removeprefix('sha256:'))
+        # Preserve policies in their authored order and retain one authority per ID.
+        authored['apiVersion'] = 'platform.installer/service-manifest/v1alpha2'
+        authored['artifacts'] = [dict(artifactRef=item['id'], **{key: value for key, value in item.items()
+                                if key == 'requiredOffline' or key.startswith('x-')}) for item in requirements
+                                if item in compiled.get('artifacts', []) or item['id'] in selected]
+        authored['runtimeRequirements'] = [item for item in compiled.get('runtimeRequirements', []) if item['id'] not in selected]
+        metadata['artifacts'] = [entries[key] for key in sorted(entries)]
+        parts = compiled['roleEntrypoints']['apply']['fqcn'].split('.')
+        defaults_path = source.parent / 'ansible_collections' / parts[0] / parts[1] / 'roles' / parts[2] / 'defaults/main.yml'
+        if not defaults_path.resolve().is_relative_to(root.resolve()):
+            raise ValueError('role defaults path escapes bundle staging')
+        defaults = load_yaml(defaults_path)
+        if service == 'clickhouse':
+            defaults['platform_clickhouse_package_version'] = next(iter(selected.values()))['version']
+            defaults['platform_clickhouse_package_releases'] = {key: entry['release'] for key, entry in selected.items()}
+            defaults['platform_clickhouse_package_architecture'] = architecture
+            defaults['platform_clickhouse_expected_rpm_digests'] = {key: entries[key]['sha256'] for key in selected}
+        if service == 'redis' and 'redis-runtime' in selected:
+            identity = selected['redis-runtime']
+            defaults['platform_redis_version'] = identity['version'] + '-' + identity['release']
+        if 'kafka-binary' in selected and service == 'kafka':
+            identity = selected['kafka-binary']
+            defaults.update(platform_kafka_version=identity['version'], platform_kafka_archive_directory=identity['root'],
+                            platform_kafka_script_extension=identity['extension'],
+                            platform_kafka_schema_registry_use_kafka_distribution=bool(shared))
+            if shared:
+                defaults['platform_kafka_install_directory'] = '/opt/' + identity['root']
+        if 'schema-registry-binary' in selected and service == 'kafka':
+            identity = selected['schema-registry-binary']
+            defaults.update(platform_kafka_schema_registry_version=identity['version'],
+                            platform_kafka_schema_registry_archive_directory=identity['root'],
+                            platform_kafka_schema_registry_install_directory='/opt/' + identity['root'])
+        for path, value in ((source, authored), (metadata_path, metadata), (defaults_path, defaults)):
+            path.write_text(yaml.safe_dump(value, allow_unicode=True, sort_keys=False), encoding='utf-8', newline='\n')
+
+
 def artifact_sources(root):
     """Build the verified offline-source index from service metadata.
 
@@ -329,6 +507,7 @@ def build(output, runtime, bundle_version, core_version, platforms=None, applica
         copy_tree(runtime, temporary / "runtime")
         for directory in ("packages", "python"):
             (temporary / "runtime" / directory).mkdir(parents=True, exist_ok=True)
+        project_service_artifacts(temporary, platforms)
         write_service_catalog(temporary)
         validate_catalog_layout(temporary)
         write_ui_static_defaults(temporary)

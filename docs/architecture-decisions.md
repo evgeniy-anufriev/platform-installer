@@ -923,3 +923,16 @@ selection branches. Core scopes installation artifacts, inputs/outputs and PKI.
 The all-unchecked UI reuses APPLICATION_LIBRARIES_ONLY + skipInfrastructureVerify.
 React edits selection only; Go transports and retains it without resolving service
 semantics. Existing bootstrap custody requires an actual Vault Apply in the plan.
+
+## ADR-049: Normalize authored artifact refs, compile bundle-local metadata
+
+Owner decision, 2026-10-31: authored service v2 stores local artifact refs and
+usage policy; sibling artifacts metadata owns the file/version/platform/hash.
+The existing catalog generator validates and expands these into its established
+v1 runtime definition. The bundle builder derives metadata and native defaults
+from supplied local payloads in staging before catalog/component hashes. It
+never edits repository defaults or runtime-input. Confluent's combined archive
+uses the existing shared-distribution role path and two logical refs to one
+verified file. This changes authoring/build compilation, not source-selection,
+execution authorization, desired-project or Go infrastructure ownership.
+See [plan/evidence](work/runtime-bundle/artifact-input-projection-plan.md).

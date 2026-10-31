@@ -2,17 +2,21 @@ apiVersion: platform.installer/artifacts/v1alpha1
 service: kafka
 artifacts:
   - id: schema-registry-binary
+    name: confluent-schema-registry
     version: "8.3.2"
+    os: redos
+    architecture: noarch
     filename: confluent-community-8.3.2.tar.gz
     mediaType: application/gzip
     sha256: dc4d6234e0f7e1a91b369f9cf1d27d7c9885edb9f6440170c3a6f00ba68fcc81
     source: https://packages.confluent.io/archive/8.3/confluent-community-8.3.2.tar.gz
-    offlineRequired: true
   - id: kafka-binary
+    name: kafka
     version: "4.3.1"
+    os: redos
+    architecture: x86_64
     filename: kafka_2.13-4.3.1.tgz
     mediaType: application/gzip
     sha256: f118328b2d053497350d5befd82c08db7ffd710327ff52943dd5caaa1b25db21
     source: https://downloads.apache.org/kafka/4.3.1/kafka_2.13-4.3.1.tgz
-    offlineRequired: true
 status: approved-dev-artifact-offline-production

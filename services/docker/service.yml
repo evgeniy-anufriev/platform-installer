@@ -1,4 +1,4 @@
-apiVersion: platform.installer/service-manifest/v1alpha1
+apiVersion: platform.installer/service-manifest/v1alpha2
 kind: ServiceManifest
 metadata:
   id: docker
