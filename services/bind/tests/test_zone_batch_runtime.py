@@ -3,11 +3,14 @@ from pathlib import Path
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 import yaml
 
 ROLE = Path(__file__).resolve().parents[1] / 'ansible_collections/platform/bind/roles/bind'
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'ansible-core/collections'))
+from ansible_collections.platform.core.plugins.module_utils.dns_resolution import resolve_dns_zones
 
 
 class ZoneBatchRuntimeTests(unittest.TestCase):
@@ -21,16 +24,27 @@ class ZoneBatchRuntimeTests(unittest.TestCase):
             dig.write_text('#!/bin/sh\nprintf "REAL_DIG_STUB\\n" >> "$BIND_TEST_CALLS"\n'
                            'printf ";; status: NOERROR\\n;; flags: qr aa;\\n%s 60 IN A 192.0.2.2\\n" "$2"\n')
             dig.chmod(0o755)
-            records = [dict(type='A', owner=name + '.example.test.', values=['192.0.2.2'])
-                       for name in ('first', 'second')]
+            resolved = resolve_dns_zones(
+                dict(serviceDeployments={
+                    'dns': dict(serviceType='bind', configuration=dict(zone='example.test', defaultTtl=60)),
+                    'vip': dict(serviceType='keepalived', endpointGroupRef='apps',
+                                virtualAddresses=[dict(address='192.0.2.2', interface='eth1')])},
+                     endpointGroups={'apps': dict(address=dict(domain='example.test', wildcard=True))}),
+                dict(definitions={'bind': dict(endpoint=None), 'keepalived': dict(endpointProvider={})}),
+                {name: dict(ansible_host='192.0.2.2') for name in ('first', 'second')},
+                {'first': {'dns': dict(roles=['primary'])}},
+                include_service_endpoints=False, include_group_wildcards=True)
+            self.assertEqual('PASS', resolved['status'], resolved['findings'])
+            zone = resolved['zones']['dns']
+            self.assertEqual(['*.example.test.', 'first.example.test.', 'second.example.test.'],
+                             [record['owner'] for record in zone['records']])
             include = {'ansible.builtin.include_tasks': str(ROLE / 'tasks/update_base_zone_records.yml')}
             tasks = [include, include, {'ansible.builtin.assert': {'that': [
                 '_platform_bind_zone_observations | length == 1',
                 '_platform_bind_zone_observations[0].record.owner == "second.example.test."',
                 'not _platform_bind_zone_observations[0].changed']}}]
             play = [dict(hosts='localhost', connection='local', gather_facts=False,
-                         vars=dict(platform_bind_base_zone=dict(value=dict(
-                             zone='example.test', defaultTtl=60, records=records))), tasks=tasks)]
+                         vars=dict(platform_bind_base_zone=dict(value=zone)), tasks=tasks)]
             source = root / 'play.yml'
             source.write_text(yaml.safe_dump(play))
             calls = root / 'calls'
@@ -39,7 +53,7 @@ class ZoneBatchRuntimeTests(unittest.TestCase):
                                              BIND_TEST_CALLS=str(calls)),
                                     capture_output=True, text=True, timeout=90)
             self.assertEqual(0, result.returncode, result.stdout + result.stderr)
-            self.assertEqual(4, len(calls.read_text().splitlines()))
+            self.assertEqual(6, len(calls.read_text().splitlines()))
             self.assertIn('changed=0', result.stdout)
 
     def run_tasks(self, observations, success=True):
@@ -61,6 +75,24 @@ class ZoneBatchRuntimeTests(unittest.TestCase):
             self.assertEqual(success, result.returncode == 0, result.stdout + result.stderr)
             return result_path.read_text() if result_path.exists() else ''
 
+    def test_invalid_wildcard_owners_fail_before_dns_commands(self):
+        if not shutil.which('ansible-playbook'):
+            self.skipTest('Ansible runtime required')
+        guard = yaml.safe_load((ROLE / 'tasks/prepare_a_record.yml').read_text())[0]
+        for owner in ('foo.*.example.test.', '**.example.test.', '*.*.example.test.',
+                      '*.other.test.', '*.Example.test.', '*.example.test',
+                      '*-node.example.test.', '*.example.test.\nupdate delete other.example.test. A'):
+            with self.subTest(owner=owner), tempfile.TemporaryDirectory() as directory:
+                play = [dict(hosts='localhost', connection='local', gather_facts=False,
+                             vars=dict(platform_bind_a_record=self.observed(owner)['record']),
+                             tasks=[guard])]
+                source = Path(directory) / 'guard.yml'
+                source.write_text(yaml.safe_dump(play))
+                result = subprocess.run(['ansible-playbook', '-i', 'localhost,', str(source)],
+                                        capture_output=True, text=True, timeout=40)
+                self.assertNotEqual(0, result.returncode, result.stdout + result.stderr)
+                self.assertIn('BIND_DNS_A_RECORD_UPDATE_INPUT_INVALID', result.stdout)
+
     @staticmethod
     def observed(owner, current=(), absent=False, zone='example.test', addresses=None):
         return dict(record=dict(zone=zone, owner=owner, addresses=addresses or ['192.0.2.2'], ttl=60),
@@ -69,13 +101,16 @@ class ZoneBatchRuntimeTests(unittest.TestCase):
     def test_one_send_covers_all_owners_and_exact_prerequisites(self):
         text = self.run_tasks([self.observed('existing.example.test.', ['192.0.2.1']),
                                self.observed('new.example.test.', absent=True),
+                               self.observed('*.example.test.', absent=True),
                                self.observed('empty.example.test.')])
         self.assertEqual(1, text.splitlines().count('send'))
         self.assertIn('prereq yxrrset existing.example.test. A 192.0.2.1', text)
         self.assertIn('prereq nxdomain new.example.test.', text)
         self.assertIn('prereq nxrrset empty.example.test. A', text)
         self.assertIn('prereq nxrrset empty.example.test. CNAME', text)
-        self.assertEqual(3, text.count('update delete '))
+        self.assertIn('prereq nxdomain *.example.test.', text)
+        self.assertIn('update add *.example.test. 60 A 192.0.2.2', text)
+        self.assertEqual(4, text.count('update delete '))
 
     def test_duplicate_owner_and_mixed_zones_fail_before_mutation(self):
         row = self.observed('one.example.test.')
