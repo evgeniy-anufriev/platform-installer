@@ -36481,7 +36481,7 @@ func exportUnixNotExist(err error) error {
 func isExportNotExist(err error) bool { return errors.Is(err, os.ErrNotExist) }
 
 @@END
-@@PORTABLE {"path":"internal/installer/project_export_windows.go","mode":420,"size":15514,"sha256":"b976e5e04524321f2b8079a752ca07fb428dc48a71ef8a76393149d6a24c1f28","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":15514}
+@@PORTABLE {"path":"internal/installer/project_export_windows.go","mode":420,"size":15615,"sha256":"319740a60b1b0de1a565a67e3c8de9ded0f2190dd884e568b3a323e5bdaa4ab1","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":15615}
 //go:build windows
 
 package installer
@@ -36815,7 +36815,7 @@ func removeExportWindowsDirectory(directory *exportDirectory) error {
 	}
 	for _, entry := range entries {
 		if entry.kind == exportEntryDirectory {
-			child, openErr := directory.openDirectory([]string{entry.name})
+			child, openErr := directory.openDirectoryWithAccess([]string{entry.name}, windows.FILE_GENERIC_READ|windows.DELETE)
 			if openErr != nil {
 				return openErr
 			}
@@ -36829,7 +36829,7 @@ func removeExportWindowsDirectory(directory *exportDirectory) error {
 			}
 			continue
 		}
-		handle, openErr := openExportWindowsRelative(directory.handle, entry.name, false, windows.DELETE, windows.FILE_OPEN)
+		handle, openErr := openExportWindowsRelative(directory.handle, entry.name, false, windows.DELETE|windows.SYNCHRONIZE|windows.FILE_READ_ATTRIBUTES, windows.FILE_OPEN)
 		if openErr != nil {
 			return openErr
 		}
