@@ -237,30 +237,17 @@ func (a *App) missingInstallationSecretsLocked(plan executionnode.DeploymentPlan
 	if err != nil {
 		return nil, err
 	}
-	labels := map[string]string{"pki-store-password": "Сертификаты: пароль PKCS#12"}
-	for _, descriptor := range a.runtimeSecretEvidenceDescriptorsLocked(plan.ProjectRevision) {
-		label := descriptor.DisplayLabel
-		if descriptor.ServiceDeployment != "" {
-			label = descriptor.ServiceDeployment + ": " + label
-		}
-		labels[descriptor.RequirementRef] = label
-	}
 	binding, err := a.credentialBindingLocked()
 	if err != nil {
 		return nil, err
 	}
 	missing := a.secrets.MissingRequiredSecrets(binding, passwords, executionnodePlanRequiresPKIStorePassword(plan), !attest)
-	if len(missing) > 0 || !attest || len(passwords) == 0 {
-		for i, reference := range missing {
-			if label := labels[reference]; label != "" {
-				missing[i] = label
-			}
-		}
-		return missing, nil
-	}
-	if len(passwords) > 0 {
+	if len(passwords) > 0 && (attest || len(missing) > 0) {
 		currentDescriptors := a.runtimeSecretEvidenceDescriptorsLocked(plan.ProjectRevision)
-		if currentDescriptors == nil {
+		// Missing opaque references may still have deployment-bound pending
+		// values. Let the existing Core descriptor path attest and bind them
+		// before reporting absence, even when descriptors were cached earlier.
+		if currentDescriptors == nil || len(missing) > 0 {
 			descriptors := a.getRuntimeSecretDescriptorsLocked(false)
 			if descriptors.Status != "READY" {
 				if descriptors.Error != nil && descriptors.Error.Code != "" {
@@ -273,11 +260,6 @@ func (a *App) missingInstallationSecretsLocked(plan executionnode.DeploymentPlan
 		known := map[string]bool{}
 		for _, descriptor := range currentDescriptors {
 			known[descriptor.RequirementRef+"\x00"+descriptor.Purpose] = true
-			label := descriptor.DisplayLabel
-			if descriptor.ServiceDeployment != "" {
-				label = descriptor.ServiceDeployment + ": " + label
-			}
-			labels[descriptor.RequirementRef] = label
 		}
 		for _, requirement := range plan.RequiredCredentials {
 			if executionnode.RuntimeSecretValuePurpose(requirement.Purpose) && !known[requirement.RequirementRef+"\x00"+requirement.Purpose] {
@@ -285,7 +267,15 @@ func (a *App) missingInstallationSecretsLocked(plan executionnode.DeploymentPlan
 			}
 		}
 	}
-	missing = a.secrets.MissingRequiredSecrets(binding, passwords, executionnodePlanRequiresPKIStorePassword(plan), false)
+	missing = a.secrets.MissingRequiredSecrets(binding, passwords, executionnodePlanRequiresPKIStorePassword(plan), !attest)
+	labels := map[string]string{"pki-store-password": "Сертификаты: пароль PKCS#12"}
+	for _, descriptor := range a.runtimeSecretEvidenceDescriptorsLocked(plan.ProjectRevision) {
+		label := descriptor.DisplayLabel
+		if descriptor.ServiceDeployment != "" {
+			label = descriptor.ServiceDeployment + ": " + label
+		}
+		labels[descriptor.RequirementRef] = label
+	}
 	for i, reference := range missing {
 		if label := labels[reference]; label != "" {
 			missing[i] = label
@@ -402,7 +392,7 @@ func executionnodePlanRequiresPKIStorePassword(plan executionnode.DeploymentPlan
 
 // installationPlanRuntimeSecretRequirements is intentionally derived from the
 // fresh Core plan rather than the UI catalog. It is used only to bind already
-// pending runtime-only values at the pre-target Start gate.
+// pending runtime-only values at approval and the pre-target Start gate.
 func installationPlanRuntimeSecretRequirements(plan executionnode.DeploymentPlan) ([]string, error) {
 	result := make([]string, 0)
 	seen := map[string]struct{}{}

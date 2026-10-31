@@ -516,3 +516,48 @@ Safe controller/results: .runtime/qa/docker-preview/artifact-acceptance.cjs
 and artifact-results-final.txt. Owned QA processes stopped; previous local
 cache restored with the standard publisher. The QA bundle intentionally lacks
 service artifacts; this verifies diagnostics, not offline-install completeness.
+
+## Installation secret names and pending values — 2026-10-31
+
+The generic approval gate returned before obtaining Core descriptors whenever
+reference-keyed secrets were missing or the check was not a Start attestation.
+Services could correctly report a deployment-bound pending password present,
+while approval searched for the Core si- identity and reported it missing. The
+same early return prevented loading the service/name label. Re-entering the
+password could not repair this order of operations.
+
+The existing getRuntimeSecretDescriptorsLocked(false) path now attests/binds
+pending inputs before reporting absence, including inputs saved after a cached
+descriptor set. Presence is checked again and errors use Core ServiceDeployment
+and DisplayLabel. There is no service-specific branch, identity hashing, new
+API/model/storage or secret-value diagnostic. Existing revision/node/runtime,
+purpose, expiry and pre-Start guards remain; attached values are not cleared.
+Repeated approval with present values does not repeat descriptor discovery.
+
+Focused tests use two generic independent deployments with opaque refs, cold
+and warm descriptor caches, partial input, named errors and successful approval
+after pending entry. Existing PKCS/password/typed Start tests pass. Full Go
+test/vet and frontend/Windows Wails production builds pass.
+
+Independent FULL DIFF APPROVE, blocking0; base
+3fef298b35e3dfc7e495b71cbb011e4ae345a427, reviewed source fingerprint
+2f54a7cfd83020911ed6ce883295d7eeea3d6503cefb96cc08b874c9c970456d.
+Only installation_plan.go and installation_plan_test.go were changed in source.
+
+Actual React/Wails -> RED OS101 Core flow used unchanged verified runtime bundle
+b64e552cb9d11a535ff4f6cb6ae7ba53212d70f010206a9434ee128fd0b62a93,
+standard-published before launch. QA project projection-ui3 saved revision
+a632ed8a1d52c304c15ae0d9894117597af1a8f3618459b08d5fa7a655c4d201,
+plan-132728554300d8fed8cdb0ea, EXECUTABLE with no findings. Real UI saved secret
+references, then closed/reopened the project to clear values; fresh SSH session
+and independently compared host fingerprint were approved, PKCS password set.
+Initial approval showed docker: New account password and kafka: Kafka admin
+password, no si- identifiers. After entering Docker only Kafka remained;
+entering Kafka showed Installed and returned PLAN_APPROVED. No Start or service
+installation. ERRORS=[] excluding established Wails IPC startup warning; visual
+and native picker acceptance not claimed. Only native Open picker selection was
+substituted with real OpenProject; business responses were not substituted.
+Generated QA passwords stayed in memory without screenshots/payload logging.
+Safe controller/results are .runtime/qa/installation-secret-diagnostics/
+acceptance.cjs and results-accepted.txt. Owned processes stopped and previous
+local cache restored with standard publisher; runtime bundle itself unchanged.

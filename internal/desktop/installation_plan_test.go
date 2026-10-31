@@ -224,6 +224,9 @@ func TestRequiredPKISecretBlocksApprovalAndIsRecheckedBeforeStart(t *testing.T) 
 
 func TestRequiredServicePasswordBlocksApprovalUntilPresent(t *testing.T) {
 	app, builder, client := installationPlanApp(t, false)
+	app.binding.reader.transport = &countingSecretDescriptorTransport{descriptors: []executionnode.RuntimeSecretDescriptor{
+		{RequirementRef: "postgresql-admin-password", Purpose: "SERVICE_PASSWORD", ServiceDeployment: "database-main", DisplayLabel: "Пароль администратора", RequiredWhen: "ALWAYS", Operations: []string{"SERVICE_APPLY", "SERVICE_VERIFY"}, Hosts: []string{"node-1"}},
+	}}
 	builder.requiredCredentials = []executionnode.RequiredCredential{{RequirementRef: "postgresql-admin-password", Purpose: "SERVICE_PASSWORD"}}
 	binding := runtimesecret.Binding{Root: app.current.Root, ID: app.current.Project.ID}
 	if _, err := app.secrets.Set(binding, runtimesecret.Input{Username: "installer", SSHMode: runtimesecret.SSHPassword, SSHPassword: "synthetic-ssh-password"}); err != nil {
@@ -234,7 +237,7 @@ func TestRequiredServicePasswordBlocksApprovalUntilPresent(t *testing.T) {
 		t.Fatal("plan unavailable")
 	}
 	missing := app.ApproveInstallationPlan(created.Plan.ID, []string{"ACK_RISK"})
-	if missing.Error == nil || missing.Error.Code != "INSTALLATION_SECRETS_MISSING" || !strings.Contains(missing.Error.Message, "postgresql-admin-password") || missing.Plan == nil || missing.Plan.Approved {
+	if missing.Error == nil || missing.Error.Code != "INSTALLATION_SECRETS_MISSING" || !strings.Contains(missing.Error.Message, "database-main: Пароль администратора") || missing.Plan == nil || missing.Plan.Approved {
 		t.Fatalf("missing service password approval=%+v", missing)
 	}
 	if err := app.secrets.SetRuntimeSecretValuesForRequirements(binding, []string{"postgresql-admin-password"}, map[string]string{"postgresql-admin-password": "synthetic-service-password"}); err != nil {
@@ -248,6 +251,78 @@ func TestRequiredServicePasswordBlocksApprovalUntilPresent(t *testing.T) {
 	start := app.StartApprovedInstallation(created.Plan.ID)
 	if start.Error == nil || start.Error.Code != "INSTALLATION_SECRETS_MISSING" || client.starts != 0 {
 		t.Fatalf("start after service password loss=%+v starts=%d", start, client.starts)
+	}
+}
+
+func TestApprovalResolvesOpaqueSecretNamesAndPendingDeploymentValues(t *testing.T) {
+	for _, warm := range []bool{false, true} {
+		t.Run(map[bool]string{false: "cold_descriptors", true: "cached_descriptors"}[warm], func(t *testing.T) {
+			app, builder, client := installationPlanApp(t, false)
+			defer app.secrets.Close()
+			refs := []string{"si-" + strings.Repeat("a", 40), "si-" + strings.Repeat("b", 40)}
+			deployments := []string{"queue-one", "queue-two"}
+			transport := &countingSecretDescriptorTransport{}
+			app.binding.reader.transport = transport
+			app.current.Managed = &installer.ManagedProjectView{Deployments: map[string]installer.ManagedDeployment{}}
+			app.current.Catalog = &projectlifecycle.ProjectCatalogView{Status: "READY", Services: []projectlifecycle.ProjectCatalogService{{
+				ID: "generic-service", Modes: []projectlifecycle.ProjectCatalogMode{{ID: "single", RequiredRuntimeSecretSettings: []string{"adminCredential"}}},
+				ConfigurationSettings: []projectlifecycle.ProjectCatalogSetting{{ID: "adminCredential", EditorShape: "RUNTIME_SECRET_REFERENCE_OBJECT", RuntimeSecretRequirementRef: "admin-password", RuntimeSecretDeploymentBound: true, Label: "Пароль администратора"}},
+			}}}
+			for i, deployment := range deployments {
+				app.current.Managed.Deployments[deployment] = installer.ManagedDeployment{DeploymentID: deployment, ServiceType: "generic-service", Mode: "single"}
+				builder.requiredCredentials = append(builder.requiredCredentials, executionnode.RequiredCredential{RequirementRef: refs[i], Purpose: "SERVICE_PASSWORD"})
+				transport.descriptors = append(transport.descriptors, executionnode.RuntimeSecretDescriptor{RequirementRef: refs[i], Purpose: "SERVICE_PASSWORD", ServiceDeployment: deployment, DisplayLabel: "Пароль администратора", RequiredWhen: "ALWAYS", Operations: []string{"SERVICE_APPLY", "SERVICE_VERIFY"}, Hosts: []string{"node-1"}})
+			}
+			binding := runtimesecret.Binding{Root: app.current.Root, ID: app.current.Project.ID}
+			if _, err := app.secrets.Set(binding, runtimesecret.Input{Username: "installer", SSHMode: runtimesecret.SSHPassword, SSHPassword: "synthetic-transport"}); err != nil {
+				t.Fatal(err)
+			}
+			created := app.CreateInstallationPlan(nil)
+			if created.Plan == nil {
+				t.Fatal("plan unavailable")
+			}
+			approve := func() InstallationPlanOperation {
+				return app.ApproveInstallationPlan(created.Plan.ID, []string{"ACK_RISK"})
+			}
+			if warm {
+				missing := approve()
+				if missing.Error == nil || missing.Error.Code != "INSTALLATION_SECRETS_MISSING" || missing.Plan.Approved {
+					t.Fatalf("approval without secrets=%+v", missing)
+				}
+				for _, deployment := range deployments {
+					if !strings.Contains(missing.Error.Message, deployment+": Пароль администратора") {
+						t.Fatal("missing service/name in diagnostic")
+					}
+				}
+				if strings.Contains(missing.Error.Message, "si-") {
+					t.Fatal("opaque requirement leaked instead of label")
+				}
+			}
+			for i, deployment := range deployments {
+				if err := app.SetPendingDeploymentRuntimeSecretValues(PendingRuntimeSecretValuesInput{ServiceDeployment: deployment, Values: map[string]string{"admin-password": "synthetic-password-" + deployment}}); err != nil {
+					t.Fatal(err)
+				}
+				if !app.GetPendingRuntimeSecretDescriptors(deployment).SecretsInstalled {
+					t.Fatal("service badge did not see pending value")
+				}
+				result := approve()
+				if i == 0 {
+					if result.Error == nil || result.Error.Code != "INSTALLATION_SECRETS_MISSING" || result.Plan.Approved ||
+						!strings.Contains(result.Error.Message, "queue-two: Пароль администратора") || strings.Contains(result.Error.Message, "queue-one") || strings.Contains(result.Error.Message, "si-") {
+						t.Fatalf("independent missing secret=%+v", result)
+					}
+				} else if result.Error != nil || !result.Plan.Approved {
+					t.Fatalf("saved secrets still blocked approval=%+v", result)
+				}
+			}
+			if missing := app.secrets.MissingRequiredSecrets(binding, refs, false, false); len(missing) != 0 || client.starts != 0 {
+				t.Fatal("values were not Core-bound or approval dispatched execution")
+			}
+			calls := transport.calls
+			if result := approve(); result.Error != nil || transport.calls != calls {
+				t.Fatal("repeated approval reloaded descriptors or lost values")
+			}
+		})
 	}
 }
 
