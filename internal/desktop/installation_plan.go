@@ -2,9 +2,11 @@ package desktop
 
 import (
 	"errors"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 
 	"platform-installer/internal/executionnode"
 	"platform-installer/internal/installer"
@@ -453,9 +455,26 @@ func safeInstallationPlanFindings(findings []executionnode.Finding) []Installati
 		if finding.Code == "" || len(finding.Code) > 128 || finding.SafeMessage == "" || len(finding.SafeMessage) > 512 {
 			continue
 		}
-		result = append(result, InstallationPlanFinding{Code: finding.Code, SafeMessage: finding.SafeMessage})
+		message := finding.SafeMessage
+		if strings.HasPrefix(finding.Code, "ARTIFACT_") {
+			message = projectFindingMessageRU(finding.Code, message)
+		}
+		if strings.HasPrefix(finding.Code, "ARTIFACT_SOURCE_") &&
+			safePlanArtifactDetail(finding.ServiceDeployment) && safePlanArtifactDetail(finding.ArtifactName) &&
+			(finding.ArtifactVersion == "" || safePlanArtifactDetail(finding.ArtifactVersion)) {
+			version := finding.ArtifactVersion
+			if version == "" {
+				version = "не указана"
+			}
+			message = fmt.Sprintf("%s Сервис «%s», артефакт «%s», версия «%s».", message, finding.ServiceDeployment, finding.ArtifactName, version)
+		}
+		result = append(result, InstallationPlanFinding{Code: finding.Code, SafeMessage: message})
 	}
 	return result
+}
+
+func safePlanArtifactDetail(value string) bool {
+	return value != "" && len(value) <= 128 && strings.IndexFunc(value, unicode.IsControl) < 0
 }
 
 func installationPlanStateFor(record executionnode.PlanRecord) string {

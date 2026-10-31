@@ -484,3 +484,35 @@ remains installed on101. Owned Wails/Vite/browser processes were stopped and
 temporary source workspaces cleaned through qa-sync. The prior local active
 cache was preserved and restored through the standard publisher. Visual/native
 picker and full installation/offline-closure acceptance are not claimed.
+
+## Artifact plan diagnostics — 2026-10-31
+
+Installer now preserves Core's finding field and joins it to the full artifact
+requirement ID (including service deployment), then displays the service ID,
+artifact name and required version beside the original diagnostic code and
+Russian description. Identical codes and requirement IDs across different
+services remain separate. Source selection, plan blockers and approval rules
+are unchanged; Core/bundle changes are unnecessary. Missing legacy context
+retains the Russian description; invalid control characters or oversized
+identity fields are omitted rather than printed.
+
+Focused Go tests cover exact cross-service joins, missing/unmatched context,
+Russian descriptions, duplicate codes, unspecified versions and unsafe display
+fields. Full `go test ./...`, `go vet ./...`, frontend production build and
+Windows Wails production build passed.
+
+Actual React handlers called real Wails methods and RED OS101 Core using the
+standard-published QA bundle0f1524ab444fdc35b9ca8768e3c311f7b6e1e25b917310dec09f1e23a3f60c38.
+Project artifact-diagnostics-ui saved revision
+3fc15c4f1cc5c48c737d1389d7137f762b8e9e1566f78f46f7d2fceca82043bd.
+Fresh plan91ef2a39acfe136403a88e14 returned PLAN_BLOCKED; its actual Installation
+findings displayed service kafka, artifact kafka version4.3.1 and artifact
+confluent-schema-registry version8.3.2 with Russian descriptions and unchanged
+ARTIFACT_SOURCE_OFFLINE_REQUIRED codes. No approval or execution occurred.
+React exceptions0 excluding the established Wails IPC startup warning;
+visual/native-picker acceptance is not claimed. Only the native Open picker
+was substituted with the real OpenProject call to the known QA directory.
+Safe controller/results: .runtime/qa/docker-preview/artifact-acceptance.cjs
+and artifact-results-final.txt. Owned QA processes stopped; previous local
+cache restored with the standard publisher. The QA bundle intentionally lacks
+service artifacts; this verifies diagnostics, not offline-install completeness.

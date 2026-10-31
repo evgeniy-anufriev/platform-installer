@@ -1181,6 +1181,18 @@ func decodeDeploymentPlan(value map[string]any) (DeploymentPlan, error) {
 				return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_REQUIREMENT_INVALID")
 			}
 			plan.ArtifactRequirements = append(plan.ArtifactRequirements, requirement)
+			id, _ := item["id"].(string)
+			deployment, _ := item["serviceDeployment"].(string)
+			if id != "" && deployment != "" {
+				for index := range plan.Findings {
+					finding := &plan.Findings[index]
+					if finding.field == "artifactRequirements."+id {
+						finding.ServiceDeployment = deployment
+						finding.ArtifactName = requirement.Name
+						finding.ArtifactVersion = requirement.Version
+					}
+				}
+			}
 		}
 	}
 	credentials, err := decodeRequiredCredentials(value["requiredCredentials"])
@@ -1402,7 +1414,11 @@ func decodeFindings(raw any) []Finding {
 		code, codeOK := value["code"].(string)
 		message, messageOK := value["safeMessage"].(string)
 		if codeOK && messageOK && code != "" && message != "" {
-			result = append(result, Finding{Code: code, SafeMessage: message})
+			field, _ := value["field"].(string)
+			if len(field) > 512 {
+				field = ""
+			}
+			result = append(result, Finding{Code: code, SafeMessage: message, field: field})
 		}
 	}
 	return result

@@ -40,7 +40,13 @@ type Runtime struct {
 	BundleVersion, BundleDigest, CoreVersion, Protocol string
 	Ansible, Capabilities                              bool
 }
-type Finding struct{ Code, SafeMessage string }
+type Finding struct {
+	Code, SafeMessage string
+	ServiceDeployment string `json:"serviceDeployment,omitempty"`
+	ArtifactName      string `json:"artifactName,omitempty"`
+	ArtifactVersion   string `json:"artifactVersion,omitempty"`
+	field             string
+}
 type Inspection struct {
 	State                       State
 	OS, OSVersion, Architecture string
@@ -209,15 +215,15 @@ func NewService(transport Transport, options ...Option) *Service {
 
 func (s *Service) InspectExecutionNode(ctx context.Context, node Node) (Inspection, error) {
 	if err := validNode(node); err != nil {
-		return Inspection{State: Incompatible, Findings: []Finding{{"EXECUTION_NODE_INPUT_INVALID", "Execution Node connection details are invalid"}}}, nil
+		return Inspection{State: Incompatible, Findings: []Finding{{Code: "EXECUTION_NODE_INPUT_INVALID", SafeMessage: "Execution Node connection details are invalid"}}}, nil
 	}
 	if node.HostKey.State != "TRUSTED" {
-		return Inspection{State: Broken, Findings: []Finding{{"EXECUTION_NODE_HOST_KEY_UNTRUSTED", "Execution Node host key must be explicitly trusted"}}}, nil
+		return Inspection{State: Broken, Findings: []Finding{{Code: "EXECUTION_NODE_HOST_KEY_UNTRUSTED", SafeMessage: "Execution Node host key must be explicitly trusted"}}}, nil
 	}
 	inspection, err := s.transport.InspectExecutionNode(ctx, node)
 	if err == nil && inspection.OS != "" && !inspection.Elevation && inspection.State != Unreachable {
 		inspection.State = Broken
-		inspection.Findings = append(inspection.Findings, Finding{"EXECUTION_NODE_ELEVATION_REQUIRED", "Execution Node preparation requires non-interactive sudo access"})
+		inspection.Findings = append(inspection.Findings, Finding{Code: "EXECUTION_NODE_ELEVATION_REQUIRED", SafeMessage: "Execution Node preparation requires non-interactive sudo access"})
 	}
 	return inspection, err
 }
@@ -230,7 +236,7 @@ func (s *Service) PlanExecutionNodePreparation(ctx context.Context, node Node, b
 	bundle, err := s.resolveBundle(bundleRoot, inspection)
 	if err != nil {
 		findings := append([]Finding(nil), inspection.Findings...)
-		findings = append(findings, Finding{"EXECUTION_NODE_BUNDLE_UNAVAILABLE", "Проверенный набор установки недоступен для планирования."})
+		findings = append(findings, Finding{Code: "EXECUTION_NODE_BUNDLE_UNAVAILABLE", SafeMessage: "Проверенный набор установки недоступен для планирования."})
 		return Plan{APIVersion: APIVersion, Kind: "ExecutionNodePreparationPlan", NodeID: node.ID, State: inspection.State, Steps: []Step{{"bundle-invalid", "BLOCKED", false}}, Findings: findings}, nil
 	}
 	state := requiredState(inspection, bundle)
@@ -251,7 +257,7 @@ func platformMismatchFinding(inspection Inspection, platforms []executionbundle.
 	actual := []string{inspection.OS, inspection.OSVersion, inspection.Architecture}
 	for _, value := range actual {
 		if !safePlatformToken(value) {
-			return Finding{code, "Платформа узла содержит недопустимое или слишком длинное значение OS, VERSION_ID либо ARCH."}
+			return Finding{Code: code, SafeMessage: "Платформа узла содержит недопустимое или слишком длинное значение OS, VERSION_ID либо ARCH."}
 		}
 	}
 	supported := make([]string, 0, 4)
@@ -270,7 +276,7 @@ func platformMismatchFinding(inspection Inspection, platforms []executionbundle.
 	if len(message) > 512 {
 		message = "Платформа узла не указана в наборе установки; значения OS, VERSION_ID и ARCH слишком длинные для отображения."
 	}
-	return Finding{code, message}
+	return Finding{Code: code, SafeMessage: message}
 }
 
 func safePlatformToken(value string) bool {
@@ -292,12 +298,12 @@ func (s *Service) Prepare(ctx context.Context, node Node, bundleRoot, planID str
 	s.mu.Unlock()
 	if !exists || plan.ID != planID || plan.Digest != planDigest(plan) || !s.now().Before(plan.ExpiresAt) {
 		result.State = Broken
-		result.Findings = []Finding{{"EXECUTION_NODE_PLAN_INVALID", "Preparation plan is missing, changed or expired"}}
+		result.Findings = []Finding{{Code: "EXECUTION_NODE_PLAN_INVALID", SafeMessage: "Preparation plan is missing, changed or expired"}}
 		return result, nil
 	}
 	if plan.NodeID != node.ID {
 		result.State = Broken
-		result.Findings = []Finding{{"EXECUTION_NODE_PLAN_NODE_MISMATCH", "Preparation plan belongs to another Execution Node"}}
+		result.Findings = []Finding{{Code: "EXECUTION_NODE_PLAN_NODE_MISMATCH", SafeMessage: "Preparation plan belongs to another Execution Node"}}
 		return result, nil
 	}
 	inspection, err := s.InspectExecutionNode(ctx, node)
@@ -307,7 +313,7 @@ func (s *Service) Prepare(ctx context.Context, node Node, bundleRoot, planID str
 	bundle, err := s.resolveBundle(bundleRoot, inspection)
 	if err != nil || bundle.Digest != plan.BundleDigest {
 		result.State = Broken
-		result.Findings = []Finding{{"EXECUTION_NODE_BUNDLE_CHANGED", "Offline runtime bundle changed after planning"}}
+		result.Findings = []Finding{{Code: "EXECUTION_NODE_BUNDLE_CHANGED", SafeMessage: "Offline runtime bundle changed after planning"}}
 		return result, nil
 	}
 	state := requiredState(inspection, bundle)
@@ -336,7 +342,7 @@ func (s *Service) Prepare(ctx context.Context, node Node, bundleRoot, planID str
 	result.Changed, result.Runtime = true, runtime
 	if runtime.BundleDigest != bundle.Digest || runtime.Protocol != executionbundle.ProtocolVersion || !runtime.Ansible || !runtime.Capabilities {
 		result.State = Broken
-		result.Findings = []Finding{{"EXECUTION_NODE_RUNTIME_VERIFY_FAILED", "Prepared runtime did not pass the capability handshake"}}
+		result.Findings = []Finding{{Code: "EXECUTION_NODE_RUNTIME_VERIFY_FAILED", SafeMessage: "Prepared runtime did not pass the capability handshake"}}
 		return result, nil
 	}
 	result.State = Ready

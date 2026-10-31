@@ -76,6 +76,42 @@ func TestDecodeBlockedDeploymentPlanPreservesSafeFindings(t *testing.T) {
 	}
 }
 
+func TestDecodeDeploymentPlanArtifactFindingIdentity(t *testing.T) {
+	var value map[string]any
+	if err := json.Unmarshal([]byte(`{
+		"id":"plan-1","status":"BLOCKED","projectRevision":"revision",
+		"fingerprints":{"plan":"fingerprint"},"runtimeRelease":{"bundleDigest":"digest"},
+		"requiredCredentials":[],"phases":[],"acknowledgements":[],
+		"artifactRequirements":[
+			{"id":"kafka:distribution","serviceDeployment":"kafka","requirementId":"distribution","name":"kafka","version":"4.0.0","os":"redos","architecture":"x86_64"},
+			{"id":"registry:distribution","serviceDeployment":"registry","requirementId":"distribution","name":"schema-registry","version":"7.9.0","os":"redos","architecture":"x86_64"}
+		],
+		"findings":[
+			{"code":"ARTIFACT_SOURCE_OFFLINE_REQUIRED","field":"artifactRequirements.registry:distribution","safeMessage":"Required offline bundle artifact is unavailable"},
+			{"code":"ARTIFACT_SOURCE_OFFLINE_REQUIRED","field":"artifactRequirements.kafka:distribution","safeMessage":"Required offline bundle artifact is unavailable"},
+			{"code":"ARTIFACT_SOURCE_OFFLINE_REQUIRED","field":"artifactRequirements.unknown:distribution","safeMessage":"Required offline bundle artifact is unavailable"},
+			{"code":"ARTIFACT_SOURCE_OFFLINE_REQUIRED","safeMessage":"Required offline bundle artifact is unavailable"}
+		]
+	}`), &value); err != nil {
+		t.Fatal(err)
+	}
+	plan, err := decodeDeploymentPlan(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.Status != "BLOCKED" || len(plan.Findings) != 4 || len(plan.ArtifactRequirements) != 2 {
+		t.Fatalf("plan=%#v", plan)
+	}
+	for index, expected := range []struct{ service, name, version string }{
+		{"registry", "schema-registry", "7.9.0"}, {"kafka", "kafka", "4.0.0"}, {}, {},
+	} {
+		actual := plan.Findings[index]
+		if actual.ServiceDeployment != expected.service || actual.ArtifactName != expected.name || actual.ArtifactVersion != expected.version {
+			t.Fatalf("finding %d: %#v", index, actual)
+		}
+	}
+}
+
 func TestDecodeDeploymentPlanRetainsBoundedPhasesActionsAndAcknowledgements(t *testing.T) {
 	var value map[string]any
 	if err := json.Unmarshal([]byte(`{

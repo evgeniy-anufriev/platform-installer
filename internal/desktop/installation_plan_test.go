@@ -18,6 +18,54 @@ import (
 
 type installationPlanTransport struct{}
 
+func TestInstallationPlanArtifactFindingsRussianDetails(t *testing.T) {
+	findings := safeInstallationPlanFindings([]executionnode.Finding{
+		{Code: "ARTIFACT_SOURCE_OFFLINE_REQUIRED", SafeMessage: "Required offline bundle artifact is unavailable", ServiceDeployment: "kafka", ArtifactName: "kafka", ArtifactVersion: "4.0.0"},
+		{Code: "ARTIFACT_SOURCE_OFFLINE_REQUIRED", SafeMessage: "Required offline bundle artifact is unavailable", ServiceDeployment: "registry", ArtifactName: "schema-registry", ArtifactVersion: "7.9.0"},
+		{Code: "ARTIFACT_SOURCE_AMBIGUOUS", SafeMessage: "Offline bundle contains ambiguous artifact sources", ServiceDeployment: "kafka", ArtifactName: "kafka"},
+		{Code: "ARTIFACT_SOURCE_OFFLINE_REQUIRED", SafeMessage: "Required offline bundle artifact is unavailable"},
+		{Code: "ENDPOINT_PROVIDER_FIELD_REQUIRED", SafeMessage: "Endpoint provider deployment requires virtualAddresses"},
+	})
+	if len(findings) != 5 {
+		t.Fatalf("findings=%#v", findings)
+	}
+	for index, details := range []string{
+		"Сервис «kafka», артефакт «kafka», версия «4.0.0».",
+		"Сервис «registry», артефакт «schema-registry», версия «7.9.0».",
+		"Сервис «kafka», артефакт «kafka», версия «не указана».",
+	} {
+		if !strings.HasSuffix(findings[index].SafeMessage, details) || strings.Contains(findings[index].SafeMessage, "offline") {
+			t.Fatalf("finding %d: %#v", index, findings[index])
+		}
+	}
+	if findings[0].Code != "ARTIFACT_SOURCE_OFFLINE_REQUIRED" || findings[1].Code != findings[0].Code || findings[3].SafeMessage != projectFindingMessagesRU[findings[3].Code] {
+		t.Fatalf("lost code, duplicate or legacy fallback: %#v", findings)
+	}
+	if findings[4].SafeMessage != "Endpoint provider deployment requires virtualAddresses" {
+		t.Fatal("changed unrelated plan diagnostic")
+	}
+}
+
+func TestInstallationPlanArtifactFindingsRejectUnsafeDetails(t *testing.T) {
+	for _, detail := range []string{"injected\noutput", strings.Repeat("x", 129)} {
+		for index := 0; index < 3; index++ {
+			finding := executionnode.Finding{Code: "ARTIFACT_SOURCE_OFFLINE_REQUIRED", SafeMessage: "Required offline bundle artifact is unavailable", ServiceDeployment: "kafka", ArtifactName: "kafka", ArtifactVersion: "4.0.0"}
+			switch index {
+			case 0:
+				finding.ServiceDeployment = detail
+			case 1:
+				finding.ArtifactName = detail
+			case 2:
+				finding.ArtifactVersion = detail
+			}
+			actual := safeInstallationPlanFindings([]executionnode.Finding{finding})
+			if len(actual) != 1 || actual[0].SafeMessage != projectFindingMessagesRU[finding.Code] {
+				t.Fatalf("unsafe detail leaked: %#v", actual)
+			}
+		}
+	}
+}
+
 type countingSecretDescriptorTransport struct {
 	installationPlanTransport
 	calls       int
