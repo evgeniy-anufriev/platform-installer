@@ -29497,7 +29497,7 @@ class SchemaValidator(object):
         return findings
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/service_configuration_contract.py","mode":420,"size":10349,"sha256":"57051efc6a25979ecb1ae53816e7527b33bebdb84a6c247eac9051d6841bfe25","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":10349}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/service_configuration_contract.py","mode":420,"size":10678,"sha256":"5527d77751877061424dfbfa09618ef7f7d470fd3c9c356adf6f9fe05b74831c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":10678}
 from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
@@ -29651,6 +29651,10 @@ def validate_defaults(definition, defaults, is_literal):
         if role_variable not in defaults:
             continue
         value = defaults[role_variable]
+        # An empty TLS reference is a required input awaiting project selection,
+        # not a business default. Authored overrides still obey minLength.
+        if value == "" and entry.get("type") == "string" and isinstance(entry.get("ui"), dict) and entry["ui"].get("x-referenceKind") == "TLS_PROFILE":
+            continue
         if not is_literal(value):
             continue
         expected = entry.get("type")
@@ -29781,7 +29785,7 @@ def ordinary_presentation_value(setting, value):
     return False
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/service_configuration_resolution.py","mode":420,"size":32575,"sha256":"5a3dc6baa054dc9b70f0782c3961ec4b0b41bcc135c89a3bfb0092e7769c34b0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":32575}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/service_configuration_resolution.py","mode":420,"size":33570,"sha256":"ff5966333eb6e6505801613aa389dae7a12ee672dc8925bd09af744a1d026a5f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":33570}
 from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
@@ -30364,6 +30368,18 @@ def resolve_service_configuration(
             member_fingerprint = canonical_digest({"serviceType": service_type, "definitionVersion": service_definition_version, "mode": resolved.get("mode"), "configuration": member_values, "inputs": {"serviceDefinitionDigest": _service_definition_digest(definition), "configurationSchemaDigest": canonical_digest(schema if schema is not None else {}), "roleDefaultsDigest": canonical_digest(_canonical_defaults(defaults, mapping)), "mappingDigest": canonical_digest(_canonical_mapping(mapping))}})
             scoped_members[member_id] = {"variableContext": context, "configuration": member_values, "opaqueVariables": member_opaque_variables, "configurationFingerprint": member_fingerprint, "opaqueVariablesFingerprint": canonical_digest(sorted(member_opaque_variables, key=lambda item: (item["name"], item["origin"]["source"], item["origin"]["path"]))) }
         service["members"] = scoped_members
+
+        for logical, setting in sorted(mapping.items()):
+            ui = setting.get("ui") if isinstance(setting, dict) else None
+            if not isinstance(ui, dict) or ui.get("x-referenceKind") != "TLS_PROFILE":
+                continue
+            contexts = {member_id: value["configuration"] for member_id, value in scoped_members.items()} or {None: deployment_configuration}
+            for member_id, values in contexts.items():
+                profile = values.get(logical, {})
+                if not isinstance(profile, dict) or profile.get("state") != "RESOLVED" or not isinstance(profile.get("value"), str) or not profile["value"]:
+                    field = ("serviceDeployments.%s.members.%s.configuration.%s" % (deployment_id, member_id, logical)
+                             if member_id is not None else field_prefix + "." + logical)
+                    findings.append(_finding("TLS_PROFILE_REQUIRED", field, "Select a TLS profile for this service and save the project"))
 
         service.update({
             "serviceType": service_type,
@@ -107271,142 +107287,4 @@ export function UtilityPages({
               <dd>
                 {serverTypes.length
                   ? serverTypes.m
-@@END
-@@PORTABLE {"path":"frontend/src/UtilityPages.tsx","mode":420,"size":67854,"sha256":"c12fdcbd6ead013efaf64f28be32743d53d6a75d98098ca3c438b4f34f5a701d","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":5367}
-ap((item) => item.displayName).join(", ")
-                  : "Недоступны"}
-              </dd>
-            </dl>
-            {configError && <p role="status">{configError}</p>}
-          </section>
-        </section>
-      );
-
-  if (page === "settings")
-    return (
-      <section className="utility-page" aria-labelledby="settings-title">
-        <header className="utility-page-title">
-          <div>
-            <h1 id="settings-title">Настройки</h1>
-            <p>Параметры проекта и локальная конфигурация приложения.</p>
-          </div>
-        </header>
-        <section className="utility-card">
-          <h2>Параметры проекта</h2>
-          <p>
-            Изменения добавляются в общий черновик проекта. Просмотрите их и
-            нажмите «Сохранить» в шапке.
-          </p>
-          {editError && (
-            <p className="field-error" role="alert">
-              <code>{editError.code}</code> — {editError.message}
-            </p>
-          )}
-          <div
-            className={`project-setting-field${dataRootDirectoryChanged ? " project-setting-field--changed" : ""}`}
-          >
-            <label>
-              Корневой каталог данных сервисов
-              <input
-                value={dataRootDirectory}
-                onChange={(event) => setDataRootDirectory(event.target.value)}
-                disabled={!managed || settingBusy}
-              />
-            </label>
-            {dataRootDirectoryChanged && (
-              <small className="project-setting-draft-status" role="status">
-                В черновике: <code>{draftDataRootDirectory}</code>. Сохраните
-                проект в шапке, чтобы зафиксировать это значение.
-              </small>
-            )}
-            <button
-              type="button"
-              disabled={
-                !managed ||
-                settingBusy ||
-                dataRootDirectory ===
-                  (draftDataRootDirectory ?? savedDataRootDirectory)
-              }
-              onClick={() =>
-                void stageSetting(
-                  "platform_data_root_directory",
-                  dataRootDirectory,
-                )
-              }
-            >
-              Добавить каталог в черновик
-            </button>
-          </div>
-          <p>
-            Путь применяется к каталогам данных сервисов по умолчанию. Данные
-            при изменении пути автоматически не переносятся.
-          </p>
-          <div
-            className={`project-setting-field${namePrefixChanged ? " project-setting-field--changed" : ""}`}
-          >
-            <label>
-              Префикс имён ресурсов
-              <input
-                value={namePrefix}
-                onChange={(event) => setNamePrefix(event.target.value)}
-                disabled={!managed || settingBusy}
-              />
-            </label>
-            {namePrefixChanged && (
-              <small className="project-setting-draft-status" role="status">
-                В черновике задан префикс «{draftNamePrefix || "не задан"}».
-                Сохраните проект в шапке, чтобы зафиксировать это значение.
-              </small>
-            )}
-            <button
-              type="button"
-              disabled={
-                !managed ||
-                settingBusy ||
-                namePrefix === (draftNamePrefix ?? savedNamePrefix)
-              }
-              onClick={() =>
-                void stageSetting("platform_name_prefix", namePrefix)
-              }
-            >
-              Добавить префикс в черновик
-            </button>
-          </div>
-          <p>
-            Пустое значение создаёт имена ресурсов сервисов без префикса. Новый
-            префикс создаёт новые имена ресурсов; прежние ресурсы автоматически
-            не переименовываются.
-          </p>
-        </section>
-        <section className="utility-card">
-          <h2>Конфигурация приложения</h2>
-          {configError ? (
-            <p role="status">{configError}</p>
-          ) : (
-            <>
-              <p>
-                Версия схемы:{" "}
-                {configVersion === undefined
-                  ? "загрузка…"
-                  : `v${configVersion}`}
-              </p>
-              <p>
-                Типы серверов:{" "}
-                {serverTypes.length
-                  ? serverTypes.map((item) => item.displayName).join(", ")
-                  : "не заданы"}
-              </p>
-            </>
-          )}
-          <p>
-            Учётные данные сеанса и секреты не сохраняются в настройках
-            приложения.
-          </p>
-        </section>
-      </section>
-    );
-
-  return null;
-}
-
 @@END

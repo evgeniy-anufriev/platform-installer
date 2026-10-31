@@ -1,3 +1,141 @@
+@@PORTABLE {"path":"frontend/src/UtilityPages.tsx","mode":420,"size":67854,"sha256":"c12fdcbd6ead013efaf64f28be32743d53d6a75d98098ca3c438b4f34f5a701d","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":5367}
+ap((item) => item.displayName).join(", ")
+                  : "Недоступны"}
+              </dd>
+            </dl>
+            {configError && <p role="status">{configError}</p>}
+          </section>
+        </section>
+      );
+
+  if (page === "settings")
+    return (
+      <section className="utility-page" aria-labelledby="settings-title">
+        <header className="utility-page-title">
+          <div>
+            <h1 id="settings-title">Настройки</h1>
+            <p>Параметры проекта и локальная конфигурация приложения.</p>
+          </div>
+        </header>
+        <section className="utility-card">
+          <h2>Параметры проекта</h2>
+          <p>
+            Изменения добавляются в общий черновик проекта. Просмотрите их и
+            нажмите «Сохранить» в шапке.
+          </p>
+          {editError && (
+            <p className="field-error" role="alert">
+              <code>{editError.code}</code> — {editError.message}
+            </p>
+          )}
+          <div
+            className={`project-setting-field${dataRootDirectoryChanged ? " project-setting-field--changed" : ""}`}
+          >
+            <label>
+              Корневой каталог данных сервисов
+              <input
+                value={dataRootDirectory}
+                onChange={(event) => setDataRootDirectory(event.target.value)}
+                disabled={!managed || settingBusy}
+              />
+            </label>
+            {dataRootDirectoryChanged && (
+              <small className="project-setting-draft-status" role="status">
+                В черновике: <code>{draftDataRootDirectory}</code>. Сохраните
+                проект в шапке, чтобы зафиксировать это значение.
+              </small>
+            )}
+            <button
+              type="button"
+              disabled={
+                !managed ||
+                settingBusy ||
+                dataRootDirectory ===
+                  (draftDataRootDirectory ?? savedDataRootDirectory)
+              }
+              onClick={() =>
+                void stageSetting(
+                  "platform_data_root_directory",
+                  dataRootDirectory,
+                )
+              }
+            >
+              Добавить каталог в черновик
+            </button>
+          </div>
+          <p>
+            Путь применяется к каталогам данных сервисов по умолчанию. Данные
+            при изменении пути автоматически не переносятся.
+          </p>
+          <div
+            className={`project-setting-field${namePrefixChanged ? " project-setting-field--changed" : ""}`}
+          >
+            <label>
+              Префикс имён ресурсов
+              <input
+                value={namePrefix}
+                onChange={(event) => setNamePrefix(event.target.value)}
+                disabled={!managed || settingBusy}
+              />
+            </label>
+            {namePrefixChanged && (
+              <small className="project-setting-draft-status" role="status">
+                В черновике задан префикс «{draftNamePrefix || "не задан"}».
+                Сохраните проект в шапке, чтобы зафиксировать это значение.
+              </small>
+            )}
+            <button
+              type="button"
+              disabled={
+                !managed ||
+                settingBusy ||
+                namePrefix === (draftNamePrefix ?? savedNamePrefix)
+              }
+              onClick={() =>
+                void stageSetting("platform_name_prefix", namePrefix)
+              }
+            >
+              Добавить префикс в черновик
+            </button>
+          </div>
+          <p>
+            Пустое значение создаёт имена ресурсов сервисов без префикса. Новый
+            префикс создаёт новые имена ресурсов; прежние ресурсы автоматически
+            не переименовываются.
+          </p>
+        </section>
+        <section className="utility-card">
+          <h2>Конфигурация приложения</h2>
+          {configError ? (
+            <p role="status">{configError}</p>
+          ) : (
+            <>
+              <p>
+                Версия схемы:{" "}
+                {configVersion === undefined
+                  ? "загрузка…"
+                  : `v${configVersion}`}
+              </p>
+              <p>
+                Типы серверов:{" "}
+                {serverTypes.length
+                  ? serverTypes.map((item) => item.displayName).join(", ")
+                  : "не заданы"}
+              </p>
+            </>
+          )}
+          <p>
+            Учётные данные сеанса и секреты не сохраняются в настройках
+            приложения.
+          </p>
+        </section>
+      </section>
+    );
+
+  return null;
+}
+
+@@END
 @@PORTABLE {"path":"frontend/src/application-draft.ts","mode":420,"size":3654,"sha256":"3d92333501bbb3190dd1eb89b0a1018c68b8214ebb90859f1ac3236f62942c8f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3654}
 import type { OpenResult } from "./backend";
 export type ObjectValue = Record<string, unknown>;
@@ -17298,7 +17436,7 @@ func writeBrowserError(w http.ResponseWriter, status int, err error) {
 }
 
 @@END
-@@PORTABLE {"path":"internal/desktop/core_preview_diagnostics.go","mode":420,"size":33694,"sha256":"c450d1ee63a43f4f6ac7f16bf098e868a5d48196eaea6944cbd255c3f3c8a52c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":33694}
+@@PORTABLE {"path":"internal/desktop/core_preview_diagnostics.go","mode":420,"size":36183,"sha256":"d3e07995514bdb63a94a876c12bd6ec4e57c2a431f286cfb4913354a085979f8","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":36183}
 package desktop
 
 import (
@@ -17311,6 +17449,19 @@ import (
 
 // Presentation only: Core codes and validation severity remain authoritative.
 var projectFindingMessagesRU = map[string]string{
+	"ROLE_DEFAULT_TYPE_INVALID":                               "Тип значения роли по умолчанию не соответствует описанию настройки.",
+	"ROLE_DEFAULT_VALIDATION_INVALID":                         "Значение роли по умолчанию нарушает ограничения настройки.",
+	"SERVICE_CONFIGURATION_ADVANCED_TYPE_INVALID":             "Расширенные настройки сервиса должны иметь допустимый объектный тип.",
+	"SERVICE_CONFIGURATION_CONTRACT_CONFLICT":                 "В пакете сервиса одновременно заданы конфликтующие форматы описания настроек.",
+	"SERVICE_CONFIGURATION_KIND_INVALID":                      "Недопустим вид настройки сервиса.",
+	"SERVICE_CONFIGURATION_LOGICAL_ID_INVALID":                "Некорректен логический идентификатор настройки сервиса.",
+	"SERVICE_CONFIGURATION_ROLE_VARIABLE_DUPLICATE":           "Несколько настроек сервиса ссылаются на одну переменную роли.",
+	"SERVICE_CONFIGURATION_ROLE_VARIABLE_INVALID":             "Некорректно имя переменной роли в описании настройки.",
+	"SERVICE_CONFIGURATION_SCOPES_INVALID":                    "Недопустима область применения настройки сервиса.",
+	"SERVICE_CONFIGURATION_SETTINGS_INVALID":                  "Описание настроек сервиса должно быть объектом.",
+	"SERVICE_CONFIGURATION_SETTING_INVALID":                   "Некорректна структура описания настройки сервиса.",
+	"SERVICE_CONFIGURATION_VALIDATION_INVALID":                "Некорректно описание ограничений настройки сервиса.",
+	"SERVICE_CONFIGURATION_VALIDATION_TYPE_INVALID":           "Тип ограничения настройки не соответствует типу её значения.",
 	"ADVANCED_SETTING_RESERVED":                               "Расширенная настройка использует зарезервированное имя.",
 	"APPLICATION_BOOTSTRAP_PROVIDER_INVALID":                  "Для начальной настройки приложения выбран недопустимый поставщик секретов.",
 	"APPLICATION_INFRASTRUCTURE_BARRIER_REQUIRED":             "Перед приложениями требуется проверка готовности инфраструктуры.",
@@ -17485,6 +17636,7 @@ var projectFindingMessagesRU = map[string]string{
 	"STATIC_REFERENCE_NOT_FOUND":                              "Не найдена переменная, на которую ссылается настройка.",
 	"TLS_PROFILES_INVALID":                                    "Некорректно описание профилей TLS.",
 	"TLS_PROFILE_NOT_FOUND":                                   "Указанный профиль TLS не найден.",
+	"TLS_PROFILE_REQUIRED":                                    "Не выбран TLS-профиль сервиса. Создайте профиль TLS и сохраните проект; первый доступный профиль будет выбран автоматически.",
 	"VARIABLE_DOCUMENT_BINDING_INVALID":                       "Некорректна привязка переменной к документу проекта.",
 	"VARIABLE_DOCUMENT_ORIGIN_INVALID":                        "Некорректно указан источник документа с переменными.",
 	"VIRTUAL_ADDRESS_DUPLICATE":                               "Виртуальный адрес указан повторно.",
@@ -38317,7 +38469,7 @@ func applicationCommandFamily(operation string) string {
 }
 
 @@END
-@@PORTABLE {"path":"internal/installer/topology_save.go","mode":420,"size":44606,"sha256":"435dc4a7c874d146a53ce04a884af03b9dbcad69b7e6c28d58fad8a3c7e9a3e2","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":44606}
+@@PORTABLE {"path":"internal/installer/topology_save.go","mode":420,"size":46423,"sha256":"c37af826fd88d3ad23558674d22e3222c211913182c7928daaf763c66e20744d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":46423}
 package installer
 
 import (
@@ -38417,6 +38569,13 @@ func (b *Backend) planStructuralCandidate(ctx context.Context, root, classificat
 			return blockedStructuralPlan(revision, blocked(code, "Compatible project catalog cannot authorize this edit", "project.catalogLock")), nil
 		}
 		break
+	}
+	// Optional local metadata enables authoring defaults without making Save
+	// depend on a runtime or blocking unrelated edits when a bundle is absent.
+	if catalog == nil && b.catalogResolver != nil {
+		if available, readErr := b.catalogResolver(ctx, root); readErr == nil && available != nil && available.Status == "READY" {
+			catalog = available
+		}
 	}
 	candidate, err := loadStructuralCandidate(root, classification)
 	if err != nil {
@@ -38746,6 +38905,42 @@ func (candidate *structuralCandidate) reduce(commands []EditCommand, catalog *pr
 			return nil, mutations, err
 		}
 		changes = append(changes, commandSummary(command))
+	}
+	if profiles := asMap(state["tlsProfiles"]); len(profiles) > 0 && catalog != nil && catalog.Status == "READY" {
+		profileIDs, deploymentIDs := make([]string, 0, len(profiles)), make([]string, 0, len(deployments))
+		for id := range profiles {
+			profileIDs = append(profileIDs, id)
+		}
+		for id := range deployments {
+			deploymentIDs = append(deploymentIDs, id)
+		}
+		sort.Strings(profileIDs)
+		sort.Strings(deploymentIDs)
+		for _, id := range deploymentIDs {
+			deployment := asMap(deployments[id])
+			serviceType, _ := deployment["serviceType"].(string)
+			modeID, _ := deployment["mode"].(string)
+			service, mode := catalogServiceMode(catalog, serviceType, modeID)
+			if service == nil || mode == nil {
+				continue
+			}
+			for _, setting := range service.ConfigurationSettings {
+				if setting.ReferenceKind != "TLS_PROFILE" || setting.EditorShape != "TLS_PROFILE" || setting.Kind != "MANAGED" || !settingAllowsScope(&setting, "DEPLOYMENT") {
+					continue
+				}
+				if _, present := asMap(deployment["configuration"])[setting.ID]; present {
+					continue
+				}
+				auto := EditCommand{Operation: "SetServiceConfigurationValue", DeploymentID: id, Scope: "DEPLOYMENT", Setting: setting.ID, Value: profileIDs[0]}
+				changed, applyErr := candidate.applyConfigurationCommand(auto, deployments, catalog)
+				if applyErr != nil {
+					return nil, mutations, applyErr
+				}
+				if changed {
+					changes = append(changes, commandSummary(auto))
+				}
+			}
+		}
 	}
 	if len(inventory.hosts) > maxManagedEntities || len(deployments) > maxManagedEntities || len(groups) > maxManagedEntities {
 		return nil, mutations, blocked("INVALID_EDIT_COMMAND", "Managed entity collection exceeds its limit", "command")
@@ -48900,12 +49095,12 @@ SETTINGS
 {% endfor %}
 {{ result.tables | to_json }}
 @@END
-@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/defaults/main.yml","mode":420,"size":1612,"sha256":"c825431e488a4287f3d5dbea97dcbebbd8fb5db542306bacf703bce8993240ad","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1612}
+@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/defaults/main.yml","mode":420,"size":1596,"sha256":"10f3a2ffb7b4f1f3043da9b43affb618e2e4cb19df7bf677342b0498b7df91c2","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1596}
 ---
 platform_clickhouse_mode: standalone
 platform_clickhouse_deployment_id: "{{ platform_execution_service_deployment | default('clickhouse', true) }}"
 platform_clickhouse_instances: []
-platform_clickhouse_tls_profile: infrastructure-tls
+platform_clickhouse_tls_profile: ""
 platform_clickhouse_tls_directory: ''
 platform_clickhouse_port: 8443
 platform_clickhouse_native_port: 9440
@@ -50845,7 +51040,7 @@ tags: [docker, rootless]
 dependencies: {}
 
 @@END
-@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/defaults/main.yml","mode":420,"size":958,"sha256":"45b58b308d9e99216000dcb31009449b7c9e85ca4b48ce713c9fdf1b8603ab05","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":958}
+@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/defaults/main.yml","mode":420,"size":942,"sha256":"4daa4d7f30ac2164fb960848804b943f9e4ceda3555240eca6df3bc7e73d5bd0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":942}
 ---
 platform_docker_mode: auto
 platform_docker_name: "{{ (platform_name_prefix | default('') ~ '-') if (platform_name_prefix | default('')) else '' }}docker"
@@ -50854,7 +51049,7 @@ platform_docker_data_root: "/home/{{ platform_docker_account_name }}/.local/shar
 platform_docker_account_credential:
   passwordSecretRef: ''
 platform_docker_secret_files: {}
-platform_docker_tls_profile: infrastructure-tls
+platform_docker_tls_profile: ""
 platform_docker_tls_directory: ''
 platform_docker_api_bind_address: 0.0.0.0
 platform_docker_api_port: 2376
@@ -52803,7 +52998,7 @@ if __name__ == '__main__':
     main()
 
 @@END
-@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/defaults/main.yml","mode":420,"size":1303,"sha256":"f25fe19f5bc1c910a4191b672c02742dc767dd8d472593c4259d1f77f5036773","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1303}
+@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/defaults/main.yml","mode":420,"size":1293,"sha256":"739e1c18a6cd9d104e02df095e60d9d177a08bc4129bfe79eebf9017f75ef30e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1293}
 platform_haproxy_package: haproxy
 platform_haproxy_service_name: haproxy
 platform_haproxy_binary: /usr/sbin/haproxy
@@ -52812,7 +53007,7 @@ platform_haproxy_main_config: /etc/haproxy/haproxy.cfg
 platform_haproxy_candidate_directory: "/etc/haproxy/.{{ (platform_name_prefix | default('') ~ '-') if (platform_name_prefix | default('')) else '' }}candidate"
 platform_haproxy_conf_directory: /etc/haproxy/conf.d
 platform_haproxy_pki_directory: /etc/haproxy/pki
-platform_haproxy_tls_profile: platform-tls
+platform_haproxy_tls_profile: ""
 platform_haproxy_public_port: 443
 platform_haproxy_internal_stats_port: 8404
 platform_haproxy_runtime_socket_path: /run/haproxy/admin.sock
@@ -54746,7 +54941,7 @@ class FilterModule:
         return {'storage_scram': storage_scram}
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/defaults/main.yml","mode":420,"size":3519,"sha256":"f0655097183a8395dd487d4c0a916cb98044a8ad28a455776af660bbd469e3d3","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3519}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/defaults/main.yml","mode":420,"size":3503,"sha256":"89aec9b3c7226cb2113df2bd903d9c89b6952d5879cd9a3941f57c4c20ce219b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3503}
 ---
 platform_kafka_version: "4.3.1"
 # Include the leading dot; use an empty string for extensionless Kafka commands.
@@ -54777,7 +54972,7 @@ platform_kafka_data_directory: "{{ platform_data_root_directory | default('/var/
 platform_kafka_user: kafka
 platform_kafka_group: kafka
 platform_kafka_java_package: java-21-openjdk-headless
-platform_kafka_tls_profile: infrastructure-tls
+platform_kafka_tls_profile: ""
 # Named listeners are the Kafka service baseline. Deployment and member
 # configuration may override this mapping only for non-default listener ports
 # or topology.
@@ -61462,7 +61657,7 @@ $platform_session$;
 {% endfor %}
 
 @@END
-@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/postgresql/defaults/main.yml","mode":420,"size":2246,"sha256":"9c7fe37e7c29c9c0b5fdee00295c7bb9a6906ef3aa2c945c0d044f7f2c746023","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2246}
+@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/postgresql/defaults/main.yml","mode":420,"size":2230,"sha256":"28a6d731a7ff7cf0f6156af42635d9bdea425fe2ec14c87019d0462cf508be95","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2230}
 platform_postgresql_version: "16.14"
 platform_postgresql_binary_directory: ""
 platform_postgresql_pg_auto_failover_version: "2.2"
@@ -61477,7 +61672,7 @@ platform_postgresql_name: "{{ (platform_name_prefix | default('') ~ '-') if (pla
 platform_postgresql_data_directory: "{{ platform_data_root_directory | default('/var/lib') }}/{{ platform_postgresql_deployment_id }}/postgres"
 platform_postgresql_config_directory: "/etc/{{ (platform_name_prefix | default('') ~ '/') if (platform_name_prefix | default('')) else '' }}postgresql"
 platform_postgresql_log_directory: "/var/log/{{ (platform_name_prefix | default('') ~ '/') if (platform_name_prefix | default('')) else '' }}postgresql"
-platform_postgresql_tls_profile: infrastructure-tls
+platform_postgresql_tls_profile: ""
 platform_postgresql_admin_superuser:
   username: "{{ (platform_name_prefix | default('') ~ '_') if (platform_name_prefix | default('')) else '' }}admin"
   passwordSecretRef: ''
@@ -63972,7 +64167,7 @@ platform_redis_application_credential_files: "{{ platform_redis_secret_files | c
     platform_redis_application_phase: verify
 
 @@END
-@@PORTABLE {"path":"services/redis/ansible_collections/platform/redis/roles/redis_tls/defaults/main.yml","mode":420,"size":1108,"sha256":"a1740e1ea8494d43dc0abb4eb264e6fdfe8d46f026d21c75c2abc1f4dbc7ca45","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1108}
+@@PORTABLE {"path":"services/redis/ansible_collections/platform/redis/roles/redis_tls/defaults/main.yml","mode":420,"size":1092,"sha256":"5e811a7e0c5c50842c172d13afe0005197d3d13c03ea402e82648d086f7b295d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1092}
 platform_redis_mode: standalone
 platform_redis_deployment_id: "{{ platform_execution_service_deployment | default('redis', true) }}"
 platform_redis_version: "8.6.4-1.red80"
@@ -63985,7 +64180,7 @@ platform_redis_data_root: "{{ platform_data_root_directory | default('/var/lib')
 platform_redis_member_data_directory: "{{ platform_redis_data_root }}"
 platform_redis_config_root: "/etc/{{ platform_redis_name }}"
 platform_redis_log_root: "/var/log/{{ platform_redis_name }}"
-platform_redis_tls_profile: infrastructure-tls
+platform_redis_tls_profile: ""
 platform_redis_credential:
   passwordSecretRef: ''
 platform_redis_sentinel_credential:
@@ -66802,7 +66997,7 @@ platform_vault_bootstrap_output_dir: ''
       no_log: true
 
 @@END
-@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/roles/vault_tls/defaults/main.yml","mode":420,"size":1167,"sha256":"f222777fcf8b3e67e7c16f75410c15ecd9179761212a3bcbe39329440edafba7","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1167}
+@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/roles/vault_tls/defaults/main.yml","mode":420,"size":1151,"sha256":"bb5b84de84b0c1b496fdeb73fc2018a6279f3b6eeb6f6eaf8b0d3f79c2f2ca4a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1151}
 ---
 platform_vault_mode: standalone
 platform_vault_deployment_id: "{{ platform_execution_service_deployment | default('vault', true) }}"
@@ -66811,7 +67006,7 @@ platform_vault_api_port: 8200
 platform_vault_cluster_port: 8201
 platform_vault_unseal_shares: 3
 platform_vault_unseal_threshold: 2
-platform_vault_tls_profile: infrastructure-tls
+platform_vault_tls_profile: ""
 platform_vault_instances: []
 platform_vault_verify_only: false
 platform_vault_confirm_destructive_reset: ''
