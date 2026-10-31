@@ -21,6 +21,17 @@ except ImportError:
 API_VERSION = "platform.installer/resolved-dns-zone/v1alpha1"
 
 
+def dns_client_server_reference(deployment, deployments):
+    """Use an authored reference, otherwise the first BIND deployment by ID."""
+    configuration = deployment.get("configuration", {})
+    if not isinstance(configuration, dict):
+        return None
+    if "dnsServerRef" in configuration:
+        return configuration["dnsServerRef"]
+    return next((name for name, value in sorted(deployments.items())
+                 if isinstance(value, dict) and value.get("serviceType") == "bind"), None)
+
+
 def _finding(code, field, message, details=None):
     value = {
         "apiVersion": "platform.installer/finding/v1alpha1", "kind": "Finding",
@@ -127,7 +138,7 @@ def resolve_dns_zones(desired_state, service_catalog, inventory_hosts, inventory
         prefix = "serviceDeployments.%s" % deployment_id
         configuration = deployment.get("configuration", {}) if isinstance(deployment.get("configuration"), dict) else {}
         zone = configuration.get("zone")
-        ttl = configuration.get("defaultTtl")
+        ttl = configuration.get("defaultTtl", 300)
         if not isinstance(zone, str) or not DNS_DOMAIN.match(zone):
             findings.append(_finding("DNS_ZONE_INVALID", prefix + ".configuration.zone", "Managed DNS zone must be a lowercase fully qualified domain"))
             continue

@@ -309,6 +309,30 @@ Rules:
 
 ## Project input and resolved projections
 
+The target-free service-configuration preview renders Docker's ordinary
+`accountName` and `dataRoot` role-default expressions through native Ansible
+templating, including the project name prefix. Explicit configuration values
+retain precedence. Only the two declared ordinary fields and the prefix enter
+this presentation calculation; lookups are disabled and authored expressions
+remain deferred. No secret, desired-state write or execution permission is
+introduced. The same projection runs for fresh and cached desired resolutions.
+
+For Kafka members without an explicit `nodeId` or role default, Core uses the
+terminal numeric suffix of the member ID (`kafka-1` -> 1, `kafka-12` -> 12),
+within the Kafka nonnegative 32-bit ID range. Explicit values, including zero,
+remain authoritative. IDs without a usable suffix remain unset; no ordinal
+allocation or renumbering occurs. This default belongs to the shared resolved
+configuration consumed by preview and planning, rather than a React-only value.
+
+BIND uses a default zone TTL of 300 when the deployment does not override
+`defaultTtl`. A DNS-client deployment without `dnsServerRef` resolves to the
+first BIND deployment in alphabetical ID order. An explicit reference remains
+authoritative, including invalid references that still require correction.
+The same reference helper feeds validation, configuration preview and the
+native DNS-client runtime projection. No BIND deployment means the existing
+missing-server finding; malformed zones/placements remain validation errors.
+These are derived defaults; Verify never writes them back to desired state.
+
 The initial portable project is a normal Ansible project:
 
 ```text

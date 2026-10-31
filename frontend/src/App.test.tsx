@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { App } from "./App";
@@ -1187,7 +1187,7 @@ it("loads revision-bound PKI evidence only after an explicit Core verification",
   const value = api({ getVerifiedPKIView });
   await openCertificates(value);
   await userEvent.click(
-    screen.getAllByRole("button", { name: "Проверить" })[1],
+    within(screen.getByRole("banner")).getByRole("button", { name: "Проверить" }),
   );
   expect(value.verifyProject).toHaveBeenCalledOnce();
   expect(getVerifiedPKIView).toHaveBeenCalledOnce();
@@ -3260,7 +3260,19 @@ describe("UI-01H2 services navigation and safe settings", () => {
 
   it("adds one deployment-scoped safe setting command through the shared session", async () => {
     const value = api();
-    value.chooseProject.mockResolvedValue(project);
+    value.chooseProject.mockResolvedValue({
+      ...project,
+      catalog: {
+        ...project.catalog,
+        services: project.catalog.services.map((service) => ({
+          ...service,
+          configurationSettings: [...service.configurationSettings, {
+            id: "memberValue", kind: "MANAGED", editorShape: "INTEGER",
+            label: "Параметр только участника", scopes: ["member"],
+          }],
+        })),
+      },
+    });
     render(<App api={value} />);
     await userEvent.click(
       screen.getByRole("button", { name: "Открыть папку проекта" }),
@@ -3289,10 +3301,12 @@ describe("UI-01H2 services navigation and safe settings", () => {
     );
     expect(screen.getByText("Изменений в черновике: 1 из 16")).toBeTruthy();
     expect(
-      screen.getByText(
+      screen.queryByText(
         "Этот параметр доступен только для просмотра в текущем интерфейсе.",
       ),
-    ).toBeTruthy();
+    ).toBeNull();
+    expect(screen.queryByText("Расширенная конфигурация")).toBeNull();
+    expect(screen.queryByText("Параметр только участника")).toBeNull();
   });
 
   it("edits a catalog-declared service data root through the shared session", async () => {

@@ -20,6 +20,108 @@ from build_execution_runtime_bundle import write_ui_static_defaults
 
 
 class ServiceConfigurationPreviewTests(unittest.TestCase):
+    def test_native_dns_client_projection_uses_automatic_reference_and_default_ttl(self):
+        with tempfile.TemporaryDirectory(prefix='dns-defaults-') as folder:
+            project = Path(folder) / 'project'
+            shutil.copytree(ROOT / 'examples/valid/bind-authoritative', project)
+            source = project / 'inventory/group_vars/all/platform.yml'
+            variables = yaml.safe_load(source.read_text())
+            deployments = variables['platform_desired_state']['serviceDeployments']
+            deployments['dns-main']['configuration'].pop('defaultTtl')
+            deployments['dns-clients']['configuration'].pop('dnsServerRef')
+            source.write_text(yaml.safe_dump(variables))
+            play = Path(folder) / 'check.yml'
+            play.write_text(yaml.safe_dump([
+                {'import_playbook': str(ROOT / 'services/dns-client/playbooks/projection.yml')},
+                {'hosts': 'localhost', 'connection': 'local', 'gather_facts': False, 'tasks': [
+                    {'ansible.builtin.assert': {'that': [
+                        "platform_dns_client_runtime_projection.clients['dns-clients'].dnsServerRef == 'dns-main'",
+                        "_platform_dns_client_dns.resolved_dns_zones.zones['dns-main'].defaultTtl == 300",
+                        "'dnsServerRef' not in platform_desired_state.serviceDeployments['dns-clients'].configuration"]}}]}]))
+            result = subprocess.run(['ansible-playbook', '-i', str(project / 'inventory/hosts.yml'), str(play),
+                '-e', json.dumps({'platform_service_catalog_path': str(ROOT / 'examples/catalog/service-catalog.yml'),
+                    'platform_project_manifest_path': str(project / 'project.yml'),
+                    'platform_validation_artifact': str(Path(folder) / 'validation.json')})],
+                env=dict(os.environ, ANSIBLE_CONFIG=str(ROOT / 'ansible-core/ansible.cfg'),
+                    ANSIBLE_COLLECTIONS_PATH=str(ROOT / 'ansible-core/collections')),
+                capture_output=True, text=True, timeout=90)
+            self.assertEqual(0, result.returncode, result.stdout[-4500:] + result.stderr[-2000:])
+            self.assertNotIn('UNREACHABLE', result.stdout)
+
+    def test_real_docker_preview_cold_and_cached_resolution(self):
+        with tempfile.TemporaryDirectory(prefix='docker-preview-') as folder:
+            directory = Path(folder)
+            project = directory / 'project'
+            shutil.copytree(ROOT / 'examples/valid/postgresql-standalone', project)
+            (project / 'project.yml').write_text(yaml.safe_dump({
+                'apiVersion': 'platform.installer/v2alpha1', 'kind': 'PlatformProject',
+                'metadata': {'id': 'docker-preview', 'name': 'Docker preview'}}))
+            (project / 'inventory/hosts.yml').write_text(yaml.safe_dump({'all': {'hosts': {
+                'node1': {'ansible_host': '192.0.2.11', 'platform_deployments': {'docker-main': {'priority': 100}}}},
+                'children': {'platform_targets': {'hosts': {'node1': {}}}}}}))
+            variables = project / 'inventory/group_vars/all/platform.yml'
+            variables.write_text(yaml.safe_dump({'platform_name_prefix': 'qa', 'platform_desired_state': {
+                'serviceDeployments': {'docker-main': {'serviceType': 'docker', 'mode': 'auto',
+                    'configuration': {'accountName': 'operator'}}}}}))
+            output = directory / 'preview.json'
+            extra = dict(platform_project_root=str(project),
+                platform_service_catalog_path=str(ROOT / 'examples/catalog/service-catalog.yml'),
+                platform_project_resolution_directory=str(directory / 'cache'),
+                platform_project_resolution_local_path=str(directory / 'resolution.json'),
+                platform_project_resolution_runtime={'bundleDigest': 'sha256:test', 'coreVersion': 'qa'})
+            environment = dict(os.environ, ANSIBLE_CONFIG=str(ROOT / 'ansible-core/ansible.cfg'),
+                ANSIBLE_COLLECTIONS_PATH=os.pathsep.join([str(ROOT / 'ansible-core/collections')] + [
+                    str(path) for path in sorted((ROOT / 'services').glob('*/ansible_collections'))]),
+                ANSIBLE_CALLBACKS_ENABLED='platform.core.project_snapshot_json',
+                PLATFORM_PROJECT_SNAPSHOT_OUTPUT=str(output))
+            def call(playbook):
+                result = subprocess.run(['ansible-playbook', '-i', str(project / 'inventory/hosts.yml'),
+                    str(ROOT / 'ansible-core/playbooks' / playbook), '-e', json.dumps(extra)],
+                    env=environment, capture_output=True, text=True, timeout=90)
+                self.assertEqual(0, result.returncode, result.stdout[-4000:] + result.stderr[-2000:])
+                return json.loads(output.read_text())
+            cold = call('service-configuration-preview.yml')
+            call('project-snapshot.yml')
+            self.assertTrue(list((directory / 'cache').glob('*.json')))
+            cached = call('service-configuration-preview.yml')
+            self.assertEqual(cold, cached)
+            values = cached['services']['docker-main']['configuration']
+            self.assertEqual('operator', values['accountName']['value'])
+            self.assertEqual('/home/operator/.local/share/docker', values['dataRoot']['value'])
+
+    def test_docker_defaults_use_native_ansible_with_prefix_and_overrides(self):
+        from ansible.parsing.dataloader import DataLoader
+        from ansible.template import Templar
+        from ansible_collections.platform.core.plugins.module_utils.service_configuration_resolution import resolve_service_configuration
+        definition = yaml.safe_load((ROOT / 'services/docker/service.yml').read_text())
+        defaults = yaml.safe_load((ROOT / 'services/docker/ansible_collections/platform/docker/roles/docker_rootless/defaults/main.yml').read_text())
+        catalog = {'definitions': {'docker': definition}}
+        for prefix, override, account, directory in (
+            ('', {}, 'docker', '/home/docker/.local/share/docker'),
+            ('qa', {}, 'qa-docker', '/home/qa-docker/.local/share/docker'),
+            ('qa', {'accountName': 'operator'}, 'operator', '/home/operator/.local/share/docker'),
+            ('qa', {'dataRoot': '/data/docker'}, 'qa-docker', '/data/docker'),
+            ('qa', {'accountName': 'operator', 'dataRoot': '/data/custom'}, 'operator', '/data/custom')):
+            with self.subTest(prefix=prefix, override=override):
+                desired = {'serviceDeployments': {'docker-main': {'serviceType': 'docker', 'mode': 'auto', 'configuration': override}}}
+                topology = {'status': 'PASS', 'resolvedTopology': desired}
+                configuration = resolve_service_configuration(topology, desired, catalog, {'docker': defaults})
+                before = json.dumps(configuration, sort_keys=True)
+                templar = Templar(loader=DataLoader(), variables={'platform_name_prefix': prefix})
+                result = _safe_configuration_preview(configuration, catalog, 'sha256:' + 'a' * 64, templar=templar)
+                values = result['services']['docker-main']['configuration']
+                self.assertEqual(account, values['accountName']['value'])
+                self.assertEqual(directory, values['dataRoot']['value'])
+                self.assertEqual('DEPLOYMENT_OVERRIDE' if 'dataRoot' in override else 'ROLE_DEFAULT', values['dataRoot']['source'])
+                self.assertEqual(before, json.dumps(configuration, sort_keys=True))
+                self.assertNotIn('accountCredential', values)
+        # Authored expressions and lookups remain deferred, not evaluated by preview.
+        desired['serviceDeployments']['docker-main']['configuration'] = {'accountName': "{{ lookup('env', 'HOME') }}"}
+        configuration = resolve_service_configuration(topology, desired, catalog, {'docker': defaults})
+        values = _safe_configuration_preview(configuration, catalog, 'sha256:' + 'a' * 64, templar=templar)['services']['docker-main']['configuration']
+        self.assertNotIn('value', values['accountName'])
+        self.assertNotIn('value', values['dataRoot'])
+
     def test_real_playbook_with_applications_resolves_default_data_directory(self):
         executable = shutil.which('ansible-playbook')
         if not executable:

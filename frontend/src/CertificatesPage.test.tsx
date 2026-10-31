@@ -281,7 +281,7 @@ describe("UI-01G2 CertificatesPage", () => {
     expect(selector.value).toBe("");
   });
 
-  it("renders only current Core identity evidence and keeps Core findings visible", () => {
+  it("renders current Core identity evidence without a separate verification action", () => {
     render(
       <CertificatesPage
         {...props({
@@ -309,6 +309,7 @@ describe("UI-01G2 CertificatesPage", () => {
       />,
     );
     expect(screen.getByText("kafka.example.test")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Проверить" })).toBeNull();
     expect(screen.getByText("192.0.2.44")).toBeTruthy();
     expect(screen.getByText(/kafka-main\/kafka-kafka-1 @ node1/)).toBeTruthy();
   });
@@ -340,11 +341,11 @@ describe("UI-01G2 CertificatesPage", () => {
         })}
       />,
     );
-    expect(screen.getByText(/CERTIFICATE_REISSUE_REQUIRED/)).toBeTruthy();
+    expect(screen.queryByText(/CERTIFICATE_REISSUE_REQUIRED/)).toBeNull();
     expect(screen.queryByText("kafka.example.test")).toBeNull();
   });
 
-  it("shows stale saved-revision evidence without a current PKI view", () => {
+  it("omits a separate stale verification panel", () => {
     render(
       <CertificatesPage
         {...props({
@@ -354,14 +355,14 @@ describe("UI-01G2 CertificatesPage", () => {
       />,
     );
     expect(
-      screen.getByText(
+      screen.queryByText(
         "Проверка устарела: запустите проверку сохранённой ревизии снова.",
       ),
-    ).toBeTruthy();
+    ).toBeNull();
     expect(screen.queryByText("Проект ещё не проверен Core.")).toBeNull();
   });
 
-  it("shows the safe verification error instead of stale PKI view status", () => {
+  it("leaves verification errors to the Project page", () => {
     render(
       <CertificatesPage
         {...props({
@@ -379,10 +380,10 @@ describe("UI-01G2 CertificatesPage", () => {
     );
 
     expect(
-      screen.getByText(
+      screen.queryByText(
         "Core не смог построить снимок проекта. Проект на диске не изменён.",
       ),
-    ).toBeTruthy();
+    ).toBeNull();
     expect(screen.queryByText("Проект ещё не проверен Core.")).toBeNull();
   });
 });

@@ -35,6 +35,12 @@ deployment editor remains on the right. Topology links select the exact
 deployment/member in that editor. Long parameter lists scroll inside the
 right-hand parameter column rather than moving the service list.
 
+Owner refinement (2026-10-31): omit service/member settings without a supported
+editor instead of rendering read-only placeholders. Ordinary computed settings
+remain visible. Project verification is invoked from the shared header and its
+findings are shown on Project; Topology and Certificates do not duplicate those
+actions/errors. Certificates retain current verified identity/SAN rows.
+
 Owner refinement (2026-10-27): Services, Applications and Installation remain
 unavailable until Core has returned the service configuration projection for the
 current saved revision and selected runtime. Fetch it automatically after

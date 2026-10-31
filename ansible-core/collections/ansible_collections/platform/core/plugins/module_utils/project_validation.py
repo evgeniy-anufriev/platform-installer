@@ -737,9 +737,9 @@ def validate_project(manifest, topology, desired_hosts, service_catalog, invento
     ]
     if bind_deployments or dns_client_deployments:
         try:
-            from .dns_resolution import resolve_dns_zones
+            from .dns_resolution import resolve_dns_zones, dns_client_server_reference
         except ImportError:
-            from dns_resolution import resolve_dns_zones
+            from dns_resolution import resolve_dns_zones, dns_client_server_reference
         dns_inventory_deployments = {}
         for deployment_id, participants in (host_scoped_deployments or {}).items():
             if not isinstance(participants, dict):
@@ -752,8 +752,7 @@ def validate_project(manifest, topology, desired_hosts, service_catalog, invento
         findings.extend(dns_result["findings"])
         for deployment_id, deployment in sorted(dns_client_deployments):
             prefix = "serviceDeployments.%s.configuration.dnsServerRef" % deployment_id
-            configuration = deployment.get("configuration", {})
-            reference = configuration.get("dnsServerRef") if isinstance(configuration, dict) else None
+            reference = dns_client_server_reference(deployment, deployments)
             referenced = deployments.get(reference) if isinstance(reference, str) else None
             if not isinstance(referenced, dict):
                 findings.append(_finding(

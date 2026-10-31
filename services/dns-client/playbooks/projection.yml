@@ -37,10 +37,10 @@
         platform_dns_client_runtime_projection: >-
           {{ platform_dns_client_runtime_projection | combine({'clients': {
                item.key: {
-                 'dnsServerRef': item.value.configuration.dnsServerRef,
-                 'managedZone': _platform_dns_client_dns.resolved_dns_zones.zones[item.value.configuration.dnsServerRef].zone,
-                 'servers': (([_platform_dns_client_dns.resolved_dns_zones.zones[item.value.configuration.dnsServerRef].primary] + _platform_dns_client_dns.resolved_dns_zones.zones[item.value.configuration.dnsServerRef].secondaries) | map(attribute='address') | list),
-                 'hostRecord': _platform_dns_client_dns.resolved_dns_zones.zones[item.value.configuration.dnsServerRef].primary.fqdn
+                 'dnsServerRef': _platform_dns_client_dns.dns_client_server_refs[item.key],
+                 'managedZone': _platform_dns_client_dns.resolved_dns_zones.zones[_platform_dns_client_dns.dns_client_server_refs[item.key]].zone,
+                 'servers': (([_platform_dns_client_dns.resolved_dns_zones.zones[_platform_dns_client_dns.dns_client_server_refs[item.key]].primary] + _platform_dns_client_dns.resolved_dns_zones.zones[_platform_dns_client_dns.dns_client_server_refs[item.key]].secondaries) | map(attribute='address') | list),
+                 'hostRecord': _platform_dns_client_dns.resolved_dns_zones.zones[_platform_dns_client_dns.dns_client_server_refs[item.key]].primary.fqdn
                }
              }}, recursive=True) }}
       loop: "{{ platform_desired_state.serviceDeployments | dict2items | selectattr('value.serviceType', 'equalto', 'dns-client') | list }}"

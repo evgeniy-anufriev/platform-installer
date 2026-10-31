@@ -233,9 +233,43 @@ def _project_effective_data_directories(configuration, catalog, hostvars):
     return configuration
 
 
-def _safe_configuration_preview(configuration, catalog, revision, hostvars=None):
+def _project_docker_defaults(configuration, catalog, templar):
+    """Render the two ordinary Docker defaults with Ansible, for display only."""
+    configuration = copy.deepcopy(configuration)
+    if templar is None:
+        return configuration
+    for service in configuration.get("services", {}).values():
+        if service.get("serviceType") != "docker":
+            continue
+        settings = catalog.get("definitions", {}).get("docker", {}).get("configuration", {}).get("settings", {})
+        values = service.get("configuration", {})
+        variables = {"platform_name_prefix": templar.available_variables.get("platform_name_prefix", "")}
+        for name in ("accountName", "dataRoot"):
+            item, descriptor = values.get(name, {}), settings.get(name, {})
+            variable = descriptor.get("roleVariable")
+            if not isinstance(variable, str):
+                continue
+            if item.get("state") == "RESOLVED" and ordinary_presentation_value(descriptor, item.get("value")):
+                variables[variable] = item["value"]
+                continue
+            if (item.get("state") != "DEFERRED" or item.get("source") != "RUNTIME_DEFERRED"
+                    or item.get("reason") != "NON_LITERAL_ROLE_DEFAULT" or not isinstance(item.get("expression"), str)):
+                continue
+            try:
+                value = templar.copy_with_new_env(available_variables=variables).template(
+                    item["expression"], fail_on_undefined=True, disable_lookups=True)
+            except AnsibleError:
+                continue
+            if ordinary_presentation_value(descriptor, value):
+                variables[variable] = value
+                values[name] = {"state": "RESOLVED", "source": "ROLE_DEFAULT", "value": value}
+    return configuration
+
+
+def _safe_configuration_preview(configuration, catalog, revision, hostvars=None, templar=None):
     """Project only bounded, manifest-mapped ordinary values for the UI."""
     configuration = _project_effective_data_directories(configuration, catalog, hostvars)
+    configuration = _project_docker_defaults(configuration, catalog, templar)
     definitions = catalog.get("definitions", {}) if isinstance(catalog, dict) else {}
     services = configuration.get("services", {}) if isinstance(configuration, dict) else {}
     if not isinstance(services, dict) or len(services) > 512:
@@ -526,7 +560,7 @@ class ActionModule(ActionBase):
                                                 reuse.scope_name(project_root, runtime)), expected)
                 if cached is not None:
                     return self._public_result(dict(changed=False, snapshot=_safe_configuration_preview(
-                        cached['execution_configuration'], catalog, expected['revision'], task_vars.get('hostvars', {}))))
+                        cached['execution_configuration'], catalog, expected['revision'], task_vars.get('hostvars', {}), self._templar)))
             repo_root = self._repo_root(catalog_path, catalog)
             stage = 'чтение desired state и библиотек приложений'
             desired_state = task_vars.get("platform_desired_state", {})
@@ -615,7 +649,7 @@ class ActionModule(ActionBase):
             )
             if self._task.args.get("configuration_only") is True:
                 _, revision = project_documents(project_root, [])
-                return self._public_result({"changed": False, "snapshot": _safe_configuration_preview(configuration, catalog, revision, hostvars)})
+                return self._public_result({"changed": False, "snapshot": _safe_configuration_preview(configuration, catalog, revision, hostvars, self._templar)})
             deployments = materialized.get("serviceDeployments", {}) if isinstance(materialized, dict) else {}
             definitions = catalog.get("definitions", {}) if isinstance(catalog, dict) else {}
             _, _, secret_findings = _service_runtime_secret_requirements(

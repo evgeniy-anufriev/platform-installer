@@ -95,6 +95,47 @@ def resolved(topology_value):
 
 
 class ServiceConfigurationResolutionTests(unittest.TestCase):
+    def test_dns_client_reference_and_bind_ttl_use_core_defaults(self):
+        definition = {'definitions': {
+            'bind': {'configuration': {'settings': {'defaultTtl': {'kind': 'MANAGED', 'type': 'integer',
+                'roleVariable': 'platform_bind_default_ttl', 'scopes': ['deployment'], 'validation': {'minimum': 1}}}}},
+            'dns-client': {'configuration': {'settings': {'dnsServerRef': {'kind': 'MANAGED', 'type': 'string',
+                'roleVariable': 'platform_dns_client_server_ref', 'scopes': ['deployment'], 'validation': {'minLength': 1}}}}}}}
+        deployments = {'z-dns': {'serviceType': 'bind'}, 'a-dns': {'serviceType': 'bind'}, 'client': {'serviceType': 'dns-client'}}
+        desired = {'serviceDeployments': deployments}
+        resolved_state = {'status': 'PASS', 'resolvedTopology': desired}
+        defaults = {'bind': {'platform_bind_default_ttl': 300}, 'dns-client': {}}
+        result = CONFIGURATION.resolve_service_configuration(resolved_state, desired, definition, defaults)
+        self.assertEqual('a-dns', result['services']['client']['configuration']['dnsServerRef']['value'])
+        self.assertEqual(300, result['services']['a-dns']['configuration']['defaultTtl']['value'])
+        deployments['client']['configuration'] = {'dnsServerRef': 'z-dns'}
+        deployments['a-dns']['configuration'] = {'defaultTtl': 900}
+        result = CONFIGURATION.resolve_service_configuration(resolved_state, desired, definition, defaults)
+        self.assertEqual('z-dns', result['services']['client']['configuration']['dnsServerRef']['value'])
+        self.assertEqual(900, result['services']['a-dns']['configuration']['defaultTtl']['value'])
+        self.assertEqual('DEPLOYMENT_OVERRIDE', result['services']['client']['configuration']['dnsServerRef']['source'])
+
+    def test_kafka_node_id_defaults_to_member_numeric_suffix_and_preserves_override(self):
+        definition = catalog(canonical=True)
+        definition['definitions']['kafka']['configuration']['settings']['nodeId'] = {
+            'kind': 'MANAGED', 'type': 'integer', 'roleVariable': 'platform_kafka_node_id',
+            'scopes': ['member'], 'validation': {'minimum': 0, 'maximum': 2147483647}}
+        for member_id, override, expected in (
+            ('kafka-1', None, 1), ('kafka-12', None, 12), ('broker-003', None, 3),
+            ('kafka-1', 42, 42), ('kafka-2', 0, 0),
+            ('kafka-main', None, None), ('kafka-2147483648', None, None)):
+            with self.subTest(member=member_id, override=override):
+                desired = topology(member_configuration={} if override is None else {'nodeId': override})
+                members = desired['serviceDeployments']['kafka-main']['members']
+                members[member_id] = members.pop('member-a')
+                result = CONFIGURATION.resolve_service_configuration(resolved(desired), desired, definition, {'kafka': {}})
+                setting = result['services']['kafka-main']['members'][member_id]['configuration'].get('nodeId')
+                if expected is None:
+                    self.assertIsNone(setting)
+                else:
+                    self.assertEqual(expected, setting['value'])
+                    self.assertEqual('ROLE_DEFAULT' if override is None else 'MEMBER_OVERRIDE', setting['source'])
+
     def test_tls_profile_is_required_without_a_role_default_and_explicit_choice_resolves(self):
         selected = catalog(canonical=True)
         selected['definitions']['kafka']['configuration']['settings']['tlsProfile'] = {

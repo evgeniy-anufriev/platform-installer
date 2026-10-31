@@ -489,7 +489,8 @@ export function ServicesPage({
   const visibleSettings = settings.filter(
     (setting) =>
       !setting.runtimeSecretRequirementRef &&
-      setting.editorShape !== "RUNTIME_SECRET_REFERENCE_OBJECT",
+      setting.editorShape !== "RUNTIME_SECRET_REFERENCE_OBJECT" &&
+      isEditable(setting, true),
   );
   const hasConfigurableSecrets =
     settings.some((setting) => !!setting.runtimeSecretRequirementRef) ||
@@ -892,7 +893,7 @@ export function ServicesPage({
             </>
           ) : (
             <div className="services-setting-list">
-              {visibleSettings.map((setting) => {
+              {visibleSettings.filter((setting) => setting.scopes.includes("deployment")).map((setting) => {
                 const current = settingValue(
                   savedOverrides,
                   selected.deploymentId,

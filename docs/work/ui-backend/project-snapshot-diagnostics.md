@@ -400,3 +400,87 @@ The verified QA runtime release remains installed on node101; no service
 deployment was changed. QA source bundle and safe local evidence remain under
 .runtime/qa/tls-autoselect for reproduction. Final Go tests/vet, frontend
 production build and Windows Wails production build PASS.
+
+## Service defaults and shared verification UI, 2026-10-31
+
+Owner requested native Core display of Docker accountName/dataRoot, numeric
+Kafka member nodeId defaults, hiding unsupported settings, a single header
+verification action with findings on Project, BIND TTL300 and automatic
+DNS-client selection. No Go file, DTO, desired-state store or UI infrastructure
+resolver was added.
+
+The existing snapshot action renders only Docker's two ordinary role-default
+expressions through Ansible Templar with lookups disabled, a bounded context
+of the project prefix and already resolved ordinary settings, and the existing
+presentation-value admission. Explicit settings retain precedence; authored
+expressions remain deferred. The private resolution is not mutated and both
+fresh and cached previews use this calculation. The shared configuration
+resolver derives absent Kafka nodeId from a member's terminal numeric suffix,
+within the nonnegative 32-bit range; explicit values, including zero, win.
+
+BIND declares platform_bind_default_ttl300; DNS resolution applies the same
+default only when defaultTtl is absent. A single DNS-reference helper selects
+the first BIND ID when dnsServerRef is absent, and is used by validation,
+configuration resolution and native DNS-client projection. Explicit invalid
+references still fail validation. No implicit value is written by Verify.
+
+Services hides unsupported/advanced editor placeholders, while member-only
+settings appear only in the member section. Certificates retains current
+identity/SAN evidence, with no separate Verify/error panel. Entry points and
+Topology omit duplicate Core findings/check summaries. Header Verify and
+Project diagnostics remain authoritative. The UI design records this owner
+refinement over the earlier mockup behavior.
+
+QA: current-tree RED OS101 suite155 PASS73.990s, including real Ansible Docker
+cold/cached previews and native DNS-client projection with absent reference/TTL.
+BIND16 and DNS-client8 contract tests PASS. An initial expanded run155 had one
+test-artifact isolation failure: the native test used the standard validation
+artifact path within the temporary source tree. The test now supplies its own
+temporary output path; the clean final suite passed. No bundle-builder source
+change was needed. Frontend App/Certificates/Topology124 PASS, typecheck/lint
+PASS; the final scope-filter regression covers unsupported and member-only
+fields. Go tests/vet PASS. Production frontend and Windows Wails builds PASS.
+
+Actual nonvisual React/Wails: separate dev bridge34147/Vite4187 with installed
+headless Edge, actual handlers and bound Go methods. Only the native folder
+picker was substituted by original OpenProject at the known QA root; no
+business response/Save/Verify was mocked. A Verify wrapper observed the original
+method's completion without changing its result. Existing unrelated Installer
+processes were preserved; no Plan approval, Start or service installation.
+
+Docker/Kafka source bundle8db5b2e4160d4448c5837f72057a206ac364fe41df85fec3769a061d80dec6ee
+was standard-published before readiness. Project docker-kafka-ui3:
+
+- Default account docker and /home/docker/.local/share/docker displayed.
+- Prefix qa produced qa-docker and /home/qa-docker/.local/share/docker at
+  revision34231867dc682be75e619001bc6c57510b1db72f99d62e811ae7bc87b7840a15.
+- Explicit account operator recomputed the path at
+  revisionab9e7086bbaed76d63e4466525e61d4a91bdda12b8b95e299c7cb89b6aa5ec22;
+  explicit /data/custom remained at
+  revision8df460e9dbf94cc39ed7006fd209b09f41c1bfc2dbc3e650d22f8b91246eed36.
+- Kafka kafka-1 displayed nodeId1; manual42 persisted at
+  revision331285c0bd0099cb886991ceaf98e5d973c040ab9c1e9826fb3fae4694daabb7.
+- The real flow exposed and corrected a member-only setting duplicated as a
+  deployment read-only row. The final flow has no unsupported placeholders.
+- Header Verify returned VERIFIED with two missing-password warnings. Actual
+  Project showed both Russian diagnostics; Certificates/Topology did not.
+
+Final source bundle0f1524ab444fdc35b9ca8768e3c311f7b6e1e25b917310dec09f1e23a3f60c38
+was standard-published before the DNS flow; the project lock and READY runtime
+matched. Project dns-default-ui created z-dns before a-dns through React:
+
+- TTL300 displayed at revisione23be2264cc95311a6e3b16398a9c54b0c355dd6aa11e151d34aecb6d67939a6;
+  explicit900 persisted at revision37ce8eea00ae1db33829e1a45de301e36604f07f49ee71e8fc62a799bd6b5eb6.
+- Core displayed a-dns as the default client reference without writing it to
+  desired state; manual z-dns persisted at
+  revision624405d3e2690120b004a02a7a3ec932037ea1efaad530404df48d175c1cd711.
+- Header Verify returned VERIFIED with zero findings. Both successful flows
+  recorded ERRORS=[] excluding only the established Wails IPC startup exception.
+
+Safe controllers/logs and test projects remain in .runtime/qa/docker-preview.
+QA runtime activation reused installed prerequisites; SSH trust was compared
+with independent known_hosts before explicit approval. The final QA release
+remains installed on101. Owned Wails/Vite/browser processes were stopped and
+temporary source workspaces cleaned through qa-sync. The prior local active
+cache was preserved and restored through the standard publisher. Visual/native
+picker and full installation/offline-closure acceptance are not claimed.

@@ -246,7 +246,7 @@ describe("UI-01F3 TopologyPage", () => {
     });
   });
 
-  it("shows INVALID findings without FQDN or provider preview", () => {
+  it("leaves INVALID Core findings to the Project page", () => {
     render(
       <ControlledTopology
         {...props()}
@@ -263,8 +263,8 @@ describe("UI-01F3 TopologyPage", () => {
         }}
       />,
     );
-    expect(screen.getByText(/Адреса и provider\/VIP не показаны/)).toBeTruthy();
-    expect(screen.getByText(/ENDPOINT_INVALID: safe finding/)).toBeTruthy();
+    expect(screen.queryByText(/Адреса и provider\/VIP не показаны/)).toBeNull();
+    expect(screen.queryByText(/ENDPOINT_INVALID: safe finding/)).toBeNull();
     expect(screen.queryByText("FQDN")).toBeNull();
   });
 

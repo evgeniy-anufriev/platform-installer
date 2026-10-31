@@ -10,10 +10,12 @@ try:
     from .project_validation import canonical_digest
     from .service_configuration_contract import canonical_settings, validate_settings
     from .kafka_schema_registry import configuration_registry_findings
+    from .dns_resolution import dns_client_server_reference
 except ImportError:
     from project_validation import canonical_digest
     from service_configuration_contract import canonical_settings, validate_settings
     from kafka_schema_registry import configuration_registry_findings
+    from dns_resolution import dns_client_server_reference
 
 
 API_VERSION = "platform.installer/resolved-service-configuration/v1alpha1"
@@ -431,6 +433,14 @@ def resolve_service_configuration(
                     return "DEPLOYMENT_OVERRIDE", _merge_mapping_defaults(default_value, document_overrides[logical]), document_origins[logical]
                 if role_variable in defaults:
                     return "ROLE_DEFAULT", defaults[role_variable], None
+                if service_type == "dns-client" and logical == "dnsServerRef":
+                    reference = dns_client_server_reference(desired, desired_deployments)
+                    if reference is not None:
+                        return "ROLE_DEFAULT", reference, None
+                if service_type == "kafka" and logical == "nodeId" and scope_member is not None:
+                    suffix = re.search(r"-([0-9]{1,10})$", scope_member.get("id", ""))
+                    if suffix and int(suffix[1]) <= 2147483647:
+                        return "ROLE_DEFAULT", int(suffix[1]), None
                 return None
 
             def resolve_variable(name):

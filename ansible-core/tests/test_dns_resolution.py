@@ -56,6 +56,21 @@ class DnsResolutionTests(unittest.TestCase):
     def resolve(self, state=None, inventory_hosts=None, inventory_placement=None):
         return DNS.resolve_dns_zones(state or desired(), catalog(), inventory_hosts or hosts(), inventory_placement or placement())
 
+    def test_default_ttl_and_dns_client_first_reference_preserve_authored_values(self):
+        state = desired()
+        state['serviceDeployments']['dns-main']['configuration'].pop('defaultTtl')
+        result = self.resolve(state=state)
+        self.assertEqual('PASS', result['status'], result['findings'])
+        self.assertEqual(300, result['zones']['dns-main']['defaultTtl'])
+        self.assertNotIn('defaultTtl', state['serviceDeployments']['dns-main']['configuration'])
+        state['serviceDeployments']['dns-main']['configuration']['defaultTtl'] = 900
+        self.assertEqual(900, self.resolve(state=state)['zones']['dns-main']['defaultTtl'])
+        deployments = {'z-dns': {'serviceType': 'bind'}, 'other': {'serviceType': 'kafka'}, 'a-dns': {'serviceType': 'bind'}}
+        self.assertEqual('a-dns', DNS.dns_client_server_reference({}, deployments))
+        self.assertEqual('z-dns', DNS.dns_client_server_reference({'configuration': {'dnsServerRef': 'z-dns'}}, deployments))
+        self.assertEqual('missing', DNS.dns_client_server_reference({'configuration': {'dnsServerRef': 'missing'}}, deployments))
+        self.assertIsNone(DNS.dns_client_server_reference({}, {}))
+
     def test_primary_and_two_secondaries_resolve_all_records(self):
         result = self.resolve()
         self.assertEqual("PASS", result["status"], result["findings"])

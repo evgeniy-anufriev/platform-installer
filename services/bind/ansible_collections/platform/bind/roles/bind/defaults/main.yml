@@ -1,4 +1,5 @@
 platform_bind_package: bind
+platform_bind_default_ttl: 300
 platform_bind_utils_package: bind-utils
 platform_bind_service_name: named
 platform_bind_binary: /usr/sbin/named

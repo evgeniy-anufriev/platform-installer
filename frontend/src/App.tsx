@@ -2833,7 +2833,6 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               onSetPKIStorePassword={setPKIStorePassword}
               onReview={review}
               onDiscard={discard}
-              onVerify={verify}
               onReturnToServices={
                 certificateReturn
                   ? () => {

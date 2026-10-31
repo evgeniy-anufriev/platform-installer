@@ -144,7 +144,6 @@ export function CertificatesPage({
   onSetPKIStorePassword,
   onReview,
   onDiscard,
-  onVerify,
   onReturnToServices,
 }: {
   managed: OpenResult["managed"];
@@ -160,7 +159,6 @@ export function CertificatesPage({
   onSetPKIStorePassword?: (value: string) => Promise<SessionCredentialStatus>;
   onReview: () => void;
   onDiscard: () => void;
-  onVerify?: () => void;
   onReturnToServices?: () => void;
 }) {
   const [editor, setEditor] = useState<{ kind: PKIKind; id?: string } | null>(
@@ -301,16 +299,9 @@ export function CertificatesPage({
           )}
         </article>
       </div>
-      <CoreVerification
+      <CertificateIdentities
         verification={verification || { status: "UNVERIFIED" }}
         view={verifiedPKI}
-        disabled={
-          busy ||
-          commandCount > 0 ||
-          verification?.status === "VERIFYING" ||
-          !onVerify
-        }
-        onVerify={onVerify || (() => undefined)}
       />
       {editor && (
         <CertificateDialog
@@ -344,50 +335,29 @@ export function CertificatesPage({
   );
 }
 
-function CoreVerification({
+function CertificateIdentities({
   verification,
   view,
-  disabled,
-  onVerify,
 }: {
   verification: VerificationStatus;
   view?: VerifiedPKIView;
-  disabled: boolean;
-  onVerify: () => void;
 }) {
-  const status =
-    verification.status === "INVALID"
-      ? "INVALID"
-      : verification.status === "UNAVAILABLE"
-        ? "UNAVAILABLE"
-        : verification.status === "STALE"
-          ? "STALE"
-          : verification.status === "VERIFIED"
-            ? view?.status === "CURRENT"
-              ? "CURRENT"
-              : "STALE"
-            : verification.status === "VERIFYING"
-              ? "NOT_VERIFIED"
-              : view?.status || "NOT_VERIFIED";
-  const findings = view?.findings || verification.findings || [];
+  if (verification.status !== "VERIFIED" || view?.status !== "CURRENT") return null;
   return (
     <article className="card certificate-verification">
       <div className="section-head">
         <div>
-          <h2>Проверка Core</h2>
+          <h2>Имена сертификатов и SAN</h2>
           <small>
             Имена и SAN отображаются только по актуальным данным проверки Core.
           </small>
         </div>
-        <button disabled={disabled} onClick={onVerify}>
-          {verification.status === "VERIFYING" ? "Проверка…" : "Проверить"}
-        </button>
       </div>
       <p className="muted">
         Влияние виртуального IP поставщика определяет Core после сохранения и
         проверки. Этот экран не выпускает и не перевыпускает сертификаты.
       </p>
-      {status === "CURRENT" && view?.identities?.length ? (
+      {view.identities?.length ? (
         <div className="verified-identities">
           {view.identities.map((identity) => (
             <section key={identity.id} className="verified-identity">
@@ -415,43 +385,13 @@ function CoreVerification({
             </section>
           ))}
         </div>
-      ) : status === "CURRENT" ? (
+      ) : (
         <p className="muted">
           Core подтвердил проект; потребителей сертификатов нет.
         </p>
-      ) : (
-        <p className={status === "INVALID" ? "field-error" : "muted"}>
-          {verificationMessage(
-            status,
-            view?.error?.message || verification.error?.message,
-          )}
-        </p>
-      )}
-      {!!findings.length && (
-        <ul className="verification-findings">
-          {findings.map((finding, index) => (
-            <li key={`${finding.code}:${finding.subjectId || index}`}>
-              <b>{finding.code}</b>: {finding.summary}
-              {finding.subjectId ? ` (${finding.subjectId})` : ""}
-            </li>
-          ))}
-        </ul>
       )}
     </article>
   );
-}
-
-function verificationMessage(status: string, error?: string) {
-  switch (status) {
-    case "INVALID":
-      return "Core обнаружил ошибки проверки. Сохранённый проект не откатывается.";
-    case "STALE":
-      return "Проверка устарела: запустите проверку сохранённой ревизии снова.";
-    case "UNAVAILABLE":
-      return error || "Для проверки нужен готовый узел выполнения.";
-    default:
-      return error || "Проект ещё не проверен Core.";
-  }
 }
 
 function sectionHint(kind: PKIKind) {

@@ -162,8 +162,6 @@ export function EntryPointsView({
   intents,
   providerIntents,
   deploymentIntents,
-  preview,
-  verificationStatus,
   busy,
   disabled,
   commandCount,
@@ -227,26 +225,9 @@ export function EntryPointsView({
   );
   return (
     <>
-      {preview?.status === "INVALID" && (
-        <section className="entry-findings" role="alert">
-          <strong>Адреса и provider/VIP не показаны: проверка Core выявила ошибки.</strong>
-          {preview.findings?.map((finding) => (
-            <p key={`${finding.code}-${finding.subjectId || ""}`}>
-              {finding.code}: {finding.summary}
-            </p>
-          ))}
-        </section>
-      )}
       {providerIntents.length > 0 && (
         <p className="entry-draft-notice" role="status">
           Конфигурация provider изменена в черновике; влияние на PKI/SAN определяет только Core.
-        </p>
-      )}
-      {!preview && verificationStatus !== "VERIFIED" && (
-        <p className="entry-draft-notice" role="status">
-          {verificationStatus === "UNAVAILABLE"
-            ? "Core сейчас недоступен; проект не изменён."
-            : "Актуальные данные Core пока не получены; сохраните проект и выполните проверку."}
         </p>
       )}
       <section className="title topology-title">

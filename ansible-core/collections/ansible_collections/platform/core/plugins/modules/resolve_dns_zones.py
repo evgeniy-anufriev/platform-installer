@@ -2,7 +2,7 @@
 from __future__ import absolute_import, division, print_function
 
 from ansible.module_utils.basic import AnsibleModule
-from ansible_collections.platform.core.plugins.module_utils.dns_resolution import resolve_dns_zones
+from ansible_collections.platform.core.plugins.module_utils.dns_resolution import resolve_dns_zones, dns_client_server_reference
 
 
 def main():
@@ -25,7 +25,11 @@ def main():
     )
     if result["status"] != "PASS":
         module.fail_json(msg="DNS resolution is blocked", error_code="DNS_RESOLUTION_BLOCKED", findings=result["findings"])
-    module.exit_json(changed=False, resolved_dns_zones=result)
+    deployments = module.params["desired_state"].get("serviceDeployments", {})
+    references = {name: dns_client_server_reference(value, deployments)
+                  for name, value in deployments.items()
+                  if isinstance(value, dict) and value.get("serviceType") == "dns-client"}
+    module.exit_json(changed=False, resolved_dns_zones=result, dns_client_server_refs=references)
 
 
 if __name__ == "__main__":

@@ -131,6 +131,11 @@ class ProjectValidationTests(unittest.TestCase):
         topology["serviceDeployments"]["dns-clients"]["configuration"]["dnsServerRef"] = "missing"
         result = VALIDATION.validate_project(manifest_value, topology, {}, service_catalog, ["node1", "node2"], host_scoped_deployments=placement, inventory_host_addresses=addresses)
         self.assertIn("DNS_CLIENT_SERVER_NOT_FOUND", [item["code"] for item in result["findings"]])
+        topology['serviceDeployments']['dns-clients']['configuration'].pop('dnsServerRef')
+        topology['serviceDeployments']['dns-main']['configuration'].pop('defaultTtl')
+        result = VALIDATION.validate_project(manifest_value, topology, {}, service_catalog, ['node1', 'node2'], host_scoped_deployments=placement, inventory_host_addresses=addresses)
+        self.assertEqual('PASS', result['status'], result['findings'])
+        self.assertNotIn('dnsServerRef', topology['serviceDeployments']['dns-clients']['configuration'])
 
     def test_definition_version_is_catalog_owned_and_optional_in_desired_state(self):
         topology = {"serviceDeployments": {"kafka-main": {

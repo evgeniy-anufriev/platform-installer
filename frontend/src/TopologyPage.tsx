@@ -646,8 +646,6 @@ export function TopologyPage({
               <dd>{commandCount} / 16 изменений</dd>
               <dt>Размещение</dt>
               <dd>Настраивается здесь</dd>
-              <dt>Проверка Core</dt>
-              <dd>Запускается отдельно после сохранения</dd>
             </dl>
             <p className="muted">
               Размещение и роли задаются в проекте; итоговую проверку выполняет Core после сохранения.
@@ -920,8 +918,6 @@ function ByServersView({
           <dd>{selected?.label.split(" · ").slice(1).join(" · ") || "—"}</dd>
           <dt>Размещений</dt>
           <dd>{assignments.length}</dd>
-          <dt>Проверка Core</dt>
-          <dd>После сохранения</dd>
         </dl>
         <p className="muted">
           Настраивайте размещение и параметры сервиса или участника в центральном
