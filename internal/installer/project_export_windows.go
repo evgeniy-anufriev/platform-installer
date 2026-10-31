@@ -331,7 +331,7 @@ func removeExportWindowsDirectory(directory *exportDirectory) error {
 	}
 	for _, entry := range entries {
 		if entry.kind == exportEntryDirectory {
-			child, openErr := directory.openDirectory([]string{entry.name})
+			child, openErr := directory.openDirectoryWithAccess([]string{entry.name}, windows.FILE_GENERIC_READ|windows.DELETE)
 			if openErr != nil {
 				return openErr
 			}
@@ -345,7 +345,7 @@ func removeExportWindowsDirectory(directory *exportDirectory) error {
 			}
 			continue
 		}
-		handle, openErr := openExportWindowsRelative(directory.handle, entry.name, false, windows.DELETE, windows.FILE_OPEN)
+		handle, openErr := openExportWindowsRelative(directory.handle, entry.name, false, windows.DELETE|windows.SYNCHRONIZE|windows.FILE_READ_ATTRIBUTES, windows.FILE_OPEN)
 		if openErr != nil {
 			return openErr
 		}
