@@ -20182,14 +20182,16 @@ func (a *App) CancelInstallationRun(runID string) InstallationRunOperation {
 }
 
 @@END
-@@PORTABLE {"path":"internal/desktop/installation_plan.go","mode":420,"size":23028,"sha256":"ea6a1cef7e447814ccbe5a400b00fb6b6d13d8f7d277185f7c39c78fe96e1c07","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":23028}
+@@PORTABLE {"path":"internal/desktop/installation_plan.go","mode":420,"size":23849,"sha256":"ab3167768bc872736ec83f97e407b885a704dba16e56cffe5b1d4bdcca6fe1c7","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":23849}
 package desktop
 
 import (
 	"errors"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 
 	"platform-installer/internal/executionnode"
 	"platform-installer/internal/installer"
@@ -20638,9 +20640,26 @@ func safeInstallationPlanFindings(findings []executionnode.Finding) []Installati
 		if finding.Code == "" || len(finding.Code) > 128 || finding.SafeMessage == "" || len(finding.SafeMessage) > 512 {
 			continue
 		}
-		result = append(result, InstallationPlanFinding{Code: finding.Code, SafeMessage: finding.SafeMessage})
+		message := finding.SafeMessage
+		if strings.HasPrefix(finding.Code, "ARTIFACT_") {
+			message = projectFindingMessageRU(finding.Code, message)
+		}
+		if strings.HasPrefix(finding.Code, "ARTIFACT_SOURCE_") &&
+			safePlanArtifactDetail(finding.ServiceDeployment) && safePlanArtifactDetail(finding.ArtifactName) &&
+			(finding.ArtifactVersion == "" || safePlanArtifactDetail(finding.ArtifactVersion)) {
+			version := finding.ArtifactVersion
+			if version == "" {
+				version = "не указана"
+			}
+			message = fmt.Sprintf("%s Сервис «%s», артефакт «%s», версия «%s».", message, finding.ServiceDeployment, finding.ArtifactName, version)
+		}
+		result = append(result, InstallationPlanFinding{Code: finding.Code, SafeMessage: message})
 	}
 	return result
+}
+
+func safePlanArtifactDetail(value string) bool {
+	return value != "" && len(value) <= 128 && strings.IndexFunc(value, unicode.IsControl) < 0
 }
 
 func installationPlanStateFor(record executionnode.PlanRecord) string {
@@ -28652,7 +28671,7 @@ fi
 `
 
 @@END
-@@PORTABLE {"path":"internal/executionnode/runtime_protocol.go","mode":420,"size":69402,"sha256":"c1867c32bb90a22ca3bb191c2e02da03966b0acf20c18a21fc74e3138e72967a","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"internal/executionnode/runtime_protocol.go","mode":420,"size":69916,"sha256":"9ba96967637f6da153d6b647a40fa47d2f14bb64159ba82c00785c61eac825a8","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
 package executionnode
 
 // Typed access to the fixed UI-BE-04C runtime protocol.  This is transport
@@ -29637,7 +29656,7 @@ func decodeEventPage(response map[string]any, runID string, afterSequence, limit
 	if !nextOK || next < 0 || next != float64(int(next)) || !moreOK || len(result) > limit {
 		return
 @@END
-@@PORTABLE {"path":"internal/executionnode/runtime_protocol.go","mode":420,"size":69402,"sha256":"c1867c32bb90a22ca3bb191c2e02da03966b0acf20c18a21fc74e3138e72967a","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":21402}
+@@PORTABLE {"path":"internal/executionnode/runtime_protocol.go","mode":420,"size":69916,"sha256":"9ba96967637f6da153d6b647a40fa47d2f14bb64159ba82c00785c61eac825a8","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":21916}
  ExecutionEventPage{}, errExecutionEventsResponseInvalid
 	}
 	page.NextSequence, page.HasMore = int(next), more
@@ -29839,6 +29858,18 @@ func decodeDeploymentPlan(value map[string]any) (DeploymentPlan, error) {
 				return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_REQUIREMENT_INVALID")
 			}
 			plan.ArtifactRequirements = append(plan.ArtifactRequirements, requirement)
+			id, _ := item["id"].(string)
+			deployment, _ := item["serviceDeployment"].(string)
+			if id != "" && deployment != "" {
+				for index := range plan.Findings {
+					finding := &plan.Findings[index]
+					if finding.field == "artifactRequirements."+id {
+						finding.ServiceDeployment = deployment
+						finding.ArtifactName = requirement.Name
+						finding.ArtifactVersion = requirement.Version
+					}
+				}
+			}
 		}
 	}
 	credentials, err := decodeRequiredCredentials(value["requiredCredentials"])
@@ -30060,7 +30091,11 @@ func decodeFindings(raw any) []Finding {
 		code, codeOK := value["code"].(string)
 		message, messageOK := value["safeMessage"].(string)
 		if codeOK && messageOK && code != "" && message != "" {
-			result = append(result, Finding{Code: code, SafeMessage: message})
+			field, _ := value["field"].(string)
+			if len(field) > 512 {
+				field = ""
+			}
+			result = append(result, Finding{Code: code, SafeMessage: message, field: field})
 		}
 	}
 	return result
@@ -30515,7 +30550,7 @@ func parseServerInformation(output []byte) (ServerInformation, error) {
 }
 
 @@END
-@@PORTABLE {"path":"internal/executionnode/service.go","mode":420,"size":16492,"sha256":"956f204ba97cc4e9094f4c1570fd4bf72abf5f668d8bb4ac880023b195ba3659","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":16492}
+@@PORTABLE {"path":"internal/executionnode/service.go","mode":420,"size":16892,"sha256":"d23aa1a3a600d3b4c5898216a92414dc3f0526afbbf0c07f2057f64957fca4cb","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":16892}
 // Package executionnode owns the narrow pre-Core readiness lifecycle.
 package executionnode
 
@@ -30558,7 +30593,13 @@ type Runtime struct {
 	BundleVersion, BundleDigest, CoreVersion, Protocol string
 	Ansible, Capabilities                              bool
 }
-type Finding struct{ Code, SafeMessage string }
+type Finding struct {
+	Code, SafeMessage string
+	ServiceDeployment string `json:"serviceDeployment,omitempty"`
+	ArtifactName      string `json:"artifactName,omitempty"`
+	ArtifactVersion   string `json:"artifactVersion,omitempty"`
+	field             string
+}
 type Inspection struct {
 	State                       State
 	OS, OSVersion, Architecture string
@@ -30727,15 +30768,15 @@ func NewService(transport Transport, options ...Option) *Service {
 
 func (s *Service) InspectExecutionNode(ctx context.Context, node Node) (Inspection, error) {
 	if err := validNode(node); err != nil {
-		return Inspection{State: Incompatible, Findings: []Finding{{"EXECUTION_NODE_INPUT_INVALID", "Execution Node connection details are invalid"}}}, nil
+		return Inspection{State: Incompatible, Findings: []Finding{{Code: "EXECUTION_NODE_INPUT_INVALID", SafeMessage: "Execution Node connection details are invalid"}}}, nil
 	}
 	if node.HostKey.State != "TRUSTED" {
-		return Inspection{State: Broken, Findings: []Finding{{"EXECUTION_NODE_HOST_KEY_UNTRUSTED", "Execution Node host key must be explicitly trusted"}}}, nil
+		return Inspection{State: Broken, Findings: []Finding{{Code: "EXECUTION_NODE_HOST_KEY_UNTRUSTED", SafeMessage: "Execution Node host key must be explicitly trusted"}}}, nil
 	}
 	inspection, err := s.transport.InspectExecutionNode(ctx, node)
 	if err == nil && inspection.OS != "" && !inspection.Elevation && inspection.State != Unreachable {
 		inspection.State = Broken
-		inspection.Findings = append(inspection.Findings, Finding{"EXECUTION_NODE_ELEVATION_REQUIRED", "Execution Node preparation requires non-interactive sudo access"})
+		inspection.Findings = append(inspection.Findings, Finding{Code: "EXECUTION_NODE_ELEVATION_REQUIRED", SafeMessage: "Execution Node preparation requires non-interactive sudo access"})
 	}
 	return inspection, err
 }
@@ -30748,7 +30789,7 @@ func (s *Service) PlanExecutionNodePreparation(ctx context.Context, node Node, b
 	bundle, err := s.resolveBundle(bundleRoot, inspection)
 	if err != nil {
 		findings := append([]Finding(nil), inspection.Findings...)
-		findings = append(findings, Finding{"EXECUTION_NODE_BUNDLE_UNAVAILABLE", "Проверенный набор установки недоступен для планирования."})
+		findings = append(findings, Finding{Code: "EXECUTION_NODE_BUNDLE_UNAVAILABLE", SafeMessage: "Проверенный набор установки недоступен для планирования."})
 		return Plan{APIVersion: APIVersion, Kind: "ExecutionNodePreparationPlan", NodeID: node.ID, State: inspection.State, Steps: []Step{{"bundle-invalid", "BLOCKED", false}}, Findings: findings}, nil
 	}
 	state := requiredState(inspection, bundle)
@@ -30769,7 +30810,7 @@ func platformMismatchFinding(inspection Inspection, platforms []executionbundle.
 	actual := []string{inspection.OS, inspection.OSVersion, inspection.Architecture}
 	for _, value := range actual {
 		if !safePlatformToken(value) {
-			return Finding{code, "Платформа узла содержит недопустимое или слишком длинное значение OS, VERSION_ID либо ARCH."}
+			return Finding{Code: code, SafeMessage: "Платформа узла содержит недопустимое или слишком длинное значение OS, VERSION_ID либо ARCH."}
 		}
 	}
 	supported := make([]string, 0, 4)
@@ -30788,7 +30829,7 @@ func platformMismatchFinding(inspection Inspection, platforms []executionbundle.
 	if len(message) > 512 {
 		message = "Платформа узла не указана в наборе установки; значения OS, VERSION_ID и ARCH слишком длинные для отображения."
 	}
-	return Finding{code, message}
+	return Finding{Code: code, SafeMessage: message}
 }
 
 func safePlatformToken(value string) bool {
@@ -30810,12 +30851,12 @@ func (s *Service) Prepare(ctx context.Context, node Node, bundleRoot, planID str
 	s.mu.Unlock()
 	if !exists || plan.ID != planID || plan.Digest != planDigest(plan) || !s.now().Before(plan.ExpiresAt) {
 		result.State = Broken
-		result.Findings = []Finding{{"EXECUTION_NODE_PLAN_INVALID", "Preparation plan is missing, changed or expired"}}
+		result.Findings = []Finding{{Code: "EXECUTION_NODE_PLAN_INVALID", SafeMessage: "Preparation plan is missing, changed or expired"}}
 		return result, nil
 	}
 	if plan.NodeID != node.ID {
 		result.State = Broken
-		result.Findings = []Finding{{"EXECUTION_NODE_PLAN_NODE_MISMATCH", "Preparation plan belongs to another Execution Node"}}
+		result.Findings = []Finding{{Code: "EXECUTION_NODE_PLAN_NODE_MISMATCH", SafeMessage: "Preparation plan belongs to another Execution Node"}}
 		return result, nil
 	}
 	inspection, err := s.InspectExecutionNode(ctx, node)
@@ -30825,7 +30866,7 @@ func (s *Service) Prepare(ctx context.Context, node Node, bundleRoot, planID str
 	bundle, err := s.resolveBundle(bundleRoot, inspection)
 	if err != nil || bundle.Digest != plan.BundleDigest {
 		result.State = Broken
-		result.Findings = []Finding{{"EXECUTION_NODE_BUNDLE_CHANGED", "Offline runtime bundle changed after planning"}}
+		result.Findings = []Finding{{Code: "EXECUTION_NODE_BUNDLE_CHANGED", SafeMessage: "Offline runtime bundle changed after planning"}}
 		return result, nil
 	}
 	state := requiredState(inspection, bundle)
@@ -30854,7 +30895,7 @@ func (s *Service) Prepare(ctx context.Context, node Node, bundleRoot, planID str
 	result.Changed, result.Runtime = true, runtime
 	if runtime.BundleDigest != bundle.Digest || runtime.Protocol != executionbundle.ProtocolVersion || !runtime.Ansible || !runtime.Capabilities {
 		result.State = Broken
-		result.Findings = []Finding{{"EXECUTION_NODE_RUNTIME_VERIFY_FAILED", "Prepared runtime did not pass the capability handshake"}}
+		result.Findings = []Finding{{Code: "EXECUTION_NODE_RUNTIME_VERIFY_FAILED", SafeMessage: "Prepared runtime did not pass the capability handshake"}}
 		return result, nil
 	}
 	result.State = Ready
