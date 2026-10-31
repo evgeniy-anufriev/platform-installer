@@ -63,3 +63,15 @@ with tempfile.TemporaryDirectory(prefix="platform-core-diag-") as work:
         "-e", json.dumps(variables),
     ], env=env)
 PY
+
+sudo sh -c '
+r=$(readlink -f /var/lib/platform-installer/runtime/current)
+p="$r/ansible-core/collections/ansible_collections/platform/core/plugins"
+
+echo "=== action/project_snapshot.py ==="
+head -n 30 "$p/action/project_snapshot.py"
+grep -n "def _materialize_resolved_members" "$p/action/project_snapshot.py"
+
+echo "=== module_utils/service_configuration_resolution.py ==="
+head -n 30 "$p/module_utils/service_configuration_resolution.py"
+'
