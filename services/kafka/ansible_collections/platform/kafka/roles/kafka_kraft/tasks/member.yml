@@ -234,7 +234,7 @@
 - name: Определение стратегии формата хранения Kafka
   ansible.builtin.set_fact:
     _platform_kafka_storage_format_strategy: >-
-      {{ 'INITIAL_CONTROLLERS'
+      {{ 'STATIC' if platform_kafka_quorum_mode == 'static' else ('INITIAL_CONTROLLERS'
          if (platform_kafka_quorum_mode == 'dynamic'
              and 'controller' in kafka_member.roles
              and kafka_member.directory_id is defined)
@@ -243,7 +243,7 @@
                    and 'controller' in kafka_member.roles
                    and _platform_kafka_controller_instances | length == 1
                    and kafka_member.directory_id is not defined)
-               else 'NO_INITIAL_CONTROLLERS') }}
+               else 'NO_INITIAL_CONTROLLERS')) }}
   when:
     - not (platform_kafka_verify_only | bool)
     - not platform_kafka_member_metadata.stat.exists
@@ -281,10 +281,11 @@
           {{ [platform_kafka_install_directory ~ '/bin/kafka-storage' ~ platform_kafka_script_extension,
               'format', '--cluster-id', platform_kafka_cluster_id,
               '--config', kafka_member.config_directory ~ '/server.properties']
-             + (['--initial-controllers', _platform_kafka_initial_controllers | trim]
+             + ([] if _platform_kafka_storage_format_strategy == 'STATIC' else
+               (['--initial-controllers', _platform_kafka_initial_controllers | trim]
                 if _platform_kafka_storage_format_strategy == 'INITIAL_CONTROLLERS'
                 else (['--standalone'] if _platform_kafka_storage_format_strategy == 'STANDALONE_COMPATIBILITY'
-                      else ['--no-initial-controllers']))
+                      else ['--no-initial-controllers'])))
              + (['@' ~ kafka_storage_scram_args.path] if _platform_kafka_scram_enabled | bool else []) }}
       register: kafka_storage_format_result
       failed_when: false

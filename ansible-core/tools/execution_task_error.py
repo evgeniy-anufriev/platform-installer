@@ -166,6 +166,7 @@ CORE_DIAGNOSTIC_CODES = frozenset(('PROJECT_SNAPSHOT_INPUT_INVALID',
     'KAFKA_CLUSTER_ID_DISCOVERY_CONFLICT',
     'KAFKA_CLUSTER_ID_METADATA_MISMATCH',
     'KAFKA_DIRECTORY_ID_METADATA_MISMATCH',
+    'KAFKA_DYNAMIC_QUORUM_UNSUPPORTED',
     'KAFKA_IDENTITY_DISCOVERY_DUPLICATE',
     'KAFKA_IDENTITY_DISCOVERY_INCOMPLETE',
     'KAFKA_IDENTITY_DISCOVERY_REQUIRED',
@@ -212,6 +213,9 @@ def safe_task_error(result, no_log=False):
     code = core_error_code(result)
     if code:
         summary = 'Core operation failed (' + code + ')'
+        if code == 'KAFKA_DYNAMIC_QUORUM_UNSUPPORTED':
+            summary = ('Дистрибутив Kafka не поддерживает динамический кворум. '
+                       'Для нового кластера выберите quorumMode=static или совместимый дистрибутив.')
         value = result.get('msg')
         if isinstance(value, dict):
             for key, minimum, maximum in (('rc', -255, 65535), ('step', 0, 65535), ('http_status', 0, 599), ('curl_exit', 0, 255), ('partial_count', 0, 65535), ('elapsed_ms', 0, 86400000)):

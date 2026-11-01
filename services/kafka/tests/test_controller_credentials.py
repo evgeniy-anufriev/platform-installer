@@ -31,6 +31,7 @@ class ControllerCredentialsTests(unittest.TestCase):
 
     def test_controller_baseline_uses_plain_over_tls_and_only_admin_superuser(self):
         defaults = yaml.safe_load((ROLE/'defaults/main.yml').read_text())
+        self.assertEqual('static', defaults['platform_kafka_quorum_mode'])
         self.assertEqual('SASL_SSL',defaults['platform_kafka_listeners']['CONTROLLER']['securityProtocol'])
         member = (ROLE/'tasks/member.yml').read_text()
         self.assertIn("'sasl.mechanism.controller.protocol': 'PLAIN'",member)

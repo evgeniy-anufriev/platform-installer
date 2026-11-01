@@ -186,6 +186,14 @@ and do not restart the service. Credential/unit changes participate in the
 existing member restart condition. Existing caller EnvironmentFile overrides
 must preserve the managed JAAS JVM option.
 
+The role defaults to `platform_kafka_quorum_mode: static`. Static quorum renders
+`controller.quorum.voters` and formats without dynamic-only CLI flags, supporting
+Kafka 3.8 distributions such as Confluent 7.8. Explicit `dynamic` remains an
+operator choice; after distribution installation and before member formatting,
+the role checks `kafka-storage format --help` for the required dynamic flags.
+Unsupported CLI capabilities stop with `KAFKA_DYNAMIC_QUORUM_UNSUPPORTED` and a
+fixed Russian diagnostic. No automatic quorum-mode conversion is performed.
+
 For empty storage, the normal `kafka-storage format` call seeds the same admin
 as SCRAM-SHA-512 using `--add-scram`. An invocation-private0600 argfile in `/run`
 contains salt and saltedPassword, never a password in process argv; it is always

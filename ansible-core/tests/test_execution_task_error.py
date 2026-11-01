@@ -8,6 +8,17 @@ from execution_task_error import safe_task_error
 
 
 class TaskErrorTests(unittest.TestCase):
+    def test_dynamic_quorum_failure_has_fixed_russian_diagnostic(self):
+        error = safe_task_error({'msg': {'code': 'KAFKA_DYNAMIC_QUORUM_UNSUPPORTED',
+                                        'message': 'private-untrusted-output'},
+                                 'stdout': 'private-secret'})
+        self.assertEqual('KAFKA_DYNAMIC_QUORUM_UNSUPPORTED', error['code'])
+        self.assertIn('quorumMode=static', error['summary'])
+        self.assertIn('Дистрибутив Kafka', error['summary'])
+        self.assertNotIn('private', json.dumps(error))
+        self.assertEqual('ANSIBLE_FAILURE_REDACTED', safe_task_error(
+            {'msg': {'code': error['code']}}, no_log=True)['code'])
+
     def test_vault_write_code_is_public_without_private_response(self):
         value = safe_task_error({'msg': 'APPLICATION_VAULT_DOCUMENT_WRITE_FAILED',
                                  'stdout': 'private-token', 'body': 'private-password'})

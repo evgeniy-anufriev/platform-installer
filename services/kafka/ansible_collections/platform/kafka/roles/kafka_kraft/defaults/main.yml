@@ -63,7 +63,7 @@ platform_kafka_startup_readiness_retries: 30
 platform_kafka_startup_readiness_delay: 2
 platform_kafka_instances: []
 platform_kafka_log_directory: /var/log/kafka
-platform_kafka_quorum_mode: dynamic
+platform_kafka_quorum_mode: static
 platform_kafka_clean_install: false
 platform_kafka_confirm_destructive_reset: ''
 platform_pki_materialization_plans: []

@@ -43,6 +43,22 @@
     force: true
   when: platform_kafka_install_directory != ('/opt/' ~ platform_kafka_archive_directory)
 
+- name: Получение поддерживаемых параметров форматирования Kafka
+  ansible.builtin.command:
+    argv: ["{{ platform_kafka_install_directory }}/bin/kafka-storage{{ platform_kafka_script_extension }}", format, --help]
+  register: _platform_kafka_storage_format_help
+  changed_when: false
+  when: platform_kafka_quorum_mode == 'dynamic'
+
+- name: Проверка поддержки динамического кворума до форматирования Kafka
+  ansible.builtin.assert:
+    that:
+      - "'--initial-controllers' in _platform_kafka_storage_format_help.stdout"
+      - "'--no-initial-controllers' in _platform_kafka_storage_format_help.stdout"
+      - "'--standalone' in _platform_kafka_storage_format_help.stdout"
+    fail_msg: KAFKA_DYNAMIC_QUORUM_UNSUPPORTED
+  when: platform_kafka_quorum_mode == 'dynamic'
+
 - name: Создание общей группы Kafka
   ansible.builtin.group:
     name: "{{ platform_kafka_group }}"

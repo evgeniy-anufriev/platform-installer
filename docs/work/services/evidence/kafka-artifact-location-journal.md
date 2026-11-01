@@ -87,3 +87,27 @@ Current source bytes were restored before cleanup.
 No review invoked, following the owner's instruction. Build host102 still
 times out on SSH; updated-bundle React/Wails installation remains untested.
 No distributed bundle, service or active execution was modified.
+
+## Static storage formatting and role default
+
+Owner's Confluent7.8 CLI help has no --initial-controllers,
+--no-initial-controllers or --standalone. The existing static configuration
+already rendered controller.quorum.voters, but its format argv incorrectly
+appended --no-initial-controllers. STATIC now has no dynamic-only flags.
+Dynamic strategies retain their three existing command shapes.
+
+After extraction, before member formatting, dynamic mode checks the installed
+CLI's format --help. Missing capabilities produce the closed code
+KAFKA_DYNAMIC_QUORUM_UNSUPPORTED; the existing diagnostic allowlist exports a
+fixed Russian explanation, never arbitrary CLI text. This is a target-side
+pre-format check, not target-free Project Verify or pre-plan capability proof.
+The owner also explicitly requested role default quorum mode static; an
+explicit desired dynamic override remains effective. No automatic migration.
+
+31 focused RED OS101 tests PASS: storage/config command scenarios6,
+safe diagnostics10, controller/SCRAM credentials3, shared distribution8,
+artifact location4. New native Ansible tests execute production config/strategy/
+format tasks against legacy and modern CLI-interface fixtures; they are not
+actual Confluent7.8 binary installation acceptance. Owner subsequently authorized
+real Confluent7.8 static installation on the three test VMs and separate official
+DEV artifact acquisition; that acceptance is in progress.
