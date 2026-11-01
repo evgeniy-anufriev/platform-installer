@@ -111,3 +111,26 @@ format tasks against legacy and modern CLI-interface fixtures; they are not
 actual Confluent7.8 binary installation acceptance. Owner subsequently authorized
 real Confluent7.8 static installation on the three test VMs and separate official
 DEV artifact acquisition; that acceptance is in progress.
+
+### Confluent7.8 real-binary listener correction (2026-11-01)
+
+Owner-authorized real React/Wails install of the official SHA256-verified
+Confluent7.8.0 payload reached storage format but FAILED:
+installer-c50aeb4e1cd521d7a05e8a8d8066cad7, plan-9efaaa85dea321c97f6d169c,
+revision a5b9368c1ee09f641a8e03958261b9de5ba49962636ff8deadd4812a147befb2,
+bundle346e8ec9d6786c9185c1d54f0ad55e1b072e52dc712c187f8955e47e9478c159.
+An isolated format probe reproduced Kafka3.8 IllegalArgumentException:
+advertised.listeners included the controller listener on a combined broker.
+Static flags and salted SCRAM argfile themselves passed isolated native probes.
+
+Production projection now advertises only broker listeners and omits
+advertised.listeners for controller-only members. Bound listeners and the
+controller quorum addresses remain unchanged. No existing data was formatted,
+deleted or migrated by the diagnostic probes.
+
+RED OS102 current-source tests: test_storage_format_runtime.py 8 PASS,
+including actual Confluent7.8.0 storage formatting using production listener,
+broker-config, static-quorum and format tasks in an isolated temporary directory.
+Seven CLI fixture scenarios remain supplementary; they now reject advertised
+controller endpoints. Real three-node installation acceptance remains pending.
+No independent review invoked, per explicit owner instruction.

@@ -16,7 +16,7 @@ ROLE = ROOT / 'services/kafka/ansible_collections/platform/kafka/roles/kafka_kra
 
 @unittest.skipUnless(shutil.which('ansible-playbook'), 'Ansible runtime required')
 class StorageFormatRuntimeTests(unittest.TestCase):
-    def probe(self, mode, modern=False, roles=None, directory_id=True, controller_count=3):
+    def probe(self, mode, modern=False, roles=None, directory_id=True, controller_count=3, native=False):
         member_tasks = yaml.safe_load((ROLE / 'tasks/member.yml').read_text())
         preparation = yaml.safe_load((ROLE / 'tasks/prepare_host.yml').read_text())
         strategy = next(task for task in member_tasks if task['name'] == 'Определение стратегии формата хранения Kafka')
@@ -40,27 +40,43 @@ parser.add_argument('--standalone', action='store_true')
 ''' if modern else '') + '''
 args = parser.parse_args()
 config = pathlib.Path(args.config).read_text()
+values = dict(line.split('=', 1) for line in config.splitlines() if '=' in line)
+advertised = values.get('advertised.listeners', '')
+if 'CONTROLLER://' in advertised:
+    parser.error('controller listener must not be advertised to broker clients')
+if 'broker' not in values.get('process.roles', '') and 'advertised.listeners' in values:
+    parser.error('controller-only member must omit advertised.listeners')
 ''' + ('' if modern else '''
 if 'controller.quorum.voters=' not in config or 'controller.quorum.bootstrap.servers=' in config:
     parser.error('legacy static quorum configuration required')
 ''') + 'pathlib.Path(' + repr(str(record)) + ').write_text(json.dumps(sys.argv[1:]))\n')
             cli.chmod(0o755)
-            member = {'roles': roles or ['broker', 'controller'], 'config_directory': str(base)}
+            member = {'roles': roles or ['broker', 'controller'], 'config_directory': str(base),
+                      'node_id': 1, 'data_directory': str(base / 'data'), 'advertised_host': 'localhost',
+                      'listeners': {'CONTROLLER': {'purpose': 'controller', 'securityProtocol': 'PLAINTEXT', 'port': 19193},
+                                    'REPLICATION': {'purpose': 'interBroker', 'securityProtocol': 'PLAINTEXT', 'port': 19192},
+                                    'CLIENT': {'purpose': 'client', 'securityProtocol': 'PLAINTEXT', 'port': 19194}}}
             if directory_id:
                 member['directory_id'] = 'qa-directory-id'
-            variables = dict(platform_kafka_install_directory=str(base), platform_kafka_script_extension='',
+            variables = dict(platform_kafka_install_directory=os.environ['KAFKA_STORAGE_NATIVE_HOME'] if native else str(base), platform_kafka_script_extension='',
                 platform_kafka_user=getpass.getuser(), platform_kafka_quorum_mode=mode,
-                platform_kafka_cluster_id='qa-cluster-id', platform_kafka_verify_only=False,
+                platform_kafka_cluster_id='MkU3OEVBNTcwNTJENDM2Qk', platform_kafka_verify_only=False,
                 platform_kafka_member_metadata={'stat': {'exists': False}}, kafka_member=member,
                 _platform_kafka_scram_enabled=False,
                 _platform_kafka_controller_instances=[{}] * controller_count,
                 _platform_kafka_initial_controllers='1@node1:9093:qa-directory-id',
-                _platform_kafka_static_quorum_voters='1@node1:9093,2@node2:9093,3@node3:9093',
+                _platform_kafka_static_quorum_voters='1@127.0.0.1:19193,2@127.0.0.1:19293,3@127.0.0.1:19393',
                 _platform_kafka_controller_bootstrap_servers='node1:9093,node2:9093,node3:9093',
-                kafka_effective_config={})
+                platform_kafka_advanced_config={}, platform_kafka_log_retention_hours=168, kafka_effective_config={})
             tasks = [task for task in preparation if task.get('register') == '_platform_kafka_storage_format_help'
                      or task['name'] == 'Проверка поддержки динамического кворума до форматирования Kafka']
             tasks += [task for task in member_tasks if task['name'] in (
+                'Создание проекции Kafka listeners экземпляра с учётом ролей',
+                'Преобразование проекции именованных Kafka listeners в список Ansible',
+                'Выбор listeners экземпляра Kafka',
+                'Формирование строк действующих именованных Kafka listeners',
+                'Создание действующей конфигурации экземпляра службы',
+                'Добавление действующей конфигурации брокера',
                 'Добавление запрошенной проекции динамического кворума',
                 'Добавление статической проекции кворума при явном выборе')]
             tasks += [{'ansible.builtin.template': {
@@ -82,6 +98,9 @@ if 'controller.quorum.voters=' not in config or 'controller.quorum.bootstrap.ser
                 self.assertFalse((base / 'server.properties').exists())
                 return
             self.assertEqual(0, result.returncode, output[-3000:])
+            if native:
+                self.assertTrue((base / 'data/meta.properties').is_file())
+                return
             arguments = json.loads(record.read_text())
             flags = [item for item in arguments if item in (
                 '--initial-controllers', '--no-initial-controllers', '--standalone')]
@@ -111,6 +130,13 @@ if 'controller.quorum.voters=' not in config or 'controller.quorum.bootstrap.ser
 
     def test_modern_broker_format_keeps_no_initial_controllers(self):
         self.probe('dynamic', modern=True, roles=['broker'], directory_id=False)
+
+    def test_static_controller_only_omits_advertised_listeners(self):
+        self.probe('static', roles=['controller'])
+
+    @unittest.skipUnless(os.environ.get('KAFKA_STORAGE_NATIVE_HOME'), 'explicit installed Kafka required')
+    def test_native_static_format_accepts_production_listener_projection(self):
+        self.probe('static', native=True)
 
 
 if __name__ == '__main__':
