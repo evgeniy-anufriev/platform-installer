@@ -987,6 +987,53 @@ it("refreshes a running installation without navigation or a SUCCEEDED event", a
   view.unmount();
 });
 
+it.each([false, true])("clears a previous run-less error only after a successful fresh plan (blocked=%s)", async (blocked) => {
+  let attempted = false;
+  const plan = {
+    id: "old-plan", status: "EXECUTABLE", approved: true,
+    projectRevision: "sha256:old", phases: [], acknowledgements: [], runtime: {},
+    expiresAt: "2099-01-01T00:00:00Z",
+  };
+  const create = vi.fn().mockResolvedValue(blocked
+    ? { status: "BLOCKED", error: { code: "NEW_PLAN_BLOCKED", message: "Новый план не создан" } }
+    : { status: "PLAN_REVIEW", plan: { ...plan, id: "fresh-plan", approved: false } });
+  const value = api({
+    getInstallationState: vi.fn().mockImplementation(async () => ({
+      status: attempted ? "READY_TO_PLAN" : "PLAN_APPROVED",
+      project: { revision: "sha256:old", hasUnsavedChanges: false },
+      executionNode: { status: "READY" },
+      plan: { status: attempted ? "NONE" : "PLAN_APPROVED", planId: attempted ? undefined : "old-plan" },
+      prerequisites: [],
+    })),
+    getInstallationPlan: vi.fn().mockResolvedValue({ status: "PLAN_APPROVED", plan }),
+    createInstallationPlan: create,
+    startApprovedInstallation: vi.fn().mockImplementation(async () => {
+      attempted = true;
+      return { status: "BLOCKED", error: {
+        code: "INSTALLATION_RUN_NOT_FOUND", message: "Выполнение не известно текущему сеансу" } };
+    }),
+  });
+  value.chooseProject.mockResolvedValue({ ...project,
+    managed: { ...project.managed, deployments: {} } });
+  render(<App api={value} />);
+  await userEvent.click(screen.getByRole("button", { name: "Открыть папку проекта" }));
+  await userEvent.click(await screen.findByRole("button", { name: "Установка" }));
+  await userEvent.click(screen.getByRole("tab", { name: "План" }));
+  await userEvent.click(await screen.findByRole("button", { name: "Начать выполнение" }));
+  expect(await screen.findByText("Запуск не начался")).toBeTruthy();
+  await userEvent.click(screen.getByRole("tab", { name: "План" }));
+  await userEvent.click(await screen.findByRole("button", { name: "Сформировать свежий план" }));
+  await waitFor(() => expect(create).toHaveBeenCalledTimes(1));
+  if (blocked) {
+    expect(await screen.findByText("Запуск не начался")).toBeTruthy();
+    expect(await screen.findByText("NEW_PLAN_BLOCKED")).toBeTruthy();
+  } else {
+    await waitFor(() => expect(screen.queryByText("Запуск не начался")).toBeNull());
+    expect(screen.queryByText("INSTALLATION_RUN_NOT_FOUND")).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Ошибки плана" })).toBeNull();
+  }
+});
+
 it("replays late failure events before closing a terminal subscription", async () => {
   let handler:
     | Parameters<

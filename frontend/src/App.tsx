@@ -1116,6 +1116,13 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
                 },
               };
       setInstallationPlan(operation);
+      if (operation.plan && !operation.error) {
+        // A new plan supersedes an earlier failed attempt without a run.
+        // Preserve actual run history and its observation/result errors.
+        setInstallationRun((current) =>
+          current?.run ? current : undefined,
+        );
+      }
       await refreshInstallationState();
       setInstallationTab("plan");
     } finally {
