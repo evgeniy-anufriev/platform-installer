@@ -63090,10 +63090,11 @@ $platform_session$;
 {% endfor %}
 
 @@END
-@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/postgresql/defaults/main.yml","mode":420,"size":2230,"sha256":"28a6d731a7ff7cf0f6156af42635d9bdea425fe2ec14c87019d0462cf508be95","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2230}
+@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/postgresql/defaults/main.yml","mode":420,"size":2281,"sha256":"0af3e31a5709a7d518158a172f02a0498ed5e4c2fb39e04afe38912fde4e7d21","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2281}
 platform_postgresql_version: "16.14"
 platform_postgresql_binary_directory: ""
 platform_postgresql_pg_auto_failover_version: "2.2"
+platform_postgresql_pg_autoctl_create_timeout: 300
 platform_postgresql_mode: standalone
 platform_postgresql_deployment_id: "{{ platform_execution_service_deployment | default('postgresql', true) }}"
 platform_postgresql_port: 5432
@@ -63574,7 +63575,7 @@ platform_postgresql_pgpass_file: "/var/lib/pgsql/.pgpass"
     not (platform_postgresql_clean_install | bool and platform_postgresql_clear_only | bool)
 
 @@END
-@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/postgresql/tasks/pg_auto_failover.yml","mode":420,"size":7561,"sha256":"275e55601c42223af56744f3e6fa88f6dd52801e36aa38ed8a11cd0f1d12fc3e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7561}
+@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/postgresql/tasks/pg_auto_failover.yml","mode":420,"size":7835,"sha256":"718c64de4430a38abb1dcb2658c89d40619fb16a34ef6493c542ceb4cb8f778c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7835}
 ---
 - name: Выбор текущего экземпляра службы pg_auto_failover из явной топологии
   ansible.builtin.set_fact:
@@ -63681,6 +63682,10 @@ platform_postgresql_pgpass_file: "/var/lib/pgsql/.pgpass"
 - name: Создание монитора pg_auto_failover
   ansible.builtin.command:
     argv:
+      - timeout
+      - --signal=TERM
+      - --kill-after=5s
+      - "{{ platform_postgresql_pg_autoctl_create_timeout | int }}s"
       - pg_autoctl
       - create
       - monitor
@@ -63713,6 +63718,10 @@ platform_postgresql_pgpass_file: "/var/lib/pgsql/.pgpass"
 - name: Создание регистрации экземпляра службы данных pg_auto_failover
   ansible.builtin.command:
     argv:
+      - timeout
+      - --signal=TERM
+      - --kill-after=5s
+      - "{{ platform_postgresql_pg_autoctl_create_timeout | int }}s"
       - pg_autoctl
       - create
       - postgres
@@ -63746,7 +63755,7 @@ platform_postgresql_pgpass_file: "/var/lib/pgsql/.pgpass"
   register: platform_postgresql_pg_autoctl_create_postgres
   retries: 20
   delay: 3
-  until: platform_postgresql_pg_autoctl_create_postgres.rc == 0
+  until: platform_postgresql_pg_autoctl_create_postgres.rc in [0, 124, 137]
   changed_when: true
 
 @@END
@@ -64443,12 +64452,13 @@ platform_postgresql_pgpass_file: "/var/lib/pgsql/.pgpass"
   when: not (platform_postgresql_verify_only | bool)
 
 @@END
-@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/postgresql/tasks/validate.yml","mode":420,"size":7308,"sha256":"8cffc65a8511f5383e2a1fc821f0d8dc02c3ce6a7aeb71f86e04535e880be843","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7308}
+@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/postgresql/tasks/validate.yml","mode":420,"size":7422,"sha256":"58723f13287d3abc6cd4433c0e062a9ecf33f9fd16ec9b6a4449db481aa68d1b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7422}
 ---
 - name: Проверка режима PostgreSQL
   ansible.builtin.assert:
     that:
       - platform_postgresql_mode in ['standalone', 'pg_auto_failover']
+      - platform_postgresql_mode != 'pg_auto_failover' or platform_postgresql_pg_autoctl_create_timeout | int > 0
       - platform_postgresql_deployment_id is string
       - platform_postgresql_deployment_id is match('^[a-z0-9][a-z0-9-]*$')
       - platform_postgresql_advanced_config is mapping
@@ -64818,22 +64828,45 @@ status: requires-postgres-01-runtime-evidence
 }
 
 @@END
-@@PORTABLE {"path":"services/postgresql/playbooks/apply.yml","mode":420,"size":648,"sha256":"3a9590985eb4f7a6c8c836525f763aa42d71d479a0ca969a97bfa3382bb3751b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":648}
+@@PORTABLE {"path":"services/postgresql/playbooks/apply.yml","mode":420,"size":1703,"sha256":"5b049d54f8c5ac4841d3cd7338a150e574ac4310105bbba989bf37e359589ad4","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1703}
 ---
 - import_playbook: ../../../ansible-core/playbooks/validate-infrastructure.yml
 
 - import_playbook: ../../../ansible-core/playbooks/pki-apply.yml
 
-- name: Применение PostgreSQL
+- name: Определение порядка подготовки экземпляров PostgreSQL
   hosts: platform_targets
-  serial: 1
-  become: true
-  gather_facts: true
-  pre_tasks:
+  gather_facts: false
+  tasks:
     - name: Применение конфигурации доверенной среды выполнения PostgreSQL
       ansible.builtin.include_role:
         name: platform.core.runtime_role_variables
       when: platform_execution_role_variables_by_host is defined
+    - name: Группировка монитора перед экземплярами данных PostgreSQL
+      ansible.builtin.group_by:
+        key: >-
+          {{ 'platform_postgresql_monitor_targets'
+             if (platform_postgresql_instances | default([])
+                 | selectattr('host', 'equalto', inventory_hostname)
+                 | selectattr('roles', 'contains', 'monitor') | list | length > 0)
+             else 'platform_postgresql_data_targets' }}
+      changed_when: false
+
+- name: Подготовка монитора PostgreSQL до регистрации экземпляров данных
+  hosts: platform_postgresql_monitor_targets
+  serial: 1
+  any_errors_fatal: true
+  become: true
+  gather_facts: true
+  roles:
+    - role: platform.postgresql.postgresql
+      platform_postgresql_verify_only: false
+
+- name: Применение экземпляров данных и standalone PostgreSQL
+  hosts: platform_postgresql_data_targets
+  serial: 1
+  become: true
+  gather_facts: true
   roles:
     - role: platform.postgresql.postgresql
       platform_postgresql_verify_only: false
