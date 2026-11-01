@@ -791,8 +791,8 @@ func (a *App) GetSessionCredentialStatus() (runtimesecret.Status, error) {
 	return a.secrets.Status(binding), nil
 }
 
-// SetPKIStorePassword stores the one approved runtime-only PKI password on
-// the current in-memory session credential. The return value is status-only.
+// SetPKIStorePassword stores the runtime-only PKI password with project secret
+// inputs independently of SSH credentials. The return value is status-only.
 func (a *App) SetPKIStorePassword(value string) (runtimesecret.Status, error) {
 	a.editMu.Lock()
 	defer a.editMu.Unlock()

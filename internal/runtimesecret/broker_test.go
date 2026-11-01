@@ -400,6 +400,99 @@ func TestBrokerStoresBoundedPKIStorePasswordOnlyInMemory(t *testing.T) {
 	}
 }
 
+func TestPKIPasswordSharesProjectSecretLifecycle(t *testing.T) {
+	now := time.Now()
+	broker := NewBroker(WithClock(func() time.Time { return now }))
+	defer broker.Clear()
+	binding := Binding{Root: t.TempDir(), ID: "project-pki"}
+	input := Input{Username: "installer", SSHMode: SSHPassword, SSHPassword: "synthetic-ssh", ElevationMode: ElevationNone}
+	if status, err := broker.SetPKIStorePassword(binding, "synthetic-pki"); err != nil || status.PKIStorePasswordStatus != PKIStorePasswordPresent {
+		t.Fatal("project input must be accepted before SSH", err)
+	}
+	requirement := RuntimeSecretInput{ServiceDeployment: "vault", Purpose: "SERVICE_ADMIN_TOKEN"}
+	if err := broker.SetPendingServiceSecretInput(binding, "vault", requirement.Purpose, []byte("synthetic-token"), nil); err != nil {
+		t.Fatal(err)
+	}
+	expiry := broker.pending.expiresAt
+	if err := broker.SetPendingRuntimeSecretValuesForRequirements(binding, []string{"service-password"}, map[string]string{"service-password": "synthetic-service"}); err != nil {
+		t.Fatal(err)
+	}
+	if broker.Status(binding).PKIStorePasswordStatus != PKIStorePasswordPresent {
+		t.Fatal("service password update lost PKCS input")
+	}
+	for _, password := range []string{"synthetic-ssh", "synthetic-replacement"} {
+		input.SSHPassword = password
+		status, err := broker.Set(binding, input)
+		if err != nil || status.PKIStorePasswordStatus != PKIStorePasswordPresent || !broker.ServiceSecretsPresent(binding, []RuntimeSecretInput{requirement}) {
+			t.Fatal("SSH replacement lost project inputs", err)
+		}
+		if err := broker.WithTargetCredential(binding, func(value TargetCredential) error {
+			if string(value.PKIStorePassword) != "synthetic-pki" {
+				t.Fatal("execution payload missing PKCS password")
+			}
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	broker.ClearAttachedRuntimeSecretValues(binding)
+	if broker.Status(binding).PKIStorePasswordStatus != PKIStorePasswordPresent {
+		t.Fatal("descriptor invalidation lost pending PKCS input")
+	}
+	now = expiry.Add(-time.Minute)
+	if _, err := broker.Set(binding, input); err != nil {
+		t.Fatal(err)
+	}
+	now = expiry
+	if broker.Status(binding).Status != StatusPresent || broker.Status(binding).PKIStorePasswordStatus != PKIStorePasswordMissing || broker.ServiceSecretsPresent(binding, []RuntimeSecretInput{requirement}) {
+		t.Fatal("transport renewal extended project input lifetime")
+	}
+	if err := broker.WithTargetCredential(binding, func(value TargetCredential) error {
+		if len(value.PKIStorePassword) != 0 {
+			t.Fatal("expired PKCS password dispatched")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPKIPasswordProjectSecretClearingAndIsolation(t *testing.T) {
+	for _, action := range []string{"clear", "project", "runtime_inputs"} {
+		t.Run(action, func(t *testing.T) {
+			broker := NewBroker()
+			defer broker.Clear()
+			binding := Binding{Root: t.TempDir(), ID: "project-pki"}
+			if _, err := broker.SetPKIStorePassword(binding, "synthetic-pki"); err != nil {
+				t.Fatal(err)
+			}
+			stored := broker.pending.pkiStorePassword
+			switch action {
+			case "clear":
+				broker.Clear()
+			case "runtime_inputs":
+				broker.ClearRuntimeSecretValues(binding)
+			case "project":
+				other := Binding{Root: t.TempDir(), ID: "other"}
+				if broker.Status(other).PKIStorePasswordStatus != PKIStorePasswordMissing {
+					t.Fatal("cross-project presence")
+				}
+				if _, err := broker.Set(other, Input{Username: "installer", SSHMode: SSHPassword, SSHPassword: "synthetic-ssh", ElevationMode: ElevationNone}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if broker.Status(binding).PKIStorePasswordStatus != PKIStorePasswordMissing {
+				t.Fatal("PKCS input survived clearing")
+			}
+			for _, value := range stored {
+				if value != 0 {
+					t.Fatal("cleared PKCS bytes were not wiped")
+				}
+			}
+		})
+	}
+}
+
 func TestBrokerReadsRegularUnencryptedPEMKeyOnly(t *testing.T) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {

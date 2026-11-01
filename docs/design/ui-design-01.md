@@ -848,6 +848,9 @@ format. TLS profile settings provide a write-only password input for generated
 PKCS#12 Java keystore/truststore files; the value is held in the active
 Installer session and never redisplayed or saved in project state. The project
 stores only the fixed opaque reference `runtime:pki-store-password`.
+It shares the project-secret input lifecycle, independent of SSH credentials:
+SSH renewal/recheck retains it, transport renewal does not extend its shared
+secret-input TTL, and project/session clearing removes it with other inputs.
 Replacing only this password updates the current session directly and does not
 create a project draft command. Changing TLS profile settings still creates a
 draft command; the password remains session-only in either case.

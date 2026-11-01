@@ -646,3 +646,51 @@ flow completed separately. Safe results/controllers are under
 .runtime/qa/approval-target-trust/. Windows Wails production build PASS.
 Owned QA processes stopped; prior local cache restored through standard
 publisher. Runtime bundle and target services were not changed.
+
+## Shared project-secret lifecycle for PKCS passwords — 2026-11-01
+
+Owner requires the PKCS#12 password to follow the same lifecycle as other
+project runtime secrets. Audit reproduced that saving even identical SSH
+credentials cleared PKI, while same-key confirmation did not: PKI bytes were
+owned by the transport lease rather than the existing project input bucket.
+
+Moved the private bytes into pendingRuntimeSecrets, reusing its project binding,
+generation, expiry timer and clearing. A shared pending initializer serves typed
+service inputs and PKI. Existing password-map replacement carries PKI alongside
+typed inputs when it renews that shared bucket. SSH replacement in the same
+project preserves project inputs; it does not extend their TTL. PKI can be
+entered before SSH, like service inputs. Explicit session/project/input clearing
+and project replacement wipe it with other inputs. Descriptor-only invalidation
+retains pending inputs; a changed SSH host key clears them equally. No extra
+storage, API, persistence, timer or wire contract was added. Execution borrows
+a bounded copy only while project input is current and wipes it after callback;
+the existing Core PKI requirement and typed lease payload remain unchanged.
+
+Go regressions cover pre-SSH input, SSH replacement, transport renewal near
+project-input expiry, absence of expired PKI in dispatch, password-map updates,
+descriptor invalidation, explicit clears, cross-project isolation and byte
+wiping. Desktop reapproval tests now cover PKI alongside Vault typed inputs.
+Full go test ./... and go vet ./... PASS; frontend production and Windows Wails
+production builds PASS. No Python/Core source or runtime bundle changed.
+
+Independent FULL DIFF APPROVE_WITH_CHANGES, blocking0; base
+565e08d0bbdffd113e95d473612273aaa933f4ee, three-file reviewed source diffSHA256
+33221d27cb9e80406eb19e37b80048ebffa2ab395a1d3b07e36aef1e9dd9d6b3.
+Nonblocking PKI-LIFE-N01 fixed by updating the pending/setter comments. Shared
+UI interaction contract updated; existing controls and session-only display
+remain unchanged. No functional edits after review.
+
+Actual React/Wails acceptance used project projection-ui3, existing verified
+bundle b64e552cb9d11a535ff4f6cb6ae7ba53212d70f010206a9434ee128fd0b62a93,
+standard-published before launch. Real TLS-profile handler stored random PKI
+before SSH; presence survived first and repeated PEM SSH saves, explicit
+server check with independently compared fingerprint and later SSH renewal.
+The explicit credential Clear removed PKI; re-entry before SSH worked, then
+Close/Open removed it again. Real Go presence statuses observed, no business
+responses substituted. Only native folder picker redirected to real OpenProject.
+Project files' hashes stayed identical; generated password was never logged or
+persisted. RESULT=PASS, no unexpected React errors (known IPC startup warning
+excluded), Start NOT_INVOKED; no new plan/run or service installation. Visual
+acceptance not claimed. Safe script/results: .runtime/qa/pki-shared-lifecycle/.
+Owned QA processes stopped and prior cache restored by standard publisher.
+This fix requires the updated Installer executable, not a runtime-bundle update.

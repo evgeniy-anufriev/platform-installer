@@ -51,6 +51,9 @@ func reapprovalFixture(t *testing.T) (*App, runtimesecret.Binding, []runtimesecr
 		t.Fatal("fixture inputs missing")
 	}
 	app.installationPlanID = "existing-plan"
+	if _, err := app.SetPKIStorePassword("synthetic-pki-password"); err != nil {
+		t.Fatal(err)
+	}
 	return app, binding, inputs
 }
 
@@ -99,6 +102,9 @@ func TestRepeatedHostKeyApprovalRetainsBindingPlanAndVaultInputs(t *testing.T) {
 			if !app.secrets.ServiceSecretsPresent(binding, inputs) {
 				t.Fatal("same-key confirmation cleared Vault inputs")
 			}
+			if app.secrets.Status(binding).PKIStorePasswordStatus != runtimesecret.PKIStorePasswordPresent {
+				t.Fatal("same-key confirmation cleared PKCS password")
+			}
 		})
 	}
 }
@@ -113,6 +119,9 @@ func TestChangedHostKeyApprovalStillInvalidatesPlanAndVaultInputs(t *testing.T) 
 	}
 	if app.secrets.ServiceSecretsPresent(binding, inputs) {
 		t.Fatal("different key retained stale Vault inputs")
+	}
+	if app.secrets.Status(binding).PKIStorePasswordStatus != runtimesecret.PKIStorePasswordMissing {
+		t.Fatal("different key retained PKCS password unlike service inputs")
 	}
 }
 
@@ -135,7 +144,7 @@ func TestSessionCredentialRenewalRetainsVaultInputsForReattestation(t *testing.T
 			app, binding, inputs := reapprovalFixture(t)
 			app.runtimeSecretEvidence = &runtimeSecretDescriptorEvidence{}
 			status, err := app.SetSessionCredential(runtimesecret.Input{Username: "platform-automation", SSHMode: runtimesecret.SSHPassword, SSHPassword: password, ElevationMode: runtimesecret.ElevationNone})
-			if err != nil || status.Status != "PRESENT" {
+			if err != nil || status.Status != "PRESENT" || status.PKIStorePasswordStatus != runtimesecret.PKIStorePasswordPresent {
 				t.Fatalf("credential renewal: %v", err)
 			}
 			if app.binding != nil || app.installationPlanID != "" || app.runtimeSecretEvidence != nil {

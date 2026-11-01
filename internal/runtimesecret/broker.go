@@ -102,7 +102,6 @@ type lease struct {
 	privateKeyPath      string
 	privateKeyInfo      os.FileInfo
 	sudoSecret          []byte
-	pkiStorePassword    []byte
 	runtimeSecretValues map[string][]byte
 	runtimeSecretInputs []RuntimeSecretInput
 	expiresAt           time.Time
@@ -122,16 +121,16 @@ type runExecutionIdentityHold struct {
 	sudoPassword []byte
 }
 
-// pendingRuntimeSecrets holds service-password values entered before a target
-// credential is available.  It is project-bound, short-lived and deliberately
-// separate from a transport credential: it cannot be used for SSH or exposed
-// through Status.
+// pendingRuntimeSecrets holds project runtime inputs, including service values
+// and PKCS passwords, independently of a target credential. It is project-bound,
+// short-lived and cannot be used for SSH or expose values through Status.
 type pendingRuntimeSecrets struct {
-	binding    Binding
-	values     map[string][]byte
-	typed      map[string]RuntimeSecretInput
-	expiresAt  time.Time
-	generation uint64
+	binding          Binding
+	values           map[string][]byte
+	pkiStorePassword []byte
+	typed            map[string]RuntimeSecretInput
+	expiresAt        time.Time
+	generation       uint64
 }
 
 // SetPendingServiceSecretInput stores a locally catalog-authorized typed
@@ -171,14 +170,7 @@ func (b *Broker) SetPendingServiceSecretInput(binding Binding, deployment, purpo
 	key := typedSecretKey(deployment, purpose)
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if b.pending == nil || b.pending.binding != binding || !b.now().Before(b.pending.expiresAt) {
-		if b.pending != nil && !b.now().Before(b.pending.expiresAt) {
-			b.clearPendingLocked()
-		}
-		b.nextGen++
-		b.pending = &pendingRuntimeSecrets{binding: binding, values: map[string][]byte{}, typed: map[string]RuntimeSecretInput{}, expiresAt: b.now().Add(b.ttl), generation: b.nextGen}
-		b.armPendingExpiryLocked(b.pending.generation, b.pending.expiresAt)
-	}
+	b.pendingForBindingLocked(binding)
 	if b.pending.typed == nil {
 		b.pending.typed = map[string]RuntimeSecretInput{}
 	}
@@ -284,24 +276,18 @@ func zeroByteSlices(values [][]byte) {
 	}
 }
 
-// SetPKIStorePassword updates only the optional in-memory PKI password on the
-// current project-bound lease. It neither extends its TTL nor contacts a node.
+// SetPKIStorePassword uses the same project-bound pending inputs and expiry as
+// service secrets. Transport credential replacement does not own these inputs.
 func (b *Broker) SetPKIStorePassword(binding Binding, value string) (Status, error) {
-	if !utf8.ValidString(value) || len([]byte(value)) < 1 || len([]byte(value)) > maxPKIStorePasswordBytes {
+	if binding.Root == "" || binding.ID == "" || !utf8.ValidString(value) || len([]byte(value)) < 1 || len([]byte(value)) > maxPKIStorePasswordBytes {
 		return Status{}, errors.New("PKI_STORE_PASSWORD_INPUT_INVALID")
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if b.lease == nil || b.lease.binding != binding || !b.now().Before(b.lease.expiresAt) {
-		if b.lease != nil && !b.now().Before(b.lease.expiresAt) {
-			b.expireLocked(b.lease.generation)
-		}
-		return Status{}, errors.New("SESSION_CREDENTIAL_UNAVAILABLE")
-	}
-	next := append([]byte(nil), value...)
-	zero(b.lease.pkiStorePassword)
-	b.lease.pkiStorePassword = next
-	return statusFromLease(b.lease), nil
+	pending := b.pendingForBindingLocked(binding)
+	zero(pending.pkiStorePassword)
+	pending.pkiStorePassword = []byte(value)
+	return b.statusLocked(binding), nil
 }
 
 // SetRuntimeSecretValues replaces the session-only service-secret set.  The
@@ -381,6 +367,7 @@ func (b *Broker) SetPendingRuntimeSecretValuesForRequirements(binding Binding, r
 	if b.pending != nil && b.pending.binding == binding && b.now().Before(b.pending.expiresAt) {
 		merged := cloneSecretMap(b.pending.values)
 		typed := cloneTypedSecretMap(b.pending.typed)
+		pki := append([]byte(nil), b.pending.pkiStorePassword...)
 		for _, reference := range requirements {
 			zero(merged[reference])
 			delete(merged, reference)
@@ -392,10 +379,11 @@ func (b *Broker) SetPendingRuntimeSecretValuesForRequirements(binding Binding, r
 		if !validRuntimeSecretMap(next) {
 			zeroSecretMap(next)
 			zeroTypedSecretMap(typed)
+			zero(pki)
 			return errors.New("RUNTIME_SECRET_INPUT_INVALID")
 		}
 		b.clearPendingLocked()
-		b.pending = &pendingRuntimeSecrets{binding: binding, values: next, typed: typed, expiresAt: b.now().Add(b.ttl)}
+		b.pending = &pendingRuntimeSecrets{binding: binding, values: next, typed: typed, pkiStorePassword: pki, expiresAt: b.now().Add(b.ttl)}
 		b.nextGen++
 		b.pending.generation = b.nextGen
 		b.armPendingExpiryLocked(b.pending.generation, b.pending.expiresAt)
@@ -461,8 +449,8 @@ func (b *Broker) PromotePendingRuntimeSecretValues(binding Binding, requirements
 	return nil
 }
 
-// ClearRuntimeSecretValues leaves the target credential and optional PKI
-// password intact while invalidating descriptor-bound service values.
+// ClearRuntimeSecretValues invalidates project secret inputs while leaving the
+// transport credential intact.
 func (b *Broker) ClearRuntimeSecretValues(binding Binding) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -606,7 +594,6 @@ func (b *Broker) Set(binding Binding, input Input) (Status, error) {
 	if b.runHold != nil {
 		zero(candidate.sshSecret)
 		zero(candidate.sudoSecret)
-		zero(candidate.pkiStorePassword)
 		zeroSecretMap(candidate.runtimeSecretValues)
 		zeroTypedSecretSlice(candidate.runtimeSecretInputs)
 		return Status{}, errors.New("INSTALLATION_RUN_ACTIVE")
@@ -627,23 +614,31 @@ func (b *Broker) Set(binding Binding, input Input) (Status, error) {
 	candidate.expiresAt = b.now().Add(b.ttl)
 	b.lease = candidate
 	b.armExpiryLocked(candidate.generation, candidate.expiresAt)
-	return statusFromLease(candidate), nil
+	return b.statusLocked(binding), nil
 }
 
 func (b *Broker) Status(binding Binding) Status {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	return b.statusLocked(binding)
+}
+
+func (b *Broker) statusLocked(binding Binding) Status {
+	status := missingStatus()
 	if b.lease != nil && b.lease.binding == binding {
 		if !b.now().Before(b.lease.expiresAt) {
 			b.expireLocked(b.lease.generation)
 		} else {
-			return statusFromLease(b.lease)
+			status = statusFromLease(b.lease)
 		}
 	}
 	if b.expired != nil && b.expired.binding == binding {
-		return Status{Status: StatusExpired, SudoPasswordStatus: SudoNotProvided, PKIStorePasswordStatus: PKIStorePasswordMissing}
+		status = Status{Status: StatusExpired, SudoPasswordStatus: SudoNotProvided, PKIStorePasswordStatus: PKIStorePasswordMissing}
 	}
-	return missingStatus()
+	if b.pending != nil && b.pending.binding == binding && b.now().Before(b.pending.expiresAt) && len(b.pending.pkiStorePassword) > 0 {
+		status.PKIStorePasswordStatus = PKIStorePasswordPresent
+	}
+	return status
 }
 
 func (b *Broker) Clear() {
@@ -671,7 +666,7 @@ func (b *Broker) MissingRequiredSecrets(binding Binding, passwords []string, req
 	result := make([]string, 0, len(passwords)+1)
 	valid := b.lease != nil && b.lease.binding == binding && b.now().Before(b.lease.expiresAt)
 	pendingValid := includePending && b.pending != nil && b.pending.binding == binding && b.now().Before(b.pending.expiresAt)
-	if requirePKI && (!valid || len(b.lease.pkiStorePassword) == 0) {
+	if requirePKI && (b.pending == nil || b.pending.binding != binding || !b.now().Before(b.pending.expiresAt) || len(b.pending.pkiStorePassword) == 0) {
 		result = append(result, "pki-store-password")
 	}
 	for _, reference := range passwords {
@@ -731,7 +726,10 @@ func (b *Broker) WithTargetCredential(binding Binding, use func(TargetCredential
 		b.mu.Unlock()
 		return errors.New("SESSION_CREDENTIAL_UNAVAILABLE")
 	}
-	value := TargetCredential{Username: b.lease.username, SSHMode: b.lease.sshMode, SSHSecret: append([]byte(nil), b.lease.sshSecret...), SudoSecret: append([]byte(nil), b.lease.sudoSecret...), PKIStorePassword: append([]byte(nil), b.lease.pkiStorePassword...), RuntimeSecretValues: cloneSecretMap(b.lease.runtimeSecretValues), RuntimeSecretInputs: cloneTypedSecretSlice(b.lease.runtimeSecretInputs)}
+	value := TargetCredential{Username: b.lease.username, SSHMode: b.lease.sshMode, SSHSecret: append([]byte(nil), b.lease.sshSecret...), SudoSecret: append([]byte(nil), b.lease.sudoSecret...), RuntimeSecretValues: cloneSecretMap(b.lease.runtimeSecretValues), RuntimeSecretInputs: cloneTypedSecretSlice(b.lease.runtimeSecretInputs)}
+	if b.pending != nil && b.pending.binding == binding && b.now().Before(b.pending.expiresAt) {
+		value.PKIStorePassword = append([]byte(nil), b.pending.pkiStorePassword...)
+	}
 	b.mu.Unlock()
 	defer zero(value.SSHSecret)
 	defer zero(value.SudoSecret)
@@ -1109,7 +1107,6 @@ func (b *Broker) clearLeaseLocked(clearExpired bool) {
 		zero(b.lease.reference)
 		zero(b.lease.sshSecret)
 		zero(b.lease.sudoSecret)
-		zero(b.lease.pkiStorePassword)
 		zeroSecretMap(b.lease.runtimeSecretValues)
 		zeroTypedSecretSlice(b.lease.runtimeSecretInputs)
 		zeroTypedSecretSlice(b.lease.runtimeSecretInputs)
@@ -1125,6 +1122,7 @@ func (b *Broker) clearPendingLocked() {
 		return
 	}
 	zeroSecretMap(b.pending.values)
+	zero(b.pending.pkiStorePassword)
 	zeroTypedSecretMap(b.pending.typed)
 	b.pending = nil
 }
@@ -1134,11 +1132,17 @@ func statusFromLease(value *lease) Status {
 	if len(value.sudoSecret) != 0 {
 		sudo = SudoPresent
 	}
-	pki := PKIStorePasswordMissing
-	if len(value.pkiStorePassword) != 0 {
-		pki = PKIStorePasswordPresent
+	return Status{Status: StatusPresent, Username: value.username, SSHMode: value.sshMode, SudoPasswordStatus: sudo, PKIStorePasswordStatus: PKIStorePasswordMissing, ExpiresAt: value.expiresAt.UTC().Format(time.RFC3339)}
+}
+
+func (b *Broker) pendingForBindingLocked(binding Binding) *pendingRuntimeSecrets {
+	if b.pending == nil || b.pending.binding != binding || !b.now().Before(b.pending.expiresAt) {
+		b.clearPendingLocked()
+		b.nextGen++
+		b.pending = &pendingRuntimeSecrets{binding: binding, values: map[string][]byte{}, typed: map[string]RuntimeSecretInput{}, expiresAt: b.now().Add(b.ttl), generation: b.nextGen}
+		b.armPendingExpiryLocked(b.pending.generation, b.pending.expiresAt)
 	}
-	return Status{Status: StatusPresent, Username: value.username, SSHMode: value.sshMode, SudoPasswordStatus: sudo, PKIStorePasswordStatus: pki, ExpiresAt: value.expiresAt.UTC().Format(time.RFC3339)}
+	return b.pending
 }
 
 func missingStatus() Status {
