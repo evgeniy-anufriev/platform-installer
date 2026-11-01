@@ -56324,9 +56324,23 @@ class FilterModule:
         return dict(application_topic_validation=validate_topic, application_topics_validation=validate_topics)
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/plugins/filter/scram_diagnostic.py","mode":420,"size":1998,"sha256":"7f7b164812e71daeb6f7194fc3d1ca3178ea9abf91efd17a32cd03aa8ae9cbd9","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1998}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/plugins/filter/scram_diagnostic.py","mode":420,"size":2552,"sha256":"9168678f535502d12f4cbd8eee10bfaf106bfdd783f86590b0c4dbfbc5169fa2","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2552}
 """Project private Kafka CLI results into a closed public failure record."""
+import json
 import re
+
+
+def quorum_voter_ids(output):
+    """Read the public voter list emitted by Kafka 3.8 and newer CLIs."""
+    lines = re.findall(r'^CurrentVoters:\s*(\[[^\r\n]*\])\s*$', output, re.M)
+    if len(lines) != 1:
+        return []
+    try:
+        voters = json.loads(lines[0])
+    except (TypeError, ValueError):
+        return []
+    ids = [item.get('id') if isinstance(item, dict) else item for item in voters]
+    return ids if all(type(item) is int and item >= 0 for item in ids) else []
 
 
 def scram_read_diagnostic(result):
@@ -56365,7 +56379,8 @@ def scram_read_diagnostic(result):
 
 class FilterModule:
     def filters(self):
-        return {'scram_read_diagnostic': scram_read_diagnostic}
+        return {'scram_read_diagnostic': scram_read_diagnostic,
+                'quorum_voter_ids': quorum_voter_ids}
 
 @@END
 @@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/plugins/filter/storage_credentials.py","mode":420,"size":685,"sha256":"803ce1879b3d1deba064159e2452af38780ca9ce37a7c33d485448a683dac695","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":685}
@@ -59013,7 +59028,7 @@ dependencies: []
   changed_when: false
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/run_cli_command.yml","mode":420,"size":1746,"sha256":"8871187668a896a6ea0838171adc495ec169be3536ccbd524798bd8c3424a53a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1746}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/run_cli_command.yml","mode":420,"size":1771,"sha256":"22725a3291e7f82a8c1a234d70b2daf50930ff63a7cad269d2b909765798491e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1771}
 ---
 - block:
     - name: Подготовка отдельной конфигурации Kafka CLI
@@ -59031,12 +59046,12 @@ dependencies: []
         - >-
           kafka_cli_expected_controller_ids is not defined or
           (platform_kafka_cli_command_result.stdout
-           | regex_findall('"id":\\s*([0-9]+),') | map('int') | unique | sort)
+           | platform.kafka.quorum_voter_ids | unique | sort)
           == (kafka_cli_expected_controller_ids | map('int') | unique | sort)
         - >-
           kafka_cli_expected_unfenced_broker_count is not defined or
           (platform_kafka_cli_command_result.stdout_lines
-           | select('search', 'isFenced:\\s*false\\)\\s*->\\s*\\(')
+           | select('search', '\\(id:\\s*[0-9]+\\s+rack:\\s*\\S+(?:\\s+isFenced:\\s*false)?\\)\\s*->\\s*\\(')
            | list | length) == (kafka_cli_expected_unfenced_broker_count | int)
       retries: "{{ platform_kafka_startup_readiness_retries }}"
       delay: "{{ platform_kafka_startup_readiness_delay }}"
@@ -59984,7 +59999,7 @@ dependencies: []
   when: not (_platform_kafka_scram_enabled | default(false) | bool)
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/verify_cluster.yml","mode":420,"size":4202,"sha256":"e1513a6fc30d643cf790704cb3051dda8b730f015a33f7599a0765a7d0807332","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4202}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/verify_cluster.yml","mode":420,"size":4258,"sha256":"787d555763b41ea2537ab2b028f2fe52e5119cf5e661810adf0f61743cf2308f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4258}
 ---
 - name: Выбор экземпляра Kafka для диагностики кворума без внесения изменений
   ansible.builtin.set_fact:
@@ -60034,7 +60049,7 @@ dependencies: []
   ansible.builtin.set_fact:
     _platform_kafka_unfenced_broker_headers: >-
       {{ platform_kafka_cli_command_result.stdout_lines
-         | select('search', 'isFenced:\s*false\)\s*->\s*\(')
+         | select('search', '\(id:\s*[0-9]+\s+rack:\s*\S+(?:\s+isFenced:\s*false)?\)\s*->\s*\(')
          | list }}
   changed_when: false
   when: inventory_hostname == _platform_kafka_verify_broker.host
@@ -60047,7 +60062,7 @@ dependencies: []
       - >-
         (_platform_kafka_unfenced_broker_headers
          | select('search', '^\s*' ~ (kafka_verify_broker_endpoints[0].bootstrap_host | regex_escape) ~ ':' ~ (kafka_verify_broker_endpoints[0].bootstrap_port | string) ~
-           '\s+\(id:\s*' ~ (item.node_id | string) ~ '.*isFenced:\s*false\)\s*->\s*\(')
+           '\s+\(id:\s*' ~ (item.node_id | string) ~ '\s+rack:\s*\S+(?:\s+isFenced:\s*false)?\)\s*->\s*\(')
          | list | length) == 1
     fail_msg: Kafka broker diagnostic does not contain exactly the expected registered, unfenced members
   vars:
@@ -60228,7 +60243,7 @@ dependencies: []
   when: kafka_member.listeners | default({}) | length > 0
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/verify_quorum.yml","mode":420,"size":2221,"sha256":"610add832e839a13502b1b3a7e4a2310c4432a53a8ce1d38ec2538a53133b9ae","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2221}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/verify_quorum.yml","mode":420,"size":2218,"sha256":"89c1032dd02ff305224857ca2e596113384ece5ccc6f3d31f50b40b2378ce014","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2218}
 ---
 - name: Определение подключения Kafka CLI к кворуму контроллеров по runtime-проекции
   ansible.builtin.include_tasks: resolve_cli_connection.yml
@@ -60263,8 +60278,7 @@ dependencies: []
         (_platform_kafka_controller_instances | map(attribute='node_id') | map('string') | join('|')) ~
         ')(?:\s|$)')
       - >-
-        platform_kafka_cli_command_result.stdout is search(
-        '"id":\s*' ~ (item.node_id | string) ~ ',')
+        (item.node_id | int) in (platform_kafka_cli_command_result.stdout | platform.kafka.quorum_voter_ids)
     fail_msg: Kafka controller quorum does not represent exactly the expected controller members
   loop: "{{ _platform_kafka_controller_instances }}"
   loop_control:
