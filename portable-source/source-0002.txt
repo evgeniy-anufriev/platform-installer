@@ -58563,7 +58563,7 @@ dependencies: []
   when: kafka_cli_connection.securityProtocol in ['SSL', 'SASL_SSL']
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/prepare_host.yml","mode":420,"size":2601,"sha256":"48d546291cbb608d4c50f2438bf9bb4dd13a6fe179b1fd93739003fb800e4e3a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2601}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/prepare_host.yml","mode":420,"size":2690,"sha256":"f78e29ac9d0508d41d1ce8fae4f61c8f04a83f69de9723e29fbe3fad24db2b3f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2690}
 ---
 - name: Установка необходимого компонента Java для всего хоста
   ansible.builtin.package:
@@ -58607,6 +58607,7 @@ dependencies: []
     dest: "{{ platform_kafka_install_directory }}"
     state: link
     force: true
+  when: platform_kafka_install_directory != ('/opt/' ~ platform_kafka_archive_directory)
 
 - name: Создание общей группы Kafka
   ansible.builtin.group:
