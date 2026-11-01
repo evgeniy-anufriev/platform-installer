@@ -58001,7 +58001,7 @@ dependencies: []
   when: not (platform_kafka_verify_only | bool)
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/member.yml","mode":420,"size":21163,"sha256":"aa0870cc12afe42094713e431b9b961f6aa908c62e36acc868358de12183a263","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":21163}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/member.yml","mode":420,"size":21261,"sha256":"82d0dde505c90cc64e9a2f0e93e25fe62996718119b01c3358c1f7facfd1bc46","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":21261}
 ---
 - name: Создание изолированных каталогов экземпляров службы
   ansible.builtin.file:
@@ -58069,7 +58069,7 @@ dependencies: []
     _platform_kafka_member_security_map: >-
       {% if kafka_member.listeners | default({}) | length > 0 %}{% for listener in _platform_kafka_member_named_listeners %}{{ listener.name }}:{{ listener.securityProtocol }}{% if not loop.last %},{% endif %}{% endfor %}{% else %}CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT{% endif %}
     _platform_kafka_member_advertised_listeners: >-
-      {% for listener in _platform_kafka_member_bound_listeners %}{{ listener.name }}://{{ listener.advertisedAddress | default(kafka_member.advertised_host) }}:{{ listener.port }}{% if not loop.last %},{% endif %}{% endfor %}
+      {% for listener in _platform_kafka_member_bound_listeners | rejectattr('purpose', 'equalto', 'controller') %}{{ listener.name }}://{{ listener.advertisedAddress | default(kafka_member.advertised_host) }}:{{ listener.port }}{% if not loop.last %},{% endif %}{% endfor %}
 
 - name: Создание действующей конфигурации экземпляра службы
   ansible.builtin.set_fact:
@@ -58079,11 +58079,11 @@ dependencies: []
              'process.roles': kafka_member.roles | join(','),
              'node.id': kafka_member.node_id | int,
              'listeners': _platform_kafka_member_listeners,
-             'advertised.listeners': _platform_kafka_member_advertised_listeners,
              'listener.security.protocol.map': _platform_kafka_member_security_map,
              'controller.listener.names': (_platform_kafka_member_named_listeners | selectattr('purpose', 'equalto', 'controller') | map(attribute='name') | join(',') if kafka_member.listeners | default({}) | length > 0 else 'CONTROLLER'),
              'log.dirs': kafka_member.data_directory
-           }) }}
+           }) | combine({'advertised.listeners': _platform_kafka_member_advertised_listeners}
+                        if 'broker' in kafka_member.roles else {}) }}
   when: not (platform_kafka_verify_only | bool)
 
 - name: Подготовка PKI-01 один раз для TLS listeners экземпляра Kafka
@@ -58181,7 +58181,7 @@ dependencies: []
       - "'broker' in kafka_member.roles or 'inter.broker.listener.name' not in kafka_effective_config"
       - "'broker' in kafka_member.roles or 'log.retention.hours' not in kafka_effective_config"
       - "'broker' in kafka_member.roles or 'PLAINTEXT://' not in kafka_effective_config['listeners']"
-      - "'broker' in kafka_member.roles or 'PLAINTEXT://' not in kafka_effective_config['advertised.listeners']"
+      - "'broker' in kafka_member.roles or 'advertised.listeners' not in kafka_effective_config"
       - "'controller' in kafka_member.roles or (kafka_member.node_id | string) not in (_platform_kafka_controller_instances | map(attribute='node_id') | map('string') | list)"
     fail_msg: Kafka effective configuration contains behavior from an unassigned member role
   when: not (platform_kafka_verify_only | bool)
