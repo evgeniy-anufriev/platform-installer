@@ -58708,7 +58708,7 @@ dependencies: []
     label: "{{ _platform_kafka_project_member_host }}"
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/project_deployment_host.yml","mode":420,"size":3424,"sha256":"805ab30cab435405ea40697a6a946756258c9a40bfdf8b8fa7aca3e483e69794","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3424}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/project_deployment_host.yml","mode":420,"size":3497,"sha256":"23a22b954dca65f5407cb197be8d209a92fc2a2fef1dcd0ddfda840a122551ee","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3497}
 ---
 - name: "Формирование экземпляров Kafka по развёртываниям из inventory"
   ansible.builtin.set_fact:
@@ -58717,7 +58717,7 @@ dependencies: []
       'deployment_id': _platform_kafka_project_deployment.key,
       'host': _platform_kafka_project_member_host,
       'advertised_host': (hostvars[_platform_kafka_project_member_host].ansible_host | default(_platform_kafka_project_member_host)),
-      'node_id': (item.value.configuration.nodeId),
+      'node_id': (item.value.configuration.nodeId | default((platform_kafka_member_inputs | default({}))[item.key].nodeId)),
       'directory_id': (((platform_generated_state | default({})).get('serviceDeployments', {})).get(_platform_kafka_project_deployment.key, {}).get('members', {}).get(item.key, {}).get('identity', {}).get('directoryId', item.value.identity.directoryId | default(omit))),
       'roles': (item.value.roles | sort),
       'schema_registry': {
@@ -61060,7 +61060,7 @@ status: requires-integration-evidence
       platform_kafka_verify_only: true
 
 @@END
-@@PORTABLE {"path":"services/kafka/service.yml","mode":420,"size":8280,"sha256":"9d91ec0da3516b97bcfaf94d08e7776fb50aa1cd961fc072765032247d8aacea","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":8280}
+@@PORTABLE {"path":"services/kafka/service.yml","mode":420,"size":8310,"sha256":"7d4884226688dff4e5910b80966083f36aa22d1dbcc5cefd005cd7e621ee5494","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":8310}
 apiVersion: platform.installer/service-manifest/v1alpha2
 kind: ServiceManifest
 metadata:
@@ -61193,6 +61193,7 @@ configuration:
     nodeId:
       kind: MANAGED
       roleVariable: platform_kafka_node_id
+      x-memberInputOnly: true
       type: integer
       scopes: [member]
       validation: {minimum: 0, maximum: 2147483647}

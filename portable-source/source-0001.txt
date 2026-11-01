@@ -24763,7 +24763,7 @@ def assemble_authority(requirement, offline=None, repository=None, image=False):
     }
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/deployment_plan.py","mode":420,"size":66094,"sha256":"d9dfbdea39e4ddcfab227bd0a817590f8fd3f3f4a4a9d326c44e3d552dff95f8","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48011}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/deployment_plan.py","mode":420,"size":66917,"sha256":"342a46f1c051b293d4802a4a8a03d81656b01adf6c1e442ebb4c4f5da3ea8cf0","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48011}
 """Deterministic, target-free DeploymentPlan construction for UI-BE-04B."""
 
 from __future__ import absolute_import, division, print_function
@@ -25314,7 +25314,7 @@ def _execution_role_variables(deployment_id, definition, prefix, execution_confi
             if member_scope and role_variable == member_data_variable:
                 continue
             if member_scope and entry.get("x-memberInputOnly") is True:
-                # The ordinary role projects these values from the exact member input.
+                # The role consumes these per member, never as a host scalar.
                 # Never let the last co-located member overwrite deployment defaults.
                 continue
             if not isinstance(resolved, dict):
@@ -25336,6 +25336,7 @@ def _execution_role_variables(deployment_id, definition, prefix, execution_confi
     if not isinstance(targets, list) or not targets or any(not isinstance(host, str) or not host for host in targets):
         raise ValueError("EXECUTION_CONFIGURATION_INVALID")
     by_host = {host: role_values(deployment_values) for host in sorted(set(targets))}
+    member_inputs = {}
     for member_id, member in sorted(members.items()):
         context = member.get("variableContext", {}) if isinstance(member, dict) else {}
         host_id = context.get("hostId") if isinstance(context, dict) else None
@@ -25343,6 +25344,17 @@ def _execution_role_variables(deployment_id, definition, prefix, execution_confi
         if not isinstance(member_id, str) or not isinstance(host_id, str) or not host_id:
             raise ValueError("EXECUTION_CONFIGURATION_INVALID")
         variables = role_values(values, member_scope=True)
+        # Member-only inputs must not become one scalar shared by co-located
+        # members. Carry resolved values (including Core-computed defaults) to
+        # the ordinary role through the same private operation projection.
+        inputs = {logical: copy.deepcopy(value["value"])
+                  for logical, value in values.items()
+                  if isinstance(settings.get(logical), dict)
+                  and settings[logical].get("x-memberInputOnly") is True
+                  and isinstance(value, dict) and value.get("state") == "RESOLVED"
+                  and "value" in value}
+        if inputs:
+            member_inputs[member_id] = inputs
         if host_id not in by_host:
             raise ValueError("EXECUTION_CONFIGURATION_INVALID")
         # A package-declared client port is represented per member in the
@@ -25355,6 +25367,9 @@ def _execution_role_variables(deployment_id, definition, prefix, execution_confi
         if by_host[host_id] != role_values(deployment_values) and by_host[host_id] != variables:
             raise ValueError("EXECUTION_CONFIGURATION_HOST_CONFLICT")
         by_host[host_id] = variables
+    if member_inputs:
+        for variables in by_host.values():
+            variables[prefix + "member_inputs"] = copy.deepcopy(member_inputs)
     if member_list_variable is not None:
         if (not isinstance(member_list_variable, str) or not member_list_variable.startswith(prefix) or
                 not isinstance(resolved_deployment, dict) or not isinstance(hosts, dict)):
@@ -25481,7 +25496,10 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
     service_public, service_private, service_secret_findings = _service_runtime_secret_requirements(deployments, definitions, sorted(snapshot.get("hosts", {}).keys()) if isinstance(snapshot.get("hosts"), dict) else [])
     service_input_public, service_input_private, service_input_findings = _service_input_requirements(
         selected, definitions,
-        (snapshot.get("topology") or {}).get("resolved", {}) if isinstance(snapshot.get("topology"), dict) else {},
+        (snapshot.get("topology") or {}).get("resolved", {}) if isinstance(snapshot
+@@END
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/deployment_plan.py","mode":420,"size":66917,"sha256":"342a46f1c051b293d4802a4a8a03d81656b01adf6c1e442ebb4c4f5da3ea8cf0","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":18906}
+.get("topology"), dict) else {},
     )
     required_credentials = pki_public + service_public + [
         {key: item[key] for key in ("requirementRef", "purpose", "hosts")}
@@ -25491,10 +25509,7 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
         required_credentials.extend({key: item[key] for key in ('requirementRef', 'purpose', 'hosts')}
                                     for item in application_model['runtimeSecretRequirements'] if item['source'] == 'RUNTIME_INPUT')
     runtime_secret_requirements = pki_private + service_private
-    if len({item["requirementRef"] for item in runtime_secret_requirements + service_input_private}) != len(runtime_secret_requirements) + len(service_input_private) or len({(item.get('serviceDeployment'), item["runtimeReference"]) for item in runtime_secret_requirements if "r
-@@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/deployment_plan.py","mode":420,"size":66094,"sha256":"d9dfbdea39e4ddcfab227bd0a817590f8fd3f3f4a4a9d326c44e3d552dff95f8","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":18083}
-untimeReference" in item}) != len([item for item in runtime_secret_requirements if "runtimeReference" in item]):
+    if len({item["requirementRef"] for item in runtime_secret_requirements + service_input_private}) != len(runtime_secret_requirements) + len(service_input_private) or len({(item.get('serviceDeployment'), item["runtimeReference"]) for item in runtime_secret_requirements if "runtimeReference" in item}) != len([item for item in runtime_secret_requirements if "runtimeReference" in item]):
         service_secret_findings.append(_finding("RUNTIME_SECRET_REQUIREMENT_DUPLICATE", "runtimeSecrets", "Runtime secret requirements must be unique"))
     findings.extend(pki_secret_findings + service_secret_findings + service_input_findings)
     required_credentials.sort(key=lambda item: item["requirementRef"])
@@ -36564,7 +36579,7 @@ all:
       hosts: {}
 
 @@END
-@@PORTABLE {"path":"ansible-core/examples/empty/project.yml","mode":420,"size":481,"sha256":"4e3608c197ba6ab8c0cb58fed278f66d89ae08df6596197ec9c6473afce46c55","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":481}
+@@PORTABLE {"path":"ansible-core/examples/empty/project.yml","mode":420,"size":481,"sha256":"1c8242c9875bda02c3c98dece3e0986ac0ffa8eb80ab340c0d5f430373d92149","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":481}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -36572,7 +36587,7 @@ metadata:
 desiredStateContract: platform.installer/project-desired-state/v2alpha1
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:245193464efbc37af1afb9484bc6ebbbe4943f1807e06c56573f5850752df9c2
+  digest: sha256:e5f84dce68a74525075830b1cbaa509c25677d1ce29fe91c48c3d72d9be839ff
   services: {}
 artifactLock:
   apiVersion: platform.installer/artifacts/v1alpha1
@@ -36614,7 +36629,7 @@ all:
           ansible_host: 192.0.2.10
 
 @@END
-@@PORTABLE {"path":"ansible-core/examples/invalid-reference/project.yml","mode":420,"size":617,"sha256":"0eef82d9d52d3eb4499e8f88c549ba1803e89676e3f2bfa788f28ff6148179a4","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":617}
+@@PORTABLE {"path":"ansible-core/examples/invalid-reference/project.yml","mode":420,"size":617,"sha256":"e043712db9a64ea0774b44dc26459c354f5b59c826d90e2af1a93127123d1260","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":617}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -36622,11 +36637,11 @@ metadata:
 desiredStateContract: platform.installer/project-desired-state/v2alpha1
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:245193464efbc37af1afb9484bc6ebbbe4943f1807e06c56573f5850752df9c2
+  digest: sha256:e5f84dce68a74525075830b1cbaa509c25677d1ce29fe91c48c3d72d9be839ff
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.3
-      digest: sha256:61fbfde75c130b9479fd03ef128a40b2d52d541343323b51b5233bf214268b5b
+      digest: sha256:4fbf398cc6cd6e463464b779d453c2e4cdf5e4f6d5c340df60503f5460090c69
 artifactLock:
   apiVersion: platform.installer/artifacts/v1alpha1
   digest: sha256:2222222222222222222222222222222222222222222222222222222222222222
@@ -36669,7 +36684,7 @@ all:
                   roles: [broker, controller]
 
 @@END
-@@PORTABLE {"path":"ansible-core/examples/valid/project.yml","mode":420,"size":662,"sha256":"363cb90131c6f28d0f945c8381fa71ac09ede403bc65f14c75016ba1812823a5","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":662}
+@@PORTABLE {"path":"ansible-core/examples/valid/project.yml","mode":420,"size":662,"sha256":"d0d798a8c1e183b228e7e92023c5839971523a8535b8498b1944da7cfaafd356","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":662}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -36678,11 +36693,11 @@ metadata:
 desiredStateContract: platform.installer/project-desired-state/v2alpha1
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:245193464efbc37af1afb9484bc6ebbbe4943f1807e06c56573f5850752df9c2
+  digest: sha256:e5f84dce68a74525075830b1cbaa509c25677d1ce29fe91c48c3d72d9be839ff
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.3
-      digest: sha256:61fbfde75c130b9479fd03ef128a40b2d52d541343323b51b5233bf214268b5b
+      digest: sha256:4fbf398cc6cd6e463464b779d453c2e4cdf5e4f6d5c340df60503f5460090c69
 artifactLock:
   apiVersion: platform.installer/artifacts/v1alpha1
   digest: sha256:2222222222222222222222222222222222222222222222222222222222222222
@@ -65067,10 +65082,9 @@ artifacts: []
 x-conformanceOnly: true
 
 @@END
-@@PORTABLE {"path":"examples/catalog/service-catalog.yml","mode":420,"size":60515,"sha256":"aa1478c60b66f15153249ced245c03b47dc37ae54dc3951349438cb0628719e9","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":49446}
+@@PORTABLE {"path":"examples/catalog/service-catalog.yml","mode":420,"size":60549,"sha256":"d3c8391c33af54b42f178b7dea36ac169a9d516240cc73dbad4f129e0c45782a","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":49446}
 apiVersion: platform.installer/catalog/v1alpha1
 kind: ServiceCatalog
-digest: sha256:245193464efbc37af1afb9484bc6ebbbe4943f1807e06c56573f5850752df9c2
 definitions:
   clickhouse:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -65770,6 +65784,7 @@ definitions:
         nodeId:
           kind: MANAGED
           roleVariable: platform_kafka_node_id
+          x-memberInputOnly: true
           type: integer
           scopes:
           - member
@@ -65912,7 +65927,7 @@ definitions:
       sasl: SCRAM-SHA-512
       mtls: deferred
       customListeners: implemented-service-02a
-    x-definitionDigest: sha256:61fbfde75c130b9479fd03ef128a40b2d52d541343323b51b5233bf214268b5b
+    x-definitionDigest: sha256:4fbf398cc6cd6e463464b779d453c2e4cdf5e4f6d5c340df60503f5460090c69
     x-sourceManifest: services/kafka/service.yml
   postgresql:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -66711,11 +66726,11 @@ definitions:
                 type: integer
                 minimum: 1
                 maximum: 60
- 
+              fall:
+                type: integ
 @@END
-@@PORTABLE {"path":"examples/catalog/service-catalog.yml","mode":420,"size":60515,"sha256":"aa1478c60b66f15153249ced245c03b47dc37ae54dc3951349438cb0628719e9","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":11069}
-             fall:
-                type: integer
+@@PORTABLE {"path":"examples/catalog/service-catalog.yml","mode":420,"size":60549,"sha256":"d3c8391c33af54b42f178b7dea36ac169a9d516240cc73dbad4f129e0c45782a","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":11103}
+er
                 minimum: 1
                 maximum: 20
               rise:
@@ -67088,6 +67103,7 @@ definitions:
     x-conformanceOnly: true
     x-definitionDigest: sha256:3cb015e5af12cb6b27b6264a61dd903c4327dc9b3aec5ec22cc2c6bb960a90d0
     x-sourceManifest: examples/catalog/manifests/etcd.yml
+digest: sha256:e5f84dce68a74525075830b1cbaa509c25677d1ce29fe91c48c3d72d9be839ff
 
 @@END
 @@PORTABLE {"path":"examples/invalid/invalid-placement/expected.yml","mode":420,"size":119,"sha256":"b9ebce3a64d448933d1e167792b4c808b03174d6037ccee12db52f53850d82bd","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":119}
@@ -67128,7 +67144,7 @@ all:
         redos-node1: {}
 
 @@END
-@@PORTABLE {"path":"examples/invalid/invalid-placement/project.yml","mode":420,"size":645,"sha256":"2453badc2e4655a2aaa3f90c3b5986a1a7bb1d5cccd838c659f34947e5a76a17","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":645}
+@@PORTABLE {"path":"examples/invalid/invalid-placement/project.yml","mode":420,"size":645,"sha256":"05a04684a9d03327addfdf6765df8b6cac6aab3f2ffa29b5a2861f553cf1c471","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":645}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -67140,11 +67156,11 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:245193464efbc37af1afb9484bc6ebbbe4943f1807e06c56573f5850752df9c2
+  digest: sha256:e5f84dce68a74525075830b1cbaa509c25677d1ce29fe91c48c3d72d9be839ff
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.3
-      digest: sha256:61fbfde75c130b9479fd03ef128a40b2d52d541343323b51b5233bf214268b5b
+      digest: sha256:4fbf398cc6cd6e463464b779d453c2e4cdf5e4f6d5c340df60503f5460090c69
 
 @@END
 @@PORTABLE {"path":"examples/invalid/missing-host-reference/expected.yml","mode":420,"size":120,"sha256":"a5109b4720cfa766aa9f567ce751f85e1f2d1af79db5257feed38e5a7a83a59c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":120}
@@ -67183,7 +67199,7 @@ all:
         redos-node1: {}
 
 @@END
-@@PORTABLE {"path":"examples/invalid/missing-host-reference/project.yml","mode":420,"size":651,"sha256":"3b7785afcbb95e6a6b73918d523818064c57f1aceb256f8cd1560ab63dd00ec4","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":651}
+@@PORTABLE {"path":"examples/invalid/missing-host-reference/project.yml","mode":420,"size":651,"sha256":"83b3b031fcc8f90b3b35d4cfc687cfe406061ddb3b7c9b2a407197da2bc96b2c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":651}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -67195,11 +67211,11 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:245193464efbc37af1afb9484bc6ebbbe4943f1807e06c56573f5850752df9c2
+  digest: sha256:e5f84dce68a74525075830b1cbaa509c25677d1ce29fe91c48c3d72d9be839ff
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.3
-      digest: sha256:61fbfde75c130b9479fd03ef128a40b2d52d541343323b51b5233bf214268b5b
+      digest: sha256:4fbf398cc6cd6e463464b779d453c2e4cdf5e4f6d5c340df60503f5460090c69
 
 @@END
 @@PORTABLE {"path":"examples/invalid/unknown-mode/expected.yml","mode":420,"size":107,"sha256":"6effb8d7c8113f6e855f55cde819e28546be8f67579642ea595e4b04182a05b8","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":107}
@@ -67238,7 +67254,7 @@ all:
         redos-node1: {}
 
 @@END
-@@PORTABLE {"path":"examples/invalid/unknown-mode/project.yml","mode":420,"size":641,"sha256":"672d1b4992b3952b86d213e2e4965e82c71157f5575e5234abcddfaf0f33f631","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":641}
+@@PORTABLE {"path":"examples/invalid/unknown-mode/project.yml","mode":420,"size":641,"sha256":"03ef7d114d729d070173aa0ec7dcfa330d38b79f4160936a6d9083c7d50c5d1d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":641}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -67250,11 +67266,11 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:245193464efbc37af1afb9484bc6ebbbe4943f1807e06c56573f5850752df9c2
+  digest: sha256:e5f84dce68a74525075830b1cbaa509c25677d1ce29fe91c48c3d72d9be839ff
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.3
-      digest: sha256:61fbfde75c130b9479fd03ef128a40b2d52d541343323b51b5233bf214268b5b
+      digest: sha256:4fbf398cc6cd6e463464b779d453c2e4cdf5e4f6d5c340df60503f5460090c69
 
 @@END
 @@PORTABLE {"path":"examples/sdku/application-packages/alarm-service/1.0.0/application.yml","mode":420,"size":533,"sha256":"5348bc4beab46b93e6ddeb3ad923096ed8d0bc47791ea0beed0a1cabcd95c6d8","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":533}
@@ -82755,7 +82771,7 @@ all:
         node3: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/bind-authoritative/project.yml","mode":420,"size":937,"sha256":"710f0a3bd9100d5ac6d0986b30e4d989eaf04efe4318145572e9e2e6e0616ee0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":937}
+@@PORTABLE {"path":"examples/valid/bind-authoritative/project.yml","mode":420,"size":937,"sha256":"aa1648a56aec928d9806c66457c5e2ebb2d6be59abe67c359ecda541f81f79f8","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":937}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -82767,7 +82783,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:245193464efbc37af1afb9484bc6ebbbe4943f1807e06c56573f5850752df9c2
+  digest: sha256:e5f84dce68a74525075830b1cbaa509c25677d1ce29fe91c48c3d72d9be839ff
   services:
     bind:
       definitionVersion: 1.0.0-alpha.2
@@ -82804,7 +82820,7 @@ all:
         bind1: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/bind-standalone/project.yml","mode":420,"size":646,"sha256":"034da367f0b6988f01d8a46b55af4fb10b65a1eb201e9a238eec96117fc581fe","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":646}
+@@PORTABLE {"path":"examples/valid/bind-standalone/project.yml","mode":420,"size":646,"sha256":"af10c34d1512bfec257b42525fb4e67d098ae1ffca7db94bb23169d7561bcf28","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":646}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -82816,7 +82832,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:245193464efbc37af1afb9484bc6ebbbe4943f1807e06c56573f5850752df9c2
+  digest: sha256:e5f84dce68a74525075830b1cbaa509c25677d1ce29fe91c48c3d72d9be839ff
   services:
     bind:
       definitionVersion: 1.0.0-alpha.2
@@ -82843,7 +82859,7 @@ all:
       hosts: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/empty/project.yml","mode":420,"size":494,"sha256":"a27832114300dbab34209729dcf7ab1a023d4dc395b1f9ee7fcf9e17ccc5e83a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":494}
+@@PORTABLE {"path":"examples/valid/empty/project.yml","mode":420,"size":494,"sha256":"00d7fb10318a3b89a7056254d98c8a3463552e08ede630984db01ae0606cc7de","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":494}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -82855,7 +82871,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:245193464efbc37af1afb9484bc6ebbbe4943f1807e06c56573f5850752df9c2
+  digest: sha256:e5f84dce68a74525075830b1cbaa509c25677d1ce29fe91c48c3d72d9be839ff
   services: {}
 
 @@END
@@ -82949,7 +82965,7 @@ all:
       hosts: {node1: {}, node2: {}, node3: {}}
 
 @@END
-@@PORTABLE {"path":"examples/valid/haproxy-routing/project.yml","mode":420,"size":929,"sha256":"d143f448cb5cbb9710ed000cba9dbb25d8ff23d39b4655eddc97e15eab9450e5","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":929}
+@@PORTABLE {"path":"examples/valid/haproxy-routing/project.yml","mode":420,"size":929,"sha256":"954d127499875c879beab17b75ef552fc519d686bf91dfadf08e52e66fe72083","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":929}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -82961,7 +82977,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:245193464efbc37af1afb9484bc6ebbbe4943f1807e06c56573f5850752df9c2
+  digest: sha256:e5f84dce68a74525075830b1cbaa509c25677d1ce29fe91c48c3d72d9be839ff
   services:
     haproxy:
       definitionVersion: 1.0.0-alpha.1
@@ -83037,7 +83053,7 @@ all:
         redos-node1: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/kafka-distributed/project.yml","mode":420,"size":641,"sha256":"c8c02f73a188005664b127f1b3936378e9261e4396a7d6632e81e37eba92f471","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":641}
+@@PORTABLE {"path":"examples/valid/kafka-distributed/project.yml","mode":420,"size":641,"sha256":"f7821e491454d2fd85b2ab01ac9f6b765b2803de6c961fcbfe2b0c9156483fb5","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":641}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -83049,11 +83065,11 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:245193464efbc37af1afb9484bc6ebbbe4943f1807e06c56573f5850752df9c2
+  digest: sha256:e5f84dce68a74525075830b1cbaa509c25677d1ce29fe91c48c3d72d9be839ff
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.3
-      digest: sha256:61fbfde75c130b9479fd03ef128a40b2d52d541343323b51b5233bf214268b5b
+      digest: sha256:4fbf398cc6cd6e463464b779d453c2e4cdf5e4f6d5c340df60503f5460090c69
 
 @@END
 @@PORTABLE {"path":"examples/valid/kafka-real-multihost/inventory/group_vars/all/platform-state.yml","mode":420,"size":548,"sha256":"4fd3237ef0960f3d58369bfbcfdae6c4a2418ae595cc829dc2cd960248415d41","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":548}
@@ -83138,7 +83154,7 @@ all:
         node3: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/kafka-real-multihost/project.yml","mode":420,"size":648,"sha256":"96b084abd53e4713a2fb2bcbb594d7674dc1aa2b2e2fe154918876e8451fb283","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":648}
+@@PORTABLE {"path":"examples/valid/kafka-real-multihost/project.yml","mode":420,"size":648,"sha256":"4390d9c49823c6537b3259777d19766b30c15714be002a1bf9c8b2defba0a12a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":648}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -83150,11 +83166,11 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:245193464efbc37af1afb9484bc6ebbbe4943f1807e06c56573f5850752df9c2
+  digest: sha256:e5f84dce68a74525075830b1cbaa509c25677d1ce29fe91c48c3d72d9be839ff
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.3
-      digest: sha256:61fbfde75c130b9479fd03ef128a40b2d52d541343323b51b5233bf214268b5b
+      digest: sha256:4fbf398cc6cd6e463464b779d453c2e4cdf5e4f6d5c340df60503f5460090c69
 
 @@END
 @@PORTABLE {"path":"examples/valid/kafka-single/inventory/group_vars/all/platform-state.yml","mode":420,"size":324,"sha256":"0dde96064d8c99c068e71e6fd06fdf90e9129afb300fd33c29aaac08556f407c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":324}
@@ -83218,7 +83234,7 @@ all:
         redos-node1: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/kafka-single/project.yml","mode":420,"size":636,"sha256":"3d041c5e70ceed3965ccdb6b796ad8877c6834c440ff5a4b797a57c251be06aa","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":636}
+@@PORTABLE {"path":"examples/valid/kafka-single/project.yml","mode":420,"size":636,"sha256":"e0d17a769bfcdb784fd60dfd3adbd652c517b8ccec9bd94bdd29badee0ad6e58","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":636}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -83230,11 +83246,11 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:245193464efbc37af1afb9484bc6ebbbe4943f1807e06c56573f5850752df9c2
+  digest: sha256:e5f84dce68a74525075830b1cbaa509c25677d1ce29fe91c48c3d72d9be839ff
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.3
-      digest: sha256:61fbfde75c130b9479fd03ef128a40b2d52d541343323b51b5233bf214268b5b
+      digest: sha256:4fbf398cc6cd6e463464b779d453c2e4cdf5e4f6d5c340df60503f5460090c69
 
 @@END
 @@PORTABLE {"path":"examples/valid/kafka-split-multihost/inventory/group_vars/all/platform-state.yml","mode":420,"size":564,"sha256":"20213d45c458e49971532206f0e8dbd319021c91a7b4c673eda4cb15f66b4b64","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":564}
@@ -83302,7 +83318,7 @@ all:
         node3: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/kafka-split-multihost/project.yml","mode":420,"size":657,"sha256":"7f4df50803d5204768cc6368cd482f309807d7a93dd069b5b853e4ce46971e13","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":657}
+@@PORTABLE {"path":"examples/valid/kafka-split-multihost/project.yml","mode":420,"size":657,"sha256":"e6990b29e685240cef770a2e19a98fadc9ed505094dbdf0b8e9facc9462b0b3f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":657}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -83314,11 +83330,11 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:245193464efbc37af1afb9484bc6ebbbe4943f1807e06c56573f5850752df9c2
+  digest: sha256:e5f84dce68a74525075830b1cbaa509c25677d1ce29fe91c48c3d72d9be839ff
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.3
-      digest: sha256:61fbfde75c130b9479fd03ef128a40b2d52d541343323b51b5233bf214268b5b
+      digest: sha256:4fbf398cc6cd6e463464b779d453c2e4cdf5e4f6d5c340df60503f5460090c69
 
 @@END
 @@PORTABLE {"path":"examples/valid/kafka-ssl-single/inventory/group_vars/all/platform-state.yml","mode":420,"size":29,"sha256":"11303937afacdde65ceec76daa99d305d4d4e30eda1935934af5d7eda4258be3","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":29}
@@ -83439,7 +83455,7 @@ all:
         node3: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/keepalived-vrrp/project.yml","mode":420,"size":656,"sha256":"81046558f5c35c177485c5f578e2d89f4c97c76dab91c96cb5b3c39886fc1875","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":656}
+@@PORTABLE {"path":"examples/valid/keepalived-vrrp/project.yml","mode":420,"size":656,"sha256":"c5d1e696759e85f64b71ce95cc8a26ec80243db80670ee6b481ee9eae47c4153","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":656}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -83451,7 +83467,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:245193464efbc37af1afb9484bc6ebbbe4943f1807e06c56573f5850752df9c2
+  digest: sha256:e5f84dce68a74525075830b1cbaa509c25677d1ce29fe91c48c3d72d9be839ff
   services:
     keepalived:
       definitionVersion: 1.0.0-alpha.1
@@ -83532,7 +83548,7 @@ all:
       hosts: {node1: {}, node2: {}, node3: {}}
 
 @@END
-@@PORTABLE {"path":"examples/valid/net-04-2-integration/project.yml","mode":420,"size":1086,"sha256":"e3bebfd827814f02e0e659b6395bee26aed98df885e3577130df847797b19778","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1086}
+@@PORTABLE {"path":"examples/valid/net-04-2-integration/project.yml","mode":420,"size":1086,"sha256":"eb02fa566cef2783703695d606509c2b32c74de14493e23ba4a5a2897abe2e24","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1086}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -83544,7 +83560,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:245193464efbc37af1afb9484bc6ebbbe4943f1807e06c56573f5850752df9c2
+  digest: sha256:e5f84dce68a74525075830b1cbaa509c25677d1ce29fe91c48c3d72d9be839ff
   services:
     bind:
       definitionVersion: 1.0.0-alpha.2
@@ -83604,7 +83620,7 @@ all:
         node1: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/pki-host-scope/project.yml","mode":420,"size":637,"sha256":"db4f4640a78866b1e1942f1f3ca29d99c8b8298719df5d36171df1ecf1b832c0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":637}
+@@PORTABLE {"path":"examples/valid/pki-host-scope/project.yml","mode":420,"size":637,"sha256":"7c893b720426650c8d1f00dd98cbd4b66e75f3cb0826e29457588c6dcf55b995","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":637}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -83616,11 +83632,11 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:245193464efbc37af1afb9484bc6ebbbe4943f1807e06c56573f5850752df9c2
+  digest: sha256:e5f84dce68a74525075830b1cbaa509c25677d1ce29fe91c48c3d72d9be839ff
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.3
-      digest: sha256:61fbfde75c130b9479fd03ef128a40b2d52d541343323b51b5233bf214268b5b
+      digest: sha256:4fbf398cc6cd6e463464b779d453c2e4cdf5e4f6d5c340df60503f5460090c69
 
 @@END
 @@PORTABLE {"path":"examples/valid/postgresql-patroni/inventory/group_vars/all/platform.yml","mode":420,"size":970,"sha256":"39c2b02c126160e2d9fa970face8bf08e80a4120dfe0c6ff31a50592dfa02e25","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":970}
@@ -83681,7 +83697,7 @@ all:
         db-node3: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/postgresql-patroni/project.yml","mode":420,"size":782,"sha256":"95e038bd336df991d094b82e02f48d48f3cceb5f45e7aa66d063f7c19efce792","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":782}
+@@PORTABLE {"path":"examples/valid/postgresql-patroni/project.yml","mode":420,"size":782,"sha256":"4ad03a1bafefe1dca01fd2718fa868d8082f5d92190fe92a1ed683499419283b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":782}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -83693,7 +83709,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:245193464efbc37af1afb9484bc6ebbbe4943f1807e06c56573f5850752df9c2
+  digest: sha256:e5f84dce68a74525075830b1cbaa509c25677d1ce29fe91c48c3d72d9be839ff
   services:
     postgresql:
       definitionVersion: 1.0.0-alpha.1
@@ -83738,7 +83754,7 @@ all:
       hosts: {db-node1: {}}
 
 @@END
-@@PORTABLE {"path":"examples/valid/postgresql-standalone/project.yml","mode":420,"size":656,"sha256":"7e997a8236fe139b6f4ac46a9c063ff34ffff28c42fee33c6dad6f621c94df7c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":656}
+@@PORTABLE {"path":"examples/valid/postgresql-standalone/project.yml","mode":420,"size":656,"sha256":"f3bac10f9b6007a5fe6c1e5d0c888143ee708633b62833205b14a8fbf0b5765a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":656}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -83750,7 +83766,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:245193464efbc37af1afb9484bc6ebbbe4943f1807e06c56573f5850752df9c2
+  digest: sha256:e5f84dce68a74525075830b1cbaa509c25677d1ce29fe91c48c3d72d9be839ff
   services:
     postgresql:
       definitionVersion: 1.0.0-alpha.1
@@ -83866,7 +83882,7 @@ all:
       hosts: {node1: {}, node2: {}, node3: {}}
 
 @@END
-@@PORTABLE {"path":"examples/valid/ui-project-snapshot/project.yml","mode":420,"size":1353,"sha256":"f9e73a9cfca5373d5d94d1a2b67e94f0dc8b6178070e57cce8be4c9b0eb9db4f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1353}
+@@PORTABLE {"path":"examples/valid/ui-project-snapshot/project.yml","mode":420,"size":1353,"sha256":"58260195f65c6dcb1a6a5ab6f652768eef187748393e919ca6cb8572a4ded807","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1353}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -83878,7 +83894,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:245193464efbc37af1afb9484bc6ebbbe4943f1807e06c56573f5850752df9c2
+  digest: sha256:e5f84dce68a74525075830b1cbaa509c25677d1ce29fe91c48c3d72d9be839ff
   services:
     bind:
       definitionVersion: 1.0.0-alpha.2
@@ -83891,7 +83907,7 @@ catalogLock:
       digest: sha256:fbb7260777f57459fb77adaa0d4afb4efe88af8bd76774e483d490afdb42984e
     kafka:
       definitionVersion: 1.0.0-alpha.3
-      digest: sha256:61fbfde75c130b9479fd03ef128a40b2d52d541343323b51b5233bf214268b5b
+      digest: sha256:4fbf398cc6cd6e463464b779d453c2e4cdf5e4f6d5c340df60503f5460090c69
     keepalived:
       definitionVersion: 1.0.0-alpha.1
       digest: sha256:5b721ee5a5f5667f9cb6ccd1b40b3afe00693890aec3f2500e5a8fc9f5dad444
