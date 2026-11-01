@@ -289,14 +289,14 @@
     fail_msg: Kafka offline artifact path, version, and checksum are required
   when: not (platform_kafka_verify_only | bool) and platform_kafka_phase != 'schema_registry'
 
-- name: Проверка утвержденного артефакта Kafka на контроллере
+- name: Проверка утверждённого артефакта Kafka в выбранном расположении
   ansible.builtin.stat:
     path: "{{ platform_kafka_artifact_path }}"
     checksum_algorithm: sha256
     get_mime: false
     get_attributes: false
-  delegate_to: localhost
-  become: false
+  delegate_to: "{{ inventory_hostname if (platform_resolved_artifact_sources is defined and platform_resolved_artifact_sources['kafka-binary'].source == 'OFFLINE_BUNDLE') else 'localhost' }}"
+  become: "{{ platform_resolved_artifact_sources is defined and platform_resolved_artifact_sources['kafka-binary'].source == 'OFFLINE_BUNDLE' }}"
   register: platform_kafka_artifact_stat
   when: not (platform_kafka_verify_only | bool) and platform_kafka_phase != 'schema_registry'
 

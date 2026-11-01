@@ -27,7 +27,10 @@ Also set `platform_kafka_version` and `platform_kafka_schema_registry_version`
 to the actual component versions of the approved distribution. The archive
 release number is not necessarily the embedded Kafka version. Manual inventory
 must supply `platform_kafka_artifact_path` and its approved
-`platform_kafka_artifact_checksum` (`sha256:...`). Kafka extracts the archive
+`platform_kafka_artifact_checksum` (`sha256:...`). This manual path belongs to
+the Ansible controller. For Core-selected offline artifacts, delivery stages
+the archive on each target; Kafka verifies SHA-256 and extracts it there, even
+when the Execution Node is not a Kafka host. Kafka extracts the archive
 once under `/opt`; Registry reuses its real directory, launcher and versioned
 JAR. Separate Registry delivery/extraction and its separate distribution marker
 are skipped. Service configuration, users and systemd remain independent.
