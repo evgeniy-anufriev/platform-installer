@@ -56389,7 +56389,7 @@ class FilterModule:
         return {'storage_scram': storage_scram}
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/defaults/main.yml","mode":420,"size":3503,"sha256":"89aec9b3c7226cb2113df2bd903d9c89b6952d5879cd9a3941f57c4c20ce219b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3503}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/defaults/main.yml","mode":420,"size":3502,"sha256":"5d3408560c6b81896efe8ad0ad36cdd4cc380dd1079ae332f74dc2ac752eb0c3","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3502}
 ---
 platform_kafka_version: "4.3.1"
 # Include the leading dot; use an empty string for extensionless Kafka commands.
@@ -56455,7 +56455,7 @@ platform_kafka_startup_readiness_retries: 30
 platform_kafka_startup_readiness_delay: 2
 platform_kafka_instances: []
 platform_kafka_log_directory: /var/log/kafka
-platform_kafka_quorum_mode: dynamic
+platform_kafka_quorum_mode: static
 platform_kafka_clean_install: false
 platform_kafka_confirm_destructive_reset: ''
 platform_pki_materialization_plans: []
@@ -58001,7 +58001,7 @@ dependencies: []
   when: not (platform_kafka_verify_only | bool)
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/member.yml","mode":420,"size":21025,"sha256":"4a47f9197362f03eabc716979c057521d137072318fab541400f3b070de25441","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":21025}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/member.yml","mode":420,"size":21163,"sha256":"aa0870cc12afe42094713e431b9b961f6aa908c62e36acc868358de12183a263","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":21163}
 ---
 - name: Создание изолированных каталогов экземпляров службы
   ansible.builtin.file:
@@ -58238,7 +58238,7 @@ dependencies: []
 - name: Определение стратегии формата хранения Kafka
   ansible.builtin.set_fact:
     _platform_kafka_storage_format_strategy: >-
-      {{ 'INITIAL_CONTROLLERS'
+      {{ 'STATIC' if platform_kafka_quorum_mode == 'static' else ('INITIAL_CONTROLLERS'
          if (platform_kafka_quorum_mode == 'dynamic'
              and 'controller' in kafka_member.roles
              and kafka_member.directory_id is defined)
@@ -58247,7 +58247,7 @@ dependencies: []
                    and 'controller' in kafka_member.roles
                    and _platform_kafka_controller_instances | length == 1
                    and kafka_member.directory_id is not defined)
-               else 'NO_INITIAL_CONTROLLERS') }}
+               else 'NO_INITIAL_CONTROLLERS')) }}
   when:
     - not (platform_kafka_verify_only | bool)
     - not platform_kafka_member_metadata.stat.exists
@@ -58285,10 +58285,11 @@ dependencies: []
           {{ [platform_kafka_install_directory ~ '/bin/kafka-storage' ~ platform_kafka_script_extension,
               'format', '--cluster-id', platform_kafka_cluster_id,
               '--config', kafka_member.config_directory ~ '/server.properties']
-             + (['--initial-controllers', _platform_kafka_initial_controllers | trim]
+             + ([] if _platform_kafka_storage_format_strategy == 'STATIC' else
+               (['--initial-controllers', _platform_kafka_initial_controllers | trim]
                 if _platform_kafka_storage_format_strategy == 'INITIAL_CONTROLLERS'
                 else (['--standalone'] if _platform_kafka_storage_format_strategy == 'STANDALONE_COMPATIBILITY'
-                      else ['--no-initial-controllers']))
+                      else ['--no-initial-controllers'])))
              + (['@' ~ kafka_storage_scram_args.path] if _platform_kafka_scram_enabled | bool else []) }}
       register: kafka_storage_format_result
       failed_when: false
@@ -58563,7 +58564,7 @@ dependencies: []
   when: kafka_cli_connection.securityProtocol in ['SSL', 'SASL_SSL']
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/prepare_host.yml","mode":420,"size":2690,"sha256":"f78e29ac9d0508d41d1ce8fae4f61c8f04a83f69de9723e29fbe3fad24db2b3f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2690}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/prepare_host.yml","mode":420,"size":3564,"sha256":"9da0b3b986216fa7a1d5c8c2c1495a3fe613ba02ec86c23cf80cca234a0ac0ca","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3564}
 ---
 - name: Установка необходимого компонента Java для всего хоста
   ansible.builtin.package:
@@ -58608,6 +58609,22 @@ dependencies: []
     state: link
     force: true
   when: platform_kafka_install_directory != ('/opt/' ~ platform_kafka_archive_directory)
+
+- name: Получение поддерживаемых параметров форматирования Kafka
+  ansible.builtin.command:
+    argv: ["{{ platform_kafka_install_directory }}/bin/kafka-storage{{ platform_kafka_script_extension }}", format, --help]
+  register: _platform_kafka_storage_format_help
+  changed_when: false
+  when: platform_kafka_quorum_mode == 'dynamic'
+
+- name: Проверка поддержки динамического кворума до форматирования Kafka
+  ansible.builtin.assert:
+    that:
+      - "'--initial-controllers' in _platform_kafka_storage_format_help.stdout"
+      - "'--no-initial-controllers' in _platform_kafka_storage_format_help.stdout"
+      - "'--standalone' in _platform_kafka_storage_format_help.stdout"
+    fail_msg: KAFKA_DYNAMIC_QUORUM_UNSUPPORTED
+  when: platform_kafka_quorum_mode == 'dynamic'
 
 - name: Создание общей группы Kafka
   ansible.builtin.group:
