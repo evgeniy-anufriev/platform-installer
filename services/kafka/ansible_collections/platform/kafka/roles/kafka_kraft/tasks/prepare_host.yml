@@ -41,6 +41,7 @@
     dest: "{{ platform_kafka_install_directory }}"
     state: link
     force: true
+  when: platform_kafka_install_directory != ('/opt/' ~ platform_kafka_archive_directory)
 
 - name: Создание общей группы Kafka
   ansible.builtin.group:

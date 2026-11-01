@@ -79,6 +79,12 @@ class SharedDistributionTests(unittest.TestCase):
 
 class SharedDistributionNativeTests(unittest.TestCase):
     def test_fresh_repeat_registry_only_verify_and_interrupted_marker(self):
+        self.probe_native('/opt/kafka')
+
+    def test_bundle_layout_uses_extracted_directory_without_self_link(self):
+        self.probe_native('/opt/confluent-qa')
+
+    def probe_native(self, install_directory):
         """Real production preparation tasks inside an isolated /opt mount."""
         available = subprocess.run(['sudo', '-n', 'unshare', '--mount',
                                     '--propagation', 'private', 'true'], capture_output=True)
@@ -118,6 +124,7 @@ class SharedDistributionNativeTests(unittest.TestCase):
             defaults = yaml.safe_load((ROLE / 'defaults/main.yml').read_text())
             variables = dict(defaults, platform_kafka_schema_registry_use_kafka_distribution=True,
                 platform_kafka_archive_directory='confluent-qa',
+                platform_kafka_install_directory=install_directory,
                 platform_kafka_schema_registry_install_directory='/opt/confluent-qa',
                 platform_kafka_schema_registry_version='qa', platform_kafka_script_extension='',
                 platform_kafka_artifact_path=str(archive), platform_kafka_artifact_checksum=digest)
@@ -149,6 +156,15 @@ class SharedDistributionNativeTests(unittest.TestCase):
                                 self.assertRegex(output, r'localhost\s+:.*changed=0\s+.*failed=0')
                             self.assertEqual(digest,
                                 (opt / 'confluent-qa/.platform-kafka-approved-sha256').read_text())
+                            installation = opt / Path(install_directory).relative_to('/opt')
+                            if install_directory == '/opt/kafka':
+                                # Absolute links resolve within the target mount,
+                                # not the controller's /opt after unshare exits.
+                                self.assertTrue(installation.is_symlink())
+                                self.assertEqual('/opt/confluent-qa', os.readlink(installation))
+                            else:
+                                self.assertTrue(installation.is_dir())
+                                self.assertFalse(installation.is_symlink())
             finally:
                 # Root-owned files stay inside the temporary mount backing directory.
                 subprocess.run(['sudo', '-n', 'chown', '-hR', str(os.getuid()) + ':' + str(os.getgid()),

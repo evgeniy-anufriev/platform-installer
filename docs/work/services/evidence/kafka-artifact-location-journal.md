@@ -56,3 +56,34 @@ Trusted build host192.168.56.102 remains unreachable (SSH timeout8s). No bundle
 build/publication/rebind/preparation or real React/Wails installation performed.
 Updated-bundle acceptance remains pending. Deploy through a rebuilt verified
 runtime bundle and ordinary node preparation; no active bundle was patched.
+
+## Combined distribution installation path
+
+The next owner screenshot failed at the stable installation link. Their staged
+defaults set archive_directory=confluent-7.8.0 and
+install_directory=/opt/confluent-7.8.0, matching the bundle builder's shared
+Confluent layout. The role attempted to convert the extracted directory into
+a symlink to itself. These defaults are valid and remain unchanged.
+
+One task condition now creates the stable link only when its destination
+differs from the extracted /opt/<archive_directory>. Existing /opt/kafka aliases
+remain supported; ownership/marker checks are unchanged. The existing native
+shared-distribution sequence now exercises both alias and direct bundle layouts
+through fresh/repeat/Registry-only/Verify/missing-marker phases, checking that
+the direct directory remains a directory and the alias stays the expected link.
+
+Current-source RED OS101 validation: 22 tests PASS (shared-distribution8,
+bundle artifact projection10, artifact-location4), no skips. This includes the
+builder's existing test asserting the shared Kafka/Registry installation path.
+Workspace `/var/tmp/platform-installer-qa-e6b274f975bb4ceabc8cbb7bba44cb0f`
+was cleaned with qa-sync after validation. Previous intermediate alias checks
+incorrectly followed an absolute target symlink in the controller namespace;
+the test now checks its exact link target instead. Production direct-layout
+checks passed; this test-fixture issue did not require another production edit.
+Negative control without the new condition reproduced Ansible's exact refusal:
+`the directory /opt/confluent-qa is not empty, refusing to convert it`.
+Current source bytes were restored before cleanup.
+
+No review invoked, following the owner's instruction. Build host102 still
+times out on SSH; updated-bundle React/Wails installation remains untested.
+No distributed bundle, service or active execution was modified.
