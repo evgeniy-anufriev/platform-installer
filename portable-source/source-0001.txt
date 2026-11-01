@@ -87395,7 +87395,7 @@ catalogLock:
 })();
 
 @@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":134121,"sha256":"40919b24a5622a7f2e7afeccc103d744783d21d42f359b0fc9b164c9d2a617e9","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49805}
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":134422,"sha256":"6b01b32f3a902e5d92e284be10c6f90f908f9f4710478637556cc61959a2141a","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49805}
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   EditResult,
@@ -88514,6 +88514,13 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
                 },
               };
       setInstallationPlan(operation);
+      if (operation.plan && !operation.error) {
+        // A new plan supersedes an earlier failed attempt without a run.
+        // Preserve actual run history and its observation/result errors.
+        setInstallationRun((current) =>
+          current?.run ? current : undefined,
+        );
+      }
       await refreshInstallationState();
       setInstallationTab("plan");
     } finally {
@@ -88705,7 +88712,10 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       let cursor = pending.nextCursor;
       const seen = new Set<string>();
       for (let page = 1; cursor && page < 128; page++) {
-        if (seen.has(cursor)) break;
+        if (seen.has(cu
+@@END
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":134422,"sha256":"6b01b32f3a902e5d92e284be10c6f90f908f9f4710478637556cc61959a2141a","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49750}
+rsor)) break;
         seen.add(cursor);
         let next: SecretOutputPackagesOperation;
         try {
@@ -88714,10 +88724,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
           setSecretOutputPackages(secretOutputListingUnavailable());
           return;
         }
-        if (next.statu
-@@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":134121,"sha256":"40919b24a5622a7f2e7afeccc103d744783d21d42f359b0fc9b164c9d2a617e9","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49750}
-s !== "READY") break;
+        if (next.status !== "READY") break;
         candidates.push(...(next.packages || []));
         cursor = next.nextCursor;
       }
@@ -90064,17 +90071,17 @@ s !== "READY") break;
                 setPage("services");
               }}
               onConfigureMember={(deploymentId, memberId) => {
-                setSelectedTopologyDeployment(deploymentId);
+                setSelect
+@@END
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":134422,"sha256":"6b01b32f3a902e5d92e284be10c6f90f908f9f4710478637556cc61959a2141a","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":34867}
+edTopologyDeployment(deploymentId);
                 setSelectedServiceDeployment(deploymentId);
                 setSelectedServiceMember(memberId);
                 setFocusServiceMemberSettings(true);
                 setServicesView("detail");
                 setPage("services");
               }}
-   
-@@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":134121,"sha256":"40919b24a5622a7f2e7afeccc103d744783d21d42f359b0fc9b164c9d2a617e9","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":34566}
-           preview={endpointPreview}
+              preview={endpointPreview}
               verificationStatus={verification.status}
             />
           )}
