@@ -159,3 +159,48 @@ membership/endpoints/count and actual CLI success remain mandatory.
 RED OS102 current production source: native Ansible/TLS/API health suite12 PASS
 (includes Kafka3.8 output and explicit fenced rejection); diagnostic/parser5 PASS.
 Actual updated-bundle Verify via React/Wails remains pending.
+
+### Final real Confluent7.8 static acceptance (2026-11-01)
+
+Approved DEV payload: official
+https://packages.confluent.io/archive/7.8/confluent-community-7.8.0.tar.gz
+and matching official .sha256.txt;367139824 bytes,
+SHA256 e8b8688c7eaa1fc1771b31ef54586a9367d9baa01a4ce00192a1805c3e2d9443.
+Build host RED OS102; source transferred by qa-sync; standard bundle validator
+and publisher used before real UI rebind/preparation. Source originals and
+existing distributed bundles were not patched.
+
+Updated bundle c97e77d7f9d2336a83fd588f790fa737759c2a4a56157d4cce4216a41b051a4f,
+production source120c739c. Project project-684405e9a2769a67, saved revision
+c694b0838ebbed088e40ea14146a80622217dfa99c35d11a77bad8bcf4ec8c9b.
+Actual React mode-change callback selected supported INFRASTRUCTURE_VERIFY_ONLY;
+actual React fresh-plan/acknowledge/Approve/Start handlers called real Wails Go
+methods. No production bypass or test-only start path was added. Before Start,
+guard asserted only SERVICE_VERIFY/qa78-static on node1,node2,node3, no Apply/PKI.
+Harness originally checked every checkbox and unintentionally selected Full;
+this was corrected to .acknowledgement inputs before any Start. The accidental
+Full review plan was never started.
+
+Plan plan-2097d7eb68e863b410a4be4d;
+run installer-4502e578ce29ac6bffa91f8df73df9d7 SUCCEEDED.
+Authoritative remote public events journal:346 unique sequences1..346/no gaps,
+FAILED0/CHANGED0. Kafka quorum, exact broker endpoints/membership, TLS and all3
+Schema Registry APIs passed real Verify. All3 test Kafka7.8 and Registry units
+active after completion; node.id1/2/3 and the same explicit static voter list
+confirmed on101/102/103. Existing Kafka4.3.1/Registry services and /opt/kafka
+pointers were preserved. No project data deleted or reformatted after install.
+
+This is successful real Apply followed by corrected separate Verify, not a
+claim that the earlier combined run succeeded. The combined run FAILED in
+Verify as recorded above. No second full Apply was executed. Focused tests:
+storage8 (including actual7.8 binary), health12, diagnostics/parser5 PASS.
+
+Nonvisual React/Wails integration PASS. Terminal Go observation was asserted;
+the immediate UI screenshot still showed pre-terminal progress, and replay
+subscription captured only144/346 events. Full counts above come from the
+authoritative remote public journal. Complete terminal-screen visual acceptance
+is not claimed. Known Wails ipc.js runtime-ready/null-nodes development warnings
+were excluded by their exact existing stack signature; no other React errors
+were observed. Owned Wails/Vite processes stopped after terminal completion.
+All temporary remote source/build workspaces cleaned with qa-sync; QA services
+and required runtime identities retained, secret values never logged or committed.
