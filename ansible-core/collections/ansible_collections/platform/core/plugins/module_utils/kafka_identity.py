@@ -37,7 +37,7 @@ def validate_kafka_discovery(member_ids, records):
     return findings
 
 
-def materialize_kafka_identities(deployment_id, deployment, members, metadata, random_bytes=os.urandom):
+def materialize_kafka_identities(deployment_id, deployment, members, metadata, random_bytes=os.urandom, default_quorum_mode=None):
     """Pure Kafka-specific identity decision before persistence or mutation.
 
     metadata is an inventory-member keyed read-only projection of meta.properties.
@@ -48,6 +48,8 @@ def materialize_kafka_identities(deployment_id, deployment, members, metadata, r
     members = members if isinstance(members, dict) else {}
     metadata = metadata if isinstance(metadata, dict) else {}
     identity = deployment.get("identity", {}) if isinstance(deployment.get("identity"), dict) else {}
+    configuration = deployment.get("configuration", {})
+    quorum_mode = configuration.get("quorumMode", default_quorum_mode) if isinstance(configuration, dict) else default_quorum_mode
     discovered_clusters = sorted(set(
         value.get("clusterId") for value in metadata.values()
         if isinstance(value, dict) and (value.get("initialized") or value.get("state") == "INITIALIZED") and value.get("clusterId")
@@ -69,7 +71,9 @@ def materialize_kafka_identities(deployment_id, deployment, members, metadata, r
     missing = [member_id for member_id in required if member_id not in metadata]
     if missing:
         return {"status": "BLOCKED", "findings": [_finding("KAFKA_IDENTITY_DISCOVERY_INCOMPLETE", "discovery", "Kafka identity discovery is incomplete for required controller members") ]}
-    for member_id in required:
+    # Static format assigns its own storage directory IDs. Only dynamic
+    # bootstrap consumes the preassigned IDs in --initial-controllers.
+    for member_id in (required if quorum_mode != "static" else []):
         member = members[member_id]
         persisted = member.get("identity", {}).get("directoryId") if isinstance(member.get("identity"), dict) else None
         observed = metadata.get(member_id, {}) if isinstance(metadata.get(member_id), dict) else {}

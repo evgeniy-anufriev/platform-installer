@@ -11,6 +11,41 @@ spec.loader.exec_module(identity)
 
 
 class KafkaIdentityTests(unittest.TestCase):
+    def test_static_fresh_allocates_cluster_only(self):
+        result = identity.materialize_kafka_identities('k', {'configuration': {'quorumMode': 'static'}},
+            {'c': {'roles': ['controller']}}, {'c': {'state': 'UNINITIALIZED'}}, lambda _: b'a' * 16)
+        self.assertEqual('PASS', result['status'])
+        self.assertIn('clusterId', result['patch']['deploymentIdentity'])
+        self.assertEqual({}, result['patch']['memberIdentities'])
+
+    def test_static_repeat_ignores_unused_pregenerated_directory_id(self):
+        result = identity.materialize_kafka_identities('k',
+            {'configuration': {'quorumMode': 'static'}, 'identity': {'clusterId': 'cluster'}},
+            {'c': {'roles': ['controller'], 'identity': {'directoryId': 'old-generated'}}},
+            {'c': {'state': 'INITIALIZED', 'clusterId': 'cluster', 'directoryId': 'assigned-by-kafka'}})
+        self.assertEqual('PASS', result['status'])
+        self.assertFalse(result['changed'])
+
+    def test_default_static_and_explicit_dynamic_keep_distinct_directory_rules(self):
+        members = {'c': {'roles': ['controller'], 'identity': {'directoryId': 'generated'}}}
+        metadata = {'c': {'state': 'INITIALIZED', 'clusterId': 'cluster', 'directoryId': 'disk'}}
+        deployment = {'identity': {'clusterId': 'cluster'}}
+        static = identity.materialize_kafka_identities('k', deployment, members, metadata, default_quorum_mode='static')
+        self.assertEqual('PASS', static['status'])
+        dynamic = identity.materialize_kafka_identities('k', dict(deployment, configuration={'quorumMode': 'dynamic'}),
+            members, metadata, default_quorum_mode='static')
+        self.assertEqual('BLOCKED', dynamic['status'])
+        self.assertEqual('KAFKA_DIRECTORY_ID_METADATA_MISMATCH', dynamic['findings'][0]['code'])
+
+    def test_static_still_blocks_cluster_conflicts_and_missing_controller(self):
+        deployment = {'configuration': {'quorumMode': 'static'}, 'identity': {'clusterId': 'expected'}}
+        members = {'c': {'roles': ['controller']}}
+        conflict = identity.materialize_kafka_identities('k', deployment, members,
+            {'c': {'state': 'INITIALIZED', 'clusterId': 'different'}})
+        self.assertEqual('KAFKA_CLUSTER_ID_METADATA_MISMATCH', conflict['findings'][0]['code'])
+        missing = identity.materialize_kafka_identities('k', deployment, members, {'other': {'state': 'UNINITIALIZED'}})
+        self.assertEqual('KAFKA_IDENTITY_DISCOVERY_INCOMPLETE', missing['findings'][0]['code'])
+
     def test_generates_complete_new_identity_set_once(self):
         values = iter([b"a" * 16, b"b" * 16, b"c" * 16])
         result = identity.materialize_kafka_identities("k", {}, {"c1": {"roles": ["controller"]}, "c2": {"roles": ["controller"]}}, {"c1": {"state": "UNINITIALIZED"}, "c2": {"state": "UNINITIALIZED"}}, lambda _: next(values))

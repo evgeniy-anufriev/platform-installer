@@ -17,6 +17,12 @@
   connection: local
   gather_facts: false
   tasks:
+    - name: Загрузка исходных defaults Kafka для подготовки идентификаторов
+      ansible.builtin.set_fact:
+        _kafka_identity_default_quorum_mode: >-
+          {{ (lookup('ansible.builtin.file', '../ansible_collections/platform/kafka/roles/kafka_kraft/defaults/main.yml')
+              | from_yaml).platform_kafka_quorum_mode }}
+
     - name: Выбор действующих параметров подготовки Kafka на контроллере
       ansible.builtin.set_fact:
         _platform_kafka_materialization_desired_state: >-
@@ -35,6 +41,7 @@
              default(platform_project_manifest_document.metadata.id |
                      default((inventory_dir | default('/project/inventory', true) | dirname | basename), true), true) }}
         discovery: "{{ hostvars['localhost'].platform_kafka_discovery_by_host | default({}) }}"
+        default_quorum_mode: "{{ platform_kafka_quorum_mode | default(_kafka_identity_default_quorum_mode) }}"
       register: platform_kafka_materialization
       # This only creates run-local derived state for the following play. It
       # neither mutates canonical desired state nor a target host, so it must

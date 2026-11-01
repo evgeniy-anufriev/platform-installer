@@ -17,6 +17,13 @@ Quorum состоит только из controller members. Dynamic/static quoru
 exclusive; role детерминированно выводит member sets и проверяет listener/path
 collisions на physical host.
 
+Static Apply не назначает и не сверяет `directoryId`: storage format создаёт
+его самостоятельно. Старые неиспользуемые значения в generated state не мешают
+повторному Apply и не переписываются; данные и `meta.properties` не изменяются.
+Проверки `clusterId`, полного discovery и dynamic directory identities сохраняются.
+Если `quorumMode` не задан, материализация использует текущий default роли,
+без отдельного жёстко заданного default в Core.
+
 ## Запуск и настройка
 
 Используйте `services/kafka/playbooks/apply.yml` и `verify.yml`; `discover.yml`

@@ -204,3 +204,53 @@ were excluded by their exact existing stack signature; no other React errors
 were observed. Owned Wails/Vite processes stopped after terminal completion.
 All temporary remote source/build workspaces cleaned with qa-sync; QA services
 and required runtime identities retained, secret values never logged or committed.
+
+### Static Kafka identity repeat regression (2026-11-01)
+
+Owner reported KAFKA_IDENTITY_MATERIALIZATION_BLOCKED on repeat Apply.
+The earlier three-node Confluent acceptance above covered initial Apply and a
+separate corrected Verify, not a second Apply. Read-only QA inspection confirmed
+clusterId matched storage, while Core's preallocated directoryId differed from
+Kafka3.8 static format's actual directory.id.
+
+Core now manages directory IDs only when quorum mode is not static. Static
+still validates discovery coverage/known state and cluster identity. Existing
+unused generated directory IDs remain byte-preserved; no identity rewrite,
+storage migration, metadata edit, clear or formatting is introduced. Dynamic
+directory mismatches remain blocking. The service passes its role default when
+quorumMode is omitted; only the scalar is read from the authoritative defaults
+file, avoiding a duplicated product default or rendering unrelated expressions.
+The optional module argument preserves prior strict behavior for other callers.
+
+RED OS current-source tests:45 test_kafka* Core tests plus7 managed-materialization
+tests PASS (52 total). Coverage includes fresh static generation, initialized
+repeat with an old unused ID, omitted quorumMode through actual Ansible module/
+production preparation tasks, byte-preserved state/inventory, cluster/discovery
+blockers and dynamic mismatch rejection. The existing CLI readiness fixture was
+corrected to valid modern JSON and explicit collection paths; production CLI
+parsing is unchanged.
+
+Negative control on actual QA storage: old runtime identity decision BLOCKED
+with KAFKA_DIRECTORY_ID_METADATA_MISMATCH; new decision PASS/changedfalse.
+Selected Execution Node RED OS101; native full
+services/kafka/playbooks/apply.yml through Core/Ansible, without UI or Go harness.
+Existing Confluent7.8.0 deployment qa78-static on101/102/103, ports29091..29094,
+Registry18081/18082. Canonical QA inventory and previously Core-derived role
+inputs reused; official previously verified archive SHA256
+e8b8688c7eaa1fc1771b31ef54586a9367d9baa01a4ce00192a1805c3e2d9443.
+No new download, bundle patch/publication or runtime/current activation.
+
+One early native attempt caught full-default-map templating before Kafka
+mutation; fixed scalar lookup and native omitted-mode regression test cover it.
+Final full repeat Apply exit0:
+localhost ok241/changed0/failed0/unreachable0;
+node1 ok387/changed0/failed0/unreachable0;
+node2 ok231/changed0/failed0/unreachable0;
+node3 ok231/changed0/failed0/unreachable0.
+Materialization PASS, existing storage format skipped, Kafka/Registry readiness
+passed. Native log retained in .runtime/qa/kafka-static-repeat/repeat-apply.log.
+All3 meta.properties SHA256s and the persistent generated-state bytes exactly
+match pre-run values. No Installer plan/run ID: this is owner-requested direct
+native Apply. No UI or independent review invoked. Temporary source workspaces,
+controller-only runtime inputs and forwarded local agent are cleaned; existing
+test services/data, managed PKI state and immutable runtime remain intact.

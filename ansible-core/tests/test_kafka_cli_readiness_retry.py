@@ -42,7 +42,7 @@ class KafkaCLIReadinessRetryTests(unittest.TestCase):
                         print('LeaderId: -1')
                     else:
                         print('LeaderId: 2')
-                        print('CurrentVoters: [{"id": 1,}, {"id": 2,}, {"id": 3,}]')
+                        print('CurrentVoters: [{"id": 1}, {"id": 2}, {"id": 3}]')
                 """))
             os.chmod(command, 0o755)
             with open(playbook, "w", encoding="utf-8") as handle:
@@ -69,6 +69,9 @@ class KafkaCLIReadinessRetryTests(unittest.TestCase):
             result = subprocess.run(
                 ["ansible-playbook", "-i", inventory, playbook],
                 cwd=ROOT,
+                env=dict(os.environ, ANSIBLE_COLLECTIONS_PATH=os.pathsep.join([
+                    os.path.join(ROOT, 'ansible-core', 'collections'),
+                    os.path.join(ROOT, 'services', 'kafka', 'ansible_collections')])),
                 text=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,

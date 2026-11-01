@@ -15,6 +15,7 @@ def main():
         "desired_state": {"type": "dict", "required": False, "default": {}},
         "project_id": {"type": "str", "required": False, "default": "ansible-project"},
         "discovery": {"type": "dict", "required": True},
+        "default_quorum_mode": {"type": "str", "choices": ["static", "dynamic"], "default": None},
     }, supports_check_mode=False)
     if module.check_mode:
         module.fail_json(msg="Identity materialization is a mutating apply phase")
@@ -22,11 +23,11 @@ def main():
         if module.params["desired_state"]:
             if not module.params["state_path"]:
                 module.fail_json(msg="Ansible-native identity materialization requires state_path", error_code="PLATFORM_STATE_PATH_REQUIRED")
-            result = materialize_ansible_kafka(module.params["desired_state"], module.params["inventory_path"], module.params["state_path"], module.params["discovery"], module.params["project_id"])
+            result = materialize_ansible_kafka(module.params["desired_state"], module.params["inventory_path"], module.params["state_path"], module.params["discovery"], module.params["project_id"], default_quorum_mode=module.params["default_quorum_mode"])
         else:
             if not module.params["project_path"]:
                 module.fail_json(msg="Legacy identity materialization requires project_path", error_code="PROJECT_PATH_REQUIRED")
-            result = materialize_managed_kafka(module.params["project_path"], module.params["inventory_path"], module.params["discovery"])
+            result = materialize_managed_kafka(module.params["project_path"], module.params["inventory_path"], module.params["discovery"], default_quorum_mode=module.params["default_quorum_mode"])
     except Exception as error:
         module.fail_json(msg="Kafka identity materialization failed", error_code="KAFKA_IDENTITY_MATERIALIZATION_FAILED", safe_details=str(error))
     if result.get("status") != "PASS":

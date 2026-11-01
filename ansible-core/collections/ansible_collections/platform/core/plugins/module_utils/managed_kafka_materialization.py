@@ -42,7 +42,7 @@ def _inventory_hosts_with_managed_deployments(inventory_path, inventory):
         yield host, effective
 
 
-def materialize_ansible_kafka(desired_state, inventory_path, state_path, discovery, project_id="ansible-project", random_bytes=None):
+def materialize_ansible_kafka(desired_state, inventory_path, state_path, discovery, project_id="ansible-project", random_bytes=None, default_quorum_mode=None):
     """Materialize Kafka identities into machine-owned Ansible state only."""
     with open(inventory_path, "r", encoding="utf-8") as source:
         inventory = yaml.safe_load(source) or {}
@@ -85,7 +85,7 @@ def materialize_ansible_kafka(desired_state, inventory_path, state_path, discove
         if findings:
             return dict(result, status="BLOCKED", findings=findings)
         kwargs = {"random_bytes": random_bytes} if random_bytes is not None else {}
-        decision = materialize_kafka_identities(deployment_id, effective, members, metadata, **kwargs)
+        decision = materialize_kafka_identities(deployment_id, effective, members, metadata, default_quorum_mode=default_quorum_mode, **kwargs)
         result["decisions"][deployment_id] = decision
         if decision["status"] != "PASS":
             return dict(result, status="BLOCKED", findings=decision.get("findings", []))
@@ -103,7 +103,7 @@ def materialize_ansible_kafka(desired_state, inventory_path, state_path, discove
     return result
 
 
-def materialize_managed_kafka(project_path, inventory_path, discovery, random_bytes=None):
+def materialize_managed_kafka(project_path, inventory_path, discovery, random_bytes=None, default_quorum_mode=None):
     """Materialize all Kafka identities, then reload canonical documents.
 
     Discovery is read-only input collected by the Ansible target phase. The
@@ -152,7 +152,7 @@ def materialize_managed_kafka(project_path, inventory_path, discovery, random_by
         if discovery_findings:
             return dict(result, status="BLOCKED", findings=discovery_findings)
         kwargs = {"random_bytes": random_bytes} if random_bytes is not None else {}
-        decision = materialize_kafka_identities(deployment_id, deployment, members, metadata, **kwargs)
+        decision = materialize_kafka_identities(deployment_id, deployment, members, metadata, default_quorum_mode=default_quorum_mode, **kwargs)
         result["decisions"][deployment_id] = decision
         if decision["status"] != "PASS":
             return dict(result, status="BLOCKED", findings=decision.get("findings", []))
