@@ -6,7 +6,7 @@
       'deployment_id': _platform_kafka_project_deployment.key,
       'host': _platform_kafka_project_member_host,
       'advertised_host': (hostvars[_platform_kafka_project_member_host].ansible_host | default(_platform_kafka_project_member_host)),
-      'node_id': (item.value.configuration.nodeId),
+      'node_id': (item.value.configuration.nodeId | default((platform_kafka_member_inputs | default({}))[item.key].nodeId)),
       'directory_id': (((platform_generated_state | default({})).get('serviceDeployments', {})).get(_platform_kafka_project_deployment.key, {}).get('members', {}).get(item.key, {}).get('identity', {}).get('directoryId', item.value.identity.directoryId | default(omit))),
       'roles': (item.value.roles | sort),
       'schema_registry': {

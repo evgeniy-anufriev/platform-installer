@@ -486,6 +486,13 @@ Go dependency, target transport or file writes; it rejects task arguments/invali
 names, reports `changed=false`, and preserves `no_log`. Built-in `set_fact` was
 insufficient because non-native mode coerced numbers and strings such as `false`.
 
+Settings declared `x-memberInputOnly` remain keyed by member identity in the
+private `<variablesPrefix>member_inputs` mapping. Core transfers resolved values,
+including computed member defaults, through the existing role-variable map;
+the role consumes them while constructing individual instances. They never
+become one host-wide scalar or edits to portable inventory. Kafka `nodeId` uses
+this mapping when no explicit member value is present in ordinary inventory.
+
 ## Registered loop-result convention
 
 For ordinary per-member render/copy operations with downstream changed-member

@@ -548,7 +548,7 @@ def _execution_role_variables(deployment_id, definition, prefix, execution_confi
             if member_scope and role_variable == member_data_variable:
                 continue
             if member_scope and entry.get("x-memberInputOnly") is True:
-                # The ordinary role projects these values from the exact member input.
+                # The role consumes these per member, never as a host scalar.
                 # Never let the last co-located member overwrite deployment defaults.
                 continue
             if not isinstance(resolved, dict):
@@ -570,6 +570,7 @@ def _execution_role_variables(deployment_id, definition, prefix, execution_confi
     if not isinstance(targets, list) or not targets or any(not isinstance(host, str) or not host for host in targets):
         raise ValueError("EXECUTION_CONFIGURATION_INVALID")
     by_host = {host: role_values(deployment_values) for host in sorted(set(targets))}
+    member_inputs = {}
     for member_id, member in sorted(members.items()):
         context = member.get("variableContext", {}) if isinstance(member, dict) else {}
         host_id = context.get("hostId") if isinstance(context, dict) else None
@@ -577,6 +578,17 @@ def _execution_role_variables(deployment_id, definition, prefix, execution_confi
         if not isinstance(member_id, str) or not isinstance(host_id, str) or not host_id:
             raise ValueError("EXECUTION_CONFIGURATION_INVALID")
         variables = role_values(values, member_scope=True)
+        # Member-only inputs must not become one scalar shared by co-located
+        # members. Carry resolved values (including Core-computed defaults) to
+        # the ordinary role through the same private operation projection.
+        inputs = {logical: copy.deepcopy(value["value"])
+                  for logical, value in values.items()
+                  if isinstance(settings.get(logical), dict)
+                  and settings[logical].get("x-memberInputOnly") is True
+                  and isinstance(value, dict) and value.get("state") == "RESOLVED"
+                  and "value" in value}
+        if inputs:
+            member_inputs[member_id] = inputs
         if host_id not in by_host:
             raise ValueError("EXECUTION_CONFIGURATION_INVALID")
         # A package-declared client port is represented per member in the
@@ -589,6 +601,9 @@ def _execution_role_variables(deployment_id, definition, prefix, execution_confi
         if by_host[host_id] != role_values(deployment_values) and by_host[host_id] != variables:
             raise ValueError("EXECUTION_CONFIGURATION_HOST_CONFLICT")
         by_host[host_id] = variables
+    if member_inputs:
+        for variables in by_host.values():
+            variables[prefix + "member_inputs"] = copy.deepcopy(member_inputs)
     if member_list_variable is not None:
         if (not isinstance(member_list_variable, str) or not member_list_variable.startswith(prefix) or
                 not isinstance(resolved_deployment, dict) or not isinstance(hosts, dict)):

@@ -130,6 +130,7 @@ configuration:
     nodeId:
       kind: MANAGED
       roleVariable: platform_kafka_node_id
+      x-memberInputOnly: true
       type: integer
       scopes: [member]
       validation: {minimum: 0, maximum: 2147483647}

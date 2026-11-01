@@ -1,6 +1,5 @@
 apiVersion: platform.installer/catalog/v1alpha1
 kind: ServiceCatalog
-digest: sha256:245193464efbc37af1afb9484bc6ebbbe4943f1807e06c56573f5850752df9c2
 definitions:
   clickhouse:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -700,6 +699,7 @@ definitions:
         nodeId:
           kind: MANAGED
           roleVariable: platform_kafka_node_id
+          x-memberInputOnly: true
           type: integer
           scopes:
           - member
@@ -842,7 +842,7 @@ definitions:
       sasl: SCRAM-SHA-512
       mtls: deferred
       customListeners: implemented-service-02a
-    x-definitionDigest: sha256:61fbfde75c130b9479fd03ef128a40b2d52d541343323b51b5233bf214268b5b
+    x-definitionDigest: sha256:4fbf398cc6cd6e463464b779d453c2e4cdf5e4f6d5c340df60503f5460090c69
     x-sourceManifest: services/kafka/service.yml
   postgresql:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -2015,3 +2015,4 @@ definitions:
     x-conformanceOnly: true
     x-definitionDigest: sha256:3cb015e5af12cb6b27b6264a61dd903c4327dc9b3aec5ec22cc2c6bb960a90d0
     x-sourceManifest: examples/catalog/manifests/etcd.yml
+digest: sha256:e5f84dce68a74525075830b1cbaa509c25677d1ce29fe91c48c3d72d9be839ff
