@@ -26741,7 +26741,7 @@ def parse_meta_properties(deployment_id, member_id, host_id, metadata_path, cont
     return record
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/kafka_identity.py","mode":420,"size":5036,"sha256":"dd99a31f908a848b04c9bcd6555b567b0e99e00ece6e35ad925a42aa92c6360d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5036}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/kafka_identity.py","mode":420,"size":5429,"sha256":"b111c1726936293ef2f8f1b220a88a87a820673f6f311d4967d879e2abfc96b9","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5429}
 from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
@@ -26781,7 +26781,7 @@ def validate_kafka_discovery(member_ids, records):
     return findings
 
 
-def materialize_kafka_identities(deployment_id, deployment, members, metadata, random_bytes=os.urandom):
+def materialize_kafka_identities(deployment_id, deployment, members, metadata, random_bytes=os.urandom, default_quorum_mode=None):
     """Pure Kafka-specific identity decision before persistence or mutation.
 
     metadata is an inventory-member keyed read-only projection of meta.properties.
@@ -26792,6 +26792,8 @@ def materialize_kafka_identities(deployment_id, deployment, members, metadata, r
     members = members if isinstance(members, dict) else {}
     metadata = metadata if isinstance(metadata, dict) else {}
     identity = deployment.get("identity", {}) if isinstance(deployment.get("identity"), dict) else {}
+    configuration = deployment.get("configuration", {})
+    quorum_mode = configuration.get("quorumMode", default_quorum_mode) if isinstance(configuration, dict) else default_quorum_mode
     discovered_clusters = sorted(set(
         value.get("clusterId") for value in metadata.values()
         if isinstance(value, dict) and (value.get("initialized") or value.get("state") == "INITIALIZED") and value.get("clusterId")
@@ -26813,7 +26815,9 @@ def materialize_kafka_identities(deployment_id, deployment, members, metadata, r
     missing = [member_id for member_id in required if member_id not in metadata]
     if missing:
         return {"status": "BLOCKED", "findings": [_finding("KAFKA_IDENTITY_DISCOVERY_INCOMPLETE", "discovery", "Kafka identity discovery is incomplete for required controller members") ]}
-    for member_id in required:
+    # Static format assigns its own storage directory IDs. Only dynamic
+    # bootstrap consumes the preassigned IDs in --initial-controllers.
+    for member_id in (required if quorum_mode != "static" else []):
         member = members[member_id]
         persisted = member.get("identity", {}).get("directoryId") if isinstance(member.get("identity"), dict) else None
         observed = metadata.get(member_id, {}) if isinstance(metadata.get(member_id), dict) else {}
@@ -27202,7 +27206,7 @@ def configuration_registry_findings(services, resolved_topology):
     return findings
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/managed_kafka_materialization.py","mode":420,"size":10522,"sha256":"1736c401906aeb006eb51a445829d2322fc82046cdb4ee9634cd67f58f31a6e4","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":10522}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/managed_kafka_materialization.py","mode":420,"size":10656,"sha256":"3ce105649e7314b2df1e87fc1cca0f091b7db305545901b47fcba378c04a7a51","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":10656}
 from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
@@ -27247,7 +27251,7 @@ def _inventory_hosts_with_managed_deployments(inventory_path, inventory):
         yield host, effective
 
 
-def materialize_ansible_kafka(desired_state, inventory_path, state_path, discovery, project_id="ansible-project", random_bytes=None):
+def materialize_ansible_kafka(desired_state, inventory_path, state_path, discovery, project_id="ansible-project", random_bytes=None, default_quorum_mode=None):
     """Materialize Kafka identities into machine-owned Ansible state only."""
     with open(inventory_path, "r", encoding="utf-8") as source:
         inventory = yaml.safe_load(source) or {}
@@ -27290,7 +27294,7 @@ def materialize_ansible_kafka(desired_state, inventory_path, state_path, discove
         if findings:
             return dict(result, status="BLOCKED", findings=findings)
         kwargs = {"random_bytes": random_bytes} if random_bytes is not None else {}
-        decision = materialize_kafka_identities(deployment_id, effective, members, metadata, **kwargs)
+        decision = materialize_kafka_identities(deployment_id, effective, members, metadata, default_quorum_mode=default_quorum_mode, **kwargs)
         result["decisions"][deployment_id] = decision
         if decision["status"] != "PASS":
             return dict(result, status="BLOCKED", findings=decision.get("findings", []))
@@ -27308,7 +27312,7 @@ def materialize_ansible_kafka(desired_state, inventory_path, state_path, discove
     return result
 
 
-def materialize_managed_kafka(project_path, inventory_path, discovery, random_bytes=None):
+def materialize_managed_kafka(project_path, inventory_path, discovery, random_bytes=None, default_quorum_mode=None):
     """Materialize all Kafka identities, then reload canonical documents.
 
     Discovery is read-only input collected by the Ansible target phase. The
@@ -27357,7 +27361,7 @@ def materialize_managed_kafka(project_path, inventory_path, discovery, random_by
         if discovery_findings:
             return dict(result, status="BLOCKED", findings=discovery_findings)
         kwargs = {"random_bytes": random_bytes} if random_bytes is not None else {}
-        decision = materialize_kafka_identities(deployment_id, deployment, members, metadata, **kwargs)
+        decision = materialize_kafka_identities(deployment_id, deployment, members, metadata, default_quorum_mode=default_quorum_mode, **kwargs)
         result["decisions"][deployment_id] = decision
         if decision["status"] != "PASS":
             return dict(result, status="BLOCKED", findings=decision.get("findings", []))
@@ -31423,7 +31427,7 @@ if __name__ == "__main__":
     main()
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/modules/materialize_kafka_identities.py","mode":420,"size":2225,"sha256":"63a1e5827997d9ba30a4610c71a4f18a268b6541a19776b371e2155ec8d21cc3","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2225}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/modules/materialize_kafka_identities.py","mode":420,"size":2440,"sha256":"4b09d123ced86c8e83ed2335caa4bdf0c7af5994588e500e40fcd1c5fa76c474","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2440}
 #!/usr/bin/python
 from __future__ import absolute_import, division, print_function
 
@@ -31441,6 +31445,7 @@ def main():
         "desired_state": {"type": "dict", "required": False, "default": {}},
         "project_id": {"type": "str", "required": False, "default": "ansible-project"},
         "discovery": {"type": "dict", "required": True},
+        "default_quorum_mode": {"type": "str", "choices": ["static", "dynamic"], "default": None},
     }, supports_check_mode=False)
     if module.check_mode:
         module.fail_json(msg="Identity materialization is a mutating apply phase")
@@ -31448,11 +31453,11 @@ def main():
         if module.params["desired_state"]:
             if not module.params["state_path"]:
                 module.fail_json(msg="Ansible-native identity materialization requires state_path", error_code="PLATFORM_STATE_PATH_REQUIRED")
-            result = materialize_ansible_kafka(module.params["desired_state"], module.params["inventory_path"], module.params["state_path"], module.params["discovery"], module.params["project_id"])
+            result = materialize_ansible_kafka(module.params["desired_state"], module.params["inventory_path"], module.params["state_path"], module.params["discovery"], module.params["project_id"], default_quorum_mode=module.params["default_quorum_mode"])
         else:
             if not module.params["project_path"]:
                 module.fail_json(msg="Legacy identity materialization requires project_path", error_code="PROJECT_PATH_REQUIRED")
-            result = materialize_managed_kafka(module.params["project_path"], module.params["inventory_path"], module.params["discovery"])
+            result = materialize_managed_kafka(module.params["project_path"], module.params["inventory_path"], module.params["discovery"], default_quorum_mode=module.params["default_quorum_mode"])
     except Exception as error:
         module.fail_json(msg="Kafka identity materialization failed", error_code="KAFKA_IDENTITY_MATERIALIZATION_FAILED", safe_details=str(error))
     if result.get("status") != "PASS":
