@@ -15,12 +15,12 @@
         - >-
           kafka_cli_expected_controller_ids is not defined or
           (platform_kafka_cli_command_result.stdout
-           | regex_findall('"id":\\s*([0-9]+),') | map('int') | unique | sort)
+           | platform.kafka.quorum_voter_ids | unique | sort)
           == (kafka_cli_expected_controller_ids | map('int') | unique | sort)
         - >-
           kafka_cli_expected_unfenced_broker_count is not defined or
           (platform_kafka_cli_command_result.stdout_lines
-           | select('search', 'isFenced:\\s*false\\)\\s*->\\s*\\(')
+           | select('search', '\\(id:\\s*[0-9]+\\s+rack:\\s*\\S+(?:\\s+isFenced:\\s*false)?\\)\\s*->\\s*\\(')
            | list | length) == (kafka_cli_expected_unfenced_broker_count | int)
       retries: "{{ platform_kafka_startup_readiness_retries }}"
       delay: "{{ platform_kafka_startup_readiness_delay }}"

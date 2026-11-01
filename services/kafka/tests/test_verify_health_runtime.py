@@ -44,7 +44,7 @@ class VerifyHealthRuntimeTests(unittest.TestCase):
         self.bin = self.root / 'bin'
         self.bin.mkdir()
         self.script('systemctl', 'printf "ActiveState=active\\nMainPID=42\\n"')
-        self.script('kafka-metadata-quorum.sh', 'printf \'LeaderId: 1\\nCurrentVoters: [{"id":1,}]\\n\'')
+        self.script('kafka-metadata-quorum.sh', 'printf \'LeaderId: 1\\nCurrentVoters: [{"id":1}]\\n\'')
         self.script('kafka-broker-api-versions.sh',
                     "printf 'localhost:%s (id: 1 rack: null isFenced: false) -> (\\n'" % port)
         member = copy.deepcopy(fixture.member)
@@ -109,6 +109,20 @@ class VerifyHealthRuntimeTests(unittest.TestCase):
             self.assertEqual(1, output.count('TASK [platform.kafka.kafka_kraft : Выбор действующих запросов и наборов планов PKI-01]'))
             self.assertNotIn('Проверка ресурсов Schema Registry перед модификацией Kafka', output)
 
+    def test_kafka38_numeric_voters_and_broker_headers_pass(self):
+        self.script('kafka-metadata-quorum.sh', 'printf \'LeaderId: 1\\nCurrentVoters: [1]\\n\'')
+        self.script('kafka-broker-api-versions.sh',
+                    "printf 'localhost:%s (id: 1 rack: null) -> (\\n'" % self.member['listeners']['CLIENT']['port'])
+        result = self.run_verify()
+        self.assertEqual(0, result.returncode, result.stdout[-2000:])
+
+    def test_explicitly_fenced_broker_fails(self):
+        port = self.member['listeners']['CLIENT']['port']
+        self.script('kafka-broker-api-versions.sh',
+                    "printf 'localhost:%s (id: 1 rack: null isFenced: true) -> (\\n'" % port)
+        result = self.run_verify()
+        self.assertNotEqual(0, result.returncode)
+
     def test_inactive_node_fails(self):
         self.script('systemctl', 'printf "ActiveState=inactive\\nMainPID=0\\n"')
         result = self.run_verify()
@@ -116,7 +130,7 @@ class VerifyHealthRuntimeTests(unittest.TestCase):
         self.assertIn('Kafka member systemd instance is not active', result.stdout)
 
     def test_wrong_quorum_fails(self):
-        self.script('kafka-metadata-quorum.sh', 'printf \'LeaderId: 99\\nCurrentVoters: [{"id":99,}]\\n\'')
+        self.script('kafka-metadata-quorum.sh', 'printf \'LeaderId: 99\\nCurrentVoters: [{"id":99}]\\n\'')
         result = self.run_verify()
         self.assertNotEqual(0, result.returncode)
         self.assertIn('Получение состояния кворума контроллеров Kafka', result.stdout)
@@ -147,7 +161,7 @@ class VerifyHealthRuntimeTests(unittest.TestCase):
             'while [ "$1" != --command-config ]; do shift; done\n'
             'grep -q "security.protocol=SASL_SSL" "$2" || exit 9\n'
             'grep -q "synthetic-test-password" "$2" || exit 10\n'
-            'printf \'LeaderId: 1\\nCurrentVoters: [{"id":1,}]\\n\'')
+            'printf \'LeaderId: 1\\nCurrentVoters: [{"id":1}]\\n\'')
         result = self.run_verify(values)
         self.assertEqual(0, result.returncode, result.stdout[-3500:] + result.stderr[-800:])
         self.assertIn('changed=0', result.stdout)
@@ -195,7 +209,7 @@ class VerifyHealthRuntimeTests(unittest.TestCase):
         record = ('while [ "$1" != --command-config ]; do shift; done\n'
                   'test "$(stat -c %a "$2")" = 600 || exit 9\n'
                   'printf "%s\\n" "$2" >> ' + str(paths) + '\n')
-        self.script('kafka-metadata-quorum.sh', record + 'printf \'LeaderId: 1\\nCurrentVoters: [{"id":1,}]\\n\'')
+        self.script('kafka-metadata-quorum.sh', record + 'printf \'LeaderId: 1\\nCurrentVoters: [{"id":1}]\\n\'')
         self.script('kafka-broker-api-versions.sh', record + 'exit 7')
         result = self.run_verify(values)
         self.assertNotEqual(0, result.returncode)

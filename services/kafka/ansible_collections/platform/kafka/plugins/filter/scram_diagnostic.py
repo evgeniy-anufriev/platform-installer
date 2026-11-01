@@ -1,5 +1,19 @@
 """Project private Kafka CLI results into a closed public failure record."""
+import json
 import re
+
+
+def quorum_voter_ids(output):
+    """Read the public voter list emitted by Kafka 3.8 and newer CLIs."""
+    lines = re.findall(r'^CurrentVoters:\s*(\[[^\r\n]*\])\s*$', output, re.M)
+    if len(lines) != 1:
+        return []
+    try:
+        voters = json.loads(lines[0])
+    except (TypeError, ValueError):
+        return []
+    ids = [item.get('id') if isinstance(item, dict) else item for item in voters]
+    return ids if all(type(item) is int and item >= 0 for item in ids) else []
 
 
 def scram_read_diagnostic(result):
@@ -38,4 +52,5 @@ def scram_read_diagnostic(result):
 
 class FilterModule:
     def filters(self):
-        return {'scram_read_diagnostic': scram_read_diagnostic}
+        return {'scram_read_diagnostic': scram_read_diagnostic,
+                'quorum_voter_ids': quorum_voter_ids}

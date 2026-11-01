@@ -32,8 +32,7 @@
         (_platform_kafka_controller_instances | map(attribute='node_id') | map('string') | join('|')) ~
         ')(?:\s|$)')
       - >-
-        platform_kafka_cli_command_result.stdout is search(
-        '"id":\s*' ~ (item.node_id | string) ~ ',')
+        (item.node_id | int) in (platform_kafka_cli_command_result.stdout | platform.kafka.quorum_voter_ids)
     fail_msg: Kafka controller quorum does not represent exactly the expected controller members
   loop: "{{ _platform_kafka_controller_instances }}"
   loop_control:

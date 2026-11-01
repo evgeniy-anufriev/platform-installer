@@ -47,7 +47,7 @@
   ansible.builtin.set_fact:
     _platform_kafka_unfenced_broker_headers: >-
       {{ platform_kafka_cli_command_result.stdout_lines
-         | select('search', 'isFenced:\s*false\)\s*->\s*\(')
+         | select('search', '\(id:\s*[0-9]+\s+rack:\s*\S+(?:\s+isFenced:\s*false)?\)\s*->\s*\(')
          | list }}
   changed_when: false
   when: inventory_hostname == _platform_kafka_verify_broker.host
@@ -60,7 +60,7 @@
       - >-
         (_platform_kafka_unfenced_broker_headers
          | select('search', '^\s*' ~ (kafka_verify_broker_endpoints[0].bootstrap_host | regex_escape) ~ ':' ~ (kafka_verify_broker_endpoints[0].bootstrap_port | string) ~
-           '\s+\(id:\s*' ~ (item.node_id | string) ~ '.*isFenced:\s*false\)\s*->\s*\(')
+           '\s+\(id:\s*' ~ (item.node_id | string) ~ '\s+rack:\s*\S+(?:\s+isFenced:\s*false)?\)\s*->\s*\(')
          | list | length) == 1
     fail_msg: Kafka broker diagnostic does not contain exactly the expected registered, unfenced members
   vars:

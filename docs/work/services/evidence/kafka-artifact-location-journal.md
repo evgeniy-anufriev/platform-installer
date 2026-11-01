@@ -134,3 +134,28 @@ broker-config, static-quorum and format tasks in an isolated temporary directory
 Seven CLI fixture scenarios remain supplementary; they now reject advertised
 controller endpoints. Real three-node installation acceptance remains pending.
 No independent review invoked, per explicit owner instruction.
+
+### Kafka3.8 Verify output compatibility (2026-11-01)
+
+Real React/Wails Apply completed on all three QA nodes with bundle
+f17aca4ed8b72e7323b93b4da832efa0e8fdbb29adbb61fafc34c651c41a8105,
+source bca9d0d8, plan-e858e95c42155da3592289e8,
+installer-d640f8d49c0869f2cecd3ebcb30834d2.
+All3 format assertions passed (events1666/1814/1962); all3 Kafka7.8.0
+and Registry units active. Verify then FAILED3217: its existing CLI-output
+checks only accepted newer Kafka reply shapes. The observer25min deadline
+did not stop execution; read-only subscription resumed through terminal.
+
+Read-only real7.8 CLI: metadata quorum rc0/LeaderId2/CurrentVoters[1,2,3];
+broker API versions rc0, exactly endpoints101/102/103:29094 with IDs1/2/3,
+headers omit isFenced. One earlier ad-hoc broker query returned rc1;
+subsequent bounded query succeeded. Existing4.3.1 Kafka/Registry services
+and /opt/kafka pointers remain intact on all3. No data repair or format retry.
+
+Shared Verify now parses only the CurrentVoters JSON line (integer IDs or
+modern objects) and accepts successful legacy broker API headers without the
+new isFenced field. Explicit modern isFenced:true still fails. Exact expected
+membership/endpoints/count and actual CLI success remain mandatory.
+RED OS102 current production source: native Ansible/TLS/API health suite12 PASS
+(includes Kafka3.8 output and explicit fenced rejection); diagnostic/parser5 PASS.
+Actual updated-bundle Verify via React/Wails remains pending.

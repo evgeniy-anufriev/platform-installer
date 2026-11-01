@@ -13,6 +13,17 @@ from execution_task_error import safe_task_error, core_error_code
 
 
 class ScramDiagnosticTests(unittest.TestCase):
+    def test_voter_formats_and_observer_ids(self):
+        for voters in ('[1,2,3]', '[{"id":1,"endpoints":[]},{"id":2},{"id":3}]'):
+            self.assertEqual([1, 2, 3], module.quorum_voter_ids(
+                'CurrentVoters: ' + voters + '\nCurrentObservers: [{"id":99}]\n'))
+
+    def test_invalid_voter_lists_are_not_accepted(self):
+        for text in ('no quorum', 'CurrentVoters: [true]', 'CurrentVoters: ["1"]',
+                     'CurrentVoters: [{"id":-1}]', 'CurrentVoters: [{"id":1,}]',
+                     'CurrentVoters: [1]\nCurrentVoters: [2]'):
+            self.assertEqual([], module.quorum_voter_ids(text))
+
     def test_categories_and_safe_projection(self):
         for text, reason in (
             ('TimeoutException', 'TIMEOUT'), ('SSLHandshakeException', 'TLS'),
