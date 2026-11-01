@@ -57032,7 +57032,7 @@ dependencies: []
       changed_when: false
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/apply.yml","mode":420,"size":22337,"sha256":"aab54224248fa1a244dcdfac47da1e366ef168140c94eccab215d8de6ac5493c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":22337}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/apply.yml","mode":420,"size":22653,"sha256":"ee4fe35844d13caf727e85992b41a5cac994f54bc377696e13b56c39ac38eba3","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":22653}
 ---
 - name: Проверка настроек ресурсов переносимой службы
   ansible.builtin.include_role:
@@ -57324,14 +57324,14 @@ dependencies: []
     fail_msg: Kafka offline artifact path, version, and checksum are required
   when: not (platform_kafka_verify_only | bool) and platform_kafka_phase != 'schema_registry'
 
-- name: Проверка утвержденного артефакта Kafka на контроллере
+- name: Проверка утверждённого артефакта Kafka в выбранном расположении
   ansible.builtin.stat:
     path: "{{ platform_kafka_artifact_path }}"
     checksum_algorithm: sha256
     get_mime: false
     get_attributes: false
-  delegate_to: localhost
-  become: false
+  delegate_to: "{{ inventory_hostname if (platform_resolved_artifact_sources is defined and platform_resolved_artifact_sources['kafka-binary'].source == 'OFFLINE_BUNDLE') else 'localhost' }}"
+  become: "{{ platform_resolved_artifact_sources is defined and platform_resolved_artifact_sources['kafka-binary'].source == 'OFFLINE_BUNDLE' }}"
   register: platform_kafka_artifact_stat
   when: not (platform_kafka_verify_only | bool) and platform_kafka_phase != 'schema_registry'
 
@@ -58563,7 +58563,7 @@ dependencies: []
   when: kafka_cli_connection.securityProtocol in ['SSL', 'SASL_SSL']
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/prepare_host.yml","mode":420,"size":2471,"sha256":"282a389085de4bfc8f540d656a7b682af7f7a6b94b6a7e214e501f39f03d3ba3","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2471}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/prepare_host.yml","mode":420,"size":2601,"sha256":"48d546291cbb608d4c50f2438bf9bb4dd13a6fe179b1fd93739003fb800e4e3a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2601}
 ---
 - name: Установка необходимого компонента Java для всего хоста
   ansible.builtin.package:
@@ -58585,7 +58585,7 @@ dependencies: []
   ansible.builtin.unarchive:
     src: "{{ platform_kafka_artifact_path }}"
     dest: /opt
-    remote_src: false
+    remote_src: "{{ platform_resolved_artifact_sources is defined and platform_resolved_artifact_sources['kafka-binary'].source == 'OFFLINE_BUNDLE' }}"
     creates: "/opt/{{ platform_kafka_archive_directory }}/bin/kafka-storage{{ platform_kafka_script_extension }}"
   register: _platform_kafka_distribution_unpack
 
