@@ -127,7 +127,7 @@ class ServiceApplyPkiContractTests(unittest.TestCase):
         aggregate = os.path.join(ROOT, "services/kafka/playbooks/aggregate_discovery.yml")
         with open(aggregate, encoding="utf-8") as handle:
             aggregate_tasks = handle.read()
-        self.assertIn("dict((groups['platform_targets'] | default([]) | sort) | zip", aggregate_tasks)
+        self.assertIn("dict((ansible_play_hosts_all | sort) | zip", aggregate_tasks)
         self.assertIn("map('extract', hostvars, 'platform_kafka_identity_discovery')", aggregate_tasks)
         self.assertNotIn("platform_kafka_discovery_by_host | default({}) | combine", apply_tasks)
         materializer = apply_tasks[apply_tasks.index("Подготовка идентификаторов Kafka перед внесением изменений"):apply_tasks.index("Сохранение рассчитанных идентификаторов Kafka")]
