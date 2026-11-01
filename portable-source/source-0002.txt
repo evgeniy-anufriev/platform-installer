@@ -48134,6 +48134,33 @@ if __name__ == "__main__":
     sys.exit(main())
 
 @@END
+@@PORTABLE {"path":"scripts/read_exec_node_run_status.sh","mode":420,"size":748,"sha256":"45b819a5f84b2899f90690f1bf5d6b64e56762846e3d9e0c45be63b61f8d3016","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":748}
+sudo python3 - <<'PY'
+import json
+import subprocess
+from pathlib import Path
+
+root = Path("/var/lib/platform-installer/execution/runs")
+files = sorted(root.glob("*/status.json"),
+               key=lambda p: p.stat().st_mtime, reverse=True)
+
+for path in files[:5]:
+    status = json.loads(path.read_text())
+    run_id = path.parent.name
+    unit = f"platform-installer-run-{run_id}.service"
+    process = subprocess.run(
+        ["systemctl", "is-active", unit],
+        capture_output=True, text=True
+    )
+    print("Run:", run_id)
+    print("Статус:", status.get("state"))
+    print("Обновлён:", status.get("updatedAt"))
+    print("Процесс:", process.stdout.strip())
+    print("Каталог:", path.parent)
+    print()
+PY
+
+@@END
 @@PORTABLE {"path":"scripts/update_portable_source.py","mode":420,"size":3591,"sha256":"11e8e19515de3506f6efe623cf8c920666d3e4fed7bbda7d39a43835e8ec99bb","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3591}
 #!/usr/bin/env python3
 """Regenerate only portable-source artifacts; validate before replacing files."""
