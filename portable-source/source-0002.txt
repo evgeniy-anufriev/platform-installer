@@ -60670,13 +60670,15 @@ status: requires-integration-evidence
 }
 
 @@END
-@@PORTABLE {"path":"services/kafka/playbooks/aggregate_discovery.yml","mode":420,"size":592,"sha256":"746157ced0bcd742a8a8495cb2d2c7b2ac6516b7aa021e524d6f87d3ed5d95be","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":592}
+@@PORTABLE {"path":"services/kafka/playbooks/aggregate_discovery.yml","mode":420,"size":676,"sha256":"4da27d5a8e2be78472673e81bd8d96ea6cda3045869a602f522993d21a0c28bb","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":676}
 ---
 # One controller-side snapshot: never use a delegated localhost fact as a
 # mutable accumulator across target-host loop contexts.
+# Use the play's limited host set, not the full inventory group: other services'
+# hosts have no Kafka discovery facts.
 - name: Создание полного нормализованного снимка обнаружения идентификации Kafka
   ansible.builtin.set_fact:
-    platform_kafka_discovery_by_host: "{{ dict((groups['platform_targets'] | default([]) | sort) | zip((groups['platform_targets'] | default([]) | sort) | map('extract', hostvars, 'platform_kafka_identity_discovery'))) }}"
+    platform_kafka_discovery_by_host: "{{ dict((ansible_play_hosts_all | sort) | zip((ansible_play_hosts_all | sort) | map('extract', hostvars, 'platform_kafka_identity_discovery'))) }}"
   delegate_to: localhost
   delegate_facts: true
   run_once: true
