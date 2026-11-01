@@ -89,6 +89,29 @@ class ServiceConfigurationPreviewTests(unittest.TestCase):
             self.assertEqual('operator', values['accountName']['value'])
             self.assertEqual('/home/operator/.local/share/docker', values['dataRoot']['value'])
 
+            # First acquisition for this revision must work even when another
+            # service makes the authoritative project validation BLOCKED.
+            variables.write_text(yaml.safe_dump({'platform_name_prefix': 'qa', 'platform_desired_state': {
+                'serviceDeployments': {
+                    'docker-main': {'serviceType': 'docker', 'mode': 'auto',
+                                    'configuration': {'accountName': 'operator'}},
+                    'dns-broken': {'serviceType': 'bind', 'mode': 'authoritative-primary-secondary',
+                                   'configuration': {'zone': 'INVALID'}}}}}))
+            blocked_preview = call('service-configuration-preview.yml')
+            blocked_values = blocked_preview['services']['docker-main']['configuration']
+            self.assertEqual('operator', blocked_values['accountName']['value'])
+            self.assertEqual('/home/operator/.local/share/docker', blocked_values['dataRoot']['value'])
+            self.assertNotEqual(cold['projectRevision'], blocked_preview['projectRevision'])
+            snapshot = call('project-snapshot.yml')
+            self.assertEqual('BLOCKED', snapshot['validation']['status'])
+            self.assertTrue(snapshot['findings'])
+            changed = yaml.safe_load(variables.read_text())
+            changed['platform_desired_state']['serviceDeployments']['docker-main']['configuration']['dataRoot'] = '/srv/docker'
+            variables.write_text(yaml.safe_dump(changed))
+            refreshed = call('service-configuration-preview.yml')
+            self.assertEqual('/srv/docker', refreshed['services']['docker-main']['configuration']['dataRoot']['value'])
+            self.assertNotEqual(blocked_preview['projectRevision'], refreshed['projectRevision'])
+
     def test_docker_defaults_use_native_ansible_with_prefix_and_overrides(self):
         from ansible.parsing.dataloader import DataLoader
         from ansible.template import Templar
@@ -133,6 +156,9 @@ class ServiceConfigurationPreviewTests(unittest.TestCase):
             values = yaml.safe_load(variables.read_text())
             values['platform_data_root_directory'] = '/data'
             values['platform_desired_state_contract'] = 'platform.installer/project-desired-state/v3alpha1'
+            values['platform_desired_state']['serviceDeployments']['dns-broken'] = {
+                'serviceType': 'bind', 'mode': 'authoritative-primary-secondary',
+                'configuration': {'zone': 'INVALID'}}
             values['platform_desired_state']['applicationLibraryDeployments'] = {
                 'consumer': {'libraryRef': 'example@1.0.0', 'runtimeRef': 'docker', 'bindings': {}}}
             variables.write_text(yaml.safe_dump(values))

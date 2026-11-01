@@ -125,6 +125,18 @@ def topology(reverse=False):
 
 
 class TopologyResolutionTests(unittest.TestCase):
+    def test_partial_canonical_shape_keeps_valid_services_and_members(self):
+        desired = topology()
+        desired["serviceDeployments"]["broken"] = {"serviceType": []}
+        members = desired["serviceDeployments"]["kafka-main"]["members"]
+        members["broken"] = None
+        members["member-a"]["roles"] = None
+        resolved = RESOLUTION.canonical_topology(desired)["serviceDeployments"]
+        self.assertEqual(["kafka-main"], list(resolved))
+        self.assertEqual(["member-a", "member-b"], list(resolved["kafka-main"]["members"]))
+        self.assertEqual([], resolved["kafka-main"]["members"]["member-a"]["roles"])
+        self.assertEqual(["broker", "controller"], resolved["kafka-main"]["members"]["member-b"]["roles"])
+
     def test_resolves_only_canonical_explicit_topology(self):
         result = RESOLUTION.resolve_topology(
             manifest(), topology(), ["node-a", "node-b"], catalog()
@@ -194,6 +206,12 @@ class TopologyResolutionTests(unittest.TestCase):
         result = RESOLUTION.resolve_topology(manifest(), invalid, ["node-a", "node-b"], catalog())
         self.assertEqual("BLOCKED", result["status"])
         self.assertIn("PLACEMENT_DISTINCT_HOSTS_REQUIRED", [item["code"] for item in result["findings"]])
+        self.assertNotIn("resolvedTopology", result)
+        preview = RESOLUTION.resolve_topology(manifest(), invalid, ["node-a", "node-b"], catalog(),
+                                              configuration_only=True)
+        self.assertEqual("BLOCKED", preview["status"])
+        self.assertEqual(result["findings"], preview["findings"])
+        self.assertIn("kafka-main", preview["resolvedTopology"]["serviceDeployments"])
 
     def test_joins_current_desired_state_with_inventory_placement(self):
         desired = topology()

@@ -302,6 +302,50 @@ Real React/Wails and visual acceptance remain OPEN. These presentation changes
 require an updated Installer only. TLS default/profile-selection policy is a
 separate owner discussion; it is not changed by this patch.
 
+### Core calculation despite unrelated validation errors — 2026-11-01
+
+Display retention above could preserve a previously received directory, but a
+cold Core preview still returned no services whenever topology validation was
+blocked. resolve_topology discarded the canonical topology on any finding, so
+the configuration resolver had no deployments to evaluate. Unrelated DNS,
+provider or placement errors therefore hid otherwise calculable directories.
+
+The existing configuration_only request now explicitly requests partial
+canonical topology and materializes valid inventory-owned members for display.
+Its status/findings remain BLOCKED. The default topology/full snapshot/planning
+path remains strict and returns no resolvedTopology for blocked input. Canonical
+shape guards skip malformed service/member entries, and definition digests use
+that canonical input. No second resolver, desired-state persistence, frontend
+calculation, new wire contract or last-success label was introduced. Safe
+ordinary-value/secret-exclusion projection remains unchanged.
+
+Actual standalone target-free preview tests on current RED OS101 sources prove:
+Docker account/dataRoot survive invalid DNS, a later override replaces the
+directory on a new revision while DNS remains invalid, PostgreSQL dataDirectory
+is calculated on first preview despite invalid DNS/application inputs, and full
+ProjectSnapshot validation remains BLOCKED with findings. Existing directory
+root/colocation/member override/secret exclusion cases pass. Final selections:
+preview13 PASS7.960s, topology13 PASS0.007s, configuration28 PASS0.021s, no skips.
+Topology/configuration direct tests require the established module_utils
+PYTHONPATH; the first topology invocation without it failed at test import,
+then passed with the correct environment. No production repair was needed.
+
+Independent FULL DIFF APPROVE_WITH_CHANGES, blocking0; base
+71bfce96533147735e1d8d00789c5cce97fa7c31, reviewed four-file diff SHA256
+20eba46a6cade86a2fc18983a018e65dae4e59b63ccb506fb84df9ea343bbf56.
+Nonblocking SC-PREVIEW-N01 addressed by a compact malformed-member/service-type
+canonicalization regression; added override-refresh coverage afterwards. No
+production changes after review. Design/mocked UI checks from the retention
+section remain separate historical evidence; no new UI code was changed.
+
+Safe logs/workspace identities under .runtime/qa/approval-target-trust/
+path-preview-*. Current sources transferred and temporary workspaces cleaned by
+qa-sync.ps1. No targets/services were modified. Updated bundle build and real
+React/Wails acceptance remain OPEN: configured node2 build host192.168.56.102
+SSH timed out. No bundle publication/activation or real installation started.
+The correction requires rebuilding the runtime bundle; this wire-compatible
+change needs no Installer binary update.
+
 ## Explicit TLS profile selection through ordinary Save
 
 Owner-approved auto-selection uses the existing structural candidate and

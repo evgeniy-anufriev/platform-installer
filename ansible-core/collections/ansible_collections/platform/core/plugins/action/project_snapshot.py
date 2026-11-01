@@ -74,13 +74,13 @@ def snapshot_input_message(stage, error):
     return 'Не удалось построить снимок проекта. Этап: %s. %s' % (stage, reason)
 
 
-def _materialize_resolved_members(desired_state, topology, inventory_deployments, target_ids):
+def _materialize_resolved_members(desired_state, topology, inventory_deployments, target_ids, configuration_only=False):
     """Keep topology identity and inventory-owned member settings together."""
     materialized = copy.deepcopy(desired_state)
-    if topology.get("status") != "PASS":
+    if topology.get("status") != "PASS" and not configuration_only:
         return materialized
     inventory_members, findings = canonical_inventory_members(inventory_deployments, target_ids)
-    if findings:
+    if findings and not configuration_only:
         raise ValueError("validated inventory members could not be materialized")
     for deployment_id, resolved in topology["resolvedTopology"].get("serviceDeployments", {}).items():
         deployment = materialized.get("serviceDeployments", {}).get(deployment_id)
@@ -610,6 +610,7 @@ class ActionModule(ActionBase):
                 inventory_deployments_by_host=inventory_deployments,
                 ansible_desired_state=desired_state,
                 inventory_host_addresses=host_addresses,
+                configuration_only=self._task.args.get("configuration_only") is True,
             )
             try:
                 validator = SchemaValidator(os.path.join(repo_root, "contracts"))
@@ -643,6 +644,7 @@ class ActionModule(ActionBase):
             stage = 'разрешение конфигурации сервисов'
             materialized = _materialize_resolved_members(
                 desired_state, topology, inventory_deployments, target_ids,
+                configuration_only=self._task.args.get("configuration_only") is True,
             )
             configuration = resolve_service_configuration(
                 topology, materialized, catalog, role_defaults, schemas,

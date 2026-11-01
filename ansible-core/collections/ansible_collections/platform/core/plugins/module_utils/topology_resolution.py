@@ -43,7 +43,7 @@ def _with_placement_hosts(topology, placements):
 
 
 def _canonical_roles(roles):
-    return sorted(role for role in roles if isinstance(role, str))
+    return sorted(role for role in roles if isinstance(role, str)) if isinstance(roles, list) else []
 
 
 def _canonical_member(member, host=None):
@@ -57,12 +57,14 @@ def _canonical_member(member, host=None):
 def canonical_topology(topology, placements=None):
     """Return only the explicit topology fields in stable identifier order."""
     deployments = topology.get("serviceDeployments", {})
+    deployments = deployments if isinstance(deployments, dict) else {}
     canonical_deployments = {}
-    for deployment_id in sorted(deployments):
+    for deployment_id in sorted(key for key in deployments if isinstance(key, str)):
         deployment = deployments[deployment_id]
-        if not isinstance(deployment, dict):
+        if not isinstance(deployment, dict) or not isinstance(deployment.get("serviceType"), str):
             continue
         members = deployment.get("members", {})
+        members = members if isinstance(members, dict) else {}
         canonical_deployments[deployment_id] = {
             field: (
                 {
@@ -70,7 +72,8 @@ def canonical_topology(topology, placements=None):
                         members[member_id],
                         placements.get((deployment_id, member_id)) if placements is not None else None,
                     )
-                    for member_id in sorted(members)
+                    for member_id in sorted(key for key in members if isinstance(key, str))
+                    if isinstance(members[member_id], dict)
                 }
                 if field == "members"
                 else deployment.get(field)
@@ -100,7 +103,7 @@ def _used_definition_digests(topology, service_catalog):
 
 def resolve_topology(manifest, topology, inventory_hosts, service_catalog, placement_by_host=None,
                      inventory_deployments_by_host=None, ansible_desired_state=None,
-                     inventory_host_addresses=None):
+                     inventory_host_addresses=None, configuration_only=False):
     """Resolve explicit topology without filesystem, Ansible or host-var knowledge.
 
     CORE-01 remains responsible for project/catalog/reference and manifest
@@ -194,14 +197,16 @@ def resolve_topology(manifest, topology, inventory_hosts, service_catalog, place
         inventory_host_addresses=inventory_host_addresses,
     )
     findings = validation["findings"] + [item for item in state_findings if item["status"] == "BLOCKED"] + placement_findings
-    if findings:
+    # Only the target-free settings preview may consume partial topology.
+    # Its findings/status remain blocked; execution callers keep the strict default.
+    if findings and not configuration_only:
         return {
             "status": "BLOCKED",
             "findings": findings,
         }
 
     resolved = canonical_topology(desired_state, placements)
-    definition_digests = _used_definition_digests(desired_state, service_catalog)
+    definition_digests = _used_definition_digests(resolved, service_catalog)
     fingerprint_input = {
         "resolvedTopology": resolved,
         "hostScopedDeployments": {
@@ -214,9 +219,9 @@ def resolve_topology(manifest, topology, inventory_hosts, service_catalog, place
         "serviceDefinitionDigests": definition_digests,
     }
     return {
-        "status": "PASS",
+        "status": "BLOCKED" if findings else "PASS",
         "resolvedTopology": resolved,
         "serviceDefinitionDigests": definition_digests,
         "topologyFingerprint": canonical_digest(fingerprint_input),
-        "findings": state_findings,
+        "findings": findings if findings else state_findings,
     }
