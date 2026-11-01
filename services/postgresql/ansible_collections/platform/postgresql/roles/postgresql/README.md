@@ -10,6 +10,19 @@ TLS profile, administrator и pg_auto_failover credential references.
 `platform_postgresql_secret_files` содержит только runtime-only secret-file
 mapping. В HA members задают monitor/database role, host address и port.
 
+Apply сначала полностью подготавливает monitor, включая запуск и готовность,
+затем последовательно data-узлы, независимо от порядка inventory. Ошибка monitor
+останавливает playbook до регистрации data-узлов. Standalone выполняется как раньше.
+Для собственного playbook с прямым вызовом роли также обеспечьте этот порядок.
+
+Обе команды `pg_autoctl create` ограничены
+`platform_postgresql_pg_autoctl_create_timeout` (по умолчанию 300 секунд).
+После истечения срока команда получает TERM, через 5 секунд — KILL, если требуется.
+Обычные временные ошибки `create postgres` сохраняют существующие 20 повторов
+с паузой 3 секунды; истечение таймаута немедленно завершает задачу ошибкой,
+без повторения зависшей команды. Данные сохраняются. Для длительного
+первичного копирования увеличьте положительное значение таймаута в переменных Ansible.
+
 TLS/HBA policy, Platform include, pg_autoctl lifecycle, units и credential files
 принадлежат role. Не храните passwords в inventory и не меняйте `.pgpass`, PKI,
 generated HBA/include, data directory или units вручную.

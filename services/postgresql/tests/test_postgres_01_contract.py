@@ -133,8 +133,8 @@ class PostgreSQLHaLifecycleContractTests(unittest.TestCase):
     def test_data_node_uses_local_postgres_user_not_monitor_identity(self):
         self.assertIn('- "{{ platform_postgresql_user }}"', self.failover)
 
-    def test_pg_autoctl_owns_slot_convergence_retry(self):
-        self.assertIn("until: platform_postgresql_pg_autoctl_create_postgres.rc == 0", self.failover)
+    def test_slot_convergence_retries_stop_on_create_timeout(self):
+        self.assertIn("until: platform_postgresql_pg_autoctl_create_postgres.rc in [0, 124, 137]", self.failover)
         self.assertIn("retries: 20", self.failover)
 
     def test_pgpass_covers_pg_autoctl_replication_database(self):

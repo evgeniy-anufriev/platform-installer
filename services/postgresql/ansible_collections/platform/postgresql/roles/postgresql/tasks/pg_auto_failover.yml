@@ -104,6 +104,10 @@
 - name: Создание монитора pg_auto_failover
   ansible.builtin.command:
     argv:
+      - timeout
+      - --signal=TERM
+      - --kill-after=5s
+      - "{{ platform_postgresql_pg_autoctl_create_timeout | int }}s"
       - pg_autoctl
       - create
       - monitor
@@ -136,6 +140,10 @@
 - name: Создание регистрации экземпляра службы данных pg_auto_failover
   ansible.builtin.command:
     argv:
+      - timeout
+      - --signal=TERM
+      - --kill-after=5s
+      - "{{ platform_postgresql_pg_autoctl_create_timeout | int }}s"
       - pg_autoctl
       - create
       - postgres
@@ -169,5 +177,5 @@
   register: platform_postgresql_pg_autoctl_create_postgres
   retries: 20
   delay: 3
-  until: platform_postgresql_pg_autoctl_create_postgres.rc == 0
+  until: platform_postgresql_pg_autoctl_create_postgres.rc in [0, 124, 137]
   changed_when: true

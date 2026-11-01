@@ -3,6 +3,7 @@
   ansible.builtin.assert:
     that:
       - platform_postgresql_mode in ['standalone', 'pg_auto_failover']
+      - platform_postgresql_mode != 'pg_auto_failover' or platform_postgresql_pg_autoctl_create_timeout | int > 0
       - platform_postgresql_deployment_id is string
       - platform_postgresql_deployment_id is match('^[a-z0-9][a-z0-9-]*$')
       - platform_postgresql_advanced_config is mapping
