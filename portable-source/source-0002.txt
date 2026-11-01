@@ -47388,6 +47388,39 @@ ansible-inventory \
 SH
 
 @@END
+@@PORTABLE {"path":"scripts/check_kafka_nodeid.sh","mode":420,"size":1148,"sha256":"07e511d1b4b9b51ece73a19ac7343badc8689ea68fcfe4001cd86661b198a37d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1148}
+sudo python3 <<'PY'
+import json
+import subprocess
+from pathlib import Path
+
+base = Path("/var/lib/platform-installer/execution/runs")
+statuses = list(base.glob("*/status.json"))
+if not statuses:
+    raise SystemExit("Запуски не найдены")
+
+run = max(statuses, key=lambda p: p.stat().st_mtime).parent
+print("Запуск:", run.name)
+
+result = subprocess.run(
+    ["ansible-inventory", "-i",
+     str(run / "project/inventory/hosts.yml"), "--list"],
+    capture_output=True, text=True
+)
+if result.returncode:
+    raise SystemExit("Не удалось прочитать inventory через ansible-inventory")
+
+hosts = json.loads(result.stdout).get("_meta", {}).get("hostvars", {})
+for host, variables in sorted(hosts.items()):
+    for deployment, settings in variables.get("platform_deployments", {}).items():
+        for member, data in settings.get("members", {}).items():
+            if not set(data.get("roles", [])) & {"broker", "controller"}:
+                continue
+            node_id = data.get("configuration", {}).get("nodeId", "НЕ ЗАДАН")
+            print(f"{host}: {deployment}/{member}, nodeId={node_id}")
+PY
+
+@@END
 @@PORTABLE {"path":"scripts/npm_offline.py","mode":420,"size":17225,"sha256":"bceb887c3a65c76fdfe3c7a107d278b112b0722ad5764e0bff586cd5e3ffbafb","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":17225}
 #!/usr/bin/env python3
 """Acquire a lockfile-complete npm payload explicitly; install it offline."""
