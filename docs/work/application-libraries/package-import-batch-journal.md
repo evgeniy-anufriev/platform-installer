@@ -408,3 +408,40 @@ before showing inputs. Its current transport stages the project and invokes
 Core describe-runtime-secrets; each click can repeat that work. Latency/caching
 is not changed by the session-retention fix. SSH/SCP/fsutil use the existing
 hidden-window helper in current source; no new visible-console fix claimed.
+
+
+## Registry credentials without a Core round trip (2026-11-02)
+
+Owner requested local registry input like pending service credentials. The
+existing registry form now opens from saved authored username/password sources;
+no descriptor query, project staging, SSH or Core call on open/Save. Source
+identifiers are not shown. Values stay in the existing Broker's project-bound
+pending bucket, with bounded expiry and clearing. No new Go files/endpoints or
+persistent credential storage. Existing SetDeploymentRuntimeSecretValues accepts
+an additive authored-source submission, guarded by exact saved revision, library
+and source membership; draft/foreign/mixed submissions are rejected locally.
+
+Core still owns requirement IDs and execution admission. Existing validated
+application descriptors map sourceRef to requirementRef during promotion; image
+preparation also consumes this mapping. Unselected sources cannot be delivered.
+Replacing a registry value with current Core evidence updates its attached
+value; otherwise it waits for normal Core attestation. Other service/application
+and PKCS inputs remain in the same pending session.
+
+Full Go tests/vet PASS, including no-Core/offline input, stale revision/foreign
+library/source/draft rejection, source expiry/zeroing, sibling-service retention,
+and replacement values in image-preparation payloads. React138, TypeScript/lint
+and Windows production Wails build PASS. No review per owner. The source test
+initially exposed empty unmapped-source promotion rejecting an empty target map;
+corrected to leave unattested sources pending, final suite passed.
+
+Actual React/Wails on the existing c97 READY runtime: saved project revision
+911217d47790021cfbb927a675f35067f2503f521d6595ad57dd73f24f22f5a1;
+registry button -> four fields for two configured registries -> session Save
+PASS. Measured opening18ms in this single QA run; intercepted real
+GetRuntimeSecretDescriptors count0 for open and Save. Project revision unchanged.
+Core/Ansible sources and runtime bundle unchanged; no plan approval, installation
+Start or registry login/pull executed. Source-to-requirement consumption tested
+through existing Go contract tests; no new installation acceptance claimed.
+Owned Wails/Vite processes stopped, generated outputs restored, unrelated work
+preserved. Updated Installer only is required.

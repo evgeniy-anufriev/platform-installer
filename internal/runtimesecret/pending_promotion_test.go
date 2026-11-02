@@ -5,6 +5,56 @@ import (
 	"time"
 )
 
+func TestPendingApplicationSourcesRequireCoreMappingAndExpire(t *testing.T) {
+	now := time.Now()
+	b := NewBroker(WithClock(func() time.Time { return now }), WithTTL(time.Minute))
+	t.Cleanup(b.Close)
+	binding := Binding{Root: t.TempDir(), ID: "application-input"}
+	if err := b.SetPendingApplicationSecretValues(binding, map[string]string{"registry-user": "synthetic-user", "registry-password": "synthetic-password"}); err != nil {
+		t.Fatal(err)
+	}
+	expiry := b.pending.expiresAt
+	if _, err := b.Set(binding, Input{Username: "operator", SSHMode: SSHPassword, SSHPassword: "synthetic-transport", ElevationMode: ElevationNone}); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.PromotePendingRuntimeSecretValues(binding, []string{"core-password"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(b.lease.runtimeSecretValues) != 0 {
+		t.Fatal("unattested source attached")
+	}
+	if err := b.SetPendingRuntimeSecretValuesForRequirements(binding, []string{"service-password"}, map[string]string{"service-password": "synthetic-service"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(b.pending.applicationValues) != 2 {
+		t.Fatal("service input replaced application sources")
+	}
+	expiry = b.pending.expiresAt
+	now = now.Add(20 * time.Second)
+	if err := b.SetPendingApplicationSecretValues(binding, map[string]string{"registry-password": "synthetic-replacement"}); err != nil {
+		t.Fatal(err)
+	}
+	if b.pending.expiresAt != expiry {
+		t.Fatal("source replacement extended expiry")
+	}
+	if err := b.PromotePendingRuntimeSecretValues(binding, []string{"service-password", "core-password"}, map[string]string{"registry-password": "core-password", "registry-user": "not-in-core-set"}); err != nil {
+		t.Fatal(err)
+	}
+	if string(b.lease.runtimeSecretValues["core-password"]) != "synthetic-replacement" || len(b.lease.runtimeSecretValues) != 2 {
+		t.Fatal("source mapping crossed authoritative requirements")
+	}
+	buffer := b.pending.applicationValues["registry-password"]
+	now = expiry.Add(time.Second)
+	if err := b.PromotePendingRuntimeSecretValues(binding, []string{"core-password"}, map[string]string{"registry-password": "core-password"}); err == nil {
+		t.Fatal("expired source promoted")
+	}
+	for _, value := range buffer {
+		if value != 0 {
+			t.Fatal("expired source buffer retained")
+		}
+	}
+}
+
 func TestPasswordPromotionPreservesTypedInputsForCoreBinding(t *testing.T) {
 	for _, withPassword := range []bool{false, true} {
 		t.Run(map[bool]string{false: "typed-only", true: "mixed"}[withPassword], func(t *testing.T) {

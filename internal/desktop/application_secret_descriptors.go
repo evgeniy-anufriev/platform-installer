@@ -10,6 +10,16 @@ var applicationSecretRequirement = regexp.MustCompile(`^application-secret-[a-f0
 var applicationSecretID = regexp.MustCompile(`^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$`)
 var applicationSecretHost = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 
+func applicationSecretSourceRequirements(inputs []executionnode.ApplicationSecretDescriptor) map[string]string {
+	result := map[string]string{}
+	for _, item := range inputs {
+		if item.Purpose == "APPLICATION_SECRET" || item.Purpose == "APPLICATION_REGISTRY_USERNAME" || item.Purpose == "APPLICATION_REGISTRY_PASSWORD" {
+			result[item.SourceRef] = item.RequirementRef
+		}
+	}
+	return result
+}
+
 func validApplicationSecretDescriptor(item executionnode.ApplicationSecretDescriptor) bool {
 	if !applicationSecretRequirement.MatchString(item.RequirementRef) || !applicationSecretID.MatchString(item.SourceRef) || item.DisplayLabel == "" || len([]byte(item.DisplayLabel)) > 256 ||
 		!validApplicationSecretOperations(item.Operations) {

@@ -489,6 +489,7 @@ export type RuntimeSecretValuesInput = {
   serviceDeployment: string;
   applicationLibrary?: string;
   applicationRequirementRef?: string;
+  applicationSourceValues?: Record<string, string>;
   values: Record<string, string>;
 };
 export type PendingRuntimeSecretValuesInput = {

@@ -1913,6 +1913,7 @@ export namespace desktop {
     serviceDeployment: string;
     applicationLibrary?: string;
     applicationRequirementRef?: string;
+    applicationSourceValues?: Record<string, string>;
     values: Record<string, string>;
 
     static createFrom(source: any = {}) {
@@ -1926,6 +1927,7 @@ export namespace desktop {
       this.serviceDeployment = source["serviceDeployment"];
       this.applicationLibrary = source["applicationLibrary"];
       this.applicationRequirementRef = source["applicationRequirementRef"];
+      this.applicationSourceValues = source["applicationSourceValues"];
       this.values = source["values"];
     }
   }

@@ -1,8 +1,59 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ApplicationRegistryCredentials } from "./ApplicationRegistryCredentials";
 
 describe("library registry credentials", () => {
+  it("opens immediately and saves authored sources without loading Core descriptors", async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    render(
+      <ApplicationRegistryCredentials
+        libraryId="szi"
+        projectRevision="saved-revision"
+        value={{
+          "registry.example": {
+            username: {
+              source: { kind: "runtime_secret_ref", ref: "registry-user" },
+            },
+            password: {
+              source: { kind: "runtime_secret_ref", ref: "registry-password" },
+            },
+          },
+        }}
+        registries={[]}
+        disabled={false}
+        runtimeDisabled={false}
+        onChange={vi.fn()}
+        save={save}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Логин и пароль registry" }),
+    );
+    fireEvent.change(screen.getByLabelText("Логин: registry.example"), {
+      target: { value: "operator" },
+    });
+    fireEvent.change(screen.getByLabelText("Пароль: registry.example"), {
+      target: { value: "synthetic-password" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить в сессии" }));
+    await waitFor(() =>
+      expect(save).toHaveBeenCalledWith({
+        projectRevision: "saved-revision",
+        descriptorSetFingerprint: "",
+        serviceDeployment: "",
+        applicationLibrary: "szi",
+        applicationSourceValues: {
+          "registry-user": "operator",
+          "registry-password": "synthetic-password",
+        },
+        values: {},
+      }),
+    );
+    expect(
+      await screen.findByText("Логин и пароль сохранены только в сессии"),
+    ).toBeTruthy();
+    expect(screen.queryByLabelText("Пароль: registry.example")).toBeNull();
+  });
   it("stages references and leaves actual values to the runtime session", () => {
     const onChange = vi.fn();
     render(

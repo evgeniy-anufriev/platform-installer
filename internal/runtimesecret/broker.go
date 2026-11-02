@@ -125,12 +125,13 @@ type runExecutionIdentityHold struct {
 // and PKCS passwords, independently of a target credential. It is project-bound,
 // short-lived and cannot be used for SSH or expose values through Status.
 type pendingRuntimeSecrets struct {
-	binding          Binding
-	values           map[string][]byte
-	pkiStorePassword []byte
-	typed            map[string]RuntimeSecretInput
-	expiresAt        time.Time
-	generation       uint64
+	binding           Binding
+	values            map[string][]byte
+	applicationValues map[string][]byte
+	pkiStorePassword  []byte
+	typed             map[string]RuntimeSecretInput
+	expiresAt         time.Time
+	generation        uint64
 }
 
 // SetPendingServiceSecretInput stores a locally catalog-authorized typed
@@ -350,6 +351,39 @@ func (b *Broker) SetRuntimeSecretValuesForRequirements(binding Binding, requirem
 	return nil
 }
 
+// SetPendingApplicationSecretValues holds authored source values without Core
+// requirement IDs. Only a later Core-provided source-to-requirement mapping can
+// attach these values to a target credential.
+func (b *Broker) SetPendingApplicationSecretValues(binding Binding, values map[string]string) error {
+	if binding.Root == "" || binding.ID == "" || len(values) == 0 || len(values) > 128 {
+		return errors.New("RUNTIME_SECRET_INPUT_INVALID")
+	}
+	for source, value := range values {
+		if len(source) > 128 || !applicationSecretSourcePattern.MatchString(source) || !utf8.ValidString(value) || len(value) == 0 || len(value) > 4096 {
+			return errors.New("RUNTIME_SECRET_INPUT_INVALID")
+		}
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	pending := b.pendingForBindingLocked(binding)
+	next := cloneSecretMap(pending.applicationValues)
+	for source, value := range values {
+		zero(next[source])
+		next[source] = []byte(value)
+	}
+	total := 0
+	for _, value := range next {
+		total += len(value)
+	}
+	if len(next) > 128 || total > 65536 {
+		zeroSecretMap(next)
+		return errors.New("RUNTIME_SECRET_INPUT_INVALID")
+	}
+	zeroSecretMap(pending.applicationValues)
+	pending.applicationValues = next
+	return nil
+}
+
 // SetPendingRuntimeSecretValuesForRequirements accepts a locally
 // catalog-authorized service-secret subset before a READY Execution Node or a
 // target credential exists. Values are kept only in Broker memory and expire
@@ -368,6 +402,7 @@ func (b *Broker) SetPendingRuntimeSecretValuesForRequirements(binding Binding, r
 		merged := cloneSecretMap(b.pending.values)
 		typed := cloneTypedSecretMap(b.pending.typed)
 		pki := append([]byte(nil), b.pending.pkiStorePassword...)
+		application := cloneSecretMap(b.pending.applicationValues)
 		for _, reference := range requirements {
 			zero(merged[reference])
 			delete(merged, reference)
@@ -380,10 +415,11 @@ func (b *Broker) SetPendingRuntimeSecretValuesForRequirements(binding Binding, r
 			zeroSecretMap(next)
 			zeroTypedSecretMap(typed)
 			zero(pki)
+			zeroSecretMap(application)
 			return errors.New("RUNTIME_SECRET_INPUT_INVALID")
 		}
 		b.clearPendingLocked()
-		b.pending = &pendingRuntimeSecrets{binding: binding, values: next, typed: typed, pkiStorePassword: pki, expiresAt: b.now().Add(b.ttl)}
+		b.pending = &pendingRuntimeSecrets{binding: binding, values: next, applicationValues: application, typed: typed, pkiStorePassword: pki, expiresAt: b.now().Add(b.ttl)}
 		b.nextGen++
 		b.pending.generation = b.nextGen
 		b.armPendingExpiryLocked(b.pending.generation, b.pending.expiresAt)
@@ -403,9 +439,11 @@ func (b *Broker) SetPendingRuntimeSecretValuesForRequirements(binding Binding, r
 // PromotePendingRuntimeSecretValues copies values into the target credential
 // only after Core has produced the current descriptor set. Every pending key
 // must be in that set; stale or superseded local requirements fail closed.
+// Authored application sources attach only when the current Core set maps them;
+// unselected/removed sources remain pending and cannot reach target credentials.
 // Original inputs retain their existing project binding and expiry, like typed
 // inputs, so a later Save can revoke attached proof without asking again.
-func (b *Broker) PromotePendingRuntimeSecretValues(binding Binding, requirements []string) error {
+func (b *Broker) PromotePendingRuntimeSecretValues(binding Binding, requirements []string, applicationSources ...map[string]string) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.pending == nil || b.pending.binding != binding {
@@ -432,13 +470,26 @@ func (b *Broker) PromotePendingRuntimeSecretValues(binding Binding, requirements
 	}
 	// Typed inputs share this pending bucket but are authorized and bound by
 	// BindPendingServiceSecretInputs, not by password-map promotion.
-	if len(b.pending.values) == 0 {
+	if len(b.pending.values) == 0 && len(b.pending.applicationValues) == 0 {
 		return nil
 	}
 	next := cloneSecretMap(b.lease.runtimeSecretValues)
 	for reference, value := range b.pending.values {
 		zero(next[reference])
 		next[reference] = append([]byte(nil), value...)
+	}
+	if len(applicationSources) == 1 {
+		for source, reference := range applicationSources[0] {
+			value := b.pending.applicationValues[source]
+			if _, ok := allowed[reference]; !ok || len(value) == 0 {
+				continue
+			}
+			zero(next[reference])
+			next[reference] = append([]byte(nil), value...)
+		}
+	}
+	if len(next) == 0 {
+		return nil
 	}
 	if !validRuntimeSecretMap(next) {
 		zeroSecretMap(next)
@@ -1122,6 +1173,7 @@ func (b *Broker) clearPendingLocked() {
 		return
 	}
 	zeroSecretMap(b.pending.values)
+	zeroSecretMap(b.pending.applicationValues)
 	zero(b.pending.pkiStorePassword)
 	zeroTypedSecretMap(b.pending.typed)
 	b.pending = nil
@@ -1155,6 +1207,7 @@ func zero(value []byte) {
 }
 
 var runtimeSecretRequirementPattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`)
+var applicationSecretSourcePattern = regexp.MustCompile(`^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$`)
 
 func runtimeSecretID(value string) bool { return runtimeSecretRequirementPattern.MatchString(value) }
 

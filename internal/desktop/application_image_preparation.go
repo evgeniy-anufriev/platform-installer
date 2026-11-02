@@ -51,7 +51,7 @@ func (a *App) imagePreparationCredentialsLocked(scope executionnode.ImagePrepara
 		for _, item := range a.runtimeSecretEvidence.applicationInputs {
 			requirements = append(requirements, item.RequirementRef)
 		}
-		if err := a.secrets.PromotePendingRuntimeSecretValues(binding, requirements); err != nil {
+		if err := a.secrets.PromotePendingRuntimeSecretValues(binding, requirements, applicationSecretSourceRequirements(a.runtimeSecretEvidence.applicationInputs)); err != nil {
 			return result, err
 		}
 	}

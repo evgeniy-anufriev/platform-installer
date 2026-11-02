@@ -36,6 +36,14 @@ func TestImagePreparationUsesPendingRegistrySessionValues(t *testing.T) {
 	if err := app.SetDeploymentRuntimeSecretValues(RuntimeSecretValuesInput{ProjectRevision: descriptors.ProjectRevision, DescriptorSetFingerprint: descriptors.DescriptorSetFingerprint, ApplicationLibrary: "sdku", Values: values}); err != nil {
 		t.Fatal(err)
 	}
+	sources := map[string]string{}
+	for _, item := range inputs[:2] {
+		sources[item.SourceRef] = "replacement-" + item.SourceRef
+		values[item.RequirementRef] = sources[item.SourceRef]
+	}
+	if err := app.secrets.SetPendingApplicationSecretValues(binding, sources); err != nil {
+		t.Fatal(err)
+	}
 	app.current.Managed = &installer.ManagedProjectView{ProjectRevision: descriptors.ProjectRevision, Servers: map[string]installer.ManagedServer{"node-1": {HostID: "node-1", Address: "192.0.2.10"}}}
 	app.approvedTargetHostKeys = map[string]approvedTargetHostKey{"node-1": {root: app.current.Root, projectID: app.current.Project.ID, revision: descriptors.ProjectRevision, address: "192.0.2.10", port: 22, keyType: "ssh-ed25519", publicKey: "confirmed-key"}}
 	scope := executionnode.ImagePreparationScope{ProjectIdentity: app.current.Project.ID, ProjectRevision: descriptors.ProjectRevision, TargetConnections: map[string]executionnode.ImageTargetConnection{"node-1": {Address: "192.0.2.10", Port: 22}}}
@@ -60,5 +68,54 @@ func TestImagePreparationUsesPendingRegistrySessionValues(t *testing.T) {
 		if credentials.Payload.RuntimeSecretValues[input.RequirementRef] != values[input.RequirementRef] {
 			t.Fatal("saved session input missing from preparation")
 		}
+	}
+}
+
+func TestRegistrySecretSaveNeedsOnlySavedSourcesNotCore(t *testing.T) {
+	app := preparedDraftApp(t)
+	credential, _ := app.credentialBindingLocked()
+	app.binding = nil
+	app.execution.setStatus("NOT_PREPARED")
+	app.current.Managed.ApplicationLibraries = map[string]map[string]any{"szi": {"registry_credentials": map[string]any{
+		"registry.example": map[string]any{"password": map[string]any{"source": map[string]any{"kind": "runtime_secret_ref", "ref": "registry-password"}}},
+	}}}
+	input := RuntimeSecretValuesInput{ProjectRevision: app.current.Managed.ProjectRevision, ApplicationLibrary: "szi", ApplicationSourceValues: map[string]string{"registry-password": "synthetic-password"}}
+	for _, change := range []string{"revision", "library", "source", "draft", "mixed"} {
+		t.Run(change, func(t *testing.T) {
+			candidate := input
+			switch change {
+			case "revision":
+				candidate.ProjectRevision = "changed"
+			case "library":
+				candidate.ApplicationLibrary = "foreign"
+			case "source":
+				candidate.ApplicationSourceValues = map[string]string{"foreign-source": "synthetic"}
+			case "draft":
+				app.activeSession = "draft"
+			case "mixed":
+				candidate.Values = map[string]string{"unattested-ref": "synthetic"}
+			}
+			if err := app.SetDeploymentRuntimeSecretValues(candidate); err == nil {
+				t.Fatal("unsafe input accepted")
+			}
+			app.activeSession = ""
+		})
+	}
+	if err := app.SetDeploymentRuntimeSecretValues(input); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.secrets.WithTargetCredential(credential, func(value runtimesecret.TargetCredential) error {
+		if len(value.RuntimeSecretValues) != 0 {
+			t.Fatal("unattested source attached to target")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.secrets.PromotePendingRuntimeSecretValues(credential, []string{"core-requirement"}, map[string]string{"registry-password": "core-requirement"}); err != nil {
+		t.Fatal(err)
+	}
+	if missing := app.secrets.MissingRequiredSecrets(credential, []string{"core-requirement"}, false, false); len(missing) != 0 {
+		t.Fatal("attested source was lost")
 	}
 }

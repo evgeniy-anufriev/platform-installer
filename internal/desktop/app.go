@@ -183,13 +183,14 @@ type RuntimeSecretDescriptorOperation struct {
 }
 
 // RuntimeSecretValuesInput is one non-persistent submission for a single
-// Core-derived service deployment or application library. Values are never returned.
+// Core-derived requirements or saved application source references. Values are never returned.
 type RuntimeSecretValuesInput struct {
 	ProjectRevision           string            `json:"projectRevision"`
 	DescriptorSetFingerprint  string            `json:"descriptorSetFingerprint"`
 	ServiceDeployment         string            `json:"serviceDeployment"`
 	ApplicationLibrary        string            `json:"applicationLibrary,omitempty"`
 	ApplicationRequirementRef string            `json:"applicationRequirementRef,omitempty"`
+	ApplicationSourceValues   map[string]string `json:"applicationSourceValues,omitempty"`
 	Values                    map[string]string `json:"values"`
 }
 
@@ -831,14 +832,59 @@ func (a *App) GetApplicationRuntimeSecretAvailability() RuntimeSecretDescriptorO
 	return RuntimeSecretDescriptorOperation{Status: "READY", ProjectRevision: revision, DescriptorSetFingerprint: evidence.fingerprint, ApplicationSecretAvailability: availability}
 }
 
-// SetDeploymentRuntimeSecretValues accepts values only for the current,
-// Core-derived descriptor set. It never persists or returns secret values.
+// SetDeploymentRuntimeSecretValues accepts Core-bound values or locally saved
+// application sources pending Core attestation. It never persists/returns values.
 func (a *App) SetDeploymentRuntimeSecretValues(input RuntimeSecretValuesInput) error {
 	a.editMu.Lock()
 	defer a.editMu.Unlock()
 	binding, err := a.credentialBindingLocked()
 	if err != nil {
 		return err
+	}
+	if input.ApplicationSourceValues != nil {
+		if input.ApplicationLibrary == "" || input.ServiceDeployment != "" || input.ApplicationRequirementRef != "" || input.DescriptorSetFingerprint != "" || len(input.Values) != 0 || a.current.Managed == nil || a.activeSession != "" {
+			return errors.New("RUNTIME_SECRET_INPUT_INVALID")
+		}
+		revision, err := a.projectRevision(a.current.Root)
+		if err != nil || revision != input.ProjectRevision || revision != a.current.Managed.ProjectRevision {
+			return errors.New("RUNTIME_SECRET_DESCRIPTORS_STALE")
+		}
+		library := a.current.Managed.ApplicationLibraries[input.ApplicationLibrary]
+		registries, _ := library["registry_credentials"].(map[string]any)
+		allowed := map[string]bool{}
+		for _, raw := range registries {
+			pair, _ := raw.(map[string]any)
+			for _, field := range []string{"username", "password"} {
+				credential, _ := pair[field].(map[string]any)
+				source, _ := credential["source"].(map[string]any)
+				if source["kind"] == "runtime_secret_ref" {
+					if ref, ok := source["ref"].(string); ok {
+						allowed[ref] = true
+					}
+				}
+			}
+		}
+		for source := range input.ApplicationSourceValues {
+			if !allowed[source] {
+				return errors.New("RUNTIME_SECRET_DESCRIPTOR_NOT_FOUND")
+			}
+		}
+		if err := a.secrets.SetPendingApplicationSecretValues(binding, input.ApplicationSourceValues); err != nil {
+			return err
+		}
+		if evidence := a.runtimeSecretEvidence; evidence != nil && a.runtimeSecretEvidenceDescriptorsLocked(revision) != nil {
+			requirements := []string{}
+			for _, item := range evidence.descriptors {
+				if item.Purpose == "SERVICE_PASSWORD" {
+					requirements = append(requirements, item.RequirementRef)
+				}
+			}
+			for _, item := range evidence.applicationInputs {
+				requirements = append(requirements, item.RequirementRef)
+			}
+			return a.secrets.PromotePendingRuntimeSecretValues(binding, requirements, applicationSecretSourceRequirements(evidence.applicationInputs))
+		}
+		return nil
 	}
 	evidence := a.runtimeSecretEvidence
 	if evidence == nil || a.binding == nil || a.current.Project == nil || input.ProjectRevision == "" || input.ProjectRevision != evidence.projectRevision || input.DescriptorSetFingerprint == "" || input.DescriptorSetFingerprint != evidence.fingerprint || evidence.projectID != a.current.Project.ID || evidence.nodeID != a.execution.context.SelectedHostID || !runtimeEvidenceMatchesExpected(evidence.runtime, a.binding.reader.runtimeRelease) {
@@ -1317,7 +1363,7 @@ func (a *App) getRuntimeSecretDescriptorsLocked(clearAttached bool) RuntimeSecre
 		}
 	}
 	if credentialBinding, bindingErr := a.credentialBindingLocked(); bindingErr == nil {
-		if err := a.secrets.PromotePendingRuntimeSecretValues(credentialBinding, requirements); err != nil {
+		if err := a.secrets.PromotePendingRuntimeSecretValues(credentialBinding, requirements, applicationSecretSourceRequirements(view.ApplicationInputs)); err != nil {
 			a.runtimeSecretEvidence = nil
 			return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: projectErrorCode(err), Message: projectErrorMessage(projectErrorCode(err))}}
 		}

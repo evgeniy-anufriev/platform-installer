@@ -1,10 +1,6 @@
 import { useState } from "react";
-import { ApplicationSecretInputs } from "./ApplicationSecretInputs";
 import { objectValue, type ObjectValue } from "./application-draft";
-import type {
-  RuntimeSecretDescriptorOperation,
-  RuntimeSecretValuesInput,
-} from "./backend";
+import type { RuntimeSecretValuesInput } from "./backend";
 
 export function ApplicationRegistryCredentials({
   libraryId,
@@ -13,8 +9,8 @@ export function ApplicationRegistryCredentials({
   disabled,
   runtimeDisabled,
   onChange,
-  load,
   save,
+  projectRevision = "",
 }: {
   libraryId: string;
   value: unknown;
@@ -22,11 +18,30 @@ export function ApplicationRegistryCredentials({
   disabled: boolean;
   runtimeDisabled: boolean;
   onChange: (value: ObjectValue) => void;
-  load?: () => Promise<RuntimeSecretDescriptorOperation>;
   save?: (input: RuntimeSecretValuesInput) => Promise<void>;
+  projectRevision?: string;
 }) {
   const entries = objectValue(value);
   const [registry, setRegistry] = useState("");
+  const [open, setOpen] = useState(false);
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const fields = Object.entries(entries).flatMap(([name, raw]) =>
+    ["username", "password"].flatMap((field) => {
+      const source = objectValue(objectValue(objectValue(raw)[field]).source);
+      return source.kind === "runtime_secret_ref" &&
+        typeof source.ref === "string"
+        ? [
+            {
+              source: source.ref,
+              label: `${field === "username" ? "Логин" : "Пароль"}: ${name}`,
+              password: field === "password",
+            },
+          ]
+        : [];
+    }),
+  );
   const options = [...new Set([...registries, ...Object.keys(entries)])];
   return (
     <section className="application-registry-credentials">
@@ -99,22 +114,89 @@ export function ApplicationRegistryCredentials({
           </button>
         </div>
       ))}
-      {Object.keys(entries).length > 0 && load && save && (
+      {fields.length > 0 && save && (
         <>
           {runtimeDisabled && (
             <p className="muted">
               Сохраните настройки библиотеки перед вводом логина и пароля.
             </p>
           )}
-          <ApplicationSecretInputs
-            inline
-            registryOnly
-            libraryId={libraryId}
-            disabled={runtimeDisabled}
-            title="Логин и пароль registry"
-            load={load}
-            save={save}
-          />
+          <button
+            type="button"
+            disabled={runtimeDisabled || saving}
+            onClick={() => {
+              setOpen(true);
+              setValues({});
+              setMessage("");
+            }}
+          >
+            Логин и пароль registry
+          </button>
+          {message && <p role="status">{message}</p>}
+          {open && (
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (runtimeDisabled || saving || !projectRevision) return;
+                const submitted = values;
+                setValues({});
+                setSaving(true);
+                void save({
+                  projectRevision,
+                  descriptorSetFingerprint: "",
+                  serviceDeployment: "",
+                  applicationLibrary: libraryId,
+                  applicationSourceValues: submitted,
+                  values: {},
+                })
+                  .then(() => {
+                    setOpen(false);
+                    setMessage("Логин и пароль сохранены только в сессии");
+                  })
+                  .catch(() =>
+                    setMessage(
+                      "Не удалось сохранить логин и пароль. Проверьте, что настройки registry сохранены в проекте.",
+                    ),
+                  )
+                  .finally(() => setSaving(false));
+              }}
+            >
+              {fields.map((field) => (
+                <label key={field.source}>
+                  {field.label}
+                  <input
+                    type={field.password ? "password" : "text"}
+                    autoComplete={field.password ? "new-password" : "username"}
+                    required
+                    disabled={runtimeDisabled || saving}
+                    value={values[field.source] || ""}
+                    onChange={(event) =>
+                      setValues((current) => ({
+                        ...current,
+                        [field.source]: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+              ))}
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => {
+                  setOpen(false);
+                  setValues({});
+                }}
+              >
+                Отмена
+              </button>
+              <button
+                type="submit"
+                disabled={runtimeDisabled || saving || !projectRevision}
+              >
+                Сохранить в сессии
+              </button>
+            </form>
+          )}
         </>
       )}
     </section>

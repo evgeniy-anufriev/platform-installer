@@ -1132,8 +1132,9 @@ export function ApplicationsPage({
                       </p>
                     </section>
                     <ApplicationRegistryCredentials
-                      key={selected}
+                      key={`${selected}:${managed?.projectRevision}`}
                       libraryId={selected}
+                      projectRevision={managed?.projectRevision}
                       value={library.registry_credentials}
                       registries={resolved?.registries ?? []}
                       disabled={busy}
@@ -1145,7 +1146,6 @@ export function ApplicationsPage({
                           entity: { registry_credentials: value },
                         })
                       }
-                      load={loadSecrets ? loadApplicationSecrets : undefined}
                       save={saveSecrets ? saveApplicationSecrets : undefined}
                     />
                     <section className="application-library-placement">

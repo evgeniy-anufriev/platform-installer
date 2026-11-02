@@ -94,6 +94,12 @@ when all declared inputs exist in the current session, amber «Не устано
 otherwise. Project references alone do not establish presence; this status
 does not authorize execution or replace Core checks.
 
+Owner refinement (2026-11-02): registry login/password fields open immediately
+from saved library credential sources. Opening and saving the session inputs
+does not stage the project or query Core. Values use the existing bounded
+project session; Core maps their sources to current requirements before use.
+Source identifiers are internal and are not shown in the form.
+
 Data directory overrides for Kafka, Redis, ClickHouse, PostgreSQL and Docker use the
 same catalog-driven parameter editor. The service package provides the field
 label and help text. Redis and ClickHouse configure a root with member
