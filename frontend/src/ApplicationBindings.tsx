@@ -53,9 +53,6 @@ export function ApplicationBindings({
   disabled,
   onSave,
   onDirtyChange,
-  vaultBinding,
-  deploymentTypes = {},
-  onSelectVault,
   candidates,
   endpointGroups = [],
   endpointGroupRef,
@@ -72,9 +69,6 @@ export function ApplicationBindings({
       kind?: string;
     }
   >;
-  vaultBinding?: string;
-  deploymentTypes?: Record<string, string>;
-  onSelectVault?: (binding: string) => Promise<boolean>;
   value: Obj;
   hints: Record<string, string>;
   deployments: string[];
@@ -90,7 +84,7 @@ export function ApplicationBindings({
   const [adding, setAdding] = useState(false);
   const names = [
     ...new Set([...Object.keys(hints), ...Object.keys(value), ...added]),
-  ];
+  ].filter((name) => name !== "endpoint" || !onSaveEndpointGroup);
   const mark = (key: string, dirty: boolean) => {
     if (dirty) dirtyRows.current.add(key);
     else dirtyRows.current.delete(key);
@@ -129,7 +123,6 @@ export function ApplicationBindings({
                 profiles={[]}
                 endpointGroups={endpointGroups}
                 disabled={disabled}
-                isVault={false}
                 selectedVault={false}
                 onDirtyChange={(dirty) => mark("$library-endpoint", dirty)}
                 onSave={(entry) =>
@@ -147,15 +140,7 @@ export function ApplicationBindings({
                   JSON.stringify(value[key])
                 }
                 name={key}
-                isVault={
-                  deploymentTypes[
-                    String(objectValue(value[key]).deploymentRef)
-                  ] === "vault"
-                }
-                selectedVault={vaultBinding === key}
-                onSelectVault={
-                  onSelectVault ? () => onSelectVault(key) : undefined
-                }
+                selectedVault={key === "secrets"}
                 value={objectValue(value[key])}
                 hint={
                   hints[key] === "pki"
@@ -237,9 +222,7 @@ export function ApplicationBindings({
 }
 function BindingRow({
   name,
-  isVault,
   selectedVault,
-  onSelectVault,
   value,
   hint,
   deployments,
@@ -253,9 +236,7 @@ function BindingRow({
 }: {
   endpointGroups?: string[];
   name: string;
-  isVault: boolean;
   selectedVault: boolean;
-  onSelectVault?: () => Promise<boolean>;
   value: Obj;
   hint?: string;
   deployments: string[];
@@ -381,15 +362,6 @@ function BindingRow({
           >
             Сбросить
           </button>
-          {isVault && !selectedVault && onSelectVault && (
-            <button
-              className="outline"
-              disabled={disabled || dirty}
-              onClick={() => void onSelectVault()}
-            >
-              Для секретов
-            </button>
-          )}
         </div>
       </td>
     </tr>

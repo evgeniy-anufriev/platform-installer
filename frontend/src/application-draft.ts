@@ -47,11 +47,18 @@ export function applicationDraft(
   const libraryEndpointGroups = { ...managed?.libraryEndpointGroups };
   for (const c of intents) {
     const id = c.deploymentId;
-    if (c.operation === "SetApplicationLibraryEndpointGroup")
+    if (c.operation === "SetApplicationLibraryEndpointGroup") {
       libraryEndpointGroups[id] = String(c.value);
-    else if (c.operation === "ClearApplicationLibraryEndpointGroup")
+      libraries[id].bindings = {
+        ...objectValue(libraries[id].bindings),
+        endpoint: { endpointGroupRef: String(c.value) },
+      };
+    } else if (c.operation === "ClearApplicationLibraryEndpointGroup") {
       delete libraryEndpointGroups[id];
-    else if (c.operation === "CreateApplicationLibraryDeployment")
+      const bindings = { ...objectValue(libraries[id].bindings) };
+      delete bindings.endpoint;
+      libraries[id].bindings = bindings;
+    } else if (c.operation === "CreateApplicationLibraryDeployment")
       libraries[id] = { ...c.entity };
     else if (
       c.operation === "DeleteApplicationLibraryDeployment" ||

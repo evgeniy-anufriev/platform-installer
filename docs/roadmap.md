@@ -1,5 +1,11 @@
 # V2 roadmap and milestone gates
 
+Owner refinement (2026-11-02): application library bindings own endpoint and
+Vault provider selection without root-level duplicate pointers. A library's
+explicit registry entry authorizes its scoped image source; ordinary Ansible
+node policy remains supported for standalone sources. Core owns the checks;
+Installer only edits the portable library block. See the project contract.
+
 Owner-approved selective infrastructure installation extends invocation selection
 to service deployment IDs. Preserve provider integrations, bind selection through
 fresh Start, and use the existing all-infrastructure skip path. Acceptance includes

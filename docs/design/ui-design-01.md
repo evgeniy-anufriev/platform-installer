@@ -100,6 +100,13 @@ does not stage the project or query Core. Values use the existing bounded
 project session; Core maps their sources to current requirements before use.
 Source identifiers are internal and are not shown in the form.
 
+Owner refinement (2026-11-02): library registry entries authorize their scoped
+image sources without a separate node-list edit. Endpoint selection is stored
+in `bindings.endpoint.endpointGroupRef`. `bindings.secrets` automatically selects
+the library Vault provider; remove the separate "Для секретов" action and do not
+write duplicate `vault_ref`/`vaultRef` metadata. Library Save moves legacy endpoint
+and Vault pointers into the canonical bindings while retaining their selections.
+
 Data directory overrides for Kafka, Redis, ClickHouse, PostgreSQL and Docker use the
 same catalog-driven parameter editor. The service package provides the field
 label and help text. Redis and ClickHouse configure a root with member

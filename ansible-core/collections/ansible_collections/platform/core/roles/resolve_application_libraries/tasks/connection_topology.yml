@@ -5,8 +5,8 @@
       ansible.builtin.set_fact:
         library_instance_id: "{{ application_job.libraryId }}"
         _application_library_endpoint: >-
-          {{ {'endpoint_group': platform_desired_state['x-applicationLibraryEndpointGroups'][application_job.libraryId]}
-             if platform_desired_state['x-applicationLibraryEndpointGroups'][application_job.libraryId] is defined else {} }}
+          {{ {'endpoint_group': application_job.deployment.bindings.endpoint.endpointGroupRef | default(platform_desired_state['x-applicationLibraryEndpointGroups'][application_job.libraryId] | default(''))}
+             if (application_job.deployment.bindings.endpoint.endpointGroupRef | default(platform_desired_state['x-applicationLibraryEndpointGroups'][application_job.libraryId] | default(''))) else {} }}
       no_log: true
       become: false
 

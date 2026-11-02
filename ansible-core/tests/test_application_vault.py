@@ -69,6 +69,12 @@ class ApplicationVaultTest(unittest.TestCase):
         self.assertEqual(result['instanceJobs'][0]['hosts'],['node1','node2'])
         self.assertNotIn('token',result['providers'][0])
 
+    def test_secrets_binding_is_the_default_without_duplicate_vault_reference(self):
+        for row in self.rows:
+            row.pop('vaultRef')
+        result = project_vault(self.rows, self.prepared)
+        self.assertEqual('v', result['providers'][0]['providerId'])
+
     def test_endpoint_uses_443_with_different_backend_ports(self):
         self.instance['connections']['vault']['targets'].append(
             {'hostId':'another','port':8202,'address':'10.0.0.4','tlsProfileRef':'vprofile'})
@@ -114,6 +120,8 @@ class ApplicationVaultTest(unittest.TestCase):
     def test_missing_vault_binding_fails(self):
         self.rows[0]['vaultRef']={}
         self.rows[1]['vaultRef']={}
+        for row in self.rows:
+            row['bindings'] = {}
         with self.assertRaisesRegex(ValueError,'BINDING_REQUIRED'):
             project_vault(self.rows,self.prepared)
 

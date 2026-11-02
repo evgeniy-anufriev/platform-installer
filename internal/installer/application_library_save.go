@@ -59,7 +59,7 @@ func validateApplicationEdit(c EditCommand) error {
 		}
 	case "CreateApplicationLibraryDeployment", "UpdateApplicationLibraryDeployment":
 		fields = append(fields, "entity")
-		if c.Entity == nil || !applicationKeys(c.Entity, "libraryRef", "runtimeRef", "runtime_directory", "bindings", "resources", "shared_secrets", "vault_ref", "applications", "overrides", "registry_credentials", "provided_connections") {
+		if c.Entity == nil || !applicationKeys(c.Entity, "libraryRef", "runtimeRef", "runtime_directory", "bindings", "resources", "shared_secrets", "vaultRef", "vault_ref", "applications", "overrides", "registry_credentials", "provided_connections") {
 			return invalid
 		}
 		if c.Operation == "CreateApplicationLibraryDeployment" {
@@ -471,23 +471,49 @@ func (c *structuralCandidate) reduceApplicationEdit(cmd EditCommand) error {
 	if err != nil {
 		return err
 	}
+	// Move the former root extension only during an explicit application Save.
+	// A binding already authored inside the library is authoritative.
+	if raw, exists := state[libraryEndpointGroupsKey]; exists {
+		groups := asMap(raw)
+		if groups == nil {
+			return managedReadError("Library endpoint selections are malformed", libraryEndpointGroupsKey)
+		}
+		for id, rawRef := range groups {
+			ref, ok := rawRef.(string)
+			library := asMap(libraries[id])
+			if !ok || !validLibraryInputID(ref) || library == nil {
+				return referenceNotFound("bindings.endpoint")
+			}
+			bindings, e := applicationMap(library, "bindings")
+			if e != nil {
+				return e
+			}
+			if _, exists := bindings["endpoint"]; !exists {
+				bindings["endpoint"] = map[string]any{"endpointGroupRef": ref}
+			}
+		}
+		delete(state, libraryEndpointGroupsKey)
+	}
+	for _, raw := range libraries {
+		normalizeLibraryVaultBinding(asMap(raw))
+	}
 	owner := asMap(libraries[cmd.DeploymentID])
 	switch cmd.Operation {
 	case "SetApplicationLibraryEndpointGroup", "ClearApplicationLibraryEndpointGroup":
 		if owner == nil {
 			return referenceNotFound("deploymentId")
 		}
-		groups, e := applicationMap(state, libraryEndpointGroupsKey)
+		bindings, e := applicationMap(owner, "bindings")
 		if e != nil {
 			return e
 		}
 		if cmd.Operation == "SetApplicationLibraryEndpointGroup" {
-			groups[cmd.DeploymentID] = cmd.Value
+			bindings["endpoint"] = map[string]any{"endpointGroupRef": cmd.Value}
 		} else {
-			delete(groups, cmd.DeploymentID)
+			delete(bindings, "endpoint")
 		}
-		if len(groups) == 0 {
-			delete(state, libraryEndpointGroupsKey)
+		if len(bindings) == 0 {
+			delete(owner, "bindings")
 		}
 	case "CreateApplicationLibraryDeployment":
 		if owner != nil {
@@ -624,9 +650,27 @@ func (c *structuralCandidate) reduceApplicationEdit(cmd EditCommand) error {
 		c.dirty[logical] = true
 		return nil
 	}
+	for _, raw := range libraries {
+		normalizeLibraryVaultBinding(asMap(raw))
+	}
 	c.documents[desiredDocument]["platform_desired_state_contract"] = "platform.installer/project-desired-state/v3alpha1"
 	c.dirty[desiredDocument] = true
 	return nil
+}
+
+func normalizeLibraryVaultBinding(library map[string]any) {
+	legacy := asMap(library["vault_ref"])
+	if legacy == nil {
+		legacy = asMap(library["vaultRef"])
+	}
+	bindings := asMap(library["bindings"])
+	if bindings["secrets"] == nil {
+		if name, ok := legacy["binding"].(string); ok && bindings[name] != nil {
+			bindings["secrets"] = deepCopy(bindings[name])
+		}
+	}
+	delete(library, "vault_ref")
+	delete(library, "vaultRef")
 }
 
 func (c *structuralCandidate) validateApplicationReferences() error {
@@ -683,7 +727,14 @@ func (c *structuralCandidate) validateApplicationReferences() error {
 				}
 			}
 		}
-		for _, rawBinding := range asMap(library["bindings"]) {
+		for name, rawBinding := range asMap(library["bindings"]) {
+			if name == "endpoint" {
+				binding := asMap(rawBinding)
+				ref, ok := binding["endpointGroupRef"].(string)
+				if len(binding) != 1 || !ok || !validLibraryInputID(ref) || endpointGroups[ref] == nil {
+					return referenceNotFound("bindings.endpoint.endpointGroupRef")
+				}
+			}
 			ref, _ := asMap(rawBinding)["deploymentRef"].(string)
 			if ref != "" && deployments[ref] == nil {
 				return referenceNotFound("bindings")

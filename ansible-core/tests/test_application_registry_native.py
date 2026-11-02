@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 @unittest.skipUnless(shutil.which('ansible-playbook') and shutil.which('openssl'), 'native Ansible/openssl required')
 class ApplicationRegistryNativeTests(unittest.TestCase):
-    def run_registry(self, bearer=False, corrupt=False, anonymous=False, duplicate=False, standalone=False):
+    def run_registry(self, bearer=False, corrupt=False, anonymous=False, duplicate=False, standalone=False, library_only=False):
         config = json.dumps(dict(os='linux', architecture='amd64', rootfs=dict(type='layers', diff_ids=[]))).encode()
         image_id = 'sha256:' + hashlib.sha256(config).hexdigest()
         manifest = json.dumps(dict(schemaVersion=2, mediaType='application/vnd.oci.image.manifest.v1+json',
@@ -58,7 +58,7 @@ class ApplicationRegistryNativeTests(unittest.TestCase):
             authority = 'localhost:%d' % server.server_port
             reference = authority + '/app:latest'
             pair = {name: dict(source=dict(kind='runtime_secret_ref', ref='fixture-' + name)) for name in ('username', 'password')}
-            variables = dict(platform_application_approved_registries=[authority],
+            variables = dict(platform_application_approved_registries=[] if library_only else [authority],
                 platform_application_image_secret_values={'fixture-username': 'sentinel-registry-login-7362', 'fixture-password': 'sentinel-registry-password-8362'},
                 platform_application_image_bundle=dict(containerImages=[], components=[]), platform_application_image_preparations={},
                 application_image_input=dict(libraryId='fixture', instanceId='app-fixture', hostId='localhost', reference=reference,
@@ -113,6 +113,9 @@ class ApplicationRegistryNativeTests(unittest.TestCase):
 
     def test_target_side_basic_auth_without_docker(self):
         self.run_registry()
+
+    def test_library_registry_assignment_authorizes_its_source_without_node_list(self):
+        self.run_registry(library_only=True)
 
     def test_target_side_bearer_auth_without_docker(self):
         self.run_registry(bearer=True)

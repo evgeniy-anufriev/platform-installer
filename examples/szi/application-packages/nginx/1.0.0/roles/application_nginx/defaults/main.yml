@@ -27,13 +27,13 @@ platform_application_definition:
     environment:
       NGINX_HOST: >-
         {%- set group = platform_desired_state.applicationLibraryDeployments[library_instance_id].applications.nginx.overrides.endpoint.endpoint_group |
-          default(platform_desired_state['x-applicationLibraryEndpointGroups'][library_instance_id] | default('')) -%}
+          default(platform_desired_state.applicationLibraryDeployments[library_instance_id].bindings.endpoint.endpointGroupRef | default(platform_desired_state['x-applicationLibraryEndpointGroups'][library_instance_id] | default(''))) -%}
         {{ ('nginx.' ~ platform_desired_state.endpointGroups[group].address.domain)
           if group and (platform_desired_state.endpointGroups[group].address.domain | default('')) else '' }}
       REALM: '{{ application_connections.sso.parameters.realm }}'
       GA_HOST: >-
         {%- set group = platform_desired_state.applicationLibraryDeployments[library_instance_id].applications['grant-access'].overrides.endpoint.endpoint_group |
-          default(platform_desired_state['x-applicationLibraryEndpointGroups'][library_instance_id] | default('')) -%}
+          default(platform_desired_state.applicationLibraryDeployments[library_instance_id].bindings.endpoint.endpointGroupRef | default(platform_desired_state['x-applicationLibraryEndpointGroups'][library_instance_id] | default(''))) -%}
         {{ ('https://grant-access.' ~ platform_desired_state.endpointGroups[group].address.domain)
           if group and (platform_desired_state.endpointGroups[group].address.domain | default('')) else '' }}
     ports:

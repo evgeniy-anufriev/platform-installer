@@ -240,6 +240,11 @@ def prepare(root, desired, memberships, contract, loader, contracts_root):
             if (library_id not in deployments or not isinstance(group, str) or not ID.fullmatch(group)
                     or group not in desired.get('endpointGroups', {})):
                 findings.append(finding('APPLICATION_LIBRARY_ENDPOINT_INVALID', 'x-applicationLibraryEndpointGroups.' + str(library_id)))
+    for library_id, deployment in sorted(deployments.items()):
+        bindings = deployment.get('bindings') if isinstance(deployment, dict) else None
+        binding = bindings.get('endpoint') if isinstance(bindings, dict) else None
+        if binding is not None and (not isinstance(binding, dict) or not isinstance(binding.get('endpointGroupRef'), str) or binding['endpointGroupRef'] not in desired.get('endpointGroups', {})):
+            findings.append(finding('APPLICATION_LIBRARY_ENDPOINT_INVALID', 'applicationLibraryDeployments.' + library_id + '.bindings.endpoint'))
     for host, membership in sorted(memberships.items()):
         findings.extend(validator.validate(membership, os.path.join(contracts_root, "application-libraries", "v1alpha1", "membership.schema.json")))
         for library in membership if isinstance(membership, dict) else []:

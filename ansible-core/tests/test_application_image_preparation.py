@@ -1,9 +1,11 @@
 """Preparation lease scope and frozen image/legacy authority boundaries."""
 import copy
+import importlib.util
 import json
 from pathlib import Path
 import sys
 import time
+import tempfile
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
@@ -24,6 +26,29 @@ from schema_validation import SchemaValidator
 
 
 class ApplicationImagePreparationTests(unittest.TestCase):
+    def test_library_registry_source_is_scoped_to_the_selected_row(self):
+        path = ROOT / 'ansible-core/collections/ansible_collections/platform/core/plugins/action/prepare_application_images.py'
+        spec = importlib.util.spec_from_file_location('prepare_images_action_test', path)
+        module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+        action = object.__new__(module.ActionModule)
+        snapshot = application_snapshot()
+        snapshot['validation'] = {'status': 'PASS'}
+        snapshot['effectiveConfiguration'] = {'services': {'docker': {'configuration': {}}}}
+        pair = {name: {'source': {'kind': 'runtime_secret_ref', 'ref': 'registry-' + name}} for name in ('username', 'password')}
+        with tempfile.TemporaryDirectory() as root:
+            action._task = SimpleNamespace(args={'project_root': root, 'bundle_root': root, 'snapshot': snapshot,
+                'connections': {'node1': {'address': '192.0.2.1', 'port': 22}}})
+            action._loader = SimpleNamespace(load_from_file=lambda _: {'containerImages': []})
+            row = dict(libraryId='sdku', instanceId='apigateway-sdku', hostId='node1', runtimeRef='docker',
+                       settings={'image': 'registry.example/probe:qa'}, registryCredentials={'registry.example': pair})
+            values = {'platform_application_rows': [row], 'hostvars': {'node1': {'platform_application_approved_registries': []}}}
+            with patch.object(module, 'application_execution_model', return_value={'runtimeSecretRequirements': []}):
+                result = action.run(task_vars=values)
+                self.assertFalse(result.get('failed'), result)
+                self.assertEqual(result['inputs']['placements'][0]['credentials'], pair)
+                row['registryCredentials'] = {'other.example': pair}
+                self.assertEqual(action.run(task_vars=values)['error_code'], 'APPLICATION_IMAGE_NOT_LOCKED')
+
     def test_registry_assignment_requires_authority_and_never_a_url(self):
         validator = SchemaValidator(str(ROOT / 'contracts'))
         path = str(ROOT / 'contracts/application-libraries/v1alpha1/deployments.schema.json')

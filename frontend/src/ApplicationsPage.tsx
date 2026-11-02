@@ -1242,29 +1242,6 @@ export function ApplicationsPage({
                   <div className="application-library-connections">
                     <ApplicationBindings
                       key={selected + "bindings"}
-                      vaultBinding={
-                        typeof objectValue(library.vault_ref).binding ===
-                        "string"
-                          ? String(objectValue(library.vault_ref).binding)
-                          : undefined
-                      }
-                      deploymentTypes={Object.fromEntries(
-                        Object.entries(managed?.deployments ?? {}).map(
-                          ([id, row]) => [id, row.serviceType],
-                        ),
-                      )}
-                      onSelectVault={(binding) =>
-                        send({
-                          operation: "UpdateApplicationLibraryDeployment",
-                          deploymentId: selected,
-                          entity: {
-                            vault_ref: {
-                              ...objectValue(library.vault_ref),
-                              binding,
-                            },
-                          },
-                        })
-                      }
                       value={objectValue(library.bindings)}
                       endpointGroups={Object.keys(
                         managed?.endpointGroups ?? {},

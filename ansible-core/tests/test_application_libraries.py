@@ -191,6 +191,14 @@ class ApplicationLibrariesTest(unittest.TestCase):
             self.desired['x-applicationLibraryEndpointGroups'] = selections
             self.assertIn('APPLICATION_LIBRARY_ENDPOINT_INVALID', [row['code'] for row in self.prepare()['findings']])
 
+    def test_library_endpoint_binding_is_validated_inside_library(self):
+        self.desired['endpointGroups'] = {'apps': {'address': {'domain': 'apps.example.test', 'wildcard': True}}}
+        library = self.desired['applicationLibraryDeployments']['sdku']
+        library.setdefault('bindings', {})['endpoint'] = {'endpointGroupRef': 'apps'}
+        self.assertEqual([], self.prepare()['findings'])
+        library['bindings']['endpoint']['endpointGroupRef'] = 'missing'
+        self.assertIn('APPLICATION_LIBRARY_ENDPOINT_INVALID', [row['code'] for row in self.prepare()['findings']])
+
     def test_szi_endpoint_defaults_resolve_incomplete_and_inherited_groups(self):
         from ansible.parsing.dataloader import DataLoader
         from ansible.template import Templar
@@ -209,9 +217,14 @@ class ApplicationLibrariesTest(unittest.TestCase):
             desired = {'applicationLibraryDeployments': {'szi': {'applications': apps}},
                        'endpointGroups': {'apps': {'address': {'domain': 'apps.example.test'}}, 'own': {'address': {'domain': 'own.example.test'}}},
                        'x-applicationLibraryEndpointGroups': selected}
-            templar = Templar(loader=DataLoader(), variables={'platform_desired_state': desired, 'library_instance_id': 'szi'})
-            for expression, prefix in expressions:
-                self.assertEqual(prefix + expected if expected else '', templar.template(expression, fail_on_undefined=True))
+            nested = copy.deepcopy(desired)
+            nested.pop('x-applicationLibraryEndpointGroups')
+            if selected:
+                nested['applicationLibraryDeployments']['szi']['bindings'] = {'endpoint': {'endpointGroupRef': selected['szi']}}
+            for candidate in (desired, nested):
+                templar = Templar(loader=DataLoader(), variables={'platform_desired_state': candidate, 'library_instance_id': 'szi'})
+                for expression, prefix in expressions:
+                    self.assertEqual(prefix + expected if expected else '', templar.template(expression, fail_on_undefined=True))
 
     def test_library_database_defaults_select_resources_without_freezing_names(self):
         definition = {'connections': {'postgres': {'library_binding': 'database'}, 'clickhouse': {'library_binding': 'analytics'}},

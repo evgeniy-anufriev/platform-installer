@@ -8,6 +8,7 @@
     _image_username: ''
     _image_password: ''
     _image_token: ''
+    _image_registry_approved: "{{ application_image_input.request.registry in (platform_application_approved_registries | default([])) or (application_image_input.credentials | length > 0) }}"
     _image_request_key: "{{ [application_image_input.request, application_image_input.credentials, application_image_input.account, application_image_input.configDirectory] | to_json | hash('sha256') }}"
   no_log: true
 
@@ -36,19 +37,19 @@
   ansible.builtin.include_tasks: node_credentials.yml
   when:
     - application_image_input.credentials | length == 0
-    - application_image_input.request.registry in (platform_application_approved_registries | default([]))
+    - _image_registry_approved
     - _image_request_key not in (_image_registry_cache | default({}))
 
 - name: Чтение метаданных утверждённого реестра через сеть целевого узла подготовки образов
   ansible.builtin.include_tasks: registry.yml
   when:
-    - application_image_input.request.registry in (platform_application_approved_registries | default([]))
+    - _image_registry_approved
     - _image_request_key not in (_image_registry_cache | default({}))
 
 - name: Сохранение несекретных метаданных реестра для повторных размещений образа на целевом узле
   ansible.builtin.set_fact:
     _image_registry_cache: "{{ (_image_registry_cache | default({})) | combine({_image_request_key: _image_registry}) }}"
-  when: application_image_input.request.registry in (platform_application_approved_registries | default([]))
+  when: _image_registry_approved
   no_log: true
 
 - name: Сопоставление метаданных offline-источника с выбранным образом

@@ -16,7 +16,7 @@ platform_library_definition:
         realm: master
         proxy_url: >-
           {%- set group = platform_desired_state.applicationLibraryDeployments[library_instance_id].applications.nginx.overrides.endpoint.endpoint_group |
-            default(platform_desired_state['x-applicationLibraryEndpointGroups'][library_instance_id] | default('')) -%}
+            default(platform_desired_state.applicationLibraryDeployments[library_instance_id].bindings.endpoint.endpointGroupRef | default(platform_desired_state['x-applicationLibraryEndpointGroups'][library_instance_id] | default(''))) -%}
           {{ ('https://nginx.' ~ platform_desired_state.endpointGroups[group].address.domain)
             if group and (platform_desired_state.endpointGroups[group].address.domain | default('')) else '' }}
       credentials:

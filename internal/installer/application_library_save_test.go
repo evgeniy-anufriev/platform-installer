@@ -554,6 +554,51 @@ func TestApplicationLibraryEndpointSelectionSaveClearAndReferences(t *testing.T)
 	if err != nil || view.LibraryEndpointGroups["sdku"] != "apps" {
 		t.Fatalf("selection not retained: %v", err)
 	}
+	path := filepath.Join(root, filepath.FromSlash(desiredDocument))
+	document, err := parseManagedYAML(mustRead(t, path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := asMap(document["platform_desired_state"])
+	library := asMap(asMap(state["applicationLibraryDeployments"])["sdku"])
+	if state[libraryEndpointGroupsKey] != nil || asMap(asMap(library["bindings"])["endpoint"])["endpointGroupRef"] != "apps" {
+		t.Fatal("endpoint was not stored inside library bindings")
+	}
+	// Simulate an existing project authored by the previous release.
+	delete(asMap(library["bindings"]), "endpoint")
+	asMap(library["bindings"])["secrets"] = map[string]any{"deploymentRef": "kafka-main"}
+	library["vault_ref"] = map[string]any{"binding": "secrets"}
+	state[libraryEndpointGroupsKey] = map[string]any{"sdku": "apps"}
+	content, err := deterministicYAML(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, content, 0600); err != nil {
+		t.Fatal(err)
+	}
+	legacyRevision, err := ProjectRevision(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	view, err = ReadManagedProjectView(root)
+	if err != nil || view.LibraryEndpointGroups["sdku"] != "apps" {
+		t.Fatal("legacy selection cannot be read")
+	}
+	update := b2Command(legacyRevision, "UpdateApplicationLibraryDeployment")
+	update.Entity = map[string]any{"runtime_directory": "/data/sdku"}
+	result = commitStructuralForTest(t, b, root, projectlifecycle.ClassificationManaged, legacyRevision, []EditCommand{update})
+	document, err = parseManagedYAML(mustRead(t, path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	state = asMap(document["platform_desired_state"])
+	library = asMap(asMap(state["applicationLibraryDeployments"])["sdku"])
+	if library["vault_ref"] != nil || library["vaultRef"] != nil || asMap(asMap(library["bindings"])["secrets"])["deploymentRef"] != "kafka-main" {
+		t.Fatal("Vault reference migration lost the secrets binding or retained duplicate metadata")
+	}
+	if state[libraryEndpointGroupsKey] != nil || asMap(asMap(library["bindings"])["endpoint"])["endpointGroupRef"] != "apps" {
+		t.Fatal("legacy selection migration lost the endpoint or kept the root extension")
+	}
 	selectGroup.BaseProjectRevision, selectGroup.Value = result.NewProjectRevision, "missing"
 	plan, _ := b.PlanStructuralSave(context.Background(), root, projectlifecycle.ClassificationManaged, result.NewProjectRevision, []EditCommand{selectGroup})
 	if plan.Status != "BLOCKED" {

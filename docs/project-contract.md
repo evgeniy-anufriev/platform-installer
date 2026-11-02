@@ -554,6 +554,25 @@ Verify reuse the selected identity and a private transient Docker configuration.
 Preparation does not authorize execution. Fresh Build/Approve/Start remain
 mandatory. See the [implementation plan](work/application-libraries/application-image-metadata-plan.md).
 
+Owner refinement (2026-11-02): an explicit `registry_credentials` entry also
+authorizes that registry for image operations of this library's placements.
+It does not add a node-global registry or authorize another library. Existing
+node registry policy remains available for standalone/unassigned sources; TLS,
+platform, digest and source fallback checks remain unchanged.
+
+Library endpoint selection is authored at
+`applicationLibraryDeployments.<id>.bindings.endpoint.endpointGroupRef` and is
+inherited by application endpoint defaults. Explicit application overrides keep
+their normal Ansible precedence. The former root
+`x-applicationLibraryEndpointGroups` is read for compatibility and moved into
+bindings during a library edit/Save, without changing the chosen group.
+
+`bindings.secrets.deploymentRef` is the library's Vault provider. No additional
+`vault_ref`, `vaultRef` or separate provider-selection action is required.
+Existing pointer metadata is read and removed during a library edit/Save;
+the selected deployment is retained in `bindings.secrets`. Credential source
+kind `vault_ref` still names an existing Vault secret and is a separate contract.
+
 ## Server type metadata
 
 An inventory host may carry one stable descriptive type ID as

@@ -61,7 +61,7 @@
 - name: Проверка явного одобрения реестра на целевом узле приложения
   ansible.builtin.assert:
     that:
-      - application_runtime_job.authority.repository.reference.split('/')[0] in platform_application_approved_registries
+      - application_runtime_job.authority.repository.reference.split('/')[0] in platform_application_approved_registries or (application_runtime_job.registryCredentials | default({}) | length > 0)
     fail_msg: APPLICATION_REGISTRY_NOT_APPROVED
   when: application_runtime_job.authority.repository.reference is defined
 

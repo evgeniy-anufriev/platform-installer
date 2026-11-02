@@ -17,8 +17,8 @@
              else application_job.application.name ~ '-' ~ application_job.libraryId }}
         library_instance_id: "{{ application_job.libraryId }}"
         _application_library_endpoint: >-
-          {{ {'endpoint_group': platform_desired_state['x-applicationLibraryEndpointGroups'][application_job.libraryId]}
-             if platform_desired_state['x-applicationLibraryEndpointGroups'][application_job.libraryId] is defined else {} }}
+          {{ {'endpoint_group': application_job.deployment.bindings.endpoint.endpointGroupRef | default(platform_desired_state['x-applicationLibraryEndpointGroups'][application_job.libraryId] | default(''))}
+             if (application_job.deployment.bindings.endpoint.endpointGroupRef | default(platform_desired_state['x-applicationLibraryEndpointGroups'][application_job.libraryId] | default(''))) else {} }}
         application_topics: {}
         application_databases: {}
         _application_connections: {}
@@ -198,7 +198,7 @@
             'providedConnections': (platform_application_connection_rows |
               selectattr('libraryId', 'equalto', application_job.libraryId) | first).providedConnections,
             'bindings': application_job.deployment.bindings | default({}),
-            'vaultRef': application_job.deployment.vault_ref | default({}),
+            'vaultRef': {'binding': 'secrets'} if application_job.deployment.bindings.secrets is defined else (application_job.deployment.vault_ref | default({})),
             'registryCredentials': application_job.deployment.registry_credentials | default({}),
             'resources': _application_resources,
             'resourceDefaults': _application_resource_defaults,

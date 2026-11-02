@@ -126,7 +126,23 @@
             ]
           }
         },
-        "maxProperties": 128
+        "maxProperties": 128,
+        "properties": {
+          "endpoint": {
+            "type": "object",
+            "required": [
+              "endpointGroupRef"
+            ],
+            "properties": {
+              "endpointGroupRef": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+                "maxLength": 128
+              }
+            },
+            "additionalProperties": false
+          }
+        }
       },
       "resources": {
         "type": "object",

@@ -445,3 +445,52 @@ Start or registry login/pull executed. Source-to-requirement consumption tested
 through existing Go contract tests; no new installation acceptance claimed.
 Owned Wails/Vite processes stopped, generated outputs restored, unrelated work
 preserved. Updated Installer only is required.
+
+
+## Canonical library registry/endpoint/secrets bindings (2026-11-02)
+
+Owner approved using an existing library registry entry as its scoped image
+source and moving endpoint selection into bindings. Subsequent clarification:
+keep only bindings.secrets as the Vault provider; no vault binding, vaultRef,
+vault_ref or separate provider-selection button. Runtime source kind vault_ref
+continues to mean an existing Vault secret and is unchanged.
+
+Guarded application Save moves the root endpoint extension to
+bindings.endpoint.endpointGroupRef and removes the duplicate Vault pointer.
+Existing selections survive; reads do not rewrite canonical files. Existing
+UI endpoint projection remains derived, not a second persistence mechanism.
+Explicit application endpoint overrides retain their ordinary precedence.
+SZI library/nginx templates now read nested endpoint bindings with legacy
+fallback. Previously imported copies need the updated package defaults if they
+read only the former root extension; no silent package-source rewrite is done.
+
+Core preparation accepts a registry declared on the selected library row;
+Apply/Verify use the same scoped credential assignment. Other libraries gain
+no registry permission. Standalone node allowlists, TLS, integrity, platform
+and repository/offline selection rules remain. Go/UI edit only authored data.
+No independent review per owner.
+
+Full Go tests/vet PASS. React146, TypeScript/lint PASS. RED OS102 current-tree
+QA81 PASS, including real HTTPS registry metadata retrieval without a node
+allowlist, exact row scoping, nested endpoint/default templating, Vault provider
+default and missing-binding rejection. Test-only corrections addressed the
+action row variable name and the intentionally superseded old Vault-pointer
+expectation. No target service Apply/Start was invoked.
+
+Verified QA-only bundle df402e97f625b16fab0dbb7697e875d079e656650e1c3e11faa67c9c54d4b849
+built on102, standard-published and bound through actual Wails. Rebinding a
+startup-defined node required restarting the dev app before preparation; this
+existing startup-rebind limitation was not changed. QA project
+project-2026110200000021: real registry Add/Review/Save migrated old endpoint
+and Vault fields; selected endpoint apps and Vault deployment vaultqa retained,
+no provider button, one endpoint row. Saved revision
+8ec664b6301d98f388a0ad4662a9dbfea9bcca1a6d42fccfe2c8f07dd57d7356;
+real Header Verify VERIFIED. Both Keycloak placements node1/node2 inherit apps.
+Safe evidence: .runtime/qa/import-reproduce/library-bindings-result.json.
+Visual inspection/production registry access/installation acceptance not claimed.
+
+Temporary RED OS source workspaces cleaned with qa-sync. Production delivery
+requires updated Installer/Core bundle; updated SZI/nginx defaults are included
+in the source packages.
+
+Final Windows production Wails build PASS. Prior c97e77d7 cache/runtime restored through the standard publisher and real Wails preparation (READY). Owned dev processes stopped; generated frontend outputs restored; unrelated work preserved. Existing development runtime:ready/nodes IPC warnings observed; acceptance above is nonvisual.

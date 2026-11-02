@@ -35,7 +35,7 @@ class ActionModule(ActionBase):
                 legacy = selected_image(lock, reference, row['libraryId'], row['instanceId'], row['hostId'])
                 request = registry_request(reference, legacy)
                 host = values['hostvars'][row['hostId']]
-                policy = list(host.get('platform_application_approved_registries', []))
+                policy = set(host.get('platform_application_approved_registries', [])) | set(row.get('registryCredentials', {}))
                 if legacy:
                     ready[placement_key(row)] = dict(reference=reference, image=legacy)
                     continue

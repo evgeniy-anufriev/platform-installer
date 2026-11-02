@@ -76,7 +76,7 @@ Reset удаляет только `overrides.image`. Обычные Ansible defa
 | --- | --- | --- |
 | Желаемый образ | Defaults приложения / существующие Ansible overrides | До изменения проекта или пакета |
 | Registry и ссылки на его username/password inputs | `registry_credentials` экземпляра библиотеки в существующем group_vars | До изменения проекта |
-| Разрешённые registry, trust и источник credentials | Существующая политика узла и runtime identity | По существующим правилам |
+| Разрешённые registry, trust и источник credentials | Registry библиотеки для её размещений; политика узла для остальных источников; runtime identity | По существующим правилам и уточнению владельца 02.11 |
 | Архив образа | Неизменяемый runtime bundle | Версия поставки |
 | SHA и размер архива | Существующая запись `components` manifest bundle | Версия поставки |
 | Связь image/platform с архивом и imageId | Автоматически построенный индекс в том же manifest | Версия поставки |

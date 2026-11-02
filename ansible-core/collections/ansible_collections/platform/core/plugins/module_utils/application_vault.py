@@ -65,7 +65,7 @@ def project_vault(rows, prepared):
             raise ValueError('APPLICATION_VAULT_GENERATED_PASSWORD_SCOPE_INVALID')
         if not active and not sources:
             continue
-        auth = row.get('vaultRef', {})
+        auth = row.get('vaultRef') or {'binding': 'secrets'}
         ref = row['bindings'].get(auth.get('binding'), {}).get('deploymentRef')
         if not ref:
             raise ValueError('APPLICATION_VAULT_BINDING_REQUIRED')

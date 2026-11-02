@@ -118,25 +118,15 @@ describe("library connections table", () => {
     expect(screen.getByLabelText("Подключение f")).toBeTruthy();
     expect(screen.queryByText("Далее")).toBeNull();
   });
-  it("selects a Vault binding in the same table using its existing alias", async () => {
-    const user = userEvent.setup(),
-      select = vi.fn(async () => true);
+  it("uses the secrets binding without a separate provider selection button", () => {
     render(
       <ApplicationBindings
         value={{
-          store: { deploymentRef: "qa-vault" },
+          secrets: { deploymentRef: "qa-vault" },
           other: { deploymentRef: "qa-other-vault" },
-          pg: { deploymentRef: "pg1" },
         }}
         hints={{}}
-        deployments={["qa-vault", "qa-other-vault", "pg1"]}
-        deploymentTypes={{
-          "qa-vault": "vault",
-          "qa-other-vault": "vault",
-          pg1: "postgresql",
-        }}
-        vaultBinding="store"
-        onSelectVault={select}
+        deployments={["qa-vault", "qa-other-vault"]}
         profiles={[]}
         disabled={false}
         onSave={vi.fn()}
@@ -144,21 +134,11 @@ describe("library connections table", () => {
       />,
     );
     expect(
-      within(screen.getByRole("row", { name: /^store / })).getByText(
+      within(screen.getByRole("row", { name: /^secrets / })).getByText(
         "Хранилище секретов",
       ),
     ).toBeTruthy();
-    expect(
-      within(screen.getByRole("row", { name: /^pg / })).queryByText(
-        "Для секретов",
-      ),
-    ).toBeNull();
-    await user.click(
-      within(screen.getByRole("row", { name: /^other / })).getByText(
-        "Для секретов",
-      ),
-    );
-    expect(select).toHaveBeenCalledWith("other");
+    expect(screen.queryByRole("button", { name: "Для секретов" })).toBeNull();
   });
   it("renders named rows with current deployment and profile", () => {
     setup();

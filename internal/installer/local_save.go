@@ -167,6 +167,15 @@ func readManagedDesiredState(root string, budget *managedReadBudget, view *Manag
 			return managedReadError("Managed application library input is unsafe", desiredDocument)
 		}
 		view.ApplicationLibraries[id] = asMap(deepCopy(value))
+		normalizeLibraryVaultBinding(view.ApplicationLibraries[id])
+		if raw, exists := asMap(value["bindings"])["endpoint"]; exists {
+			binding := asMap(raw)
+			ref, ok := binding["endpointGroupRef"].(string)
+			if !ok || len(binding) != 1 || !validLibraryInputID(ref) {
+				return managedReadError("Library endpoint binding is malformed", desiredDocument)
+			}
+			view.LibraryEndpointGroups[id] = ref
+		}
 	}
 	view.DataRootDirectory = "/var/lib"
 	if raw, found := document["platform_data_root_directory"]; found {

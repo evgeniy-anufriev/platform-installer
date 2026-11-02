@@ -1263,6 +1263,7 @@ it("offers declared SSO without a Core snapshot and saves the library endpoint s
     value: "apps",
   });
   expect(applicationDraft(view, calls).libraryEndpointGroups.sdku).toBe("apps");
+  expect(applicationDraft(view, calls).libraries.sdku.bindings).toMatchObject({ endpoint: { endpointGroupRef: "apps" } });
   await waitFor(() =>
     expect(
       (

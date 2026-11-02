@@ -599,6 +599,16 @@ See [A2 plan](work/application-libraries/milestones/a2/a2-technical-plan.md) and
 [DIFF review](work/application-libraries/milestones/a2/reviews/a2-diff-review.md); these do not authorize
 later provider, Go or UI stages.
 
+Owner refinement (2026-11-02): explicit registry entries inside an application
+library authorize only that library's image sources on its selected nodes.
+Preparation and Apply/Verify share this authority; no Go/React source-selection
+rule or node-global approval is inferred. Standalone node lists remain valid.
+Endpoint assignment and Vault selection live inside the same library bindings:
+`endpoint.endpointGroupRef` and `secrets.deploymentRef`. Root endpoint extension
+and duplicate Vault pointer metadata are read for compatibility and removed by
+the guarded library Save. Existing Core semantics and runtime-only credential
+values remain separate from Installer edit/session ownership.
+
 ## ADR-035: Managed PKI authorities enter the target OS trust store
 
 For each resolved PKI authority selected for a target, `platform.core.pki_deploy`
