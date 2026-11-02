@@ -159,6 +159,38 @@ async function selectSlot() {
   await userEvent.click(screen.getByRole("button", { name: "↳ gateway" }));
 }
 describe("application editor", () => {
+  it.each([false, true])(
+    "shows library connections with child package present=%s",
+    async (childPresent) => {
+      const view = structuredClone(managed);
+      const definition = objectValue(
+        view.applicationPackages["library:sdku@1.0.0"].definition,
+      );
+      definition.connections = {
+        postgres: { library_binding: "database" },
+        redis: { library_binding: "cache" },
+        sentinel: { library_binding: "cache" },
+        vault: { library_binding: "secrets" },
+      };
+      definition.shared_secrets = {
+        storePassword: {
+          source: { kind: "pki_credential", binding: "application-pki" },
+        },
+      };
+      if (!childPresent)
+        delete view.applicationPackages["application:gateway@1.0.0"];
+      const calls: ApplicationIntent[] = [];
+      render(<Harness calls={calls} view={view} />);
+      await userEvent.click(screen.getByRole("button", { name: /^sdku/ }));
+      await userEvent.click(screen.getByRole("button", { name: "Подключения" }));
+      for (const name of ["database", "cache", "secrets", "application-pki"])
+        expect(screen.getAllByLabelText("Подключение " + name)).toHaveLength(1);
+      expect(screen.queryByLabelText("Подключение messaging") !== null).toBe(
+        childPresent,
+      );
+      expect(calls).toEqual([]);
+    },
+  );
   it("shows the next step only after a completed package import", () => {
     const rendered = render(<Harness calls={[]} />);
     expect(screen.queryByText(/Пакет успешно импортирован/)).toBeNull();

@@ -246,6 +246,10 @@ export function ApplicationsPage({
       : objectValue(value);
   const recipe = objectValue(definition.slots);
   const bindingHints: Record<string, string> = {};
+  for (const connection of Object.values(objectValue(definition.connections))) {
+    const name = objectValue(connection).library_binding;
+    if (typeof name === "string") bindingHints[name] = "deployment";
+  }
   for (const raw of Object.values(recipe)) {
     const def = packageDefinition(
       "application",
