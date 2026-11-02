@@ -48,7 +48,7 @@ class ResourceContextBatchQA(unittest.TestCase):
                   {'db': {'kept': {'resourceId': 'kept', 'name': 'kept'}}},
                   dict(expected_topics, kept=entry('events')),
                   dict(expected_databases, db=dict(entry('main'), kept={'resourceId': 'kept', 'name': 'kept'})))]
-        include = next(task for task in yaml.safe_load((TASKS / 'instance.yml').read_text())
+        include = next(task for task in yaml.safe_load((TASKS / 'instance.yml').read_text())[0]['block']
                        if task.get('ansible.builtin.include_tasks') == 'resource_context.yml')
         include = copy.deepcopy(include)
         include['ansible.builtin.include_tasks'] = str(TASKS / 'resource_context.yml')

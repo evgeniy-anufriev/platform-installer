@@ -212,3 +212,56 @@ Safe evidence: `.runtime/qa/import-reproduce/locked-connection-kinds/`.
 The table screenshot was inspected. No Core/source schema, runtime bundle,
 service, Approve/Start changed; existing development IPC warnings observed.
 Owned Wails/Vite processes stopped.
+
+## Database defaults and pre-snapshot diagnostics — 2026-11-02
+
+Owner requested immediate display/use of the databases declared in library
+resource_defaults and concrete Core failure reasons. Existing Resources table
+now renders PostgreSQL/ClickHouse declarations before Core succeeds; it does not
+stage a draft on display. Editing stores only the selected override, and reset
+removes that override. Existing controls/Project diagnostic area are reused.
+Core selects those database declarations through the library/selected-app
+connection metadata when the provider binding is unambiguous. Names continue to
+resolve with native Ansible defaults/overrides; desired files are not rewritten.
+Explicit resource IDs override defaults; Kafka/Redis selection is unchanged.
+
+Pre-snapshot application tasks retain their original expressions and no_log.
+An ordinary block/rescue publishes a safe adapterError through the existing
+snapshot-output channel. Existing snapshot_input_message was extracted from the
+snapshot action for reuse, rather than retaining a second classifier. It adds
+bounded missing-field/variable identifiers and library/slot/host context; raw
+exception values are never returned. Snapshot and earlier library calculations
+now share that formatter. No new UI error rendering or Go error model was added.
+Original task bodies were checked byte-equivalent after de-indentation.
+
+Validation: focused RED OS suites application_libraries30, snapshot_output7,
+snapshot_action10, native project-resolution1, resource-context1, connections11,
+providers25 and endpoint-stage5 PASS (90 total). Native failures under no_log
+cover missing sso/url/postgres with context and no private sentinel in stdout,
+stderr or public artifact. Native database resolution succeeds without saved
+resource entries and leaves desired YAML unchanged. React page/resources/App146
+PASS; TypeScript/lint/Vite and Windows Wails production build PASS. Existing Vite
+chunk-size warning and development IPC warnings were observed.
+
+Updated current-source QA bundle 8f2f6f1c8c2e2a0690fe8cfd4c65ca6eaeb7053f21cf1617b4f7ffea740bed51
+was built on trusted RED OS102, verified/published through the standard publisher
+and prepared on101 through real React/Wails. No service installation or
+Approve/Start was invoked. QA project project-2026110200000015:
+
+- Revision8e25cf424b990d7ed376cd095b273067c36e126cbc91fb1a8eb66b51ad58dc42:
+  keycloak/keycloak-db and szi_audit/audit-db are visible immediately. Header
+  Verify returns PROJECT_SNAPSHOT_INPUT_INVALID with missing sso, library szi,
+  application grant-access and node1. The existing Project area visibly shows
+  the same reason; its screenshot was inspected. This expected invalid fixture
+  does not constitute successful full-SZI verification/installation.
+- Actual resource edit -> review -> Save COMMITTED at
+  e6bcd06265d2a28651d5437994830521b1d6a776b0ad5202183896000fc54ef1.
+  Only keycloak-db name custom_keycloak was persisted; audit-db remains inherited
+  and visible. No freezing/copying of sibling defaults.
+
+Safe outputs/screenshots: .runtime/qa/import-reproduce/db-diagnostics-result.json,
+db-diagnostics.png, db-override-result.json and db-override.png. Distribution needs
+an updated Installer plus rebuilt runtime bundle; existing imported package
+settings remain desired inputs. No independent review was launched, per owner.
+
+After QA, the prior verified c97e77d7 bundle was republished through the standard publisher and restored to READY on101 through React/Wails preparation. Both temporary RED OS source workspaces were cleaned with qa-sync; owned Wails/Vite processes stopped. Local QA bundle/evidence retained under ignored .runtime only.

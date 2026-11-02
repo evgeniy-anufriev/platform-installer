@@ -3,7 +3,8 @@ from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
 from ansible.plugins.callback import CallbackBase
-from ansible_collections.platform.core.plugins.module_utils.project_snapshot_output import write_snapshot_output, snapshot_failure_published
+from ansible.errors import AnsibleError
+from ansible_collections.platform.core.plugins.module_utils.project_snapshot_output import write_snapshot_output, snapshot_failure_published, snapshot_input_message
 
 
 class CallbackModule(CallbackBase):
@@ -24,7 +25,10 @@ class CallbackModule(CallbackBase):
                 self._write(snapshot)
 
     def v2_runner_on_failed(self, result, ignore_errors=False):
-        del ignore_errors
+        if ignore_errors:
+            return
+        if snapshot_failure_published():
+            return
         if getattr(result._task, "action", "") == "platform.core.project_snapshot":
             if snapshot_failure_published():
                 return
@@ -32,3 +36,8 @@ class CallbackModule(CallbackBase):
                 "code": "PROJECT_SNAPSHOT_INPUT_INVALID",
                 "safeMessage": "Задача platform.core.project_snapshot завершилась без диагностического результата action.",
             })})
+        else:
+            self._write({'adapterError': {
+                'code': 'PROJECT_SNAPSHOT_INPUT_INVALID',
+                'safeMessage': snapshot_input_message('задача Ansible', AnsibleError(result._result.get('msg', ''))),
+            }})

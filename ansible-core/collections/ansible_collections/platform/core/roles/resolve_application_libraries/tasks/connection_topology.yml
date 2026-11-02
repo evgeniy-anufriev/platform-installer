@@ -1,66 +1,78 @@
 ---
-- name: Привязка идентификатора шаблона библиотеки перед вычислением экспортируемых значений
-  ansible.builtin.set_fact:
-    library_instance_id: "{{ application_job.libraryId }}"
-    _application_library_endpoint: >-
-      {{ {'endpoint_group': platform_desired_state['x-applicationLibraryEndpointGroups'][application_job.libraryId]}
-         if platform_desired_state['x-applicationLibraryEndpointGroups'][application_job.libraryId] is defined else {} }}
-  no_log: true
-  become: false
+- name: Расчёт настроек с безопасной диагностикой отказа
+  block:
+    - name: Привязка идентификатора шаблона библиотеки перед вычислением экспортируемых значений
+      ansible.builtin.set_fact:
+        library_instance_id: "{{ application_job.libraryId }}"
+        _application_library_endpoint: >-
+          {{ {'endpoint_group': platform_desired_state['x-applicationLibraryEndpointGroups'][application_job.libraryId]}
+             if platform_desired_state['x-applicationLibraryEndpointGroups'][application_job.libraryId] is defined else {} }}
+      no_log: true
+      become: false
 
-- name: Вычисление только объявленных экспортируемых значений в контексте библиотеки
-  platform.core.prepare_application_libraries:
-    provided_connections: true
-    library_id: "{{ application_job.libraryId }}"
-    host_id: "{{ application_job.hostId }}"
-    defaults_path: "{{ application_job.library.defaultsPath }}"
-  register: _application_export_inputs
-  no_log: true
-  become: false
+    - name: Вычисление только объявленных экспортируемых значений в контексте библиотеки
+      platform.core.prepare_application_libraries:
+        provided_connections: true
+        library_id: "{{ application_job.libraryId }}"
+        host_id: "{{ application_job.hostId }}"
+        defaults_path: "{{ application_job.library.defaultsPath }}"
+      register: _application_export_inputs
+      no_log: true
+      become: false
 
-- name: "Проверка вычисления всех экспортируемых значений библиотеки перед расчётом топологии"
-  ansible.builtin.assert:
-    that: _application_export_inputs.findings | default([]) | length == 0
-    fail_msg: APPLICATION_INPUT_INVALID
-  no_log: true
-  become: false
+    - name: "Проверка вычисления всех экспортируемых значений библиотеки перед расчётом топологии"
+      ansible.builtin.assert:
+        that: _application_export_inputs.findings | default([]) | length == 0
+        fail_msg: APPLICATION_INPUT_INVALID
+      no_log: true
+      become: false
 
-- name: "Объединение параметров с учётом приоритета значений Ansible"
-  ansible.builtin.set_fact:
-    application_provided_connection_definitions: >-
-      {{ _application_export_inputs.defaults |
-         combine(_application_export_inputs.overrides, recursive=true, list_merge='replace') }}
-  no_log: true
-  become: false
+    - name: "Объединение параметров с учётом приоритета значений Ansible"
+      ansible.builtin.set_fact:
+        application_provided_connection_definitions: >-
+          {{ _application_export_inputs.defaults |
+             combine(_application_export_inputs.overrides, recursive=true, list_merge='replace') }}
+      no_log: true
+      become: false
 
-- name: Замена дескрипторов источника учетных данных полными типизированными значениями
-  ansible.builtin.include_tasks: provided_credential_sources.yml
-  loop: "{{ _application_export_inputs.overrides | dict2items }}"
-  loop_control:
-    loop_var: application_export_override
-  no_log: true
+    - name: Замена дескрипторов источника учетных данных полными типизированными значениями
+      ansible.builtin.include_tasks: provided_credential_sources.yml
+      loop: "{{ _application_export_inputs.overrides | dict2items }}"
+      loop_control:
+        loop_var: application_export_override
+      no_log: true
 
-- name: "Определение топологии подключений по параметрам пакета и установки"
-  ansible.builtin.set_fact:
-    platform_application_connection_rows: >-
-      {{ platform_application_connection_rows + [{
-        'libraryId': application_job.libraryId, 'slotId': application_job.slotId,
-        'instanceId': (application_job.application.name if
-          application_job.library.definition.instance_id_strategy | default('qualified') == 'application-name'
-          else application_job.application.name ~ '-' ~ application_job.libraryId),
-        'hostId': application_job.hostId, 'startupPriority': application_job.slot.start_priority | default(100),
-        'providedConnections': application_provided_connection_definitions,
-        'settings': {
-          'endpoint': application_job.application.definition.defaults.endpoint | default({}) |
-            combine(_application_library_endpoint, recursive=true) |
-            combine(application_job.slot.overrides.endpoint | default({}), recursive=true) |
-            combine(application_job.instance.overrides.endpoint | default({}), recursive=true) |
-            combine(application_job.hostOverride.endpoint | default({}), recursive=true),
-          'ports': application_job.application.definition.defaults.ports | default({}) |
-            combine(application_job.slot.overrides.ports | default({}), recursive=true) |
-            combine(application_job.instance.overrides.ports | default({}), recursive=true) |
-            combine(application_job.hostOverride.ports | default({}), recursive=true)
-        }
-      }] }}
-  no_log: true
-  become: false
+    - name: "Определение топологии подключений по параметрам пакета и установки"
+      ansible.builtin.set_fact:
+        platform_application_connection_rows: >-
+          {{ platform_application_connection_rows + [{
+            'libraryId': application_job.libraryId, 'slotId': application_job.slotId,
+            'instanceId': (application_job.application.name if
+              application_job.library.definition.instance_id_strategy | default('qualified') == 'application-name'
+              else application_job.application.name ~ '-' ~ application_job.libraryId),
+            'hostId': application_job.hostId, 'startupPriority': application_job.slot.start_priority | default(100),
+            'providedConnections': application_provided_connection_definitions,
+            'settings': {
+              'endpoint': application_job.application.definition.defaults.endpoint | default({}) |
+                combine(_application_library_endpoint, recursive=true) |
+                combine(application_job.slot.overrides.endpoint | default({}), recursive=true) |
+                combine(application_job.instance.overrides.endpoint | default({}), recursive=true) |
+                combine(application_job.hostOverride.endpoint | default({}), recursive=true),
+              'ports': application_job.application.definition.defaults.ports | default({}) |
+                combine(application_job.slot.overrides.ports | default({}), recursive=true) |
+                combine(application_job.instance.overrides.ports | default({}), recursive=true) |
+                combine(application_job.hostOverride.ports | default({}), recursive=true)
+            }
+          }] }}
+      no_log: true
+      become: false
+  rescue:
+    - name: Публикация конкретной причины отказа расчёта приложения
+      platform.core.prepare_application_libraries:
+        diagnose_failure: true
+        library_id: "{{ application_job.libraryId }}"
+        slot_id: "{{ application_job.slotId }}"
+        host_id: "{{ application_job.hostId }}"
+        stage: provided-connections
+      no_log: true
+      become: false

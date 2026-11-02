@@ -627,7 +627,12 @@ assign a RepoDigest using docker tag, and offline loads need not retain it.
 Standard Ansible tasks merge library package resource_defaults, instance
 resource_defaults and explicit selected resource.parameters, in that order.
 Kafka uses resource_defaults.kafka.topics; PostgreSQL uses
-resource_defaults.postgresql.databases. Defaults alone select/create nothing.
+resource_defaults.postgresql.databases. Package-declared PostgreSQL and ClickHouse
+database defaults select effective library resources when the selected library/app
+connections declare one unambiguous provider binding. Explicit resources override
+the corresponding IDs. Names and parameters still resolve through ordinary
+Ansible defaults/overrides; no entries are copied into desired-state files.
+Kafka topics and other resource kinds still require explicit selection.
 Before parameters and ENV expand, each placement receives
 application_topics.<connection>.<resourceId>.name and
 application_databases.<connection>.<resourceId>.name (plus resourceId).
@@ -659,13 +664,15 @@ resource_defaults.clickhouse.databases.history.name defaults to
 {{ library_instance_id | replace('-', '_') }}. It is resolved on the Execution
 Node after binding the current library identity. Library instance resource_defaults
 in group_vars overrides the package; selected resource.parameters overrides both.
-Defaults alone create nothing. ClickHouse JDBC and account databaseRef use history,
+Declared database defaults participate in the effective resources. ClickHouse JDBC and account databaseRef use history,
 ENV reads application_databases.clickhouse.history.name. The same normalized DB
 name feeds provider jobs; existing table templates, grants and standalone/cluster
 engine selection are unchanged. Tables are created for selected ClickHouse DBs.
 
-Resources supports selecting history from defaults, explicit name/clear-reset and
-fresh-only Core name display. UI never evaluates the default expression. Existing
+Resources immediately lists declared database defaults, supports explicit
+name/clear-reset and displays Core-resolved names when available. Before Core
+returns, it can show the authored default text; UI never evaluates the expression.
+Reset removes only the authored override, leaving the inherited database visible. Existing
 installed resource IDs/ownership must be preserved via account/ENV/name overrides;
 key changes do not migrate/adopt installed objects. No automatic project migration.
 

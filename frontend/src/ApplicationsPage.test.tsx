@@ -1189,3 +1189,58 @@ it("keeps the selected instance when deletion is not acknowledged", async () => 
   expect(calls).toEqual([]);
   confirm.mockRestore();
 });
+
+it("shows package databases immediately and saves only explicit overrides", async () => {
+  const view = structuredClone(managed);
+  Object.assign(view.deployments, { pg: { serviceType: "postgresql" } });
+  view.applicationLibraries.sdku.bindings = {
+    database: { deploymentRef: "pg" },
+  };
+  objectValue(
+    view.applicationPackages["library:sdku@1.0.0"].definition,
+  ).resource_defaults = {
+    postgresql: {
+      databases: {
+        "keycloak-db": { name: "keycloak" },
+        "audit-db": { name: "szi_audit" },
+      },
+    },
+  };
+  const calls: ApplicationIntent[] = [];
+  render(<Harness calls={calls} view={view} />);
+  await userEvent.click(screen.getByRole("button", { name: /^sdku/ }));
+  await userEvent.click(
+    screen.getByRole("button", { name: "Ресурсы и секреты" }),
+  );
+  expect(screen.getByText("keycloak")).toBeTruthy();
+  expect(screen.getByText("szi_audit")).toBeTruthy();
+  expect(screen.queryByText("Ресурсы библиотеки не заданы.")).toBeNull();
+  expect(calls).toEqual([]);
+  await userEvent.click(
+    within(screen.getByRole("row", { name: /keycloak-db/ })).getByRole(
+      "button",
+      { name: "Настроить" },
+    ),
+  );
+  await userEvent.type(
+    screen.getByLabelText("Имя БД / схемы"),
+    "custom_keycloak",
+  );
+  await userEvent.click(screen.getByRole("button", { name: "В черновик" }));
+  expect(calls.at(-1)).toMatchObject({
+    operation: "UpdateApplicationLibraryDeployment",
+    entity: {
+      resources: {
+        "keycloak-db": {
+          kind: "postgresql.database",
+          binding: "database",
+          mode: "managed",
+          parameters: { name: "custom_keycloak" },
+        },
+      },
+    },
+  });
+  expect(
+    objectValue(calls.at(-1)?.entity?.resources)["audit-db"],
+  ).toBeUndefined();
+});

@@ -14,7 +14,8 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'ansible-core/collections'))
 from ansible_collections.platform.core.plugins.callback.project_snapshot_json import CallbackModule
 from ansible_collections.platform.core.plugins.action.project_snapshot import ActionModule
-from ansible_collections.platform.core.plugins.module_utils.project_snapshot_output import write_snapshot_output, snapshot_failure_published
+from ansible_collections.platform.core.plugins.module_utils.project_snapshot_output import write_snapshot_output, snapshot_failure_published, snapshot_input_message
+from ansible.errors import AnsibleError
 
 
 class SnapshotOutputTests(unittest.TestCase):
@@ -67,6 +68,44 @@ class SnapshotOutputTests(unittest.TestCase):
                 self.assertEqual('PROJECT_SNAPSHOT_INPUT_INVALID', fallback['code'])
                 self.assertTrue(fallback['safeMessage'])
                 self.assertNotIn('PRIVATE_TEST_SENTINEL', path.read_text())
+
+    def test_safe_task_failure_does_not_publish_raw_values(self):
+        callback = CallbackModule()
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'snapshot.json'
+            with patch.dict(os.environ, PLATFORM_PROJECT_SNAPSHOT_OUTPUT=str(path)):
+                write_snapshot_output({'adapterError': {'code': 'PROJECT_SNAPSHOT_INPUT_INVALID',
+                    'safeMessage': snapshot_input_message('application-settings',
+                        AnsibleError("'dict object' has no attribute 'postgres'; PRIVATE_TEST_SENTINEL"),
+                        {'libraryId': 'szi', 'slotId': 'keycloak', 'hostId': 'node1'})}})
+                finding = json.loads(path.read_text())['adapterError']
+                self.assertEqual('PROJECT_SNAPSHOT_INPUT_INVALID', finding['code'])
+                for token in ('postgres', 'szi', 'keycloak', 'node1'):
+                    self.assertIn(token, finding['safeMessage'])
+                self.assertNotIn('PRIVATE_TEST_SENTINEL', path.read_text())
+
+    @unittest.skipUnless(shutil.which('ansible-playbook'), 'native Ansible required')
+    def test_native_no_log_defaults_failure_publishes_missing_field_and_context(self):
+        with tempfile.TemporaryDirectory() as folder:
+            directory = Path(folder)
+            output, play = directory / 'snapshot.json', directory / 'play.json'
+            environment = dict(os.environ, ANSIBLE_CONFIG=str(ROOT / 'ansible-core/ansible.cfg'),
+                ANSIBLE_COLLECTIONS_PATH=str(ROOT / 'ansible-core/collections'),
+                ANSIBLE_CALLBACKS_ENABLED='platform.core.project_snapshot_json', PLATFORM_PROJECT_SNAPSHOT_OUTPUT=str(output))
+            for field in ('sso', 'url', 'postgres'):
+                if output.exists():
+                    output.unlink()
+                play.write_text(json.dumps([{'hosts': 'localhost', 'gather_facts': False, 'vars': {'empty': {}}, 'tasks': [
+                    {'block': [{'ansible.builtin.set_fact': {'private_settings': "{{ {'password': 'PRIVATE_TEST_SENTINEL', 'value': empty.%s} }}" % field}, 'no_log': True}],
+                     'rescue': [{'platform.core.prepare_application_libraries': {'diagnose_failure': True, 'library_id': 'szi', 'slot_id': 'keycloak', 'host_id': 'node1'}, 'no_log': True}]}]}]))
+                completed = subprocess.run(['ansible-playbook', '-vvv', '-i', 'localhost,', '-c', 'local', str(play)],
+                    env=environment, capture_output=True, text=True, timeout=45)
+                self.assertNotEqual(0, completed.returncode)
+                finding = json.loads(output.read_text())['adapterError']
+                for token in (field, 'szi', 'keycloak', 'node1'):
+                    self.assertIn(token, finding['safeMessage'])
+                for content in (completed.stdout, completed.stderr, output.read_text()):
+                    self.assertNotIn('PRIVATE_TEST_SENTINEL', content)
 
     @unittest.skipUnless(shutil.which('ansible-playbook'), 'native Ansible required')
     def test_native_success_keeps_private_register_out_of_output(self):

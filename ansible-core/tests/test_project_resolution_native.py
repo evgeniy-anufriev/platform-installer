@@ -68,6 +68,48 @@ class NativeProjectResolutionTests(unittest.TestCase):
                     self.assertEqual(1, len(clickhouse), snapshot['findings'])
                     self.assertEqual('WARNING', clickhouse[0]['status'])
 
+    def test_package_database_defaults_reach_templates_without_saved_resource_entries(self):
+        with tempfile.TemporaryDirectory(prefix='snapshot-default-db-') as folder:
+            directory, project = Path(folder), Path(folder) / 'project'
+            shutil.copytree(ROOT / 'examples/valid/application-libraries', project)
+            variables_path = project / 'inventory/group_vars/all/platform-installer.yml'
+            variables = yaml.safe_load(variables_path.read_text())
+            variables['platform_desired_state']['applicationLibraryDeployments']['sdku']['resources'] = {}
+            variables_path.write_text(yaml.safe_dump(variables))
+            before = variables_path.read_bytes()
+            library_path = project / 'library-packages/sdku/1.0.0/roles/library_sdku/defaults/main.yml'
+            library = yaml.safe_load(library_path.read_text())
+            definition = library['platform_library_definition']
+            definition['resource_defaults'] = {'postgresql': {'databases': {'applicationDatabase': {'name': 'sdku_auto'}}}}
+            library_path.write_text(yaml.safe_dump(library))
+            app_path = project / 'application-packages/apigateway/1.0.0/roles/application_apigateway/defaults/main.yml'
+            application = yaml.safe_load(app_path.read_text())
+            application['platform_application_definition']['defaults']['environment']['AUTO_DATABASE'] = '{{ application_databases.postgres.applicationDatabase.name }}'
+            app_path.write_text(yaml.safe_dump(application))
+            output = directory / 'snapshot.json'
+            environment = dict(os.environ, ANSIBLE_CONFIG=str(ROOT / 'ansible-core/ansible.cfg'),
+                ANSIBLE_COLLECTIONS_PATH=os.pathsep.join([str(ROOT / 'ansible-core/collections')] + [str(p) for p in sorted((ROOT / 'services').glob('*/ansible_collections'))]),
+                ANSIBLE_CALLBACKS_ENABLED='platform.core.project_snapshot_json', PLATFORM_PROJECT_SNAPSHOT_OUTPUT=str(output))
+            completed = subprocess.run(['ansible-playbook', '-i', str(project / 'inventory/hosts.yml'),
+                str(ROOT / 'ansible-core/playbooks/project-snapshot-machine.yml'), '-e', json.dumps({
+                    'platform_project_root': str(project), 'platform_service_catalog_path': str(ROOT / 'examples/catalog/service-catalog.yml')})],
+                env=environment, capture_output=True, text=True, timeout=90)
+            self.assertEqual(0, completed.returncode, completed.stdout[-3000:] + completed.stderr[-1000:] + (output.read_text() if output.exists() else ''))
+            snapshot = json.loads(output.read_text())
+            resolved = snapshot['applicationLibraries']['libraries']['sdku']
+            self.assertEqual('sdku_auto', resolved['resources']['applicationDatabase']['parameters']['name'])
+            self.assertEqual('sdku_auto', resolved['instances']['apigateway-sdku']['placements']['node1']['environment']['AUTO_DATABASE'])
+            self.assertEqual(before, variables_path.read_bytes())
+            self.assertNotIn('UNREACHABLE', completed.stdout)
+            application['platform_application_definition']['defaults']['environment']['AUTO_DATABASE'] = '{{ application_databases.postgres.applicationDatabase.url }}'
+            app_path.write_text(yaml.safe_dump(application))
+            failed = subprocess.run(completed.args, env=environment, capture_output=True, text=True, timeout=90)
+            self.assertNotEqual(0, failed.returncode)
+            diagnostic = json.loads(output.read_text())['adapterError']
+            self.assertEqual('PROJECT_SNAPSHOT_INPUT_INVALID', diagnostic['code'])
+            for token in ('url', 'gateway', 'node1'):
+                self.assertIn(token, diagnostic['safeMessage'])
+
     def test_root_expressions_are_lazy_and_keep_inventory_fallback(self):
         from ansible.parsing.dataloader import DataLoader
         from ansible.template import Templar

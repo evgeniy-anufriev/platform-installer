@@ -16,6 +16,14 @@ remain active. The current running UI must not be reloaded for this change.
 
 Static reference views are in [ui-design-01-mockups.html](ui-design-01-mockups.html).
 
+Owner refinement (2026-11-02): library Resources immediately lists database
+declarations from the imported library defaults, without a manual Add action or
+a successful Core snapshot prerequisite. Editing creates only an explicit
+override; resetting it restores inheritance. Core computes expressions and
+effective database selections. The existing Project diagnostic area also shows
+safe failure reasons from application resolution before snapshot construction;
+no second error panel or new verification action is introduced.
+
 The 2026-09-05 [project creation design](ui-project-creation-design.md) extends
 the reference with a metadata-only new-project entry and empty states. UI-01A
 accepted its exact lifecycle and ownership boundaries in the

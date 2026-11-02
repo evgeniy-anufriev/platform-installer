@@ -1,226 +1,238 @@
 ---
-- name: Загрузка проверенных параметров приложения по умолчанию в изолированное пространство имен
-  ansible.builtin.include_vars:
-    file: "{{ application_job.application.defaultsPath }}"
-    name: "_application_package_{{ (application_job.libraryId ~ application_job.slotId ~ application_job.hostId) | hash('sha256') }}"
-  no_log: true
-  become: false
+- name: Расчёт настроек с безопасной диагностикой отказа
+  block:
+    - name: Загрузка проверенных параметров приложения по умолчанию в изолированное пространство имен
+      ansible.builtin.include_vars:
+        file: "{{ application_job.application.defaultsPath }}"
+        name: "_application_package_{{ (application_job.libraryId ~ application_job.slotId ~ application_job.hostId) | hash('sha256') }}"
+      no_log: true
+      become: false
 
-- name: Привязка идентификаторов и контекста параметров размещения приложения
-  ansible.builtin.set_fact:
-    application_name: "{{ application_job.application.name }}"
-    application_instance_id: >-
-      {{ application_job.application.name if
-         (application_job.library.definition.instance_id_strategy | default('qualified')) == 'application-name'
-         else application_job.application.name ~ '-' ~ application_job.libraryId }}
-    library_instance_id: "{{ application_job.libraryId }}"
-    _application_library_endpoint: >-
-      {{ {'endpoint_group': platform_desired_state['x-applicationLibraryEndpointGroups'][application_job.libraryId]}
-         if platform_desired_state['x-applicationLibraryEndpointGroups'][application_job.libraryId] is defined else {} }}
-    application_topics: {}
-    application_databases: {}
-    _application_connections: {}
-    application_connections: {}
-    _application_resources: {}
-    library_resources: {}
-    _application_resource_defaults: {}
-  no_log: true
-  become: false
+    - name: Привязка идентификаторов и контекста параметров размещения приложения
+      ansible.builtin.set_fact:
+        application_name: "{{ application_job.application.name }}"
+        application_instance_id: >-
+          {{ application_job.application.name if
+             (application_job.library.definition.instance_id_strategy | default('qualified')) == 'application-name'
+             else application_job.application.name ~ '-' ~ application_job.libraryId }}
+        library_instance_id: "{{ application_job.libraryId }}"
+        _application_library_endpoint: >-
+          {{ {'endpoint_group': platform_desired_state['x-applicationLibraryEndpointGroups'][application_job.libraryId]}
+             if platform_desired_state['x-applicationLibraryEndpointGroups'][application_job.libraryId] is defined else {} }}
+        application_topics: {}
+        application_databases: {}
+        _application_connections: {}
+        application_connections: {}
+        _application_resources: {}
+        library_resources: {}
+        _application_resource_defaults: {}
+      no_log: true
+      become: false
 
-- name: Проверка наличия выбранных ключей в подключениях библиотеки
-  ansible.builtin.assert:
-    that:
-      - application_job.application.definition.connections | difference(application_job.library.definition.connections | default({}) | list) | length == 0
-    fail_msg: "Unknown library connection: {{ application_job.libraryId }}/{{ application_job.slotId }}"
-    quiet: true
-  when: application_job.application.definition.connections | default({}) is not mapping
-  become: false
+    - name: Проверка наличия выбранных ключей в подключениях библиотеки
+      ansible.builtin.assert:
+        that:
+          - application_job.application.definition.connections | difference(application_job.library.definition.connections | default({}) | list) | length == 0
+        fail_msg: "Unknown library connection: {{ application_job.libraryId }}/{{ application_job.slotId }}"
+        quiet: true
+      when: application_job.application.definition.connections | default({}) is not mapping
+      become: false
 
-- name: Определение выбранных подключений к библиотекам с поддержкой старых объявлений
-  ansible.builtin.set_fact:
-    _application_connections: >-
-      {{ _application_connections | combine({item:
-         application_job.application.definition.connections[item] if application_job.application.definition.connections is mapping else
-         application_job.library.definition.connections[item]}) }}
-  loop: "{{ application_job.application.definition.connections | default({}) | list }}"
-  no_log: true
-  become: false
+    - name: Определение выбранных подключений к библиотекам с поддержкой старых объявлений
+      ansible.builtin.set_fact:
+        _application_connections: >-
+          {{ _application_connections | combine({item:
+             application_job.application.definition.connections[item] if application_job.application.definition.connections is mapping else
+             application_job.library.definition.connections[item]}) }}
+      loop: "{{ application_job.application.definition.connections | default({}) | list }}"
+      no_log: true
+      become: false
 
-- name: "Передача значений подключений в шаблоны приложений"
-  ansible.builtin.set_fact:
-    application_connections: >-
-      {{ application_connections | combine({item.key:
-        platform_application_provided_connections.get(
-          application_job.deployment.bindings[item.value.library_binding].providedConnectionRef.libraryId, {}).get(
-          application_job.deployment.bindings[item.value.library_binding].providedConnectionRef.name, {})}) }}
-  loop: "{{ _application_connections | dict2items }}"
-  when: application_job.deployment.bindings.get(item.value.library_binding, {}).providedConnectionRef is defined
-  no_log: true
-  become: false
+    - name: "Передача значений подключений в шаблоны приложений"
+      ansible.builtin.set_fact:
+        application_connections: >-
+          {{ application_connections | combine({item.key:
+            platform_application_provided_connections.get(
+              application_job.deployment.bindings[item.value.library_binding].providedConnectionRef.libraryId, {}).get(
+              application_job.deployment.bindings[item.value.library_binding].providedConnectionRef.name, {})}) }}
+      loop: "{{ _application_connections | dict2items }}"
+      when: application_job.deployment.bindings.get(item.value.library_binding, {}).providedConnectionRef is defined
+      no_log: true
+      become: false
 
-- name: "Вычисление шаблонов ресурсов в контексте библиотеки"
-  platform.core.prepare_application_libraries:
-    resource_defaults: true
-    library_id: "{{ application_job.libraryId }}"
-    host_id: "{{ application_job.hostId }}"
-    defaults_path: "{{ application_job.library.defaultsPath }}"
-  register: _application_resource_inputs
-  no_log: true
-  become: false
+    - name: "Вычисление шаблонов ресурсов в контексте библиотеки"
+      platform.core.prepare_application_libraries:
+        resource_defaults: true
+        library_id: "{{ application_job.libraryId }}"
+        host_id: "{{ application_job.hostId }}"
+        defaults_path: "{{ application_job.library.defaultsPath }}"
+      register: _application_resource_inputs
+      no_log: true
+      become: false
 
-- name: Проверка корректности шаблонов ресурсов библиотеки
-  ansible.builtin.assert:
-    that: _application_resource_inputs.findings | default([]) | length == 0
-    fail_msg: "PROJECT_SNAPSHOT_INPUT_INVALID: Unable to resolve isolated library resource defaults"
-    quiet: true
-  become: false
+    - name: Проверка корректности шаблонов ресурсов библиотеки
+      ansible.builtin.assert:
+        that: _application_resource_inputs.findings | default([]) | length == 0
+        fail_msg: "PROJECT_SNAPSHOT_INPUT_INVALID: Unable to resolve isolated library resource defaults"
+        quiet: true
+      become: false
 
-- name: Объединение значений ресурсов по умолчанию для пакета и экземпляра с обычным приоритетом Ansible
-  ansible.builtin.set_fact:
-    _application_resource_defaults: >-
-      {{ _application_resource_inputs.defaults |
-         combine(_application_resource_inputs.overrides, recursive=true, list_merge='replace') }}
-  no_log: true
-  become: false
+    - name: Объединение значений ресурсов по умолчанию для пакета и экземпляра с обычным приоритетом Ansible
+      ansible.builtin.set_fact:
+        _application_resource_defaults: >-
+          {{ _application_resource_inputs.defaults |
+             combine(_application_resource_inputs.overrides, recursive=true, list_merge='replace') }}
+      no_log: true
+      become: false
 
-- name: Объединение выбранных параметров ресурса со значениями библиотеки по умолчанию
-  ansible.builtin.set_fact:
-    _application_resources: >-
-      {{ _application_resources | combine({item.key: item.value | combine({'parameters':
-         ((_application_resource_defaults.kafka.topics[item.key] | default({})) if item.value.kind == 'kafka.topic' else
-          (_application_resource_defaults.postgresql.databases[item.key] | default({})) if item.value.kind == 'postgresql.database' else
-          (_application_resource_defaults.clickhouse.databases[item.key] | default({})) if item.value.kind == 'clickhouse.database' else
-          (_application_resource_defaults.redis['keys'][item.key] | default({})) if item.value.kind == 'redis.key' else {}) |
-         combine(item.value.parameters, recursive=true, list_merge='replace')})}) }}
-  loop: "{{ application_job.deployment.resources | default({}) | dict2items }}"
-  no_log: true
-  become: false
+    - name: Объединение выбранных параметров ресурса со значениями библиотеки по умолчанию
+      ansible.builtin.set_fact:
+        _application_resources: >-
+          {{ _application_resources | combine({item.key: item.value | combine({'parameters':
+             ((_application_resource_defaults.kafka.topics[item.key] | default({})) if item.value.kind == 'kafka.topic' else
+              (_application_resource_defaults.postgresql.databases[item.key] | default({})) if item.value.kind == 'postgresql.database' else
+              (_application_resource_defaults.clickhouse.databases[item.key] | default({})) if item.value.kind == 'clickhouse.database' else
+              (_application_resource_defaults.redis['keys'][item.key] | default({})) if item.value.kind == 'redis.key' else {}) |
+             combine(item.value.parameters, recursive=true, list_merge='replace')})}) }}
+      loop: "{{ application_job.deployment.resources | default({}) | dict2items }}"
+      no_log: true
+      become: false
 
-- name: Привязка нормализованных ресурсов к шаблонам общих библиотек
-  ansible.builtin.set_fact:
-    library_resources: "{{ _application_resources }}"
-  no_log: true
-  become: false
+    - name: Привязка нормализованных ресурсов к шаблонам общих библиотек
+      ansible.builtin.set_fact:
+        library_resources: "{{ _application_resources }}"
+      no_log: true
+      become: false
 
-- name: "Вычисление общих значений библиотеки по умолчанию после обработки ресурсов"
-  platform.core.prepare_application_libraries:
-    shared_defaults: true
-    library_id: "{{ application_job.libraryId }}"
-    host_id: "{{ application_job.hostId }}"
-    defaults_path: "{{ application_job.library.defaultsPath }}"
-  register: _application_shared
-  no_log: true
-  become: false
+    - name: "Вычисление общих значений библиотеки по умолчанию после обработки ресурсов"
+      platform.core.prepare_application_libraries:
+        shared_defaults: true
+        library_id: "{{ application_job.libraryId }}"
+        host_id: "{{ application_job.hostId }}"
+        defaults_path: "{{ application_job.library.defaultsPath }}"
+      register: _application_shared
+      no_log: true
+      become: false
 
-- name: Проверка корректности общих шаблонов библиотеки
-  ansible.builtin.assert:
-    that: _application_shared.findings | default([]) | length == 0
-    fail_msg: "PROJECT_SNAPSHOT_INPUT_INVALID: Unable to resolve isolated shared library defaults"
-    quiet: true
-  become: false
+    - name: Проверка корректности общих шаблонов библиотеки
+      ansible.builtin.assert:
+        that: _application_shared.findings | default([]) | length == 0
+        fail_msg: "PROJECT_SNAPSHOT_INPUT_INVALID: Unable to resolve isolated shared library defaults"
+        quiet: true
+      become: false
 
-- name: "Сбор привязок топиков старого формата с учётом значений по умолчанию"
-  ansible.builtin.set_fact:
-    _application_topic_bindings: >-
-      {{ (_application_shared.defaults.topicBindings | default({}) if application_job.slot.inherit_defaults | default(true) else {}) |
-         combine(application_job.application.definition.defaults.topicBindings | default({}), recursive=true, list_merge='replace') |
-         combine(application_job.slot.overrides.topicBindings | default({}), recursive=true, list_merge='replace') |
-         combine(_application_shared.overrides.topicBindings | default({}) if application_job.slot.inherit_defaults | default(true) else {}, recursive=true, list_merge='replace') |
-         combine(application_job.instance.overrides.topicBindings | default({}), recursive=true, list_merge='replace') |
-         combine(application_job.hostOverride.topicBindings | default({}), recursive=true, list_merge='replace') }}
-  no_log: true
-  become: false
+    - name: "Сбор привязок топиков старого формата с учётом значений по умолчанию"
+      ansible.builtin.set_fact:
+        _application_topic_bindings: >-
+          {{ (_application_shared.defaults.topicBindings | default({}) if application_job.slot.inherit_defaults | default(true) else {}) |
+             combine(application_job.application.definition.defaults.topicBindings | default({}), recursive=true, list_merge='replace') |
+             combine(application_job.slot.overrides.topicBindings | default({}), recursive=true, list_merge='replace') |
+             combine(_application_shared.overrides.topicBindings | default({}) if application_job.slot.inherit_defaults | default(true) else {}, recursive=true, list_merge='replace') |
+             combine(application_job.instance.overrides.topicBindings | default({}), recursive=true, list_merge='replace') |
+             combine(application_job.hostOverride.topicBindings | default({}), recursive=true, list_merge='replace') }}
+      no_log: true
+      become: false
 
-- name: Предоставление выбранных ключей ресурсов перед расширением параметров и среды
-  ansible.builtin.include_tasks: resource_context.yml
+    - name: Предоставление выбранных ключей ресурсов перед расширением параметров и среды
+      ansible.builtin.include_tasks: resource_context.yml
 
-- name: "Обработка привязок ролей топиков старого формата после прямых ключей"
-  ansible.builtin.include_tasks: topic_roles.yml
-  loop: "{{ _application_topic_bindings | dict2items }}"
-  loop_control:
-    loop_var: topic_connection
-    label: "{{ topic_connection.key }}"
-  when: topic_connection.value is mapping
+    - name: "Обработка привязок ролей топиков старого формата после прямых ключей"
+      ansible.builtin.include_tasks: topic_roles.yml
+      loop: "{{ _application_topic_bindings | dict2items }}"
+      loop_control:
+        loop_var: topic_connection
+        label: "{{ topic_connection.key }}"
+      when: topic_connection.value is mapping
 
-- name: "Подготовка параметров узла перед вычислением зависимых параметров приложения"
-  ansible.builtin.set_fact:
-    application_parameters: >-
-      {{ (_application_shared.defaults.parameters | default({}) if application_job.slot.inherit_defaults | default(true) else {}) |
-         combine(vars['_application_package_' ~ ((application_job.libraryId ~ application_job.slotId ~ application_job.hostId) | hash('sha256'))].platform_application_definition.defaults.parameters | default({}), recursive=true, list_merge='replace') |
-         combine(application_job.slot.overrides.parameters | default({}), recursive=true, list_merge='replace') |
-         combine(_application_shared.overrides.parameters | default({}) if application_job.slot.inherit_defaults | default(true) else {}, recursive=true, list_merge='replace') |
-         combine(application_job.instance.overrides.parameters | default({}), recursive=true, list_merge='replace') |
-         combine(application_job.hostOverride.parameters | default({}), recursive=true, list_merge='replace') }}
-  no_log: true
-  become: false
+    - name: "Подготовка параметров узла перед вычислением зависимых параметров приложения"
+      ansible.builtin.set_fact:
+        application_parameters: >-
+          {{ (_application_shared.defaults.parameters | default({}) if application_job.slot.inherit_defaults | default(true) else {}) |
+             combine(vars['_application_package_' ~ ((application_job.libraryId ~ application_job.slotId ~ application_job.hostId) | hash('sha256'))].platform_application_definition.defaults.parameters | default({}), recursive=true, list_merge='replace') |
+             combine(application_job.slot.overrides.parameters | default({}), recursive=true, list_merge='replace') |
+             combine(_application_shared.overrides.parameters | default({}) if application_job.slot.inherit_defaults | default(true) else {}, recursive=true, list_merge='replace') |
+             combine(application_job.instance.overrides.parameters | default({}), recursive=true, list_merge='replace') |
+             combine(application_job.hostOverride.parameters | default({}), recursive=true, list_merge='replace') }}
+      no_log: true
+      become: false
 
-- name: Определение параметров приложения после привязки идентификатора размещения
-  ansible.builtin.set_fact:
-    application_parameters: >-
-      {{ (_application_shared.defaults.parameters | default({}) if application_job.slot.inherit_defaults | default(true) else {}) |
-         combine(_application_package.platform_application_definition.defaults.parameters | default({}), recursive=true, list_merge='replace') |
-         combine(application_job.slot.overrides.parameters | default({}), recursive=true, list_merge='replace') |
-         combine(_application_shared.overrides.parameters | default({}) if application_job.slot.inherit_defaults | default(true) else {}, recursive=true, list_merge='replace') |
-         combine(application_job.instance.overrides.parameters | default({}), recursive=true, list_merge='replace') |
-         combine(application_job.hostOverride.parameters | default({}), recursive=true, list_merge='replace') }}
-  no_log: true
-  become: false
+    - name: Определение параметров приложения после привязки идентификатора размещения
+      ansible.builtin.set_fact:
+        application_parameters: >-
+          {{ (_application_shared.defaults.parameters | default({}) if application_job.slot.inherit_defaults | default(true) else {}) |
+             combine(_application_package.platform_application_definition.defaults.parameters | default({}), recursive=true, list_merge='replace') |
+             combine(application_job.slot.overrides.parameters | default({}), recursive=true, list_merge='replace') |
+             combine(_application_shared.overrides.parameters | default({}) if application_job.slot.inherit_defaults | default(true) else {}, recursive=true, list_merge='replace') |
+             combine(application_job.instance.overrides.parameters | default({}), recursive=true, list_merge='replace') |
+             combine(application_job.hostOverride.parameters | default({}), recursive=true, list_merge='replace') }}
+      no_log: true
+      become: false
 
-- name: Определение наследуемых настроек приложения без явных переопределений
-  ansible.builtin.set_fact:
-    application_inherited: >-
-      {{ (_application_shared.defaults if application_job.slot.inherit_defaults | default(true) else {}) |
-         combine(_application_package.platform_application_definition.defaults, recursive=true, list_merge='replace') |
-         combine(({'endpoint': _application_library_endpoint} if _application_library_endpoint else {}), recursive=true, list_merge='replace') |
-         combine(application_job.slot.overrides | default({}), recursive=true, list_merge='replace') |
-         combine(_application_shared.overrides if application_job.slot.inherit_defaults | default(true) else {}, recursive=true, list_merge='replace') }}
-  no_log: true
-  become: false
+    - name: Определение наследуемых настроек приложения без явных переопределений
+      ansible.builtin.set_fact:
+        application_inherited: >-
+          {{ (_application_shared.defaults if application_job.slot.inherit_defaults | default(true) else {}) |
+             combine(_application_package.platform_application_definition.defaults, recursive=true, list_merge='replace') |
+             combine(({'endpoint': _application_library_endpoint} if _application_library_endpoint else {}), recursive=true, list_merge='replace') |
+             combine(application_job.slot.overrides | default({}), recursive=true, list_merge='replace') |
+             combine(_application_shared.overrides if application_job.slot.inherit_defaults | default(true) else {}, recursive=true, list_merge='replace') }}
+      no_log: true
+      become: false
 
-- name: Сбор служебной записи рассчитанных параметров для структурированных операций
-  ansible.builtin.set_fact:
-    platform_application_rows: >-
-      {{ platform_application_rows + [{
-        'libraryId': application_job.libraryId,
-        'libraryRef': application_job.deployment.libraryRef,
-        'slotId': application_job.slotId,
-        'startupPriority': application_job.slot.start_priority | default(100),
-        'instanceId': application_instance_id,
-        'instanceIdStrategy': application_job.library.definition.instance_id_strategy | default('qualified'),
-        'applicationName': application_name,
-        'applicationVersion': application_job.application.version,
-        'hostId': application_job.hostId,
-        'runtimeRef': application_job.deployment.runtimeRef,
-        'runtimeDirectory': application_job.deployment.runtime_directory | default(_library_package.platform_library_definition.runtime_directory | default('~/' ~ application_job.libraryId), true),
-        'libraryConnections': _library_package.platform_library_definition.connections | default({}),
-        'providedConnections': (platform_application_connection_rows |
-          selectattr('libraryId', 'equalto', application_job.libraryId) | first).providedConnections,
-        'bindings': application_job.deployment.bindings | default({}),
-        'vaultRef': application_job.deployment.vault_ref | default({}),
-        'registryCredentials': application_job.deployment.registry_credentials | default({}),
-        'resources': _application_resources,
-        'resourceDefaults': _application_resource_defaults,
-        'sharedSecrets': _library_package.platform_library_definition.shared_secrets | default({}) |
-          combine(application_job.deployment.shared_secrets | default({}), recursive=true, list_merge='replace'),
-        'connectionDefaults': _library_package.platform_library_definition.connection_defaults | default({}) |
-          combine(application_job.deployment.connection_defaults | default({}), recursive=true, list_merge='replace'),
-        'connections': _application_connections,
-        'identityNames': _application_package.platform_application_definition.identity_environment | default([]),
-        'packageIdentity': {'application': application_job.application.digest, 'library': application_job.library.digest},
-        'libraryScripts': application_job.library.scripts | default([]),
-        'applicationScripts': application_job.application.scripts | default([]),
-        'commonDefaults': _application_shared.defaults | combine(_application_shared.overrides, recursive=true, list_merge='replace'),
-        'inherited': {'environment': application_inherited.environment | default({}), 'parameters': application_inherited.parameters | default({})},
-        'settings': application_inherited |
-          combine(application_job.instance.overrides | default({}), recursive=true, list_merge='replace') |
-          combine(({'accounts': application_job.instance.accounts} if application_job.instance.accounts is defined else {}), recursive=true, list_merge='replace') |
-          combine(application_job.hostOverride, recursive=true, list_merge='replace') |
-          platform.core.application_account_policies([
-            _application_package.platform_application_definition.defaults,
-            application_job.slot.overrides | default({}),
-            application_job.instance.overrides | default({}),
-            {'accounts': application_job.instance.accounts | default({})},
-            application_job.hostOverride])
-      }] }}
-  no_log: true
-  become: false
+    - name: Сбор служебной записи рассчитанных параметров для структурированных операций
+      ansible.builtin.set_fact:
+        platform_application_rows: >-
+          {{ platform_application_rows + [{
+            'libraryId': application_job.libraryId,
+            'libraryRef': application_job.deployment.libraryRef,
+            'slotId': application_job.slotId,
+            'startupPriority': application_job.slot.start_priority | default(100),
+            'instanceId': application_instance_id,
+            'instanceIdStrategy': application_job.library.definition.instance_id_strategy | default('qualified'),
+            'applicationName': application_name,
+            'applicationVersion': application_job.application.version,
+            'hostId': application_job.hostId,
+            'runtimeRef': application_job.deployment.runtimeRef,
+            'runtimeDirectory': application_job.deployment.runtime_directory | default(_library_package.platform_library_definition.runtime_directory | default('~/' ~ application_job.libraryId), true),
+            'libraryConnections': _library_package.platform_library_definition.connections | default({}),
+            'providedConnections': (platform_application_connection_rows |
+              selectattr('libraryId', 'equalto', application_job.libraryId) | first).providedConnections,
+            'bindings': application_job.deployment.bindings | default({}),
+            'vaultRef': application_job.deployment.vault_ref | default({}),
+            'registryCredentials': application_job.deployment.registry_credentials | default({}),
+            'resources': _application_resources,
+            'resourceDefaults': _application_resource_defaults,
+            'sharedSecrets': _library_package.platform_library_definition.shared_secrets | default({}) |
+              combine(application_job.deployment.shared_secrets | default({}), recursive=true, list_merge='replace'),
+            'connectionDefaults': _library_package.platform_library_definition.connection_defaults | default({}) |
+              combine(application_job.deployment.connection_defaults | default({}), recursive=true, list_merge='replace'),
+            'connections': _application_connections,
+            'identityNames': _application_package.platform_application_definition.identity_environment | default([]),
+            'packageIdentity': {'application': application_job.application.digest, 'library': application_job.library.digest},
+            'libraryScripts': application_job.library.scripts | default([]),
+            'applicationScripts': application_job.application.scripts | default([]),
+            'commonDefaults': _application_shared.defaults | combine(_application_shared.overrides, recursive=true, list_merge='replace'),
+            'inherited': {'environment': application_inherited.environment | default({}), 'parameters': application_inherited.parameters | default({})},
+            'settings': application_inherited |
+              combine(application_job.instance.overrides | default({}), recursive=true, list_merge='replace') |
+              combine(({'accounts': application_job.instance.accounts} if application_job.instance.accounts is defined else {}), recursive=true, list_merge='replace') |
+              combine(application_job.hostOverride, recursive=true, list_merge='replace') |
+              platform.core.application_account_policies([
+                _application_package.platform_application_definition.defaults,
+                application_job.slot.overrides | default({}),
+                application_job.instance.overrides | default({}),
+                {'accounts': application_job.instance.accounts | default({})},
+                application_job.hostOverride])
+          }] }}
+      no_log: true
+      become: false
+  rescue:
+    - name: Публикация конкретной причины отказа расчёта приложения
+      platform.core.prepare_application_libraries:
+        diagnose_failure: true
+        library_id: "{{ application_job.libraryId }}"
+        slot_id: "{{ application_job.slotId }}"
+        host_id: "{{ application_job.hostId }}"
+        stage: application-settings
+      no_log: true
+      become: false

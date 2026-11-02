@@ -245,6 +245,16 @@ snapshot/runtime shapes; missing/cleared/wrong-provider roles cannot execute.
 Logical resource IDs let shared applications consume each library's physical
 names. See [role/default plan](work/application-libraries/topic-role-bindings-plan.md).
 
+Package-declared PostgreSQL/ClickHouse database defaults also select effective
+library resources through an unambiguous declared connection binding. Explicit
+resource overrides win; ordinary Ansible still evaluates database parameters.
+No generated selection/name is written back into desired state.
+Application resolution failures use the existing snapshot adapterError channel
+and shared snapshot_input_message formatter, including bounded missing-field or
+variable identifiers and library/application/host context. Standard block/rescue
+publishes this safe finding before no_log censors the result. Raw exceptions,
+settings and secrets remain private; UI uses its existing diagnostic renderer.
+
 Each library resource scope precedes logical instance account/grant scopes and
 Vault publication. HA ClickHouse user/grant writes use one ON CLUSTER default
 batch per logical instance, followed by per-server result/login verification.

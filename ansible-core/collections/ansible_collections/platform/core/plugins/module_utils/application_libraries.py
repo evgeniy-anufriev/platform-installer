@@ -1,5 +1,6 @@
 """Read-only application contract checks. Ansible owns composition and templating."""
 import hashlib
+import copy
 import json
 import os
 import re
@@ -206,6 +207,25 @@ def invocation_package_loader(root, loader, validator):
     return load
 
 
+def library_database_resources(definition, deployment, applications=()):
+    """Select package-declared databases; Ansible resolves their parameter defaults."""
+    resources = {}
+    connections = list(definition.get('connections', {}).items())
+    for application in applications:
+        if isinstance(application.get('connections'), dict):
+            connections.extend(application['connections'].items())
+    for provider, roles in (('postgresql', ('postgres', 'postgresql')), ('clickhouse', ('clickhouse',))):
+        bindings = {row['library_binding'] for name, row in connections
+                    if name in roles and isinstance(row, dict) and row.get('library_binding')}
+        if len(bindings) != 1:
+            continue
+        binding = next(iter(bindings))
+        for name in definition.get('resource_defaults', {}).get(provider, {}).get('databases', {}):
+            resources[name] = dict(kind=provider + '.database', binding=binding, mode='managed', parameters={})
+    resources.update(copy.deepcopy(deployment.get('resources', {})))
+    return resources
+
+
 def prepare(root, desired, memberships, contract, loader, contracts_root):
     schema_version(desired, contract)
     validator = SchemaValidator(contracts_root)
@@ -233,6 +253,7 @@ def prepare(root, desired, memberships, contract, loader, contracts_root):
         field = "applicationLibraryDeployments." + library_id
         try:
             library = package(deployment["libraryRef"], "library")
+            deployment = copy.deepcopy(deployment)
             if set(deployment.get('provided_connections', {})) - set(library['definition'].get('provided_connections', {})):
                 raise ValueError('Unknown provided connection override')
             for resource in deployment.get("resources", {}).values():
@@ -252,6 +273,8 @@ def prepare(root, desired, memberships, contract, loader, contracts_root):
             slots = library["definition"]["slots"]
             if set(selected) - set(slots) or any(slot.get("required", False) and name not in selected for name, slot in slots.items()):
                 raise ValueError("Recipe slots mismatch")
+            deployment['resources'] = library_database_resources(library['definition'], deployment,
+                [package(slots[name]['applicationRef'], 'application')['definition'] for name in selected])
             placements = [host for host, membership in sorted(memberships.items()) if library_id in membership]
             if not placements:
                 findings.append(finding("APPLICATION_LIBRARY_PLACEMENT_MISSING", field))

@@ -54,12 +54,27 @@ export function ApplicationLibraryResources({
     "redis.key": redisDefaults,
   };
   const hasDefault = Object.hasOwn(defaultsByKind[kind] ?? {}, edit ?? "");
+  const inheritedResources: ObjectValue = {};
+  for (const resourceKind of ["postgresql.database", "clickhouse.database"]) {
+    const candidates = compatibleBindings(resourceKind);
+    for (const id of Object.keys(defaultsByKind[resourceKind])) {
+      inheritedResources[id] = {
+        kind: resourceKind,
+        binding:
+          objectValue(resolvedResources[id]).binding ??
+          (candidates.length === 1 ? candidates[0] : ""),
+        mode: "managed",
+        parameters: {},
+      };
+    }
+  }
+  const displayedResources = { ...inheritedResources, ...resources };
   const groups = new Map<string, string[]>();
   for (const key of Object.keys(bindings)) {
     const deployment = String(objectValue(bindings[key]).deploymentRef ?? key);
     if (!groups.has(deployment)) groups.set(deployment, []);
   }
-  for (const [key, value] of Object.entries(resources)) {
+  for (const [key, value] of Object.entries(displayedResources)) {
     const ref = String(objectValue(value).binding ?? "");
     const deployment = String(objectValue(bindings[ref]).deploymentRef ?? ref);
     groups.set(deployment, [...(groups.get(deployment) ?? []), key]);
@@ -71,7 +86,7 @@ export function ApplicationLibraryResources({
     )
       return;
     onDirtyChange(false);
-    const row = objectValue(resources[key]);
+    const row = objectValue(displayedResources[key]);
     setEdit(key);
     setName(String(objectValue(row.parameters).name ?? ""));
     setKind(String(row.kind ?? newKind));
@@ -129,7 +144,7 @@ export function ApplicationLibraryResources({
       {showAddActions &&
         Object.entries(defaultsByKind).flatMap(([resourceKind, defaults]) =>
           Object.keys(defaults)
-            .filter((id) => !Object.hasOwn(resources, id))
+            .filter((id) => !Object.hasOwn(displayedResources, id))
             .map((id) => (
               <button
                 key={resourceKind + id}
@@ -166,7 +181,7 @@ export function ApplicationLibraryResources({
               .map(([deployment, keys]) => (
                 <Group key={deployment} title={deployment}>
                   {keys.map((key) => {
-                    const row = objectValue(resources[key]);
+                    const row = objectValue(displayedResources[key]);
                     return (
                       <tr key={key}>
                         <td>{key}</td>
@@ -188,6 +203,9 @@ export function ApplicationLibraryResources({
                                 objectValue(resolvedResources[key]).parameters,
                               ).name ??
                               objectValue(row.parameters).name ??
+                              objectValue(
+                                defaultsByKind[String(row.kind)]?.[key],
+                              ).name ??
                               "—",
                           )}
                           {row.kind === "kafka.topic" && (
@@ -210,11 +228,17 @@ export function ApplicationLibraryResources({
                           </button>{" "}
                           <button
                             className="outline"
-                            disabled={disabled}
+                            disabled={
+                              disabled ||
+                              (Object.hasOwn(inheritedResources, key) &&
+                                !Object.hasOwn(resources, key))
+                            }
                             onClick={async () => {
                               if (
                                 !window.confirm(
-                                  `Удалить ресурс ${key} из проекта? Установленный ресурс сохранится. Связанные ссылки необходимо изменить отдельно.`,
+                                  Object.hasOwn(inheritedResources, key)
+                                    ? `Сбросить переопределения ресурса ${key} к defaults библиотеки?`
+                                    : `Удалить ресурс ${key} из проекта? Установленный ресурс сохранится. Связанные ссылки необходимо изменить отдельно.`,
                                 )
                               )
                                 return;
@@ -225,7 +249,9 @@ export function ApplicationLibraryResources({
                               }
                             }}
                           >
-                            Удалить
+                            {Object.hasOwn(inheritedResources, key)
+                              ? "Сбросить к defaults"
+                              : "Удалить"}
                           </button>
                         </td>
                       </tr>
@@ -236,7 +262,9 @@ export function ApplicationLibraryResources({
           </tbody>
         </table>
       </div>
-      {!Object.keys(resources).length && <p>Ресурсы библиотеки не заданы.</p>}
+      {!Object.keys(displayedResources).length && (
+        <p>Ресурсы библиотеки не заданы.</p>
+      )}
       {edit !== null && (
         <form
           className="application-resource-form"

@@ -128,9 +128,7 @@ describe("library resource table", () => {
       onDirtyChange: vi.fn(),
     };
     const view = render(<ApplicationLibraryResources {...props} />);
-    await user.click(
-      screen.getByRole("button", { name: "Добавить из defaults · ef-store" }),
-    );
+    await user.click(screen.getByRole("button", { name: "Настроить" }));
     await user.click(screen.getByRole("button", { name: "В черновик" }));
     expect(save).toHaveBeenLastCalledWith({
       "ef-store": {
@@ -181,9 +179,7 @@ describe("library resource table", () => {
       onDirtyChange: vi.fn(),
     };
     const view = render(<ApplicationLibraryResources {...props} />);
-    await user.click(
-      screen.getByRole("button", { name: "Добавить из defaults · history" }),
-    );
+    await user.click(screen.getByRole("button", { name: "Настроить" }));
     await user.click(screen.getByRole("button", { name: "В черновик" }));
     expect(save).toHaveBeenLastCalledWith({
       history: {

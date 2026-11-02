@@ -213,6 +213,20 @@ class ApplicationLibrariesTest(unittest.TestCase):
             for expression, prefix in expressions:
                 self.assertEqual(prefix + expected if expected else '', templar.template(expression, fail_on_undefined=True))
 
+    def test_library_database_defaults_select_resources_without_freezing_names(self):
+        definition = {'connections': {'postgres': {'library_binding': 'database'}, 'clickhouse': {'library_binding': 'analytics'}},
+                      'resource_defaults': {'postgresql': {'databases': {'keycloak-db': {'name': '{{ library_instance_id }}'}}},
+                                            'clickhouse': {'databases': {'archive': {'name': 'archive'}}}}}
+        deployment = {'resources': {'keycloak-db': {'kind': 'postgresql.database', 'binding': 'database', 'parameters': {'name': 'custom'}}}}
+        before = copy.deepcopy(deployment)
+        resources = APP.library_database_resources(definition, deployment)
+        self.assertEqual(before, deployment)
+        self.assertEqual('custom', resources['keycloak-db']['parameters']['name'])
+        self.assertEqual({'kind': 'clickhouse.database', 'binding': 'analytics', 'mode': 'managed', 'parameters': {}}, resources['archive'])
+        empty = APP.library_database_resources(definition, {})
+        self.assertEqual({}, empty['keycloak-db']['parameters'])
+        self.assertEqual('database', empty['keycloak-db']['binding'])
+
     def test_package_closure_two_libraries_two_hosts(self):
         prepared = self.prepare()
         self.assertEqual([], prepared["findings"])
