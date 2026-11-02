@@ -541,8 +541,11 @@ func (b *Backend) storeStructuralPlan(root, revision string, changes []SemanticC
 		if document.Existed {
 			before = &DocumentState{State: "PRESENT", Digest: digestBytes(document.Before)}
 		}
-		documentChanges = append(documentChanges, DocumentChange{LogicalPath: document.LogicalPath, Before: before,
-			After: &DocumentState{State: "PRESENT", Digest: digestBytes(document.After)}})
+		after := &DocumentState{State: "PRESENT", Digest: digestBytes(document.After)}
+		if document.Deleted {
+			after = &DocumentState{State: "ABSENT"}
+		}
+		documentChanges = append(documentChanges, DocumentChange{LogicalPath: document.LogicalPath, Before: before, After: after})
 		diffs = append(diffs, boundedDiff(document.LogicalPath, document.Before, document.After))
 	}
 	plan := StructuralEditPlan{APIVersion: StructuralPlanAPIVersion, Kind: "StructuralEditPlan", Status: "READY", BaseProjectRevision: revision,

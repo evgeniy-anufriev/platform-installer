@@ -923,3 +923,9 @@ remain local desired-state edits through Review/Save, not uninstall operations.
 SSO binding choices come from authored package exports even when Core reports
 configuration findings. See [writer](contracts/application-library-writer.md#library-endpoint-selection-and-instance-removal-v12)
 and [evidence](work/application-libraries/package-import-batch-journal.md).
+
+Owner import amendment (2026-11-02): preserve packages when removing instances;
+explicit reimport can replace the same name/version through the existing reviewed
+transaction. Obsolete package files are removed with rollback/recovery; identical
+content finishes without writes. This changes project package import only, not
+runtime-bundle immutability or installation authorization.

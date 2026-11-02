@@ -53,7 +53,10 @@ import {
   observeRunEvent,
   type RunProgress,
 } from "./installationPresentation";
-import { executionNodeCombinedStatus, type ExecutionNodeCombinedStatus } from "./executionNodeLabels";
+import {
+  executionNodeCombinedStatus,
+  type ExecutionNodeCombinedStatus,
+} from "./executionNodeLabels";
 import "./edit.css";
 import {
   ApplicationsPage,
@@ -112,11 +115,21 @@ type ServicePreviewObservation = {
   selectedHostId?: string;
   safeLabel?: string;
 };
-type PreviewValues = ServiceConfigurationPreview["services"][string]["configuration"];
-const retainResolvedPreviewValues = (previous: PreviewValues = {}, next: PreviewValues = {}): PreviewValues => ({
+type PreviewValues =
+  ServiceConfigurationPreview["services"][string]["configuration"];
+const retainResolvedPreviewValues = (
+  previous: PreviewValues = {},
+  next: PreviewValues = {},
+): PreviewValues => ({
   ...previous,
-  ...Object.fromEntries(Object.entries(next).filter(([key, item]) =>
-    item.state === "RESOLVED" && item.value !== undefined || previous[key]?.state !== "RESOLVED" || previous[key]?.value === undefined)),
+  ...Object.fromEntries(
+    Object.entries(next).filter(
+      ([key, item]) =>
+        (item.state === "RESOLVED" && item.value !== undefined) ||
+        previous[key]?.state !== "RESOLVED" ||
+        previous[key]?.value === undefined,
+    ),
+  ),
 });
 const navigation: Array<{ id: Page | string; label: string }> = [
   { id: "project", label: "Проект" },
@@ -146,7 +159,11 @@ const exportExclusionLabels: Record<string, string> = {
 };
 const exportExclusionLabel = (category: string) =>
   exportExclusionLabels[category] ?? "другие служебные данные";
-const verificationLabel = (status: string, failed = false, warnings = false) => {
+const verificationLabel = (
+  status: string,
+  failed = false,
+  warnings = false,
+) => {
   if (status === "UNVERIFIED" && failed) return "Проверка недоступна";
   switch (status) {
     case "VERIFIED":
@@ -400,7 +417,8 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   const snapshot = result.snapshot;
   const managed = result.managed;
   const verification = result.verification || { status: "UNVERIFIED" };
-  const verificationWarnings = verification.status === "VERIFIED" &&
+  const verificationWarnings =
+    verification.status === "VERIFIED" &&
     verification.projectRevision === result.managed?.projectRevision &&
     !!verification.projectRevision &&
     !!verification.findings?.some((finding) => finding.severity === "WARNING");
@@ -464,11 +482,14 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       ? serviceConfigurationPreview.value
       : undefined;
   const coreProjectionReady = !!savedServiceConfigurationPreview;
-  const coreProjectKey = projectOpen && result.root
-    ? JSON.stringify([result.root, result.project?.id]) : "";
+  const coreProjectKey =
+    projectOpen && result.root
+      ? JSON.stringify([result.root, result.project?.id])
+      : "";
   // Navigation admission survives saved-revision/runtime refreshes. It is
   // neither current Core evidence nor permission to approve or start a plan.
-  const corePagesAvailable = coreProjectionReady ||
+  const corePagesAvailable =
+    coreProjectionReady ||
     (!!coreProjectKey && coreAdmittedProject === coreProjectKey);
   useEffect(() => setCoreAdmittedProject(""), [coreProjectKey]);
   useEffect(() => {
@@ -489,25 +510,34 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     ) &&
     ["UNVERIFIED", "STALE"].includes(verification.status);
   const visibleServiceConfigurationPreview =
-    serviceConfigurationPreview && serviceConfigurationPreview.root === result.root &&
+    serviceConfigurationPreview &&
+    serviceConfigurationPreview.root === result.root &&
     serviceConfigurationPreview.projectId === result.project?.id
-      ? { ...serviceConfigurationPreview.value, services: Object.fromEntries(
-          Object.entries(serviceConfigurationPreview.displayServices).filter(([id]) =>
-            managed?.deployments[id]?.serviceType === serviceConfigurationPreview.deploymentTypes[id]),
-        ) }
+      ? {
+          ...serviceConfigurationPreview.value,
+          services: Object.fromEntries(
+            Object.entries(serviceConfigurationPreview.displayServices).filter(
+              ([id]) =>
+                managed?.deployments[id]?.serviceType ===
+                serviceConfigurationPreview.deploymentTypes[id],
+            ),
+          ),
+        }
       : undefined;
-  const serviceConfigurationPreviewNotice = serviceConfigurationPreviewError || (coreProjectionReady
-    ? ""
-    : commandCount !== 0
-      ? "Сохраните или отмените изменения проекта, чтобы получить Core-проекцию."
-      : !executionReady
-        ? "Для получения Core-проекции выберите и подготовьте узел выполнения на странице «Серверы»."
-        : !executionNode?.runtimeDigest
-          ? "Core-проекция недоступна: runtime узла выполнения не подтверждён. Проверьте или подготовьте узел."
-          : !managed?.projectRevision
-            ? "Core-проекция недоступна: ревизия проекта не определена. Сохраните проект."
-            : serviceConfigurationPreviewError ||
-              "Получение Core-проекции для сохранённой ревизии. Тайм-аут запроса — 90 секунд. Актуальные вычисленные значения появятся после получения проекции.");
+  const serviceConfigurationPreviewNotice =
+    serviceConfigurationPreviewError ||
+    (coreProjectionReady
+      ? ""
+      : commandCount !== 0
+        ? "Сохраните или отмените изменения проекта, чтобы получить Core-проекцию."
+        : !executionReady
+          ? "Для получения Core-проекции выберите и подготовьте узел выполнения на странице «Серверы»."
+          : !executionNode?.runtimeDigest
+            ? "Core-проекция недоступна: runtime узла выполнения не подтверждён. Проверьте или подготовьте узел."
+            : !managed?.projectRevision
+              ? "Core-проекция недоступна: ревизия проекта не определена. Сохраните проект."
+              : serviceConfigurationPreviewError ||
+                "Получение Core-проекции для сохранённой ревизии. Тайм-аут запроса — 90 секунд. Актуальные вычисленные значения появятся после получения проекции.");
 
   useEffect(() => {
     let live = true;
@@ -644,10 +674,15 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       .then((value) => {
         if (live && value.diagnostic) {
           const { Code, SafeMessage } = value.diagnostic;
-          const valid = /^[A-Z][A-Z0-9_]{0,95}$/u.test(Code) && typeof SafeMessage === "string" && SafeMessage.length <= 512;
-          setServiceConfigurationPreviewError(valid
-            ? `Core-проекция недоступна. Код: ${Code}. ${SafeMessage}`
-            : "Core-проекция недоступна: некорректная диагностика ответа.");
+          const valid =
+            /^[A-Z][A-Z0-9_]{0,95}$/u.test(Code) &&
+            typeof SafeMessage === "string" &&
+            SafeMessage.length <= 512;
+          setServiceConfigurationPreviewError(
+            valid
+              ? `Core-проекция недоступна. Код: ${Code}. ${SafeMessage}`
+              : "Core-проекция недоступна: некорректная диагностика ответа.",
+          );
           return;
         }
         if (
@@ -666,19 +701,48 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
           value.runtimeDigest === runtimeDigest
         )
           setServiceConfigurationPreview((previous) => {
-            const deploymentTypes = Object.fromEntries(Object.entries(result.managed?.deployments || {}).map(([id, item]) => [id, item.serviceType]));
-            const displayServices = previous?.root === root && previous.projectId === result.project?.id
-              ? Object.fromEntries(Object.entries(previous.displayServices).filter(([id]) =>
-                  deploymentTypes[id] && deploymentTypes[id] === previous.deploymentTypes[id])) : {};
+            const deploymentTypes = Object.fromEntries(
+              Object.entries(result.managed?.deployments || {}).map(
+                ([id, item]) => [id, item.serviceType],
+              ),
+            );
+            const displayServices =
+              previous?.root === root &&
+              previous.projectId === result.project?.id
+                ? Object.fromEntries(
+                    Object.entries(previous.displayServices).filter(
+                      ([id]) =>
+                        deploymentTypes[id] &&
+                        deploymentTypes[id] === previous.deploymentTypes[id],
+                    ),
+                  )
+                : {};
             for (const [id, service] of Object.entries(value.services)) {
               const old = displayServices[id];
               const members = { ...old?.members };
               for (const [member, settings] of Object.entries(service.members))
-                members[member] = retainResolvedPreviewValues(members[member], settings);
-              displayServices[id] = { configuration: retainResolvedPreviewValues(old?.configuration, service.configuration), members };
+                members[member] = retainResolvedPreviewValues(
+                  members[member],
+                  settings,
+                );
+              displayServices[id] = {
+                configuration: retainResolvedPreviewValues(
+                  old?.configuration,
+                  service.configuration,
+                ),
+                members,
+              };
             }
-            return { value, displayServices, deploymentTypes, projectId: result.project?.id,
-              root, selectionKind, selectedHostId, safeLabel };
+            return {
+              value,
+              displayServices,
+              deploymentTypes,
+              projectId: result.project?.id,
+              root,
+              selectionKind,
+              selectedHostId,
+              safeLabel,
+            };
           });
       })
       .catch((reason: unknown) => {
@@ -928,20 +992,39 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   const informationBindingRef = useRef(informationBinding);
   informationBindingRef.current = informationBinding;
   const [nodePreparation, setNodePreparation] = useState<{
-    binding: string; value: ExecutionNodePreparation;
+    binding: string;
+    value: ExecutionNodePreparation;
   } | null>(null);
-  const currentPreparation = nodePreparation?.binding === informationBinding
-    ? nodePreparation.value : null;
-  const nodeReadiness = lastNodeCheck?.binding === nodeCheckBinding(executionNode)
-    ? lastNodeCheck.readiness : { status: executionNode?.status || "NOT_CONFIGURED" };
-  const nodeStatus = executionNodeCombinedStatus(nodeReadiness, currentPreparation);
-  const showCoreStatus = executionReady && (!coreProjectionReady || !!serviceConfigurationPreviewError) &&
-    (!currentPreparation || ["PREPARED", "READY"].includes(currentPreparation.status));
-  const coreUnavailable = !executionNode?.runtimeDigest || !managed?.projectRevision;
+  const currentPreparation =
+    nodePreparation?.binding === informationBinding
+      ? nodePreparation.value
+      : null;
+  const nodeReadiness =
+    lastNodeCheck?.binding === nodeCheckBinding(executionNode)
+      ? lastNodeCheck.readiness
+      : { status: executionNode?.status || "NOT_CONFIGURED" };
+  const nodeStatus = executionNodeCombinedStatus(
+    nodeReadiness,
+    currentPreparation,
+  );
+  const showCoreStatus =
+    executionReady &&
+    (!coreProjectionReady || !!serviceConfigurationPreviewError) &&
+    (!currentPreparation ||
+      ["PREPARED", "READY"].includes(currentPreparation.status));
+  const coreUnavailable =
+    !executionNode?.runtimeDigest || !managed?.projectRevision;
   const nodeDisplayStatus: ExecutionNodeCombinedStatus = showCoreStatus
     ? {
-        label: serviceConfigurationPreviewError ? "Ошибка получения данных Core" : coreUnavailable ? "Данные Core недоступны" : "Получение данных Core…",
-        tone: serviceConfigurationPreviewError || coreUnavailable ? "danger" : "warning",
+        label: serviceConfigurationPreviewError
+          ? "Ошибка получения данных Core"
+          : coreUnavailable
+            ? "Данные Core недоступны"
+            : "Получение данных Core…",
+        tone:
+          serviceConfigurationPreviewError || coreUnavailable
+            ? "danger"
+            : "warning",
       }
     : nodeStatus;
   const probeServerInformation = useCallback(
@@ -1120,9 +1203,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       if (operation.plan && !operation.error) {
         // A new plan supersedes an earlier failed attempt without a run.
         // Preserve actual run history and its observation/result errors.
-        setInstallationRun((current) =>
-          current?.run ? current : undefined,
-        );
+        setInstallationRun((current) => (current?.run ? current : undefined));
       }
       await refreshInstallationState();
       setInstallationTab("plan");
@@ -1805,6 +1886,12 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
         version,
         digest,
       );
+      if (next.status === "NO_CHANGE") {
+        await api.discardEditSession(id);
+        clearDraft();
+        setImportCompleted(true);
+        return true;
+      }
       setEdit(next);
       setEditError(next.error ?? null);
       setImportReview(true);
@@ -2078,7 +2165,10 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
           }
         : current,
     );
-    if (readiness.status === "READY" && (!coreProjectionReady || serviceConfigurationPreviewError)) {
+    if (
+      readiness.status === "READY" &&
+      (!coreProjectionReady || serviceConfigurationPreviewError)
+    ) {
       if (serviceConfigurationPreviewError)
         servicePreviewRequests.current.clear();
       setServicePreviewAttempt((value) => value + 1);
@@ -2140,10 +2230,21 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       try {
         preparation = await api.planExecutionNodePreparation();
       } catch (error) {
-        setNodePreparation({ binding, value: { status: "BLOCKED", error: { code: "EXECUTION_NODE_PREPARATION_UNAVAILABLE", message: "Не удалось спланировать подготовку узла." } } });
+        setNodePreparation({
+          binding,
+          value: {
+            status: "BLOCKED",
+            error: {
+              code: "EXECUTION_NODE_PREPARATION_UNAVAILABLE",
+              message: "Не удалось спланировать подготовку узла.",
+            },
+          },
+        });
         throw error;
       }
-      const refreshed = await api.getExecutionNodeContext?.().catch(() => undefined);
+      const refreshed = await api
+        .getExecutionNodeContext?.()
+        .catch(() => undefined);
       if (binding !== informationBindingRef.current)
         throw new Error("SERVER_INFORMATION_BINDING_CHANGED");
       if (refreshed) setExecutionNode(refreshed);
@@ -2161,7 +2262,16 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     try {
       preparation = await api.prepareExecutionNode(planId);
     } catch (error) {
-      setNodePreparation({ binding, value: { status: "BLOCKED", error: { code: "EXECUTION_NODE_PREPARATION_UNAVAILABLE", message: "Не удалось выполнить подготовку узла." } } });
+      setNodePreparation({
+        binding,
+        value: {
+          status: "BLOCKED",
+          error: {
+            code: "EXECUTION_NODE_PREPARATION_UNAVAILABLE",
+            message: "Не удалось выполнить подготовку узла.",
+          },
+        },
+      });
       throw error;
     }
     if (binding !== informationBindingRef.current)
@@ -2306,16 +2416,24 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               </div>
             )}
             {projectOpen &&
-              (verification.error || verification.status === "INVALID" || verificationWarnings ? (
+              (verification.error ||
+              verification.status === "INVALID" ||
+              verificationWarnings ? (
                 <button
                   className={`status-chip status-chip--${verification.error || verification.status === "INVALID" ? "danger" : "warning"}`}
                   type="button"
                   onClick={() => requestPage("project")}
-                  title={verification.error
-                    ? verificationErrorMessage(verification.error.code)
-                    : "Открыть замечания проверки проекта"}
+                  title={
+                    verification.error
+                      ? verificationErrorMessage(verification.error.code)
+                      : "Открыть замечания проверки проекта"
+                  }
                 >
-                  {verificationLabel(verification.status, !!verification.error, verificationWarnings)}
+                  {verificationLabel(
+                    verification.status,
+                    !!verification.error,
+                    verificationWarnings,
+                  )}
                 </button>
               ) : (
                 <div className="readonly">
@@ -2388,7 +2506,9 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             {projectOpen && (
               <button
                 className={
-                  projectVerificationIsNext ? "outline next-step-hint" : "outline"
+                  projectVerificationIsNext
+                    ? "outline next-step-hint"
+                    : "outline"
                 }
                 onClick={verify}
                 disabled={
@@ -2430,7 +2550,10 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
           </div>
         </header>
         <div className="workspace-content">
-          {!loading && !creating && corePagesAvailable && !coreProjectionReady &&
+          {!loading &&
+            !creating &&
+            corePagesAvailable &&
+            !coreProjectionReady &&
             ["services", "applications", "installation"].includes(page) && (
               <section className="card topology-warning" role="status">
                 {serviceConfigurationPreviewNotice}
@@ -3090,7 +3213,8 @@ function ProjectPage({
     ["VERIFIED", "INVALID"].includes(verification.status) &&
     !!verification.projectRevision &&
     verification.projectRevision === managed?.projectRevision;
-  const findings = checked || verification.error ? verification.findings || [] : [];
+  const findings =
+    checked || verification.error ? verification.findings || [] : [];
   const bundleCard = (
     <section className="card" aria-label="Набор установки">
       <h2>Набор установки</h2>
@@ -3264,11 +3388,7 @@ function ProjectPage({
         />
         <Stat
           label="Замечания проверки"
-          value={
-            checked
-              ? findings.length
-              : "Не проверено"
-          }
+          value={checked ? findings.length : "Не проверено"}
         />
       </section>
       <section className="card">
@@ -3276,8 +3396,12 @@ function ProjectPage({
         <dl>
           <dt>Статус</dt>
           <dd>
-            {verificationLabel(verification.status, !!verification.error,
-              checked && !!findings.some((finding) => finding.severity === "WARNING"))}
+            {verificationLabel(
+              verification.status,
+              !!verification.error,
+              checked &&
+                !!findings.some((finding) => finding.severity === "WARNING"),
+            )}
           </dd>
           <dt>Ревизия</dt>
           <dd>{managed?.projectRevision || snapshot?.projectRevision}</dd>
@@ -3288,9 +3412,16 @@ function ProjectPage({
           </p>
         )}
         {findings.map((finding, index) => (
-          <p className={finding.severity === "BLOCKED" ? "field-error" : undefined} role="status" key={`${finding.code}-${index}`}>
+          <p
+            className={
+              finding.severity === "BLOCKED" ? "field-error" : undefined
+            }
+            role="status"
+            key={`${finding.code}-${index}`}
+          >
             [{finding.severity}] {finding.code}: {finding.summary}
-            {finding.subjectId && ` (${finding.subjectKind || "Объект"}: ${finding.subjectId})`}
+            {finding.subjectId &&
+              ` (${finding.subjectKind || "Объект"}: ${finding.subjectId})`}
           </p>
         ))}
         {verification.findingsTruncated && findings.length > 0 && (

@@ -1,12 +1,12 @@
 package installer
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"gopkg.in/yaml.v3"
 	"io"
-	"os"
 	"platform-installer/internal/projectlifecycle"
 	"regexp"
 	"sort"
@@ -275,7 +275,7 @@ func validateExportPackages(records []exportRecord) error {
 
 // Import retains the reviewed package bytes in the existing opaque plan store
 // and publishes them through the same revision-guarded/recoverable transaction.
-// Existing versions are immutable: changing a package requires a new version.
+// Existing versions may be replaced through the same reviewed, guarded transaction.
 func (b *Backend) PlanApplicationPackageImport(ctx context.Context, projectRoot, sourceRoot, revision, kind, name, version, _ string) (*StructuralEditPlan, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -347,45 +347,50 @@ func (b *Backend) PlanApplicationPackageImport(ctx context.Context, projectRoot,
 		}
 		return blockedStructuralPlan(revision, packageImportError("project", "Не удалось проверить файлы пакетов, уже находящихся в проекте.")), nil
 	}
-	total := observation.total
-	for _, record := range existing {
-		total += record.Size
+
+	// Reimport replaces exactly the reviewed versions; other packages are retained.
+	versions := map[string]bool{}
+	incoming := map[string]exportRecord{}
+	for _, record := range observation.documents {
+		versions[strings.Join(strings.Split(record.LogicalPath, "/")[:3], "/")] = true
+		incoming[record.LogicalPath] = record
 	}
-	if len(existing)+len(observation.documents) > maxApplicationPackageFiles {
+	existingByPath := map[string]exportRecord{}
+	retained := []exportRecord{}
+	total := observation.total
+	documents := []storedDocument{}
+	for _, record := range existing {
+		existingByPath[record.LogicalPath] = record
+		versionPath := strings.Join(strings.Split(record.LogicalPath, "/")[:3], "/")
+		if !versions[versionPath] {
+			retained = append(retained, record)
+			total += record.Size
+		} else if _, present := incoming[record.LogicalPath]; !present {
+			documents = append(documents, storedDocument{LogicalPath: record.LogicalPath, Before: record.content, Existed: true, Deleted: true})
+		}
+	}
+	if len(retained)+len(observation.documents) > maxApplicationPackageFiles {
 		return blockedStructuralPlan(revision, blocked("APPLICATION_PACKAGE_LIMIT", "После импорта будет превышен лимит 512 файлов пакетов в проекте.", "package")), nil
 	}
 	if total > maxExportTotalBytes {
 		return blockedStructuralPlan(revision, blocked("APPLICATION_PACKAGE_LIMIT", "После импорта будет превышен общий размер пакетов проекта: 64 МиБ.", "package")), nil
 	}
-	documents := make([]storedDocument, 0, len(observation.documents))
-	versions := map[string]bool{}
-	for _, r := range observation.documents {
+	for _, record := range observation.documents {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		versionPath := strings.Join(strings.Split(r.LogicalPath, "/")[:3], "/")
-		if !versions[versionPath] {
-			versionRoot, pathErr := safeProjectPath(root, versionPath, true)
-			if pathErr != nil {
-				return blockedStructuralPlan(revision, pathErr), nil
-			}
-			if _, statErr := os.Lstat(versionRoot); !errors.Is(statErr, os.ErrNotExist) {
-				return blockedStructuralPlan(revision, blocked("APPLICATION_PACKAGE_EXISTS", "Версия пакета уже существует в проекте: «"+versionPath+"».", versionPath)), nil
-			}
-			versions[versionPath] = true
-		}
-		destination, err := safeProjectPath(root, r.LogicalPath, true)
-		if err != nil {
+		if _, err := safeProjectPath(root, record.LogicalPath, true); err != nil {
 			return blockedStructuralPlan(revision, err), nil
 		}
-		if _, statErr := os.Lstat(destination); !errors.Is(statErr, os.ErrNotExist) {
-			return blockedStructuralPlan(revision, blocked("APPLICATION_PACKAGE_EXISTS", "Файл пакета уже существует в проекте: «"+r.LogicalPath+"».", r.LogicalPath)), nil
+		previous, existed := existingByPath[record.LogicalPath]
+		if existed && bytes.Equal(previous.content, record.content) {
+			continue
 		}
-		documents = append(documents, storedDocument{LogicalPath: r.LogicalPath, After: r.content, Existed: false})
+		documents = append(documents, storedDocument{LogicalPath: record.LogicalPath, Before: previous.content, After: record.content, Existed: existed})
 	}
 	changes := []SemanticChange{}
 	if kind == "application" {
-		packages, err := managedApplicationPackages(append(existing, observation.documents...))
+		packages, err := managedApplicationPackages(append(retained, observation.documents...))
 		if err != nil {
 			return blockedStructuralPlan(revision, err), nil
 		}
@@ -411,6 +416,6 @@ func (b *Backend) PlanApplicationPackageImport(ctx context.Context, projectRoot,
 	if batch {
 		entityID = "application-packages"
 	}
-	changes = append([]SemanticChange{{Operation: "ImportApplicationPackage", EntityID: entityID, SafeSummary: "Импорт пакетов приложений / библиотеки"}}, changes...)
+	changes = append([]SemanticChange{{Operation: "ImportApplicationPackage", EntityID: entityID, SafeSummary: "Импорт / замена пакетов приложений или библиотеки"}}, changes...)
 	return b.storeStructuralPlan(root, revision, changes, documents)
 }

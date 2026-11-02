@@ -27,7 +27,11 @@ func expectedRevisionAfterCommit(current []projectDocument, changes []storedDocu
 		digests[document.LogicalPath] = document.Digest
 	}
 	for _, change := range changes {
-		digests[change.LogicalPath] = digestBytes(change.After)
+		if change.Deleted {
+			delete(digests, change.LogicalPath)
+		} else {
+			digests[change.LogicalPath] = digestBytes(change.After)
+		}
 	}
 	paths := make([]string, 0, len(digests))
 	for logical := range digests {
@@ -54,6 +58,7 @@ type transactionParent struct {
 type transactionDocument struct {
 	LogicalPath      string              `json:"logicalPath"`
 	Existed          bool                `json:"existed"`
+	Deleted          bool                `json:"deleted,omitempty"`
 	Mode             uint32              `json:"mode"`
 	Backup           string              `json:"backup"`
 	Temporary        string              `json:"temporary"`
@@ -72,6 +77,13 @@ type transactionJournal struct {
 	Replacing     int                   `json:"replacingIndex"`
 	Published     int                   `json:"publishedCount"`
 	Documents     []transactionDocument `json:"documents"`
+}
+
+func transactionOutputMatches(document transactionDocument, exists bool, digest, identity string, securityMatches bool) bool {
+	if document.Deleted {
+		return !exists
+	}
+	return exists && digest == document.AfterDigest && identity == document.OutputIdentity && securityMatches
 }
 
 func writeSynced(path string, content []byte, mode os.FileMode) error {
@@ -253,7 +265,10 @@ func validateTransactionJournal(root, directory string, journal transactionJourn
 		} else if document.BeforeDigest != "" || document.BeforeIdentity != "" || document.BeforeSecurity != "" {
 			return errors.New("new transaction document has a before-state")
 		}
-		if journal.Phase != "PREPARING" && !validIdentity(document.OutputIdentity) {
+		if document.Deleted && (!document.Existed || !safeApplicationPackagePath(document.LogicalPath) || document.AfterDigest != digestBytes(nil) || document.OutputIdentity != "" || len(document.CreatedParents) != 0) {
+			return errors.New("transaction package deletion is invalid")
+		}
+		if !document.Deleted && journal.Phase != "PREPARING" && !validIdentity(document.OutputIdentity) {
 			return errors.New("prepared transaction output identity is invalid")
 		}
 		if document.OutputIdentity != "" && !validIdentity(document.OutputIdentity) {
@@ -487,7 +502,7 @@ func validateCleanupArtifacts(root, directory string, journal transactionJournal
 		if err != nil {
 			return err
 		}
-		if exists && document.OutputIdentity != "" && identity != document.OutputIdentity {
+		if exists && (document.Deleted || (document.OutputIdentity != "" && identity != document.OutputIdentity)) {
 			return errors.New("transaction temporary identity changed")
 		}
 		rollback := filepath.Join(directory, fmt.Sprintf("%03d.rollback", index))
@@ -564,7 +579,7 @@ func restoreTransaction(root, directory string, journal transactionJournal) erro
 				return err
 			}
 		}
-		if exists && digest == document.AfterDigest && identity == document.OutputIdentity && securityMatches {
+		if transactionOutputMatches(document, exists, digest, identity, securityMatches) {
 			published++
 		} else if document.Existed {
 			matchesBeforeIdentity := identity == document.BeforeIdentity || (document.RollbackIdentity != "" && identity == document.RollbackIdentity)
@@ -592,7 +607,7 @@ func restoreTransaction(root, directory string, journal transactionJournal) erro
 				return err
 			}
 		}
-		matchesOutput := exists && digest == document.AfterDigest && identity == document.OutputIdentity && securityMatches
+		matchesOutput := transactionOutputMatches(document, exists, digest, identity, securityMatches)
 		matchesBefore := (!document.Existed && !exists) || (document.Existed && exists && digest == document.BeforeDigest &&
 			(identity == document.BeforeIdentity || (document.RollbackIdentity != "" && identity == document.RollbackIdentity)) && securityMatches)
 		if !matchesOutput && !matchesBefore {
@@ -625,7 +640,7 @@ func restoreTransaction(root, directory string, journal transactionJournal) erro
 		if matchesBefore {
 			continue
 		}
-		if !exists || digest != document.AfterDigest || identity != document.OutputIdentity || !securityMatches {
+		if !transactionOutputMatches(document, exists, digest, identity, securityMatches) {
 			return errors.New("published transaction target changed during rollback")
 		}
 		if document.Existed {
@@ -677,8 +692,11 @@ func restoreTransaction(root, directory string, journal transactionJournal) erro
 			if currentErr != nil {
 				return currentErr
 			}
-			currentSecurityMatches, currentSecurityErr := transactionSecurityMatches(target, document)
-			if currentSecurityErr != nil || !currentExists || currentDigest != document.AfterDigest || currentIdentity != document.OutputIdentity || !currentSecurityMatches {
+			currentSecurityMatches, currentSecurityErr := true, error(nil)
+			if currentExists {
+				currentSecurityMatches, currentSecurityErr = transactionSecurityMatches(target, document)
+			}
+			if currentSecurityErr != nil || !transactionOutputMatches(document, currentExists, currentDigest, currentIdentity, currentSecurityMatches) {
 				return errors.New("published transaction target changed immediately before rollback")
 			}
 			if err := atomicReplace(temporaryPath, target); err != nil {
@@ -835,6 +853,11 @@ func (b *Backend) commitDocuments(root, identifier string, documents []storedDoc
 	if !validTransactionID(identifier) || len(documents) == 0 || len(documents) > maxTransactionDocuments {
 		return blocked("WRITE_FAILED", "Writer transaction identity or document count is invalid", "transaction")
 	}
+	for _, document := range documents {
+		if document.Deleted && (!document.Existed || len(document.After) != 0 || !safeApplicationPackagePath(document.LogicalPath)) {
+			return blocked("WRITE_FAILED", "Only reviewed existing package files may be removed", "document")
+		}
+	}
 	if err := assertSafeExistingAncestors(root); err != nil {
 		return err
 	}
@@ -902,7 +925,7 @@ func (b *Backend) commitDocuments(root, identifier string, documents []storedDoc
 			}
 		}
 		journal.Documents = append(journal.Documents, transactionDocument{LogicalPath: document.LogicalPath,
-			Existed: document.Existed, Mode: uint32(mode), Backup: backupName, Temporary: temporaryName,
+			Existed: document.Existed, Deleted: document.Deleted, Mode: uint32(mode), Backup: backupName, Temporary: temporaryName,
 			BeforeDigest: beforeDigest, BeforeIdentity: beforeIdentity, BeforeSecurity: beforeSecurity, AfterDigest: digestBytes(document.After),
 			CreatedParents: createdParents})
 	}
@@ -994,6 +1017,9 @@ func (b *Backend) commitDocuments(root, identifier string, documents []storedDoc
 				return err
 			}
 		}
+		if document.Deleted {
+			continue
+		}
 		temporaryPath := filepath.Join(directory, journal.Documents[index].Temporary)
 		mode := os.FileMode(journal.Documents[index].Mode)
 		temporary, err := createWriterFile(temporaryPath, mode)
@@ -1060,20 +1086,29 @@ func (b *Backend) commitDocuments(root, identifier string, documents []storedDoc
 			}
 		}
 		temporary := filepath.Join(directory, document.Temporary)
-		if err := b.replace(temporary, target); err != nil {
-			return err
-		}
-		if err := finalizeCanonicalACL(target, document.Existed); err != nil {
-			return err
+		if document.Deleted {
+			if err := os.Remove(target); err != nil {
+				return err
+			}
+		} else {
+			if err := b.replace(temporary, target); err != nil {
+				return err
+			}
+			if err := finalizeCanonicalACL(target, document.Existed); err != nil {
+				return err
+			}
 		}
 		if err := syncDirectory(filepath.Dir(target)); err != nil {
 			return err
 		}
 		exists, digest, identity, err := inspectWriterFile(target)
-		if err != nil || !exists || digest != document.AfterDigest || identity != document.OutputIdentity {
+		if err != nil || !transactionOutputMatches(document, exists, digest, identity, true) {
 			return errors.New("published transaction output could not be verified")
 		}
-		securityMatches, securityErr := transactionSecurityMatches(target, document)
+		securityMatches, securityErr := true, error(nil)
+		if exists {
+			securityMatches, securityErr = transactionSecurityMatches(target, document)
+		}
 		if securityErr != nil || !securityMatches {
 			return errors.New("published transaction security could not be verified")
 		}

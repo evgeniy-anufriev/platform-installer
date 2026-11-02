@@ -152,3 +152,39 @@ Core/Ansible on RED OS. No replacement bundle was published/activated. Distribut
 requires a rebuilt runtime bundle and updated SZI package copies; updating the
 Installer does not rewrite immutable imports in existing projects. Owned Wails/
 Vite processes stopped; temporary RED OS workspace cleaned with qa-sync.
+
+## Reviewed same-version package replacement — 2026-11-02
+
+Owner chose retaining packages on instance deletion and permitting reimport with
+replacement. Import now captures the complete incoming closure for each selected
+name/version, keeps other versions, replaces changed files, adds new files and
+plans obsolete declared files as PRESENT -> ABSENT. Limit accounting uses the
+final closure. Existing library/application settings and references are retained.
+Identical packages return NO_CHANGE; React discards the empty edit session and
+shows the import completion message without a Save dialog.
+
+The existing transaction writer now journals an optional deletion only for
+existing application/library package files. It preserves before bytes/security,
+revision/document guards and recovery, without recursive directory removal.
+No Core, service execution or runtime-bundle source was changed.
+
+Validation: full Go tests/vet PASS; focused tests cover replacement, obsolete-file
+review/removal, identical retry, rollback after deletion on publication failure,
+crash recovery with ACL preservation and rejection of non-package deletion.
+App/import React104 PASS, lint/TypeScript/Vite PASS. Real React/Wails QA in
+project-2026110200000013 used the standard Review/Save handlers:
+
+- Identical existing SZI library: NO_CHANGE, form closed, no Save offered.
+- Existing application-packages bulk replacement: COMMITTED at
+  sha256:b9a5765bcf038d5291f5b4f8344dd82a3a78ec41839edd86cf149104a50b30ee;
+  old Nginx asset was reviewed as ABSENT and removed; new asset bytes match.
+- Identical bulk retry: NO_CHANGE without an active edit session.
+- Existing SZI library same-version replacement: COMMITTED at
+  sha256:668af57dbd8aec3def39b6cf8edfdf920691a2af0d3084182fb690d2039351ef;
+  replacement defaults bytes confirmed. Desired-state YAML remained byte-identical.
+
+Safe records/screenshots: `.runtime/qa/import-reproduce/reimport-replacement/`.
+Replacement review screenshot inspected; this is not blanket visual or install
+acceptance. Existing Wails dev runtime:ready/null-nodes warnings were observed;
+requested flows completed. No Approve/Start or service mutation, artifact
+acquisition or runtime replacement occurred. Owned Wails/Vite processes stopped.

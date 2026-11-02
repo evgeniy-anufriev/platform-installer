@@ -542,3 +542,47 @@ func TestRecoveryRejectsExternalSameContentRollbackSubstitution(t *testing.T) {
 		t.Fatalf("recovery mutated external replacement: %q, %v", current, readErr)
 	}
 }
+
+func TestRecoveryRestoresPackageFileDeletedBeforePublishAcknowledgement(t *testing.T) {
+	root := t.TempDir()
+	logical := "application-packages/gateway/1.0.0/assets/old.bin"
+	writeExportFixture(t, root, logical, "recover bytes")
+	target := filepath.Join(root, filepath.FromSlash(logical))
+	_, digest, identity, err := inspectWriterFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	security := mustCaptureCanonicalSecurity(t, target)
+	identifier := strings.Repeat("7", 32)
+	directory := runtimePath(root, "edit-transactions", identifier)
+	if err := os.MkdirAll(directory, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeSynced(filepath.Join(directory, "000.before"), []byte("recover bytes"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	journal := transactionJournal{TransactionID: identifier, Phase: "REPLACING", Replacing: 0, Published: 0, Documents: []transactionDocument{{LogicalPath: logical, Existed: true, Deleted: true, Mode: 0600, Backup: "000.before", Temporary: ".platform-installer-" + identifier + "-000.tmp", BeforeDigest: digest, BeforeIdentity: identity, BeforeSecurity: security, AfterDigest: digestBytes(nil)}}}
+	writeRecoveryJournal(t, root, identifier, journal)
+	if err := os.Remove(target); err != nil {
+		t.Fatal(err)
+	}
+	if err := recoverTransactions(root); err != nil {
+		t.Fatal(err)
+	}
+	if string(mustRead(t, target)) != "recover bytes" {
+		t.Fatal("deleted file not recovered")
+	}
+	if matches, err := canonicalSecurityMatches(target, security); err != nil || !matches {
+		t.Fatal("security not recovered")
+	}
+}
+
+func TestTransactionDeletionCannotRemoveDesiredState(t *testing.T) {
+	root := t.TempDir()
+	writeExportFixture(t, root, desiredDocument, "desired state remains")
+	b := NewBackend(nil)
+	err := b.commitDocuments(root, strings.Repeat("6", 32), []storedDocument{{LogicalPath: desiredDocument, Existed: true, Deleted: true, Before: []byte("desired state remains")}})
+	if err == nil || string(mustRead(t, filepath.Join(root, filepath.FromSlash(desiredDocument)))) != "desired state remains" {
+		t.Fatal("non-package deletion admitted")
+	}
+}

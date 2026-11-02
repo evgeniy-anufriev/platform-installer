@@ -40,7 +40,9 @@ request a version or expected SHA. The legacy digest argument is ignored during
 import. Its StructuralEditPlan commits with
 CommitStructuralSave. Existing handle-bound export reads capture reviewed bytes in
 the bounded opaque PlanStore. No new extractor, catalog, persistence or execution
-path is added. Version destinations are immutable; changes require a new version.
+path is added. Owner amendment (2026-11-02): explicit reimport may replace an
+existing exact version after Review/Save. The reviewed closure replaces its files,
+including removal of obsolete declared files; other versions stay untouched.
 
 The existing manifest must match identity/default namespace, exact file allowlist
 and computes a digest of sorted `[relativePath, sha256Hex]` rows, including the manifest,
@@ -163,4 +165,4 @@ library packages, including draft library instances. They do not depend on a
 successful Core snapshot; computed values and compatibility remain Core-owned.
 SZI templates tolerate missing endpoint groups and use the inherited library
 group unless the application overrides it. Existing imported package copies
-are immutable and are not rewritten by an Installer update.
+are not rewritten by an Installer update; explicit reviewed reimport can replace them.

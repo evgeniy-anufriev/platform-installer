@@ -235,7 +235,7 @@ func TestB2PackageRollbackAndConcurrentRevisionGuard(t *testing.T) {
 	}
 }
 
-func TestB2PackageImportRevisionExportAndImmutableVersion(t *testing.T) {
+func TestB2PackageImportRevisionExportAndIdenticalReimport(t *testing.T) {
 	root, b, revision := b2Project(t)
 	source, digest := b2Package(t)
 	plan, err := b.PlanApplicationPackageImport(context.Background(), root, source, revision, "application", "gateway", "1.0.0", digest)
@@ -250,8 +250,8 @@ func TestB2PackageImportRevisionExportAndImmutableVersion(t *testing.T) {
 		t.Fatalf("%+v", result)
 	}
 	retry, _ := b.PlanApplicationPackageImport(context.Background(), root, source, result.NewProjectRevision, "application", "gateway", "1.0.0", digest)
-	if retry.Status != "BLOCKED" {
-		t.Fatal("package version replaced")
+	if retry.Status != "NO_CHANGE" {
+		t.Fatal("identical reimport was not a no-op")
 	}
 	writeExportFixture(t, root, ".runtime/infrastructure-verification/cache.json", "must-not-export")
 	export, _, err := PlanProjectExport(root, t.TempDir(), "copy")
@@ -389,7 +389,7 @@ func TestApplicationPackagesBatchImport(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if failure != "" {
+			if failure != "" && failure != "existing" {
 				if plan.Status != "BLOCKED" {
 					t.Fatalf("invalid batch accepted: %+v", plan)
 				}
@@ -401,7 +401,7 @@ func TestApplicationPackagesBatchImport(t *testing.T) {
 			if plan.Status != "READY" {
 				t.Fatalf("%+v", plan)
 			}
-			if _, err := os.Stat(filepath.Join(root, "application-packages")); !os.IsNotExist(err) {
+			if _, err := os.Stat(filepath.Join(root, "application-packages/gateway/1.0.0")); !os.IsNotExist(err) {
 				t.Fatal("preview wrote project")
 			}
 			writeExportFixture(t, source, "gateway/1.0.0/application.yml", "changed after review")
@@ -581,6 +581,80 @@ func TestImportedApplicationsEnrollAllMatchingLibrariesAtomically(t *testing.T) 
 			}
 			if _, err := os.Stat(filepath.Join(root, "application-packages/gateway/1.0.0/application.yml")); err != nil {
 				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestApplicationPackageReimportReplacesClosureAndRollsBack(t *testing.T) {
+	for _, fail := range []bool{false, true} {
+		t.Run(map[bool]string{false: "commit", true: "rollback"}[fail], func(t *testing.T) {
+			root, b, revision := b2Project(t)
+			source, _ := b2Package(t)
+			manifest := filepath.Join(source, "application.yml")
+			original := mustRead(t, manifest)
+			if err := os.WriteFile(manifest, bytes.Replace(original, []byte("files:\n"), []byte("files:\n  - assets/old.bin\n"), 1), 0600); err != nil {
+				t.Fatal(err)
+			}
+			writeExportFixture(t, source, "assets/old.bin", "old binary")
+			first, _ := b.PlanApplicationPackageImport(context.Background(), root, source, revision, "application", "gateway", "", "")
+			saved := b.CommitStructuralSave(context.Background(), first.PlanID)
+			if saved.Status != "COMMITTED" {
+				t.Fatalf("initial: %+v", saved)
+			}
+			before := saved.NewProjectRevision
+			if err := os.Remove(filepath.Join(source, "assets/old.bin")); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(manifest, bytes.Replace(original, []byte("files:\n"), []byte("files:\n  - assets/new.bin\n"), 1), 0600); err != nil {
+				t.Fatal(err)
+			}
+			writeExportFixture(t, source, "assets/new.bin", "new binary")
+			plan, err := b.PlanApplicationPackageImport(context.Background(), root, source, before, "application", "gateway", "", "")
+			if err != nil || plan.Status != "READY" {
+				t.Fatalf("replacement: %+v %v", plan, err)
+			}
+			foundDelete := false
+			for _, d := range plan.AffectedDocuments {
+				if strings.HasSuffix(d.LogicalPath, "old.bin") {
+					foundDelete = d.After.State == "ABSENT"
+				}
+			}
+			if !foundDelete {
+				t.Fatal("obsolete file deletion not disclosed")
+			}
+			if current, _ := ProjectRevision(root); current != before {
+				t.Fatal("review mutated project")
+			}
+			if fail {
+				b.replace = func(string, string) error { return errors.New("injected replacement failure") }
+			}
+			result := b.CommitStructuralSave(context.Background(), plan.PlanID)
+			prefix := filepath.Join(root, "application-packages/gateway/1.0.0/assets")
+			if fail {
+				if result.Status == "COMMITTED" {
+					t.Fatal("failure ignored")
+				}
+				if got := string(mustRead(t, filepath.Join(prefix, "old.bin"))); got != "old binary" {
+					t.Fatal("deleted file not restored")
+				}
+				if current, err := ProjectRevision(root); err != nil || current != before {
+					t.Fatalf("rollback revision: %v", err)
+				}
+			} else {
+				if result.Status != "COMMITTED" {
+					t.Fatalf("replacement failed: %+v", result)
+				}
+				if _, err := os.Stat(filepath.Join(prefix, "old.bin")); !os.IsNotExist(err) {
+					t.Fatal("obsolete file retained")
+				}
+				if string(mustRead(t, filepath.Join(prefix, "new.bin"))) != "new binary" {
+					t.Fatal("new file missing")
+				}
+				retry, _ := b.PlanApplicationPackageImport(context.Background(), root, source, result.NewProjectRevision, "application", "gateway", "", "")
+				if retry.Status != "NO_CHANGE" {
+					t.Fatalf("identical retry: %+v", retry)
+				}
 			}
 		})
 	}

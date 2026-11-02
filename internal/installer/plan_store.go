@@ -12,6 +12,7 @@ type storedDocument struct {
 	Before      []byte
 	After       []byte
 	Existed     bool
+	Deleted     bool
 }
 
 type storedPlan struct {

@@ -949,3 +949,18 @@ and final application settings. UI/Go edit only the authored ref via additive v1
 commands; existing contracts remain unchanged. Deletion is a local desired-state
 transaction and never an uninstall operation. See the
 [writer contract](contracts/application-library-writer.md#library-endpoint-selection-and-instance-removal-v12).
+
+### Explicit package replacement (2026-11-02)
+
+Owner selected retaining imported packages when instances are removed and
+allowing explicit reimport with replacement. Same-version immutability for
+project application/library packages is superseded; runtime bundles remain
+immutable. Review captures the new complete package closure and lists changed,
+added and removed files. Existing revision/document guards and the journaled
+writer commit all changes together. Its optional deletion operation is limited
+to existing declared package files; recovery restores deleted bytes and their
+security. Empty directories may remain, but do not prevent reimport. No recursive
+folder deletion or alternate persistence exists. Shared references/settings stay
+unchanged; all instances of that exact ref use the replacement after subsequent
+Core resolution. Import never starts installation. Identical content is NO_CHANGE
+and the UI closes the import session without offering Save.
