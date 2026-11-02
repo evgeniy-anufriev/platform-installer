@@ -33,19 +33,22 @@ resolution and semantic validity. No Node/Ansible is required for local Save.
 
 ## Package import and transfer
 
-Backend.PlanApplicationPackageImport takes source directory, kind, exact name/version,
-current revision and reviewed expected digest. Its StructuralEditPlan commits with
+Backend.PlanApplicationPackageImport takes source directory, kind, exact name and
+current revision. The version is read from the package manifest; the UI does not
+request a version or expected SHA. The legacy digest argument is ignored during
+import. Its StructuralEditPlan commits with
 CommitStructuralSave. Existing handle-bound export reads capture reviewed bytes in
 the bounded opaque PlanStore. No new extractor, catalog, persistence or execution
 path is added. Version destinations are immutable; changes require a new version.
 
 The existing manifest must match identity/default namespace, exact file allowlist
-and digest of sorted `[relativePath, sha256Hex]` rows, including the manifest.
+and computes a digest of sorted `[relativePath, sha256Hex]` rows, including the manifest,
+for internal package identity without comparing an operator-supplied checksum.
 Destinations derive from `<kind>-packages/<name>/<version>`. Import/transfer admits
 manifest, exact role defaults/templates, configuration/assets data and library .env.
 It rejects hooks/tasks/handlers/plugins paths, unsafe/traversing or
 absolute paths, symlink/reparse points, reserved device names, case-folded duplicate
-paths, unlisted/missing files and identity/digest mismatch. This is an Installer
+paths, unlisted/missing files and identity mismatch. This is an Installer
 data import policy, not an Ansible resolver or arbitrary-template execution sandbox.
 
 Files of any extension, including no extension, are allowed within the existing

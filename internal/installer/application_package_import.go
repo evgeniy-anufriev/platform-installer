@@ -224,12 +224,12 @@ func validateExportPackages(records []exportRecord) error {
 // Import retains the reviewed package bytes in the existing opaque plan store
 // and publishes them through the same revision-guarded/recoverable transaction.
 // Existing versions are immutable: changing a package requires a new version.
-func (b *Backend) PlanApplicationPackageImport(ctx context.Context, projectRoot, sourceRoot, revision, kind, name, version, expectedDigest string) (*StructuralEditPlan, error) {
+func (b *Backend) PlanApplicationPackageImport(ctx context.Context, projectRoot, sourceRoot, revision, kind, name, version, _ string) (*StructuralEditPlan, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	invalid := blocked("APPLICATION_PACKAGE_INVALID", "Package metadata, paths or content are invalid", "package")
-	if (kind != "application" && kind != "library") || !validLibraryInputID(name) || !packageVersion.MatchString(version) || !validSHA256(expectedDigest) {
+	if (kind != "application" && kind != "library") || !validLibraryInputID(name) || (version != "" && !packageVersion.MatchString(version)) {
 		return blockedStructuralPlan(revision, invalid), nil
 	}
 	root, err := cleanRoot(projectRoot)
@@ -248,6 +248,15 @@ func (b *Backend) PlanApplicationPackageImport(ctx context.Context, projectRoot,
 		return blockedStructuralPlan(revision, invalid), nil
 	}
 	defer source.close()
+	manifest, _, err := source.readFile([]string{kind + ".yml"}, maxApplicationPackageFileBytes)
+	if err != nil {
+		return blockedStructuralPlan(revision, invalid), nil
+	}
+	var metadata applicationPackageManifest
+	if yaml.Unmarshal(manifest, &metadata) != nil || !packageVersion.MatchString(metadata.Version) || (version != "" && version != metadata.Version) {
+		return blockedStructuralPlan(revision, invalid), nil
+	}
+	version = metadata.Version
 	prefix := kind + "-packages/" + name + "/" + version
 	versionRoot, pathErr := safeProjectPath(root, prefix, true)
 	if pathErr != nil {
@@ -260,8 +269,15 @@ func (b *Backend) PlanApplicationPackageImport(ctx context.Context, projectRoot,
 	if err := collectExportDirectory(source, prefix, &observation, map[string]bool{}, map[string]bool{}); err != nil || len(observation.documents) > maxApplicationPackageFiles {
 		return blockedStructuralPlan(revision, invalid), nil
 	}
-	digest, err := checkPackageManifest(observation.documents, kind, name, version)
-	if err != nil || digest != expectedDigest {
+	// Validate the captured package, without requiring an operator-supplied SHA.
+	// The manifest used to derive the destination must be the reviewed bytes.
+	for _, record := range observation.documents {
+		if record.LogicalPath == prefix+"/"+kind+".yml" && string(record.content) != string(manifest) {
+			return blockedStructuralPlan(revision, invalid), nil
+		}
+	}
+	_, err = checkPackageManifest(observation.documents, kind, name, version)
+	if err != nil {
 		return blockedStructuralPlan(revision, invalid), nil
 	}
 	existing, err := applicationPackageDocuments(root)

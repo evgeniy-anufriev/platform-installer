@@ -271,10 +271,10 @@ func TestB2PackageImportRevisionExportAndImmutableVersion(t *testing.T) {
 	}
 }
 
-func TestB2PackageRejectsDigestHookTraversalAndSymlink(t *testing.T) {
+func TestB2PackageRejectsHookTraversalAndSymlink(t *testing.T) {
 	root, b, revision := b2Project(t)
 	source, digest := b2Package(t)
-	for _, item := range []struct{ version, digest string }{{"../1.0.0", digest}, {"1.0.0", "sha256:" + strings.Repeat("a", 64)}} {
+	for _, item := range []struct{ version, digest string }{{"../1.0.0", digest}} {
 		p, _ := b.PlanApplicationPackageImport(context.Background(), root, source, revision, "application", "gateway", item.version, item.digest)
 		if p.Status != "BLOCKED" {
 			t.Fatal("unsafe package accepted")
@@ -293,6 +293,42 @@ func TestB2PackageRejectsDigestHookTraversalAndSymlink(t *testing.T) {
 		if p.Status != "BLOCKED" {
 			t.Fatal("symlink accepted")
 		}
+	}
+}
+
+func TestApplicationPackageImportReadsVersionWithoutExpectedSHA(t *testing.T) {
+	for _, suppliedSHA := range []string{"", "sha256:" + strings.Repeat("a", 64)} {
+		t.Run(suppliedSHA, func(t *testing.T) {
+			root, b, revision := b2Project(t)
+			source, _ := b2Package(t)
+			plan, err := b.PlanApplicationPackageImport(context.Background(), root, source, revision, "application", "gateway", "", suppliedSHA)
+			if err != nil || plan.Status != "READY" {
+				t.Fatalf("import without manual version/SHA: %v %+v", err, plan)
+			}
+			if result := b.CommitStructuralSave(context.Background(), plan.PlanID); !result.Changed {
+				t.Fatalf("%+v", result)
+			}
+			if _, err := os.Stat(filepath.Join(root, "application-packages/gateway/1.0.0/application.yml")); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestLibraryPackageImportReadsManifestVersion(t *testing.T) {
+	root, b, revision := b2Project(t)
+	source := t.TempDir()
+	writeExportFixture(t, source, "library.yml", "apiVersion: platform.installer/application-package/v1alpha1\nkind: LibraryPackage\nname: demo\nversion: 2.1.0\nfiles:\n  - roles/library_demo/defaults/main.yml\n")
+	writeExportFixture(t, source, "roles/library_demo/defaults/main.yml", "platform_library_definition:\n  name: demo\n  version: 2.1.0\n")
+	plan, err := b.PlanApplicationPackageImport(context.Background(), root, source, revision, "library", "demo", "", "")
+	if err != nil || plan.Status != "READY" {
+		t.Fatalf("%v %+v", err, plan)
+	}
+	if result := b.CommitStructuralSave(context.Background(), plan.PlanID); !result.Changed {
+		t.Fatalf("%+v", result)
+	}
+	if _, err := os.Stat(filepath.Join(root, "library-packages/demo/2.1.0/library.yml")); err != nil {
+		t.Fatal(err)
 	}
 }
 

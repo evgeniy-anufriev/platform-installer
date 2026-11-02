@@ -19,8 +19,6 @@ export function ApplicationPackageImport({
   const [source, setSource] = useState("");
   const [kind, setKind] = useState("application");
   const [name, setName] = useState("");
-  const [version, setVersion] = useState("");
-  const [digest, setDigest] = useState("");
   const [error, setError] = useState("");
   return (
     <>
@@ -60,31 +58,16 @@ export function ApplicationPackageImport({
             Имя
             <input value={name} onChange={(e) => setName(e.target.value)} />
           </label>
-          <label>
-            Версия
-            <input
-              value={version}
-              onChange={(e) => setVersion(e.target.value)}
-              placeholder="1.0.0"
-            />
-          </label>
-          <label>
-            Ожидаемый digest пакета
-            <input
-              value={digest}
-              onChange={(e) => setDigest(e.target.value)}
-              placeholder="sha256:…"
-            />
-          </label>
+          <p>Версия будет прочитана из описания пакета.</p>
           <p>
             Только локальный data-only пакет. Публикация после проверки и общего
             Review/Save.
           </p>
           {error && <p role="alert">{error}</p>}
           <button
-            disabled={disabled || !source || !name || !version || !digest}
+            disabled={disabled || !source || !name}
             onClick={() =>
-              void review(source, kind, name, version, digest).then((ok) => {
+              void review(source, kind, name, "", "").then((ok) => {
                 if (ok) setOpen(false);
               })
             }

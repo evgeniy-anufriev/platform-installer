@@ -35,6 +35,11 @@ deployment editor remains on the right. Topology links select the exact
 deployment/member in that editor. Long parameter lists scroll inside the
 right-hand parameter column rather than moving the service list.
 
+Owner refinement (2026-11-02): local application/library package import reads
+the version from its manifest. Do not request a version or expected SHA in the
+import form or compare an operator-supplied SHA. Keep manifest/file validation
+and the existing review/save transaction.
+
 Owner refinement (2026-10-31): omit service/member settings without a supported
 editor instead of rendering read-only placeholders. Ordinary computed settings
 remain visible. Project verification is invoked from the shared header and its
