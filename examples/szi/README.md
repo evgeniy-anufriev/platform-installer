@@ -98,7 +98,9 @@ JDBC acquisition timeout по умолчанию — 30 секунд.
 
 - `application-packages/keycloak/1.0.0/assets/providers/*.jar` — девять плагинов;
 - `application-packages/keycloak/1.0.0/assets/themes.tar.gz` — полная тема;
-- `library-packages/szi/1.0.0/assets/keycloak-clean.dump` — чистая база без admin, с пользователем `---` в группе `ТУЗ`.
+
+`library-packages/szi/1.0.0/assets/keycloak-clean.dump` хранится в Git — это
+чистая база без admin, с пользователем `---` в группе `ТУЗ`.
 
 SHA-256 чистого дампа:
 `2ea1a1d6da9acd2ea2445914821d1f1be88341fb29ee46dd66464a620fc6e061`.

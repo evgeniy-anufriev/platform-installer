@@ -7,6 +7,7 @@
 *.sh text eol=lf
 examples/sdku/**/*.j2 text eol=lf
 examples/szi/**/*.j2 text eol=lf
+examples/szi/library-packages/szi/*/assets/keycloak-clean.dump -text
 services/docker/** text eol=lf
 
 # Portable records preserve byte-counted source payloads.
