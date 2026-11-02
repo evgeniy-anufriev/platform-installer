@@ -8896,11 +8896,14 @@ ap((item) => item.displayName).join(", ")
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/application-draft.ts","mode":420,"size":3654,"sha256":"3d92333501bbb3190dd1eb89b0a1018c68b8214ebb90859f1ac3236f62942c8f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3654}
+@@PORTABLE {"path":"frontend/src/application-draft.ts","mode":420,"size":4381,"sha256":"6dce9a0fa43dc7b7a0ec904de7d1b66c0f0a95cb2cbd8efaa1b7cf6ee65bd9b1","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4381}
 import type { OpenResult } from "./backend";
 export type ObjectValue = Record<string, unknown>;
 export type ApplicationIntent = {
   operation:
+    | "SetApplicationLibraryEndpointGroup"
+    | "ClearApplicationLibraryEndpointGroup"
+    | "DeleteApplicationLibraryWithPlacements"
     | "CreateApplicationLibraryDeployment"
     | "UpdateApplicationLibraryDeployment"
     | "DeleteApplicationLibraryDeployment"
@@ -8940,13 +8943,24 @@ export function applicationDraft(
     Object.create(null),
     structuredClone(managed?.applicationPlacements ?? {}),
   ) as Record<string, ObjectValue>;
+  const libraryEndpointGroups = { ...managed?.libraryEndpointGroups };
   for (const c of intents) {
     const id = c.deploymentId;
-    if (c.operation === "CreateApplicationLibraryDeployment")
+    if (c.operation === "SetApplicationLibraryEndpointGroup")
+      libraryEndpointGroups[id] = String(c.value);
+    else if (c.operation === "ClearApplicationLibraryEndpointGroup")
+      delete libraryEndpointGroups[id];
+    else if (c.operation === "CreateApplicationLibraryDeployment")
       libraries[id] = { ...c.entity };
-    else if (c.operation === "DeleteApplicationLibraryDeployment")
+    else if (
+      c.operation === "DeleteApplicationLibraryDeployment" ||
+      c.operation === "DeleteApplicationLibraryWithPlacements"
+    ) {
       delete libraries[id];
-    else if (c.operation === "UpdateApplicationLibraryDeployment")
+      delete libraryEndpointGroups[id];
+      if (c.operation === "DeleteApplicationLibraryWithPlacements")
+        for (const host of Object.keys(placements)) delete placements[host][id];
+    } else if (c.operation === "UpdateApplicationLibraryDeployment")
       libraries[id] = { ...libraries[id], ...c.entity };
     else if (c.hostId && c.operation.endsWith("Placement")) {
       placements[c.hostId] ??= {};
@@ -8991,7 +9005,7 @@ export function applicationDraft(
       if (c.property) target[c.property] = fields;
     }
   }
-  return { libraries, placements };
+  return { libraries, placements, libraryEndpointGroups };
 }
 
 @@END
@@ -10381,7 +10395,7 @@ export function applicationDraft(
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/backend.ts","mode":420,"size":28538,"sha256":"a579e5a70aeb8c6df15e13960639de51cbac655223fcea35a7a4c4b741ce3ae2","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":28538}
+@@PORTABLE {"path":"frontend/src/backend.ts","mode":420,"size":28588,"sha256":"88fb1a841c753c3f4dfa5aafa6ffafc51a2762a8151dcf75c1f14884ba1f2471","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":28588}
 import {
   ProbeServerInformation,
   CheckServerInformation,
@@ -10483,6 +10497,7 @@ export type VerificationStatus = {
 export type ManagedProjectView = {
   projectRevision: string;
   applicationLibraries?: Record<string, { libraryRef: string }>;
+  libraryEndpointGroups?: Record<string, string>;
   dataRootDirectory?: string;
   namePrefix?: string;
   servers: Record<
@@ -17011,7 +17026,7 @@ export function VerifyProject() {
 }
 
 @@END
-@@PORTABLE {"path":"frontend/wailsjs/go/models.ts","mode":420,"size":117465,"sha256":"0dbf73991a1aa089a20ac64643dc053ba7e7dfb80e659702ca759c9cade73b8c","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"frontend/wailsjs/go/models.ts","mode":420,"size":117585,"sha256":"dc4db1d1dbe3cfc1c012f521667e4ff4232b0e029acfac271c6dfb42545eb1b3","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
 export namespace appconfig {
   export class LibraryExecutionPriority {
     libraryName: string;
@@ -18585,7 +18600,7 @@ export namespace desktop {
             a[key] = new classs(a[key]);
    
 @@END
-@@PORTABLE {"path":"frontend/wailsjs/go/models.ts","mode":420,"size":117465,"sha256":"0dbf73991a1aa089a20ac64643dc053ba7e7dfb80e659702ca759c9cade73b8c","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"frontend/wailsjs/go/models.ts","mode":420,"size":117585,"sha256":"dc4db1d1dbe3cfc1c012f521667e4ff4232b0e029acfac271c6dfb42545eb1b3","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
        }
           return a;
         }
@@ -19917,6 +19932,7 @@ export namespace installer {
     }
   }
   export class ManagedProjectView {
+    libraryEndpointGroups?: Record<string, string>;
     applicationPackages: Record<string, ManagedApplicationPackage>;
     applicationLibraries: Record<string, any>;
     applicationPlacements: Record<string, any>;
@@ -19936,6 +19952,7 @@ export namespace installer {
 
     constructor(source: any = {}) {
       if ("string" === typeof source) source = JSON.parse(source);
+      this.libraryEndpointGroups = source["libraryEndpointGroups"];
       this.applicationPackages = this.convertValues(
         source["applicationPackages"],
         ManagedApplicationPackage,
@@ -20185,11 +20202,11 @@ export namespace installer {
       this.reviewDiff = source["reviewDiff"];
       this.commitAllowed = source["commitAllowed"];
       this.applyRequired = source["applyRequired"];
-      this.expiresAt = this.convertValues(source["expiresAt"], null);
-      this.timing = this.convertValues(source["timing"
+    
 @@END
-@@PORTABLE {"path":"frontend/wailsjs/go/models.ts","mode":420,"size":117465,"sha256":"0dbf73991a1aa089a20ac64643dc053ba7e7dfb80e659702ca759c9cade73b8c","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":21465}
-], PlanTiming);
+@@PORTABLE {"path":"frontend/wailsjs/go/models.ts","mode":420,"size":117585,"sha256":"dc4db1d1dbe3cfc1c012f521667e4ff4232b0e029acfac271c6dfb42545eb1b3","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":21585}
+  this.expiresAt = this.convertValues(source["expiresAt"], null);
+      this.timing = this.convertValues(source["timing"], PlanTiming);
     }
 
     convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -22419,7 +22436,7 @@ func (a *CommandAdapter) BuildSnapshot(ctx context.Context, projectRoot string, 
 }
 
 @@END
-@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":111398,"sha256":"619922b8014f859b3e8f66266cef367de21a11b87b06885aac24074578d0cb70","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48373}
+@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":111520,"sha256":"5b5dc6fff257b6886e1ee9866cba3cbe25cd935fa35fc9ec1a1fc5a78c6f39f9","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48373}
 package desktop
 
 import (
@@ -23529,7 +23546,7 @@ func (a *App) pendingRuntimeSecretDescriptorsLocked(serviceDeployment string) ([
 	for _, input := range service.SecretInputs {
 		if !runtimeSecretDescriptorRequirement.MatchString(input.RequirementRef) || input.DisplayLabel 
 @@END
-@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":111398,"sha256":"619922b8014f859b3e8f66266cef367de21a11b87b06885aac24074578d0cb70","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49923}
+@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":111520,"sha256":"5b5dc6fff257b6886e1ee9866cba3cbe25cd935fa35fc9ec1a1fc5a78c6f39f9","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49872}
 == "" || (input.Purpose != secretfiles.PurposeAdminToken && input.Purpose != secretfiles.PurposeUnsealShares) || input.RequiredWhen == "" || len(input.Operations) == 0 {
 			return nil, errors.New("RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE")
 		}
@@ -24088,6 +24105,7 @@ func (a *App) AppendEditCommand(sessionID string, command installer.EditCommand)
 		"CreateTLSProfile", "UpdateTLSProfile", "DeleteTLSProfile",
 		"CreateCertificateScope", "UpdateCertificateScope", "DeleteCertificateScope":
 	case "CreateApplicationLibraryDeployment", "UpdateApplicationLibraryDeployment", "DeleteApplicationLibraryDeployment",
+		"SetApplicationLibraryEndpointGroup", "ClearApplicationLibraryEndpointGroup", "DeleteApplicationLibraryWithPlacements",
 		"SetApplicationLibrarySlot", "RemoveApplicationLibrarySlot", "SetApplicationLibraryPlacement", "RemoveApplicationLibraryPlacement",
 		"SetApplicationLibraryOverride", "RemoveApplicationLibraryOverride":
 	case "SetServiceConfigurationValue", "RemoveServiceConfigurationOverride":
@@ -24504,12 +24522,12 @@ func projectErrorMessage(code string) string {
 	case "EXECUTION_NODE_PEM_REQUIRED":
 		return "Для подключения нужны действующие учётные данные SSH-сеанса: пароль или приватный ключ PEM."
 	case "EXECUTION_NODE_USER_INVALID":
-		return "Имя технического пользователя не подходит для подключения к узлу выполнения."
-	case "EXECUTION_NODE_HOST_KEY_PROBE_FAILED":
-		return "Не удалось получить ключ SSH выбранного узла. Подключение не
+		return "Имя технического пользователя не подходит для подключения к узлу выполне
 @@END
-@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":111398,"sha256":"619922b8014f859b3e8f66266cef367de21a11b87b06885aac24074578d0cb70","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":13102}
- подтверждено."
+@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":111520,"sha256":"5b5dc6fff257b6886e1ee9866cba3cbe25cd935fa35fc9ec1a1fc5a78c6f39f9","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":13275}
+ния."
+	case "EXECUTION_NODE_HOST_KEY_PROBE_FAILED":
+		return "Не удалось получить ключ SSH выбранного узла. Подключение не подтверждено."
 	case "EXECUTION_NODE_HOST_KEY_APPROVAL_STALE":
 		return "Данные ключа SSH изменились или истекли. Повторите получение отпечатка."
 	case "TARGET_HOST_TRUST_PROJECT_UNAVAILABLE", "TARGET_HOST_TRUST_PROJECT_STALE", "TARGET_HOST_TRUST_STALE":
@@ -26196,7 +26214,7 @@ func writeBrowserError(w http.ResponseWriter, status int, err error) {
 }
 
 @@END
-@@PORTABLE {"path":"internal/desktop/core_preview_diagnostics.go","mode":420,"size":36183,"sha256":"d3e07995514bdb63a94a876c12bd6ec4e57c2a431f286cfb4913354a085979f8","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":36183}
+@@PORTABLE {"path":"internal/desktop/core_preview_diagnostics.go","mode":420,"size":36433,"sha256":"66eee1b80f77cada2603ea8da581e95a742b8e60736559808d9fd7ead2c8936c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":36433}
 package desktop
 
 import (
@@ -26209,6 +26227,7 @@ import (
 
 // Presentation only: Core codes and validation severity remain authoritative.
 var projectFindingMessagesRU = map[string]string{
+	"APPLICATION_LIBRARY_ENDPOINT_INVALID":                    "Некорректная группа точек входа библиотеки: выберите существующую группу в подключениях библиотеки.",
 	"ROLE_DEFAULT_TYPE_INVALID":                               "Тип значения роли по умолчанию не соответствует описанию настройки.",
 	"ROLE_DEFAULT_VALIDATION_INVALID":                         "Значение роли по умолчанию нарушает ограничения настройки.",
 	"SERVICE_CONFIGURATION_ADVANCED_TYPE_INVALID":             "Расширенные настройки сервиса должны иметь допустимый объектный тип.",
@@ -39822,7 +39841,7 @@ func (t OpenSSHTransport) withSudoInput(ctx context.Context, program string, arg
 }
 
 @@END
-@@PORTABLE {"path":"internal/installer/application_library_save.go","mode":420,"size":22524,"sha256":"292ce763a2a869a4e0af247b34b652e474b72b15abb713c82ee5cb94e5cd4f5d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":22524}
+@@PORTABLE {"path":"internal/installer/application_library_save.go","mode":420,"size":25719,"sha256":"38fdb79e08978a94a58c5ef69c703fee079fb2658df3db77e49ff9daa5a80af9","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":25719}
 package installer
 
 import (
@@ -39838,6 +39857,12 @@ var registryAuthority = regexp.MustCompile(`^[a-z0-9][a-z0-9.-]*(?::[0-9]+)?$`)
 var applicationSettingKeys = []string{"image", "command", "user", "restart", "parameters", "environment", "ports", "endpoint", "accounts", "provisioner", "readiness", "config_files", "config_directories", "config_archives", "topicBindings", "connections"}
 
 func applicationEditOperation(op string) bool {
+	if op == "DeleteApplicationLibraryWithPlacements" {
+		return true
+	}
+	if libraryEndpointOperation(op) {
+		return true
+	}
 	switch op {
 	case "CreateApplicationLibraryDeployment", "UpdateApplicationLibraryDeployment", "DeleteApplicationLibraryDeployment", "SetApplicationLibrarySlot", "RemoveApplicationLibrarySlot", "SetApplicationLibraryPlacement", "RemoveApplicationLibraryPlacement", "SetApplicationLibraryOverride", "RemoveApplicationLibraryOverride":
 		return true
@@ -39845,15 +39870,37 @@ func applicationEditOperation(op string) bool {
 	return false
 }
 
+const libraryEndpointGroupsKey = "x-applicationLibraryEndpointGroups"
+
+func libraryEndpointOperation(op string) bool {
+	return op == "SetApplicationLibraryEndpointGroup" || op == "ClearApplicationLibraryEndpointGroup"
+}
+
+func applicationCommandVersion(op string) string {
+	if libraryEndpointOperation(op) || op == "DeleteApplicationLibraryWithPlacements" {
+		return EditCommandAPIVersionV12
+	}
+	return EditCommandAPIVersionV11
+}
+
 func validLibraryInputID(s string) bool { return len(s) <= 128 && libraryInputID.MatchString(s) }
 
 func validateApplicationEdit(c EditCommand) error {
 	invalid := blocked("INVALID_EDIT_COMMAND", "Application library edit is invalid", "command")
-	if c.APIVersion != EditCommandAPIVersionV11 || c.Kind != "EditCommand" || !validSHA256(c.BaseProjectRevision) || !validLibraryInputID(c.DeploymentID) {
+	if c.APIVersion != applicationCommandVersion(c.Operation) || c.Kind != "EditCommand" || !validSHA256(c.BaseProjectRevision) || !validLibraryInputID(c.DeploymentID) {
 		return invalid
 	}
 	fields := []string{"deploymentId"}
 	switch c.Operation {
+	case "DeleteApplicationLibraryWithPlacements":
+	case "SetApplicationLibraryEndpointGroup", "ClearApplicationLibraryEndpointGroup":
+		if c.Operation == "SetApplicationLibraryEndpointGroup" {
+			fields = append(fields, "value")
+			ref, ok := c.Value.(string)
+			if !ok || !validLibraryInputID(ref) {
+				return invalid
+			}
+		}
 	case "CreateApplicationLibraryDeployment", "UpdateApplicationLibraryDeployment":
 		fields = append(fields, "entity")
 		if c.Entity == nil || !applicationKeys(c.Entity, "libraryRef", "runtimeRef", "runtime_directory", "bindings", "resources", "shared_secrets", "vault_ref", "applications", "overrides", "registry_credentials", "provided_connections") {
@@ -40270,6 +40317,22 @@ func (c *structuralCandidate) reduceApplicationEdit(cmd EditCommand) error {
 	}
 	owner := asMap(libraries[cmd.DeploymentID])
 	switch cmd.Operation {
+	case "SetApplicationLibraryEndpointGroup", "ClearApplicationLibraryEndpointGroup":
+		if owner == nil {
+			return referenceNotFound("deploymentId")
+		}
+		groups, e := applicationMap(state, libraryEndpointGroupsKey)
+		if e != nil {
+			return e
+		}
+		if cmd.Operation == "SetApplicationLibraryEndpointGroup" {
+			groups[cmd.DeploymentID] = cmd.Value
+		} else {
+			delete(groups, cmd.DeploymentID)
+		}
+		if len(groups) == 0 {
+			delete(state, libraryEndpointGroupsKey)
+		}
 	case "CreateApplicationLibraryDeployment":
 		if owner != nil {
 			return blocked("EDIT_COMMAND_CONFLICT", "Library deployment already exists", "command.deploymentId")
@@ -40282,11 +40345,36 @@ func (c *structuralCandidate) reduceApplicationEdit(cmd EditCommand) error {
 		for key, value := range cmd.Entity {
 			owner[key] = deepCopy(value)
 		}
-	case "DeleteApplicationLibraryDeployment":
+	case "DeleteApplicationLibraryDeployment", "DeleteApplicationLibraryWithPlacements":
 		if owner == nil {
 			return referenceNotFound("deploymentId")
 		}
+		if cmd.Operation == "DeleteApplicationLibraryWithPlacements" {
+			for id, rawLibrary := range libraries {
+				if id == cmd.DeploymentID {
+					continue
+				}
+				for _, rawBinding := range asMap(asMap(rawLibrary)["bindings"]) {
+					if asMap(asMap(rawBinding)["providedConnectionRef"])["libraryId"] == cmd.DeploymentID {
+						return referenceInUse("providedConnectionRef")
+					}
+				}
+			}
+			for logical, document := range c.documents {
+				if strings.HasPrefix(logical, "inventory/host_vars/") {
+					members := asMap(document["platform_application_libraries"])
+					if _, exists := members[cmd.DeploymentID]; exists {
+						delete(members, cmd.DeploymentID)
+						c.dirty[logical] = true
+					}
+				}
+			}
+		}
 		delete(libraries, cmd.DeploymentID)
+		delete(asMap(state[libraryEndpointGroupsKey]), cmd.DeploymentID)
+		if len(asMap(state[libraryEndpointGroupsKey])) == 0 {
+			delete(state, libraryEndpointGroupsKey)
+		}
 	default:
 		if owner == nil {
 			return referenceNotFound("deploymentId")
@@ -40391,6 +40479,25 @@ func (c *structuralCandidate) validateApplicationReferences() error {
 		return err
 	}
 	libraries := asMap(state["applicationLibraryDeployments"])
+	endpointGroups := asMap(state["endpointGroups"])
+	if raw, exists := state[libraryEndpointGroupsKey]; exists {
+		selected := asMap(raw)
+		if selected == nil || len(selected) > 128 {
+			return managedReadError("Library endpoint selection is malformed", libraryEndpointGroupsKey)
+		}
+		for id, rawRef := range selected {
+			ref, ok := rawRef.(string)
+			if !validLibraryInputID(id) || !ok || !validLibraryInputID(ref) {
+				return managedReadError("Library endpoint reference is malformed", libraryEndpointGroupsKey)
+			}
+			if libraries[id] == nil {
+				return referenceNotFound("libraryEndpointGroups.libraryId")
+			}
+			if endpointGroups[ref] == nil {
+				return referenceNotFound("libraryEndpointGroups.endpointGroup")
+			}
+		}
+	}
 	if len(libraries) > 128 {
 		return managedReadError("Too many library deployments", desiredDocument)
 	}
@@ -40451,6 +40558,8 @@ func applicationWritePaths(c EditCommand) []string {
 		root = "host/" + c.HostID + "/library/" + c.DeploymentID
 	}
 	switch c.Operation {
+	case "SetApplicationLibraryEndpointGroup", "ClearApplicationLibraryEndpointGroup":
+		return []string{root + "/endpoint-group"}
 	case "CreateApplicationLibraryDeployment":
 		// Creation may be followed by slot and placement edits in the same session.
 		paths := []string{root + "/@create"}
@@ -40464,7 +40573,7 @@ func applicationWritePaths(c EditCommand) []string {
 			paths = append(paths, root+"/"+key)
 		}
 		return paths
-	case "DeleteApplicationLibraryDeployment", "RemoveApplicationLibraryPlacement":
+	case "DeleteApplicationLibraryDeployment", "DeleteApplicationLibraryWithPlacements", "RemoveApplicationLibraryPlacement":
 		return []string{root}
 	case "SetApplicationLibraryPlacement":
 		var paths []string
@@ -41728,7 +41837,7 @@ func runtimePath(root string, elements ...string) string {
 }
 
 @@END
-@@PORTABLE {"path":"internal/installer/edit.go","mode":420,"size":46560,"sha256":"1ff5b6676fcd1955fa1082cf141030827fdc28dae868294298e9ceb5f92f1a42","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":46560}
+@@PORTABLE {"path":"internal/installer/edit.go","mode":420,"size":46649,"sha256":"5c1fef1e3652008bb5e153cf2872bb1e49de5eb1856310ca0bb14c9fc2a929de","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":46649}
 package installer
 
 import (
@@ -41863,7 +41972,7 @@ func validateCommand(command EditCommand) error {
 }
 
 func isEditCommandV2OrLater(version string) bool {
-	if version == EditCommandAPIVersionV11 {
+	if version == EditCommandAPIVersionV11 || version == EditCommandAPIVersionV12 {
 		return true
 	}
 	return version == EditCommandAPIVersionV2 || version == EditCommandAPIVersionV3 || version == EditCommandAPIVersionV4 || version == EditCommandAPIVersionV5 || version == EditCommandAPIVersionV6 || version == EditCommandAPIVersionV7 || version == EditCommandAPIVersionV8 || version == EditCommandAPIVersionV9 || version == EditCommandAPIVersionV10
@@ -41877,7 +41986,7 @@ func validateCommandWithInternalBatch(command EditCommand, allowV2Batch bool) er
 	if applicationEditOperation(command.Operation) {
 		return validateApplicationEdit(command)
 	}
-	if command.APIVersion == EditCommandAPIVersionV11 {
+	if command.APIVersion == EditCommandAPIVersionV11 || command.APIVersion == EditCommandAPIVersionV12 {
 		return blocked("INVALID_EDIT_COMMAND", "This command version admits only application library edits", "command.operation")
 	}
 	if (command.APIVersion != EditCommandAPIVersion && !isEditCommandV2OrLater(command.APIVersion)) || command.Kind != "EditCommand" || command.BaseProjectRevision == "" || (isEditCommandV2OrLater(command.APIVersion) && !validSHA256(command.BaseProjectRevision)) {
@@ -43254,7 +43363,7 @@ func presentBeforeDigest(document DocumentChange) string {
 }
 
 @@END
-@@PORTABLE {"path":"internal/installer/local_save.go","mode":420,"size":24018,"sha256":"3a0a09386f711b7058a8060b5c339d7a8cf2d2f1e00ee6220c3d3115de33d9ad","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":24018}
+@@PORTABLE {"path":"internal/installer/local_save.go","mode":420,"size":24561,"sha256":"634be04a3b969f05326a5664e39d9676d4bb9f2b35ef4c7cd5c1743f455881ef","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":24561}
 package installer
 
 import (
@@ -43403,6 +43512,20 @@ func readManagedDesiredState(root string, budget *managedReadBudget, view *Manag
 	}
 	state := asMap(document["platform_desired_state"])
 	view.ApplicationLibraries = map[string]map[string]any{}
+	view.LibraryEndpointGroups = map[string]string{}
+	if raw, exists := state[libraryEndpointGroupsKey]; exists {
+		groups := asMap(raw)
+		if groups == nil || len(groups) > 128 {
+			return managedReadError("Library endpoint selections are malformed", desiredDocument)
+		}
+		for id, rawRef := range groups {
+			ref, ok := rawRef.(string)
+			if !validLibraryInputID(id) || !ok || !validLibraryInputID(ref) {
+				return managedReadError("Library endpoint selection is malformed", desiredDocument)
+			}
+			view.LibraryEndpointGroups[id] = ref
+		}
+	}
 	view.ApplicationPlacements = map[string]map[string]any{}
 	for id, raw := range asMap(state["applicationLibraryDeployments"]) {
 		value := asMap(raw)
@@ -47005,7 +47128,7 @@ func (candidate *structuralCandidate) configurationTarget(command EditCommand, d
 }
 
 @@END
-@@PORTABLE {"path":"internal/installer/session.go","mode":420,"size":15662,"sha256":"87efe57aab9200e114ed3723efbc715f40896dfb77cbc1577476cb5ee779f3bf","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":15662}
+@@PORTABLE {"path":"internal/installer/session.go","mode":420,"size":15775,"sha256":"e8dfc6ade7da1b56d0cae2f1cf083dc003bdb8ee8bc3a77c376d99336e50e24f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":15775}
 package installer
 
 import (
@@ -47126,7 +47249,7 @@ func (s *EditSessionStore) Append(sessionID string, command EditCommand, backend
 	}
 	command.APIVersion = EditCommandAPIVersionV10
 	if applicationEditOperation(command.Operation) {
-		command.APIVersion = EditCommandAPIVersionV11
+		command.APIVersion = applicationCommandVersion(command.Operation)
 	}
 	command.Kind = "EditCommand"
 	command.BaseProjectRevision = state.public.BaseProjectRevision
@@ -47192,7 +47315,7 @@ func (s *EditSessionStore) amendCommand(sessionID string, index int, expected Ed
 	normalize := func(command *EditCommand) {
 		command.APIVersion = EditCommandAPIVersionV10
 		if application {
-			command.APIVersion = EditCommandAPIVersionV11
+			command.APIVersion = applicationCommandVersion(command.Operation)
 		}
 		command.Kind = "EditCommand"
 		command.BaseProjectRevision = state.public.BaseProjectRevision
@@ -47443,6 +47566,9 @@ func (s *EditSessionStore) ConsumePlan(sessionID, planID string) bool {
 }
 
 func applicationCommandFamily(operation string) string {
+	if libraryEndpointOperation(operation) {
+		return "library-endpoint"
+	}
 	switch operation {
 	case "SetApplicationLibraryOverride", "RemoveApplicationLibraryOverride":
 		return "override"
@@ -49933,7 +50059,7 @@ func (b *Backend) commitEditPlan(ctx context.Context, planID, missingPlanVersion
 }
 
 @@END
-@@PORTABLE {"path":"internal/installer/types.go","mode":420,"size":17638,"sha256":"f70a9178c04c837717ec2000f26f5888e774bd5a2a382f7c3e041bb9f34dc061","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":17638}
+@@PORTABLE {"path":"internal/installer/types.go","mode":420,"size":17813,"sha256":"650f27f68f02cf019f735f6d0b048a9c71f244fc568c3d6c1a77e67a19ca639c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":17813}
 package installer
 
 import (
@@ -49953,6 +50079,7 @@ const (
 	EditCommandAPIVersionV9    = "platform.installer/edit-command/v1alpha9"
 	EditCommandAPIVersionV10   = "platform.installer/edit-command/v1alpha10"
 	EditCommandAPIVersionV11   = "platform.installer/edit-command/v1alpha11"
+	EditCommandAPIVersionV12   = "platform.installer/edit-command/v1alpha12"
 	EditPlanAPIVersion         = "platform.installer/edit-plan/v1alpha1"
 	EditPlanAPIVersionV2       = "platform.installer/edit-plan/v1alpha2"
 	EditResultAPIVersion       = "platform.installer/edit-commit-result/v1alpha1"
@@ -50199,6 +50326,7 @@ type StructuralSaveResult struct {
 // an Ansible-resolved ProjectSnapshot and exposes only directly owned provider
 // fields, never Core-derived endpoint, DNS or PKI semantics.
 type ManagedProjectView struct {
+	LibraryEndpointGroups map[string]string                    `json:"libraryEndpointGroups,omitempty"`
 	ApplicationPackages   map[string]ManagedApplicationPackage `json:"applicationPackages"`
 	ApplicationLibraries  map[string]map[string]any            `json:"applicationLibraries"`
 	ApplicationPlacements map[string]map[string]any            `json:"applicationPlacements"`

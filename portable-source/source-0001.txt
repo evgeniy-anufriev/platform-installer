@@ -22277,7 +22277,7 @@ def shared_vault_jobs(jobs, inputs, completed, delivered=()):
     return result
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_libraries.py","mode":420,"size":55511,"sha256":"1bc3ec17601402e2bbf573e6f07439da7656b5ef7d86a7bbc4665968b22334c5","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_libraries.py","mode":420,"size":56163,"sha256":"15184697fc95bbf9744fa2f068fbd92aadf7bf0fd892f91280506e3f1cddc0b4","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
 """Read-only application contract checks. Ansible owns composition and templating."""
 import hashlib
 import json
@@ -22492,6 +22492,14 @@ def prepare(root, desired, memberships, contract, loader, contracts_root):
     # Kept here for callers/tests: no package/defaults is templated before validation.
     deployments = desired.get("applicationLibraryDeployments", {})
     findings = validator.validate(deployments, os.path.join(contracts_root, "application-libraries", "v1alpha1", "deployments.schema.json"))
+    endpoint_groups = desired.get('x-applicationLibraryEndpointGroups', {})
+    if not isinstance(endpoint_groups, dict) or len(endpoint_groups) > 128:
+        findings.append(finding('APPLICATION_LIBRARY_ENDPOINT_INVALID', 'x-applicationLibraryEndpointGroups'))
+    else:
+        for library_id, group in sorted(endpoint_groups.items()):
+            if (library_id not in deployments or not isinstance(group, str) or not ID.fullmatch(group)
+                    or group not in desired.get('endpointGroups', {})):
+                findings.append(finding('APPLICATION_LIBRARY_ENDPOINT_INVALID', 'x-applicationLibraryEndpointGroups.' + str(library_id)))
     for host, membership in sorted(memberships.items()):
         findings.extend(validator.validate(membership, os.path.join(contracts_root, "application-libraries", "v1alpha1", "membership.schema.json")))
         for library in membership if isinstance(membership, dict) else []:
@@ -22977,17 +22985,17 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
         used = {binding["source"]["library_secret"] for instance in library["instances"].values()
                 for binding in instance.get("secretBindings", {}).values() if "library_secret" in binding["source"]}
         used.update(source['name'] for instance in library['instances'].values()
-                    for script in library.get('scripts', []) + instance.get('scripts', []) if active_script(script, instance)
+                    for script in library.get('scripts', []) + insta
+@@END
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_libraries.py","mode":420,"size":56163,"sha256":"15184697fc95bbf9744fa2f068fbd92aadf7bf0fd892f91280506e3f1cddc0b4","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":8163}
+nce.get('scripts', []) if active_script(script, instance)
                     for source in script.get('secretInputs', {}).values() if source.get('valueFrom') == 'library_secret')
         library["sharedSecretRequirements"] = {key: value for key, value in library["sharedSecretRequirements"].items() if key in used}
     for library_id, library in libraries.items():
         for export_name, export in library.get('providedConnections', {}).items():
             callback = export.get('accountProvisioner', {}).get('apply_script')
             if callback and len([script for script in library['instances'][export['applicationId']].get('scripts', [])
-    
-@@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_libraries.py","mode":420,"size":55511,"sha256":"1bc3ec17601402e2bbf573e6f07439da7656b5ef7d86a7bbc4665968b22334c5","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":7511}
-                             if script['id'] == callback and script['phase'] == 'account_apply']) != 1:
+                                 if script['id'] == callback and script['phase'] == 'account_apply']) != 1:
                 findings.append(finding('APPLICATION_ACCOUNT_CALLBACK_INVALID',
                                         'applicationLibraryDeployments.' + library_id + '.provided_connections.' + export_name))
             if export.get('connectionProvisioner'):
@@ -35998,11 +36006,14 @@ platform_name_prefix: ''
     quiet: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/resolve_application_libraries/tasks/connection_topology.yml","mode":420,"size":3427,"sha256":"db70a15cd8d083a52b01c5394beec64caa38d2208c4c8c29ba65191450c34f9c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3427}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/resolve_application_libraries/tasks/connection_topology.yml","mode":420,"size":3773,"sha256":"d824aa2e230de9194b7b6085cadbbc02bd727835c87e1b8cdde6759e2806028e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3773}
 ---
 - name: Привязка идентификатора шаблона библиотеки перед вычислением экспортируемых значений
   ansible.builtin.set_fact:
     library_instance_id: "{{ application_job.libraryId }}"
+    _application_library_endpoint: >-
+      {{ {'endpoint_group': platform_desired_state['x-applicationLibraryEndpointGroups'][application_job.libraryId]}
+         if platform_desired_state['x-applicationLibraryEndpointGroups'][application_job.libraryId] is defined else {} }}
   no_log: true
   become: false
 
@@ -36050,6 +36061,7 @@ platform_name_prefix: ''
         'providedConnections': application_provided_connection_definitions,
         'settings': {
           'endpoint': application_job.application.definition.defaults.endpoint | default({}) |
+            combine(_application_library_endpoint, recursive=true) |
             combine(application_job.slot.overrides.endpoint | default({}), recursive=true) |
             combine(application_job.instance.overrides.endpoint | default({}), recursive=true) |
             combine(application_job.hostOverride.endpoint | default({}), recursive=true),
@@ -36063,7 +36075,7 @@ platform_name_prefix: ''
   become: false
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/resolve_application_libraries/tasks/instance.yml","mode":420,"size":14490,"sha256":"1449b57cccda675ca92aae50bc20078c537a7c481e3b4288b997fb2ff68a38eb","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":14490}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/resolve_application_libraries/tasks/instance.yml","mode":420,"size":14912,"sha256":"fbbb75c93450552c24483701dbd08dbfe58f76565e8c3e58303958f8e9e9a207","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":14912}
 ---
 - name: Загрузка проверенных параметров приложения по умолчанию в изолированное пространство имен
   ansible.builtin.include_vars:
@@ -36080,6 +36092,9 @@ platform_name_prefix: ''
          (application_job.library.definition.instance_id_strategy | default('qualified')) == 'application-name'
          else application_job.application.name ~ '-' ~ application_job.libraryId }}
     library_instance_id: "{{ application_job.libraryId }}"
+    _application_library_endpoint: >-
+      {{ {'endpoint_group': platform_desired_state['x-applicationLibraryEndpointGroups'][application_job.libraryId]}
+         if platform_desired_state['x-applicationLibraryEndpointGroups'][application_job.libraryId] is defined else {} }}
     application_topics: {}
     application_databases: {}
     _application_connections: {}
@@ -36234,6 +36249,7 @@ platform_name_prefix: ''
     application_inherited: >-
       {{ (_application_shared.defaults if application_job.slot.inherit_defaults | default(true) else {}) |
          combine(_application_package.platform_application_definition.defaults, recursive=true, list_merge='replace') |
+         combine(({'endpoint': _application_library_endpoint} if _application_library_endpoint else {}), recursive=true, list_merge='replace') |
          combine(application_job.slot.overrides | default({}), recursive=true, list_merge='replace') |
          combine(_application_shared.overrides if application_job.slot.inherit_defaults | default(true) else {}, recursive=true, list_merge='replace') }}
   no_log: true
@@ -60787,6 +60803,33 @@ libraryExecutionPriorities:
 }
 
 @@END
+@@PORTABLE {"path":"contracts/project-edit/v1alpha12/schema.json","mode":420,"size":1154,"sha256":"794beb888ef23b7c0f0d0c0b239eff3baf02cabbcf3b47afafaafa17fc9ecbe4","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1154}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/project-edit/v1alpha12/schema.json",
+  "title": "Library endpoint group selection and instance removal",
+  "oneOf": [
+    {"$ref": "../v1alpha11/schema.json"},
+    {
+      "type": "object",
+      "required": ["apiVersion", "kind", "baseProjectRevision", "operation", "deploymentId"],
+      "properties": {
+        "apiVersion": {"const": "platform.installer/edit-command/v1alpha12"},
+        "kind": {"const": "EditCommand"},
+        "baseProjectRevision": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "operation": {"enum": ["SetApplicationLibraryEndpointGroup", "ClearApplicationLibraryEndpointGroup", "DeleteApplicationLibraryWithPlacements"]},
+        "deploymentId": {"$ref": "../v1alpha11/schema.json#/$defs/id"},
+        "value": {"$ref": "../v1alpha11/schema.json#/$defs/id"}
+      },
+      "if": {"properties": {"operation": {"const": "SetApplicationLibraryEndpointGroup"}}},
+      "then": {"required": ["value"]},
+      "else": {"not": {"required": ["value"]}},
+      "additionalProperties": false
+    }
+  ]
+}
+
+@@END
 @@PORTABLE {"path":"contracts/project-edit/v1alpha2/schema.json","mode":420,"size":12565,"sha256":"712588934fed4c17039e319ac03e615db26ba5e789db5b37dc666cd1b3501804","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":12565}
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -80780,7 +80823,7 @@ ent-Type"] = "applapplication/json",
 end
 
 @@END
-@@PORTABLE {"path":"examples/szi/application-packages/nginx/1.0.0/roles/application_nginx/defaults/main.yml","mode":420,"size":1606,"sha256":"1946ad22f7199bb7932492ddb378507a899bbae48e2711acd7925251c5c6e1ff","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1606}
+@@PORTABLE {"path":"examples/szi/application-packages/nginx/1.0.0/roles/application_nginx/defaults/main.yml","mode":420,"size":2154,"sha256":"1d38708d73ef5a4d33754561c7736ff68296e199f681e792e40e129c0b3660b3","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2154}
 platform_application_definition:
   name: nginx
   version: 1.0.0
@@ -80808,9 +80851,17 @@ platform_application_definition:
         destination: scada-lawellet.conf
         mode: "0644"
     environment:
-      NGINX_HOST: "nginx.{{ platform_desired_state.endpointGroups[platform_desired_state.applicationLibraryDeployments[library_instance_id].applications.nginx.overrides.endpoint.endpoint_group].address.domain }}"
+      NGINX_HOST: >-
+        {%- set group = platform_desired_state.applicationLibraryDeployments[library_instance_id].applications.nginx.overrides.endpoint.endpoint_group |
+          default(platform_desired_state['x-applicationLibraryEndpointGroups'][library_instance_id] | default('')) -%}
+        {{ ('nginx.' ~ platform_desired_state.endpointGroups[group].address.domain)
+          if group and (platform_desired_state.endpointGroups[group].address.domain | default('')) else '' }}
       REALM: '{{ application_parameters.SZI_REALM }}'
-      GA_HOST: "https://grant-access.{{ platform_desired_state.endpointGroups[platform_desired_state.applicationLibraryDeployments[library_instance_id].applications['grant-access'].overrides.endpoint.endpoint_group].address.domain }}"
+      GA_HOST: >-
+        {%- set group = platform_desired_state.applicationLibraryDeployments[library_instance_id].applications['grant-access'].overrides.endpoint.endpoint_group |
+          default(platform_desired_state['x-applicationLibraryEndpointGroups'][library_instance_id] | default('')) -%}
+        {{ ('https://grant-access.' ~ platform_desired_state.endpointGroups[group].address.domain)
+          if group and (platform_desired_state.endpointGroups[group].address.domain | default('')) else '' }}
     ports:
       port-1:
         container: 18443
@@ -81019,7 +81070,7 @@ exec /bin/sh ./application-packages/keycloak/1.0.0/assets/scripts/integration.sh
 }
 
 @@END
-@@PORTABLE {"path":"examples/szi/library-packages/szi/1.0.0/roles/library_szi/defaults/main.yml","mode":420,"size":2660,"sha256":"c38ff1a3d63a224b36cab28ac8bf5eaf619e984bf6cee6bb7b51dff61628a227","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2660}
+@@PORTABLE {"path":"examples/szi/library-packages/szi/1.0.0/roles/library_szi/defaults/main.yml","mode":420,"size":2826,"sha256":"59d7be1471c899131421481d60e4b3ed41595c53f34bbecb4f3865ec5a1cf05c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2826}
 platform_library_definition:
   name: szi
   version: 1.0.0
@@ -81038,7 +81089,11 @@ platform_library_definition:
       protocol: https
       parameters:
         realm: master
-        proxy_url: "{{ ('https://nginx.' ~ platform_desired_state.endpointGroups[platform_desired_state.applicationLibraryDeployments[library_instance_id].applications.nginx.overrides.endpoint.endpoint_group].address.domain) if 'nginx' in platform_desired_state.applicationLibraryDeployments[library_instance_id].applications else '' }}"
+        proxy_url: >-
+          {%- set group = platform_desired_state.applicationLibraryDeployments[library_instance_id].applications.nginx.overrides.endpoint.endpoint_group |
+            default(platform_desired_state['x-applicationLibraryEndpointGroups'][library_instance_id] | default('')) -%}
+          {{ ('https://nginx.' ~ platform_desired_state.endpointGroups[group].address.domain)
+            if group and (platform_desired_state.endpointGroups[group].address.domain | default('')) else '' }}
       credentials:
         username:
           sensitive: false
@@ -91374,7 +91429,7 @@ export function ApplicationRedisAccess({
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/ApplicationBindings.tsx","mode":420,"size":10139,"sha256":"c2917ea8e17e15ae3444a657a7347303d3ca6e7abc1ee130e92f42b936b81c33","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":10139}
+@@PORTABLE {"path":"frontend/src/ApplicationBindings.tsx","mode":420,"size":11628,"sha256":"77010057ca0bba4f769866b9238aabe6bea4d7f6bc011064472dd2d77b9bf479","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":11628}
 import { useState, useRef } from "react";
 import { objectValue } from "./application-draft";
 
@@ -91427,7 +91482,13 @@ export function ApplicationBindings({
   deploymentTypes = {},
   onSelectVault,
   candidates,
+  endpointGroups = [],
+  endpointGroupRef,
+  onSaveEndpointGroup,
 }: {
+  endpointGroups?: string[];
+  endpointGroupRef?: string;
+  onSaveEndpointGroup?: (ref: string) => Promise<boolean>;
   candidates?: Record<
     string,
     { deploymentRefs: string[]; providedConnectionRefs: string[] }
@@ -91479,6 +91540,25 @@ export function ApplicationBindings({
             </tr>
           </thead>
           <tbody>
+            {onSaveEndpointGroup && (
+              <BindingRow
+                key={"library-endpoint:" + endpointGroupRef}
+                name="Endpoint библиотеки"
+                hint="endpoint"
+                value={endpointGroupRef ? { endpointGroupRef } : {}}
+                deployments={[]}
+                profiles={[]}
+                endpointGroups={endpointGroups}
+                disabled={disabled}
+                isVault={false}
+                selectedVault={false}
+                onDirtyChange={(dirty) => mark("$library-endpoint", dirty)}
+                onSave={(entry) =>
+                  onSaveEndpointGroup(String(entry.endpointGroupRef ?? ""))
+                }
+                onRemove={() => onSaveEndpointGroup("")}
+              />
+            )}
             {names.map((key) => (
               <BindingRow
                 key={key + JSON.stringify(value[key])}
@@ -91581,7 +91661,9 @@ function BindingRow({
   onSave,
   onRemove,
   onDirtyChange,
+  endpointGroups = [],
 }: {
+  endpointGroups?: string[];
   name: string;
   isVault: boolean;
   selectedVault: boolean;
@@ -91597,26 +91679,35 @@ function BindingRow({
   onDirtyChange: (dirty: boolean) => void;
 }) {
   const [kind, setKind] = useState(
-    Object.hasOwn(value, "providedConnectionRef")
-      ? "providedConnectionRef"
-      : Object.hasOwn(value, "profileRef") || hint === "pki"
-        ? "profileRef"
-        : "deploymentRef",
+    hint === "endpoint"
+      ? "endpointGroupRef"
+      : Object.hasOwn(value, "providedConnectionRef")
+        ? "providedConnectionRef"
+        : Object.hasOwn(value, "profileRef") || hint === "pki"
+          ? "profileRef"
+          : "deploymentRef",
   );
   const [ref, setRef] = useState(
     value.providedConnectionRef
       ? String(objectValue(value.providedConnectionRef).libraryId) +
           "/" +
           String(objectValue(value.providedConnectionRef).name)
-      : String(value.profileRef ?? value.deploymentRef ?? ""),
+      : String(
+          value.endpointGroupRef ??
+            value.profileRef ??
+            value.deploymentRef ??
+            "",
+        ),
   );
   const [dirty, setDirty] = useState(false);
   const candidates =
-    kind === "providedConnectionRef"
-      ? providedConnections
-      : kind === "profileRef"
-        ? profiles
-        : deployments;
+    kind === "endpointGroupRef"
+      ? endpointGroups
+      : kind === "providedConnectionRef"
+        ? providedConnections
+        : kind === "profileRef"
+          ? profiles
+          : deployments;
   return (
     <tr>
       <td>
@@ -91628,7 +91719,7 @@ function BindingRow({
       <td>
         <select
           aria-label={"Тип подключения " + name}
-          disabled={disabled}
+          disabled={disabled || hint === "endpoint"}
           value={kind}
           onChange={(e) => {
             setKind(e.target.value);
@@ -91637,9 +91728,17 @@ function BindingRow({
             onDirtyChange(true);
           }}
         >
-          <option value="deploymentRef">Сервис</option>
-          <option value="profileRef">TLS-профиль</option>
-          <option value="providedConnectionRef">Подключение приложения</option>
+          {hint === "endpoint" ? (
+            <option value="endpointGroupRef">Группа точек входа</option>
+          ) : (
+            <>
+              <option value="deploymentRef">Сервис</option>
+              <option value="profileRef">TLS-профиль</option>
+              <option value="providedConnectionRef">
+                Подключение приложения
+              </option>
+            </>
+          )}
         </select>
       </td>
       <td>
@@ -95462,7 +95561,7 @@ export function inferParameterValue(text: string): string | number | boolean {
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":82172,"sha256":"f5aaf57d9f65e5bfbb85088d32eb2cb4c82719b3a97748efa9c682b1e05230a4","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":49935}
+@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":85472,"sha256":"a775a93aeeb6f846482b7840b5a60bc64f82cb7c1dda3179bf9e3a668bd2001a","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":50066}
 import { ApplicationProvidedConnections } from "./ApplicationProvidedConnections";
 import {
   ApplicationRuntimeSecretField,
@@ -95551,7 +95650,10 @@ export function ApplicationsPage({
   onInstallation: () => void;
   onDirtyChange: (dirty: boolean) => void;
 }) {
-  const { libraries, placements } = applicationDraft(managed, intents);
+  const { libraries, placements, libraryEndpointGroups } = applicationDraft(
+    managed,
+    intents,
+  );
   const packages = objectValue(managed?.applicationPackages);
   const [selected, setSelected] = useState("");
   const [slot, setSlot] = useState("");
@@ -95797,8 +95899,8 @@ export function ApplicationsPage({
             p.hostId === c.hostId &&
             p.setting === c.setting &&
             p.property === c.property &&
-            p.operation.replace(/^(Set|Remove)/, "") ===
-              c.operation.replace(/^(Set|Remove)/, ""),
+            p.operation.replace(/^(Set|Remove|Clear)/, "") ===
+              c.operation.replace(/^(Set|Remove|Clear)/, ""),
         );
     try {
       if (
@@ -95966,14 +96068,15 @@ export function ApplicationsPage({
     !dirty &&
     intents.length === 0 &&
     snapshot?.projectRevision === managed?.projectRevision;
-  const providedConnectionChoices = freshSecrets
-    ? Object.entries(snapshot?.applicationLibraries?.libraries ?? {}).flatMap(
-        ([id, lib]) =>
-          Object.keys(lib.providedConnections ?? {}).map(
-            (name) => id + "/" + name,
-          ),
-      )
-    : [];
+  // Selecting an authored reference must not depend on successful Core resolution.
+  const providedConnectionChoices = Object.entries(libraries).flatMap(
+    ([id, lib]) =>
+      Object.keys(
+        objectValue(
+          packageDefinition("library", lib.libraryRef).provided_connections,
+        ),
+      ).map((name) => id + "/" + name),
+  );
   const secretContext = JSON.stringify([
     selected,
     slot,
@@ -96188,12 +96291,7 @@ export function ApplicationsPage({
               [
                 key,
                 String(row.libraryRef),
-                ...Object.keys({
-                  ...objectValue(
-                    packageDefinition("library", row.libraryRef).slots,
-                  ),
-                  ...objectValue(row.applications),
-                }),
+                ...Object.keys(objectValue(row.applications)),
               ]
                 .join(" ")
                 .toLocaleLowerCase()
@@ -96215,12 +96313,7 @@ export function ApplicationsPage({
                   <strong>{key}</strong>
                   <small>{String(row.libraryRef)}</small>
                 </button>
-                {Object.keys({
-                  ...objectValue(
-                    packageDefinition("library", row.libraryRef).slots,
-                  ),
-                  ...objectValue(row.applications),
-                }).map((name) => (
+                {Object.keys(objectValue(row.applications)).map((name) => (
                   <button
                     className="outline application-slot"
                     key={name}
@@ -96390,15 +96483,53 @@ export function ApplicationsPage({
                         )
                       )
                         void send({
-                          operation: "RemoveApplicationLibrarySlot",
+                          operation: "SetApplicationLibrarySlot",
                           deploymentId: selected,
                           entityId: slot,
+                          entity: {
+                            overrides: {},
+                            accounts: {},
+                            credentials: {},
+                          },
                         });
                     }}
                   >
                     Сбросить настройки
                   </button>
                 )}
+                <button
+                  className="outline"
+                  disabled={busy || dirty}
+                  onClick={() => {
+                    if (
+                      !window.confirm(
+                        slot
+                          ? "Удалить экземпляр приложения из проекта? Установленные ресурсы и данные сохранятся."
+                          : "Удалить экземпляр библиотеки со всеми приложениями и размещениями из проекта? Установленные ресурсы и данные сохранятся.",
+                      )
+                    )
+                      return;
+                    void send(
+                      slot
+                        ? {
+                            operation: "RemoveApplicationLibrarySlot",
+                            deploymentId: selected,
+                            entityId: slot,
+                          }
+                        : {
+                            operation: "DeleteApplicationLibraryWithPlacements",
+                            deploymentId: selected,
+                          },
+                    ).then((ok) => {
+                      if (!ok) return;
+                      clearLocal();
+                      setSlot("");
+                      if (!slot) setSelected("");
+                    });
+                  }}
+                >
+                  {slot ? "Удалить приложение" : "Удалить библиотеку"}
+                </button>
                 {((slot && selectedTab === "Запуск") ||
                   (!slot && selectedTab === "Общие параметры")) && (
                   <button
@@ -96433,6 +96564,50 @@ export function ApplicationsPage({
                   <>
                     <section className="application-library-overview">
                       <h3>Экземпляр библиотеки</h3>
+                      {Object.keys(recipe).some(
+                        (name) =>
+                          !Object.hasOwn(
+                            objectValue(library.applications),
+                            name,
+                          ),
+                      ) && (
+                        <label>
+                          Добавить приложение
+                          <select
+                            aria-label="Добавить приложение"
+                            value=""
+                            disabled={busy || dirty}
+                            onChange={(event) => {
+                              const name = event.target.value;
+                              if (name)
+                                void send({
+                                  operation: "SetApplicationLibrarySlot",
+                                  deploymentId: selected,
+                                  entityId: name,
+                                  entity: {},
+                                }).then((ok) => {
+                                  if (ok) {
+                                    setSlot(name);
+                                    setTab("Общее");
+                                  }
+                                });
+                            }}
+                          >
+                            <option value="">Выберите приложение</option>
+                            {Object.keys(recipe)
+                              .filter(
+                                (name) =>
+                                  !Object.hasOwn(
+                                    objectValue(library.applications),
+                                    name,
+                                  ),
+                              )
+                              .map((name) => (
+                                <option key={name}>{name}</option>
+                              ))}
+                          </select>
+                        </label>
+                      )}
                       <label>
                         ID экземпляра библиотеки
                         <input value={selected} readOnly />
@@ -96584,25 +96759,6 @@ export function ApplicationsPage({
                             entity: { libraryRef: value },
                           }),
                       )}
-                      <button
-                        className="outline"
-                        disabled={busy}
-                        onClick={() => {
-                          if (
-                            window.confirm(
-                              "Удалить библиотеку из проекта? Установленные ресурсы сохранятся. Сначала удалите размещения.",
-                            )
-                          )
-                            void send({
-                              operation: "DeleteApplicationLibraryDeployment",
-                              deploymentId: selected,
-                            }).then((ok) => {
-                              if (ok) setSelected("");
-                            });
-                        }}
-                      >
-                        Удалить из проекта
-                      </button>
                     </details>
                   </>
                 )}
@@ -96693,7 +96849,10 @@ export function ApplicationsPage({
                       group_vars; собственные значения приложений задаются в их
                       настройках.
                     </p>
-                    {["environment", "parameters"].map((section) => (
+                    {["environment", "paramet
+@@END
+@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":85472,"sha256":"a775a93aeeb6f846482b7840b5a60bc64f82cb7c1dda3179bf9e3a668bd2001a","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":35406}
+ers"].map((section) => (
                       <ApplicationValueFields
                         key={selected + section + formEpoch}
                         compact
@@ -96750,10 +96909,7 @@ export function ApplicationsPage({
                         ),
                       )}
                       onSelectVault={(binding) =>
-           
-@@END
-@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":82172,"sha256":"f5aaf57d9f65e5bfbb85088d32eb2cb4c82719b3a97748efa9c682b1e05230a4","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":32237}
-             send({
+                        send({
                           operation: "UpdateApplicationLibraryDeployment",
                           deploymentId: selected,
                           entity: {
@@ -96765,6 +96921,19 @@ export function ApplicationsPage({
                         })
                       }
                       value={objectValue(library.bindings)}
+                      endpointGroups={Object.keys(
+                        managed?.endpointGroups ?? {},
+                      )}
+                      endpointGroupRef={libraryEndpointGroups[selected]}
+                      onSaveEndpointGroup={(ref) =>
+                        send({
+                          operation: ref
+                            ? "SetApplicationLibraryEndpointGroup"
+                            : "ClearApplicationLibraryEndpointGroup",
+                          deploymentId: selected,
+                          ...(ref ? { value: ref } : {}),
+                        })
+                      }
                       hints={bindingHints}
                       candidates={connectionCandidates(
                         bindingConnectionNames,
