@@ -117,17 +117,20 @@ function Harness({
   accept = true,
   snapshot,
   view = managed,
+  importCompleted = false,
 }: {
   calls: ApplicationIntent[];
   dirty?: (value: boolean) => void;
   accept?: boolean;
   snapshot?: OpenResult["snapshot"];
   view?: NonNullable<OpenResult["managed"]>;
+  importCompleted?: boolean;
 }) {
   const [intents, setIntents] = useState<ApplicationIntent[]>([]);
   return (
     <ApplicationsPage
       managed={view}
+      importCompleted={importCompleted}
       snapshot={snapshot}
       intents={intents}
       busy={false}
@@ -156,6 +159,16 @@ async function selectSlot() {
   await userEvent.click(screen.getByRole("button", { name: "↳ gateway" }));
 }
 describe("application editor", () => {
+  it("shows the next step only after a completed package import", () => {
+    const rendered = render(<Harness calls={[]} />);
+    expect(screen.queryByText(/Пакет успешно импортирован/)).toBeNull();
+    rendered.rerender(<Harness calls={[]} importCompleted />);
+    expect(screen.getByRole("status").textContent).toContain(
+      "Чтобы добавить библиотеку, нажмите «Добавить библиотеку»",
+    );
+    rendered.rerender(<Harness calls={[]} />);
+    expect(screen.queryByText(/Пакет успешно импортирован/)).toBeNull();
+  });
   it("uses compact endpoint rows on the application General tab with the existing writer", async () => {
     const view = structuredClone(managed);
     objectValue(

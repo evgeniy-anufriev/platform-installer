@@ -52,6 +52,7 @@ export function ApplicationsPage({
   onImport,
   draftActive,
   backendError,
+  importCompleted = false,
 }: {
   choosePackage?: () => Promise<string>;
   onImport: (
@@ -63,6 +64,7 @@ export function ApplicationsPage({
   ) => Promise<boolean>;
   draftActive: boolean;
   backendError?: string;
+  importCompleted?: boolean;
   onProviderSecrets?: (deploymentId: string) => void;
   loadSecrets?: () => Promise<RuntimeSecretDescriptorOperation>;
   saveSecrets?: (input: RuntimeSecretValuesInput) => Promise<void>;
@@ -660,6 +662,13 @@ export function ApplicationsPage({
         </button>
       </header>
       {(error || backendError) && <p role="alert">{error || backendError}</p>}
+      {importCompleted && (
+        <p role="status">
+          Пакет успешно импортирован и доступен для выбора при добавлении
+          библиотеки или приложения. Чтобы добавить библиотеку, нажмите «Добавить
+          библиотеку».
+        </p>
+      )}
       <div className="applications-layout">
         <aside className="application-list">
           <label>

@@ -760,6 +760,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
 
   const clearDraft = () => {
     setImportReview(false);
+    setImportCompleted(false);
     setEdit(null);
     setEditError(null);
     setSessionId("");
@@ -1770,6 +1771,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     }
   };
   const [importReview, setImportReview] = useState(false);
+  const [importCompleted, setImportCompleted] = useState(false);
   const reviewPackage = async (
     source: string,
     kind: string,
@@ -1777,6 +1779,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     version: string,
     digest: string,
   ) => {
+    setImportCompleted(false);
     if (sessionId || !api.reviewApplicationPackageImport) {
       setEditError({
         code: "EDIT_SESSION_ACTIVE",
@@ -1871,6 +1874,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
         setEndpointPreview(undefined);
         setVerifiedPKI(undefined);
         clearDraft();
+        if (importReview) setImportCompleted(true);
         return;
       }
       if (next.status === "COMMITTED_REFRESH_FAILED") {
@@ -2712,6 +2716,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
                 onImport={reviewPackage}
                 draftActive={!!sessionId}
                 backendError={editError?.message}
+                importCompleted={importCompleted}
                 loadSecrets={api.getRuntimeSecretDescriptors}
                 executionContextKey={JSON.stringify([
                   executionNode?.selectionKind,
