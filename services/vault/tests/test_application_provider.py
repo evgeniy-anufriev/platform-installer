@@ -22,6 +22,32 @@ document_action=importlib.util.module_from_spec(spec);spec.loader.exec_module(do
 
 
 class ApplicationProviderTest(unittest.TestCase):
+    def test_shared_client_secret_profile_creates_once_reuses_and_rejects_unknown(self):
+        with tempfile.TemporaryDirectory() as root:
+            ref = 'pla-generated-' + 'b' * 40
+            source = {'kind': 'generated', 'profile': 'client_secret'}
+            document = dict(mount='secret', document='szi/shared', owner='owned', fields={
+                'client_secret': dict(source=source, passwordRef=ref)})
+            args = dict(document=document, current={'status': 404}, secret_root=root,
+                        secret_files={}, provider={'mounts': {'secret/': {'type': 'kv', 'options': {'version': '2'}}}})
+            action = object.__new__(document_action.ActionModule)
+            action._task = SimpleNamespace(args=args)
+            with patch.object(document_action, 'generated_password', side_effect=AssertionError('password generator called')):
+                first = action.run()
+                self.assertFalse(first.get('failed'), first)
+                value = first['fields']['client_secret']
+                self.assertEqual(len(value), 32)
+                self.assertTrue(all(c in 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789' for c in value))
+                args['current'] = self.response()
+                args['current']['json']['data']['data']['client_secret'] = value
+                self.assertEqual(action.run()['fields'], first['fields'])
+                args['current']['json']['data']['data']['client_secret'] = 'pre-existing-secret!'
+                self.assertEqual(action.run()['fields']['client_secret'], 'pre-existing-secret!')
+                args['current']['json']['data']['data']['_platform_owner'] = 'foreign'
+                self.assertTrue(action.run()['failed'])
+                source['profile'] = 'unknown'
+                self.assertEqual(action.run()['msg'], 'APPLICATION_GENERATED_PROFILE_INVALID')
+
     def test_new_password_is_exactly_15_chars_and_guarantees_character_classes(self):
         with patch.object(document_action.secrets, 'choice', side_effect=lambda alphabet: alphabet[0]):
             value = document_action.generated_password()

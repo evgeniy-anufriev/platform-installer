@@ -21,6 +21,10 @@
           "properties": {
             "kind": {
               "const": "generated"
+            },
+            "profile": {
+              "type": "string",
+              "enum": ["password", "client_secret"]
             }
           },
           "required": [

@@ -203,7 +203,7 @@
             'resources': _application_resources,
             'resourceDefaults': _application_resource_defaults,
             'sharedSecrets': _library_package.platform_library_definition.shared_secrets | default({}) |
-              combine(application_job.deployment.shared_secrets | default({}), recursive=true, list_merge='replace'),
+              combine(application_job.deployment.shared_secrets | default({}), recursive=false),
             'connectionDefaults': _library_package.platform_library_definition.connection_defaults | default({}) |
               combine(application_job.deployment.connection_defaults | default({}), recursive=true, list_merge='replace'),
             'connections': _application_connections,

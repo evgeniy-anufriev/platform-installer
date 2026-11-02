@@ -103,12 +103,16 @@ def _argument(argument, job, library, hosts, desired, provider_library=None, sna
 
 
 def _secret_reference(source, declaration, job):
-    if source and source.get('kind') == 'generated' and declaration.get('valueFrom') == 'secret_binding':
+    if source and source.get('kind') == 'generated' and declaration.get('valueFrom') in ('library_secret', 'secret_binding'):
         try:
             from .runtime_secret_identity import generated_password_ref
         except ImportError:
             from runtime_secret_identity import generated_password_ref
+        if declaration.get('valueFrom') == 'library_secret':
+            return generated_password_ref(job['projectId'], job['libraryId'], '', declaration['name'])
         binding = job['secretBindings'][declaration['binding']]['source']
+        if 'library_secret' in binding:
+            return generated_password_ref(job['projectId'], job['libraryId'], '', binding['library_secret'])
         return generated_password_ref(job['projectId'], job['libraryId'], job['instanceId'], binding['account'])
     return script_secret_reference(source)
 
@@ -205,7 +209,7 @@ def prepare_script_jobs(root, snapshot, desired, rows, jobs, phase=None):
                 value = script_secret_source(source, library, instance, provider)
                 if value is None and source.get('optional', False):
                     continue
-                secret_inputs[key] = script_secret_reference(value)
+                secret_inputs[key] = _secret_reference(value, source, job)
                 if source.get('valueFrom') == 'library_secret':
                     shared_inputs.append(source['name'])
                 elif source.get('valueFrom') == 'secret_binding':

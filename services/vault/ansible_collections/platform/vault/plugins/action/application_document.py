@@ -41,7 +41,12 @@ class ActionModule(ActionBase):
                         value = stream.read(4097)
                 elif source['kind'] == 'generated':
                     ref = descriptor['passwordRef']
-                    if field != 'password' or not re.fullmatch(r'pla-generated-[0-9a-f]{40}', ref):
+                    profile = source.get('profile', 'password')
+                    if profile not in ('password', 'client_secret'):
+                        return dict(failed=True, msg='APPLICATION_GENERATED_PROFILE_INVALID')
+                    shared_field = (document.get('document', '').endswith('/shared') and
+                                    re.fullmatch(r'[A-Za-z0-9_-][A-Za-z0-9_.-]{0,127}', field))
+                    if (field != 'password' and not shared_field) or not re.fullmatch(r'pla-generated-[0-9a-f]{40}', ref):
                         raise ValueError()
                     protected_secret_files({}, [], args['secret_root'])
                     current = args['current']
@@ -62,7 +67,8 @@ class ActionModule(ActionBase):
                         with open(args['secret_files'][ref], encoding='utf-8') as stream:
                             value = stream.read(4097)
                     if value is None:
-                        value = generated_password()
+                        value = (''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(32))
+                                 if profile == 'client_secret' else generated_password())
                     generated[ref] = value
                 else:
                     raise ValueError()

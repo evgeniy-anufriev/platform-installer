@@ -34,6 +34,7 @@ class NativeApplicationConnectionsTests(unittest.TestCase):
                 consumer['applications']['gateway']['overrides']['endpoint'] = {
                     'enabled': True, 'listener': 'http', 'protocol': 'https', 'endpoint_group': 'apps'}
                 consumer['provided_connections'] = {}
+                consumer['shared_secrets'] = {'client': {'source': {'kind': 'runtime_secret_ref', 'ref': 'explicit-client'}}}
                 provider = state['applicationLibraryDeployments']['cspa']
                 provider['applications']['gateway']['overrides']['endpoint'] = {
                     'enabled': True, 'listener': 'http', 'protocol': 'https', 'endpoint_group': 'apps'}
@@ -50,7 +51,7 @@ class NativeApplicationConnectionsTests(unittest.TestCase):
                     library = data['platform_library_definition']
                     library['connections'] = {'vault': {'library_binding': 'secrets', 'protocol': 'https'},
                                               'identity': {'library_binding': 'identity-admin', 'protocol': 'https'}}
-                    library['shared_secrets'] = {}
+                    library['shared_secrets'] = {'client': {'source': {'kind': 'generated', 'profile': 'client_secret'}}}
                     if provider:
                         library['provided_connections'] = {'admin': {
                             'application': 'gateway', 'protocol': 'https', 'parameters': {
@@ -73,6 +74,8 @@ class NativeApplicationConnectionsTests(unittest.TestCase):
                     'password': {'source': {'kind': 'runtime_secret_ref', 'ref': 'consumer-password'}}}}}
                 settings['environment'] = {'API_ENDPOINT': "{{ application_connections.identity.url if library_instance_id == 'sdku' else 'provider' }}"}
                 settings['provisioner']['secret_bindings'] = {'API_PASSWORD': {'source': {'account': 'identity', 'field': 'password'}}}
+                settings['provisioner']['secret_bindings']['QA_CLIENT'] = {
+                    'requires_connections': ['identity'], 'source': {'library_secret': 'client'}}
             edit(defaults, application)
             manifest = root / 'application-packages/apigateway/1.0.0/application.yml'
             probe = root / 'application-packages/apigateway/1.0.0/assets/probe.sh'
@@ -106,6 +109,8 @@ class NativeApplicationConnectionsTests(unittest.TestCase):
                 self.assertEqual('PASS', projection['status'], projection['findings'])
                 return rows, projection['libraries']
             rows, libraries = resolve()
+            self.assertEqual(libraries['sdku']['sharedSecretRequirements']['client']['source'],
+                             {'kind': 'runtime_secret_ref', 'ref': 'explicit-client'})
             instance = libraries['sdku']['instances']['apigateway-sdku']
             self.assertEqual('https://apigateway-cspa.apps.example.test', instance['connections']['identity']['url'])
             self.assertEqual({'tenant': 'override', 'origin': 'https://cspa.example.test',

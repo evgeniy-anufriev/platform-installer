@@ -231,6 +231,25 @@ platform_desired_state:
 Варианты начального значения password (`generated`, `runtime_secret_ref`,
 `vault_ref`) приведены в [секретах](secrets.md#первоначальные-значения-секретов).
 
+Для `kind: generated` необязательный `profile` выбирает `password` (прежние
+15 символов с обязательными классами) либо `client_secret` (32 случайные буквы
+ASCII и цифры). Без `profile` сохраняется поведение `password`. Тот же источник
+поддерживается в `shared_secrets` библиотеки:
+
+```yaml
+shared_secrets:
+  grant_access_client_secret:
+    source: {kind: generated, profile: client_secret}
+```
+
+Генерация выполняется Core только при Apply. Существующее значение собственного
+документа Vault сохраняется, включая значения, ранее введённые вручную. Один
+общий секрет используется callback провайдера и всеми потребителями. В SZI
+callback задаёт его клиенту Keycloak, затем штатная публикация Vault и Agent
+доставляют его в `KEYCLOAK_CLIENT_SECRET` и `APIPROVIDER_CLIENT_SECRET`. Ручного
+runtime-ввода для этого generated-источника нет. Явное переопределение источника
+общего секрета в проекте целиком заменяет соответствующий источник defaults.
+
 Обычная настройка Redis — только `overrides.parameters.redis.user` и
 `password_ref`. Account descriptor, mode, source kind, права и secret bindings
 принадлежат defaults приложения; редкие изменения разрешены через явный override

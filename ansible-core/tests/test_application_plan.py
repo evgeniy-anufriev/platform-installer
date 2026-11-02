@@ -39,6 +39,14 @@ def image_lock():
 
 
 class ApplicationPlanTests(unittest.TestCase):
+    def test_generated_shared_client_secret_is_not_a_user_runtime_requirement(self):
+        value = application_snapshot()
+        library = value['applicationLibraries']['libraries']['sdku']
+        library['sharedSecretRequirements']['client'] = {'source': {'kind': 'generated', 'profile': 'client_secret'}}
+        model = application_execution_model(value, image_lock())
+        self.assertFalse(any(item.get('runtimeReference') == 'grant-access-client-secret' or
+                             item.get('purpose') == 'APPLICATION_SECRET' for item in model['runtimeSecretRequirements']))
+
     def test_shared_secret_accumulates_operations_across_provider_and_lifecycle(self):
         value = application_snapshot()
         library = value['applicationLibraries']['libraries']['sdku']

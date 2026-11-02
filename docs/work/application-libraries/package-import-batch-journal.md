@@ -506,3 +506,54 @@ Owner confirmed the active runtime already uses library registry_credentials, wh
 
 Validation: full go test ./... and go vet ./... PASS. Current-tree RED OS102 image-preparation/application-plan suites23 PASS, including native ansible-playbook -> deployment_plan_json diagnostic output. Go tests cover matching detail and rejected oversized/control-bearing messages. Actual React/Wails Open -> PEM session -> independent trust confirmation -> Check/Prepare -> Installation/Plan -> CreateInstallationPlanForMode PASS. No Approve/Start or service installation. Target-free DESCRIBE returned BLOCKED APPLICATION_IMAGE_NOT_LOCKED with szi/keycloak/node1/unassigned.invalid/keycloak:qa and concrete source-policy reason visible on screen. Revision sha256:d38505bd449c9b93cdc95679453ce9a458b992cd5fc70147b47b7b314103a6b7; run installer-74401350302849180932119204526448769490. QA-only bundle sha256:69fb28391be0399117f913cd7d50ff073d5c2bddf85ccdcfc0786ecfd22bfe4a was built on trusted102 with empty runtime input and standard-published before use; it is not offline-install closure. Safe result and scenario scripts: .runtime/qa/image-diagnostics/. UI automation selector corrections did not change product code. No visual-inspection claim. Both Installer and runtime bundle must be updated for customer diagnostics; the customer's actual failing image/source remains unknown until that diagnostic is collected.
 Windows Wails production build PASS. Standard publisher and actual React/Wails Prepare restored prior QA cache/runtime c97e77d7f9d2336a83fd588f790fa737759c2a4a56157d4cce4216a41b051a4f to READY; temporary RED OS source workspaces cleaned. Owned Vite/Wails processes stopped.
+
+### Generated shared client-secret profile — 2026-11-02
+
+Owner approved optional generated profiles with minimal changes. `password`
+retains the existing mixed-class 15-character policy and is the default when
+profile is omitted. `client_secret` selects 32 cryptographically random ASCII
+letters/digits. SZI grant_access_client_secret now declares generated/client_secret.
+The existing shared Vault field, invocation-private file map, provider callback,
+deferred publication and Agent delivery are reused. The integration script still
+sets the supplied value on the Keycloak client and verifies it; it does not fetch
+an independently generated Keycloak value. No Keycloak-specific generator or new
+Installer API/store was added. Existing owned values are reused, never implicitly
+rotated. Apply-only generation/retry limits remain ADR-047.
+
+Shared generated references use the existing project/library identity with a
+reserved empty instance segment. Explicit authored shared-source descriptors
+replace the complete corresponding default descriptor; a runtime/vault override
+does not inherit a generated profile. Other shared entries remain unchanged.
+
+Current-tree RED OS102 validation: application-plan/Vault/callback suites49 PASS;
+Vault provider18 PASS; SZI package3 PASS; real native Ansible Vault delivery6 PASS
+(78.085s), including generated shared client first Apply/repeat without rewrite;
+native connection/default resolution1 PASS (19.361s), including explicit runtime
+override without an inherited profile. Full Go tests/vet and Windows production
+Wails build PASS. No review per owner. No full SZI installation, actual Keycloak
+client API acceptance, Approve or Start was performed.
+
+QA-only bundle674808d604d4180dc7265d58d830f54cea3dba0eb70b5529014ecd04a4c5e32c
+built on trusted102 and standard-published before Wails preparation; empty runtime
+input is not production offline-install closure. Nonvisual React/Wails fixture
+uses the existing single-Keycloak library recipe and a QA-only shared binding so
+the client secret is used/projected. Initial descriptor lookup correctly blocked
+on missing Docker/PostgreSQL runtime references in that fixture; those public
+references were supplied without secret values. Product validation was unchanged.
+
+Actual React handlers/real Wails methods PASS: Open, PEM session/trust Check,
+Prepare, library Import/Review/Save, Header Verify VERIFIED and runtime descriptor
+query READY without grant-access-client-secret. Saved revision
+8ca764fdcc25cd84a15c299aae5eb1de696f122b5310221b6f3c74de6f9c327a;
+project project-2026110200000024. Evidence/scripts:
+.runtime/qa/generated-profiles/wails-result.json and flow.cjs. A parallel build
+reloaded the development page and lost one automation observation; the same
+scenario subsequently passed with a stable dev server. Visual inspection and a
+full SZI installation are not claimed. Customer delivery requires the updated
+Installer/runtime bundle and reimport of the updated SZI library package; existing
+explicit runtime/vault source overrides remain explicit.
+
+Prior c97e77d7 cache/runtime restored using the standard publisher and actual
+React/Wails preparation, final READY with matching digest. Temporary RED OS102
+source/fixture workspace cleaned with qa-sync; owned dev processes stopped and
+generated frontend build/runtime outputs restored. Unrelated edits were retained.

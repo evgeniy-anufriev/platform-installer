@@ -37,7 +37,7 @@ platform_library_definition:
           name: szi_audit
   shared_secrets:
     grant_access_client_secret:
-      source: {kind: runtime_secret_ref, ref: grant-access-client-secret}
+      source: {kind: generated, profile: client_secret}
     java_keystore_password:
       source:
         binding: application-pki

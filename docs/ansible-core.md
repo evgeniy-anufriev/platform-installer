@@ -688,3 +688,13 @@ route/host/bridge network discovery is reused within the Ansible process.
 Vault instance Apply performs one full fresh preflight before document writes;
 deferred delivery does not call that same preflight twice. Existing generated
 password runtime files retain the identity already provisioned before delivery.
+
+Generated credential sources support `profile: password` (the existing
+15-character mixed-class password) and `profile: client_secret` (32 random ASCII
+letters/digits). An omitted profile means `password`; unknown profiles are
+rejected. Library `shared_secrets` can use these same generated sources. Core
+prepares one private value per logical shared field, gives that same reference to
+provider callbacks, and publishes it through the existing owned Vault document
+after provider success. Resolve/Verify/Plan do not generate or expose values.
+Repeated Apply reuses an existing published value; before first publication the
+existing retry/reconciliation limitation in ADR-047 still applies.

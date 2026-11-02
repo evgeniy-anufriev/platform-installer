@@ -46,6 +46,17 @@ and Execution Nodes, covering selection through provider and Vault publication.
 There is no new cross-node lock or concurrent-Apply guarantee. See the
 [owner-approved plan](work/application-libraries/generated-password-plan.md).
 
+Owner extension, 2026-11-02: generated sources accept an optional `profile`:
+`password` retains the existing 15-character password policy, and `client_secret`
+selects 32 cryptographically random ASCII letters/digits. Omission means
+`password`. Library-shared generated fields reuse the existing Apply-only
+generation, invocation-private file map, provider-before-publication sequence,
+owned KV document/CAS and Agent delivery. A shared identity uses the existing
+project/library identity tuple with an empty instance segment, disjoint from
+application accounts. Profiles affect newly selected values only; existing
+published values are retained. Explicit shared-source descriptors replace their
+default descriptor as a whole. No new generator API, secret store or UI lifecycle.
+
 ## ADR-001: V2 is a separate repository
 
 Status: Accepted.

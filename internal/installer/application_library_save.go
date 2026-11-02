@@ -339,6 +339,12 @@ func validApplicationCredential(raw any, allowLiteral bool) bool {
 	required := []string{"kind"}
 	switch source["kind"] {
 	case "generated":
+		if profile, present := source["profile"]; present {
+			if profile != "password" && profile != "client_secret" {
+				return false
+			}
+			required = append(required, "profile")
+		}
 	case "runtime_secret_ref":
 		required = append(required, "ref")
 	case "vault_ref":

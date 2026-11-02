@@ -446,11 +446,18 @@ func TestB2TypedCredentialSourcesClosedWithoutRestrictingUserData(t *testing.T) 
 		{"kind": "runtime_secret_ref", "ref": "{{ library_id }}-password"},
 		{"kind": "vault_ref", "binding": "vault", "mount": "kv", "document": "app/credentials", "field": "password"},
 		{"kind": "generated"},
+		{"kind": "generated", "profile": "password"},
+		{"kind": "generated", "profile": "client_secret"},
 		{"kind": "pki_credential", "binding": "pki", "credential": "client"},
 	}
 	for _, source := range valid {
 		if !validApplicationCredential(map[string]any{"source": source}, false) {
 			t.Fatal("valid declared source rejected")
+		}
+	}
+	for _, profile := range []any{"unknown", "", true} {
+		if validApplicationCredential(map[string]any{"source": map[string]any{"kind": "generated", "profile": profile}}, false) {
+			t.Fatal("invalid generated profile accepted")
 		}
 	}
 	if validApplicationCredential(map[string]any{"source": valid[0], "value": "synthetic-marker"}, false) {

@@ -13,6 +13,17 @@ from schema_validation import SchemaValidator
 
 
 class ApplicationVaultTest(unittest.TestCase):
+    def test_generated_profile_schema_accepts_legacy_and_two_profiles(self):
+        contracts = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../contracts'))
+        validator = SchemaValidator(contracts)
+        schema = os.path.join(contracts, 'application-libraries/v1alpha1/deployments.schema.json')
+        for profile in (None, 'password', 'client_secret', 'unknown', True):
+            source = {'kind': 'generated'}
+            if profile is not None:
+                source['profile'] = profile
+            value = {'szi': {'libraryRef': 'szi@1.0.0', 'runtimeRef': 'docker', 'shared_secrets': {'client': {'source': source}}}}
+            self.assertEqual(bool(validator.validate(value, schema)), profile in ('unknown', True))
+
     def test_retained_policy_accepts_real_core_projected_paths(self):
         self.rows[0]['bindings']['api'] = {'providedConnectionRef': {'libraryId': 'provider', 'name': 'api'}}
         job = project_vault(self.rows, self.prepared)['instanceJobs'][0]
@@ -154,6 +165,19 @@ class ApplicationVaultTest(unittest.TestCase):
         self.instance['agentRequired'] = False
         with self.assertRaisesRegex(ValueError, 'GENERATED_PASSWORD_SCOPE_INVALID'):
             project_vault(self.rows, self.prepared)
+
+    def test_generated_shared_client_secret_is_stable_and_shared_by_all_placements(self):
+        library = self.prepared['snapshot']['applicationLibraries']['libraries']['sdku']
+        library['sharedSecretRequirements'] = {'client_secret': {'source': {'kind': 'generated', 'profile': 'client_secret'}}}
+        self.instance['secretBindings']['CLIENT_SECRET'] = {'source': {'library_secret': 'client_secret'}}
+        result = project_vault(self.rows, self.prepared)
+        document = result['libraryJobs'][0]['documents'][0]
+        self.assertEqual(document['document'], 'sdku/shared')
+        descriptor = document['fields']['client_secret']
+        self.assertEqual(descriptor['source'], {'kind': 'generated', 'profile': 'client_secret'})
+        self.assertEqual(1, sum(job.get('passwordRef') == descriptor['passwordRef'] for job in result['sourceJobs']))
+        self.assertEqual(result, project_vault(self.rows, self.prepared))
+        self.assertTrue(any('client_secret' in env['contents'] for env in result['instanceJobs'][0]['envTemplates']))
 
     def test_shared_vault_source_is_preflighted_without_password_file(self):
         self.instance['credentialRequirements']={}

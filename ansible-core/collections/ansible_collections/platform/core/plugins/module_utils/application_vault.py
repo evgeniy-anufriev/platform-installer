@@ -123,7 +123,7 @@ def project_vault(rows, prepared):
                         or not matches[0].get('storePasswordSecretRef')):
                     raise ValueError('APPLICATION_VAULT_PKI_CREDENTIAL_AMBIGUOUS')
                 shared[name] = dict(source=dict(kind='runtime_secret_ref', ref=matches[0]['storePasswordSecretRef']), pkiPlans=matches)
-            elif source['kind'] in {'runtime_secret_ref', 'vault_ref'}:
+            elif source['kind'] in {'runtime_secret_ref', 'vault_ref', 'generated'}:
                 shared[name] = dict(source=source)
             else:
                 raise ValueError('APPLICATION_VAULT_SOURCE_DEFERRED')
@@ -142,6 +142,12 @@ def project_vault(rows, prepared):
             if location and not any(all(entry.get(key) == value for key, value in location.items()) for entry in source_jobs):
                 source_jobs.append(location)
             shared_locations[name] = location or dict(mount=mount, document=shared_doc, field=segment(name))
+            if value['source']['kind'] == 'generated':
+                # Empty instance is reserved for library-shared identities.
+                password_ref = generated_password_ref(project, library_id, '', name)
+                value['passwordRef'] = password_ref
+                source_jobs.append(dict(providerId=ref, mount=mount, document=shared_doc,
+                                        field=segment(name), passwordRef=password_ref))
         writable_shared = {k: v for k, v in shared.items() if v['source']['kind'] != 'vault_ref'}
         if writable_shared:
             documents.append(dict(mount=mount, document=shared_doc, fields=writable_shared))

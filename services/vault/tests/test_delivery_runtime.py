@@ -47,7 +47,7 @@ class VaultDeliveryRuntimeTests(unittest.TestCase):
                                     capture_output=True, text=True, timeout=30)
             self.assertEqual(0, result.returncode, (result.stdout + result.stderr)[-1500:])
 
-    def exercise(self, *, race=False, foreign=False, repeat=True, generated=False):
+    def exercise(self, *, race=False, foreign=False, repeat=True, generated=False, shared_client=False):
         with tempfile.TemporaryDirectory(prefix='qa-vault-delivery-') as directory:
             root = Path(directory)
             secret_root = root / 'secrets'
@@ -171,6 +171,13 @@ class VaultDeliveryRuntimeTests(unittest.TestCase):
                     for job in jobs:
                         job['documents'][0]['fields']['password'] = {
                             'source': {'kind': 'generated'}, 'passwordRef': ref}
+                if shared_client:
+                    facts['platform_application_secret_files'] = {}
+                    for index, job in enumerate(jobs):
+                        document = job['documents'][0]
+                        document['document'] = 'lib/' + job['instanceId'] + '/shared'
+                        document['fields'] = {'client_secret': {'source': {'kind': 'generated', 'profile': 'client_secret'},
+                            'passwordRef': 'pla-generated-' + str(index + 1) * 40}}
                 play = root / 'probe.yml'
                 play.write_text(yaml.safe_dump([
                     dict(hosts='localhost', gather_facts=False, tasks=[{'ansible.builtin.set_fact': facts}]),
@@ -195,10 +202,16 @@ class VaultDeliveryRuntimeTests(unittest.TestCase):
                     for document in state['kv'].values():
                         self.assertTrue(document['data']['password'] == password_file.read_text(),
                                         'Deferred delivery changed the provisioned password')
+                if shared_client:
+                    for document in state['kv'].values():
+                        value = document['data']['client_secret']
+                        self.assertEqual(len(value), 32)
+                        self.assertTrue(value.isascii() and value.isalnum())
                 self.assertEqual(1 if race else 0, state['conflicts'])
-                self.assertEqual(2 if repeat else 1, state['gets']['secret/data/lib/second/accounts/db'])
+                suffix = 'shared' if shared_client else 'accounts/db'
+                self.assertEqual(2 if repeat else 1, state['gets']['secret/data/lib/second/' + suffix])
                 self.assertEqual((2 if repeat else 1) + (1 if race else 0),
-                                 state['gets']['secret/data/lib/first/accounts/db'])
+                                 state['gets']['secret/data/lib/first/' + suffix])
                 self.assertEqual(6 if repeat else 3, len((root / 'network-calls').read_text().splitlines()))
                 self.assertEqual(['10.0.3.0/24', '127.0.0.1/32', '192.0.2.0/24'], state['roles']['id-first']['token_bound_cidrs'])
                 if race:
@@ -213,6 +226,9 @@ class VaultDeliveryRuntimeTests(unittest.TestCase):
 
     def test_generated_password_custody_crosses_delegated_host_and_repeat(self):
         self.exercise(generated=True)
+
+    def test_generated_shared_client_secret_native_apply_and_repeat(self):
+        self.exercise(shared_client=True)
 
     def test_cas_conflict_retains_unrelated_fields_and_retries_once(self):
         self.exercise(race=True, repeat=False)

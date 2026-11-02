@@ -46,6 +46,21 @@ def fixture(root):
 
 
 class ConnectionCallbackTests(unittest.TestCase):
+    def test_generated_shared_secret_uses_the_same_private_identity_in_provider_callback(self):
+        from runtime_secret_identity import generated_password_ref
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            snapshot, jobs, desired = fixture(root)
+            library = snapshot['applicationLibraries']['libraries']['consumer']
+            library['sharedSecretRequirements']['client-token']['source'] = {'kind': 'generated', 'profile': 'client_secret'}
+            for job in jobs:
+                if job['libraryId'] == 'consumer':
+                    job['secretBindings'] = library['instances']['frontend']['secretBindings']
+            result = prepare_script_jobs(root, snapshot, desired, [], jobs)
+            hooks = [script for job in result for script in job['scripts'] if script['id'] == 'api.integrate']
+            self.assertEqual(len(hooks), 1)
+            self.assertEqual(hooks[0]['secretInputs']['consumer_token'], generated_password_ref('project', 'consumer', '', 'client-token'))
+
     def test_integration_hook_uses_declaring_placement_and_selected_consumers(self):
         import json
         from application_selection import execution_scope
