@@ -93185,14 +93185,16 @@ function Group({ title, children }: { title: string; children: ReactNode }) {
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/ApplicationPackageImport.tsx","mode":420,"size":2598,"sha256":"32d36fcc9fd07bd2248c977d8d43d1b8205da23ed02262f22297c78417be70a0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2598}
+@@PORTABLE {"path":"frontend/src/ApplicationPackageImport.tsx","mode":420,"size":3928,"sha256":"4fd1fba1a6f88862bf879e89823c4898131d38d51c829249a46014fe7bc883a4","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3928}
 import { useState } from "react";
 
 export function ApplicationPackageImport({
   disabled,
   choose,
   review,
+  applicationRef,
 }: {
+  applicationRef?: string;
   disabled: boolean;
   choose?: () => Promise<string>;
   review: (
@@ -93215,7 +93217,7 @@ export function ApplicationPackageImport({
         disabled={disabled || !choose}
         onClick={() => setOpen((v) => !v)}
       >
-        Импорт пакета…
+        {applicationRef ? "Импорт пакета приложения…" : "Импорт пакета…"}
       </button>
       {open && (
         <section aria-label="Импорт пакета">
@@ -93235,17 +93237,38 @@ export function ApplicationPackageImport({
             Выбрать папку пакета
           </button>
           <p>{source || "Папка не выбрана"}</p>
-          <label>
-            Тип
-            <select value={kind} onChange={(e) => setKind(e.target.value)}>
-              <option value="application">Приложение</option>
-              <option value="library">Библиотека</option>
-            </select>
-          </label>
-          <label>
-            Имя
-            <input value={name} onChange={(e) => setName(e.target.value)} />
-          </label>
+          {applicationRef ? (
+            <p>
+              Приложение: {applicationRef}. Выберите папку с application.yml.
+            </p>
+          ) : (
+            <>
+              <label>
+                Тип
+                <select value={kind} onChange={(e) => setKind(e.target.value)}>
+                  <option value="application">
+                    Приложения — вся папка application-packages
+                  </option>
+                  <option value="library">Библиотека</option>
+                </select>
+              </label>
+              {kind === "library" && (
+                <label>
+                  Имя
+                  <input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                  />
+                </label>
+              )}
+            </>
+          )}
+          {!applicationRef && kind === "application" && (
+            <p>
+              Выберите папку application-packages. Все вложенные приложения и
+              версии будут импортированы вместе.
+            </p>
+          )}
           <p>Версия будет прочитана из описания пакета.</p>
           <p>
             Только локальный data-only пакет. Публикация после проверки и общего
@@ -93253,9 +93276,23 @@ export function ApplicationPackageImport({
           </p>
           {error && <p role="alert">{error}</p>}
           <button
-            disabled={disabled || !source || !name}
+            disabled={
+              disabled ||
+              !source ||
+              (!applicationRef && kind === "library" && !name)
+            }
             onClick={() =>
-              void review(source, kind, name, "", "").then((ok) => {
+              void review(
+                source,
+                applicationRef ? "application" : kind,
+                applicationRef
+                  ? applicationRef.split("@")[0]
+                  : kind === "application"
+                    ? ""
+                    : name,
+                applicationRef ? (applicationRef.split("@")[1] ?? "") : "",
+                "",
+              ).then((ok) => {
                 if (ok) setOpen(false);
               })
             }
@@ -95395,7 +95432,7 @@ export function inferParameterValue(text: string): string | number | boolean {
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":80592,"sha256":"430bd307cd0e9269eaa9434ede42678cdf88021c6623733ec66c077f53a988ad","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":49935}
+@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":81020,"sha256":"a3f85911e3efdaff983307eaf7dd95979d92fc78691acda8cdc4cdfeb9243ae4","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":49935}
 import { ApplicationProvidedConnections } from "./ApplicationProvidedConnections";
 import {
   ApplicationRuntimeSecretField,
@@ -96261,6 +96298,15 @@ export function ApplicationsPage({
                   {slot && <span> / {slot}</span>}
                 </div>
                 <h2>{slot || selected}</h2>
+                {slot && typeof slotDefinition.applicationRef === "string" && (
+                  <ApplicationPackageImport
+                    key={slotDefinition.applicationRef}
+                    applicationRef={slotDefinition.applicationRef}
+                    disabled={busy || draftActive || dirty}
+                    choose={choosePackage}
+                    review={onImport}
+                  />
+                )}
                 <small>
                   {String(
                     slot
@@ -96663,7 +96709,10 @@ export function ApplicationsPage({
                                 (name) => id + "/" + name,
                               ),
                             )
-                          : []
+                       
+@@END
+@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":81020,"sha256":"a3f85911e3efdaff983307eaf7dd95979d92fc78691acda8cdc4cdfeb9243ae4","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":31085}
+   : []
                       }
                       disabled={busy}
                       onDirtyChange={(v) => markChildDirty(v, "bindings")}
@@ -96673,10 +96722,7 @@ export function ApplicationsPage({
                           deploymentId: selected,
                           entity: { bindings },
                         })
-        
-@@END
-@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":80592,"sha256":"430bd307cd0e9269eaa9434ede42678cdf88021c6623733ec66c077f53a988ad","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":30657}
-              }
+                      }
                     />
                     <ApplicationProvidedConnections
                       secretSession={librarySecretSession}
