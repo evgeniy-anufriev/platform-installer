@@ -26301,7 +26301,7 @@ func writeBrowserError(w http.ResponseWriter, status int, err error) {
 }
 
 @@END
-@@PORTABLE {"path":"internal/desktop/core_preview_diagnostics.go","mode":420,"size":36433,"sha256":"66eee1b80f77cada2603ea8da581e95a742b8e60736559808d9fd7ead2c8936c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":36433}
+@@PORTABLE {"path":"internal/desktop/core_preview_diagnostics.go","mode":420,"size":36615,"sha256":"319f2495fb1a77a554b4d37d65a594f3cf189958e54ffbaee9bd71624bd5e3aa","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":36615}
 package desktop
 
 import (
@@ -26314,6 +26314,7 @@ import (
 
 // Presentation only: Core codes and validation severity remain authoritative.
 var projectFindingMessagesRU = map[string]string{
+	"APPLICATION_GENERATED_PROFILE_INVALID":                   "Неизвестный профиль генерации секрета. Допустимы password и client_secret.",
 	"APPLICATION_LIBRARY_ENDPOINT_INVALID":                    "Некорректная группа точек входа библиотеки: выберите существующую группу в подключениях библиотеки.",
 	"ROLE_DEFAULT_TYPE_INVALID":                               "Тип значения роли по умолчанию не соответствует описанию настройки.",
 	"ROLE_DEFAULT_VALIDATION_INVALID":                         "Значение роли по умолчанию нарушает ограничения настройки.",
@@ -39945,7 +39946,7 @@ func (t OpenSSHTransport) withSudoInput(ctx context.Context, program string, arg
 }
 
 @@END
-@@PORTABLE {"path":"internal/installer/application_library_save.go","mode":420,"size":27434,"sha256":"898b93d5181e4e9ebb8f51efe8d4df4b0d982b80bb2623d73f110d670db5b37f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":27434}
+@@PORTABLE {"path":"internal/installer/application_library_save.go","mode":420,"size":27616,"sha256":"135d3e9b0a9fea76a62f0ed0d21cced9d8af4a979333be8d1fe38bc81f459a6a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":27616}
 package installer
 
 import (
@@ -40287,6 +40288,12 @@ func validApplicationCredential(raw any, allowLiteral bool) bool {
 	required := []string{"kind"}
 	switch source["kind"] {
 	case "generated":
+		if profile, present := source["profile"]; present {
+			if profile != "password" && profile != "client_secret" {
+				return false
+			}
+			required = append(required, "profile")
+		}
 	case "runtime_secret_ref":
 		required = append(required, "ref")
 	case "vault_ref":
@@ -75525,7 +75532,7 @@ class ActionModule(ActionBase):
             return dict(failed=True, msg='APPLICATION_VAULT_ADMIN_CREDENTIAL_INVALID')
 
 @@END
-@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/plugins/action/application_document.py","mode":420,"size":3819,"sha256":"1c88676b2f480e35f68b034bd49b912508bdc76f8bb932e65dea316ab472e66b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3819}
+@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/plugins/action/application_document.py","mode":420,"size":4405,"sha256":"7147535a86479c43f382a2e76b40bb118d368ac71b16beeef4fe87424704d481","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4405}
 """Resolve one managed document through existing private inputs and builtin uri."""
 import re
 import secrets
@@ -75569,7 +75576,12 @@ class ActionModule(ActionBase):
                         value = stream.read(4097)
                 elif source['kind'] == 'generated':
                     ref = descriptor['passwordRef']
-                    if field != 'password' or not re.fullmatch(r'pla-generated-[0-9a-f]{40}', ref):
+                    profile = source.get('profile', 'password')
+                    if profile not in ('password', 'client_secret'):
+                        return dict(failed=True, msg='APPLICATION_GENERATED_PROFILE_INVALID')
+                    shared_field = (document.get('document', '').endswith('/shared') and
+                                    re.fullmatch(r'[A-Za-z0-9_-][A-Za-z0-9_.-]{0,127}', field))
+                    if (field != 'password' and not shared_field) or not re.fullmatch(r'pla-generated-[0-9a-f]{40}', ref):
                         raise ValueError()
                     protected_secret_files({}, [], args['secret_root'])
                     current = args['current']
@@ -75590,7 +75602,8 @@ class ActionModule(ActionBase):
                         with open(args['secret_files'][ref], encoding='utf-8') as stream:
                             value = stream.read(4097)
                     if value is None:
-                        value = generated_password()
+                        value = (''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(32))
+                                 if profile == 'client_secret' else generated_password())
                     generated[ref] = value
                 else:
                     raise ValueError()

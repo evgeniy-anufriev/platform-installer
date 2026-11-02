@@ -24291,7 +24291,7 @@ def validate_agent(content, runtime):
     return True
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_scripts.py","mode":420,"size":13305,"sha256":"6e5f3ac352fc8dba64f86b4bd01a27e29b50db30d9d94837753efac93615515a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":13305}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_scripts.py","mode":420,"size":13645,"sha256":"0f18ff5bae7429e631d830db29df88e780d84c71eff4061b860c66f9d66bada8","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":13645}
 """Resolve versioned package scripts from the existing application projection."""
 import json
 import hashlib
@@ -24397,12 +24397,16 @@ def _argument(argument, job, library, hosts, desired, provider_library=None, sna
 
 
 def _secret_reference(source, declaration, job):
-    if source and source.get('kind') == 'generated' and declaration.get('valueFrom') == 'secret_binding':
+    if source and source.get('kind') == 'generated' and declaration.get('valueFrom') in ('library_secret', 'secret_binding'):
         try:
             from .runtime_secret_identity import generated_password_ref
         except ImportError:
             from runtime_secret_identity import generated_password_ref
+        if declaration.get('valueFrom') == 'library_secret':
+            return generated_password_ref(job['projectId'], job['libraryId'], '', declaration['name'])
         binding = job['secretBindings'][declaration['binding']]['source']
+        if 'library_secret' in binding:
+            return generated_password_ref(job['projectId'], job['libraryId'], '', binding['library_secret'])
         return generated_password_ref(job['projectId'], job['libraryId'], job['instanceId'], binding['account'])
     return script_secret_reference(source)
 
@@ -24499,7 +24503,7 @@ def prepare_script_jobs(root, snapshot, desired, rows, jobs, phase=None):
                 value = script_secret_source(source, library, instance, provider)
                 if value is None and source.get('optional', False):
                     continue
-                secret_inputs[key] = script_secret_reference(value)
+                secret_inputs[key] = _secret_reference(value, source, job)
                 if source.get('valueFrom') == 'library_secret':
                     shared_inputs.append(source['name'])
                 elif source.get('valueFrom') == 'secret_binding':
@@ -24595,7 +24599,7 @@ def integration_consumers(snapshot, provider_library_id, desired=None):
     return result
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_vault.py","mode":420,"size":14555,"sha256":"13e57f815f12d6da6821845105ed835ee72be2957a467e2ec3093e1ed786a392","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":14555}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_vault.py","mode":420,"size":15014,"sha256":"794963f913d6b3990aea766b4c99e40eef39bcb7eef342c167326c6b3ec397bc","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":15014}
 """Target-free Vault jobs; no values, network access or Installer lifecycle."""
 import hashlib
 import json
@@ -24721,7 +24725,7 @@ def project_vault(rows, prepared):
                         or not matches[0].get('storePasswordSecretRef')):
                     raise ValueError('APPLICATION_VAULT_PKI_CREDENTIAL_AMBIGUOUS')
                 shared[name] = dict(source=dict(kind='runtime_secret_ref', ref=matches[0]['storePasswordSecretRef']), pkiPlans=matches)
-            elif source['kind'] in {'runtime_secret_ref', 'vault_ref'}:
+            elif source['kind'] in {'runtime_secret_ref', 'vault_ref', 'generated'}:
                 shared[name] = dict(source=source)
             else:
                 raise ValueError('APPLICATION_VAULT_SOURCE_DEFERRED')
@@ -24740,6 +24744,12 @@ def project_vault(rows, prepared):
             if location and not any(all(entry.get(key) == value for key, value in location.items()) for entry in source_jobs):
                 source_jobs.append(location)
             shared_locations[name] = location or dict(mount=mount, document=shared_doc, field=segment(name))
+            if value['source']['kind'] == 'generated':
+                # Empty instance is reserved for library-shared identities.
+                password_ref = generated_password_ref(project, library_id, '', name)
+                value['passwordRef'] = password_ref
+                source_jobs.append(dict(providerId=ref, mount=mount, document=shared_doc,
+                                        field=segment(name), passwordRef=password_ref))
         writable_shared = {k: v for k, v in shared.items() if v['source']['kind'] != 'vault_ref'}
         if writable_shared:
             documents.append(dict(mount=mount, document=shared_doc, fields=writable_shared))
@@ -36214,7 +36224,7 @@ platform_name_prefix: ''
       become: false
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/resolve_application_libraries/tasks/instance.yml","mode":420,"size":16875,"sha256":"f4355482ca94275ac8ac5ee601f2a18bea311e8c1f4c97963d3e4ff66a749f51","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":16875}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/resolve_application_libraries/tasks/instance.yml","mode":420,"size":16854,"sha256":"d4f38d3b4271e60b1388d7ea8df5307b4419fc73efab929ca58f14649243cdb4","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":16854}
 ---
 - name: Расчёт настроек с безопасной диагностикой отказа
   block:
@@ -36420,7 +36430,7 @@ platform_name_prefix: ''
             'resources': _application_resources,
             'resourceDefaults': _application_resource_defaults,
             'sharedSecrets': _library_package.platform_library_definition.shared_secrets | default({}) |
-              combine(application_job.deployment.shared_secrets | default({}), recursive=true, list_merge='replace'),
+              combine(application_job.deployment.shared_secrets | default({}), recursive=false),
             'connectionDefaults': _library_package.platform_library_definition.connection_defaults | default({}) |
               combine(application_job.deployment.connection_defaults | default({}), recursive=true, list_merge='replace'),
             'connections': _application_connections,
@@ -45071,12 +45081,13 @@ def required(manifest):
                for item in manifest.get("operations", []))
 
 @@END
-@@PORTABLE {"path":"ansible-core/tools/execution_task_error.py","mode":420,"size":13063,"sha256":"eff85a83d78e23dacd07e754871595341e00135ab94b6c2a3c319f6869e18801","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":13063}
+@@PORTABLE {"path":"ansible-core/tools/execution_task_error.py","mode":420,"size":13108,"sha256":"4e907cc5c7e3edbb58fc403a5de7b659b12cc08fba5c5afe83ac17b51724f828","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":13108}
 """Closed diagnostic vocabulary: arbitrary Ansible text never leaves this module."""
 
 
 # Fixed Core vocabulary only; never accept arbitrary uppercase output as a code.
 CORE_DIAGNOSTIC_CODES = frozenset(('PROJECT_SNAPSHOT_INPUT_INVALID',
+    'APPLICATION_GENERATED_PROFILE_INVALID',
     'APPLICATION_SCRIPT_EXECUTION_FAILED',
     'APPLICATION_KAFKA_SCRAM_READ_FAILED',
     'APPLICATION_VAULT_DOCUMENT_WRITE_FAILED',
@@ -48938,7 +48949,7 @@ libraryExecutionPriorities:
 }
 
 @@END
-@@PORTABLE {"path":"contracts/application-libraries/v1alpha1/settings.schema.json","mode":420,"size":19942,"sha256":"9ab14b0b9821d0637a3fbed1f4184b7ab502b7f1a711ea61697ca8e38d269462","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":19942}
+@@PORTABLE {"path":"contracts/application-libraries/v1alpha1/settings.schema.json","mode":420,"size":20066,"sha256":"c8a6cdb795f2767c19e5b77db498adf8808ff49b43a43d691afc6637d8036555","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":20066}
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://platform-installer.local/contracts/application-libraries/v1alpha1/settings.schema.json",
@@ -48962,6 +48973,10 @@ libraryExecutionPriorities:
           "properties": {
             "kind": {
               "const": "generated"
+            },
+            "profile": {
+              "type": "string",
+              "enum": ["password", "client_secret"]
             }
           },
           "required": [
@@ -81244,7 +81259,7 @@ exec /bin/sh ./application-packages/keycloak/1.0.0/assets/scripts/integration.sh
 }
 
 @@END
-@@PORTABLE {"path":"examples/szi/library-packages/szi/1.0.0/roles/library_szi/defaults/main.yml","mode":420,"size":2872,"sha256":"8e3f8e81f4888424ed50542ebc2f0c1012c5feee5e0ab9a568ea92cb27a323b0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2872}
+@@PORTABLE {"path":"examples/szi/library-packages/szi/1.0.0/roles/library_szi/defaults/main.yml","mode":420,"size":2854,"sha256":"606c97fda4b058175c5f9f37f8a9affa709c43c2185bf3c8ad4c65d3727b54b3","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2854}
 platform_library_definition:
   name: szi
   version: 1.0.0
@@ -81284,7 +81299,7 @@ platform_library_definition:
           name: szi_audit
   shared_secrets:
     grant_access_client_secret:
-      source: {kind: runtime_secret_ref, ref: grant-access-client-secret}
+      source: {kind: generated, profile: client_secret}
     java_keystore_password:
       source:
         binding: application-pki
