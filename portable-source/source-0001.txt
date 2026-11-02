@@ -95395,7 +95395,7 @@ export function inferParameterValue(text: string): string | number | boolean {
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":80380,"sha256":"faafe587273d139cabd2835d75800a547ab000e4260f470f77f149daf1a6faca","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":49935}
+@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":80592,"sha256":"430bd307cd0e9269eaa9434ede42678cdf88021c6623733ec66c077f53a988ad","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":49935}
 import { ApplicationProvidedConnections } from "./ApplicationProvidedConnections";
 import {
   ApplicationRuntimeSecretField,
@@ -95644,6 +95644,10 @@ export function ApplicationsPage({
       : objectValue(value);
   const recipe = objectValue(definition.slots);
   const bindingHints: Record<string, string> = {};
+  for (const connection of Object.values(objectValue(definition.connections))) {
+    const name = objectValue(connection).library_binding;
+    if (typeof name === "string") bindingHints[name] = "deployment";
+  }
   for (const raw of Object.values(recipe)) {
     const def = packageDefinition(
       "application",
@@ -96669,14 +96673,14 @@ export function ApplicationsPage({
                           deploymentId: selected,
                           entity: { bindings },
                         })
-                      }
+        
+@@END
+@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":80592,"sha256":"430bd307cd0e9269eaa9434ede42678cdf88021c6623733ec66c077f53a988ad","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":30657}
+              }
                     />
                     <ApplicationProvidedConnections
                       secretSession={librarySecretSession}
-                      definitions={objectValue(definition.prov
-@@END
-@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":80380,"sha256":"faafe587273d139cabd2835d75800a547ab000e4260f470f77f149daf1a6faca","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":30445}
-ided_connections)}
+                      definitions={objectValue(definition.provided_connections)}
                       value={objectValue(library.provided_connections)}
                       resolved={
                         freshSecrets
