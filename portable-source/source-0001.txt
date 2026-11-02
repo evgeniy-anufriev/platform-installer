@@ -87419,7 +87419,7 @@ catalogLock:
 })();
 
 @@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":134422,"sha256":"6b01b32f3a902e5d92e284be10c6f90f908f9f4710478637556cc61959a2141a","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49805}
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":134651,"sha256":"27fc0f692067f2605fe327141009cea2fb332521ae837051f537c5d50d3c96f1","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49805}
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   EditResult,
@@ -88182,6 +88182,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
 
   const clearDraft = () => {
     setImportReview(false);
+    setImportCompleted(false);
     setEdit(null);
     setEditError(null);
     setSessionId("");
@@ -88735,11 +88736,11 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       const candidates = [...(pending.packages || [])];
       let cursor = pending.nextCursor;
       const seen = new Set<string>();
-      for (let page = 1; cursor && page < 128; page++) {
-        if (seen.has(cu
+      for (let page = 1; cursor && page < 128; pa
 @@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":134422,"sha256":"6b01b32f3a902e5d92e284be10c6f90f908f9f4710478637556cc61959a2141a","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49750}
-rsor)) break;
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":134651,"sha256":"27fc0f692067f2605fe327141009cea2fb332521ae837051f537c5d50d3c96f1","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49750}
+ge++) {
+        if (seen.has(cursor)) break;
         seen.add(cursor);
         let next: SecretOutputPackagesOperation;
         try {
@@ -89195,6 +89196,7 @@ rsor)) break;
     }
   };
   const [importReview, setImportReview] = useState(false);
+  const [importCompleted, setImportCompleted] = useState(false);
   const reviewPackage = async (
     source: string,
     kind: string,
@@ -89202,6 +89204,7 @@ rsor)) break;
     version: string,
     digest: string,
   ) => {
+    setImportCompleted(false);
     if (sessionId || !api.reviewApplicationPackageImport) {
       setEditError({
         code: "EDIT_SESSION_ACTIVE",
@@ -89296,6 +89299,7 @@ rsor)) break;
         setEndpointPreview(undefined);
         setVerifiedPKI(undefined);
         clearDraft();
+        if (importReview) setImportCompleted(true);
         return;
       }
       if (next.status === "COMMITTED_REFRESH_FAILED") {
@@ -90091,14 +90095,14 @@ rsor)) break;
                 setSelectedServiceDeployment(deploymentId);
                 setSelectedServiceMember("");
                 setFocusServiceMemberSettings(false);
-                setServicesView("detail");
+      
+@@END
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":134651,"sha256":"27fc0f692067f2605fe327141009cea2fb332521ae837051f537c5d50d3c96f1","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":35096}
+          setServicesView("detail");
                 setPage("services");
               }}
               onConfigureMember={(deploymentId, memberId) => {
-                setSelect
-@@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":134422,"sha256":"6b01b32f3a902e5d92e284be10c6f90f908f9f4710478637556cc61959a2141a","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":34867}
-edTopologyDeployment(deploymentId);
+                setSelectedTopologyDeployment(deploymentId);
                 setSelectedServiceDeployment(deploymentId);
                 setSelectedServiceMember(memberId);
                 setFocusServiceMemberSettings(true);
@@ -90140,6 +90144,7 @@ edTopologyDeployment(deploymentId);
                 onImport={reviewPackage}
                 draftActive={!!sessionId}
                 backendError={editError?.message}
+                importCompleted={importCompleted}
                 loadSecrets={api.getRuntimeSecretDescriptors}
                 executionContextKey={JSON.stringify([
                   executionNode?.selectionKind,
@@ -95390,7 +95395,7 @@ export function inferParameterValue(text: string): string | number | boolean {
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":79941,"sha256":"0b8404a616ee72e5c7974607127a227c25e34c37ee0c2118e4d3a49f62e743d6","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":49807}
+@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":80380,"sha256":"faafe587273d139cabd2835d75800a547ab000e4260f470f77f149daf1a6faca","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":49935}
 import { ApplicationProvidedConnections } from "./ApplicationProvidedConnections";
 import {
   ApplicationRuntimeSecretField,
@@ -95445,6 +95450,7 @@ export function ApplicationsPage({
   onImport,
   draftActive,
   backendError,
+  importCompleted = false,
 }: {
   choosePackage?: () => Promise<string>;
   onImport: (
@@ -95456,6 +95462,7 @@ export function ApplicationsPage({
   ) => Promise<boolean>;
   draftActive: boolean;
   backendError?: string;
+  importCompleted?: boolean;
   onProviderSecrets?: (deploymentId: string) => void;
   loadSecrets?: () => Promise<RuntimeSecretDescriptorOperation>;
   saveSecrets?: (input: RuntimeSecretValuesInput) => Promise<void>;
@@ -96053,6 +96060,13 @@ export function ApplicationsPage({
         </button>
       </header>
       {(error || backendError) && <p role="alert">{error || backendError}</p>}
+      {importCompleted && (
+        <p role="status">
+          Пакет успешно импортирован и доступен для выбора при добавлении
+          библиотеки или приложения. Чтобы добавить библиотеку, нажмите «Добавить
+          библиотеку».
+        </p>
+      )}
       <div className="applications-layout">
         <aside className="application-list">
           <label>
@@ -96659,17 +96673,17 @@ export function ApplicationsPage({
                     />
                     <ApplicationProvidedConnections
                       secretSession={librarySecretSession}
-                      definitions={objectValue(definition.provided_connections)}
+                      definitions={objectValue(definition.prov
+@@END
+@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":80380,"sha256":"faafe587273d139cabd2835d75800a547ab000e4260f470f77f149daf1a6faca","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":30445}
+ided_connections)}
                       value={objectValue(library.provided_connections)}
                       resolved={
                         freshSecrets
                           ? objectValue(resolved?.providedConnections)
                           : {}
                       }
-                      di
-@@END
-@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":79941,"sha256":"0b8404a616ee72e5c7974607127a227c25e34c37ee0c2118e4d3a49f62e743d6","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":30134}
-sabled={busy}
+                      disabled={busy}
                       onDirtyChange={(v, k) =>
                         markChildDirty(v, "provided:" + k)
                       }
