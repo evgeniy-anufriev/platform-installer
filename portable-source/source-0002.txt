@@ -55196,7 +55196,8 @@ for host, variables in sorted(hosts.items()):
 PY
 
 @@END
-@@PORTABLE {"path":"scripts/cmd_journals.sh","mode":420,"size":2601,"sha256":"2e367a78a4a91ce1680131a5762c07cd29b1a32abd4ff85983aff691a09a15d7","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2601}
+@@PORTABLE {"path":"scripts/cmd_journals.sh","mode":420,"size":2730,"sha256":"9853f72572ed01386adf0c53ef7235b77f1f33d4ebe3e7e79f453977baa832ba","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2730}
+#VERIFY PROJECT
 sudo python3 - <<'PY'
 import json
 import os
@@ -55268,6 +55269,7 @@ raise SystemExit(
     "и убедитесь, что команда выполняется на выбранном узле выполнения."
 )
 PY
+#===============================================================================================================
 
 @@END
 @@PORTABLE {"path":"scripts/npm_offline.py","mode":420,"size":17225,"sha256":"bceb887c3a65c76fdfe3c7a107d278b112b0722ad5764e0bff586cd5e3ffbafb","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":17225}
