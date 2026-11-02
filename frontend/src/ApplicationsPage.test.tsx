@@ -1121,7 +1121,7 @@ it("offers declared SSO without a Core snapshot and saves the library endpoint s
   ).provided_connections = { sso: { provider: "keycloak" } };
   objectValue(
     view.applicationPackages["library:sdku@1.0.0"].definition,
-  ).connections = { identity: { library_binding: "sso" } };
+  ).connections = { sso: { library_binding: "sso" } };
   view.endpointGroups = {
     apps: {
       endpointGroupId: "apps",
@@ -1133,8 +1133,12 @@ it("offers declared SSO without a Core snapshot and saves the library endpoint s
   render(<Harness calls={calls} view={view} />);
   await userEvent.click(screen.getByRole("button", { name: /^sdku/ }));
   await userEvent.click(screen.getByRole("button", { name: "Подключения" }));
-  await userEvent.selectOptions(
-    screen.getByLabelText("Тип подключения sso"),
+  expect(screen.getByLabelText("Тип подключения sso")).toHaveProperty(
+    "disabled",
+    true,
+  );
+  expect(screen.getByLabelText("Тип подключения sso")).toHaveProperty(
+    "value",
     "providedConnectionRef",
   );
   expect(screen.getByRole("option", { name: "sdku/sso" })).toBeTruthy();

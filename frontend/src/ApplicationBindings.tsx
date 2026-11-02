@@ -21,12 +21,19 @@ export function connectionCandidates(
   };
   const result: Record<
     string,
-    { deploymentRefs: string[]; providedConnectionRefs: string[] }
+    {
+      deploymentRefs: string[];
+      providedConnectionRefs: string[];
+      kind?: string;
+    }
   > = {};
   for (const [binding, names] of Object.entries(bindings)) {
     const types = names.map((name) => roleTypes[name]).filter(Boolean);
     if (!types.length) continue;
     result[binding] = {
+      kind: types.every((type) => type === "application")
+        ? "providedConnectionRef"
+        : "deploymentRef",
       deploymentRefs: Object.keys(deploymentTypes).filter((id) =>
         types.every((type) => deploymentTypes[id] === type),
       ),
@@ -59,7 +66,11 @@ export function ApplicationBindings({
   onSaveEndpointGroup?: (ref: string) => Promise<boolean>;
   candidates?: Record<
     string,
-    { deploymentRefs: string[]; providedConnectionRefs: string[] }
+    {
+      deploymentRefs: string[];
+      providedConnectionRefs: string[];
+      kind?: string;
+    }
   >;
   vaultBinding?: string;
   deploymentTypes?: Record<string, string>;
@@ -129,7 +140,12 @@ export function ApplicationBindings({
             )}
             {names.map((key) => (
               <BindingRow
-                key={key + JSON.stringify(value[key])}
+                key={
+                  key +
+                  hints[key] +
+                  candidates?.[key]?.kind +
+                  JSON.stringify(value[key])
+                }
                 name={key}
                 isVault={
                   deploymentTypes[
@@ -141,7 +157,11 @@ export function ApplicationBindings({
                   onSelectVault ? () => onSelectVault(key) : undefined
                 }
                 value={objectValue(value[key])}
-                hint={hints[key]}
+                hint={
+                  hints[key] === "pki"
+                    ? "pki"
+                    : (candidates?.[key]?.kind ?? hints[key])
+                }
                 deployments={candidates?.[key]?.deploymentRefs ?? deployments}
                 profiles={profiles}
                 providedConnections={
@@ -246,26 +266,29 @@ function BindingRow({
   onRemove: () => Promise<boolean>;
   onDirtyChange: (dirty: boolean) => void;
 }) {
-  const [kind, setKind] = useState(
+  const savedKind = Object.hasOwn(value, "providedConnectionRef")
+    ? "providedConnectionRef"
+    : Object.hasOwn(value, "profileRef")
+      ? "profileRef"
+      : Object.hasOwn(value, "deploymentRef")
+        ? "deploymentRef"
+        : undefined;
+  const kind =
     hint === "endpoint"
       ? "endpointGroupRef"
-      : Object.hasOwn(value, "providedConnectionRef")
-        ? "providedConnectionRef"
-        : Object.hasOwn(value, "profileRef") || hint === "pki"
-          ? "profileRef"
-          : "deploymentRef",
-  );
+      : hint === "pki"
+        ? "profileRef"
+        : hint === "providedConnectionRef"
+          ? "providedConnectionRef"
+          : hint === "deployment" || hint === "deploymentRef"
+            ? "deploymentRef"
+            : (savedKind ?? "deploymentRef");
   const [ref, setRef] = useState(
-    value.providedConnectionRef
+    kind === "providedConnectionRef" && value.providedConnectionRef
       ? String(objectValue(value.providedConnectionRef).libraryId) +
           "/" +
           String(objectValue(value.providedConnectionRef).name)
-      : String(
-          value.endpointGroupRef ??
-            value.profileRef ??
-            value.deploymentRef ??
-            "",
-        ),
+      : String(value[kind] ?? ""),
   );
   const [dirty, setDirty] = useState(false);
   const candidates =
@@ -285,29 +308,22 @@ function BindingRow({
         )}
       </td>
       <td>
-        <select
-          aria-label={"Тип подключения " + name}
-          disabled={disabled || hint === "endpoint"}
-          value={kind}
-          onChange={(e) => {
-            setKind(e.target.value);
-            setRef("");
-            setDirty(true);
-            onDirtyChange(true);
-          }}
-        >
-          {hint === "endpoint" ? (
-            <option value="endpointGroupRef">Группа точек входа</option>
-          ) : (
-            <>
-              <option value="deploymentRef">Сервис</option>
-              <option value="profileRef">TLS-профиль</option>
-              <option value="providedConnectionRef">
-                Подключение приложения
-              </option>
-            </>
-          )}
+        <select aria-label={"Тип подключения " + name} disabled value={kind}>
+          <option value={kind}>
+            {kind === "endpointGroupRef"
+              ? "Группа точек входа"
+              : kind === "profileRef"
+                ? "TLS-профиль"
+                : kind === "providedConnectionRef"
+                  ? "Подключение приложения"
+                  : "Сервис"}
+          </option>
         </select>
+        {savedKind && savedKind !== kind && (
+          <small>
+            Сохранённая привязка имеет другой тип. Выберите подключение заново.
+          </small>
+        )}
       </td>
       <td>
         <select

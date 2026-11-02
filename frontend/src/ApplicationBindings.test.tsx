@@ -67,7 +67,11 @@ describe("library connections table", () => {
           },
           cache: { deploymentRefs: ["old-redis"], providedConnectionRefs: [] },
           secrets: { deploymentRefs: ["vault-a"], providedConnectionRefs: [] },
-          sso: { deploymentRefs: [], providedConnectionRefs: ["szi/sso"] },
+          sso: {
+            kind: "providedConnectionRef",
+            deploymentRefs: [],
+            providedConnectionRefs: ["szi/sso"],
+          },
         }}
         disabled={false}
         onSave={save}
@@ -84,10 +88,9 @@ describe("library connections table", () => {
     ).toBeTruthy();
     expect(options("cache")).toEqual(["", "old-redis"]);
     expect(options("secrets")).toEqual(["", "vault-a"]);
-    expect(options("sso")).toEqual([""]);
-    await userEvent.selectOptions(
-      screen.getByLabelText("Тип подключения sso"),
-      "providedConnectionRef",
+    expect(screen.getByLabelText("Тип подключения sso")).toHaveProperty(
+      "disabled",
+      true,
     );
     expect(options("sso")).toEqual(["", "szi/sso"]);
     expect(save).not.toHaveBeenCalled();
@@ -179,22 +182,41 @@ describe("library connections table", () => {
     });
     expect(dirty).toHaveBeenLastCalledWith(false);
   });
-  it("clears the selected reference when switching reference kind", async () => {
+  it("locks all reference kinds while retaining saved bindings and target selection", async () => {
     const { user, save } = setup();
-    await user.selectOptions(
-      screen.getByLabelText("Тип подключения pg"),
+    expect(screen.getByLabelText("Тип подключения pg")).toHaveProperty(
+      "disabled",
+      true,
+    );
+    expect(screen.getByLabelText("Тип подключения pg")).toHaveProperty(
+      "value",
+      "deploymentRef",
+    );
+    expect(screen.getByLabelText("Тип подключения tls")).toHaveProperty(
+      "disabled",
+      true,
+    );
+    expect(screen.getByLabelText("Тип подключения tls")).toHaveProperty(
+      "value",
       "profileRef",
     );
-    expect(
-      (screen.getByLabelText("Подключение pg") as HTMLSelectElement).value,
-    ).toBe("");
-    await user.selectOptions(screen.getByLabelText("Подключение pg"), "client");
+    expect(screen.getByLabelText("Подключение pg")).toHaveProperty(
+      "value",
+      "pg1",
+    );
+    expect(save).not.toHaveBeenCalled();
+    await user.selectOptions(
+      screen.getByLabelText("Подключение tls"),
+      "client",
+    );
     await user.click(
-      within(screen.getByRole("row", { name: /^pg / })).getByText("В черновик"),
+      within(screen.getByRole("row", { name: /^tls / })).getByText(
+        "В черновик",
+      ),
     );
     expect(save).toHaveBeenCalledWith({
-      pg: { profileRef: "client" },
-      tls: { profileRef: "server" },
+      pg: { deploymentRef: "pg1" },
+      tls: { profileRef: "client" },
     });
   });
   it("resets only the selected binding", async () => {
@@ -213,3 +235,49 @@ describe("library connections table", () => {
     expect(dirty).toHaveBeenLastCalledWith(true);
   });
 });
+
+it.each([{ refs: [] }, { refs: ["szi/sso"] }])(
+  "keeps the declared application kind even without candidates and preserves a mismatched saved binding until staging: %j",
+  async ({ refs }) => {
+    const save = vi.fn(async () => true);
+    render(
+      <ApplicationBindings
+        value={{ identity: { deploymentRef: "old-service" } }}
+        hints={{ identity: "deployment" }}
+        candidates={connectionCandidates(
+          { identity: ["sso"] },
+          { "old-service": "docker" },
+          refs,
+        )}
+        deployments={["old-service"]}
+        profiles={[]}
+        providedConnections={refs}
+        disabled={false}
+        onSave={save}
+        onDirtyChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByLabelText("Тип подключения identity")).toHaveProperty(
+      "value",
+      "providedConnectionRef",
+    );
+    expect(screen.getByLabelText("Тип подключения identity")).toHaveProperty(
+      "disabled",
+      true,
+    );
+    expect(
+      screen.getByText(/Сохранённая привязка имеет другой тип/),
+    ).toBeTruthy();
+    expect(save).not.toHaveBeenCalled();
+    if (refs.length) {
+      await userEvent.selectOptions(
+        screen.getByLabelText("Подключение identity"),
+        "szi/sso",
+      );
+      await userEvent.click(screen.getByRole("button", { name: "В черновик" }));
+      expect(save).toHaveBeenCalledWith({
+        identity: { providedConnectionRef: { libraryId: "szi", name: "sso" } },
+      });
+    }
+  },
+);

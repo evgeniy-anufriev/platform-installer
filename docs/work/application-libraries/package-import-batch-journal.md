@@ -188,3 +188,27 @@ Replacement review screenshot inspected; this is not blanket visual or install
 acceptance. Existing Wails dev runtime:ready/null-nodes warnings were observed;
 requested flows completed. No Approve/Start or service mutation, artifact
 acquisition or runtime replacement occurred. Owned Wails/Vite processes stopped.
+
+## Fixed connection kinds — 2026-11-02
+
+Owner requested locking the connection-type control for every library binding,
+as already done for the library endpoint. The type select now contains only its
+current fixed kind and is disabled; the referenced service/profile/export select
+remains editable. New bindings use the existing connection-role presentation
+filter and PKI hint, so SSO starts as providedConnectionRef even when no matching
+export exists yet. Undeclared saved bindings retain their stored kind. A declared
+kind mismatch is shown explicitly; the old desired binding is not rewritten
+until the operator selects and stages a compatible reference. Save/reset paths
+and Core compatibility rules are unchanged.
+
+Validation: React bindings/page/App141 PASS, lint/TypeScript/Vite and Windows
+Wails build PASS. Tests cover all disabled type controls, continued target edits,
+SSO without candidates, aliased binding names, incompatible saved kinds and no
+implicit write. Real React/Wails in project-2026110200000014 verified all six
+kinds (endpoint, database, cache, SSO, secrets, PKI) disabled and targets editable;
+SSO and TLS references saved through existing handlers at
+sha256:bce323b8a5a1ef47ba324b936b79809278473f12e0676126424d853e488e3c5e.
+Safe evidence: `.runtime/qa/import-reproduce/locked-connection-kinds/`.
+The table screenshot was inspected. No Core/source schema, runtime bundle,
+service, Approve/Start changed; existing development IPC warnings observed.
+Owned Wails/Vite processes stopped.

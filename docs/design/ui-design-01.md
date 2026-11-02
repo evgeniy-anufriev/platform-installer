@@ -1219,3 +1219,10 @@ Connections tab adds one endpoint group selection inherited through Core/Ansible
 explicit application overrides retain priority. These extend the earlier static
 mockup, whose generic application panel does not show these controls. No duplicate
 project verification or execution actions are added.
+
+Owner interaction refinement (2026-11-02): library binding type controls are
+fixed/disabled like the endpoint row. Existing role-based presentation filtering
+and PKI declarations choose new-row kinds, with SSO shown as an application
+connection. Users edit the reference, not its kind. Incompatible saved kinds are
+reported locally and remain authored until explicitly replaced; Core still
+validates compatibility. This refines the earlier generic connection mockup.
