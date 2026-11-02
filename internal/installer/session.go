@@ -118,7 +118,7 @@ func (s *EditSessionStore) Append(sessionID string, command EditCommand, backend
 	}
 	command.APIVersion = EditCommandAPIVersionV10
 	if applicationEditOperation(command.Operation) {
-		command.APIVersion = EditCommandAPIVersionV11
+		command.APIVersion = applicationCommandVersion(command.Operation)
 	}
 	command.Kind = "EditCommand"
 	command.BaseProjectRevision = state.public.BaseProjectRevision
@@ -184,7 +184,7 @@ func (s *EditSessionStore) amendCommand(sessionID string, index int, expected Ed
 	normalize := func(command *EditCommand) {
 		command.APIVersion = EditCommandAPIVersionV10
 		if application {
-			command.APIVersion = EditCommandAPIVersionV11
+			command.APIVersion = applicationCommandVersion(command.Operation)
 		}
 		command.Kind = "EditCommand"
 		command.BaseProjectRevision = state.public.BaseProjectRevision
@@ -435,6 +435,9 @@ func (s *EditSessionStore) ConsumePlan(sessionID, planID string) bool {
 }
 
 func applicationCommandFamily(operation string) string {
+	if libraryEndpointOperation(operation) {
+		return "library-endpoint"
+	}
 	switch operation {
 	case "SetApplicationLibraryOverride", "RemoveApplicationLibraryOverride":
 		return "override"

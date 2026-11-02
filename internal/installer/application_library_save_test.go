@@ -499,3 +499,91 @@ func TestB2SlotCredentialShape(t *testing.T) {
 		}
 	}
 }
+
+func TestApplicationLibraryDeleteWithPlacementsIsAtomicAndKeepsPackages(t *testing.T) {
+	root, b, revision := b2Project(t)
+	create := b2Command(revision, "CreateApplicationLibraryDeployment")
+	create.Entity = map[string]any{"libraryRef": "sdku@1.0.0", "runtimeRef": "kafka-main", "applications": map[string]any{"gateway": map[string]any{}}}
+	place := b2Command(revision, "SetApplicationLibraryPlacement")
+	place.HostID, place.Placement = "node1", map[string]any{"overrides": map[string]any{}}
+	result := commitStructuralForTest(t, b, root, projectlifecycle.ClassificationManaged, revision, []EditCommand{create, place})
+	writeExportFixture(t, root, "library-packages/sdku/1.0.0/library.yml", "apiVersion: platform.installer/application-package/v1alpha1\nkind: LibraryPackage\nname: sdku\nversion: 1.0.0\nfiles: [roles/library_sdku/defaults/main.yml]\n")
+	writeExportFixture(t, root, "library-packages/sdku/1.0.0/roles/library_sdku/defaults/main.yml", "platform_library_definition:\n  name: sdku\n  version: 1.0.0\n  slots: {}\n")
+	revision, _ = ProjectRevision(root)
+	remove := b2Command(revision, "DeleteApplicationLibraryWithPlacements")
+	if validateApplicationEdit(remove) == nil {
+		t.Fatal("v11 accepted new deletion semantics")
+	}
+	remove.APIVersion = EditCommandAPIVersionV12
+	if err := validateApplicationEdit(remove); err != nil {
+		t.Fatalf("direct delete validation: %v command=%+v", err, remove)
+	}
+	result = commitStructuralForTest(t, b, root, projectlifecycle.ClassificationManaged, revision, []EditCommand{remove})
+	view, err := ReadManagedProjectView(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view.ApplicationLibraries["sdku"] != nil || view.ApplicationPlacements["node1"]["sdku"] != nil {
+		t.Fatal("library or placement retained")
+	}
+	if string(mustRead(t, filepath.Join(root, "library-packages/sdku/1.0.0/roles/library_sdku/defaults/main.yml"))) != "platform_library_definition:\n  name: sdku\n  version: 1.0.0\n  slots: {}\n" {
+		t.Fatal("package changed")
+	}
+	if result.NewProjectRevision == revision {
+		t.Fatal("deletion did not save")
+	}
+}
+
+func TestApplicationLibraryEndpointSelectionSaveClearAndReferences(t *testing.T) {
+	root, b, revision := b2Project(t)
+	create := b2Command(revision, "CreateApplicationLibraryDeployment")
+	create.Entity = map[string]any{"libraryRef": "sdku@1.0.0", "runtimeRef": "kafka-main"}
+	result := commitStructuralForTest(t, b, root, projectlifecycle.ClassificationManaged, revision, []EditCommand{create})
+	group := f2Command(result.NewProjectRevision, "CreateEndpointGroup")
+	group.EndpointGroupID = "apps"
+	group.EndpointGroup = map[string]any{"address": map[string]any{"domain": "apps.example.test", "wildcard": false}}
+	result = commitStructuralForTest(t, b, root, projectlifecycle.ClassificationManaged, result.NewProjectRevision, []EditCommand{group})
+	selectGroup := b2Command(result.NewProjectRevision, "SetApplicationLibraryEndpointGroup")
+	selectGroup.Value = "apps"
+	if validateApplicationEdit(selectGroup) == nil {
+		t.Fatal("v11 accepted endpoint selection")
+	}
+	selectGroup.APIVersion = EditCommandAPIVersionV12
+	result = commitStructuralForTest(t, b, root, projectlifecycle.ClassificationManaged, result.NewProjectRevision, []EditCommand{selectGroup})
+	view, err := ReadManagedProjectView(root)
+	if err != nil || view.LibraryEndpointGroups["sdku"] != "apps" {
+		t.Fatalf("selection not retained: %v", err)
+	}
+	selectGroup.BaseProjectRevision, selectGroup.Value = result.NewProjectRevision, "missing"
+	plan, _ := b.PlanStructuralSave(context.Background(), root, projectlifecycle.ClassificationManaged, result.NewProjectRevision, []EditCommand{selectGroup})
+	if plan.Status != "BLOCKED" {
+		t.Fatal("missing endpoint group accepted")
+	}
+	clear := b2Command(result.NewProjectRevision, "ClearApplicationLibraryEndpointGroup")
+	clear.APIVersion = EditCommandAPIVersionV12
+	commitStructuralForTest(t, b, root, projectlifecycle.ClassificationManaged, result.NewProjectRevision, []EditCommand{clear})
+	view, err = ReadManagedProjectView(root)
+	if err != nil || len(view.LibraryEndpointGroups) != 0 || view.ApplicationLibraries["sdku"] == nil {
+		t.Fatal("clear removed library or retained selection")
+	}
+}
+
+func TestApplicationLibraryDeleteRejectsDependentLibrary(t *testing.T) {
+	root, b, revision := b2Project(t)
+	provider := b2Command(revision, "CreateApplicationLibraryDeployment")
+	provider.Entity = map[string]any{"libraryRef": "provider@1.0.0", "runtimeRef": "kafka-main"}
+	consumer := b2Command(revision, "CreateApplicationLibraryDeployment")
+	consumer.DeploymentID = "consumer"
+	consumer.Entity = map[string]any{"libraryRef": "consumer@1.0.0", "runtimeRef": "kafka-main", "bindings": map[string]any{"identity": map[string]any{"providedConnectionRef": map[string]any{"libraryId": "sdku", "name": "sso"}}}}
+	result := commitStructuralForTest(t, b, root, projectlifecycle.ClassificationManaged, revision, []EditCommand{provider, consumer})
+	remove := b2Command(result.NewProjectRevision, "DeleteApplicationLibraryWithPlacements")
+	remove.APIVersion = EditCommandAPIVersionV12
+	plan, _ := b.PlanStructuralSave(context.Background(), root, projectlifecycle.ClassificationManaged, result.NewProjectRevision, []EditCommand{remove})
+	if plan.Status != "BLOCKED" || plan.Finding == nil || plan.Finding.Code != "REFERENCE_IN_USE" {
+		t.Fatalf("dependent library not protected: %+v", plan)
+	}
+	view, err := ReadManagedProjectView(root)
+	if err != nil || len(view.ApplicationLibraries) != 2 {
+		t.Fatal("blocked deletion changed project")
+	}
+}

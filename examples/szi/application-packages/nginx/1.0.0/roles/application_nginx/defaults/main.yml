@@ -25,9 +25,17 @@ platform_application_definition:
         destination: scada-lawellet.conf
         mode: "0644"
     environment:
-      NGINX_HOST: "nginx.{{ platform_desired_state.endpointGroups[platform_desired_state.applicationLibraryDeployments[library_instance_id].applications.nginx.overrides.endpoint.endpoint_group].address.domain }}"
+      NGINX_HOST: >-
+        {%- set group = platform_desired_state.applicationLibraryDeployments[library_instance_id].applications.nginx.overrides.endpoint.endpoint_group |
+          default(platform_desired_state['x-applicationLibraryEndpointGroups'][library_instance_id] | default('')) -%}
+        {{ ('nginx.' ~ platform_desired_state.endpointGroups[group].address.domain)
+          if group and (platform_desired_state.endpointGroups[group].address.domain | default('')) else '' }}
       REALM: '{{ application_parameters.SZI_REALM }}'
-      GA_HOST: "https://grant-access.{{ platform_desired_state.endpointGroups[platform_desired_state.applicationLibraryDeployments[library_instance_id].applications['grant-access'].overrides.endpoint.endpoint_group].address.domain }}"
+      GA_HOST: >-
+        {%- set group = platform_desired_state.applicationLibraryDeployments[library_instance_id].applications['grant-access'].overrides.endpoint.endpoint_group |
+          default(platform_desired_state['x-applicationLibraryEndpointGroups'][library_instance_id] | default('')) -%}
+        {{ ('https://grant-access.' ~ platform_desired_state.endpointGroups[group].address.domain)
+          if group and (platform_desired_state.endpointGroups[group].address.domain | default('')) else '' }}
     ports:
       port-1:
         container: 18443

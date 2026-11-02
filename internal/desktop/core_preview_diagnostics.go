@@ -10,6 +10,7 @@ import (
 
 // Presentation only: Core codes and validation severity remain authoritative.
 var projectFindingMessagesRU = map[string]string{
+	"APPLICATION_LIBRARY_ENDPOINT_INVALID":                    "Некорректная группа точек входа библиотеки: выберите существующую группу в подключениях библиотеки.",
 	"ROLE_DEFAULT_TYPE_INVALID":                               "Тип значения роли по умолчанию не соответствует описанию настройки.",
 	"ROLE_DEFAULT_VALIDATION_INVALID":                         "Значение роли по умолчанию нарушает ограничения настройки.",
 	"SERVICE_CONFIGURATION_ADVANCED_TYPE_INVALID":             "Расширенные настройки сервиса должны иметь допустимый объектный тип.",

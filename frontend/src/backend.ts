@@ -99,6 +99,7 @@ export type VerificationStatus = {
 export type ManagedProjectView = {
   projectRevision: string;
   applicationLibraries?: Record<string, { libraryRef: string }>;
+  libraryEndpointGroups?: Record<string, string>;
   dataRootDirectory?: string;
   namePrefix?: string;
   servers: Record<

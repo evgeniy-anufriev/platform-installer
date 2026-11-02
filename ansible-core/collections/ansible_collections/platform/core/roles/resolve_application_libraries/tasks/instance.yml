@@ -14,6 +14,9 @@
          (application_job.library.definition.instance_id_strategy | default('qualified')) == 'application-name'
          else application_job.application.name ~ '-' ~ application_job.libraryId }}
     library_instance_id: "{{ application_job.libraryId }}"
+    _application_library_endpoint: >-
+      {{ {'endpoint_group': platform_desired_state['x-applicationLibraryEndpointGroups'][application_job.libraryId]}
+         if platform_desired_state['x-applicationLibraryEndpointGroups'][application_job.libraryId] is defined else {} }}
     application_topics: {}
     application_databases: {}
     _application_connections: {}
@@ -168,6 +171,7 @@
     application_inherited: >-
       {{ (_application_shared.defaults if application_job.slot.inherit_defaults | default(true) else {}) |
          combine(_application_package.platform_application_definition.defaults, recursive=true, list_merge='replace') |
+         combine(({'endpoint': _application_library_endpoint} if _application_library_endpoint else {}), recursive=true, list_merge='replace') |
          combine(application_job.slot.overrides | default({}), recursive=true, list_merge='replace') |
          combine(_application_shared.overrides if application_job.slot.inherit_defaults | default(true) else {}, recursive=true, list_merge='replace') }}
   no_log: true

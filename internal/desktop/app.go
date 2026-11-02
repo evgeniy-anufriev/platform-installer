@@ -1663,6 +1663,7 @@ func (a *App) AppendEditCommand(sessionID string, command installer.EditCommand)
 		"CreateTLSProfile", "UpdateTLSProfile", "DeleteTLSProfile",
 		"CreateCertificateScope", "UpdateCertificateScope", "DeleteCertificateScope":
 	case "CreateApplicationLibraryDeployment", "UpdateApplicationLibraryDeployment", "DeleteApplicationLibraryDeployment",
+		"SetApplicationLibraryEndpointGroup", "ClearApplicationLibraryEndpointGroup", "DeleteApplicationLibraryWithPlacements",
 		"SetApplicationLibrarySlot", "RemoveApplicationLibrarySlot", "SetApplicationLibraryPlacement", "RemoveApplicationLibraryPlacement",
 		"SetApplicationLibraryOverride", "RemoveApplicationLibraryOverride":
 	case "SetServiceConfigurationValue", "RemoveServiceConfigurationOverride":

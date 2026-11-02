@@ -17,6 +17,7 @@ const (
 	EditCommandAPIVersionV9    = "platform.installer/edit-command/v1alpha9"
 	EditCommandAPIVersionV10   = "platform.installer/edit-command/v1alpha10"
 	EditCommandAPIVersionV11   = "platform.installer/edit-command/v1alpha11"
+	EditCommandAPIVersionV12   = "platform.installer/edit-command/v1alpha12"
 	EditPlanAPIVersion         = "platform.installer/edit-plan/v1alpha1"
 	EditPlanAPIVersionV2       = "platform.installer/edit-plan/v1alpha2"
 	EditResultAPIVersion       = "platform.installer/edit-commit-result/v1alpha1"
@@ -263,6 +264,7 @@ type StructuralSaveResult struct {
 // an Ansible-resolved ProjectSnapshot and exposes only directly owned provider
 // fields, never Core-derived endpoint, DNS or PKI semantics.
 type ManagedProjectView struct {
+	LibraryEndpointGroups map[string]string                    `json:"libraryEndpointGroups,omitempty"`
 	ApplicationPackages   map[string]ManagedApplicationPackage `json:"applicationPackages"`
 	ApplicationLibraries  map[string]map[string]any            `json:"applicationLibraries"`
 	ApplicationPlacements map[string]map[string]any            `json:"applicationPlacements"`

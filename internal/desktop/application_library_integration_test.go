@@ -9,7 +9,7 @@ import (
 )
 
 func TestB4LibraryEditsUseProductionSessionAllowlist(t *testing.T) {
-	for _, op := range []string{"CreateApplicationLibraryDeployment", "UpdateApplicationLibraryDeployment", "DeleteApplicationLibraryDeployment", "SetApplicationLibrarySlot", "RemoveApplicationLibrarySlot", "SetApplicationLibraryPlacement", "RemoveApplicationLibraryPlacement", "SetApplicationLibraryOverride", "RemoveApplicationLibraryOverride"} {
+	for _, op := range []string{"CreateApplicationLibraryDeployment", "UpdateApplicationLibraryDeployment", "DeleteApplicationLibraryDeployment", "SetApplicationLibrarySlot", "RemoveApplicationLibrarySlot", "SetApplicationLibraryPlacement", "RemoveApplicationLibraryPlacement", "SetApplicationLibraryOverride", "RemoveApplicationLibraryOverride", "SetApplicationLibraryEndpointGroup", "ClearApplicationLibraryEndpointGroup", "DeleteApplicationLibraryWithPlacements"} {
 		t.Run(op, func(t *testing.T) {
 			root := t.TempDir()
 			if err := os.WriteFile(filepath.Join(root, "project.yml"), []byte("metadata: {id: project-aaaaaaaaaaaaaaaa}\n"), 0600); err != nil {
@@ -23,6 +23,8 @@ func TestB4LibraryEditsUseProductionSessionAllowlist(t *testing.T) {
 			}
 			cmd := installer.EditCommand{Operation: op, DeploymentID: "sdku"}
 			switch op {
+			case "SetApplicationLibraryEndpointGroup":
+				cmd.Value = "apps"
 			case "CreateApplicationLibraryDeployment", "UpdateApplicationLibraryDeployment":
 				cmd.Entity = map[string]any{"libraryRef": "sdku@1.0.0", "runtimeRef": "docker-main"}
 			case "SetApplicationLibrarySlot":

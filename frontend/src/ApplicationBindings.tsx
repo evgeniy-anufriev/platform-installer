@@ -50,7 +50,13 @@ export function ApplicationBindings({
   deploymentTypes = {},
   onSelectVault,
   candidates,
+  endpointGroups = [],
+  endpointGroupRef,
+  onSaveEndpointGroup,
 }: {
+  endpointGroups?: string[];
+  endpointGroupRef?: string;
+  onSaveEndpointGroup?: (ref: string) => Promise<boolean>;
   candidates?: Record<
     string,
     { deploymentRefs: string[]; providedConnectionRefs: string[] }
@@ -102,6 +108,25 @@ export function ApplicationBindings({
             </tr>
           </thead>
           <tbody>
+            {onSaveEndpointGroup && (
+              <BindingRow
+                key={"library-endpoint:" + endpointGroupRef}
+                name="Endpoint библиотеки"
+                hint="endpoint"
+                value={endpointGroupRef ? { endpointGroupRef } : {}}
+                deployments={[]}
+                profiles={[]}
+                endpointGroups={endpointGroups}
+                disabled={disabled}
+                isVault={false}
+                selectedVault={false}
+                onDirtyChange={(dirty) => mark("$library-endpoint", dirty)}
+                onSave={(entry) =>
+                  onSaveEndpointGroup(String(entry.endpointGroupRef ?? ""))
+                }
+                onRemove={() => onSaveEndpointGroup("")}
+              />
+            )}
             {names.map((key) => (
               <BindingRow
                 key={key + JSON.stringify(value[key])}
@@ -204,7 +229,9 @@ function BindingRow({
   onSave,
   onRemove,
   onDirtyChange,
+  endpointGroups = [],
 }: {
+  endpointGroups?: string[];
   name: string;
   isVault: boolean;
   selectedVault: boolean;
@@ -220,26 +247,35 @@ function BindingRow({
   onDirtyChange: (dirty: boolean) => void;
 }) {
   const [kind, setKind] = useState(
-    Object.hasOwn(value, "providedConnectionRef")
-      ? "providedConnectionRef"
-      : Object.hasOwn(value, "profileRef") || hint === "pki"
-        ? "profileRef"
-        : "deploymentRef",
+    hint === "endpoint"
+      ? "endpointGroupRef"
+      : Object.hasOwn(value, "providedConnectionRef")
+        ? "providedConnectionRef"
+        : Object.hasOwn(value, "profileRef") || hint === "pki"
+          ? "profileRef"
+          : "deploymentRef",
   );
   const [ref, setRef] = useState(
     value.providedConnectionRef
       ? String(objectValue(value.providedConnectionRef).libraryId) +
           "/" +
           String(objectValue(value.providedConnectionRef).name)
-      : String(value.profileRef ?? value.deploymentRef ?? ""),
+      : String(
+          value.endpointGroupRef ??
+            value.profileRef ??
+            value.deploymentRef ??
+            "",
+        ),
   );
   const [dirty, setDirty] = useState(false);
   const candidates =
-    kind === "providedConnectionRef"
-      ? providedConnections
-      : kind === "profileRef"
-        ? profiles
-        : deployments;
+    kind === "endpointGroupRef"
+      ? endpointGroups
+      : kind === "providedConnectionRef"
+        ? providedConnections
+        : kind === "profileRef"
+          ? profiles
+          : deployments;
   return (
     <tr>
       <td>
@@ -251,7 +287,7 @@ function BindingRow({
       <td>
         <select
           aria-label={"Тип подключения " + name}
-          disabled={disabled}
+          disabled={disabled || hint === "endpoint"}
           value={kind}
           onChange={(e) => {
             setKind(e.target.value);
@@ -260,9 +296,17 @@ function BindingRow({
             onDirtyChange(true);
           }}
         >
-          <option value="deploymentRef">Сервис</option>
-          <option value="profileRef">TLS-профиль</option>
-          <option value="providedConnectionRef">Подключение приложения</option>
+          {hint === "endpoint" ? (
+            <option value="endpointGroupRef">Группа точек входа</option>
+          ) : (
+            <>
+              <option value="deploymentRef">Сервис</option>
+              <option value="profileRef">TLS-профиль</option>
+              <option value="providedConnectionRef">
+                Подключение приложения
+              </option>
+            </>
+          )}
         </select>
       </td>
       <td>

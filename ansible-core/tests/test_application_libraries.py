@@ -186,6 +186,33 @@ class ApplicationLibrariesTest(unittest.TestCase):
     def prepare(self, root=FIXTURE):
         return APP.prepare(root, self.desired, self.memberships, APP.CONTRACT, load, CONTRACTS)
 
+    def test_library_endpoint_selection_rejects_missing_library_or_group(self):
+        for selections in ({'missing': 'apps'}, {'sdku': 'missing'}, [], {'sdku': 42}):
+            self.desired['x-applicationLibraryEndpointGroups'] = selections
+            self.assertIn('APPLICATION_LIBRARY_ENDPOINT_INVALID', [row['code'] for row in self.prepare()['findings']])
+
+    def test_szi_endpoint_defaults_resolve_incomplete_and_inherited_groups(self):
+        from ansible.parsing.dataloader import DataLoader
+        from ansible.template import Templar
+        def definition(relative, key):
+            with open(os.path.join(REPO, relative), encoding='utf-8') as stream:
+                return yaml.safe_load(stream)[key]
+        lib = definition('examples/szi/library-packages/szi/1.0.0/roles/library_szi/defaults/main.yml', 'platform_library_definition')
+        app = definition('examples/szi/application-packages/nginx/1.0.0/roles/application_nginx/defaults/main.yml', 'platform_application_definition')
+        expressions = [(lib['provided_connections']['sso']['parameters']['proxy_url'], 'https://nginx.'),
+                       (app['defaults']['environment']['NGINX_HOST'], 'nginx.'),
+                       (app['defaults']['environment']['GA_HOST'], 'https://grant-access.')]
+        for apps, selected, expected in (({}, {}, ''), ({'nginx': {}, 'grant-access': {}}, {}, ''),
+                ({'nginx': {}, 'grant-access': {}}, {'szi': 'apps'}, 'apps.example.test'),
+                ({'nginx': {'overrides': {'endpoint': {'endpoint_group': 'own'}}},
+                  'grant-access': {'overrides': {'endpoint': {'endpoint_group': 'own'}}}}, {'szi': 'apps'}, 'own.example.test')):
+            desired = {'applicationLibraryDeployments': {'szi': {'applications': apps}},
+                       'endpointGroups': {'apps': {'address': {'domain': 'apps.example.test'}}, 'own': {'address': {'domain': 'own.example.test'}}},
+                       'x-applicationLibraryEndpointGroups': selected}
+            templar = Templar(loader=DataLoader(), variables={'platform_desired_state': desired, 'library_instance_id': 'szi'})
+            for expression, prefix in expressions:
+                self.assertEqual(prefix + expected if expected else '', templar.template(expression, fail_on_undefined=True))
+
     def test_package_closure_two_libraries_two_hosts(self):
         prepared = self.prepare()
         self.assertEqual([], prepared["findings"])
@@ -368,8 +395,9 @@ class ApplicationLibrariesTest(unittest.TestCase):
         result = _build_deployment_plan(application_snapshot(), catalog(), runtime(),
             deployment_order=['provider', 'consumer'], bundle_artifact_sources=sources(), application_image_lock=image_lock())
         self.assertEqual('EXECUTABLE', result['deploymentPlan']['status'])
-        self.assertEqual(['APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY'],
-                         [item['operation'] for item in result['executionManifest']['operations'][-2:]])
+        operations = [item['operation'] for item in result['executionManifest']['operations']]
+        self.assertEqual('APPLICATION_LIBRARIES_APPLY', operations[-1])
+        self.assertNotIn('APPLICATION_LIBRARIES_VERIFY', operations)
 
     def test_final_projection_boundary_preserves_refs_and_user_parameters(self):
         projection = {"libraries": {"sdku": {"resources": {}, "instances": {"apigateway-sdku": {

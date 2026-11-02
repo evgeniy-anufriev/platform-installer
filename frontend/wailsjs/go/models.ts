@@ -2900,6 +2900,7 @@ export namespace installer {
     }
   }
   export class ManagedProjectView {
+    libraryEndpointGroups?: Record<string, string>;
     applicationPackages: Record<string, ManagedApplicationPackage>;
     applicationLibraries: Record<string, any>;
     applicationPlacements: Record<string, any>;
@@ -2919,6 +2920,7 @@ export namespace installer {
 
     constructor(source: any = {}) {
       if ("string" === typeof source) source = JSON.parse(source);
+      this.libraryEndpointGroups = source["libraryEndpointGroups"];
       this.applicationPackages = this.convertValues(
         source["applicationPackages"],
         ManagedApplicationPackage,

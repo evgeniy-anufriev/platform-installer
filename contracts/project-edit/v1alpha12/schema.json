@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/project-edit/v1alpha12/schema.json",
+  "title": "Library endpoint group selection and instance removal",
+  "oneOf": [
+    {"$ref": "../v1alpha11/schema.json"},
+    {
+      "type": "object",
+      "required": ["apiVersion", "kind", "baseProjectRevision", "operation", "deploymentId"],
+      "properties": {
+        "apiVersion": {"const": "platform.installer/edit-command/v1alpha12"},
+        "kind": {"const": "EditCommand"},
+        "baseProjectRevision": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "operation": {"enum": ["SetApplicationLibraryEndpointGroup", "ClearApplicationLibraryEndpointGroup", "DeleteApplicationLibraryWithPlacements"]},
+        "deploymentId": {"$ref": "../v1alpha11/schema.json#/$defs/id"},
+        "value": {"$ref": "../v1alpha11/schema.json#/$defs/id"}
+      },
+      "if": {"properties": {"operation": {"const": "SetApplicationLibraryEndpointGroup"}}},
+      "then": {"required": ["value"]},
+      "else": {"not": {"required": ["value"]}},
+      "additionalProperties": false
+    }
+  ]
+}

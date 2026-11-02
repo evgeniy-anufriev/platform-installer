@@ -212,6 +212,14 @@ def prepare(root, desired, memberships, contract, loader, contracts_root):
     # Kept here for callers/tests: no package/defaults is templated before validation.
     deployments = desired.get("applicationLibraryDeployments", {})
     findings = validator.validate(deployments, os.path.join(contracts_root, "application-libraries", "v1alpha1", "deployments.schema.json"))
+    endpoint_groups = desired.get('x-applicationLibraryEndpointGroups', {})
+    if not isinstance(endpoint_groups, dict) or len(endpoint_groups) > 128:
+        findings.append(finding('APPLICATION_LIBRARY_ENDPOINT_INVALID', 'x-applicationLibraryEndpointGroups'))
+    else:
+        for library_id, group in sorted(endpoint_groups.items()):
+            if (library_id not in deployments or not isinstance(group, str) or not ID.fullmatch(group)
+                    or group not in desired.get('endpointGroups', {})):
+                findings.append(finding('APPLICATION_LIBRARY_ENDPOINT_INVALID', 'x-applicationLibraryEndpointGroups.' + str(library_id)))
     for host, membership in sorted(memberships.items()):
         findings.extend(validator.validate(membership, os.path.join(contracts_root, "application-libraries", "v1alpha1", "membership.schema.json")))
         for library in membership if isinstance(membership, dict) else []:

@@ -86,7 +86,10 @@ export function ApplicationsPage({
   onInstallation: () => void;
   onDirtyChange: (dirty: boolean) => void;
 }) {
-  const { libraries, placements } = applicationDraft(managed, intents);
+  const { libraries, placements, libraryEndpointGroups } = applicationDraft(
+    managed,
+    intents,
+  );
   const packages = objectValue(managed?.applicationPackages);
   const [selected, setSelected] = useState("");
   const [slot, setSlot] = useState("");
@@ -332,8 +335,8 @@ export function ApplicationsPage({
             p.hostId === c.hostId &&
             p.setting === c.setting &&
             p.property === c.property &&
-            p.operation.replace(/^(Set|Remove)/, "") ===
-              c.operation.replace(/^(Set|Remove)/, ""),
+            p.operation.replace(/^(Set|Remove|Clear)/, "") ===
+              c.operation.replace(/^(Set|Remove|Clear)/, ""),
         );
     try {
       if (
@@ -501,14 +504,15 @@ export function ApplicationsPage({
     !dirty &&
     intents.length === 0 &&
     snapshot?.projectRevision === managed?.projectRevision;
-  const providedConnectionChoices = freshSecrets
-    ? Object.entries(snapshot?.applicationLibraries?.libraries ?? {}).flatMap(
-        ([id, lib]) =>
-          Object.keys(lib.providedConnections ?? {}).map(
-            (name) => id + "/" + name,
-          ),
-      )
-    : [];
+  // Selecting an authored reference must not depend on successful Core resolution.
+  const providedConnectionChoices = Object.entries(libraries).flatMap(
+    ([id, lib]) =>
+      Object.keys(
+        objectValue(
+          packageDefinition("library", lib.libraryRef).provided_connections,
+        ),
+      ).map((name) => id + "/" + name),
+  );
   const secretContext = JSON.stringify([
     selected,
     slot,
@@ -723,12 +727,7 @@ export function ApplicationsPage({
               [
                 key,
                 String(row.libraryRef),
-                ...Object.keys({
-                  ...objectValue(
-                    packageDefinition("library", row.libraryRef).slots,
-                  ),
-                  ...objectValue(row.applications),
-                }),
+                ...Object.keys(objectValue(row.applications)),
               ]
                 .join(" ")
                 .toLocaleLowerCase()
@@ -750,12 +749,7 @@ export function ApplicationsPage({
                   <strong>{key}</strong>
                   <small>{String(row.libraryRef)}</small>
                 </button>
-                {Object.keys({
-                  ...objectValue(
-                    packageDefinition("library", row.libraryRef).slots,
-                  ),
-                  ...objectValue(row.applications),
-                }).map((name) => (
+                {Object.keys(objectValue(row.applications)).map((name) => (
                   <button
                     className="outline application-slot"
                     key={name}
@@ -925,15 +919,53 @@ export function ApplicationsPage({
                         )
                       )
                         void send({
-                          operation: "RemoveApplicationLibrarySlot",
+                          operation: "SetApplicationLibrarySlot",
                           deploymentId: selected,
                           entityId: slot,
+                          entity: {
+                            overrides: {},
+                            accounts: {},
+                            credentials: {},
+                          },
                         });
                     }}
                   >
                     Сбросить настройки
                   </button>
                 )}
+                <button
+                  className="outline"
+                  disabled={busy || dirty}
+                  onClick={() => {
+                    if (
+                      !window.confirm(
+                        slot
+                          ? "Удалить экземпляр приложения из проекта? Установленные ресурсы и данные сохранятся."
+                          : "Удалить экземпляр библиотеки со всеми приложениями и размещениями из проекта? Установленные ресурсы и данные сохранятся.",
+                      )
+                    )
+                      return;
+                    void send(
+                      slot
+                        ? {
+                            operation: "RemoveApplicationLibrarySlot",
+                            deploymentId: selected,
+                            entityId: slot,
+                          }
+                        : {
+                            operation: "DeleteApplicationLibraryWithPlacements",
+                            deploymentId: selected,
+                          },
+                    ).then((ok) => {
+                      if (!ok) return;
+                      clearLocal();
+                      setSlot("");
+                      if (!slot) setSelected("");
+                    });
+                  }}
+                >
+                  {slot ? "Удалить приложение" : "Удалить библиотеку"}
+                </button>
                 {((slot && selectedTab === "Запуск") ||
                   (!slot && selectedTab === "Общие параметры")) && (
                   <button
@@ -968,6 +1000,50 @@ export function ApplicationsPage({
                   <>
                     <section className="application-library-overview">
                       <h3>Экземпляр библиотеки</h3>
+                      {Object.keys(recipe).some(
+                        (name) =>
+                          !Object.hasOwn(
+                            objectValue(library.applications),
+                            name,
+                          ),
+                      ) && (
+                        <label>
+                          Добавить приложение
+                          <select
+                            aria-label="Добавить приложение"
+                            value=""
+                            disabled={busy || dirty}
+                            onChange={(event) => {
+                              const name = event.target.value;
+                              if (name)
+                                void send({
+                                  operation: "SetApplicationLibrarySlot",
+                                  deploymentId: selected,
+                                  entityId: name,
+                                  entity: {},
+                                }).then((ok) => {
+                                  if (ok) {
+                                    setSlot(name);
+                                    setTab("Общее");
+                                  }
+                                });
+                            }}
+                          >
+                            <option value="">Выберите приложение</option>
+                            {Object.keys(recipe)
+                              .filter(
+                                (name) =>
+                                  !Object.hasOwn(
+                                    objectValue(library.applications),
+                                    name,
+                                  ),
+                              )
+                              .map((name) => (
+                                <option key={name}>{name}</option>
+                              ))}
+                          </select>
+                        </label>
+                      )}
                       <label>
                         ID экземпляра библиотеки
                         <input value={selected} readOnly />
@@ -1119,25 +1195,6 @@ export function ApplicationsPage({
                             entity: { libraryRef: value },
                           }),
                       )}
-                      <button
-                        className="outline"
-                        disabled={busy}
-                        onClick={() => {
-                          if (
-                            window.confirm(
-                              "Удалить библиотеку из проекта? Установленные ресурсы сохранятся. Сначала удалите размещения.",
-                            )
-                          )
-                            void send({
-                              operation: "DeleteApplicationLibraryDeployment",
-                              deploymentId: selected,
-                            }).then((ok) => {
-                              if (ok) setSelected("");
-                            });
-                        }}
-                      >
-                        Удалить из проекта
-                      </button>
                     </details>
                   </>
                 )}
@@ -1297,6 +1354,19 @@ export function ApplicationsPage({
                         })
                       }
                       value={objectValue(library.bindings)}
+                      endpointGroups={Object.keys(
+                        managed?.endpointGroups ?? {},
+                      )}
+                      endpointGroupRef={libraryEndpointGroups[selected]}
+                      onSaveEndpointGroup={(ref) =>
+                        send({
+                          operation: ref
+                            ? "SetApplicationLibraryEndpointGroup"
+                            : "ClearApplicationLibraryEndpointGroup",
+                          deploymentId: selected,
+                          ...(ref ? { value: ref } : {}),
+                        })
+                      }
                       hints={bindingHints}
                       candidates={connectionCandidates(
                         bindingConnectionNames,

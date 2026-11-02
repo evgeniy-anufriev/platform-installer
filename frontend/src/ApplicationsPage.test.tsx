@@ -1079,3 +1079,109 @@ describe("application editor", () => {
     expect(managed).toEqual(original);
   });
 });
+
+it("deletes an application instance, permits adding it back, then removes a placed library", async () => {
+  const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+  const calls: ApplicationIntent[] = [];
+  render(<Harness calls={calls} />);
+  await selectSlot();
+  await userEvent.click(
+    screen.getByRole("button", { name: "Удалить приложение" }),
+  );
+  expect(calls.at(-1)?.operation).toBe("RemoveApplicationLibrarySlot");
+  expect(screen.queryByRole("button", { name: "↳ gateway" })).toBeNull();
+  await userEvent.selectOptions(
+    screen.getByLabelText("Добавить приложение"),
+    "gateway",
+  );
+  expect(calls.at(-1)).toMatchObject({
+    operation: "SetApplicationLibrarySlot",
+    entityId: "gateway",
+    entity: {},
+  });
+  expect(screen.getByRole("button", { name: "↳ gateway" })).toBeTruthy();
+  await userEvent.click(screen.getByRole("button", { name: /^sdku$/ }));
+  await userEvent.click(
+    screen.getByRole("button", { name: "Удалить библиотеку" }),
+  );
+  expect(calls.at(-1)?.operation).toBe(
+    "DeleteApplicationLibraryWithPlacements",
+  );
+  expect(screen.queryByRole("button", { name: /^sdku/ })).toBeNull();
+  expect(
+    applicationDraft(managed, calls).placements.node1.sdku,
+  ).toBeUndefined();
+  confirm.mockRestore();
+});
+
+it("offers declared SSO without a Core snapshot and saves the library endpoint separately", async () => {
+  const view = structuredClone(managed);
+  objectValue(
+    view.applicationPackages["library:sdku@1.0.0"].definition,
+  ).provided_connections = { sso: { provider: "keycloak" } };
+  objectValue(
+    view.applicationPackages["library:sdku@1.0.0"].definition,
+  ).connections = { identity: { library_binding: "sso" } };
+  view.endpointGroups = {
+    apps: {
+      endpointGroupId: "apps",
+      domain: "apps.example.test",
+      wildcard: false,
+    },
+  } as typeof view.endpointGroups;
+  const calls: ApplicationIntent[] = [];
+  render(<Harness calls={calls} view={view} />);
+  await userEvent.click(screen.getByRole("button", { name: /^sdku/ }));
+  await userEvent.click(screen.getByRole("button", { name: "Подключения" }));
+  await userEvent.selectOptions(
+    screen.getByLabelText("Тип подключения sso"),
+    "providedConnectionRef",
+  );
+  expect(screen.getByRole("option", { name: "sdku/sso" })).toBeTruthy();
+  const ssoSelect = screen.getByLabelText("Подключение sso");
+  await userEvent.selectOptions(ssoSelect, "sdku/sso");
+  await userEvent.click(
+    within(ssoSelect.closest("tr")!).getByRole("button", {
+      name: "В черновик",
+    }),
+  );
+  const select = screen.getByLabelText("Подключение Endpoint библиотеки");
+  await userEvent.selectOptions(select, "apps");
+  await userEvent.click(
+    within(select.closest("tr")!).getByRole("button", { name: "В черновик" }),
+  );
+  expect(calls.at(-1)).toMatchObject({
+    operation: "SetApplicationLibraryEndpointGroup",
+    deploymentId: "sdku",
+    value: "apps",
+  });
+  expect(applicationDraft(view, calls).libraryEndpointGroups.sdku).toBe("apps");
+  await waitFor(() =>
+    expect(
+      (
+        screen.getByRole("button", {
+          name: "Показать изменения проекта",
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(false),
+  );
+  expect(applicationDraft(view, calls).libraries.sdku.applications).toEqual(
+    view.applicationLibraries.sdku.applications,
+  );
+});
+
+it("keeps the selected instance when deletion is not acknowledged", async () => {
+  const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+  const calls: ApplicationIntent[] = [];
+  render(<Harness calls={calls} accept={false} />);
+  await selectSlot();
+  await userEvent.click(
+    screen.getByRole("button", { name: "Удалить приложение" }),
+  );
+  expect(screen.getByRole("button", { name: "↳ gateway" })).toBeTruthy();
+  expect(
+    screen.getByRole("button", { name: "Удалить приложение" }),
+  ).toBeTruthy();
+  expect(calls).toEqual([]);
+  confirm.mockRestore();
+});

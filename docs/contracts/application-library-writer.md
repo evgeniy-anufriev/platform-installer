@@ -1,7 +1,8 @@
 # B2 local application-library writer
 
 `project-edit/v1alpha11` adds fixed library edits; existing v1alpha10 commands
-keep their version/meaning. Sessions normalize only library commands to v11.
+keep their version/meaning. Sessions normalize library commands to their
+declared version (v11, or the additive v12 operations below).
 Review/Save remain local, through the existing managed writer and PlanStore.
 
 All operations use the EditCommand envelope, exact base revision and deploymentId
@@ -133,3 +134,33 @@ slot accounts; source values use the existing descriptor-bound runtime lease.
 The UI may scope visible runtime requirements by declared applicationLibraries,
 while preserving the authoritative descriptor-set fingerprint and requirement IDs.
 Core source rules and runtime descriptor validation remain authoritative.
+
+## Library endpoint selection and instance removal (v12)
+
+The library Connections tab selects one endpoint group. The portable native
+input is `platform_desired_state.x-applicationLibraryEndpointGroups.<library-id>`.
+It stores only an authored group ID, never derived FQDN/addresses. Core validates
+both references. Ansible merges this group after application package defaults
+and before slot, instance and host overrides, in both connection topology and
+final settings. Selecting a group does not enable an endpoint or authorize
+execution. Explicit application group overrides win.
+
+Additive `project-edit/v1alpha12` admits SetApplicationLibraryEndpointGroup
+(value: group ID), ClearApplicationLibraryEndpointGroup and
+DeleteApplicationLibraryWithPlacements. The last operation atomically removes
+the library, its memberships and endpoint selection; references from other
+libraries block deletion. v11 deletion still requires memberships removed first.
+Existing versioned commands retain their meaning.
+
+Visible instance deletion goes through the same draft, review and local Save.
+Application removal deselects its slot; reset settings keeps it selected. The
+library screen can add an unselected declared slot again. Packages remain
+available and installed containers, services, files and data are not removed.
+Core can still report a missing required slot or dependent connection.
+
+SSO choices are authored `provided_connections` declarations from available
+library packages, including draft library instances. They do not depend on a
+successful Core snapshot; computed values and compatibility remain Core-owned.
+SZI templates tolerate missing endpoint groups and use the inherited library
+group unless the application overrides it. Existing imported package copies
+are immutable and are not rewritten by an Installer update.

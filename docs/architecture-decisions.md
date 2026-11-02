@@ -936,3 +936,16 @@ uses the existing shared-distribution role path and two logical refs to one
 verified file. This changes authoring/build compilation, not source-selection,
 execution authorization, desired-project or Go infrastructure ownership.
 See [plan/evidence](work/runtime-bundle/artifact-input-projection-plan.md).
+
+### Library endpoint inheritance and UI deletion (2026-11-02)
+
+The owner requested one library endpoint selection inherited by its applications.
+The native desired state uses the existing x-extension point
+`x-applicationLibraryEndpointGroups`; there is no second persistence store and
+no copy of the ref into each selected application. Core validates references;
+ordinary Ansible combine precedence resolves defaults, library group, then
+explicit slot/instance/host overrides. The same merge applies to early topology
+and final application settings. UI/Go edit only the authored ref via additive v12
+commands; existing contracts remain unchanged. Deletion is a local desired-state
+transaction and never an uninstall operation. See the
+[writer contract](contracts/application-library-writer.md#library-endpoint-selection-and-instance-removal-v12).

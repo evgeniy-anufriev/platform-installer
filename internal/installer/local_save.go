@@ -146,6 +146,20 @@ func readManagedDesiredState(root string, budget *managedReadBudget, view *Manag
 	}
 	state := asMap(document["platform_desired_state"])
 	view.ApplicationLibraries = map[string]map[string]any{}
+	view.LibraryEndpointGroups = map[string]string{}
+	if raw, exists := state[libraryEndpointGroupsKey]; exists {
+		groups := asMap(raw)
+		if groups == nil || len(groups) > 128 {
+			return managedReadError("Library endpoint selections are malformed", desiredDocument)
+		}
+		for id, rawRef := range groups {
+			ref, ok := rawRef.(string)
+			if !validLibraryInputID(id) || !ok || !validLibraryInputID(ref) {
+				return managedReadError("Library endpoint selection is malformed", desiredDocument)
+			}
+			view.LibraryEndpointGroups[id] = ref
+		}
+	}
 	view.ApplicationPlacements = map[string]map[string]any{}
 	for id, raw := range asMap(state["applicationLibraryDeployments"]) {
 		value := asMap(raw)

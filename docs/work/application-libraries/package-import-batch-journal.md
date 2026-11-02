@@ -104,3 +104,51 @@ which asserted before the asynchronous authored-placement response arrived. It
 was replayed from a fresh project using the same actual click handler and waiting
 for the checked state; no test-only production path was added.
 Temporary RED OS workspace was removed with qa-sync. QA services/data preserved.
+
+## SSO choices, inherited endpoint and instance deletion — 2026-11-02
+
+Owner-requested follow-up: declared SSO exports are selectable without a successful
+Core snapshot. SZI proxy/host templates tolerate incomplete endpoints and fall
+back to a library group. One authored library endpoint selection is persisted in
+the native x-extension and resolved by Ansible before explicit app overrides.
+The selected instance header exposes deletion; reset retains the instance and
+General can add an unselected declared slot again. Library deletion atomically
+removes its memberships/endpoint selection, preserves packages and installed
+resources, and blocks references from other libraries. Additive v12 leaves v11
+semantics intact. No new Go file or persistence layer was introduced.
+
+Validation:
+
+- Full `go test ./...` and focused installer/desktop tests PASS; focused vet PASS.
+- React page/bindings/import 41 PASS; TypeScript, lint, Vite and Windows Wails build PASS.
+- Current sources synced with qa-sync to RED OS102: library tests29, endpoint
+  Ansible tests5 and edit contract tests8 PASS. Tests exercise incomplete SZI
+  templates, library-group inheritance through early topology and final snapshot,
+  explicit app-group priority and invalid references. An obsolete assertion for a
+  separate global APPLICATION_LIBRARIES_VERIFY was updated to the documented
+  embedded-verify contract; execution behavior was not changed.
+- Actual React handlers and Wails Go methods in independent QA project
+  project-2026110200000012: library endpoint + SSO saved at
+  sha256:9654b3db9eddf3a3179807b476cb26e0823c2db20e9a139781d49777237656fa;
+  Keycloak removal saved at
+  sha256:836e58000ead98481d36c46f2dd8b8d08ade4f56113c670fa251a34eaaee1e7e;
+  adding Keycloak back returned to the same endpoint/SSO saved revision above;
+  library deletion saved at
+  sha256:4dfc8985229482f939bce7a4e9a2bb76c3a02f179a561e7b264ccf5415f34519.
+  Remaining imported packages were confirmed available; memberships and library
+  endpoint selection were absent. Safe evidence is under
+  `.runtime/qa/import-reproduce/endpoint-delete-complete/`.
+- First real bridge attempt exposed a missing Wails command allowlist entry;
+  corrected and covered by production session allowlist tests. Automation retries
+  corrected immediate assertions before asynchronous handlers completed and an
+  exact wrapped-select label mismatch; no production bypass was added.
+- Final empty-library screenshot inspected. This is edit/Save acceptance, not a
+  full installation or blanket visual acceptance. Wails development IPC emitted
+  existing runtime:ready/null-nodes warnings while requested flows completed.
+
+No Approve/Start or service mutation was performed. UI checks used the existing
+verified c97e77d7 runtime; new inheritance was checked directly with current-source
+Core/Ansible on RED OS. No replacement bundle was published/activated. Distribution
+requires a rebuilt runtime bundle and updated SZI package copies; updating the
+Installer does not rewrite immutable imports in existing projects. Owned Wails/
+Vite processes stopped; temporary RED OS workspace cleaned with qa-sync.

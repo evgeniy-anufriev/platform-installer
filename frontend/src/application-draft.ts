@@ -2,6 +2,9 @@ import type { OpenResult } from "./backend";
 export type ObjectValue = Record<string, unknown>;
 export type ApplicationIntent = {
   operation:
+    | "SetApplicationLibraryEndpointGroup"
+    | "ClearApplicationLibraryEndpointGroup"
+    | "DeleteApplicationLibraryWithPlacements"
     | "CreateApplicationLibraryDeployment"
     | "UpdateApplicationLibraryDeployment"
     | "DeleteApplicationLibraryDeployment"
@@ -41,13 +44,24 @@ export function applicationDraft(
     Object.create(null),
     structuredClone(managed?.applicationPlacements ?? {}),
   ) as Record<string, ObjectValue>;
+  const libraryEndpointGroups = { ...managed?.libraryEndpointGroups };
   for (const c of intents) {
     const id = c.deploymentId;
-    if (c.operation === "CreateApplicationLibraryDeployment")
+    if (c.operation === "SetApplicationLibraryEndpointGroup")
+      libraryEndpointGroups[id] = String(c.value);
+    else if (c.operation === "ClearApplicationLibraryEndpointGroup")
+      delete libraryEndpointGroups[id];
+    else if (c.operation === "CreateApplicationLibraryDeployment")
       libraries[id] = { ...c.entity };
-    else if (c.operation === "DeleteApplicationLibraryDeployment")
+    else if (
+      c.operation === "DeleteApplicationLibraryDeployment" ||
+      c.operation === "DeleteApplicationLibraryWithPlacements"
+    ) {
       delete libraries[id];
-    else if (c.operation === "UpdateApplicationLibraryDeployment")
+      delete libraryEndpointGroups[id];
+      if (c.operation === "DeleteApplicationLibraryWithPlacements")
+        for (const host of Object.keys(placements)) delete placements[host][id];
+    } else if (c.operation === "UpdateApplicationLibraryDeployment")
       libraries[id] = { ...libraries[id], ...c.entity };
     else if (c.hostId && c.operation.endsWith("Placement")) {
       placements[c.hostId] ??= {};
@@ -92,5 +106,5 @@ export function applicationDraft(
       if (c.property) target[c.property] = fields;
     }
   }
-  return { libraries, placements };
+  return { libraries, placements, libraryEndpointGroups };
 }

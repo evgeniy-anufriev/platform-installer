@@ -28,6 +28,20 @@ class ProjectEditContractTests(unittest.TestCase):
     def setUp(self):
         self.validator = SCHEMA.SchemaValidator(CONTRACTS)
 
+    def test_v12_library_endpoint_and_delete_preserve_v11_contract(self):
+        schema = CONTRACTS / 'project-edit/v1alpha12/schema.json'
+        for operation in ('SetApplicationLibraryEndpointGroup', 'ClearApplicationLibraryEndpointGroup', 'DeleteApplicationLibraryWithPlacements'):
+            command = {'apiVersion': 'platform.installer/edit-command/v1alpha12', 'kind': 'EditCommand',
+                       'baseProjectRevision': REVISION, 'operation': operation, 'deploymentId': 'szi'}
+            if operation.startswith('Set'):
+                command['value'] = 'apps'
+            self.assertEqual([], self.validator.validate(command, schema))
+            command['apiVersion'] = 'platform.installer/edit-command/v1alpha11'
+            self.assertTrue(self.validator.validate(command, schema))
+            command['apiVersion'] = 'platform.installer/edit-command/v1alpha12'
+            command['entity'] = {}
+            self.assertTrue(self.validator.validate(command, schema))
+
     def test_command_plan_and_result_contracts_pass(self):
         command = {
             "apiVersion": "platform.installer/edit-command/v1alpha1",

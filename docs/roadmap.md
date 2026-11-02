@@ -915,3 +915,11 @@ adds explicit compatible provider-script batching and removes repeated delivery
 preparation. Focused QA and independent review are separate from updated-bundle,
 React/Wails and cold-install timing acceptance; the active old-bundle run is not
 benchmark evidence for these changes.
+
+Owner refinement (2026-11-02): the existing application editor also supports a
+library endpoint-group selection inherited through Core/Ansible and visible
+removal/reselection of application slots and whole library instances. These
+remain local desired-state edits through Review/Save, not uninstall operations.
+SSO binding choices come from authored package exports even when Core reports
+configuration findings. See [writer](contracts/application-library-writer.md#library-endpoint-selection-and-instance-removal-v12)
+and [evidence](work/application-libraries/package-import-batch-journal.md).

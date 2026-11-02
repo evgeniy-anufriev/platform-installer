@@ -1210,3 +1210,12 @@ network requests on image input or Save. Image digest/size are not form fields.
 Real React/Wails/Core acceptance and visual inspection are separate gates.
 
 SZI stage2 owner-approved refinement (2026-10-22): Applications / library Connections edits provided_connections parameters and credential references, and selects Core-derived providedConnectionRef candidates. Instance General edits connections.<alias>.enabled with reset; Secrets reuses existing accounts.<alias>, disabled usage blocks edits without removing data. This extends the deployment-only mockup; it adds no new navigation tab. Effective values and candidates come from current-revision Core only.
+
+Owner refinement (2026-11-02): Applications exposes deletion in the selected
+instance header and adding back unselected declared slots on the library General
+tab. Delete uses ordinary draft/review/save, preserves imported packages and
+installed resources, and removes library placements atomically. The library
+Connections tab adds one endpoint group selection inherited through Core/Ansible;
+explicit application overrides retain priority. These extend the earlier static
+mockup, whose generic application panel does not show these controls. No duplicate
+project verification or execution actions are added.

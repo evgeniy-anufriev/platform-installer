@@ -13,6 +13,12 @@ var registryAuthority = regexp.MustCompile(`^[a-z0-9][a-z0-9.-]*(?::[0-9]+)?$`)
 var applicationSettingKeys = []string{"image", "command", "user", "restart", "parameters", "environment", "ports", "endpoint", "accounts", "provisioner", "readiness", "config_files", "config_directories", "config_archives", "topicBindings", "connections"}
 
 func applicationEditOperation(op string) bool {
+	if op == "DeleteApplicationLibraryWithPlacements" {
+		return true
+	}
+	if libraryEndpointOperation(op) {
+		return true
+	}
 	switch op {
 	case "CreateApplicationLibraryDeployment", "UpdateApplicationLibraryDeployment", "DeleteApplicationLibraryDeployment", "SetApplicationLibrarySlot", "RemoveApplicationLibrarySlot", "SetApplicationLibraryPlacement", "RemoveApplicationLibraryPlacement", "SetApplicationLibraryOverride", "RemoveApplicationLibraryOverride":
 		return true
@@ -20,15 +26,37 @@ func applicationEditOperation(op string) bool {
 	return false
 }
 
+const libraryEndpointGroupsKey = "x-applicationLibraryEndpointGroups"
+
+func libraryEndpointOperation(op string) bool {
+	return op == "SetApplicationLibraryEndpointGroup" || op == "ClearApplicationLibraryEndpointGroup"
+}
+
+func applicationCommandVersion(op string) string {
+	if libraryEndpointOperation(op) || op == "DeleteApplicationLibraryWithPlacements" {
+		return EditCommandAPIVersionV12
+	}
+	return EditCommandAPIVersionV11
+}
+
 func validLibraryInputID(s string) bool { return len(s) <= 128 && libraryInputID.MatchString(s) }
 
 func validateApplicationEdit(c EditCommand) error {
 	invalid := blocked("INVALID_EDIT_COMMAND", "Application library edit is invalid", "command")
-	if c.APIVersion != EditCommandAPIVersionV11 || c.Kind != "EditCommand" || !validSHA256(c.BaseProjectRevision) || !validLibraryInputID(c.DeploymentID) {
+	if c.APIVersion != applicationCommandVersion(c.Operation) || c.Kind != "EditCommand" || !validSHA256(c.BaseProjectRevision) || !validLibraryInputID(c.DeploymentID) {
 		return invalid
 	}
 	fields := []string{"deploymentId"}
 	switch c.Operation {
+	case "DeleteApplicationLibraryWithPlacements":
+	case "SetApplicationLibraryEndpointGroup", "ClearApplicationLibraryEndpointGroup":
+		if c.Operation == "SetApplicationLibraryEndpointGroup" {
+			fields = append(fields, "value")
+			ref, ok := c.Value.(string)
+			if !ok || !validLibraryInputID(ref) {
+				return invalid
+			}
+		}
 	case "CreateApplicationLibraryDeployment", "UpdateApplicationLibraryDeployment":
 		fields = append(fields, "entity")
 		if c.Entity == nil || !applicationKeys(c.Entity, "libraryRef", "runtimeRef", "runtime_directory", "bindings", "resources", "shared_secrets", "vault_ref", "applications", "overrides", "registry_credentials", "provided_connections") {
@@ -445,6 +473,22 @@ func (c *structuralCandidate) reduceApplicationEdit(cmd EditCommand) error {
 	}
 	owner := asMap(libraries[cmd.DeploymentID])
 	switch cmd.Operation {
+	case "SetApplicationLibraryEndpointGroup", "ClearApplicationLibraryEndpointGroup":
+		if owner == nil {
+			return referenceNotFound("deploymentId")
+		}
+		groups, e := applicationMap(state, libraryEndpointGroupsKey)
+		if e != nil {
+			return e
+		}
+		if cmd.Operation == "SetApplicationLibraryEndpointGroup" {
+			groups[cmd.DeploymentID] = cmd.Value
+		} else {
+			delete(groups, cmd.DeploymentID)
+		}
+		if len(groups) == 0 {
+			delete(state, libraryEndpointGroupsKey)
+		}
 	case "CreateApplicationLibraryDeployment":
 		if owner != nil {
 			return blocked("EDIT_COMMAND_CONFLICT", "Library deployment already exists", "command.deploymentId")
@@ -457,11 +501,36 @@ func (c *structuralCandidate) reduceApplicationEdit(cmd EditCommand) error {
 		for key, value := range cmd.Entity {
 			owner[key] = deepCopy(value)
 		}
-	case "DeleteApplicationLibraryDeployment":
+	case "DeleteApplicationLibraryDeployment", "DeleteApplicationLibraryWithPlacements":
 		if owner == nil {
 			return referenceNotFound("deploymentId")
 		}
+		if cmd.Operation == "DeleteApplicationLibraryWithPlacements" {
+			for id, rawLibrary := range libraries {
+				if id == cmd.DeploymentID {
+					continue
+				}
+				for _, rawBinding := range asMap(asMap(rawLibrary)["bindings"]) {
+					if asMap(asMap(rawBinding)["providedConnectionRef"])["libraryId"] == cmd.DeploymentID {
+						return referenceInUse("providedConnectionRef")
+					}
+				}
+			}
+			for logical, document := range c.documents {
+				if strings.HasPrefix(logical, "inventory/host_vars/") {
+					members := asMap(document["platform_application_libraries"])
+					if _, exists := members[cmd.DeploymentID]; exists {
+						delete(members, cmd.DeploymentID)
+						c.dirty[logical] = true
+					}
+				}
+			}
+		}
 		delete(libraries, cmd.DeploymentID)
+		delete(asMap(state[libraryEndpointGroupsKey]), cmd.DeploymentID)
+		if len(asMap(state[libraryEndpointGroupsKey])) == 0 {
+			delete(state, libraryEndpointGroupsKey)
+		}
 	default:
 		if owner == nil {
 			return referenceNotFound("deploymentId")
@@ -566,6 +635,25 @@ func (c *structuralCandidate) validateApplicationReferences() error {
 		return err
 	}
 	libraries := asMap(state["applicationLibraryDeployments"])
+	endpointGroups := asMap(state["endpointGroups"])
+	if raw, exists := state[libraryEndpointGroupsKey]; exists {
+		selected := asMap(raw)
+		if selected == nil || len(selected) > 128 {
+			return managedReadError("Library endpoint selection is malformed", libraryEndpointGroupsKey)
+		}
+		for id, rawRef := range selected {
+			ref, ok := rawRef.(string)
+			if !validLibraryInputID(id) || !ok || !validLibraryInputID(ref) {
+				return managedReadError("Library endpoint reference is malformed", libraryEndpointGroupsKey)
+			}
+			if libraries[id] == nil {
+				return referenceNotFound("libraryEndpointGroups.libraryId")
+			}
+			if endpointGroups[ref] == nil {
+				return referenceNotFound("libraryEndpointGroups.endpointGroup")
+			}
+		}
+	}
 	if len(libraries) > 128 {
 		return managedReadError("Too many library deployments", desiredDocument)
 	}
@@ -626,6 +714,8 @@ func applicationWritePaths(c EditCommand) []string {
 		root = "host/" + c.HostID + "/library/" + c.DeploymentID
 	}
 	switch c.Operation {
+	case "SetApplicationLibraryEndpointGroup", "ClearApplicationLibraryEndpointGroup":
+		return []string{root + "/endpoint-group"}
 	case "CreateApplicationLibraryDeployment":
 		// Creation may be followed by slot and placement edits in the same session.
 		paths := []string{root + "/@create"}
@@ -639,7 +729,7 @@ func applicationWritePaths(c EditCommand) []string {
 			paths = append(paths, root+"/"+key)
 		}
 		return paths
-	case "DeleteApplicationLibraryDeployment", "RemoveApplicationLibraryPlacement":
+	case "DeleteApplicationLibraryDeployment", "DeleteApplicationLibraryWithPlacements", "RemoveApplicationLibraryPlacement":
 		return []string{root}
 	case "SetApplicationLibraryPlacement":
 		var paths []string

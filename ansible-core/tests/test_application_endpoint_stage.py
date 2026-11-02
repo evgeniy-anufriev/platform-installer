@@ -64,6 +64,41 @@ class EndpointTaskTest(unittest.TestCase):
             desired['endpointGroups'] = {'apps': {'address': {'domain': 'apps.example.test', 'wildcard': False}}}
             desired['applicationLibraryDeployments']['sdku']['applications']['gateway']['overrides']['endpoint'] = {
                 'enabled': True, 'listener': 'http', 'endpoint_group': 'apps', 'probe': {'path': '/status'}}
+            desired['endpointGroups']['other'] = {'address': {'domain': 'other.example.test', 'wildcard': False}}
+            desired['x-applicationLibraryEndpointGroups'] = {'sdku': 'other'}
+            desired_path.write_text(json.dumps(data))
+            play = [{'hosts': 'localhost', 'connection': 'local', 'gather_facts': False,
+                     'vars': {'platform_project_root': str(root), 'platform_contracts_root': str(REPO / 'contracts'),
+                              'platform_service_catalog_path': str(REPO / 'examples/catalog/service-catalog.yml')},
+                     'tasks': [
+                         {'ansible.builtin.include_role': {'name': 'platform.core.resolve_application_libraries'}},
+                         {'platform.core.project_snapshot': {'project_root': str(root),
+                          'service_catalog_path': str(REPO / 'examples/catalog/service-catalog.yml')}, 'register': 'snapshot'},
+                         {'platform.core.prepare_application_endpoints': {'snapshot': '{{ snapshot.snapshot }}',
+                          'service_catalog_path': str(REPO / 'examples/catalog/service-catalog.yml')}, 'register': 'endpoint_input'},
+                         {'ansible.builtin.assert': {'that': ["endpoint_input.status == 'PASS'",
+                          "endpoint_input.sources['apigateway-sdku'].targets | length == 2",
+                          "endpoint_input.sources['apigateway-sdku'].endpoint.fqdn == 'apigateway-sdku.apps.example.test'"]}}]}]
+            path = Path(directory) / 'qa.yml'
+            path.write_text(yaml.safe_dump(play))
+            env = dict(os.environ, ANSIBLE_CONFIG=str(REPO / 'ansible-core/ansible.cfg'),
+                       ANSIBLE_COLLECTIONS_PATH=os.pathsep.join([str(REPO / 'ansible-core/collections')] +
+                           [str(path.parent) for path in sorted((REPO / 'services').glob('*/ansible_collections'))]))
+            result = subprocess.run(['ansible-playbook', '-i', str(root / 'inventory/hosts.yml'), str(path)],
+                                    env=env, capture_output=True, text=True, timeout=90)
+            self.assertEqual(0, result.returncode, result.stdout[-5000:] + result.stderr[-2000:])
+
+    def test_library_endpoint_group_inherited_in_topology_and_snapshot(self):
+        with tempfile.TemporaryDirectory(prefix='platform-a6-native-') as directory:
+            root = Path(directory) / 'project'
+            shutil.copytree(REPO / 'examples/valid/application-libraries', root)
+            desired_path = root / 'inventory/group_vars/all/platform-installer.yml'
+            data = json.loads(desired_path.read_text())
+            desired = data['platform_desired_state']
+            desired['endpointGroups'] = {'apps': {'address': {'domain': 'apps.example.test', 'wildcard': False}}}
+            desired['applicationLibraryDeployments']['sdku']['applications']['gateway']['overrides']['endpoint'] = {
+                'enabled': True, 'listener': 'http', 'probe': {'path': '/status'}}
+            desired['x-applicationLibraryEndpointGroups'] = {'sdku': 'apps'}
             desired_path.write_text(json.dumps(data))
             play = [{'hosts': 'localhost', 'connection': 'local', 'gather_facts': False,
                      'vars': {'platform_project_root': str(root), 'platform_contracts_root': str(REPO / 'contracts'),

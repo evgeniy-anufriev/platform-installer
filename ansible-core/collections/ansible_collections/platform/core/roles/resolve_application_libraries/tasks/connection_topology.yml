@@ -2,6 +2,9 @@
 - name: Привязка идентификатора шаблона библиотеки перед вычислением экспортируемых значений
   ansible.builtin.set_fact:
     library_instance_id: "{{ application_job.libraryId }}"
+    _application_library_endpoint: >-
+      {{ {'endpoint_group': platform_desired_state['x-applicationLibraryEndpointGroups'][application_job.libraryId]}
+         if platform_desired_state['x-applicationLibraryEndpointGroups'][application_job.libraryId] is defined else {} }}
   no_log: true
   become: false
 
@@ -49,6 +52,7 @@
         'providedConnections': application_provided_connection_definitions,
         'settings': {
           'endpoint': application_job.application.definition.defaults.endpoint | default({}) |
+            combine(_application_library_endpoint, recursive=true) |
             combine(application_job.slot.overrides.endpoint | default({}), recursive=true) |
             combine(application_job.instance.overrides.endpoint | default({}), recursive=true) |
             combine(application_job.hostOverride.endpoint | default({}), recursive=true),
