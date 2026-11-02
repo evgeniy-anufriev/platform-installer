@@ -249,11 +249,15 @@ Package-declared PostgreSQL/ClickHouse database defaults also select effective
 library resources through an unambiguous declared connection binding. Explicit
 resource overrides win; ordinary Ansible still evaluates database parameters.
 No generated selection/name is written back into desired state.
-Application resolution failures use the existing snapshot adapterError channel
-and shared snapshot_input_message formatter, including bounded missing-field or
-variable identifiers and library/application/host context. Standard block/rescue
-publishes this safe finding before no_log censors the result. Raw exceptions,
-settings and secrets remain private; UI uses its existing diagnostic renderer.
+Application setting/template failures become APPLICATION_INPUT_INVALID project
+findings, scoped to the library/application/placement, through ordinary
+block/rescue and the shared snapshot_input_message formatter. Resolution continues
+and returns a PARTIAL snapshot with BLOCKED validation, preserving infrastructure
+configuration. A missing application row is accepted only with its matching
+scoped finding; unexplained missing/duplicate rows and changed package identity
+remain technical failures. AdapterError is reserved for a failed Core operation.
+Raw exceptions, settings and secrets remain private under no_log; UI uses its
+existing project findings renderer and INVALID verification status.
 
 Each library resource scope precedes logical instance account/grant scopes and
 Vault publication. HA ClickHouse user/grant writes use one ON CLUSTER default

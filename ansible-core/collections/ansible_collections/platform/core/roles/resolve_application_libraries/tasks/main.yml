@@ -46,6 +46,7 @@
 - name: Предоставление рассчитанных параметров провайдера шаблонам пакетов
   ansible.builtin.set_fact:
     platform_application_provided_connections: "{{ _application_connection_inputs.connections }}"
+    platform_application_findings: "{{ platform_application_findings + (_application_connection_inputs.findings | default([])) }}"
   no_log: true
   become: false
 

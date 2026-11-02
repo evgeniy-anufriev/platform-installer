@@ -682,7 +682,11 @@ class ActionModule(ActionBase):
                 expected = {(job["libraryId"], job["slotId"], job["hostId"]): job for job in rechecked["jobs"]}
                 rows = task_vars["platform_application_rows"]
                 actual = {(row["libraryId"], row["slotId"], row["hostId"]) for row in rows}
-                if not rechecked["findings"] and (actual != set(expected) or len(rows) != len(expected)):
+                failed_fields = {item.get('field') for item in task_vars.get('platform_application_findings', [])
+                                 if item.get('code') == 'APPLICATION_INPUT_INVALID' and item.get('status') == 'BLOCKED'}
+                failed = {key for key in expected if
+                          'applicationLibraryDeployments.%s.applications.%s.placements.%s' % key in failed_fields}
+                if not rechecked["findings"] and (actual | failed != set(expected) or len(rows) != len(actual)):
                     raise ValueError("Application projection placement identity mismatch")
                 resolved_findings = []
                 for row in rows:

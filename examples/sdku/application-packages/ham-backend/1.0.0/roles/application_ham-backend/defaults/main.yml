@@ -58,7 +58,7 @@ platform_application_definition:
             ALARMSERVICE_URL_ROOT: ""
             CSPA_TOPIC_ROUTE_ROOT: '{{ application_topics.kafka.main.name }}'
             CSPA_TOPICS: '{{ application_topics.kafka.main.name }}'
-            DATAMANAGER_ROOT_URL: '{{ application_parameters.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
+            DATAMANAGER_ROOT_URL: '{{ "https://data-manager-" ~ library_instance_id ~ "." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["data-manager"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}'
             DB_CONNECTION_STRING: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_databases.clickhouse.history.name }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             DB_TYPE: clickhouse
             EVO_MANAGER_HOT_TOPICS: '{{ application_topics.kafka.main.name }}'
@@ -68,7 +68,7 @@ platform_application_definition:
             JAVA_OPTS: -Xmx4048m
             SERVER_ALLOWED_ORIGINS: '*'
             SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
-            TN_SCADA_DATA_MANAGER_URL_ROOT: '{{ application_parameters.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
+            TN_SCADA_DATA_MANAGER_URL_ROOT: '{{ "https://data-manager-" ~ library_instance_id ~ "." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["data-manager"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}'
             TN_SCADA_METADATA_TARGET_PROJECT: TNSV
             TN_SCADA_REDIS_SENTINEL_MASTER: ""
             USER_ACTION_TAGNAME: _MaskCauseList.Description
@@ -86,14 +86,12 @@ platform_application_definition:
             tn-scada.cspa.topic-route.root.project.TNSVHYDRO.root.descentRule: rcv
             tn-scada.cspa.topic-route.root.project.TNSVHYDRO.root.topic: '{{ application_topics.kafka.main.name }}'
             tn-scada.cspa.topic-route.root.topic: '{{ application_topics.kafka.main.name }}'
-            tn-scada.data-manager.url: '{{ application_parameters.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
+            tn-scada.data-manager.url: '{{ "https://data-manager-" ~ library_instance_id ~ "." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["data-manager"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}'
             tn-scada.metadata.dontShowTargetProjectInNames: false
             tn-scada.metadata.hookTopic: '{{ application_topics.kafka.main.name }}'
             EVO_MANAGER_APP_ID: '{{ application_instance_id }}'
             KAFKA_APPLICATION_ID_CONFIG: '{{ application_instance_id }}'
             KAFKA_LISTENER_ID_CONFIG: '{{ application_instance_id }}'
-        parameters:
-            DATA_MANAGER_URL_ROOT: ""
         ports:
             port-1:
                 container: 10101

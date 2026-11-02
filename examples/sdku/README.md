@@ -96,14 +96,16 @@ ID через `{{ application_instance_id }}` и client ID через
 `{{ application_instance_id }}-$${SERVER_ID}`. `identity_environment` в SDKU
 не используется. Секреты по-прежнему поступают из защищённых Vault bindings.
 
-В `parameters` остаются только общие настройки для нескольких ENV или шаблонов:
-например, `ALARM_TOPIC_COMPACT`, `DATA_MANAGER_URL_ROOT`, `history` и
-`mount_sources`. Обёртка `source_variables` удалена. Одноразовые URL, темы и
-другие значения задаются непосредственно в соответствующей ENV.
+В `parameters` остаются структурные настройки: `IDENTITY_CLIENT`,
+`IDENTITY_GROUPS` библиотеки и `mount_sources`. Скалярные настройки приложения
+задаются непосредственно в ENV. URL по умолчанию используют выбранную группу
+endpoint; значения каждого ENV можно явно переопределить. Пустые параметры
+`DATA_MANAGER_URL_ROOT`, `PUBLIC_HOST`, `URL_ROOT`, `REDIS_SENTINEL_MASTER`
+больше не перекрывают вычисляемые или общие значения ENV.
 
 При обновлении существующего проекта перенесите overrides вручную: например,
-`parameters.source_variables.DATA_MANAGER_URL_ROOT` у KNP становится
-`parameters.DATA_MANAGER_URL_ROOT`, а `REDIS_SENTINEL_MASTER` —
+`parameters.DATA_MANAGER_URL_ROOT` у KNP становится
+`environment.EVO_MANAGER_DATA_MANAGER_URL`, а `REDIS_SENTINEL_MASTER` —
 `environment.TN_SCADA_REDIS_SENTINEL_MASTER`. Для frontend ENV с адресом
 указывается полный URL, а не прежний доменный суффикс. Старые group_vars
 автоматически не переписываются; рабочие проекты и серверы этим рефакторингом
@@ -163,7 +165,7 @@ Core/Go/UI контракты. Никакого специального SDKU-к
   команда указанной версии образа не найдена. Указать **argv-массив** в
   `overrides.command` после проверки именно этого образа. Заглушка намеренно
   требует `sdku_start_commands`, без выдуманной команды и автоматического pull.
-- Настроить ENV и общие `parameters`: внешние URL, темы и адреса приложений.
+- Настроить ENV: внешние URL, темы и адреса приложений.
   Неизвестные одиночные ENV оставлены пустыми; это не готовые подключения.
   Повторно используемые обязательные параметры сохраняют проверки в выражениях.
 - Заполнить `parameters.mount_sources` для файлов/данных. Для frontend нужны

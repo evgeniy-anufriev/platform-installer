@@ -40,4 +40,4 @@ services:
     deploy:
       resources:
         limits:
-          memory: {{ application_parameters.KEYCLOAK_MEMORY_LIMIT | to_json }}
+          memory: {{ application_environment.KEYCLOAK_MEMORY_LIMIT | to_json }}

@@ -265,3 +265,63 @@ an updated Installer plus rebuilt runtime bundle; existing imported package
 settings remain desired inputs. No independent review was launched, per owner.
 
 After QA, the prior verified c97e77d7 bundle was republished through the standard publisher and restored to READY on101 through React/Wails preparation. Both temporary RED OS source workspaces were cleaned with qa-sync; owned Wails/Vite processes stopped. Local QA bundle/evidence retained under ignored .runtime only.
+
+## Project findings instead of unavailable Core; application ENV — 2026-11-02
+
+Owner identified that the previous diagnostic fix still misclassified an
+incomplete application as an unavailable Core operation. Library setting failures
+now return APPLICATION_INPUT_INVALID findings with exact library/slot/placement
+fields. Ordinary block/rescue records those findings with builtin set_fact and
+continues other placements. Shared-default/connection failures use the same
+path. Snapshot identity checks permit only missing placements explained by those
+scoped findings; duplicates, unexplained omissions and changed packages retain
+their technical failure. Project Verify returns INVALID with a PARTIAL snapshot;
+existing project-error badges/links and infrastructure values are reused. No Go
+status translation, UI status branch, execution permission or new DTO was added.
+
+Owner also requested ordinary environment settings outside parameters. Keycloak
+now has no parameter aliases: actual ENV defaults derive advertised IP/node ID
+from the current placement and discovery peers from this library/slot only,
+using effective published/container ports. Container bind defaults to 0.0.0.0;
+Compose memory consumes KEYCLOAK_MEMORY_LIMIT from ENV. SZI cluster/realm ENV uses
+existing identity/SSO context. SDKU URL defaults use endpoint configuration;
+empty scalar aliases no longer shadow common Redis ENV. Structured IDENTITY_CLIENT,
+IDENTITY_GROUPS and mount_sources stay in parameters per explicit owner answer.
+Explicit ENV overrides retain normal Ansible precedence. Existing imported
+projects are not rewritten; distribute/reimport the updated package copies.
+SDKU import-catalog digests were regenerated with the canonical Core package loader.
+
+Validation: RED OS snapshot_output7, snapshot_action10, project_resolution_native4,
+application_connections11, application_providers25 and SZI projection3 PASS (60).
+Native tests cover incomplete templates -> ordinary findings/retained service
+projection, no_log secret-sentinel exclusion, unexplained missing rows still
+failing, own-placement Keycloak IP/hosts/ports, and structured-only parameters.
+SDKU28 schemas/digests and26 Compose renders PASS. Existing SZI presentation
+fixtures were updated to current resolved SSO/host/provider context. React147
+PASS including application-input INVALID status with retained dataDirectory;
+TypeScript/lint PASS. No independent review, per owner instruction.
+
+Current-source final QA runtime b57fc4b7e20a5631e5231002764dc67b85378f38827495a9a3305f7a1158cb0b
+built on trusted102, validated/published with the standard publisher, and prepared
+on101 through actual React/Wails. Real flows:
+
+- project-2026110200000016 revision39bca75cbe97efce86b89e97651dee7d0255371d527a22721fa0aa24b261cf65:
+  Header Verify INVALID, concrete missing-sso application findings, project-error
+  badge instead of unavailable check; infrastructure dataDirectory retained.
+- project-2026110200000017 revisionbdfb182dd4fb0b486ce300ca95ad4e345ebed468116db7d3e46599401be51f2b:
+  Verify VERIFIED with only the existing unset-service-secret warnings.
+  Keycloak on101/102 received corresponding IPs and the same ordered discovery
+  list192.168.56.101[7800],192.168.56.102[17800]. Node2 container port7801 and
+  explicit ENV memory4G/logDEBUG confirmed. Actual Applications -> Keycloak ->
+  Startup ENV controls showed calculated values and host switching.
+  Edit KC_LOG_LEVEL -> draft/review/Save COMMITTED at
+  8c68141de1c7ed6b85161867465e0f60f5162b4ddf5f948ca63ff75727190881;
+  authored value TRACE is under overrides.environment with no parameter alias.
+
+Safe local evidence: .runtime/qa/import-reproduce/project-findings-{errors,env}.json,
+matching screenshots and keycloak-env-save.json. Screenshots inspected for the
+requested Project status and ENV location only; no blanket visual acceptance.
+No Approve/Start or service installation was performed. Development IPC warnings
+remain observed; these flows completed through real React/Wails methods.
+
+Final Windows production Wails build PASS. After QA the previous c97e77d7 bundle was republished with the standard publisher and restored to READY on101 through real React/Wails preparation. Temporary RED OS source workspace cleaned with qa-sync; owned Wails/Vite processes stopped. Generated frontend outputs restored; unrelated guide/npm/portable-source work preserved.

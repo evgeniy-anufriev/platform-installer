@@ -2715,7 +2715,7 @@ describe("UI-01H2 services navigation and safe settings", () => {
     expect(screen.queryByText("По умолчанию: 5")).toBeNull();
   });
 
-  it("retains dataDirectory through project errors and incomplete refreshes, then replaces it with a new Core value", async () => {
+  it.each(["DNS_ZONE_INVALID", "APPLICATION_INPUT_INVALID"])("retains dataDirectory through %s and incomplete refreshes, then replaces it with a new Core value", async (code) => {
     let digest = "sha256:runtime-a";
     const pathProject = { ...project, catalog: { ...project.catalog, services: project.catalog.services.map((service) =>
       service.id === "kafka" ? { ...service, configurationSettings: [...service.configurationSettings,
@@ -2725,7 +2725,7 @@ describe("UI-01H2 services navigation and safe settings", () => {
     const value = api({
       getExecutionNodeContext: vi.fn().mockImplementation(async () => ({ status: "READY", selectionKind: "PROJECT_SERVER", selectedHostId: "node1", runtimeDigest: digest })),
       checkExecutionNode: vi.fn().mockResolvedValue({ status: "READY" }),
-      verifyProject: vi.fn().mockResolvedValue({ status: "INVALID", projectRevision: "sha256:old", findings: [{ code: "DNS_ZONE_INVALID", severity: "BLOCKED", summary: "Некорректная зона DNS" }] }),
+      verifyProject: vi.fn().mockResolvedValue({ status: "INVALID", projectRevision: "sha256:old", findings: [{ code, severity: "BLOCKED", summary: "Ошибка настроек проекта" }] }),
       getServiceConfigurationPreview: vi.fn()
         .mockResolvedValueOnce({ projectRevision: "sha256:old", runtimeDigest: "sha256:runtime-a", services: scope("RESOLVED", "/var/lib/kafka") })
         .mockResolvedValueOnce({ projectRevision: "sha256:old", runtimeDigest: "sha256:runtime-b", services: {} })
@@ -2739,6 +2739,7 @@ describe("UI-01H2 services navigation and safe settings", () => {
     expect(screen.getByRole("textbox", { name: "Каталог данных" })).toHaveProperty("value", "/var/lib/kafka");
     await userEvent.click(screen.getByRole("button", { name: "Проверить" }));
     expect(await screen.findByRole("button", { name: "Ошибки проверки" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Проверка недоступна" })).toBeNull();
     expect(screen.getByRole("textbox", { name: "Каталог данных" })).toHaveProperty("value", "/var/lib/kafka");
     for (const [index, next] of ["b", "c", "d"].entries()) {
       digest = `sha256:runtime-${next}`;

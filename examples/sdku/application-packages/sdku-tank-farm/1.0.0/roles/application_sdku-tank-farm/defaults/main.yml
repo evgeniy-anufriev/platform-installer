@@ -63,8 +63,6 @@ platform_application_definition:
             - source: assets/config/tank_config.yaml
               destination: config/tank_config.yaml
               mode: '0644'
-        parameters:
-            DATA_MANAGER_URL_ROOT: ""
         environment:
             KAFKA_ENABLE_SSL: "true"
             SPRING_KAFKA_SSL_ENABLE_SSL: "true"
@@ -94,7 +92,7 @@ platform_application_definition:
             ALARM_SERVICE_API_SERVER_PATH: /generate-alarm
             ALARM_SERVICE_API_TYPE: mock
             ALARM_TOPIC: '{{ application_topics.kafka.alarms_compact.name }}'
-            DATA_MANAGER_ROOT_URL: '{{ application_parameters.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
+            DATA_MANAGER_ROOT_URL: '{{ "https://data-manager-" ~ library_instance_id ~ "." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["data-manager"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}'
             DB_CONNECTION_STRING: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_databases.clickhouse.history.name }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             DB_TYPE: clickhouse
             EVO_SERVICES_CONSENSUS_SERVICE_HEALTH_CHECK_INTERVAL: 1000
@@ -124,7 +122,7 @@ platform_application_definition:
             EVO_SERVICES_CONSENSUS_SERVICE_WORKLOAD: LOW
             SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
             TANK_CONFIG_PATH: /usr/local/app/config/tank_config.yaml
-            TN_SCADA_DATA_MANAGER_URL: '{{ application_parameters.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
+            TN_SCADA_DATA_MANAGER_URL: '{{ "https://data-manager-" ~ library_instance_id ~ "." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["data-manager"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}'
             TN_SCADA_DATASOURCE_URL: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_databases.clickhouse.history.name }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             TN_SCADA_METADATA_TARGET_PROJECT: TNSV
             TN_SCADA_REDIS_SENTINEL_MASTER: ""

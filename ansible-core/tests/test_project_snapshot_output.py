@@ -97,11 +97,14 @@ class SnapshotOutputTests(unittest.TestCase):
                     output.unlink()
                 play.write_text(json.dumps([{'hosts': 'localhost', 'gather_facts': False, 'vars': {'empty': {}}, 'tasks': [
                     {'block': [{'ansible.builtin.set_fact': {'private_settings': "{{ {'password': 'PRIVATE_TEST_SENTINEL', 'value': empty.%s} }}" % field}, 'no_log': True}],
-                     'rescue': [{'platform.core.prepare_application_libraries': {'diagnose_failure': True, 'library_id': 'szi', 'slot_id': 'keycloak', 'host_id': 'node1'}, 'no_log': True}]}]}]))
+                     'rescue': [{'platform.core.prepare_application_libraries': {'diagnose_failure': True, 'library_id': 'szi', 'slot_id': 'keycloak', 'host_id': 'node1'}, 'register': 'diagnostic', 'no_log': True},
+                                {'ansible.builtin.set_fact': {'platform_application_findings': '{{ [diagnostic.finding] }}'}, 'no_log': True}]},
+                    {'ansible.builtin.copy': {'content': '{{ platform_application_findings | to_json }}', 'dest': str(output)}, 'no_log': True}]}]))
                 completed = subprocess.run(['ansible-playbook', '-vvv', '-i', 'localhost,', '-c', 'local', str(play)],
                     env=environment, capture_output=True, text=True, timeout=45)
-                self.assertNotEqual(0, completed.returncode)
-                finding = json.loads(output.read_text())['adapterError']
+                self.assertEqual(0, completed.returncode, completed.stdout[-1000:] + completed.stderr[-1000:])
+                finding = json.loads(output.read_text())[0]
+                self.assertEqual('APPLICATION_INPUT_INVALID', finding['code'])
                 for token in (field, 'szi', 'keycloak', 'node1'):
                     self.assertIn(token, finding['safeMessage'])
                 for content in (completed.stdout, completed.stderr, output.read_text()):

@@ -23,6 +23,9 @@ override; resetting it restores inheritance. Core computes expressions and
 effective database selections. The existing Project diagnostic area also shows
 safe failure reasons from application resolution before snapshot construction;
 no second error panel or new verification action is introduced.
+Incomplete application settings return ordinary project findings and the existing
+project-error status. They do not select "Проверка недоступна" or mark the
+Execution Node as failed; available Core infrastructure values remain visible.
 
 The 2026-09-05 [project creation design](ui-project-creation-design.md) extends
 the reference with a metadata-only new-project entry and empty states. UI-01A

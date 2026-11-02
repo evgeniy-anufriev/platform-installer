@@ -624,6 +624,13 @@ assign a RepoDigest using docker tag, and offline loads need not retain it.
 
 ### Direct library resource keys
 
+An incomplete application template is an ordinary project finding, scoped to
+its library/slot/placement. Project Verify returns INVALID with a PARTIAL Core
+snapshot and keeps the infrastructure projection available. Technical failure
+statuses are reserved for an operation that cannot return a trustworthy snapshot;
+missing rows without matching findings and changed input identities still fail.
+Runtime/execution admission remains blocked by the existing validation gates.
+
 Standard Ansible tasks merge library package resource_defaults, instance
 resource_defaults and explicit selected resource.parameters, in that order.
 Kafka uses resource_defaults.kafka.topics; PostgreSQL uses

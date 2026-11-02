@@ -79,7 +79,7 @@ platform_application_definition:
             spring.kafka.ssl.properties.sasl.jaas.config: '$${KAFKA_CONSUMER_SASL_JAAS_CONFIG}'
             logging.level.tnt.tnscada.core.kafkamanager.kafka.config.KafkaManagerConfig: INFO
             ALARM_SERVICE_API_TYPE: mock
-            DATA_MANAGER_ROOT_URL: '{{ application_parameters.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
+            DATA_MANAGER_ROOT_URL: '{{ "https://data-manager-" ~ library_instance_id ~ "." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["data-manager"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}'
             DB_CONNECTION_STRING: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_databases.clickhouse.history.name }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             DB_TYPE: clickhouse
             tn-scada.clickhouse.health.enabled: false
@@ -91,23 +91,18 @@ platform_application_definition:
             LOGGER_OUTPUT_PATTERN_CONFIG: '''%d{ISO8601} [%X{requestId}] [%-15.15t] %highlight(%-5level) %yellow(%30.30C{1}) %msg%n%throwable'''
             LOGGER_ROOT_LEVEL: INFO
             PRESSURES_CSV: /usr/local/app/imitator/data/pressures.csv
-            REDIS_SENTINEL_MASTER: '{{ application_parameters.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             SPRING_KAFKA_APPLICATION_ID: evo-manager-{{ application_instance_id }}
             SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
             SPRING_KAFKA_LISTENER_GROUP_ID: evo-manager-{{ application_instance_id }}
             SPRING_MAIN_WEB_APPLICATION_TYPE: NONE
-            TN_SCADA_DATA_MANAGER_URL_ROOT: '{{ application_parameters.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
+            TN_SCADA_DATA_MANAGER_URL_ROOT: '{{ "https://data-manager-" ~ library_instance_id ~ "." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["data-manager"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}'
             TN_SCADA_DATASOURCE_URL: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_databases.clickhouse.history.name }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             TN_SCADA_METADATA_LOAD_PROJECTS: TNSVHYDRO
             TN_SCADA_METADATA_TARGET_PROJECT: TNSVHYDRO
-            TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             kafka.consumer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-consumer'
             kafka.producer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-producer'
             server.max-http-request-header-size: 100MB
         config_files: []
-        parameters:
-            DATA_MANAGER_URL_ROOT: ""
-            REDIS_SENTINEL_MASTER: ""
         ports: {}
         provisioner:
             approle:

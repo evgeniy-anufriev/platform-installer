@@ -28,7 +28,7 @@
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:cc175b5cddd43a5304f3cd9c462a4ae995a38b035443489b9bf64d46c508f32a",
+    "digest": "sha256:c23f65fae36160630d50a7b2159e4410f0cf16a77011136cb4cb6a257f671af4",
     "kind": "application",
     "name": "evo-manager",
     "sourceDirectory": ".",
@@ -42,7 +42,7 @@
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:69cc64d058dcb6a8d7356d475de6fb2de96c4afe85cc091327728296a0a7e066",
+    "digest": "sha256:66b3c0f47d80ac5481093780249ab19c9d4fe7213b6f07072a74c1fbc96129f5",
     "kind": "application",
     "name": "ham-backend",
     "sourceDirectory": ".",
@@ -56,7 +56,7 @@
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:645962aee23ead4d6b0e5e99dfd46cac91762cca362ace5c39289ba0e3da5245",
+    "digest": "sha256:05db7d0181d80c774d67bc99b90e642130df3ec16cf293e47f4219671f6a906f",
     "kind": "application",
     "name": "hmi-frontend-alarms",
     "sourceDirectory": ".",
@@ -84,7 +84,7 @@
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:fbaafc443748772e1187a90b83ec93579c13cb128ca70ec7cd2850d73edd7f87",
+    "digest": "sha256:ddb4aed73b22993d285d761a5c788535809cd938ce5a5c163b0813b94fa77353",
     "kind": "application",
     "name": "hmi-frontend-viewer",
     "sourceDirectory": ".",
@@ -119,14 +119,14 @@
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:33a2d99172074dfbeb1a91a89e47cb989ebc439df59914360b9b8faee03bdf7d",
+    "digest": "sha256:4a6c77722a549fb16166d0b633513cea5134b7ce7542912663870e83093e489d",
     "kind": "application",
     "name": "opc-ua-server",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:d6405d6682e922f1dd82a87f466e63c869e2d69d81c83cb00b4a68a8ff7c82b8",
+    "digest": "sha256:7c5ed262b8155d259788fdaec0a11feee231ecb20e6b8c92c8c66a7557f1afb7",
     "kind": "application",
     "name": "sdku-knp",
     "sourceDirectory": ".",
@@ -140,14 +140,14 @@
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:983612bab036f6c056780821ac27be0e6aae27453d0112b45a1da61d9b5592e6",
+    "digest": "sha256:586da0293a54d5f85fb682afa649c32cfb07f01413accc19744301ba7d2c20b4",
     "kind": "application",
     "name": "sdku-status-calculation",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:55c3588644502c18786a7680b87ea374c93fe5ed59b90840b5f1238c1d05a402",
+    "digest": "sha256:6c8697ed5f811b7c8cfe8a5527ce0e211c68189fedf238249b38fa2a47a1e8da",
     "kind": "application",
     "name": "sdku-tank-farm",
     "sourceDirectory": ".",
@@ -168,7 +168,7 @@
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:8e31e01d03e18ca0bf0b925d65ad331f85789f13496431e320e8b2f2c3178027",
+    "digest": "sha256:7a9e52387f1c2200134372d46f582ec09c38671060a2f21cb787c1b316049a82",
     "kind": "application",
     "name": "sdku-vtor-ui",
     "sourceDirectory": ".",

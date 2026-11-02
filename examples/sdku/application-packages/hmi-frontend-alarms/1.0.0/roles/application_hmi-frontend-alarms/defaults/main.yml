@@ -8,6 +8,7 @@ platform_application_definition:
         command:
             - /app/docker-entrypoint.sh
         environment:
+            PUBLIC_HOST: '{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}'
             ALARMS_HEADER_TITLE: ""
             ALARMS_IMPORTANT_QUERY_PAGE_SIZE: 50
             ALARMS_OFFSET_TO_FUTURE_IN_REST_REQ_MS: 0
@@ -39,7 +40,6 @@ platform_application_definition:
             mount_sources:
                 mount-1: ""
                 mount-2: ""
-            PUBLIC_HOST: ""
         ports:
             port-1:
                 container: 10061

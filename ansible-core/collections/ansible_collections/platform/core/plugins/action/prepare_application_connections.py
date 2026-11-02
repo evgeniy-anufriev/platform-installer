@@ -1,6 +1,7 @@
 """Expose native topology before expansion of application ENV/default templates."""
 from ansible.plugins.action import ActionBase
 from ansible_collections.platform.core.plugins.module_utils.application_connections import provided_connections
+from ansible_collections.platform.core.plugins.module_utils.application_libraries import finding
 
 
 class ActionModule(ActionBase):
@@ -13,4 +14,6 @@ class ActionModule(ActionBase):
             hosts = {row['hostId']: {'ansibleHost': values['hostvars'][row['hostId']]['ansible_host']} for row in rows}
             return dict(changed=False, connections=provided_connections(rows, values['platform_desired_state'], hosts))
         except (KeyError, ValueError, TypeError):
-            return dict(failed=True, changed=False, msg='APPLICATION_PROVIDED_CONNECTION_INVALID')
+            diagnostic = finding('APPLICATION_PROVIDED_CONNECTION_INVALID', 'applicationLibraryDeployments')
+            diagnostic['safeMessage'] = 'Не удалось вычислить предоставляемые подключения приложений. Проверьте настройки подключений библиотеки.'
+            return dict(changed=False, connections={}, findings=[diagnostic])

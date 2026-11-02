@@ -104,11 +104,27 @@ class NativeProjectResolutionTests(unittest.TestCase):
             application['platform_application_definition']['defaults']['environment']['AUTO_DATABASE'] = '{{ application_databases.postgres.applicationDatabase.url }}'
             app_path.write_text(yaml.safe_dump(application))
             failed = subprocess.run(completed.args, env=environment, capture_output=True, text=True, timeout=90)
-            self.assertNotEqual(0, failed.returncode)
-            diagnostic = json.loads(output.read_text())['adapterError']
-            self.assertEqual('PROJECT_SNAPSHOT_INPUT_INVALID', diagnostic['code'])
+            self.assertEqual(0, failed.returncode, failed.stdout[-2000:] + failed.stderr[-1000:])
+            partial = json.loads(output.read_text())
+            self.assertNotIn('adapterError', partial)
+            self.assertEqual('PARTIAL', partial['status'])
+            self.assertEqual('BLOCKED', partial['validation']['status'])
+            self.assertTrue(partial['effectiveConfiguration']['services'])
+            diagnostic = next(item for item in partial['findings'] if item['code'] == 'APPLICATION_INPUT_INVALID'
+                              and item['field'].startswith('applicationLibraryDeployments.sdku.'))
+            self.assertEqual('applicationLibraryDeployments.sdku.applications.gateway.placements.node1', diagnostic['field'])
             for token in ('url', 'gateway', 'node1'):
                 self.assertIn(token, diagnostic['safeMessage'])
+            # A missing row without its scoped project finding remains a technical failure.
+            play = yaml.safe_load((ROOT / 'ansible-core/playbooks/project-snapshot-machine.yml').read_text())
+            play[0]['tasks'].insert(-1, {'ansible.builtin.set_fact': {'platform_application_findings': []}})
+            stripped_play = directory / 'missing-diagnostics.yml'
+            stripped_play.write_text(yaml.safe_dump(play))
+            arguments = list(completed.args)
+            arguments[arguments.index(str(ROOT / 'ansible-core/playbooks/project-snapshot-machine.yml'))] = str(stripped_play)
+            unexplained = subprocess.run(arguments, env=environment, capture_output=True, text=True, timeout=90)
+            self.assertNotEqual(0, unexplained.returncode)
+            self.assertEqual('PROJECT_SNAPSHOT_INPUT_INVALID', json.loads(output.read_text())['adapterError']['code'])
 
     def test_root_expressions_are_lazy_and_keep_inventory_fallback(self):
         from ansible.parsing.dataloader import DataLoader

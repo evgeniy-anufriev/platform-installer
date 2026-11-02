@@ -66,14 +66,12 @@ platform_application_definition:
             OPCUA_CONFIG: /usr/local/config/opcua.yml
             OPCUA_VIEW: EVO_VIEW
             OPCUA_VIEW_SOURCE: csv
-            REDIS_SENTINEL_MASTER: '{{ application_parameters.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             REDU_DISABLE: "true"
             REDU_GROUP_ID: opcua-server
             REDU_MANAGER_ID: 1
             SERVER_VIEW_CONFIG: /usr/local/config/view.csv
             SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
             TN_SCADA_DATA_MANAGER_URL_ROOT: ""
-            TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             TNSCADA_LOGGER_LEVEL: WARN
             TZ: Europe/Moscow
             kafka.consumer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-consumer'
@@ -90,7 +88,6 @@ platform_application_definition:
                 mount-1: ""
                 mount-2: ""
                 mount-7: ""
-            REDIS_SENTINEL_MASTER: ""
         ports:
             port-1:
                 container: 10391

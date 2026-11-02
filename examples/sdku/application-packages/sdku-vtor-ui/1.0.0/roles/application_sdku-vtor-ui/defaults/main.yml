@@ -8,10 +8,8 @@ platform_application_definition:
         command:
             - /app/docker-entrypoint.sh
         environment:
-            REACT_APP_VTOR_HOST_URL: https://nginx.{{ application_parameters.URL_ROOT | default(undef(hint='Configure SDKU URL_ROOT'), true) }}/sdku-vtor
-            REACT_APP_VTOR_HOST_URL_WS: wss://nginx.{{ application_parameters.URL_ROOT | default(undef(hint='Configure SDKU URL_ROOT'), true) }}/sdku-vtor
-        parameters:
-            URL_ROOT: ""
+            REACT_APP_VTOR_HOST_URL: https://nginx.{{ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/sdku-vtor
+            REACT_APP_VTOR_HOST_URL_WS: wss://nginx.{{ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/sdku-vtor
         ports:
             port-1:
                 container: 10311

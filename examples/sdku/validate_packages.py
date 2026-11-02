@@ -71,6 +71,7 @@ for (kind,name), package in packages.items():
         library_resources={ref: dict(kind='redis.key', parameters={'name':'sdku-main-'+suffix})
                            for ref, suffix in [('dm-meta','meta'), ('alert-hdl','alert-hdl'), ('alert-class','alert-class')]},
         library_instance_id='sdku-main', application_job=next(j for j in jobs if j['slotId'] == name),
+        _application_library_endpoint={'endpoint_group': 'apps'},
         _application_inputs={'jobs': jobs}, groups={'all': ['example-host']},
         hostvars={'example-host': {'ansible_host': 'example.invalid'}},
         sdku_start_commands={name:'/fixture/unavailable-command'}, application_project_id='fixture', application_config_digest='0'*64,

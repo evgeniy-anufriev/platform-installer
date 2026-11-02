@@ -70,7 +70,7 @@ platform_application_definition:
       ACCESS_LIST_OF_USERS_BY_GROUP: Администратор ЭВО СЗИ,Администратор системы,Администратор подключаемого сервиса
       ACCOUNT_EXCLUDE_GROUP_LIST: ТУЗ
       ALLOW_CLIENT_CACHE_CLEARING: "false"
-      HZ_CLUSTERNAME: '{{ application_parameters.HZ_CLUSTERNAME }}'
+      HZ_CLUSTERNAME: '{{ library_instance_id }}'
       HZ_NETWORK_PUBLICADDRESS: >-
         {%- set ports = (application_job.application.definition.defaults.ports | default({})) |
             combine(application_job.slot.overrides.ports | default({}), recursive=true) |

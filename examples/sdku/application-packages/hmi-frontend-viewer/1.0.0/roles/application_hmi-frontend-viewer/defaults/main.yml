@@ -8,21 +8,20 @@ platform_application_definition:
         command:
             - /app/docker-entrypoint.sh
         environment:
-            ALARMS_URL: https://{{ application_parameters.PUBLIC_HOST | default(undef(hint='Configure SDKU PUBLIC_HOST'), true) }}/hmi-frontend-alarms
-            CSPA_HMI_BACK: https://{{ application_parameters.PUBLIC_HOST | default(undef(hint='Configure SDKU PUBLIC_HOST'), true) }}/hmi-backend
-            CSPA_HMI_BACK_WS: wss://{{ application_parameters.PUBLIC_HOST | default(undef(hint='Configure SDKU PUBLIC_HOST'), true) }}/hmi-backend
-            GRANT_ACCESS: https://{{ application_parameters.PUBLIC_HOST | default(undef(hint='Configure SDKU PUBLIC_HOST'), true) }}/grant-access
-            GRANT_ACCESS_AUDIT: https://{{ application_parameters.PUBLIC_HOST | default(undef(hint='Configure SDKU PUBLIC_HOST'), true) }}/grant-access-audit
-            HMI_BACK: https://{{ application_parameters.PUBLIC_HOST | default(undef(hint='Configure SDKU PUBLIC_HOST'), true) }}/ef-backend
+            ALARMS_URL: https://{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/hmi-frontend-alarms
+            CSPA_HMI_BACK: https://{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/hmi-backend
+            CSPA_HMI_BACK_WS: wss://{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/hmi-backend
+            GRANT_ACCESS: https://{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/grant-access
+            GRANT_ACCESS_AUDIT: https://{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/grant-access-audit
+            HMI_BACK: https://{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/ef-backend
             NGINX_URL: ""
-            SVG_EDITOR: https://{{ application_parameters.PUBLIC_HOST | default(undef(hint='Configure SDKU PUBLIC_HOST'), true) }}/hmi-frontend-svg-editor
-            TRENDS_URL: https://{{ application_parameters.PUBLIC_HOST | default(undef(hint='Configure SDKU PUBLIC_HOST'), true) }}/hmi-frontend-trends
-            VTOR_URL: https://{{ application_parameters.PUBLIC_HOST | default(undef(hint='Configure SDKU PUBLIC_HOST'), true) }}/sdku-vtor-ui
+            SVG_EDITOR: https://{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/hmi-frontend-svg-editor
+            TRENDS_URL: https://{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/hmi-frontend-trends
+            VTOR_URL: https://{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/sdku-vtor-ui
         parameters:
             mount_sources:
                 mount-1: ""
                 mount-2: ""
-            PUBLIC_HOST: ""
         ports:
             port-1:
                 container: 10211

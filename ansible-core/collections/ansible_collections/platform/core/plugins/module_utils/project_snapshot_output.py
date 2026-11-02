@@ -51,8 +51,12 @@ def snapshot_input_message(stage, error, context=None):
                   else 'Ошибка вычисления переменных Ansible.' if isinstance(error, AnsibleError)
                   else 'Нарушена структура входных данных.' if isinstance(error, (TypeError, ValueError))
                   else 'Внутренний сбой построения снимка.')
-    message = 'Не удалось построить снимок проекта. Этап: %s. %s' % (stage, reason)
     context = context if isinstance(context, dict) else {}
+    stage = {'application-settings': 'расчёт настроек приложения',
+             'library-defaults': 'наследование настроек библиотеки',
+             'provided-connections': 'расчёт подключений приложения'}.get(stage, stage)
+    message = ('Не удалось вычислить настройки приложения.' if context else 'Не удалось построить снимок проекта.')
+    message += ' Этап: %s. %s' % (stage, reason)
     for key, label in (('libraryId', 'Библиотека'), ('slotId', 'приложение'), ('hostId', 'узел')):
         value = context.get(key)
         if isinstance(value, str) and re.fullmatch(r'[a-z][A-Za-z0-9_.-]{0,127}', value):

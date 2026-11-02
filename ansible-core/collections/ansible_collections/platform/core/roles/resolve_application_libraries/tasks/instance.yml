@@ -234,5 +234,12 @@
         slot_id: "{{ application_job.slotId }}"
         host_id: "{{ application_job.hostId }}"
         stage: application-settings
+      register: _application_failed
+      no_log: true
+      become: false
+
+    - name: Добавление ошибки настроек приложения в замечания проекта
+      ansible.builtin.set_fact:
+        platform_application_findings: "{{ platform_application_findings + [_application_failed.finding] }}"
       no_log: true
       become: false
