@@ -50,9 +50,7 @@ export function ApplicationPackageImport({
           </button>
           <p>{source || "Папка не выбрана"}</p>
           {applicationRef ? (
-            <p>
-              Приложение: {applicationRef}. Выберите папку с application.yml.
-            </p>
+            <p>Приложение: {applicationRef}</p>
           ) : (
             <>
               <label>
@@ -75,17 +73,6 @@ export function ApplicationPackageImport({
               )}
             </>
           )}
-          {!applicationRef && kind === "application" && (
-            <p>
-              Выберите папку application-packages. Все вложенные приложения и
-              версии будут импортированы вместе.
-            </p>
-          )}
-          <p>Версия будет прочитана из описания пакета.</p>
-          <p>
-            Только локальный data-only пакет. Публикация после проверки и общего
-            Review/Save.
-          </p>
           {error && <p role="alert">{error}</p>}
           <button
             disabled={

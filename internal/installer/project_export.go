@@ -312,21 +312,28 @@ func exportContentRevision(documents []exportRecord) string {
 	return digestBytes(revisionInput)
 }
 
+func exportPackagePathError(logical, code, message string) error {
+	if strings.HasPrefix(logical, "application-packages/") || strings.HasPrefix(logical, "library-packages/") {
+		return blocked(code, message+" «"+logical+"».", logical)
+	}
+	return errors.New(code)
+}
+
 func collectExportDirectory(directory *exportDirectory, prefix string, result *exportObservation, seen, caseFolded map[string]bool) error {
 	entries, err := directory.entries()
 	if err != nil {
-		return errors.New("EXPORT_SOURCE_UNSAFE")
+		return exportPackagePathError(prefix, "EXPORT_SOURCE_UNSAFE", "Не удалось безопасно прочитать каталог")
 	}
 	for _, entry := range entries {
 		logical := prefix + "/" + entry.name
 		if !safeExportLogicalPath(logical) {
-			return errors.New("EXPORT_SOURCE_UNSAFE")
+			return exportPackagePathError(logical, "EXPORT_SOURCE_UNSAFE", "Недопустимый путь")
 		}
 		switch entry.kind {
 		case exportEntryDirectory:
 			child, openErr := directory.openDirectory([]string{entry.name})
 			if openErr != nil {
-				return errors.New("EXPORT_SOURCE_UNSAFE")
+				return exportPackagePathError(logical, "EXPORT_SOURCE_UNSAFE", "Не удалось безопасно открыть каталог")
 			}
 			recurseErr := collectExportDirectory(child, logical, result, seen, caseFolded)
 			child.close()
@@ -341,7 +348,7 @@ func collectExportDirectory(directory *exportDirectory, prefix string, result *e
 			if strings.HasPrefix(logical, "application-packages/") || strings.HasPrefix(logical, "library-packages/") || extension == ".yml" || extension == ".yaml" || extension == ".json" {
 				if strings.HasPrefix(logical, "application-packages/") || strings.HasPrefix(logical, "library-packages/") {
 					if !safeApplicationPackagePath(logical) {
-						return errors.New("APPLICATION_PACKAGE_PATH_INVALID")
+						return exportPackagePathError(logical, "APPLICATION_PACKAGE_PATH_INVALID", "Путь не разрешён для пакета. Ожидается <имя>/<версия>/application.yml и объявленные файлы пакета:")
 					}
 				}
 				if err := addExportDocument(directory, entry.name, result, seen, caseFolded, logical); err != nil {
@@ -349,7 +356,7 @@ func collectExportDirectory(directory *exportDirectory, prefix string, result *e
 				}
 			}
 		default:
-			return errors.New("EXPORT_SOURCE_UNSAFE")
+			return exportPackagePathError(logical, "EXPORT_SOURCE_UNSAFE", "Элемент не является обычным файлом или каталогом")
 		}
 	}
 	return nil
@@ -365,7 +372,7 @@ func addExportDocument(root *exportDirectory, logical string, result *exportObse
 		return errors.New("EXPORT_SOURCE_UNSAFE")
 	}
 	if seen[storedLogical] || caseFolded[strings.ToLower(storedLogical)] {
-		return errors.New("EXPORT_SOURCE_UNSAFE")
+		return exportPackagePathError(storedLogical, "EXPORT_SOURCE_UNSAFE", "Повторяющийся путь с учётом регистра")
 	}
 	limit := maxExportFileBytes
 	if safeApplicationPackagePath(storedLogical) {
@@ -373,10 +380,16 @@ func addExportDocument(root *exportDirectory, logical string, result *exportObse
 	}
 	content, identity, err := root.readFile(parts, limit)
 	if err != nil {
+		if strings.HasPrefix(storedLogical, "application-packages/") || strings.HasPrefix(storedLogical, "library-packages/") {
+			if err.Error() == "EXPORT_LIMIT_EXCEEDED" {
+				return exportPackagePathError(storedLogical, "APPLICATION_PACKAGE_LIMIT", "Файл превышает допустимый размер")
+			}
+			return exportPackagePathError(storedLogical, "APPLICATION_PACKAGE_INVALID", "Не удалось безопасно прочитать файл")
+		}
 		return err
 	}
 	if len(result.documents) >= maxExportFiles || result.total > maxExportTotalBytes-int64(len(content)) {
-		return errors.New("EXPORT_LIMIT_EXCEEDED")
+		return exportPackagePathError(storedLogical, "EXPORT_LIMIT_EXCEEDED", "Превышен общий лимит файлов или размера проекта при чтении файла")
 	}
 	seen[storedLogical], caseFolded[strings.ToLower(storedLogical)] = true, true
 	record := exportRecord{ProjectExportDocument: ProjectExportDocument{LogicalPath: storedLogical, Size: int64(len(content)), Digest: digestBytes(content)}, identity: identity, content: content}

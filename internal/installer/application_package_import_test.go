@@ -447,3 +447,44 @@ func TestApplicationImportRepositoryLibraries(t *testing.T) {
 		})
 	}
 }
+
+func TestApplicationPackageImportDiagnostics(t *testing.T) {
+	for _, tc := range []struct {
+		name, path, message string
+		mutate              func(*testing.T, string)
+	}{
+		{"missing", "application-packages/gateway/1.0.0/roles/application_gateway/templates/compose.yml.j2", "отсутствует", func(t *testing.T, source string) {
+			if err := os.Remove(filepath.Join(source, "roles/application_gateway/templates/compose.yml.j2")); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{"unlisted", "application-packages/gateway/1.0.0/assets/extra.txt", "не объявлен", func(t *testing.T, source string) {
+			writeExportFixture(t, source, "assets/extra.txt", "private-content-never-in-diagnostic")
+		}},
+		{"unsafe-path", "application-packages/gateway/1.0.0/roles/application_gateway/tasks/main.yml", "не разрешён", func(t *testing.T, source string) {
+			writeExportFixture(t, source, "roles/application_gateway/tasks/main.yml", "private-content-never-in-diagnostic")
+		}},
+		{"defaults-version", "application-packages/gateway/1.0.0/roles/application_gateway/defaults/main.yml", "Версия в defaults", func(t *testing.T, source string) {
+			writeExportFixture(t, source, "roles/application_gateway/defaults/main.yml", "platform_application_definition:\n  name: gateway\n  version: 2.0.0\n")
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root, b, revision := b2Project(t)
+			source, _ := b2Package(t)
+			tc.mutate(t, source)
+			plan, err := b.PlanApplicationPackageImport(context.Background(), root, source, revision, "application", "gateway", "", "")
+			if err != nil || plan.Status != "BLOCKED" || plan.Finding == nil {
+				t.Fatalf("%v %+v", err, plan)
+			}
+			if plan.Finding.Field != tc.path || !strings.Contains(plan.Finding.SafeMessage, tc.path) || !strings.Contains(plan.Finding.SafeMessage, tc.message) {
+				t.Fatalf("%+v", plan.Finding)
+			}
+			if strings.Contains(plan.Finding.SafeMessage, "private-content-never-in-diagnostic") {
+				t.Fatal("file contents exposed")
+			}
+			if after, err := ProjectRevision(root); err != nil || after != revision {
+				t.Fatal("blocked import changed project", err)
+			}
+		})
+	}
+}
