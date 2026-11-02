@@ -40470,7 +40470,7 @@ func validApplicationConnectionSettings(v any) bool {
 }
 
 @@END
-@@PORTABLE {"path":"internal/installer/application_package_import.go","mode":420,"size":12778,"sha256":"f9c7a2fa44cf640483f2e076ab05015dcab476a3c172cb9bf95c0179468d1618","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":12778}
+@@PORTABLE {"path":"internal/installer/application_package_import.go","mode":420,"size":18335,"sha256":"c624e9b6fcfee69a42902e9088bf142a16f64dcf04d9df6b8afea83c72406ebc","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":18335}
 package installer
 
 import (
@@ -40579,32 +40579,56 @@ type applicationPackageManifest struct {
 	Scripts    []map[string]any  `yaml:"scripts,omitempty"`
 }
 
+func packageImportError(path, reason string) *writerError {
+	return blocked("APPLICATION_PACKAGE_INVALID", "Пакет «"+path+"»: "+reason, path)
+}
+
 func checkPackageManifest(records []exportRecord, kind, name, version string) (string, error) {
-	invalid := errors.New("APPLICATION_PACKAGE_INVALID")
 	prefix := kind + "-packages/" + name + "/" + version + "/"
 	byPath := map[string][]byte{}
 	for _, r := range records {
 		byPath[strings.TrimPrefix(r.LogicalPath, prefix)] = r.content
 	}
 	var m applicationPackageManifest
+	if _, ok := byPath[kind+".yml"]; !ok {
+		return "", packageImportError(prefix+kind+".yml", "Не найден файл описания пакета.")
+	}
 	d := yaml.NewDecoder(strings.NewReader(string(byPath[kind+".yml"])))
 	d.KnownFields(true)
-	if d.Decode(&m) != nil || d.Decode(new(any)) != io.EOF || (m.APIVersion != "platform.installer/application-package/v1alpha1" && m.APIVersion != "platform.installer/application-package/v1alpha2" && m.APIVersion != "platform.installer/application-package/v1alpha3" && m.APIVersion != "platform.installer/application-package/v1alpha4") || m.Kind != strings.ToUpper(kind[:1])+kind[1:]+"Package" || m.Name != name || m.Version != version || len(m.Files) < 1 || len(m.Files) > maxApplicationPackageFiles-1 {
-		return "", invalid
+	if d.Decode(&m) != nil {
+		return "", packageImportError(prefix+kind+".yml", "Описание пакета не соответствует формату манифеста.")
+	}
+	if d.Decode(new(any)) != io.EOF {
+		return "", packageImportError(prefix+kind+".yml", "Ожидается один YAML-документ описания пакета.")
+	}
+	if m.APIVersion != "platform.installer/application-package/v1alpha1" && m.APIVersion != "platform.installer/application-package/v1alpha2" && m.APIVersion != "platform.installer/application-package/v1alpha3" && m.APIVersion != "platform.installer/application-package/v1alpha4" {
+		return "", packageImportError(prefix+kind+".yml", "Неподдерживаемая apiVersion описания пакета.")
+	}
+	if m.Kind != strings.ToUpper(kind[:1])+kind[1:]+"Package" {
+		return "", packageImportError(prefix+kind+".yml", "Поле kind не соответствует выбранному типу пакета.")
+	}
+	if m.Name != name {
+		return "", packageImportError(prefix+kind+".yml", "Поле name не соответствует имени папки «"+name+"».")
+	}
+	if m.Version != version {
+		return "", packageImportError(prefix+kind+".yml", "Поле version не соответствует папке версии «"+version+"».")
+	}
+	if len(m.Files) < 1 || len(m.Files) > maxApplicationPackageFiles-1 {
+		return "", packageImportError(prefix+kind+".yml", "Список files должен содержать от 1 до 511 записей.")
 	}
 	listed := map[string]bool{kind + ".yml": true}
 	declared := map[string]bool{}
 	for _, file := range m.Files {
 		folded := strings.ToLower(file)
 		if declared[folded] {
-			return "", invalid
+			return "", packageImportError(prefix+file, "Повторная запись в списке files.")
 		}
 		declared[folded] = true
 		if strings.HasSuffix(file, "/") {
 			// A trailing slash is one allowlist entry for all files below it.
 			// Validate the directory as a package data path; records remain files.
 			if !safeApplicationPackagePath(prefix + file + "member") {
-				return "", invalid
+				return "", packageImportError(prefix+file, "Каталог из files не разрешён для импорта.")
 			}
 			for member := range byPath {
 				if strings.HasPrefix(member, file) {
@@ -40614,44 +40638,67 @@ func checkPackageManifest(records []exportRecord, kind, name, version string) (s
 			continue
 		}
 		if !safeApplicationPackagePath(prefix + file) {
-			return "", invalid
+			return "", packageImportError(prefix+file, "Путь из files не разрешён для импорта.")
 		}
 		listed[folded] = true
 		if _, ok := byPath[file]; !ok {
-			return "", invalid
+			return "", packageImportError(prefix+file, "Файл указан в files, но отсутствует в выбранной папке.")
 		}
 	}
-	if len(listed) != len(byPath) || !listed["roles/"+kind+"_"+name+"/defaults/main.yml"] {
-		return "", invalid
+	paths := make([]string, 0, len(byPath))
+	for path := range byPath {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	for _, path := range paths {
+		if !listed[strings.ToLower(path)] {
+			return "", packageImportError(prefix+path, "Файл не объявлен в списке files описания пакета.")
+		}
+	}
+	defaultsPath := "roles/" + kind + "_" + name + "/defaults/main.yml"
+	if !listed[defaultsPath] {
+		return "", packageImportError(prefix+defaultsPath, "Файл defaults не объявлен в списке files.")
 	}
 	for key, value := range m.Render {
 		if key != "compose_template" && key != "agent_template" && key != "base_compose_template" && key != "base_compose_filename" && key != "base_service" {
-			return "", invalid
+			return "", packageImportError(prefix+kind+".yml", "Неподдерживаемый параметр раздела render.")
 		}
-		if strings.HasSuffix(key, "template") && (!listed[strings.ToLower(value)] || (!strings.HasSuffix(value, ".j2") && !(key == "agent_template" && strings.HasSuffix(value, ".hcl")))) {
-			return "", invalid
+		if strings.HasSuffix(key, "template") {
+			if !listed[strings.ToLower(value)] {
+				return "", packageImportError(prefix+value, "Шаблон из render не объявлен в files.")
+			}
+			if !strings.HasSuffix(value, ".j2") && !(key == "agent_template" && strings.HasSuffix(value, ".hcl")) {
+				return "", packageImportError(prefix+value, "Недопустимое расширение шаблона в render.")
+			}
 		}
 	}
 	// Identity/default namespace is checked locally; resolution and semantic
 	// schema validation remain optional target-free Core Project Verify.
 	var defaults map[string]any
-	if yaml.Unmarshal(byPath["roles/"+kind+"_"+name+"/defaults/main.yml"], &defaults) != nil || len(defaults) != 1 {
-		return "", invalid
+	if yaml.Unmarshal(byPath["roles/"+kind+"_"+name+"/defaults/main.yml"], &defaults) != nil {
+		return "", packageImportError(prefix+defaultsPath, "Некорректный YAML defaults.")
+	}
+	if len(defaults) != 1 {
+		return "", packageImportError(prefix+defaultsPath, "В defaults ожидается единственный корневой раздел platform_"+kind+"_definition.")
 	}
 	definition := asMap(defaults["platform_"+kind+"_definition"])
-	if definition["name"] != name || definition["version"] != version || safeApplicationInput(defaults, 0) != nil {
-		return "", invalid
+	if definition["name"] != name {
+		return "", packageImportError(prefix+defaultsPath, "Имя в defaults не соответствует описанию пакета.")
 	}
-	paths := make([]string, 0, len(byPath))
-	for p := range byPath {
-		paths = append(paths, p)
+	if definition["version"] != version {
+		return "", packageImportError(prefix+defaultsPath, "Версия в defaults не соответствует описанию пакета.")
 	}
-	sort.Strings(paths)
+	if safeApplicationInput(defaults, 0) != nil {
+		return "", packageImportError(prefix+defaultsPath, "Структура defaults содержит недопустимые данные.")
+	}
 	rows := make([][]string, 0, len(paths))
 	for _, p := range paths {
 		content := byPath[p]
-		if len(content) > maxApplicationPackageFileBytes || strings.Contains(string(content), "PRIVATE KEY-----") {
-			return "", invalid
+		if len(content) > maxApplicationPackageFileBytes {
+			return "", packageImportError(prefix+p, "Файл превышает допустимый размер.")
+		}
+		if strings.Contains(string(content), "PRIVATE KEY-----") {
+			return "", packageImportError(prefix+p, "Файл содержит приватный ключ; импорт запрещён.")
 		}
 		if p == "files/.env" {
 			keys := map[string]bool{}
@@ -40662,7 +40709,7 @@ func checkPackageManifest(records []exportRecord, kind, name, version string) (s
 				}
 				name, _, found := strings.Cut(line, "=")
 				if !found || !packageEnvName.MatchString(name) || keys[name] || name == "SERVER_ID" {
-					return "", invalid
+					return "", packageImportError(prefix+p, "Некорректная запись .env: требуется уникальное допустимое имя переменной; SERVER_ID задаётся автоматически.")
 				}
 				keys[name] = true
 			}
@@ -40685,9 +40732,14 @@ func validateExportPackages(records []exportRecord) error {
 			groups[key] = append(groups[key], r)
 		}
 	}
-	for key, files := range groups {
+	keys := make([]string, 0, len(groups))
+	for key := range groups {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
 		p := strings.Split(key, "/")
-		if _, err := checkPackageManifest(files, strings.TrimSuffix(p[0], "-packages"), p[1], p[2]); err != nil {
+		if _, err := checkPackageManifest(groups[key], strings.TrimSuffix(p[0], "-packages"), p[1], p[2]); err != nil {
 			return err
 		}
 	}
@@ -40701,7 +40753,7 @@ func (b *Backend) PlanApplicationPackageImport(ctx context.Context, projectRoot,
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	invalid := blocked("APPLICATION_PACKAGE_INVALID", "Package metadata, paths or content are invalid", "package")
+	invalid := packageImportError("package", "Некорректные параметры импорта пакета.")
 	batch := kind == "application" && name == "" && version == ""
 	if (kind != "application" && kind != "library") || (!batch && !validLibraryInputID(name)) || (version != "" && !packageVersion.MatchString(version)) {
 		return blockedStructuralPlan(revision, invalid), nil
@@ -40712,14 +40764,14 @@ func (b *Backend) PlanApplicationPackageImport(ctx context.Context, projectRoot,
 	}
 	current, err := ProjectRevision(root)
 	if err != nil || current != revision {
-		return blockedStructuralPlan(revision, blocked("PROJECT_CHANGED", "Project changed before package review", "project")), nil
+		return blockedStructuralPlan(revision, blocked("PROJECT_CHANGED", "Проект изменился перед проверкой импорта. Повторите проверку.", "project")), nil
 	}
 	if _, err := loadStructuralCandidate(root, projectlifecycle.ClassificationManaged); err != nil {
 		return blockedStructuralPlan(revision, err), nil
 	}
 	source, err := openExportSourceDirectory(sourceRoot)
 	if err != nil {
-		return blockedStructuralPlan(revision, invalid), nil
+		return blockedStructuralPlan(revision, packageImportError("source", "Не удалось безопасно открыть выбранную папку пакета.")), nil
 	}
 	defer source.close()
 	prefix := "application-packages"
@@ -40727,40 +40779,55 @@ func (b *Backend) PlanApplicationPackageImport(ctx context.Context, projectRoot,
 	if !batch {
 		manifest, _, err = source.readFile([]string{kind + ".yml"}, maxApplicationPackageFileBytes)
 		if err != nil {
-			return blockedStructuralPlan(revision, invalid), nil
+			return blockedStructuralPlan(revision, packageImportError(kind+".yml", "Не удалось прочитать описание пакета в выбранной папке.")), nil
 		}
 		var metadata applicationPackageManifest
 		if yaml.Unmarshal(manifest, &metadata) != nil || !packageVersion.MatchString(metadata.Version) || (version != "" && version != metadata.Version) {
-			return blockedStructuralPlan(revision, invalid), nil
+			return blockedStructuralPlan(revision, packageImportError(kind+".yml", "Некорректная версия в описании пакета; ожидается версия выбранного приложения в формате X.Y.Z.")), nil
 		}
 		version = metadata.Version
 		prefix = kind + "-packages/" + name + "/" + version
 	}
 	observation := exportObservation{}
-	if err := collectExportDirectory(source, prefix, &observation, map[string]bool{}, map[string]bool{}); err != nil || len(observation.documents) == 0 || len(observation.documents) > maxApplicationPackageFiles {
-		return blockedStructuralPlan(revision, invalid), nil
+	if err := collectExportDirectory(source, prefix, &observation, map[string]bool{}, map[string]bool{}); err != nil {
+		if _, ok := err.(*writerError); ok {
+			return blockedStructuralPlan(revision, err), nil
+		}
+		return blockedStructuralPlan(revision, packageImportError(prefix, "Не удалось безопасно прочитать состав пакетов.")), nil
+	}
+	if len(observation.documents) == 0 {
+		return blockedStructuralPlan(revision, packageImportError(prefix, "В выбранной папке не найдены файлы пакетов. Ожидается структура <имя>/<версия>/application.yml.")), nil
+	}
+	if len(observation.documents) > maxApplicationPackageFiles {
+		return blockedStructuralPlan(revision, blocked("APPLICATION_PACKAGE_LIMIT", "Превышен лимит импорта: 512 файлов пакетов.", prefix)), nil
 	}
 	// Validate the captured package, without requiring an operator-supplied SHA.
 	// The manifest used to derive the destination must be the reviewed bytes.
 	for _, record := range observation.documents {
 		if !batch && record.LogicalPath == prefix+"/"+kind+".yml" && string(record.content) != string(manifest) {
-			return blockedStructuralPlan(revision, invalid), nil
+			return blockedStructuralPlan(revision, packageImportError(record.LogicalPath, "Описание пакета изменилось во время проверки. Повторите импорт.")), nil
 		}
 	}
 	err = validateExportPackages(observation.documents)
 	if err != nil {
-		return blockedStructuralPlan(revision, invalid), nil
+		return blockedStructuralPlan(revision, err), nil
 	}
 	existing, err := applicationPackageDocuments(root)
 	if err != nil {
-		return blockedStructuralPlan(revision, invalid), nil
+		if _, ok := err.(*writerError); ok {
+			return blockedStructuralPlan(revision, err), nil
+		}
+		return blockedStructuralPlan(revision, packageImportError("project", "Не удалось проверить файлы пакетов, уже находящихся в проекте.")), nil
 	}
 	total := observation.total
 	for _, record := range existing {
 		total += record.Size
 	}
-	if len(existing)+len(observation.documents) > maxApplicationPackageFiles || total > maxExportTotalBytes {
-		return blockedStructuralPlan(revision, blocked("APPLICATION_PACKAGE_LIMIT", "Combined project package closure exceeds its limit", "package")), nil
+	if len(existing)+len(observation.documents) > maxApplicationPackageFiles {
+		return blockedStructuralPlan(revision, blocked("APPLICATION_PACKAGE_LIMIT", "После импорта будет превышен лимит 512 файлов пакетов в проекте.", "package")), nil
+	}
+	if total > maxExportTotalBytes {
+		return blockedStructuralPlan(revision, blocked("APPLICATION_PACKAGE_LIMIT", "После импорта будет превышен общий размер пакетов проекта: 64 МиБ.", "package")), nil
 	}
 	documents := make([]storedDocument, 0, len(observation.documents))
 	versions := map[string]bool{}
@@ -40775,7 +40842,7 @@ func (b *Backend) PlanApplicationPackageImport(ctx context.Context, projectRoot,
 				return blockedStructuralPlan(revision, pathErr), nil
 			}
 			if _, statErr := os.Lstat(versionRoot); !errors.Is(statErr, os.ErrNotExist) {
-				return blockedStructuralPlan(revision, blocked("APPLICATION_PACKAGE_EXISTS", "Package version already exists", "package")), nil
+				return blockedStructuralPlan(revision, blocked("APPLICATION_PACKAGE_EXISTS", "Версия пакета уже существует в проекте: «"+versionPath+"».", versionPath)), nil
 			}
 			versions[versionPath] = true
 		}
@@ -40784,12 +40851,12 @@ func (b *Backend) PlanApplicationPackageImport(ctx context.Context, projectRoot,
 			return blockedStructuralPlan(revision, err), nil
 		}
 		if _, statErr := os.Lstat(destination); !errors.Is(statErr, os.ErrNotExist) {
-			return blockedStructuralPlan(revision, blocked("APPLICATION_PACKAGE_EXISTS", "Package version already exists", "package")), nil
+			return blockedStructuralPlan(revision, blocked("APPLICATION_PACKAGE_EXISTS", "Файл пакета уже существует в проекте: «"+r.LogicalPath+"».", r.LogicalPath)), nil
 		}
 		documents = append(documents, storedDocument{LogicalPath: r.LogicalPath, After: r.content, Existed: false})
 	}
 	if latest, err := ProjectRevision(root); err != nil || latest != revision {
-		return blockedStructuralPlan(revision, blocked("PROJECT_CHANGED", "Project changed during package review", "project")), nil
+		return blockedStructuralPlan(revision, blocked("PROJECT_CHANGED", "Проект изменился во время проверки импорта. Повторите проверку.", "project")), nil
 	}
 	entityID := name + "@" + version
 	if batch {
@@ -44398,7 +44465,7 @@ func tryProcessFileLock(file *os.File) (func() error, bool, error) {
 }
 
 @@END
-@@PORTABLE {"path":"internal/installer/project_export.go","mode":420,"size":19784,"sha256":"9e1cecab378cffb75ebf277d32345621162f3186a6bbaf6dbd0b0d94005e551b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":19784}
+@@PORTABLE {"path":"internal/installer/project_export.go","mode":420,"size":21319,"sha256":"3f55a3d1798025a2fbdd7a05aee72a1237c9aa8d39ee9da921147fcec0bf89c4","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":21319}
 package installer
 
 import (
@@ -44713,21 +44780,28 @@ func exportContentRevision(documents []exportRecord) string {
 	return digestBytes(revisionInput)
 }
 
+func exportPackagePathError(logical, code, message string) error {
+	if strings.HasPrefix(logical, "application-packages/") || strings.HasPrefix(logical, "library-packages/") {
+		return blocked(code, message+" «"+logical+"».", logical)
+	}
+	return errors.New(code)
+}
+
 func collectExportDirectory(directory *exportDirectory, prefix string, result *exportObservation, seen, caseFolded map[string]bool) error {
 	entries, err := directory.entries()
 	if err != nil {
-		return errors.New("EXPORT_SOURCE_UNSAFE")
+		return exportPackagePathError(prefix, "EXPORT_SOURCE_UNSAFE", "Не удалось безопасно прочитать каталог")
 	}
 	for _, entry := range entries {
 		logical := prefix + "/" + entry.name
 		if !safeExportLogicalPath(logical) {
-			return errors.New("EXPORT_SOURCE_UNSAFE")
+			return exportPackagePathError(logical, "EXPORT_SOURCE_UNSAFE", "Недопустимый путь")
 		}
 		switch entry.kind {
 		case exportEntryDirectory:
 			child, openErr := directory.openDirectory([]string{entry.name})
 			if openErr != nil {
-				return errors.New("EXPORT_SOURCE_UNSAFE")
+				return exportPackagePathError(logical, "EXPORT_SOURCE_UNSAFE", "Не удалось безопасно открыть каталог")
 			}
 			recurseErr := collectExportDirectory(child, logical, result, seen, caseFolded)
 			child.close()
@@ -44742,7 +44816,7 @@ func collectExportDirectory(directory *exportDirectory, prefix string, result *e
 			if strings.HasPrefix(logical, "application-packages/") || strings.HasPrefix(logical, "library-packages/") || extension == ".yml" || extension == ".yaml" || extension == ".json" {
 				if strings.HasPrefix(logical, "application-packages/") || strings.HasPrefix(logical, "library-packages/") {
 					if !safeApplicationPackagePath(logical) {
-						return errors.New("APPLICATION_PACKAGE_PATH_INVALID")
+						return exportPackagePathError(logical, "APPLICATION_PACKAGE_PATH_INVALID", "Путь не разрешён для пакета. Ожидается <имя>/<версия>/application.yml и объявленные файлы пакета:")
 					}
 				}
 				if err := addExportDocument(directory, entry.name, result, seen, caseFolded, logical); err != nil {
@@ -44750,7 +44824,7 @@ func collectExportDirectory(directory *exportDirectory, prefix string, result *e
 				}
 			}
 		default:
-			return errors.New("EXPORT_SOURCE_UNSAFE")
+			return exportPackagePathError(logical, "EXPORT_SOURCE_UNSAFE", "Элемент не является обычным файлом или каталогом")
 		}
 	}
 	return nil
@@ -44766,7 +44840,7 @@ func addExportDocument(root *exportDirectory, logical string, result *exportObse
 		return errors.New("EXPORT_SOURCE_UNSAFE")
 	}
 	if seen[storedLogical] || caseFolded[strings.ToLower(storedLogical)] {
-		return errors.New("EXPORT_SOURCE_UNSAFE")
+		return exportPackagePathError(storedLogical, "EXPORT_SOURCE_UNSAFE", "Повторяющийся путь с учётом регистра")
 	}
 	limit := maxExportFileBytes
 	if safeApplicationPackagePath(storedLogical) {
@@ -44774,10 +44848,16 @@ func addExportDocument(root *exportDirectory, logical string, result *exportObse
 	}
 	content, identity, err := root.readFile(parts, limit)
 	if err != nil {
+		if strings.HasPrefix(storedLogical, "application-packages/") || strings.HasPrefix(storedLogical, "library-packages/") {
+			if err.Error() == "EXPORT_LIMIT_EXCEEDED" {
+				return exportPackagePathError(storedLogical, "APPLICATION_PACKAGE_LIMIT", "Файл превышает допустимый размер")
+			}
+			return exportPackagePathError(storedLogical, "APPLICATION_PACKAGE_INVALID", "Не удалось безопасно прочитать файл")
+		}
 		return err
 	}
 	if len(result.documents) >= maxExportFiles || result.total > maxExportTotalBytes-int64(len(content)) {
-		return errors.New("EXPORT_LIMIT_EXCEEDED")
+		return exportPackagePathError(storedLogical, "EXPORT_LIMIT_EXCEEDED", "Превышен общий лимит файлов или размера проекта при чтении файла")
 	}
 	seen[storedLogical], caseFolded[strings.ToLower(storedLogical)] = true, true
 	record := exportRecord{ProjectExportDocument: ProjectExportDocument{LogicalPath: storedLogical, Size: int64(len(content)), Digest: digestBytes(content)}, identity: identity, content: content}
