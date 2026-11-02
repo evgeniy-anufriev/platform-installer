@@ -93180,7 +93180,7 @@ function Group({ title, children }: { title: string; children: ReactNode }) {
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/ApplicationPackageImport.tsx","mode":420,"size":3091,"sha256":"11b58fff9558b61080624c699e4ed11163382edd16e2b98be06a418e942a4ef6","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3091}
+@@PORTABLE {"path":"frontend/src/ApplicationPackageImport.tsx","mode":420,"size":2598,"sha256":"32d36fcc9fd07bd2248c977d8d43d1b8205da23ed02262f22297c78417be70a0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2598}
 import { useState } from "react";
 
 export function ApplicationPackageImport({
@@ -93202,8 +93202,6 @@ export function ApplicationPackageImport({
   const [source, setSource] = useState("");
   const [kind, setKind] = useState("application");
   const [name, setName] = useState("");
-  const [version, setVersion] = useState("");
-  const [digest, setDigest] = useState("");
   const [error, setError] = useState("");
   return (
     <>
@@ -93243,31 +93241,16 @@ export function ApplicationPackageImport({
             Имя
             <input value={name} onChange={(e) => setName(e.target.value)} />
           </label>
-          <label>
-            Версия
-            <input
-              value={version}
-              onChange={(e) => setVersion(e.target.value)}
-              placeholder="1.0.0"
-            />
-          </label>
-          <label>
-            Ожидаемый digest пакета
-            <input
-              value={digest}
-              onChange={(e) => setDigest(e.target.value)}
-              placeholder="sha256:…"
-            />
-          </label>
+          <p>Версия будет прочитана из описания пакета.</p>
           <p>
             Только локальный data-only пакет. Публикация после проверки и общего
             Review/Save.
           </p>
           {error && <p role="alert">{error}</p>}
           <button
-            disabled={disabled || !source || !name || !version || !digest}
+            disabled={disabled || !source || !name}
             onClick={() =>
-              void review(source, kind, name, version, digest).then((ok) => {
+              void review(source, kind, name, "", "").then((ok) => {
                 if (ok) setOpen(false);
               })
             }
