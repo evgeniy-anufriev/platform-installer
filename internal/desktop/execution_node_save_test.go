@@ -7,6 +7,7 @@ import (
 	"platform-installer/internal/executionnode"
 	"platform-installer/internal/installer"
 	"platform-installer/internal/projectlifecycle"
+	"platform-installer/internal/runtimesecret"
 )
 
 func TestSavePreservesOnlyUnchangedExecutionBinding(t *testing.T) {
@@ -58,5 +59,38 @@ func TestSavePreservesOnlyUnchangedExecutionBinding(t *testing.T) {
 				t.Fatal("save retained execution approval")
 			}
 		})
+	}
+}
+
+func TestExternalExecutionSaveRetainsPendingSecretsAndReadiness(t *testing.T) {
+	app := preparedDraftApp(t)
+	app.binding.dynamic = false
+	app.execution.context.SelectionKind = "EXPLICIT_EXTERNAL"
+	app.execution.context.SelectedHostID = ""
+	binding := app.binding
+	credential := runtimesecret.Binding{Root: app.current.Root, ID: app.current.Project.ID}
+	if err := app.secrets.SetPendingServiceSecretInput(credential, "kafka", "SERVICE_PASSWORD", []byte("synthetic-password"), nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := app.secrets.SetPKIStorePassword(credential, "synthetic-pki-password"); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.secrets.SetPendingRuntimeSecretValuesForRequirements(credential, []string{"keycloak-password"}, map[string]string{"keycloak-password": "synthetic-application-password"}); err != nil {
+		t.Fatal(err)
+	}
+	app.clearRuntimeSecretDescriptorEvidenceLocked(true)
+	app.refreshExecutionAfterSaveLocked(app.current.Root, app.current.Project, managedSnapshotHosts(app.current.Managed))
+	if app.binding != binding || app.execution.context.Status != "READY" ||
+		!app.secrets.ServiceSecretsPresent(credential, []runtimesecret.RuntimeSecretInput{{ServiceDeployment: "kafka", Purpose: "SERVICE_PASSWORD"}}) {
+		t.Fatal("unchanged startup connection Save lost readiness or pending service password")
+	}
+	if status := app.secrets.Status(credential); status.PKIStorePasswordStatus != runtimesecret.PKIStorePasswordPresent {
+		t.Fatal("Save lost PKCS password")
+	}
+	if err := app.secrets.PromotePendingRuntimeSecretValues(credential, []string{"keycloak-password"}); err != nil {
+		t.Fatal(err)
+	}
+	if missing := app.secrets.MissingRequiredSecrets(credential, []string{"keycloak-password"}, true, true); len(missing) != 0 {
+		t.Fatal("Save lost a pending application password")
 	}
 }

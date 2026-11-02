@@ -766,6 +766,20 @@ func TestLocalSaveReopenVerifyAndStaleEvidence(t *testing.T) {
 	if saved.Status != "COMMITTED" || reader.calls != 0 || saved.Current == nil || saved.Current.Managed.Servers["node1"].Address != "192.0.2.10" {
 		t.Fatalf("local save=%#v calls=%d", saved, reader.calls)
 	}
+	app.approvedTargetHostKeys["node1"] = approvedTargetHostKey{root: root, projectID: project.ID,
+		revision: saved.Current.Managed.ProjectRevision, hostID: "node1", address: "192.0.2.10", port: 22, publicKey: "confirmed-key"}
+	app.approvedTargetHostKeys["removed"] = approvedTargetHostKey{root: root, projectID: project.ID, revision: saved.Current.Managed.ProjectRevision}
+	unchanged := app.StartEditSession()
+	app.AppendEditCommand(unchanged.Session.SessionID, installer.EditCommand{Operation: "CreateServer", HostID: "node2", ServerType: "infra", DesiredHostname: "node2.example.internal", Address: "192.0.2.20"})
+	unchangedPlan := app.ReviewStructuralEditSession(unchanged.Session.SessionID)
+	if unchangedPlan.Plan == nil || !unchangedPlan.Plan.SaveAllowed {
+		t.Fatal("unchanged endpoint edit unavailable")
+	}
+	unchangedSave := app.CommitStructuralEditPlan(unchanged.Session.SessionID, unchangedPlan.Plan.PlanID)
+	if unchangedSave.Status != "COMMITTED" || len(app.approvedTargetHostKeys) != 1 ||
+		app.approvedTargetHostKeys["node1"].revision != unchangedSave.Commit.NewProjectRevision || app.approvedTargetHostKeys["node1"].publicKey != "confirmed-key" {
+		t.Fatal("Save lost an unchanged confirmed key or retained a removed endpoint")
+	}
 	if err := os.MkdirAll(filepath.Join(root, "inventory", "host_vars", "node1"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -821,6 +835,8 @@ func TestLocalSaveReopenVerifyAndStaleEvidence(t *testing.T) {
 		t.Fatal("could not restore verified evidence")
 	}
 	verifiedRevision := app.current.Verification.ProjectRevision
+	app.approvedTargetHostKeys["node1"] = approvedTargetHostKey{root: root, projectID: project.ID,
+		revision: verifiedRevision, hostID: "node1", address: "192.0.2.10", port: 22, publicKey: "confirmed-key"}
 	app.binding = &executionNodeBinding{dynamic: true}
 	app.execution.setStatus("READY")
 	app.installationPlanID = "old-plan"
@@ -840,6 +856,9 @@ func TestLocalSaveReopenVerifyAndStaleEvidence(t *testing.T) {
 	}
 	if len(updated.Current.Verification.Findings) != 0 || updated.Current.Snapshot != nil {
 		t.Fatalf("stale evidence exposed previous findings or snapshot: %#v", updated.Current)
+	}
+	if len(app.approvedTargetHostKeys) != 0 {
+		t.Fatal("Save retained trust for a changed SSH address")
 	}
 }
 

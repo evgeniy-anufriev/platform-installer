@@ -13,7 +13,8 @@ import (
 )
 
 // These approvals exist only in this application session. A saved project
-// revision, server endpoint, or project-open lifecycle change makes them stale.
+// endpoint or project-open lifecycle change makes them stale. Local Save may
+// carry a confirmed key to the next revision only for an unchanged endpoint.
 type pendingTargetHostKey struct {
 	id, root, projectID, revision, hostID, address string
 	port                                           uint16

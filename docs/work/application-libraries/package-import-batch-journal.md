@@ -372,3 +372,39 @@ observation. Windows process flags and the actual Verify path were exercised.
 Development IPC warnings remained observed. No independent review per owner.
 
 Windows production Wails build PASS. Prior c97e77d7 cache/runtime restored through the standard publisher and real Wails preparation (READY); owned Wails/Vite processes stopped. Generated frontend outputs restored; unrelated guide/npm/portable-source work preserved. No new runtime bundle is needed for these UI/Windows-launch fixes.
+
+
+## Registry Save session retention (2026-11-02)
+
+Owner reported that registry Save dropped node/target checks and session secrets.
+Successful structural Save previously cleared every target pin; React also
+cleared all server facts on every project revision. Preserve confirmed target
+keys only across the exact committed old/new revision when project/root and
+SSH host/address/port still match. Removed/changed targets and failed refresh
+remain revoked. Existing saved-project revision and SSH pin validation remain.
+Server facts now follow project identity and transport endpoints, not arbitrary
+configuration revisions. New plans and approval are still required after Save.
+
+The unchanged startup EXPLICIT_EXTERNAL connection now follows the same Save
+retention as PROJECT_SERVER: preserve readiness and project-bound pending
+secrets; detach old descriptor evidence and re-attest before execution. No
+secret lifetime extension or new persistent storage, SSH probe, Core rule or
+service-specific secret handling. Existing tests cover application, service
+and PKCS pending inputs; address changes revoke target trust. No review per owner.
+
+Full Go tests/vet PASS; React App102, TypeScript and lint PASS. Actual React/Wails
+flow used a separate copy of the c97 locked QA project, existing READY runtime,
+real Kafka secret dialog and registry add/Review/Save handlers. PKCS was seeded
+through the existing Wails method as a supplementary check. Saved revision
+911217d47790021cfbb927a675f35067f2503f521d6595ad57dd73f24f22f5a1:
+node READY, Kafka secretsInstalled=true, PKCS PRESENT, server facts retained.
+No Approve/Start/service installation or runtime bundle replacement. Initial
+automation retries used incorrect Registry textbox / status-chip locators; the
+corrected real UI flow passed. Visual inspection not claimed. Existing dev
+runtime:ready/nodes warnings observed. Production Windows Wails build PASS.
+
+Separate owner question: registry credential form calls GetRuntimeSecretDescriptors
+before showing inputs. Its current transport stages the project and invokes
+Core describe-runtime-secrets; each click can repeat that work. Latency/caching
+is not changed by the session-retention fix. SSH/SCP/fsutil use the existing
+hidden-window helper in current source; no new visible-console fix claimed.

@@ -1997,6 +1997,8 @@ describe("UI-01E2 server editor", () => {
       verification: { status: "STALE", projectRevision: "sha256:old" },
     };
     const value = api({
+      probeServerInformation: vi.fn().mockResolvedValue({ status: "APPROVAL_REQUIRED", probeId: "save-probe", keyType: "ssh-ed25519", fingerprint: "SHA256:example" }),
+      checkServerInformation: vi.fn().mockResolvedValue({ status: "CHECKED", hostId: "node1" }),
       getServiceConfigurationPreview: vi.fn()
         .mockResolvedValueOnce({ projectRevision: "sha256:old", runtimeDigest: "sha256:runtime-a", services: {} })
         .mockImplementation(() => new Promise(() => {})),
@@ -2027,6 +2029,9 @@ describe("UI-01E2 server editor", () => {
       }),
     });
     await openServers(value);
+    await userEvent.click(screen.getAllByRole("button", { name: "Проверить сервер" })[0]);
+    await userEvent.click(await screen.findByRole("button", { name: "Подтверждаю совпадение" }));
+    expect(await screen.findByText("Проверен", { exact: true })).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: "Изменить" }));
     await userEvent.clear(screen.getByLabelText("Желаемое имя хоста"));
     await userEvent.type(
@@ -2045,6 +2050,7 @@ describe("UI-01E2 server editor", () => {
     );
     expect(await screen.findByText("Проверка устарела")).toBeTruthy();
     expect(await screen.findByText("node1.changed.internal")).toBeTruthy();
+    expect(screen.getByText("Проверен", { exact: true })).toBeTruthy();
     await waitFor(() => expect(value.getServiceConfigurationPreview).toHaveBeenCalledTimes(2));
     for (const name of ["Сервисы", "Приложения", "Установка"])
       expect(screen.getByRole("button", { name })).toHaveProperty("disabled", false);

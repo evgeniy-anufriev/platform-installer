@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"maps"
 	"regexp"
 	"slices"
 	"sort"
@@ -1764,7 +1765,6 @@ func (a *App) CommitStructuralEditPlan(sessionID, planID string) StructuralEditO
 	}
 	if result.Status == "COMMITTED" || result.Status == "COMMITTED_REFRESH_FAILED" {
 		a.pendingTargetHostKey = nil
-		clear(a.approvedTargetHostKeys)
 		previousVerification := a.current.Verification
 		a.clearRuntimeSecretDescriptorEvidenceLocked(result.Status == "COMMITTED")
 		if !a.sessions.FinishCommit(sessionID, planID, true) {
@@ -1776,11 +1776,25 @@ func (a *App) CommitStructuralEditPlan(sessionID, planID string) StructuralEditO
 		a.current.Classification = projectlifecycle.ClassificationManaged
 		if result.Status == "COMMITTED" && result.Managed != nil && result.Managed.ProjectRevision == result.NewProjectRevision {
 			a.current.Managed = result.Managed
+			previousTargetKeys := maps.Clone(a.approvedTargetHostKeys)
 			managed := result.Managed
 			a.current.Counts.Servers = len(managed.Servers)
 			a.current.Diagnostics = a.managedServerTypeDiagnostics(managed)
 			a.refreshExecutionAfterSaveLocked(a.current.Root, a.current.Project, managedSnapshotHosts(managed))
+			// A new desired revision needs a new plan, but unchanged SSH
+			// endpoints keep their independently confirmed host keys.
+			clear(a.approvedTargetHostKeys)
+			for id, pin := range previousTargetKeys {
+				address, port, _, err := a.savedTargetServerLocked(id)
+				if err != nil || pin.root != a.current.Root || pin.projectID != a.current.Project.ID ||
+					pin.revision != result.OldProjectRevision || pin.address != address || pin.port != port {
+					continue
+				}
+				pin.revision = result.NewProjectRevision
+				a.approvedTargetHostKeys[id] = pin
+			}
 		} else {
+			clear(a.approvedTargetHostKeys)
 			a.pendingHostKey = nil
 			a.invalidateDynamicBindingLocked()
 			a.current.Managed = nil
@@ -1857,13 +1871,16 @@ func managedSnapshotHosts(view *installer.ManagedProjectView) map[string]map[str
 // Saving desired state invalidates plans, not an unchanged prepared transport.
 // Connection authority is still checked by the normal credential/pin guards.
 func (a *App) refreshExecutionAfterSaveLocked(root string, project *projectlifecycle.Project, hosts map[string]map[string]any) {
-	if project != nil && a.binding != nil && a.binding.dynamic &&
-		a.execution.root == root && a.execution.projectID == project.ID &&
-		a.execution.context.SelectionKind == "PROJECT_SERVER" {
-		id, address, port, err := a.selectedSavedExecutionServerLocked()
+	if project != nil && a.binding != nil &&
+		a.execution.root == root && a.execution.projectID == project.ID {
+		id := a.binding.node.ID
+		unchanged := !a.binding.dynamic && a.execution.context.SelectionKind == "EXPLICIT_EXTERNAL"
+		if a.execution.context.SelectionKind == "PROJECT_SERVER" {
+			selected, address, port, err := a.selectedSavedExecutionServerLocked()
+			unchanged = err == nil && selected == id && address == a.binding.node.Address && port == a.binding.node.Port
+		}
 		runtime, valid := installationRuntimeBinding(a.binding.reader.runtimeRelease)
-		if err == nil && id == a.binding.node.ID && address == a.binding.node.Address && port == a.binding.node.Port &&
-			valid && runtime.BundleDigest == project.Source.BundleDigest && runtime.CatalogDigest == project.Source.CatalogDigest {
+		if unchanged && valid && runtime.BundleDigest == project.Source.BundleDigest && runtime.CatalogDigest == project.Source.CatalogDigest {
 			a.pendingHostKey = nil
 			a.execution.replaceSnapshotHosts(hosts)
 			if candidate, ok := a.execution.candidates[id]; ok {

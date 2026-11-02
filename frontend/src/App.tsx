@@ -905,11 +905,16 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       credentialStatus?.sshMode,
       credentialStatus?.status,
     ]);
+  const serverTransportBinding = JSON.stringify(
+    Object.entries(managed?.servers || {}).sort(([a], [b]) => a.localeCompare(b))
+      .map(([id, server]) => [id, server.address, server.sshPort ?? 22]),
+  );
   useEffect(
     () => setServerInformation({}),
     [
       result.root,
-      result.managed?.projectRevision,
+      result.project?.id,
+      serverTransportBinding,
       credentialStatus?.expiresAt,
       credentialStatus?.status,
       credentialStatus?.sshMode,
