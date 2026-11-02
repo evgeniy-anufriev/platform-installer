@@ -2,6 +2,8 @@
 import copy
 import importlib.util
 import json
+import os
+import subprocess
 from pathlib import Path
 import sys
 import time
@@ -26,6 +28,30 @@ from schema_validation import SchemaValidator
 
 
 class ApplicationImagePreparationTests(unittest.TestCase):
+    def test_native_ansible_callback_publishes_image_context(self):
+        snapshot = application_snapshot()
+        snapshot['validation'] = {'status': 'PASS'}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'manifest.yaml').write_text(json.dumps({'containerImages': []}))
+            output = root / 'diagnostic.json'
+            task = {'name': 'Describe image inputs', 'platform.core.prepare_application_images': {
+                'project_root': directory, 'bundle_root': directory, 'snapshot': snapshot, 'connections': {},
+                'application_rows': [dict(libraryId='sdku', instanceId='keycloak', hostId='localhost', runtimeRef='docker',
+                    settings={'image': 'unassigned.invalid/keycloak:qa'}, registryCredentials={})]}, 'no_log': False}
+            playbook = root / 'probe.json'
+            playbook.write_text(json.dumps([dict(hosts='localhost', connection='local', gather_facts=False, tasks=[task])]))
+            environment = dict(os.environ, ANSIBLE_CONFIG=str(ROOT / 'ansible-core/ansible.cfg'),
+                ANSIBLE_COLLECTIONS_PATH=str(ROOT / 'ansible-core/collections'),
+                ANSIBLE_CALLBACKS_ENABLED='platform.core.deployment_plan_json', PLATFORM_CORE_DIAGNOSTIC_OUTPUT=str(output))
+            result = subprocess.run(['ansible-playbook', '-i', 'localhost,', str(playbook)], env=environment,
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=60)
+            self.assertNotEqual(result.returncode, 0)
+            diagnostic = json.loads(output.read_text())
+            self.assertEqual(diagnostic['errorCode'], 'APPLICATION_IMAGE_NOT_LOCKED', result.stdout.decode(errors='replace')[-3000:])
+            for value in ('sdku', 'keycloak', 'localhost', 'unassigned.invalid/keycloak:qa', 'Registry образа не разрешён'):
+                self.assertIn(value, diagnostic['findings'][0]['safeMessage'])
+
     def test_library_registry_source_is_scoped_to_the_selected_row(self):
         path = ROOT / 'ansible-core/collections/ansible_collections/platform/core/plugins/action/prepare_application_images.py'
         spec = importlib.util.spec_from_file_location('prepare_images_action_test', path)
@@ -47,7 +73,25 @@ class ApplicationImagePreparationTests(unittest.TestCase):
                 self.assertFalse(result.get('failed'), result)
                 self.assertEqual(result['inputs']['placements'][0]['credentials'], pair)
                 row['registryCredentials'] = {'other.example': pair}
-                self.assertEqual(action.run(task_vars=values)['error_code'], 'APPLICATION_IMAGE_NOT_LOCKED')
+                failure = action.run(task_vars=values)
+                self.assertEqual(failure['error_code'], 'APPLICATION_IMAGE_NOT_LOCKED')
+                diagnostic = failure['finding']
+                for text in ('sdku', 'apigateway-sdku', 'node1', 'registry.example/probe:qa', 'Registry образа не разрешён'):
+                    self.assertIn(text, diagnostic['safeMessage'])
+                self.assertNotIn('registry-username', diagnostic['safeMessage'])
+                self.assertNotIn('registry-password', diagnostic['safeMessage'])
+                self.assertLessEqual(len(diagnostic['safeMessage']), 512)
+                self.assertEqual(diagnostic['field'], 'applicationImages.sdku.apigateway-sdku.node1')
+                # The same code on a mismatched placement pin needs a different concrete reason.
+                values['platform_artifact_lock'] = {'x-container-images': {'apiVersion': 'platform.installer/container-images/v1alpha2',
+                    'placements': {'sdku:apigateway-sdku:node1': {'reference': 'registry.example/old:qa', 'image': {}}}}}
+                failure = action.run(task_vars=values)
+                self.assertEqual(failure['error_code'], 'APPLICATION_IMAGE_NOT_LOCKED')
+                self.assertIn('Запись фиксации размещения', failure['finding']['safeMessage'])
+                self.assertNotIn('не разрешён', failure['finding']['safeMessage'])
+                row['settings']['image'] = 'https://user:private-test-value@registry.example/app:qa'
+                failure = action.run(task_vars=values)
+                self.assertNotIn('private-test-value', json.dumps(failure['finding']))
 
     def test_registry_assignment_requires_authority_and_never_a_url(self):
         validator = SchemaValidator(str(ROOT / 'contracts'))

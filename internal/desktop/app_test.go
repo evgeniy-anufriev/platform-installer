@@ -430,6 +430,21 @@ func TestRuntimeSecretDescriptorDiagnosticCodesAreBoundedTokensOnly(t *testing.T
 	}
 }
 
+func TestInstallationPlanKeepsBoundedImageDiagnostic(t *testing.T) {
+	message := "Этап: выбор разрешённого источника образа. Библиотека: «szi». Приложение: «keycloak». Узел: «node1». Образ: «registry.example/keycloak:qa»."
+	err := &executionnode.ExecutionError{Code: "APPLICATION_IMAGE_NOT_LOCKED", Findings: []executionnode.Finding{{Code: "APPLICATION_IMAGE_NOT_LOCKED", SafeMessage: message}}}
+	result := installationPlanFailure(err)
+	if result.Error.Message != message || result.Error.Code != err.Code {
+		t.Fatalf("result=%+v", result.Error)
+	}
+	for _, unsafe := range []string{strings.Repeat("x", 2049), "message\nprivate-test-value"} {
+		err.Findings[0].SafeMessage = unsafe
+		if got := installationPlanFailure(err); got.Error.Message == unsafe {
+			t.Fatal("unsafe finding exposed")
+		}
+	}
+}
+
 func TestServerWriterBlockersHaveSafeMessages(t *testing.T) {
 	for _, code := range []string{"INVALID_EDIT_COMMAND", "SERVER_METADATA_REQUIRED", "REFERENCE_IN_USE", "EDIT_SHADOWED", "PLAN_EXPIRED", "WRITE_FAILED"} {
 		if message := projectErrorMessage(code); message == "" || message == projectErrorMessage("UNRELATED_UNKNOWN_ERROR") {

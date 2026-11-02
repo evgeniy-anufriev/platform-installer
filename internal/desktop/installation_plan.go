@@ -486,5 +486,17 @@ func installationPlanStateFor(record executionnode.PlanRecord) string {
 
 func installationPlanFailure(err error) InstallationPlanOperation {
 	code := projectErrorCode(err)
-	return InstallationPlanOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: code, Message: projectErrorMessage(code), DiagnosticCodes: runtimeSecretDescriptorDiagnosticCodes(err)}}
+	message := projectErrorMessage(code)
+	var executionError *executionnode.ExecutionError
+	if errors.As(err, &executionError) {
+		for _, finding := range executionError.Findings {
+			if finding.Code == code && (strings.HasPrefix(code, "APPLICATION_IMAGE_") || strings.HasPrefix(code, "APPLICATION_ARTIFACT_")) {
+				if safe := boundedFindingString(finding.SafeMessage, 2048); safe != "" && !strings.ContainsAny(safe, "\x00\r\n\x1b") {
+					message = safe
+					break
+				}
+			}
+		}
+	}
+	return InstallationPlanOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: code, Message: message, DiagnosticCodes: runtimeSecretDescriptorDiagnosticCodes(err)}}
 }

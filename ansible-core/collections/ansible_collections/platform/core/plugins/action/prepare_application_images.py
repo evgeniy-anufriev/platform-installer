@@ -1,6 +1,7 @@
 """Controller-only preparation inputs from native Ansible rows and bundle metadata."""
 import json
 import os
+import re
 from ansible.plugins.action import ActionBase
 from ansible_collections.platform.core.plugins.module_utils.application_images import (
     registry_request, selected_image, offline_image, placement_key, normalize_image,
@@ -16,14 +17,17 @@ class ActionModule(ActionBase):
     def run(self, tmp=None, task_vars=None):
         values = task_vars or {}
         args = self._task.args
+        row, stage = {}, 'project-lock'
         try:
             root = args['project_root']
             manifest_path = os.path.join(root, 'project.yml')
             project = self._loader.load_from_file(manifest_path) if os.path.isfile(manifest_path) else {}
             lock = resolve_image_lock(values.get('platform_artifact_lock'), (project or {}).get('artifactLock'))
+            stage = 'project-snapshot'
             snapshot = args['snapshot']
             if snapshot.get('validation', {}).get('status') != 'PASS':
                 raise ValueError('APPLICATION_IMAGE_PROJECT_INVALID')
+            stage = 'bundle-manifest'
             bundle = self._loader.load_from_file(os.path.join(args['bundle_root'], 'manifest.yaml'))
             from ansible_collections.platform.core.plugins.module_utils.application_selection import execution_scope
             scope = execution_scope(snapshot, values.get('platform_execution_application_library_order'), values.get('platform_execution_skip_application_libraries'))
@@ -32,7 +36,9 @@ class ActionModule(ActionBase):
                 if row['libraryId'] not in scope['installLibraries']:
                     continue
                 reference = row['settings']['image']
+                stage = 'existing-image-lock'
                 legacy = selected_image(lock, reference, row['libraryId'], row['instanceId'], row['hostId'])
+                stage = 'source-policy'
                 request = registry_request(reference, legacy)
                 host = values['hostvars'][row['hostId']]
                 policy = set(host.get('platform_application_approved_registries', [])) | set(row.get('registryCredentials', {}))
@@ -52,6 +58,7 @@ class ActionModule(ActionBase):
                                        configDirectory=host.get('platform_application_registry_config_directory', ''),
                                        credentials=row.get('registryCredentials', {}).get(request['registry'], {})))
                 targets.add(row['hostId'])
+            row, stage = {}, 'secret-requirements'
             model = application_execution_model(snapshot, lock, scope['libraryOrder'], scope['skippedLibraries'])
             needed_refs = {pair[name]['source']['ref'] for item in placements
                            for pair in [item['credentials']] if pair for name in ('username', 'password')}
@@ -65,4 +72,35 @@ class ActionModule(ActionBase):
             code = str(error)
             if not code.startswith('APPLICATION_') or not code.replace('_', '').isalnum():
                 code = 'APPLICATION_IMAGE_INPUT_INVALID'
-            return dict(failed=True, changed=False, error_code=code, msg=code)
+            stages = {
+                'project-lock': 'чтение фиксации образов проекта',
+                'project-snapshot': 'проверка снимка проекта',
+                'bundle-manifest': 'чтение манифеста набора установки',
+                'existing-image-lock': 'сопоставление ранее зафиксированного образа',
+                'source-policy': 'выбор разрешённого источника образа',
+                'secret-requirements': 'получение требований к секретам образов',
+            }
+            reasons = {
+                'APPLICATION_IMAGE_NOT_LOCKED': ('Registry образа не разрешён для этого размещения; в наборе установки образ отсутствует.'
+                    if stage == 'source-policy' else 'Запись фиксации размещения не соответствует выбранному образу.'),
+                'APPLICATION_ARTIFACT_LOCK_CONFLICT': 'Обнаружены противоречащие друг другу фиксации образа.',
+                'APPLICATION_IMAGE_REFERENCE_INVALID': 'Некорректный адрес образа.',
+                'APPLICATION_IMAGE_PROJECT_INVALID': 'Снимок проекта содержит блокирующие замечания.',
+                'APPLICATION_IMAGE_ARCHIVE_AMBIGUOUS': 'Найдено несколько подходящих архивов образа.',
+                'APPLICATION_IMAGE_ARCHIVE_NOT_LOCKED': 'Архив образа не подтверждён компонентами набора установки.',
+            }
+            message = 'Этап: ' + stages[stage] + '. ' + reasons.get(code, 'Некорректные входные данные подготовки образов.')
+            field = 'applicationImages'
+            for key, label in (('libraryId', 'Библиотека'), ('instanceId', 'Приложение'), ('hostId', 'Узел')):
+                value = row.get(key)
+                if isinstance(value, str) and re.fullmatch(r'[a-zA-Z0-9_.-]{1,96}', value):
+                    message += ' ' + label + ': «' + value[:48] + '».'
+                    field += '.' + value[:48]
+            try:
+                reference = normalize_image(row.get('settings', {}).get('image'))
+                message += ' Образ: «' + reference[:192] + '».'
+            except (ValueError, TypeError, AttributeError):
+                pass  # Invalid input text is never copied into a public diagnostic.
+            finding = dict(apiVersion='platform.installer/finding/v1alpha1', kind='Finding', code=code,
+                           status='BLOCKED', category='application-images', field=field, safeMessage=message[:512])
+            return dict(failed=True, changed=False, error_code=code, msg=code, finding=finding)
