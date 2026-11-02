@@ -1231,6 +1231,13 @@ explicit application overrides retain priority. These extend the earlier static
 mockup, whose generic application panel does not show these controls. No duplicate
 project verification or execution actions are added.
 
+The library placement selector lists only project servers with an authored
+placement of that library's selected container runtime. Switching runtime changes
+the displayed choices; hidden saved placements are not silently removed. General
+no longer exposes the package-reference or advanced placement editors, and the
+Resources tab omits shared-secret source editors. Stored package references,
+placement overrides and secret sources remain unchanged by hiding these controls.
+
 Owner interaction refinement (2026-11-02): library binding type controls are
 fixed/disabled like the endpoint row. Existing role-based presentation filtering
 and PKI declarations choose new-row kinds, with SSO shown as an application

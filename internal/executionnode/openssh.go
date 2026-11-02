@@ -828,11 +828,15 @@ func readStableCandidateFile(root, logical string) ([]byte, error) {
 		}
 	}
 	if runtime.GOOS == "windows" {
-		output, linkErr := exec.Command("fsutil", "hardlink", "list", absolute).CombinedOutput()
+		command := exec.Command("fsutil", "hardlink", "list", absolute)
+		commandwindow.Configure(command)
+		output, linkErr := command.CombinedOutput()
 		if linkErr != nil {
 			// Error 50 means the filesystem itself does not support hardlinks.
 			// Other failures cannot prove that the candidate file is single-link.
-			if !bytes.Contains(output, []byte("Error 50:")) {
+			// fsutil localizes the label when launched without a console;
+			// the numeric Win32 error code remains the same.
+			if !bytes.Contains(output, []byte(" 50:")) {
 				return nil, errors.New("PROJECT_CANDIDATE_FILE_UNSAFE")
 			}
 		} else {

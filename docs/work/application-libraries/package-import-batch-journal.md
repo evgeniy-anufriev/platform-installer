@@ -325,3 +325,50 @@ No Approve/Start or service installation was performed. Development IPC warnings
 remain observed; these flows completed through real React/Wails methods.
 
 Final Windows production Wails build PASS. After QA the previous c97e77d7 bundle was republished with the standard publisher and restored to READY on101 through real React/Wails preparation. Temporary RED OS source workspace cleaned with qa-sync; owned Wails/Vite processes stopped. Generated frontend outputs restored; unrelated guide/npm/portable-source work preserved.
+
+## Runtime placement choices and reduced library UI — 2026-11-02
+
+Owner requested library placement choices only on servers with a containerization
+entity, removal of package/advanced-placement/shared-secret-source editors, and
+reported sequential visible command windows during Project Verify.
+Applications now filters authored host/member service placements by the selected
+library runtimeRef, instead of listing every server or every Docker deployment.
+Runtime changes immediately change the choices; absent/empty runtime placements
+show an empty state. Hiding a saved incompatible placement does not delete it.
+Existing structural placement commands, review/save and Core validation remain.
+Package-reference, advanced host overrides and shared-secret-source sections are
+removed from rendering; their stored metadata/defaults are preserved.
+
+The missed Windows process was fsutil hardlink list in readStableCandidateFile,
+called for each candidate project/package file. It now uses the existing
+commandwindow.Configure (HideWindow + CREATE_NO_WINDOW), as SSH/SCP already do.
+Without a console, fsutil localizes its error label; the existing unsupported-FS
+exception now matches the stable numeric Win32 code50 instead of English Error50.
+Other failures, multiple links and existing file identity/size guards still block.
+No new Go file/process abstraction, Core rule or SSH/trust request was introduced.
+
+Validation: Applications33 + App102 =135 React tests PASS, TypeScript/lint PASS;
+full Go tests and vet PASS. Uncached executionnode suite PASS. Focused candidate
+archive/package-revision tests also ran with temporary files on the workspace
+NTFS volume: positive archive/limits and hardlink rejection PASS; existing
+Windows case-collision skip unchanged. This covers both localized unsupported
+Temp FS and actual NTFS hardlinks with hidden fsutil execution.
+
+Actual React/Wails project-2026110200000018 used existing verified b57fc4b7 Core
+runtime (unchanged Core sources). Initial revision
+9b0c9d1b29c7e433681a3b0cf883646c17f89886580e4130349eeff2e7e4e85a:
+Docker selected -> node1/node2 only; docker-alt selected -> node3 only.
+Runtime edit was discarded through normal Review/Cancel. Removed panels absent
+in General/Resources. Unchecking node2 -> Review/Save COMMITTED revision
+89ab4565efe808d4e0c53f0b92a78baa54a69aa8ad5747391fd6f40dfdc4a1e0;
+node1 library placement retained and Docker's node2 placement unchanged.
+Header Project Verify through real Go/SSH/candidate-file checks finished VERIFIED
+with only three existing unset-service-secret warnings. No service installation
+or Approve/Start occurred. Core sources/bundle semantics were unchanged.
+Safe evidence: .runtime/qa/import-reproduce/placement-ui-result.json and
+placement-{general,resources}.png. Screenshots inspected for requested removed
+sections; transient native-window visibility was not claimed as a full visual
+observation. Windows process flags and the actual Verify path were exercised.
+Development IPC warnings remained observed. No independent review per owner.
+
+Windows production Wails build PASS. Prior c97e77d7 cache/runtime restored through the standard publisher and real Wails preparation (READY); owned Wails/Vite processes stopped. Generated frontend outputs restored; unrelated guide/npm/portable-source work preserved. No new runtime bundle is needed for these UI/Windows-launch fixes.

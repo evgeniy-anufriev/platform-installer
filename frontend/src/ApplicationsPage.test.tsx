@@ -28,6 +28,7 @@ const managed = {
       serviceType: "docker",
     },
   },
+  hostPlacements: [{ deploymentId: "docker", hostId: "node1", roles: [] }],
   applicationLibraries: {
     sdku: {
       libraryRef: "sdku@1.0.0",
@@ -159,6 +160,108 @@ async function selectSlot() {
   await userEvent.click(screen.getByRole("button", { name: "↳ gateway" }));
 }
 describe("application editor", () => {
+  it("offers placement only on hosts of the selected runtime without rewriting saved placements", async () => {
+    const view = structuredClone(managed);
+    Object.assign(view.servers, {
+      node2: { hostId: "node2" },
+      node3: { hostId: "node3" },
+      node4: { hostId: "node4" },
+    });
+    Object.assign(view.deployments, {
+      other: { serviceType: "docker" },
+      pg: { serviceType: "postgresql" },
+    });
+    view.hostPlacements = [
+      { deploymentId: "docker", hostId: "node1", roles: [] },
+      { deploymentId: "other", hostId: "node3", roles: [] },
+      { deploymentId: "pg", hostId: "node4", roles: [] },
+    ];
+    view.memberPlacements = [
+      {
+        deploymentId: "docker",
+        hostId: "node2",
+        memberId: "runtime-2",
+        roles: [],
+      },
+    ] as unknown as NonNullable<typeof view.memberPlacements>;
+    objectValue(view.applicationPlacements).node3 = {
+      sdku: { overrides: { parameters: { retained: "value" } } },
+    };
+    const original = structuredClone(view);
+    const calls: ApplicationIntent[] = [];
+    render(<Harness calls={calls} view={view} />);
+    await userEvent.click(screen.getByRole("button", { name: /^sdku/ }));
+    const placement = within(
+      screen.getByText("Размещение", { selector: "h3" }).closest("section")!,
+    );
+    expect(placement.getAllByRole("checkbox")).toHaveLength(2);
+    expect(placement.queryByRole("checkbox", { name: "node3" })).toBeNull();
+    expect(placement.queryByRole("checkbox", { name: "node4" })).toBeNull();
+    expect(calls).toEqual([]);
+    await userEvent.click(placement.getByRole("checkbox", { name: "node2" }));
+    expect(calls.at(-1)).toMatchObject({
+      operation: "SetApplicationLibraryPlacement",
+      deploymentId: "sdku",
+      hostId: "node2",
+      placement: {},
+    });
+    await userEvent.selectOptions(
+      screen.getByLabelText("Среда контейнеризации"),
+      "other",
+    );
+    expect(placement.getAllByRole("checkbox")).toHaveLength(1);
+    expect(placement.getByRole("checkbox", { name: "node3" })).toHaveProperty(
+      "checked",
+      true,
+    );
+    expect(
+      calls.some(
+        (call) => call.operation === "RemoveApplicationLibraryPlacement",
+      ),
+    ).toBe(false);
+    expect(applicationDraft(view, calls).placements.node1.sdku).toBeDefined();
+    expect(view).toEqual(original);
+  });
+
+  it("shows an empty placement list when the runtime has no hosts", async () => {
+    const view = structuredClone(managed);
+    view.hostPlacements = [];
+    const calls: ApplicationIntent[] = [];
+    render(<Harness calls={calls} view={view} />);
+    await userEvent.click(screen.getByRole("button", { name: /^sdku/ }));
+    expect(
+      screen.getByText("Нет серверов с выбранной средой контейнеризации."),
+    ).toBeTruthy();
+    expect(screen.queryByRole("checkbox", { name: "node1" })).toBeNull();
+    expect(calls).toEqual([]);
+  });
+
+  it("omits package, advanced placement and shared-secret source editors without changing their data", async () => {
+    const view = structuredClone(managed);
+    objectValue(
+      view.applicationPackages["library:sdku@1.0.0"].definition,
+    ).shared_secrets = {
+      shared: { source: { kind: "runtime_secret_ref", ref: "shared-ref" } },
+    };
+    objectValue(view.applicationLibraries.sdku).shared_secrets = {
+      shared: { source: { kind: "runtime_secret_ref", ref: "saved-ref" } },
+    };
+    const original = structuredClone(view),
+      calls: ApplicationIntent[] = [];
+    render(<Harness calls={calls} view={view} />);
+    await userEvent.click(screen.getByRole("button", { name: /^sdku/ }));
+    expect(screen.queryByText("Пакет и управление библиотекой")).toBeNull();
+    expect(
+      screen.queryByText("Дополнительные настройки размещения"),
+    ).toBeNull();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Ресурсы и секреты" }),
+    );
+    expect(screen.queryByText("Общие секреты · источники")).toBeNull();
+    expect(screen.queryByText("shared · runtime_secret_ref")).toBeNull();
+    expect(calls).toEqual([]);
+    expect(view).toEqual(original);
+  });
   it.each([false, true])(
     "shows library connections with child package present=%s",
     async (childPresent) => {

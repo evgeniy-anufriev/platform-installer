@@ -1,8 +1,5 @@
 import { ApplicationProvidedConnections } from "./ApplicationProvidedConnections";
-import {
-  ApplicationRuntimeSecretField,
-  type ApplicationSecretSession,
-} from "./ApplicationRuntimeSecretField";
+import { type ApplicationSecretSession } from "./ApplicationRuntimeSecretField";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApplicationLibraryResources } from "./ApplicationLibraryResources";
 import { ApplicationTopicBindings } from "./ApplicationTopicBindings";
@@ -16,7 +13,6 @@ import {
 import { ApplicationSecretBindings } from "./ApplicationSecretBindings";
 import { ApplicationCredentials } from "./ApplicationCredentials";
 import { ApplicationValueFields } from "./ApplicationValueFields";
-import { CredentialSourceEditor } from "./ApplicationCredentials";
 import { ApplicationFileSettings } from "./ApplicationFileSettings";
 import { ApplicationPackageImport } from "./ApplicationPackageImport";
 import type {
@@ -93,8 +89,6 @@ export function ApplicationsPage({
   const packages = objectValue(managed?.applicationPackages);
   const [selected, setSelected] = useState("");
   const [slot, setSlot] = useState("");
-  const [hostOverrides, setHostOverrides] = useState("");
-  const [hostSettingsOpen, setHostSettingsOpen] = useState(false);
   const [tab, setTab] = useState("Общее");
   const [search, setSearch] = useState("");
   const [formEpoch, setFormEpoch] = useState(0);
@@ -236,6 +230,16 @@ export function ApplicationsPage({
     );
   };
   const library = libraries[selected] ?? {};
+  const placementHosts = new Set(
+    managed?.deployments[String(library.runtimeRef)]?.serviceType === "docker"
+      ? [...(managed.hostPlacements ?? []), ...(managed.memberPlacements ?? [])]
+          .filter((row) => row.deploymentId === library.runtimeRef)
+          .map((row) => row.hostId)
+      : [],
+  );
+  const availablePlacementHosts = Object.keys(managed?.servers ?? {}).filter(
+    (host) => placementHosts.has(host),
+  );
   const packageDefinition = (kind: string, reference: unknown) =>
     objectValue(
       objectValue(packages[kind + ":" + String(reference)]).definition,
@@ -1149,7 +1153,10 @@ export function ApplicationsPage({
                       <p className="muted">
                         Серверы для экземпляров этой библиотеки
                       </p>
-                      {Object.keys(managed?.servers ?? {}).map((host) => (
+                      {availablePlacementHosts.length === 0 && (
+                        <p>Нет серверов с выбранной средой контейнеризации.</p>
+                      )}
+                      {availablePlacementHosts.map((host) => (
                         <label className="application-placement" key={host}>
                           <input
                             type="checkbox"
@@ -1181,102 +1188,7 @@ export function ApplicationsPage({
                         </label>
                       ))}
                     </section>
-                    <details className="application-library-package">
-                      <summary>Пакет и управление библиотекой</summary>
-                      {scalar(
-                        "libraryRef",
-                        "Пакет · точная версия",
-                        undefined,
-                        library.libraryRef,
-                        (value) =>
-                          send({
-                            operation: "UpdateApplicationLibraryDeployment",
-                            deploymentId: selected,
-                            entity: { libraryRef: value },
-                          }),
-                      )}
-                    </details>
                   </>
-                )}
-                {!slot && selectedTab === "Общее" && (
-                  <details
-                    className="application-host-settings"
-                    open={hostSettingsOpen}
-                  >
-                    <summary
-                      onClick={(e) => {
-                        e.preventDefault();
-                        setHostSettingsOpen((value) => !value);
-                      }}
-                    >
-                      Дополнительные настройки размещения
-                    </summary>
-                    <p className="muted">
-                      Переопределения для всех приложений библиотеки на
-                      выбранном сервере. Значения из пакетов сохраняются, пока
-                      не заданы переопределения.
-                    </p>
-                    <label>
-                      Сервер для дополнительных настроек
-                      <select
-                        value={hostOverrides}
-                        onChange={(e) =>
-                          navigate(() => setHostOverrides(e.target.value))
-                        }
-                      >
-                        <option value="">Выберите размещение</option>
-                        {Object.keys(placements)
-                          .filter((host) =>
-                            Object.hasOwn(placements[host], selected),
-                          )
-                          .map((host) => (
-                            <option key={host}>{host}</option>
-                          ))}
-                      </select>
-                    </label>
-                    {hostOverrides &&
-                      Object.hasOwn(
-                        placements[hostOverrides] ?? {},
-                        selected,
-                      ) &&
-                      (["parameters", "ports"] as const).map((field) => {
-                        const member = objectValue(
-                          placements[hostOverrides][selected],
-                        );
-                        return (
-                          <ApplicationValueFields
-                            key={selected + hostOverrides + field}
-                            label={
-                              field === "parameters"
-                                ? "Параметры приложений"
-                                : "Порты приложений"
-                            }
-                            value={objectValue(
-                              objectValue(member.overrides)[field],
-                            )}
-                            defaults={{}}
-                            disabled={busy}
-                            onDirtyChange={(v) =>
-                              markChildDirty(v, "host-" + field)
-                            }
-                            onSave={(value) =>
-                              send({
-                                operation: "SetApplicationLibraryPlacement",
-                                deploymentId: selected,
-                                hostId: hostOverrides,
-                                placement: {
-                                  ...member,
-                                  overrides: {
-                                    ...objectValue(member.overrides),
-                                    [field]: value,
-                                  },
-                                },
-                              })
-                            }
-                          />
-                        );
-                      })}
-                  </details>
                 )}
                 {!slot && selectedTab === "Общие параметры" && (
                   <>
@@ -1453,89 +1365,6 @@ export function ApplicationsPage({
                         })
                       }
                     />
-                    <h3>Общие секреты · источники</h3>
-                    {Object.keys({
-                      ...objectValue(definition.shared_secrets),
-                      ...objectValue(library.shared_secrets),
-                    }).map((name) => {
-                      const source = objectValue(
-                        objectValue(objectValue(library.shared_secrets)[name])
-                          .source,
-                      );
-                      return (
-                        <details
-                          key={selected + name + JSON.stringify(source)}
-                          className="application-shared-secret"
-                        >
-                          <summary>
-                            {name} ·{" "}
-                            {String(
-                              source.kind ??
-                                objectValue(
-                                  objectValue(
-                                    objectValue(definition.shared_secrets)[
-                                      name
-                                    ],
-                                  ).source,
-                                ).kind ??
-                                "Источник пакета",
-                            )}
-                          </summary>
-                          <CredentialSourceEditor
-                            runtimeInput={
-                              librarySecretSession ? (
-                                <ApplicationRuntimeSecretField
-                                  session={librarySecretSession}
-                                  label={name}
-                                  sourceRef={String(
-                                    objectValue(
-                                      objectValue(
-                                        objectValue(
-                                          resolved?.sharedSecretRequirements,
-                                        )[name],
-                                      ).source,
-                                    ).ref ?? "",
-                                  )}
-                                />
-                              ) : undefined
-                            }
-                            label={name}
-                            source={source}
-                            packageSource={objectValue(
-                              objectValue(
-                                objectValue(definition.shared_secrets)[name],
-                              ).source,
-                            )}
-                            allowLiteral={false}
-                            disabled={busy}
-                            onDirtyChange={(v) => markChildDirty(v, name)}
-                            onSave={(source) =>
-                              send({
-                                operation: "UpdateApplicationLibraryDeployment",
-                                deploymentId: selected,
-                                entity: {
-                                  shared_secrets: {
-                                    ...objectValue(library.shared_secrets),
-                                    [name]: { source },
-                                  },
-                                },
-                              })
-                            }
-                            onReset={() => {
-                              const next = {
-                                ...objectValue(library.shared_secrets),
-                              };
-                              delete next[name];
-                              return send({
-                                operation: "UpdateApplicationLibraryDeployment",
-                                deploymentId: selected,
-                                entity: { shared_secrets: next },
-                              });
-                            }}
-                          />
-                        </details>
-                      );
-                    })}
                   </>
                 )}
                 {slot && selectedTab === "Основное" && (
