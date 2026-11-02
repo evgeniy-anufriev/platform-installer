@@ -365,10 +365,11 @@ class ActionModule(ActionBase):
             return dict(changed=False, failed=True, msg='APPLICATION_ACCOUNT_CALLBACK_INVALID')
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/prepare_application_connections.py","mode":420,"size":859,"sha256":"1b98b1eb5f8e4a4a648e34b119c0f6c7467f6ca7c63eacb6cbf3751bc89d7420","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":859}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/prepare_application_connections.py","mode":420,"size":1284,"sha256":"e1fea951bf5eb7f0f3cda4e835b7722fc5c28385f5b83df7ecb40349543987a3","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1284}
 """Expose native topology before expansion of application ENV/default templates."""
 from ansible.plugins.action import ActionBase
 from ansible_collections.platform.core.plugins.module_utils.application_connections import provided_connections
+from ansible_collections.platform.core.plugins.module_utils.application_libraries import finding
 
 
 class ActionModule(ActionBase):
@@ -381,7 +382,9 @@ class ActionModule(ActionBase):
             hosts = {row['hostId']: {'ansibleHost': values['hostvars'][row['hostId']]['ansible_host']} for row in rows}
             return dict(changed=False, connections=provided_connections(rows, values['platform_desired_state'], hosts))
         except (KeyError, ValueError, TypeError):
-            return dict(failed=True, changed=False, msg='APPLICATION_PROVIDED_CONNECTION_INVALID')
+            diagnostic = finding('APPLICATION_PROVIDED_CONNECTION_INVALID', 'applicationLibraryDeployments')
+            diagnostic['safeMessage'] = 'Не удалось вычислить предоставляемые подключения приложений. Проверьте настройки подключений библиотеки.'
+            return dict(changed=False, connections={}, findings=[diagnostic])
 
 @@END
 @@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/prepare_application_endpoints.py","mode":420,"size":3891,"sha256":"af06b5a63b8f6a86f6a330420b753aabecaee0a14846d2523969de6a75e23147","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3891}
@@ -513,14 +516,14 @@ class ActionModule(ActionBase):
             return dict(failed=True, changed=False, error_code=code, msg=code)
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/prepare_application_libraries.py","mode":420,"size":4364,"sha256":"ecb1bcc5f57cc3d073393fe010657f860bda5e3727781b65ce924a14fd664578","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4364}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/prepare_application_libraries.py","mode":420,"size":4274,"sha256":"2a87d829b3c2f0897446dabff256a8ccf899cbbe033858a00b4778cf521a5061","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4274}
 """Validate local package closure before Ansible loads/expands its defaults."""
 import os
 
 from ansible.plugins.action import ActionBase
 from ansible.errors import AnsibleError
 from ansible_collections.platform.core.plugins.module_utils.application_libraries import prepare, finding
-from ansible_collections.platform.core.plugins.module_utils.project_snapshot_output import snapshot_input_message, write_snapshot_output, snapshot_failure_published
+from ansible_collections.platform.core.plugins.module_utils.project_snapshot_output import snapshot_input_message
 
 
 class ActionModule(ActionBase):
@@ -530,14 +533,17 @@ class ActionModule(ActionBase):
         task_vars = task_vars or {}
         args = self._task.args
         if args.get('diagnose_failure'):
-            message = task_vars.get('ansible_failed_result', {}).get('msg', '')
+            failure = task_vars.get('ansible_failed_result', {})
+            message = failure.get('msg', '')
             context = {'libraryId': args.get('library_id'), 'slotId': args.get('slot_id'), 'hostId': args.get('host_id')}
-            diagnostic = dict(code='PROJECT_SNAPSHOT_INPUT_INVALID', status='BLOCKED',
-                              field='applicationLibraryDeployments',
-                              safeMessage=snapshot_input_message(args.get('stage', 'application-settings'), AnsibleError(message), context))
-            if str(message).strip() != 'APPLICATION_INPUT_INVALID' or not snapshot_failure_published():
-                write_snapshot_output({'adapterError': diagnostic})
-            return dict(failed=True, finding=diagnostic, changed=False)
+            field = 'applicationLibraryDeployments.%s.applications.%s.placements.%s' % (
+                args['library_id'], args['slot_id'], args['host_id'])
+            diagnostic = finding('APPLICATION_INPUT_INVALID', field)
+            previous = failure.get('finding', {})
+            diagnostic['safeMessage'] = (previous['safeMessage']
+                if previous.get('code') == 'APPLICATION_INPUT_INVALID' and previous.get('safeMessage') else
+                snapshot_input_message(args.get('stage', 'application-settings'), AnsibleError(message), context))
+            return dict(changed=False, finding=diagnostic)
         if args.get('shared_defaults') or args.get('resource_defaults') or args.get('provided_connections'):
             try:
                 variables = dict(task_vars)
@@ -558,11 +564,9 @@ class ActionModule(ActionBase):
             except (ValueError, OSError, KeyError, TypeError, AnsibleError) as error:
                 context = {'libraryId': args.get('library_id'), 'hostId': args.get('host_id'),
                            'slotId': task_vars.get('application_job', {}).get('slotId')}
-                diagnostic = dict(code='PROJECT_SNAPSHOT_INPUT_INVALID', status='BLOCKED',
-                                  field='applicationLibraryDeployments',
-                                  safeMessage=snapshot_input_message('library-defaults', error, context))
-                write_snapshot_output({'adapterError': diagnostic})
-                return dict(defaults={}, overrides={}, findings=[diagnostic], changed=False)
+                diagnostic = finding('APPLICATION_INPUT_INVALID', 'applicationLibraryDeployments')
+                diagnostic['safeMessage'] = snapshot_input_message('library-defaults', error, context)
+                return dict(failed=True, finding=diagnostic, changed=False)
         root = os.path.realpath(args["project_root"])
         memberships = {host: task_vars["hostvars"][host].get("platform_application_libraries", {})
                        for host in task_vars.get("groups", {}).get("platform_targets", [])}
@@ -827,7 +831,7 @@ class ActionModule(ActionBase):
             return dict(failed=True, changed=False, msg=code, error_code=code)
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/project_snapshot.py","mode":420,"size":46818,"sha256":"43d86094954a65a3c8dc88cb3c3fe150c83fba46724ee7eb6367f568f2354a49","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":46818}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/project_snapshot.py","mode":420,"size":47228,"sha256":"e7538ae8f1b37aa193be17ae13438ddd852e3078ddbab3d1259722d9e554f3c1","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":47228}
 from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
@@ -1512,7 +1516,11 @@ class ActionModule(ActionBase):
                 expected = {(job["libraryId"], job["slotId"], job["hostId"]): job for job in rechecked["jobs"]}
                 rows = task_vars["platform_application_rows"]
                 actual = {(row["libraryId"], row["slotId"], row["hostId"]) for row in rows}
-                if not rechecked["findings"] and (actual != set(expected) or len(rows) != len(expected)):
+                failed_fields = {item.get('field') for item in task_vars.get('platform_application_findings', [])
+                                 if item.get('code') == 'APPLICATION_INPUT_INVALID' and item.get('status') == 'BLOCKED'}
+                failed = {key for key in expected if
+                          'applicationLibraryDeployments.%s.applications.%s.placements.%s' % key in failed_fields}
+                if not rechecked["findings"] and (actual | failed != set(expected) or len(rows) != len(actual)):
                     raise ValueError("Application projection placement identity mismatch")
                 resolved_findings = []
                 for row in rows:
@@ -28216,7 +28224,7 @@ def build_project_snapshot(project_id, project_name, documents, project_revision
     return redact(snapshot)
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/project_snapshot_output.py","mode":420,"size":6383,"sha256":"014be547b245847747720fd4caef58c24348c13a556bc3552599600af5d59040","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":6383}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/project_snapshot_output.py","mode":420,"size":6806,"sha256":"a37a8da230ba21589ec0bd05ecdb2a9c96b941b28bf9085fc4c200d03e4f5e9f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":6806}
 """Public snapshot artifact shared by the action and its redacting callback."""
 import json
 import os
@@ -28270,8 +28278,12 @@ def snapshot_input_message(stage, error, context=None):
                   else 'Ошибка вычисления переменных Ansible.' if isinstance(error, AnsibleError)
                   else 'Нарушена структура входных данных.' if isinstance(error, (TypeError, ValueError))
                   else 'Внутренний сбой построения снимка.')
-    message = 'Не удалось построить снимок проекта. Этап: %s. %s' % (stage, reason)
     context = context if isinstance(context, dict) else {}
+    stage = {'application-settings': 'расчёт настроек приложения',
+             'library-defaults': 'наследование настроек библиотеки',
+             'provided-connections': 'расчёт подключений приложения'}.get(stage, stage)
+    message = ('Не удалось вычислить настройки приложения.' if context else 'Не удалось построить снимок проекта.')
+    message += ' Этап: %s. %s' % (stage, reason)
     for key, label in (('libraryId', 'Библиотека'), ('slotId', 'приложение'), ('hostId', 'узел')):
         value = context.get(key)
         if isinstance(value, str) and re.fullmatch(r'[a-z][A-Za-z0-9_.-]{0,127}', value):
@@ -36070,7 +36082,7 @@ platform_name_prefix: ''
     quiet: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/resolve_application_libraries/tasks/connection_topology.yml","mode":420,"size":4557,"sha256":"e09b42b3c981067fcc58159f77579863c888b09fe9e302b318ebf65bdf7aed22","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4557}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/resolve_application_libraries/tasks/connection_topology.yml","mode":420,"size":4901,"sha256":"24c7dafdfe3cfa71ed91ec8bc1c650f1ba6b69c0e8be4cac58685eaaa4088027","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4901}
 ---
 - name: Расчёт настроек с безопасной диагностикой отказа
   block:
@@ -36147,11 +36159,18 @@ platform_name_prefix: ''
         slot_id: "{{ application_job.slotId }}"
         host_id: "{{ application_job.hostId }}"
         stage: provided-connections
+      register: _application_failed
+      no_log: true
+      become: false
+
+    - name: Добавление ошибки подключения приложения в замечания проекта
+      ansible.builtin.set_fact:
+        platform_application_findings: "{{ platform_application_findings + [_application_failed.finding] }}"
       no_log: true
       become: false
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/resolve_application_libraries/tasks/instance.yml","mode":420,"size":16284,"sha256":"f926cd1b7dc997db97263c9c5e048db944a7adc509c424a4db222ed5c80374a1","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":16284}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/resolve_application_libraries/tasks/instance.yml","mode":420,"size":16622,"sha256":"d1062a7ea6355172db0ec0089b4a8961e050fd41464589927a97a9b9592dce58","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":16622}
 ---
 - name: Расчёт настроек с безопасной диагностикой отказа
   block:
@@ -36388,11 +36407,18 @@ platform_name_prefix: ''
         slot_id: "{{ application_job.slotId }}"
         host_id: "{{ application_job.hostId }}"
         stage: application-settings
+      register: _application_failed
+      no_log: true
+      become: false
+
+    - name: Добавление ошибки настроек приложения в замечания проекта
+      ansible.builtin.set_fact:
+        platform_application_findings: "{{ platform_application_findings + [_application_failed.finding] }}"
       no_log: true
       become: false
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/resolve_application_libraries/tasks/main.yml","mode":420,"size":3020,"sha256":"2edcd4d9cbeccc4c91e5d955dc2e09aaece8e02f5a3edbde18c3b7f64c25ae8b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3020}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/resolve_application_libraries/tasks/main.yml","mode":420,"size":3151,"sha256":"0d89bb7126d00353aa8113cbcd2c3769890f2b27887c40b4c26b5b1ad2212799","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3151}
 ---
 - name: "Проверка комплектности пакетов библиотек перед загрузкой значений по умолчанию"
   platform.core.prepare_application_libraries:
@@ -36441,6 +36467,7 @@ platform_name_prefix: ''
 - name: Предоставление рассчитанных параметров провайдера шаблонам пакетов
   ansible.builtin.set_fact:
     platform_application_provided_connections: "{{ _application_connection_inputs.connections }}"
+    platform_application_findings: "{{ platform_application_findings + (_application_connection_inputs.findings | default([])) }}"
   no_log: true
   become: false
 
@@ -69289,7 +69316,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/evo-manager/1.0.0/roles/application_evo-manager/defaults/main.yml","mode":420,"size":9735,"sha256":"20caf5a5bdf140e1d872a3367d2304ee43271922295e12bd933896b39419778f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":9735}
+@@PORTABLE {"path":"examples/sdku/application-packages/evo-manager/1.0.0/roles/application_evo-manager/defaults/main.yml","mode":420,"size":9690,"sha256":"49797bc048379f1e88487ee5b6e6eac724a82383af12e6442f67fc69100e0902","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":9690}
 platform_application_definition:
     name: evo-manager
     version: 1.0.0
@@ -69371,7 +69398,7 @@ platform_application_definition:
             spring.kafka.ssl.properties.sasl.jaas.config: '$${KAFKA_CONSUMER_SASL_JAAS_CONFIG}'
             logging.level.tnt.tnscada.core.kafkamanager.kafka.config.KafkaManagerConfig: INFO
             ALARM_SERVICE_API_TYPE: mock
-            DATA_MANAGER_ROOT_URL: '{{ application_parameters.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
+            DATA_MANAGER_ROOT_URL: '{{ "https://data-manager-" ~ library_instance_id ~ "." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["data-manager"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}'
             DB_CONNECTION_STRING: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_databases.clickhouse.history.name }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             DB_TYPE: clickhouse
             tn-scada.clickhouse.health.enabled: false
@@ -69383,23 +69410,18 @@ platform_application_definition:
             LOGGER_OUTPUT_PATTERN_CONFIG: '''%d{ISO8601} [%X{requestId}] [%-15.15t] %highlight(%-5level) %yellow(%30.30C{1}) %msg%n%throwable'''
             LOGGER_ROOT_LEVEL: INFO
             PRESSURES_CSV: /usr/local/app/imitator/data/pressures.csv
-            REDIS_SENTINEL_MASTER: '{{ application_parameters.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             SPRING_KAFKA_APPLICATION_ID: evo-manager-{{ application_instance_id }}
             SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
             SPRING_KAFKA_LISTENER_GROUP_ID: evo-manager-{{ application_instance_id }}
             SPRING_MAIN_WEB_APPLICATION_TYPE: NONE
-            TN_SCADA_DATA_MANAGER_URL_ROOT: '{{ application_parameters.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
+            TN_SCADA_DATA_MANAGER_URL_ROOT: '{{ "https://data-manager-" ~ library_instance_id ~ "." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["data-manager"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}'
             TN_SCADA_DATASOURCE_URL: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_databases.clickhouse.history.name }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             TN_SCADA_METADATA_LOAD_PROJECTS: TNSVHYDRO
             TN_SCADA_METADATA_TARGET_PROJECT: TNSVHYDRO
-            TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             kafka.consumer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-consumer'
             kafka.producer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-producer'
             server.max-http-request-header-size: 100MB
         config_files: []
-        parameters:
-            DATA_MANAGER_URL_ROOT: ""
-            REDIS_SENTINEL_MASTER: ""
         ports: {}
         provisioner:
             approle:
@@ -69758,7 +69780,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/ham-backend/1.0.0/roles/application_ham-backend/defaults/main.yml","mode":420,"size":7569,"sha256":"3364259fd332fb0145688e252c9d91277fecec8920c0dccf7165e1fdb6f66fb3","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7569}
+@@PORTABLE {"path":"examples/sdku/application-packages/ham-backend/1.0.0/roles/application_ham-backend/defaults/main.yml","mode":420,"size":8075,"sha256":"22c00bf66886ab4d0df6884c75f007cc4f9ced2c785043042d253610de3cb30a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":8075}
 platform_application_definition:
     name: ham-backend
     version: 1.0.0
@@ -69819,7 +69841,7 @@ platform_application_definition:
             ALARMSERVICE_URL_ROOT: ""
             CSPA_TOPIC_ROUTE_ROOT: '{{ application_topics.kafka.main.name }}'
             CSPA_TOPICS: '{{ application_topics.kafka.main.name }}'
-            DATAMANAGER_ROOT_URL: '{{ application_parameters.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
+            DATAMANAGER_ROOT_URL: '{{ "https://data-manager-" ~ library_instance_id ~ "." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["data-manager"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}'
             DB_CONNECTION_STRING: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_databases.clickhouse.history.name }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             DB_TYPE: clickhouse
             EVO_MANAGER_HOT_TOPICS: '{{ application_topics.kafka.main.name }}'
@@ -69829,7 +69851,7 @@ platform_application_definition:
             JAVA_OPTS: -Xmx4048m
             SERVER_ALLOWED_ORIGINS: '*'
             SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
-            TN_SCADA_DATA_MANAGER_URL_ROOT: '{{ application_parameters.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
+            TN_SCADA_DATA_MANAGER_URL_ROOT: '{{ "https://data-manager-" ~ library_instance_id ~ "." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["data-manager"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}'
             TN_SCADA_METADATA_TARGET_PROJECT: TNSV
             TN_SCADA_REDIS_SENTINEL_MASTER: ""
             USER_ACTION_TAGNAME: _MaskCauseList.Description
@@ -69847,14 +69869,12 @@ platform_application_definition:
             tn-scada.cspa.topic-route.root.project.TNSVHYDRO.root.descentRule: rcv
             tn-scada.cspa.topic-route.root.project.TNSVHYDRO.root.topic: '{{ application_topics.kafka.main.name }}'
             tn-scada.cspa.topic-route.root.topic: '{{ application_topics.kafka.main.name }}'
-            tn-scada.data-manager.url: '{{ application_parameters.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
+            tn-scada.data-manager.url: '{{ "https://data-manager-" ~ library_instance_id ~ "." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["data-manager"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}'
             tn-scada.metadata.dontShowTargetProjectInNames: false
             tn-scada.metadata.hookTopic: '{{ application_topics.kafka.main.name }}'
             EVO_MANAGER_APP_ID: '{{ application_instance_id }}'
             KAFKA_APPLICATION_ID_CONFIG: '{{ application_instance_id }}'
             KAFKA_LISTENER_ID_CONFIG: '{{ application_instance_id }}'
-        parameters:
-            DATA_MANAGER_URL_ROOT: ""
         ports:
             port-1:
                 container: 10101
@@ -70692,7 +70712,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/hmi-frontend-alarms/1.0.0/roles/application_hmi-frontend-alarms/defaults/main.yml","mode":420,"size":2016,"sha256":"4ec71fcb1321feee3dcd220ca6f7975c3b2c796fc80285f0473db32396ce20e2","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2016}
+@@PORTABLE {"path":"examples/sdku/application-packages/hmi-frontend-alarms/1.0.0/roles/application_hmi-frontend-alarms/defaults/main.yml","mode":420,"size":2274,"sha256":"10aa828347b7479bd19a7f2e7cdb163485d5678e67c9571a03fa4f72a31e5b7b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2274}
 platform_application_definition:
     name: hmi-frontend-alarms
     version: 1.0.0
@@ -70703,6 +70723,7 @@ platform_application_definition:
         command:
             - /app/docker-entrypoint.sh
         environment:
+            PUBLIC_HOST: '{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}'
             ALARMS_HEADER_TITLE: ""
             ALARMS_IMPORTANT_QUERY_PAGE_SIZE: 50
             ALARMS_OFFSET_TO_FUTURE_IN_REST_REQ_MS: 0
@@ -70734,7 +70755,6 @@ platform_application_definition:
             mount_sources:
                 mount-1: ""
                 mount-2: ""
-            PUBLIC_HOST: ""
         ports:
             port-1:
                 container: 10061
@@ -70746,7 +70766,7 @@ platform_application_definition:
     connections: []
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/hmi-frontend-alarms/1.0.0/roles/application_hmi-frontend-alarms/templates/compose.yml.j2","mode":420,"size":2171,"sha256":"17ad5cab8afc4fa100fffbcebe333848c57c3a112e2d3a5d4212064b3d00aae7","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2171}
+@@PORTABLE {"path":"examples/sdku/application-packages/hmi-frontend-alarms/1.0.0/roles/application_hmi-frontend-alarms/templates/compose.yml.j2","mode":420,"size":2115,"sha256":"e25adc03bee0905186a4ef78d80c35e9565f9cf34b9d390ee46ce825298cf58a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2115}
 services:
   {{ application_instance_id }}:
     extends:
@@ -70782,8 +70802,8 @@ services:
           - >-
             curl --fail --silent --show-error --output /dev/null
             --cacert /etc/nginx/server.crt
-            --resolve {{ application_parameters.PUBLIC_HOST | default(undef(hint='Configure SDKU PUBLIC_HOST'), true) }}:{{ application_effective.ports['port-1'].container }}:127.0.0.1
-            https://{{ application_parameters.PUBLIC_HOST }}:{{ application_effective.ports['port-1'].container }}/
+            --resolve {{ application_environment.PUBLIC_HOST }}:{{ application_effective.ports['port-1'].container }}:127.0.0.1
+            https://{{ application_environment.PUBLIC_HOST }}:{{ application_effective.ports['port-1'].container }}/
       "timeout": 15s
     deploy:
       "resources":
@@ -71319,7 +71339,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/hmi-frontend-viewer/1.0.0/roles/application_hmi-frontend-viewer/defaults/main.yml","mode":420,"size":2016,"sha256":"75ce00f6750a007ac9f2e5128a5926ff90bd2de616aeedf6e2a9742dd9271ce0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2016}
+@@PORTABLE {"path":"examples/sdku/application-packages/hmi-frontend-viewer/1.0.0/roles/application_hmi-frontend-viewer/defaults/main.yml","mode":420,"size":3428,"sha256":"1e6b52765deb40aea46a15aab12ba0c860680ee87282cbc81ff4056a518cfe04","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3428}
 platform_application_definition:
     name: hmi-frontend-viewer
     version: 1.0.0
@@ -71330,21 +71350,20 @@ platform_application_definition:
         command:
             - /app/docker-entrypoint.sh
         environment:
-            ALARMS_URL: https://{{ application_parameters.PUBLIC_HOST | default(undef(hint='Configure SDKU PUBLIC_HOST'), true) }}/hmi-frontend-alarms
-            CSPA_HMI_BACK: https://{{ application_parameters.PUBLIC_HOST | default(undef(hint='Configure SDKU PUBLIC_HOST'), true) }}/hmi-backend
-            CSPA_HMI_BACK_WS: wss://{{ application_parameters.PUBLIC_HOST | default(undef(hint='Configure SDKU PUBLIC_HOST'), true) }}/hmi-backend
-            GRANT_ACCESS: https://{{ application_parameters.PUBLIC_HOST | default(undef(hint='Configure SDKU PUBLIC_HOST'), true) }}/grant-access
-            GRANT_ACCESS_AUDIT: https://{{ application_parameters.PUBLIC_HOST | default(undef(hint='Configure SDKU PUBLIC_HOST'), true) }}/grant-access-audit
-            HMI_BACK: https://{{ application_parameters.PUBLIC_HOST | default(undef(hint='Configure SDKU PUBLIC_HOST'), true) }}/ef-backend
+            ALARMS_URL: https://{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/hmi-frontend-alarms
+            CSPA_HMI_BACK: https://{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/hmi-backend
+            CSPA_HMI_BACK_WS: wss://{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/hmi-backend
+            GRANT_ACCESS: https://{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/grant-access
+            GRANT_ACCESS_AUDIT: https://{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/grant-access-audit
+            HMI_BACK: https://{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/ef-backend
             NGINX_URL: ""
-            SVG_EDITOR: https://{{ application_parameters.PUBLIC_HOST | default(undef(hint='Configure SDKU PUBLIC_HOST'), true) }}/hmi-frontend-svg-editor
-            TRENDS_URL: https://{{ application_parameters.PUBLIC_HOST | default(undef(hint='Configure SDKU PUBLIC_HOST'), true) }}/hmi-frontend-trends
-            VTOR_URL: https://{{ application_parameters.PUBLIC_HOST | default(undef(hint='Configure SDKU PUBLIC_HOST'), true) }}/sdku-vtor-ui
+            SVG_EDITOR: https://{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/hmi-frontend-svg-editor
+            TRENDS_URL: https://{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/hmi-frontend-trends
+            VTOR_URL: https://{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/sdku-vtor-ui
         parameters:
             mount_sources:
                 mount-1: ""
                 mount-2: ""
-            PUBLIC_HOST: ""
         ports:
             port-1:
                 container: 10211
@@ -72043,7 +72062,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/opc-ua-server/1.0.0/roles/application_opc-ua-server/defaults/main.yml","mode":420,"size":7803,"sha256":"739d27df3ea58f83e49b49a9e66969316b61ed58e0031373c0eab402b2414f8d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7803}
+@@PORTABLE {"path":"examples/sdku/application-packages/opc-ua-server/1.0.0/roles/application_opc-ua-server/defaults/main.yml","mode":420,"size":7440,"sha256":"0fe12c39fe0b4c370e9133445442a78cd891fcbeb482da9ce3c6b34b0b85e022","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7440}
 platform_application_definition:
     name: opc-ua-server
     version: 1.0.0
@@ -72112,14 +72131,12 @@ platform_application_definition:
             OPCUA_CONFIG: /usr/local/config/opcua.yml
             OPCUA_VIEW: EVO_VIEW
             OPCUA_VIEW_SOURCE: csv
-            REDIS_SENTINEL_MASTER: '{{ application_parameters.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             REDU_DISABLE: "true"
             REDU_GROUP_ID: opcua-server
             REDU_MANAGER_ID: 1
             SERVER_VIEW_CONFIG: /usr/local/config/view.csv
             SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
             TN_SCADA_DATA_MANAGER_URL_ROOT: ""
-            TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             TNSCADA_LOGGER_LEVEL: WARN
             TZ: Europe/Moscow
             kafka.consumer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-consumer'
@@ -72136,7 +72153,6 @@ platform_application_definition:
                 mount-1: ""
                 mount-2: ""
                 mount-7: ""
-            REDIS_SENTINEL_MASTER: ""
         ports:
             port-1:
                 container: 10391
@@ -72367,7 +72383,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/sdku-knp/1.0.0/roles/application_sdku-knp/defaults/main.yml","mode":420,"size":11065,"sha256":"2c9c59f3fa12f47ca5b3d43bcd9876eb3cf5775f0f4b13b7a1b23c32bbc14faa","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":11065}
+@@PORTABLE {"path":"examples/sdku/application-packages/sdku-knp/1.0.0/roles/application_sdku-knp/defaults/main.yml","mode":420,"size":11571,"sha256":"465162043c77b08ec2862ba90169b94fe19cf9da3843caf3fcad4717d3dfa12b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":11571}
 platform_application_definition:
     name: sdku-knp
     version: 1.0.0
@@ -72429,8 +72445,6 @@ platform_application_definition:
             - java
             - -jar
             - sdku-knp.jar
-        parameters:
-            DATA_MANAGER_URL_ROOT: ""
         environment:
             KAFKA_ENABLE_SSL: "true"
             SPRING_KAFKA_SSL_ENABLE_SSL: "true"
@@ -72462,7 +72476,7 @@ platform_application_definition:
             DB_CONNECTION_STRING: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_databases.clickhouse.history.name }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             DB_TYPE: clickhouse
             EVO_MANAGER_ALARM_TOPIC: '{{ application_topics.kafka.alarms_compact.name }}'
-            EVO_MANAGER_DATA_MANAGER_URL: '{{ application_parameters.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
+            EVO_MANAGER_DATA_MANAGER_URL: '{{ "https://data-manager-" ~ library_instance_id ~ "." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["data-manager"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}'
             EVO_SERVICES_CONSENSUS_SERVICE_HEALTH_CHECK_INTERVAL: 1000
             EVO_SERVICES_CONSENSUS_SERVICE_HEALTH_CHECK_TIMEOUT: 999
             EVO_SERVICES_CONSENSUS_SERVICE_HEARTBEAT_INTERVAL: 500
@@ -72490,8 +72504,8 @@ platform_application_definition:
             EVO_SERVICES_CONSENSUS_SERVICE_WORKLOAD: LOW
             HISTORY_CONNECTION_SSL: "true"
             SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
-            TN_SCADA_DATA_MANAGER_URL: '{{ application_parameters.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
-            TN_SCADA_DATA_MANAGER_URL_ROOT: '{{ application_parameters.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
+            TN_SCADA_DATA_MANAGER_URL: '{{ "https://data-manager-" ~ library_instance_id ~ "." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["data-manager"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}'
+            TN_SCADA_DATA_MANAGER_URL_ROOT: '{{ "https://data-manager-" ~ library_instance_id ~ "." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["data-manager"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}'
             TN_SCADA_DATASOURCE_URL: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_databases.clickhouse.history.name }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             TN_SCADA_METADATA_TERGET_PROJECT: TNSV
             TN_SCADA_REDIS_SENTINEL_MASTER: ""
@@ -72639,7 +72653,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/sdku-status-calculation/1.0.0/roles/application_sdku-status-calculation/defaults/main.yml","mode":420,"size":10589,"sha256":"b450dffe02185964e6a61e26e5b04312d50414c319761a888ec463a657827f0d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":10589}
+@@PORTABLE {"path":"examples/sdku/application-packages/sdku-status-calculation/1.0.0/roles/application_sdku-status-calculation/defaults/main.yml","mode":420,"size":10907,"sha256":"e6648ab2b6cb67b15ec39ed0a9ed93d4c9c9a7b2fe74a5b21b905433ddc7ebe1","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":10907}
 platform_application_definition:
     name: sdku-status-calculation
     version: 1.0.0
@@ -72701,8 +72715,6 @@ platform_application_definition:
             - java
             - -jar
             - sdku-status-calculation.jar
-        parameters:
-            DATA_MANAGER_URL_ROOT: ""
         environment:
             KAFKA_ENABLE_SSL: "true"
             SPRING_KAFKA_SSL_ENABLE_SSL: "true"
@@ -72734,7 +72746,7 @@ platform_application_definition:
             ALARM_TOPIC: '{{ application_topics.kafka.alarms_compact.name }}'
             DB_CONNECTION_STRING: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_databases.clickhouse.history.name }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             DB_TYPE: clickhouse
-            DATA_MANAGER_ROOT_URL: '{{ application_parameters.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
+            DATA_MANAGER_ROOT_URL: '{{ "https://data-manager-" ~ library_instance_id ~ "." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["data-manager"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}'
             EVO_MANAGER_APP_ID: 'cst-{{ ((application_instance_id ~ ''-'' ~ application_job.hostId) | hash(''sha256''))[:20] }}'
             EVO_SERVICES_CONSENSUS_SERVICE_MOCK: >-
                 {{ (_application_inputs.jobs | selectattr('libraryId', 'equalto', library_instance_id) |
@@ -72756,7 +72768,7 @@ platform_application_definition:
             EVO_SERVICES_CONSENSUS_SERVICE_LISTEN_PORT: *consensus_tcp_port
             EVO_SERVICES_CONSENSUS_SERVICE_INSTANCE_NAME: '{{ application_job.hostId }}'
             SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
-            TN_SCADA_DATA_MANAGER_URL: '{{ application_parameters.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
+            TN_SCADA_DATA_MANAGER_URL: '{{ "https://data-manager-" ~ library_instance_id ~ "." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["data-manager"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}'
             TN_SCADA_DATASOURCE_URL: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_databases.clickhouse.history.name }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             TN_SCADA_METADATA_TARGET_PROJECT: TNSV
             TN_SCADA_REDIS_SENTINEL_MASTER: ""
@@ -72920,7 +72932,7 @@ tanksWithoutAlerts:     #Список резервуаров c неактивн�
 
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/sdku-tank-farm/1.0.0/roles/application_sdku-tank-farm/defaults/main.yml","mode":420,"size":11045,"sha256":"c155e63940d745f3589a7c6fcfef90162f1f1594d595829c83f5960e267993b5","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":11045}
+@@PORTABLE {"path":"examples/sdku/application-packages/sdku-tank-farm/1.0.0/roles/application_sdku-tank-farm/defaults/main.yml","mode":420,"size":11363,"sha256":"46f9392d290a31a20a89c7fb9dfde85460286a76f965d02f765c2a862dd9fd61","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":11363}
 platform_application_definition:
     name: sdku-tank-farm
     version: 1.0.0
@@ -72986,8 +72998,6 @@ platform_application_definition:
             - source: assets/config/tank_config.yaml
               destination: config/tank_config.yaml
               mode: '0644'
-        parameters:
-            DATA_MANAGER_URL_ROOT: ""
         environment:
             KAFKA_ENABLE_SSL: "true"
             SPRING_KAFKA_SSL_ENABLE_SSL: "true"
@@ -73017,7 +73027,7 @@ platform_application_definition:
             ALARM_SERVICE_API_SERVER_PATH: /generate-alarm
             ALARM_SERVICE_API_TYPE: mock
             ALARM_TOPIC: '{{ application_topics.kafka.alarms_compact.name }}'
-            DATA_MANAGER_ROOT_URL: '{{ application_parameters.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
+            DATA_MANAGER_ROOT_URL: '{{ "https://data-manager-" ~ library_instance_id ~ "." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["data-manager"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}'
             DB_CONNECTION_STRING: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_databases.clickhouse.history.name }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             DB_TYPE: clickhouse
             EVO_SERVICES_CONSENSUS_SERVICE_HEALTH_CHECK_INTERVAL: 1000
@@ -73047,7 +73057,7 @@ platform_application_definition:
             EVO_SERVICES_CONSENSUS_SERVICE_WORKLOAD: LOW
             SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
             TANK_CONFIG_PATH: /usr/local/app/config/tank_config.yaml
-            TN_SCADA_DATA_MANAGER_URL: '{{ application_parameters.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
+            TN_SCADA_DATA_MANAGER_URL: '{{ "https://data-manager-" ~ library_instance_id ~ "." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["data-manager"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}'
             TN_SCADA_DATASOURCE_URL: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_databases.clickhouse.history.name }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             TN_SCADA_METADATA_TARGET_PROJECT: TNSV
             TN_SCADA_REDIS_SENTINEL_MASTER: ""
@@ -73509,7 +73519,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/sdku-vtor-ui/1.0.0/roles/application_sdku-vtor-ui/defaults/main.yml","mode":420,"size":867,"sha256":"e3a522860ea84172bc73c0f26118242c7c38e714c73a8c9c07d6fae6937fab48","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":867}
+@@PORTABLE {"path":"examples/sdku/application-packages/sdku-vtor-ui/1.0.0/roles/application_sdku-vtor-ui/defaults/main.yml","mode":420,"size":1132,"sha256":"1ab90ce9aeafaeea558abfd44bf87b8dc7f0f29d6ee9c548d0eaf3ac1b45aa56","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1132}
 platform_application_definition:
     name: sdku-vtor-ui
     version: 1.0.0
@@ -73520,10 +73530,8 @@ platform_application_definition:
         command:
             - /app/docker-entrypoint.sh
         environment:
-            REACT_APP_VTOR_HOST_URL: https://nginx.{{ application_parameters.URL_ROOT | default(undef(hint='Configure SDKU URL_ROOT'), true) }}/sdku-vtor
-            REACT_APP_VTOR_HOST_URL_WS: wss://nginx.{{ application_parameters.URL_ROOT | default(undef(hint='Configure SDKU URL_ROOT'), true) }}/sdku-vtor
-        parameters:
-            URL_ROOT: ""
+            REACT_APP_VTOR_HOST_URL: https://nginx.{{ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/sdku-vtor
+            REACT_APP_VTOR_HOST_URL_WS: wss://nginx.{{ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/sdku-vtor
         ports:
             port-1:
                 container: 10311
@@ -74197,7 +74205,7 @@ platform_application_libraries:
   sdku-main: {}
 
 @@END
-@@PORTABLE {"path":"examples/sdku/import-catalog.json","mode":420,"size":5771,"sha256":"d5c90b21a4dd2186820b15a4809addf88d40692f18f45669b713b76be202995a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5771}
+@@PORTABLE {"path":"examples/sdku/import-catalog.json","mode":420,"size":5771,"sha256":"8332d5782bdef3e89270299c727478c18c15ee38e003c604483825f1cf206f8a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5771}
 [
   {
     "digest": "sha256:51a85d8d0276e47498b98243d47d2a7e17d354d239f7467b4822ed4d64e9f021",
@@ -74228,7 +74236,7 @@ platform_application_libraries:
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:cc175b5cddd43a5304f3cd9c462a4ae995a38b035443489b9bf64d46c508f32a",
+    "digest": "sha256:c23f65fae36160630d50a7b2159e4410f0cf16a77011136cb4cb6a257f671af4",
     "kind": "application",
     "name": "evo-manager",
     "sourceDirectory": ".",
@@ -74242,7 +74250,7 @@ platform_application_libraries:
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:69cc64d058dcb6a8d7356d475de6fb2de96c4afe85cc091327728296a0a7e066",
+    "digest": "sha256:66b3c0f47d80ac5481093780249ab19c9d4fe7213b6f07072a74c1fbc96129f5",
     "kind": "application",
     "name": "ham-backend",
     "sourceDirectory": ".",
@@ -74256,7 +74264,7 @@ platform_application_libraries:
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:645962aee23ead4d6b0e5e99dfd46cac91762cca362ace5c39289ba0e3da5245",
+    "digest": "sha256:05db7d0181d80c774d67bc99b90e642130df3ec16cf293e47f4219671f6a906f",
     "kind": "application",
     "name": "hmi-frontend-alarms",
     "sourceDirectory": ".",
@@ -74284,7 +74292,7 @@ platform_application_libraries:
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:fbaafc443748772e1187a90b83ec93579c13cb128ca70ec7cd2850d73edd7f87",
+    "digest": "sha256:ddb4aed73b22993d285d761a5c788535809cd938ce5a5c163b0813b94fa77353",
     "kind": "application",
     "name": "hmi-frontend-viewer",
     "sourceDirectory": ".",
@@ -74319,14 +74327,14 @@ platform_application_libraries:
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:33a2d99172074dfbeb1a91a89e47cb989ebc439df59914360b9b8faee03bdf7d",
+    "digest": "sha256:4a6c77722a549fb16166d0b633513cea5134b7ce7542912663870e83093e489d",
     "kind": "application",
     "name": "opc-ua-server",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:d6405d6682e922f1dd82a87f466e63c869e2d69d81c83cb00b4a68a8ff7c82b8",
+    "digest": "sha256:7c5ed262b8155d259788fdaec0a11feee231ecb20e6b8c92c8c66a7557f1afb7",
     "kind": "application",
     "name": "sdku-knp",
     "sourceDirectory": ".",
@@ -74340,14 +74348,14 @@ platform_application_libraries:
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:983612bab036f6c056780821ac27be0e6aae27453d0112b45a1da61d9b5592e6",
+    "digest": "sha256:586da0293a54d5f85fb682afa649c32cfb07f01413accc19744301ba7d2c20b4",
     "kind": "application",
     "name": "sdku-status-calculation",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:55c3588644502c18786a7680b87ea374c93fe5ed59b90840b5f1238c1d05a402",
+    "digest": "sha256:6c8697ed5f811b7c8cfe8a5527ce0e211c68189fedf238249b38fa2a47a1e8da",
     "kind": "application",
     "name": "sdku-tank-farm",
     "sourceDirectory": ".",
@@ -74368,7 +74376,7 @@ platform_application_libraries:
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:8e31e01d03e18ca0bf0b925d65ad331f85789f13496431e320e8b2f2c3178027",
+    "digest": "sha256:7a9e52387f1c2200134372d46f582ec09c38671060a2f21cb787c1b316049a82",
     "kind": "application",
     "name": "sdku-vtor-ui",
     "sourceDirectory": ".",
@@ -75971,7 +75979,7 @@ public final class StartupMock {
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/validate_packages.py","mode":420,"size":7481,"sha256":"2c736842339b8066cfee9c011e9fe968a28b35a142909e2de75f9012b60b6168","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7481}
+@@PORTABLE {"path":"examples/sdku/validate_packages.py","mode":420,"size":7547,"sha256":"ca087f27bd986d8dfff16891c5cbb848a1d19b2828167f8f4a95adcc6f0495a0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7547}
 import sys, json, pathlib, yaml
 from ansible.parsing.dataloader import DataLoader
 from ansible.template import Templar
@@ -76045,6 +76053,7 @@ for (kind,name), package in packages.items():
         library_resources={ref: dict(kind='redis.key', parameters={'name':'sdku-main-'+suffix})
                            for ref, suffix in [('dm-meta','meta'), ('alert-hdl','alert-hdl'), ('alert-class','alert-class')]},
         library_instance_id='sdku-main', application_job=next(j for j in jobs if j['slotId'] == name),
+        _application_library_endpoint={'endpoint_group': 'apps'},
         _application_inputs={'jobs': jobs}, groups={'all': ['example-host']},
         hostvars={'example-host': {'ansible_host': 'example.invalid'}},
         sdku_start_commands={name:'/fixture/unavailable-command'}, application_project_id='fixture', application_config_digest='0'*64,
@@ -77872,7 +77881,7 @@ exec java \
   "$@"
 
 @@END
-@@PORTABLE {"path":"examples/szi/application-packages/grant-access/1.0.0/roles/application_grant-access/defaults/main.yml","mode":420,"size":6964,"sha256":"f366c675b8f10245c5f8d7aa1533636e87066ee0446c5448b427e97230fa9794","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":6964}
+@@PORTABLE {"path":"examples/szi/application-packages/grant-access/1.0.0/roles/application_grant-access/defaults/main.yml","mode":420,"size":6946,"sha256":"07aee1c49548ee28dcb58c86baf3f4409dc4d34a36ce9cde1cd6086130f48daf","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":6946}
 platform_application_definition:
   name: grant-access
   version: 1.0.0
@@ -77945,7 +77954,7 @@ platform_application_definition:
       ACCESS_LIST_OF_USERS_BY_GROUP: Администратор ЭВО СЗИ,Администратор системы,Администратор подключаемого сервиса
       ACCOUNT_EXCLUDE_GROUP_LIST: ТУЗ
       ALLOW_CLIENT_CACHE_CLEARING: "false"
-      HZ_CLUSTERNAME: '{{ application_parameters.HZ_CLUSTERNAME }}'
+      HZ_CLUSTERNAME: '{{ library_instance_id }}'
       HZ_NETWORK_PUBLICADDRESS: >-
         {%- set ports = (application_job.application.definition.defaults.ports | default({})) |
             combine(application_job.slot.overrides.ports | default({}), recursive=true) |
@@ -79116,7 +79125,7 @@ done
 printf '{"status":"ok","changed":%s}\n' "$changed"
 
 @@END
-@@PORTABLE {"path":"examples/szi/application-packages/keycloak/1.0.0/roles/application_keycloak/defaults/main.yml","mode":420,"size":5947,"sha256":"9e78797d135a0bff83bd2e2ccce8bd11d8d799cfe729cee9b1c38fede33d499d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5947}
+@@PORTABLE {"path":"examples/szi/application-packages/keycloak/1.0.0/roles/application_keycloak/defaults/main.yml","mode":420,"size":6998,"sha256":"57d4c6566e54ac1ec885eb326f3a3e661d7237a55f133b08465dc380fbd10160","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":6998}
 platform_application_definition:
   name: keycloak
   version: 1.0.0
@@ -79159,6 +79168,7 @@ platform_application_definition:
         format: tar.gz
         destination: themes
     environment:
+      KEYCLOAK_MEMORY_LIMIT: 2G
       JAVA_OPTS_KC_HEAP: "-Xms256m -Xmx1g"
       KC_SPI_EVENTS_LISTENER_PASSWORD_EXPIRE_REMINDER_EXPIRE_THRESHOLD: "14"
       KC_HEALTH_ENABLED: "true"
@@ -79169,7 +79179,7 @@ platform_application_definition:
       KC_DB_URL: "jdbc:postgresql://$${POSTGRES_ADDRESS}/{{ application_databases.postgres['keycloak-db'].name }}?targetServerType=primary&hostRecheckSeconds=2&sslmode=verify-ca&sslrootcert=/opt/application/pki/ca-chain.pem"
       KC_HOSTNAME_STRICT: "false"
       JGROUPS_DISCOVERY_PROTOCOL: TCPPING
-      JGROUPS_DISCOVERY_EXTERNAL_IP: '{{ application_parameters.KEYCLOAK_DISCOVERY_IP | default(undef(hint=''Configure Keycloak discovery address''), true) }}'
+      JGROUPS_DISCOVERY_EXTERNAL_IP: '{{ hostvars[application_job.hostId].ansible_host | default(application_job.hostId) }}'
       KC_HTTPS_KEY_STORE_FILE: /opt/application/pki/keystore.p12
       KC_HTTPS_KEY_STORE_TYPE: PKCS12
       KC_HTTPS_PORT: >-
@@ -79192,22 +79202,36 @@ platform_application_definition:
       KC_SPI_EVENTS_LISTENER_JBOSS_LOGGING_SUCCESS_LEVEL: DEBUG
       KC_SPI_EVENTS_LISTENER_JBOSS_LOGGING_ERROR_LEVEL: DEBUG
       KC_PROXY_HEADERS: xforwarded
-      KC_SPI_STICKY_SESSION_ENCODER_INFINISPAN_NODE_NAME: '{{ application_parameters.KEYCLOAK_NODE_NAME | default(undef(hint=''Configure Keycloak cluster node name''), true) }}'
+      KC_SPI_STICKY_SESSION_ENCODER_INFINISPAN_NODE_NAME: '{{ application_job.hostId }}'
       KC_TRUSTSTORE_PATHS: /opt/application/pki/ca-chain.pem
       KC_CACHE_CONFIG_MUTATE: "true"
       KC_CACHE: ispn
       KC_CACHE_STACK: jdbc-ping
-      KC_EXTERNAL_ADDR: '{{ application_parameters.KEYCLOAK_DISCOVERY_IP | default(undef(hint=''Configure Keycloak discovery address''), true) }}'
-      KC_BIND_ADDR: '{{ application_parameters.KEYCLOAK_BIND_IP | default(undef(hint=''Configure Keycloak bind address''), true) }}'
-      KC_BIND_PORT: "7800"
-      KC_INITIAL_HOSTS: '{{ application_parameters.KEYCLOAK_INITIAL_HOSTS | default(undef(hint=''Configure Keycloak cluster members''), true) }}'
-      JDK_JAVA_OPTIONS: '-Djgroups.bind.address=global -Djgroups.external_addr={{ application_parameters.KEYCLOAK_DISCOVERY_IP | default(undef(hint=''Configure Keycloak discovery address''), true) }} -Djgroups.bind.port=7800 -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:InitiatingHeapOccupancyPercent=45 -XX:+ExitOnOutOfMemoryError'
-    parameters:
-      KEYCLOAK_MEMORY_LIMIT: 2G
-      KEYCLOAK_DISCOVERY_IP: ""
-      KEYCLOAK_BIND_IP: ""
-      KEYCLOAK_INITIAL_HOSTS: ""
-      KEYCLOAK_NODE_NAME: ""
+      KC_EXTERNAL_ADDR: '{{ hostvars[application_job.hostId].ansible_host | default(application_job.hostId) }}'
+      KC_BIND_ADDR: '0.0.0.0'
+      KC_BIND_PORT: >-
+        {{ ((application_job.application.definition.defaults.ports | default({})) |
+            combine(application_job.slot.overrides.ports | default({}), recursive=true) |
+            combine(application_job.instance.overrides.ports | default({}), recursive=true) |
+            combine(application_job.hostOverride.ports | default({}), recursive=true))['port-2'].container }}
+      KC_INITIAL_HOSTS: >-
+        {%- set members = [] -%}
+        {%- for placement in _application_inputs.jobs |
+            selectattr('libraryId', 'equalto', library_instance_id) |
+            selectattr('slotId', 'equalto', application_job.slotId) | sort(attribute='hostId') -%}
+        {%- set ports = (placement.application.definition.defaults.ports | default({})) |
+            combine(placement.slot.overrides.ports | default({}), recursive=true) |
+            combine(placement.instance.overrides.ports | default({}), recursive=true) |
+            combine(placement.hostOverride.ports | default({}), recursive=true) -%}
+        {%- set _ = members.append((hostvars[placement.hostId].ansible_host | default(placement.hostId)) ~ '[' ~ (ports['port-2'].published | string) ~ ']') -%}
+        {%- endfor -%}
+        {{- members | join(',') -}}
+      JDK_JAVA_OPTIONS: >-
+        {%- set ports = (application_job.application.definition.defaults.ports | default({})) |
+            combine(application_job.slot.overrides.ports | default({}), recursive=true) |
+            combine(application_job.instance.overrides.ports | default({}), recursive=true) |
+            combine(application_job.hostOverride.ports | default({}), recursive=true) -%}
+        -Djgroups.bind.address=global -Djgroups.external_addr={{ hostvars[application_job.hostId].ansible_host | default(application_job.hostId) }} -Djgroups.bind.port={{ ports['port-2'].container }} -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:InitiatingHeapOccupancyPercent=45 -XX:+ExitOnOutOfMemoryError
     ports:
       port-1:
         container: 8051
@@ -79259,7 +79283,7 @@ platform_application_definition:
 {{ application_runtime | platform.core.application_agent_config }}
 
 @@END
-@@PORTABLE {"path":"examples/szi/application-packages/keycloak/1.0.0/roles/application_keycloak/templates/compose.yml.j2","mode":420,"size":2368,"sha256":"0bd1e120225497e544a09cb573d311010adf09db384f4e0e343a60f05df6aee8","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2368}
+@@PORTABLE {"path":"examples/szi/application-packages/keycloak/1.0.0/roles/application_keycloak/templates/compose.yml.j2","mode":420,"size":2369,"sha256":"9efff838a16f2d79f095d319e49e5048a9c1b745a7a6f7d496d9a71ffafe9d82","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2369}
 services:
   {{ application_instance_id }}:
     extends:
@@ -79302,7 +79326,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: {{ application_parameters.KEYCLOAK_MEMORY_LIMIT | to_json }}
+          memory: {{ application_environment.KEYCLOAK_MEMORY_LIMIT | to_json }}
 
 @@END
 @@PORTABLE {"path":"examples/szi/application-packages/nginx/1.0.0/application.yml","mode":420,"size":1418,"sha256":"b7ed66dddc7f9eae3cbdedbb11e38abbc65f79f807def935d8e7e5a9e47e8b5e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1418}
@@ -80913,7 +80937,7 @@ ent-Type"] = "applapplication/json",
 end
 
 @@END
-@@PORTABLE {"path":"examples/szi/application-packages/nginx/1.0.0/roles/application_nginx/defaults/main.yml","mode":420,"size":2154,"sha256":"1d38708d73ef5a4d33754561c7736ff68296e199f681e792e40e129c0b3660b3","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2154}
+@@PORTABLE {"path":"examples/szi/application-packages/nginx/1.0.0/roles/application_nginx/defaults/main.yml","mode":420,"size":2166,"sha256":"9392e102bfc29a0fb1ec7ab82e2779cbf88054c74b27cf1706a7a31f54b936c9","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2166}
 platform_application_definition:
   name: nginx
   version: 1.0.0
@@ -80946,7 +80970,7 @@ platform_application_definition:
           default(platform_desired_state['x-applicationLibraryEndpointGroups'][library_instance_id] | default('')) -%}
         {{ ('nginx.' ~ platform_desired_state.endpointGroups[group].address.domain)
           if group and (platform_desired_state.endpointGroups[group].address.domain | default('')) else '' }}
-      REALM: '{{ application_parameters.SZI_REALM }}'
+      REALM: '{{ application_connections.sso.parameters.realm }}'
       GA_HOST: >-
         {%- set group = platform_desired_state.applicationLibraryDeployments[library_instance_id].applications['grant-access'].overrides.endpoint.endpoint_group |
           default(platform_desired_state['x-applicationLibraryEndpointGroups'][library_instance_id] | default('')) -%}
@@ -81160,7 +81184,7 @@ exec /bin/sh ./application-packages/keycloak/1.0.0/assets/scripts/integration.sh
 }
 
 @@END
-@@PORTABLE {"path":"examples/szi/library-packages/szi/1.0.0/roles/library_szi/defaults/main.yml","mode":420,"size":2826,"sha256":"59d7be1471c899131421481d60e4b3ed41595c53f34bbecb4f3865ec5a1cf05c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2826}
+@@PORTABLE {"path":"examples/szi/library-packages/szi/1.0.0/roles/library_szi/defaults/main.yml","mode":420,"size":2752,"sha256":"220f9fac10aed9ffb3db53b21a3407d3709a9e6380a997d8773e1e66d052ee21","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2752}
 platform_library_definition:
   name: szi
   version: 1.0.0
@@ -81171,8 +81195,6 @@ platform_library_definition:
       IDENTITY_GROUPS:
         - name: ТУЗ
           roles_file: "{{ lookup('ansible.builtin.template', platform_project_root ~ '/library-packages/szi/1.0.0/assets/group-roles/service-accounts.json.j2', convert_data=false) | from_json }}"
-      SZI_REALM: master
-      HZ_CLUSTERNAME: '{{ library_instance_id }}'
   provided_connections:
     sso:
       application: keycloak
