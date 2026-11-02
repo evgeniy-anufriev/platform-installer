@@ -40623,16 +40623,16 @@ func validApplicationConnectionSettings(v any) bool {
 }
 
 @@END
-@@PORTABLE {"path":"internal/installer/application_package_import.go","mode":420,"size":19089,"sha256":"73fe32aed6ece7ecc8202287003bca314f3ec8237c7571608aa9342a0d5336b0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":19089}
+@@PORTABLE {"path":"internal/installer/application_package_import.go","mode":420,"size":19173,"sha256":"d3c8c331c63e218dfa9ddf588c5df43b29a0b33bed82435afe1b1166949f5377","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":19173}
 package installer
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"gopkg.in/yaml.v3"
 	"io"
-	"os"
 	"platform-installer/internal/projectlifecycle"
 	"regexp"
 	"sort"
@@ -40901,7 +40901,7 @@ func validateExportPackages(records []exportRecord) error {
 
 // Import retains the reviewed package bytes in the existing opaque plan store
 // and publishes them through the same revision-guarded/recoverable transaction.
-// Existing versions are immutable: changing a package requires a new version.
+// Existing versions may be replaced through the same reviewed, guarded transaction.
 func (b *Backend) PlanApplicationPackageImport(ctx context.Context, projectRoot, sourceRoot, revision, kind, name, version, _ string) (*StructuralEditPlan, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -40973,45 +40973,50 @@ func (b *Backend) PlanApplicationPackageImport(ctx context.Context, projectRoot,
 		}
 		return blockedStructuralPlan(revision, packageImportError("project", "Не удалось проверить файлы пакетов, уже находящихся в проекте.")), nil
 	}
-	total := observation.total
-	for _, record := range existing {
-		total += record.Size
+
+	// Reimport replaces exactly the reviewed versions; other packages are retained.
+	versions := map[string]bool{}
+	incoming := map[string]exportRecord{}
+	for _, record := range observation.documents {
+		versions[strings.Join(strings.Split(record.LogicalPath, "/")[:3], "/")] = true
+		incoming[record.LogicalPath] = record
 	}
-	if len(existing)+len(observation.documents) > maxApplicationPackageFiles {
+	existingByPath := map[string]exportRecord{}
+	retained := []exportRecord{}
+	total := observation.total
+	documents := []storedDocument{}
+	for _, record := range existing {
+		existingByPath[record.LogicalPath] = record
+		versionPath := strings.Join(strings.Split(record.LogicalPath, "/")[:3], "/")
+		if !versions[versionPath] {
+			retained = append(retained, record)
+			total += record.Size
+		} else if _, present := incoming[record.LogicalPath]; !present {
+			documents = append(documents, storedDocument{LogicalPath: record.LogicalPath, Before: record.content, Existed: true, Deleted: true})
+		}
+	}
+	if len(retained)+len(observation.documents) > maxApplicationPackageFiles {
 		return blockedStructuralPlan(revision, blocked("APPLICATION_PACKAGE_LIMIT", "После импорта будет превышен лимит 512 файлов пакетов в проекте.", "package")), nil
 	}
 	if total > maxExportTotalBytes {
 		return blockedStructuralPlan(revision, blocked("APPLICATION_PACKAGE_LIMIT", "После импорта будет превышен общий размер пакетов проекта: 64 МиБ.", "package")), nil
 	}
-	documents := make([]storedDocument, 0, len(observation.documents))
-	versions := map[string]bool{}
-	for _, r := range observation.documents {
+	for _, record := range observation.documents {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		versionPath := strings.Join(strings.Split(r.LogicalPath, "/")[:3], "/")
-		if !versions[versionPath] {
-			versionRoot, pathErr := safeProjectPath(root, versionPath, true)
-			if pathErr != nil {
-				return blockedStructuralPlan(revision, pathErr), nil
-			}
-			if _, statErr := os.Lstat(versionRoot); !errors.Is(statErr, os.ErrNotExist) {
-				return blockedStructuralPlan(revision, blocked("APPLICATION_PACKAGE_EXISTS", "Версия пакета уже существует в проекте: «"+versionPath+"».", versionPath)), nil
-			}
-			versions[versionPath] = true
-		}
-		destination, err := safeProjectPath(root, r.LogicalPath, true)
-		if err != nil {
+		if _, err := safeProjectPath(root, record.LogicalPath, true); err != nil {
 			return blockedStructuralPlan(revision, err), nil
 		}
-		if _, statErr := os.Lstat(destination); !errors.Is(statErr, os.ErrNotExist) {
-			return blockedStructuralPlan(revision, blocked("APPLICATION_PACKAGE_EXISTS", "Файл пакета уже существует в проекте: «"+r.LogicalPath+"».", r.LogicalPath)), nil
+		previous, existed := existingByPath[record.LogicalPath]
+		if existed && bytes.Equal(previous.content, record.content) {
+			continue
 		}
-		documents = append(documents, storedDocument{LogicalPath: r.LogicalPath, After: r.content, Existed: false})
+		documents = append(documents, storedDocument{LogicalPath: record.LogicalPath, Before: previous.content, After: record.content, Existed: existed})
 	}
 	changes := []SemanticChange{}
 	if kind == "application" {
-		packages, err := managedApplicationPackages(append(existing, observation.documents...))
+		packages, err := managedApplicationPackages(append(retained, observation.documents...))
 		if err != nil {
 			return blockedStructuralPlan(revision, err), nil
 		}
@@ -41037,7 +41042,7 @@ func (b *Backend) PlanApplicationPackageImport(ctx context.Context, projectRoot,
 	if batch {
 		entityID = "application-packages"
 	}
-	changes = append([]SemanticChange{{Operation: "ImportApplicationPackage", EntityID: entityID, SafeSummary: "Импорт пакетов приложений / библиотеки"}}, changes...)
+	changes = append([]SemanticChange{{Operation: "ImportApplicationPackage", EntityID: entityID, SafeSummary: "Импорт / замена пакетов приложений или библиотеки"}}, changes...)
 	return b.storeStructuralPlan(root, revision, changes, documents)
 }
 
@@ -43363,7 +43368,7 @@ func presentBeforeDigest(document DocumentChange) string {
 }
 
 @@END
-@@PORTABLE {"path":"internal/installer/local_save.go","mode":420,"size":24561,"sha256":"634be04a3b969f05326a5664e39d9676d4bb9f2b35ef4c7cd5c1743f455881ef","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":24561}
+@@PORTABLE {"path":"internal/installer/local_save.go","mode":420,"size":24646,"sha256":"dbfa31c11f9e407fe860ee16c538be7e3c44165c0ac4817fcb945dd9d8a2f7c0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":24646}
 package installer
 
 import (
@@ -43907,8 +43912,11 @@ func (b *Backend) storeStructuralPlan(root, revision string, changes []SemanticC
 		if document.Existed {
 			before = &DocumentState{State: "PRESENT", Digest: digestBytes(document.Before)}
 		}
-		documentChanges = append(documentChanges, DocumentChange{LogicalPath: document.LogicalPath, Before: before,
-			After: &DocumentState{State: "PRESENT", Digest: digestBytes(document.After)}})
+		after := &DocumentState{State: "PRESENT", Digest: digestBytes(document.After)}
+		if document.Deleted {
+			after = &DocumentState{State: "ABSENT"}
+		}
+		documentChanges = append(documentChanges, DocumentChange{LogicalPath: document.LogicalPath, Before: before, After: after})
 		diffs = append(diffs, boundedDiff(document.LogicalPath, document.Before, document.After))
 	}
 	plan := StructuralEditPlan{APIVersion: StructuralPlanAPIVersion, Kind: "StructuralEditPlan", Status: "READY", BaseProjectRevision: revision,
@@ -44520,7 +44528,7 @@ func validStringList(value any, field string, requireIP bool) error {
 }
 
 @@END
-@@PORTABLE {"path":"internal/installer/plan_store.go","mode":420,"size":2085,"sha256":"735c14af233a6c253a95d7ba5fc919df046f9ddc84365e31135b4965b00269c9","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2085}
+@@PORTABLE {"path":"internal/installer/plan_store.go","mode":420,"size":2103,"sha256":"e3ceacbcb058780b0a63bb1d6f0d7005f07c197a1d5aaa40069f25bd8b97e076","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2103}
 package installer
 
 import (
@@ -44535,6 +44543,7 @@ type storedDocument struct {
 	Before      []byte
 	After       []byte
 	Existed     bool
+	Deleted     bool
 }
 
 type storedPlan struct {
@@ -48775,7 +48784,7 @@ func (candidate *structuralCandidate) storedDocuments() ([]storedDocument, error
 }
 
 @@END
-@@PORTABLE {"path":"internal/installer/transaction.go","mode":420,"size":45954,"sha256":"e2ed03dcd543ee32dd52dbf8590f675d729e50de771ca7b5cd766c5103e66218","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":45954}
+@@PORTABLE {"path":"internal/installer/transaction.go","mode":420,"size":47217,"sha256":"ce3acffa7f20ab00ce77329faedef3bfb80d1f0ad75fb09624e381e5889bb5aa","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":47217}
 package installer
 
 import (
@@ -48805,7 +48814,11 @@ func expectedRevisionAfterCommit(current []projectDocument, changes []storedDocu
 		digests[document.LogicalPath] = document.Digest
 	}
 	for _, change := range changes {
-		digests[change.LogicalPath] = digestBytes(change.After)
+		if change.Deleted {
+			delete(digests, change.LogicalPath)
+		} else {
+			digests[change.LogicalPath] = digestBytes(change.After)
+		}
 	}
 	paths := make([]string, 0, len(digests))
 	for logical := range digests {
@@ -48832,6 +48845,7 @@ type transactionParent struct {
 type transactionDocument struct {
 	LogicalPath      string              `json:"logicalPath"`
 	Existed          bool                `json:"existed"`
+	Deleted          bool                `json:"deleted,omitempty"`
 	Mode             uint32              `json:"mode"`
 	Backup           string              `json:"backup"`
 	Temporary        string              `json:"temporary"`
@@ -48850,6 +48864,13 @@ type transactionJournal struct {
 	Replacing     int                   `json:"replacingIndex"`
 	Published     int                   `json:"publishedCount"`
 	Documents     []transactionDocument `json:"documents"`
+}
+
+func transactionOutputMatches(document transactionDocument, exists bool, digest, identity string, securityMatches bool) bool {
+	if document.Deleted {
+		return !exists
+	}
+	return exists && digest == document.AfterDigest && identity == document.OutputIdentity && securityMatches
 }
 
 func writeSynced(path string, content []byte, mode os.FileMode) error {
@@ -49031,7 +49052,10 @@ func validateTransactionJournal(root, directory string, journal transactionJourn
 		} else if document.BeforeDigest != "" || document.BeforeIdentity != "" || document.BeforeSecurity != "" {
 			return errors.New("new transaction document has a before-state")
 		}
-		if journal.Phase != "PREPARING" && !validIdentity(document.OutputIdentity) {
+		if document.Deleted && (!document.Existed || !safeApplicationPackagePath(document.LogicalPath) || document.AfterDigest != digestBytes(nil) || document.OutputIdentity != "" || len(document.CreatedParents) != 0) {
+			return errors.New("transaction package deletion is invalid")
+		}
+		if !document.Deleted && journal.Phase != "PREPARING" && !validIdentity(document.OutputIdentity) {
 			return errors.New("prepared transaction output identity is invalid")
 		}
 		if document.OutputIdentity != "" && !validIdentity(document.OutputIdentity) {
@@ -49265,7 +49289,7 @@ func validateCleanupArtifacts(root, directory string, journal transactionJournal
 		if err != nil {
 			return err
 		}
-		if exists && document.OutputIdentity != "" && identity != document.OutputIdentity {
+		if exists && (document.Deleted || (document.OutputIdentity != "" && identity != document.OutputIdentity)) {
 			return errors.New("transaction temporary identity changed")
 		}
 		rollback := filepath.Join(directory, fmt.Sprintf("%03d.rollback", index))
@@ -49342,7 +49366,7 @@ func restoreTransaction(root, directory string, journal transactionJournal) erro
 				return err
 			}
 		}
-		if exists && digest == document.AfterDigest && identity == document.OutputIdentity && securityMatches {
+		if transactionOutputMatches(document, exists, digest, identity, securityMatches) {
 			published++
 		} else if document.Existed {
 			matchesBeforeIdentity := identity == document.BeforeIdentity || (document.RollbackIdentity != "" && identity == document.RollbackIdentity)
@@ -49370,7 +49394,7 @@ func restoreTransaction(root, directory string, journal transactionJournal) erro
 				return err
 			}
 		}
-		matchesOutput := exists && digest == document.AfterDigest && identity == document.OutputIdentity && securityMatches
+		matchesOutput := transactionOutputMatches(document, exists, digest, identity, securityMatches)
 		matchesBefore := (!document.Existed && !exists) || (document.Existed && exists && digest == document.BeforeDigest &&
 			(identity == document.BeforeIdentity || (document.RollbackIdentity != "" && identity == document.RollbackIdentity)) && securityMatches)
 		if !matchesOutput && !matchesBefore {
@@ -49403,7 +49427,7 @@ func restoreTransaction(root, directory string, journal transactionJournal) erro
 		if matchesBefore {
 			continue
 		}
-		if !exists || digest != document.AfterDigest || identity != document.OutputIdentity || !securityMatches {
+		if !transactionOutputMatches(document, exists, digest, identity, securityMatches) {
 			return errors.New("published transaction target changed during rollback")
 		}
 		if document.Existed {
@@ -49455,8 +49479,11 @@ func restoreTransaction(root, directory string, journal transactionJournal) erro
 			if currentErr != nil {
 				return currentErr
 			}
-			currentSecurityMatches, currentSecurityErr := transactionSecurityMatches(target, document)
-			if currentSecurityErr != nil || !currentExists || currentDigest != document.AfterDigest || currentIdentity != document.OutputIdentity || !currentSecurityMatches {
+			currentSecurityMatches, currentSecurityErr := true, error(nil)
+			if currentExists {
+				currentSecurityMatches, currentSecurityErr = transactionSecurityMatches(target, document)
+			}
+			if currentSecurityErr != nil || !transactionOutputMatches(document, currentExists, currentDigest, currentIdentity, currentSecurityMatches) {
 				return errors.New("published transaction target changed immediately before rollback")
 			}
 			if err := atomicReplace(temporaryPath, target); err != nil {
@@ -49613,6 +49640,11 @@ func (b *Backend) commitDocuments(root, identifier string, documents []storedDoc
 	if !validTransactionID(identifier) || len(documents) == 0 || len(documents) > maxTransactionDocuments {
 		return blocked("WRITE_FAILED", "Writer transaction identity or document count is invalid", "transaction")
 	}
+	for _, document := range documents {
+		if document.Deleted && (!document.Existed || len(document.After) != 0 || !safeApplicationPackagePath(document.LogicalPath)) {
+			return blocked("WRITE_FAILED", "Only reviewed existing package files may be removed", "document")
+		}
+	}
 	if err := assertSafeExistingAncestors(root); err != nil {
 		return err
 	}
@@ -49680,7 +49712,7 @@ func (b *Backend) commitDocuments(root, identifier string, documents []storedDoc
 			}
 		}
 		journal.Documents = append(journal.Documents, transactionDocument{LogicalPath: document.LogicalPath,
-			Existed: document.Existed, Mode: uint32(mode), Backup: backupName, Temporary: temporaryName,
+			Existed: document.Existed, Deleted: document.Deleted, Mode: uint32(mode), Backup: backupName, Temporary: temporaryName,
 			BeforeDigest: beforeDigest, BeforeIdentity: beforeIdentity, BeforeSecurity: beforeSecurity, AfterDigest: digestBytes(document.After),
 			CreatedParents: createdParents})
 	}
@@ -49772,6 +49804,9 @@ func (b *Backend) commitDocuments(root, identifier string, documents []storedDoc
 				return err
 			}
 		}
+		if document.Deleted {
+			continue
+		}
 		temporaryPath := filepath.Join(directory, journal.Documents[index].Temporary)
 		mode := os.FileMode(journal.Documents[index].Mode)
 		temporary, err := createWriterFile(temporaryPath, mode)
@@ -49838,20 +49873,29 @@ func (b *Backend) commitDocuments(root, identifier string, documents []storedDoc
 			}
 		}
 		temporary := filepath.Join(directory, document.Temporary)
-		if err := b.replace(temporary, target); err != nil {
-			return err
-		}
-		if err := finalizeCanonicalACL(target, document.Existed); err != nil {
-			return err
+		if document.Deleted {
+			if err := os.Remove(target); err != nil {
+				return err
+			}
+		} else {
+			if err := b.replace(temporary, target); err != nil {
+				return err
+			}
+			if err := finalizeCanonicalACL(target, document.Existed); err != nil {
+				return err
+			}
 		}
 		if err := syncDirectory(filepath.Dir(target)); err != nil {
 			return err
 		}
 		exists, digest, identity, err := inspectWriterFile(target)
-		if err != nil || !exists || digest != document.AfterDigest || identity != document.OutputIdentity {
+		if err != nil || !transactionOutputMatches(document, exists, digest, identity, true) {
 			return errors.New("published transaction output could not be verified")
 		}
-		securityMatches, securityErr := transactionSecurityMatches(target, document)
+		securityMatches, securityErr := true, error(nil)
+		if exists {
+			securityMatches, securityErr = transactionSecurityMatches(target, document)
+		}
 		if securityErr != nil || !securityMatches {
 			return errors.New("published transaction security could not be verified")
 		}
