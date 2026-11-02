@@ -87586,7 +87586,7 @@ catalogLock:
 })();
 
 @@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":134819,"sha256":"cd2d4f8d09c72f45984478d07c817376affb9f17ec515e819b8c3a610f0a0966","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49805}
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":135046,"sha256":"84b85714731111c87e56637adfa5b9cc6e08bb802b21e10b9b4d36e4c3560e37","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49805}
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   EditResult,
@@ -88494,11 +88494,16 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       credentialStatus?.sshMode,
       credentialStatus?.status,
     ]);
+  const serverTransportBinding = JSON.stringify(
+    Object.entries(managed?.servers || {}).sort(([a], [b]) => a.localeCompare(b))
+      .map(([id, server]) => [id, server.address, server.sshPort ?? 22]),
+  );
   useEffect(
     () => setServerInformation({}),
     [
       result.root,
-      result.managed?.projectRevision,
+      result.project?.id,
+      serverTransportBinding,
       credentialStatus?.expiresAt,
       credentialStatus?.status,
       credentialStatus?.sshMode,
@@ -88897,16 +88902,16 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
         pending.status !== "READY" ||
         (!manual &&
           (!plan?.secretOutputEncryptionRequired ||
-            !plan.secretOutputEncryptionPasswordPresent))
+            !plan.secretOutputEncrypt
+@@END
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":135046,"sha256":"84b85714731111c87e56637adfa5b9cc6e08bb802b21e10b9b4d36e4c3560e37","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49750}
+ionPasswordPresent))
       )
         return;
       const candidates = [...(pending.packages || [])];
       let cursor = pending.nextCursor;
       const seen = new Set<string>();
-      for (let page = 1; cursor && page < 128; pa
-@@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":134819,"sha256":"cd2d4f8d09c72f45984478d07c817376affb9f17ec515e819b8c3a610f0a0966","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49750}
-ge++) {
+      for (let page = 1; cursor && page < 128; page++) {
         if (seen.has(cursor)) break;
         seen.add(cursor);
         let next: SecretOutputPackagesOperation;
@@ -90261,13 +90266,13 @@ ge++) {
               onActiveTabChange={setTopologyTab}
               selectedDeploymentId={selectedTopologyDeployment}
               onSelectedDeploymentChange={setSelectedTopologyDeployment}
-              selectedHostId={selectedTopologyHost}
+  
+@@END
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":135046,"sha256":"84b85714731111c87e56637adfa5b9cc6e08bb802b21e10b9b4d36e4c3560e37","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":35491}
+            selectedHostId={selectedTopologyHost}
               onSelectedHostChange={setSelectedTopologyHost}
               onConfigureDeployment={(deploymentId) => {
-                setSelectedTopologyDeployment(deploymentId)
-@@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":134819,"sha256":"cd2d4f8d09c72f45984478d07c817376affb9f17ec515e819b8c3a610f0a0966","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":35264}
-;
+                setSelectedTopologyDeployment(deploymentId);
                 setSelectedServiceDeployment(deploymentId);
                 setSelectedServiceMember("");
                 setFocusServiceMemberSettings(false);

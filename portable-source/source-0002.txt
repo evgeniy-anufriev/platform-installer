@@ -22436,13 +22436,14 @@ func (a *CommandAdapter) BuildSnapshot(ctx context.Context, projectRoot string, 
 }
 
 @@END
-@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":111520,"sha256":"5b5dc6fff257b6886e1ee9866cba3cbe25cd935fa35fc9ec1a1fc5a78c6f39f9","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48373}
+@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":112278,"sha256":"e74dd71f04cfbe5ad13a340af422b053ed5ebc59527f074f69ca7cdf3dba46aa","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48373}
 package desktop
 
 import (
 	"bytes"
 	"context"
 	"errors"
+	"maps"
 	"regexp"
 	"slices"
 	"sort"
@@ -23544,10 +23545,10 @@ func (a *App) pendingRuntimeSecretDescriptorsLocked(serviceDeployment string) ([
 		result = append(result, RuntimeSecretDescriptorView{RequirementRef: setting.RuntimeSecretRequirementRef, Purpose: "SERVICE_PASSWORD", ServiceDeployment: serviceDeployment, Setting: settingID, DisplayLabel: setting.Label, ReferenceConfigured: referenceConfigured, DeploymentBound: setting.RuntimeSecretDeploymentBound})
 	}
 	for _, input := range service.SecretInputs {
-		if !runtimeSecretDescriptorRequirement.MatchString(input.RequirementRef) || input.DisplayLabel 
+		if !runtimeSecretDescriptorRequirement.MatchString(input.RequirementRef) || input.Displ
 @@END
-@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":111520,"sha256":"5b5dc6fff257b6886e1ee9866cba3cbe25cd935fa35fc9ec1a1fc5a78c6f39f9","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49872}
-== "" || (input.Purpose != secretfiles.PurposeAdminToken && input.Purpose != secretfiles.PurposeUnsealShares) || input.RequiredWhen == "" || len(input.Operations) == 0 {
+@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":112278,"sha256":"e74dd71f04cfbe5ad13a340af422b053ed5ebc59527f074f69ca7cdf3dba46aa","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49506}
+ayLabel == "" || (input.Purpose != secretfiles.PurposeAdminToken && input.Purpose != secretfiles.PurposeUnsealShares) || input.RequiredWhen == "" || len(input.Operations) == 0 {
 			return nil, errors.New("RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE")
 		}
 		result = append(result, RuntimeSecretDescriptorView{RequirementRef: input.RequirementRef, Purpose: input.Purpose, ServiceDeployment: serviceDeployment, DisplayLabel: input.DisplayLabel, RequiredWhen: input.RequiredWhen, Operations: append([]string(nil), input.Operations...)})
@@ -24206,7 +24207,6 @@ func (a *App) CommitStructuralEditPlan(sessionID, planID string) StructuralEditO
 	}
 	if result.Status == "COMMITTED" || result.Status == "COMMITTED_REFRESH_FAILED" {
 		a.pendingTargetHostKey = nil
-		clear(a.approvedTargetHostKeys)
 		previousVerification := a.current.Verification
 		a.clearRuntimeSecretDescriptorEvidenceLocked(result.Status == "COMMITTED")
 		if !a.sessions.FinishCommit(sessionID, planID, true) {
@@ -24218,11 +24218,25 @@ func (a *App) CommitStructuralEditPlan(sessionID, planID string) StructuralEditO
 		a.current.Classification = projectlifecycle.ClassificationManaged
 		if result.Status == "COMMITTED" && result.Managed != nil && result.Managed.ProjectRevision == result.NewProjectRevision {
 			a.current.Managed = result.Managed
+			previousTargetKeys := maps.Clone(a.approvedTargetHostKeys)
 			managed := result.Managed
 			a.current.Counts.Servers = len(managed.Servers)
 			a.current.Diagnostics = a.managedServerTypeDiagnostics(managed)
 			a.refreshExecutionAfterSaveLocked(a.current.Root, a.current.Project, managedSnapshotHosts(managed))
+			// A new desired revision needs a new plan, but unchanged SSH
+			// endpoints keep their independently confirmed host keys.
+			clear(a.approvedTargetHostKeys)
+			for id, pin := range previousTargetKeys {
+				address, port, _, err := a.savedTargetServerLocked(id)
+				if err != nil || pin.root != a.current.Root || pin.projectID != a.current.Project.ID ||
+					pin.revision != result.OldProjectRevision || pin.address != address || pin.port != port {
+					continue
+				}
+				pin.revision = result.NewProjectRevision
+				a.approvedTargetHostKeys[id] = pin
+			}
 		} else {
+			clear(a.approvedTargetHostKeys)
 			a.pendingHostKey = nil
 			a.invalidateDynamicBindingLocked()
 			a.current.Managed = nil
@@ -24299,13 +24313,16 @@ func managedSnapshotHosts(view *installer.ManagedProjectView) map[string]map[str
 // Saving desired state invalidates plans, not an unchanged prepared transport.
 // Connection authority is still checked by the normal credential/pin guards.
 func (a *App) refreshExecutionAfterSaveLocked(root string, project *projectlifecycle.Project, hosts map[string]map[string]any) {
-	if project != nil && a.binding != nil && a.binding.dynamic &&
-		a.execution.root == root && a.execution.projectID == project.ID &&
-		a.execution.context.SelectionKind == "PROJECT_SERVER" {
-		id, address, port, err := a.selectedSavedExecutionServerLocked()
+	if project != nil && a.binding != nil &&
+		a.execution.root == root && a.execution.projectID == project.ID {
+		id := a.binding.node.ID
+		unchanged := !a.binding.dynamic && a.execution.context.SelectionKind == "EXPLICIT_EXTERNAL"
+		if a.execution.context.SelectionKind == "PROJECT_SERVER" {
+			selected, address, port, err := a.selectedSavedExecutionServerLocked()
+			unchanged = err == nil && selected == id && address == a.binding.node.Address && port == a.binding.node.Port
+		}
 		runtime, valid := installationRuntimeBinding(a.binding.reader.runtimeRelease)
-		if err == nil && id == a.binding.node.ID && address == a.binding.node.Address && port == a.binding.node.Port &&
-			valid && runtime.BundleDigest == project.Source.BundleDigest && runtime.CatalogDigest == project.Source.CatalogDigest {
+		if unchanged && valid && runtime.BundleDigest == project.Source.BundleDigest && runtime.CatalogDigest == project.Source.CatalogDigest {
 			a.pendingHostKey = nil
 			a.execution.replaceSnapshotHosts(hosts)
 			if candidate, ok := a.execution.candidates[id]; ok {
@@ -24512,7 +24529,10 @@ func projectErrorMessage(code string) string {
 	case "EXECUTION_NODE_PREPARE_WORKSPACE_FAILED":
 		return "Не удалось передать рабочий каталог Execution Node текущему SSH-пользователю. Проверьте владельца каталога и отсутствие симлинков, затем повторите подготовку."
 	case "EXECUTION_NODE_PREPARE_STAGE_FAILED":
-		return "Подготовка остановилась при передаче проверенного runtime bundle. Проверьте доступность узла и свободное место. Проект не изменён."
+		return "Подготовка остановилась при передаче проверенного runtime bundle. Проверьте доступность узла и своб
+@@END
+@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":112278,"sha256":"e74dd71f04cfbe5ad13a340af422b053ed5ebc59527f074f69ca7cdf3dba46aa","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":14399}
+одное место. Проект не изменён."
 	case "EXECUTION_NODE_PREPARE_ACTIVATE_FAILED":
 		return "Подготовка остановилась при активации runtime на узле. Проверьте состояние узла; повторная подготовка безопасна. Проект не изменён."
 	case "EXECUTION_NODE_READY_REQUIRED":
@@ -24522,10 +24542,7 @@ func projectErrorMessage(code string) string {
 	case "EXECUTION_NODE_PEM_REQUIRED":
 		return "Для подключения нужны действующие учётные данные SSH-сеанса: пароль или приватный ключ PEM."
 	case "EXECUTION_NODE_USER_INVALID":
-		return "Имя технического пользователя не подходит для подключения к узлу выполне
-@@END
-@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":111520,"sha256":"5b5dc6fff257b6886e1ee9866cba3cbe25cd935fa35fc9ec1a1fc5a78c6f39f9","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":13275}
-ния."
+		return "Имя технического пользователя не подходит для подключения к узлу выполнения."
 	case "EXECUTION_NODE_HOST_KEY_PROBE_FAILED":
 		return "Не удалось получить ключ SSH выбранного узла. Подключение не подтверждено."
 	case "EXECUTION_NODE_HOST_KEY_APPROVAL_STALE":
@@ -31062,7 +31079,7 @@ func (a *App) CheckServerInformation(probeID string) ServerInformationResult {
 }
 
 @@END
-@@PORTABLE {"path":"internal/desktop/target_host_trust.go","mode":420,"size":7194,"sha256":"e7057de84159d0dd29ab4caa2dfc66f5685a1a0e40d992a81b6b50892e39b7a1","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7194}
+@@PORTABLE {"path":"internal/desktop/target_host_trust.go","mode":420,"size":7269,"sha256":"9f5dc1c933f7d85997f75c7916db8e70161c453b30658872f8180a9efad0724a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7269}
 package desktop
 
 import (
@@ -31078,7 +31095,8 @@ import (
 )
 
 // These approvals exist only in this application session. A saved project
-// revision, server endpoint, or project-open lifecycle change makes them stale.
+// endpoint or project-open lifecycle change makes them stale. Local Save may
+// carry a confirmed key to the next revision only for an unchanged endpoint.
 type pendingTargetHostKey struct {
 	id, root, projectID, revision, hostID, address string
 	port                                           uint16
