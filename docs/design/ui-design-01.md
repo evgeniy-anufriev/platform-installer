@@ -45,6 +45,13 @@ The page-level import choice for applications selects the full
 Single-application import belongs in the application instance screen and uses
 its declared application ref. Library import still selects one library package.
 
+Owner refinement (2026-11-02): connection dropdowns use UI-only presentation
+filtering for standard declared roles: postgres/postgresql, redis/sentinel,
+vault, kafka/schema-registry, clickhouse and sso. Filter deployments by their
+service type, using connection roles rather than arbitrary binding names.
+Unknown roles retain unfiltered choices. Keep saved incompatible values visible;
+do not rewrite them. Core remains authoritative for compatibility/admission.
+
 Owner refinement (2026-10-31): omit service/member settings without a supported
 editor instead of rendering read-only placeholders. Ordinary computed settings
 remain visible. Project verification is invoked from the shared header and its

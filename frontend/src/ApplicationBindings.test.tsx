@@ -1,7 +1,10 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi } from "vitest";
-import { ApplicationBindings } from "./ApplicationBindings";
+import {
+  ApplicationBindings,
+  connectionCandidates,
+} from "./ApplicationBindings";
 
 function setup(save = vi.fn(async () => true)) {
   const dirty = vi.fn();
@@ -19,6 +22,76 @@ function setup(save = vi.fn(async () => true)) {
   return { user: userEvent.setup(), save, dirty };
 }
 describe("library connections table", () => {
+  it("filters by declared role, not the arbitrary binding name", () => {
+    const result = connectionCandidates(
+      {
+        customDb: ["postgres"],
+        cache: ["redis", "sentinel"],
+        secrets: ["vault"],
+        database: ["custom-role"],
+        conflicting: ["postgres", "redis"],
+      },
+      {
+        pg1: "postgresql",
+        pg2: "postgresql",
+        redis: "redis",
+        vault: "vault",
+        docker: "docker",
+      },
+      [],
+    );
+    expect(result.customDb.deploymentRefs).toEqual(["pg1", "pg2"]);
+    expect(result.cache.deploymentRefs).toEqual(["redis"]);
+    expect(result.secrets.deploymentRefs).toEqual(["vault"]);
+    expect(result.conflicting.deploymentRefs).toEqual([]);
+    expect(result.database).toBeUndefined();
+  });
+  it("filters choices and preserves an incompatible saved reference", async () => {
+    const save = vi.fn(async () => true);
+    render(
+      <ApplicationBindings
+        value={{ database: { deploymentRef: "old-redis" } }}
+        hints={{
+          database: "deployment",
+          cache: "deployment",
+          secrets: "deployment",
+          sso: "deployment",
+        }}
+        deployments={["pg-a", "pg-b", "old-redis", "vault-a", "docker-a"]}
+        profiles={[]}
+        providedConnections={["szi/sso", "other/api"]}
+        candidates={{
+          database: {
+            deploymentRefs: ["pg-a", "pg-b"],
+            providedConnectionRefs: [],
+          },
+          cache: { deploymentRefs: ["old-redis"], providedConnectionRefs: [] },
+          secrets: { deploymentRefs: ["vault-a"], providedConnectionRefs: [] },
+          sso: { deploymentRefs: [], providedConnectionRefs: ["szi/sso"] },
+        }}
+        disabled={false}
+        onSave={save}
+        onDirtyChange={vi.fn()}
+      />,
+    );
+    const options = (name: string) =>
+      within(screen.getByLabelText("Подключение " + name))
+        .getAllByRole("option")
+        .map((option) => (option as HTMLOptionElement).value);
+    expect(options("database")).toEqual(["", "old-redis", "pg-a", "pg-b"]);
+    expect(
+      screen.getByRole("option", { name: /old-redis · недоступно/ }),
+    ).toBeTruthy();
+    expect(options("cache")).toEqual(["", "old-redis"]);
+    expect(options("secrets")).toEqual(["", "vault-a"]);
+    expect(options("sso")).toEqual([""]);
+    await userEvent.selectOptions(
+      screen.getByLabelText("Тип подключения sso"),
+      "providedConnectionRef",
+    );
+    expect(options("sso")).toEqual(["", "szi/sso"]);
+    expect(save).not.toHaveBeenCalled();
+  });
   it("renders the full list in one scroll region without pagination", () => {
     render(
       <ApplicationBindings

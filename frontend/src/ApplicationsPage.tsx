@@ -9,7 +9,10 @@ import { ApplicationTopicBindings } from "./ApplicationTopicBindings";
 import { ApplicationPorts, type PortSource } from "./ApplicationPorts";
 import { ApplicationReadiness } from "./ApplicationReadiness";
 import { ApplicationRegistryCredentials } from "./ApplicationRegistryCredentials";
-import { ApplicationBindings } from "./ApplicationBindings";
+import {
+  ApplicationBindings,
+  connectionCandidates,
+} from "./ApplicationBindings";
 import { ApplicationSecretBindings } from "./ApplicationSecretBindings";
 import { ApplicationCredentials } from "./ApplicationCredentials";
 import { ApplicationValueFields } from "./ApplicationValueFields";
@@ -246,20 +249,28 @@ export function ApplicationsPage({
       : objectValue(value);
   const recipe = objectValue(definition.slots);
   const bindingHints: Record<string, string> = {};
-  for (const connection of Object.values(objectValue(definition.connections))) {
+  const bindingConnectionNames: Record<string, string[]> = {};
+  const declareConnection = (connectionName: string, connection: unknown) => {
     const name = objectValue(connection).library_binding;
-    if (typeof name === "string") bindingHints[name] = "deployment";
+    if (typeof name === "string") {
+      bindingHints[name] = "deployment";
+      (bindingConnectionNames[name] ??= []).push(connectionName);
+    }
+  };
+  for (const [name, connection] of Object.entries(
+    objectValue(definition.connections),
+  )) {
+    declareConnection(name, connection);
   }
   for (const raw of Object.values(recipe)) {
     const def = packageDefinition(
       "application",
       objectValue(raw).applicationRef,
     );
-    for (const connection of Object.values(
+    for (const [name, connection] of Object.entries(
       declaredConnections(def.connections),
     )) {
-      const name = objectValue(connection).library_binding;
-      if (typeof name === "string") bindingHints[name] = "deployment";
+      declareConnection(name, connection);
     }
   }
   for (const raw of Object.values(objectValue(definition.shared_secrets))) {
@@ -490,6 +501,14 @@ export function ApplicationsPage({
     !dirty &&
     intents.length === 0 &&
     snapshot?.projectRevision === managed?.projectRevision;
+  const providedConnectionChoices = freshSecrets
+    ? Object.entries(snapshot?.applicationLibraries?.libraries ?? {}).flatMap(
+        ([id, lib]) =>
+          Object.keys(lib.providedConnections ?? {}).map(
+            (name) => id + "/" + name,
+          ),
+      )
+    : [];
   const secretContext = JSON.stringify([
     selected,
     slot,
@@ -669,8 +688,8 @@ export function ApplicationsPage({
       {importCompleted && (
         <p role="status">
           Пакет успешно импортирован и доступен для выбора при добавлении
-          библиотеки или приложения. Чтобы добавить библиотеку, нажмите «Добавить
-          библиотеку».
+          библиотеки или приложения. Чтобы добавить библиотеку, нажмите
+          «Добавить библиотеку».
         </p>
       )}
       <div className="applications-layout">
@@ -1263,19 +1282,18 @@ export function ApplicationsPage({
                       }
                       value={objectValue(library.bindings)}
                       hints={bindingHints}
+                      candidates={connectionCandidates(
+                        bindingConnectionNames,
+                        Object.fromEntries(
+                          Object.entries(managed?.deployments ?? {}).map(
+                            ([id, row]) => [id, row.serviceType],
+                          ),
+                        ),
+                        providedConnectionChoices,
+                      )}
                       deployments={Object.keys(managed?.deployments ?? {})}
                       profiles={Object.keys(managed?.pki?.tlsProfiles ?? {})}
-                      providedConnections={
-                        freshSecrets
-                          ? Object.entries(
-                              snapshot?.applicationLibraries?.libraries ?? {},
-                            ).flatMap(([id, lib]) =>
-                              Object.keys(lib.providedConnections ?? {}).map(
-                                (name) => id + "/" + name,
-                              ),
-                            )
-                          : []
-                      }
+                      providedConnections={providedConnectionChoices}
                       disabled={busy}
                       onDirtyChange={(v) => markChildDirty(v, "bindings")}
                       onSave={(bindings) =>

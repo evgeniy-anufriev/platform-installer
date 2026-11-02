@@ -2,6 +2,41 @@ import { useState, useRef } from "react";
 import { objectValue } from "./application-draft";
 
 type Obj = Record<string, unknown>;
+// Presentation filtering only. Core remains authoritative for compatibility.
+export function connectionCandidates(
+  bindings: Record<string, string[]>,
+  deploymentTypes: Record<string, string>,
+  providedConnections: string[],
+) {
+  const roleTypes: Record<string, string> = {
+    postgres: "postgresql",
+    postgresql: "postgresql",
+    redis: "redis",
+    sentinel: "redis",
+    vault: "vault",
+    kafka: "kafka",
+    "schema-registry": "kafka",
+    clickhouse: "clickhouse",
+    sso: "application",
+  };
+  const result: Record<
+    string,
+    { deploymentRefs: string[]; providedConnectionRefs: string[] }
+  > = {};
+  for (const [binding, names] of Object.entries(bindings)) {
+    const types = names.map((name) => roleTypes[name]).filter(Boolean);
+    if (!types.length) continue;
+    result[binding] = {
+      deploymentRefs: Object.keys(deploymentTypes).filter((id) =>
+        types.every((type) => deploymentTypes[id] === type),
+      ),
+      providedConnectionRefs: types.every((type) => type === "application")
+        ? providedConnections.filter((ref) => names.includes(ref.split("/")[1]))
+        : [],
+    };
+  }
+  return result;
+}
 export function ApplicationBindings({
   value,
   hints,
@@ -14,7 +49,12 @@ export function ApplicationBindings({
   vaultBinding,
   deploymentTypes = {},
   onSelectVault,
+  candidates,
 }: {
+  candidates?: Record<
+    string,
+    { deploymentRefs: string[]; providedConnectionRefs: string[] }
+  >;
   vaultBinding?: string;
   deploymentTypes?: Record<string, string>;
   onSelectVault?: (binding: string) => Promise<boolean>;
@@ -77,9 +117,12 @@ export function ApplicationBindings({
                 }
                 value={objectValue(value[key])}
                 hint={hints[key]}
-                deployments={deployments}
+                deployments={candidates?.[key]?.deploymentRefs ?? deployments}
                 profiles={profiles}
-                providedConnections={providedConnections}
+                providedConnections={
+                  candidates?.[key]?.providedConnectionRefs ??
+                  providedConnections
+                }
                 disabled={disabled}
                 onDirtyChange={(dirty) => mark(key, dirty)}
                 onSave={(entry) => onSave({ ...value, [key]: entry })}
