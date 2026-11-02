@@ -395,6 +395,23 @@ func TestAppReturnsSafeFailure(t *testing.T) {
 	}
 }
 
+func TestOpenManagedProjectIncludesSafeReaderDiagnostic(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "inventory"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	content := "# Managed by Platform Installer.\n# This is standard Ansible YAML; formatting may be normalized.\nall: [\npassword: private-test-value\n"
+	if err := os.WriteFile(filepath.Join(root, "inventory", "hosts.yml"), []byte(content), 0600); err != nil {
+		t.Fatal(err)
+	}
+	app := NewApp(snapshotReaderStub{err: errors.New("Core must not be called")}, lifecycleStub{result: projectlifecycle.Result{Root: root, Classification: projectlifecycle.ClassificationManaged, Project: &projectlifecycle.Project{ID: "project-0123456789abcdef", Name: "Invalid"}}})
+	app.projectRevision = func(string) (string, error) { return "sha256:revision", nil }
+	result := app.OpenProject(root)
+	if result.Error == nil || result.Error.Code != "MANAGED_DOCUMENT_INVALID" || !strings.Contains(result.Error.Message, "inventory/hosts.yml") || !strings.Contains(result.Error.Message, "синтаксис YAML") || strings.Contains(result.Error.Message, "private-test-value") {
+		t.Fatalf("result=%+v", result.Error)
+	}
+}
+
 func TestRuntimeSecretDescriptorDiagnosticCodesAreBoundedTokensOnly(t *testing.T) {
 	got := runtimeSecretDescriptorDiagnosticCodes(&executionnode.ExecutionError{
 		Code: "CORE_OPERATION_FAILED",

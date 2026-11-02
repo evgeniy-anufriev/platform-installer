@@ -3,11 +3,13 @@ package installer
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/netip"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 
 	"platform-installer/internal/projectlifecycle"
 )
@@ -49,16 +51,16 @@ func ReadManagedProjectViewWithCatalog(projectRoot string, catalog *projectlifec
 	hosts := asMap(all["hosts"])
 	targets := asMap(asMap(asMap(all["children"])["platform_targets"])["hosts"])
 	if all == nil || hosts == nil || targets == nil {
-		return nil, blocked("MANAGED_DOCUMENT_INVALID", "Managed inventory roots are missing or malformed", managedInventoryDocument)
+		return nil, blocked("MANAGED_DOCUMENT_INVALID", "Отсутствуют или некорректны all.hosts и all.children.platform_targets.hosts.", managedInventoryDocument)
 	}
 	view := &ManagedProjectView{Servers: make(map[string]ManagedServer), Deployments: make(map[string]ManagedDeployment), EndpointGroups: make(map[string]ManagedEndpointGroup), MemberPlacements: []ManagedMemberPlacement{}, HostPlacements: []ManagedHostPlacement{}, PKI: ManagedPKI{Authorities: map[string]map[string]any{}, Profiles: map[string]map[string]any{}, TLSProfiles: map[string]map[string]any{}, Scopes: map[string]map[string]any{}}}
 	for hostID := range targets {
 		if len(view.Servers) >= maxManagedEntities || !identifierPattern.MatchString(hostID) {
-			return nil, managedReadError("Managed server collection is invalid or exceeds its limit", managedInventoryDocument)
+			return nil, managedReadError("Недопустимый ID сервера или превышен лимит серверов.", managedInventoryDocument)
 		}
 		host := asMap(hosts[hostID])
 		if host == nil {
-			return nil, blocked("MANAGED_DOCUMENT_INVALID", "Managed target is missing its canonical host record", managedInventoryDocument)
+			return nil, blocked("MANAGED_DOCUMENT_INVALID", "Для сервера из platform_targets отсутствует запись в all.hosts.", managedInventoryDocument)
 		}
 		platformHost := asMap(host["platform_host"])
 		server := ManagedServer{HostID: hostID}
@@ -68,7 +70,7 @@ func ReadManagedProjectViewWithCatalog(projectRoot string, catalog *projectlifec
 		if raw, found := host["ansible_port"]; found {
 			port, ok := yamlInteger(raw)
 			if !ok || port < 1 || port > 65535 {
-				return nil, blocked("MANAGED_DOCUMENT_INVALID", "Managed server SSH port is invalid", managedInventoryDocument)
+				return nil, blocked("MANAGED_DOCUMENT_INVALID", "SSH-порт сервера должен быть целым числом от 1 до 65535.", managedInventoryDocument)
 			}
 			server.SSHPort = &port
 		}
@@ -96,12 +98,18 @@ type managedReadBudget struct{ total int64 }
 
 func (budget *managedReadBudget) ownedDocument(root, logical string) (map[string]any, []byte, error) {
 	content, err := readF1OwnedDocument(root, logical)
-	if err != nil || int64(len(content)) > maxManagedDocumentBytes || budget.total+int64(len(content)) > maxManagedAggregateBytes {
-		return nil, nil, managedReadError("Managed document is unsafe, malformed, or exceeds the read limit", logical)
+	if err != nil {
+		return nil, nil, managedDocumentReadError(err, logical)
+	}
+	if int64(len(content)) > maxManagedDocumentBytes || budget.total+int64(len(content)) > maxManagedAggregateBytes {
+		return nil, nil, managedReadError("Превышен лимит чтения: 4 МиБ на документ или 64 МиБ суммарно.", logical)
 	}
 	budget.total += int64(len(content))
 	document, err := parseManagedYAML(content)
 	if err != nil {
+		if failure := ManagedDocumentFinding(err); failure != nil {
+			return nil, nil, blocked(failure.Code, failure.SafeMessage, logical)
+		}
 		return nil, nil, err
 	}
 	return document, content, nil
@@ -124,12 +132,18 @@ func (budget *managedReadBudget) ownedDocumentOptionalBytes(root, logical string
 			return nil, nil, false, nil
 		}
 	}
-	if err != nil || int64(len(content)) > maxManagedDocumentBytes || budget.total+int64(len(content)) > maxManagedAggregateBytes {
-		return nil, nil, false, managedReadError("Managed document is unsafe, malformed, or exceeds the read limit", logical)
+	if err != nil {
+		return nil, nil, false, managedDocumentReadError(err, logical)
+	}
+	if int64(len(content)) > maxManagedDocumentBytes || budget.total+int64(len(content)) > maxManagedAggregateBytes {
+		return nil, nil, false, managedReadError("Превышен лимит чтения: 4 МиБ на документ или 64 МиБ суммарно.", logical)
 	}
 	budget.total += int64(len(content))
 	document, err := parseManagedYAML(content)
 	if err != nil {
+		if failure := ManagedDocumentFinding(err); failure != nil {
+			return nil, nil, false, blocked(failure.Code, failure.SafeMessage, logical)
+		}
 		return nil, nil, false, err
 	}
 	return document, content, true, nil
@@ -137,6 +151,29 @@ func (budget *managedReadBudget) ownedDocumentOptionalBytes(root, logical string
 
 func managedReadError(message, field string) error {
 	return blocked("MANAGED_DOCUMENT_INVALID", message, field)
+}
+
+func managedDocumentReadError(err error, logical string) error {
+	message := "Ошибка безопасного чтения документа."
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		message = "Обязательный документ не найден."
+	case errors.Is(err, os.ErrPermission):
+		message = "Отказано в доступе к документу."
+	case err.Error() == "managed file is unsafe":
+		message = "Путь содержит ссылку/reparse point, имеет недопустимый тип или файл превышает лимит 4 МиБ."
+	case err.Error() == "managed file read failed":
+		message = "Не удалось прочитать стабильную полную копию документа."
+	case err.Error() == "managed file open failed":
+		message = "Не удалось открыть дескриптор документа."
+	default:
+		// Numeric OS codes identify the failure without exposing arbitrary error text.
+		var errno syscall.Errno
+		if errors.As(err, &errno) {
+			message += fmt.Sprintf(" Код ОС: %d.", errno)
+		}
+	}
+	return managedReadError(message, logical)
 }
 
 func readManagedDesiredState(root string, budget *managedReadBudget, view *ManagedProjectView, catalog *projectlifecycle.ProjectCatalogView) error {
@@ -150,12 +187,12 @@ func readManagedDesiredState(root string, budget *managedReadBudget, view *Manag
 	if raw, exists := state[libraryEndpointGroupsKey]; exists {
 		groups := asMap(raw)
 		if groups == nil || len(groups) > 128 {
-			return managedReadError("Library endpoint selections are malformed", desiredDocument)
+			return managedReadError("Старые привязки endpoint должны быть объектом в пределах лимита записей.", desiredDocument)
 		}
 		for id, rawRef := range groups {
 			ref, ok := rawRef.(string)
 			if !validLibraryInputID(id) || !ok || !validLibraryInputID(ref) {
-				return managedReadError("Library endpoint selection is malformed", desiredDocument)
+				return managedReadError("Недопустимый ID библиотеки или группы endpoint.", desiredDocument)
 			}
 			view.LibraryEndpointGroups[id] = ref
 		}
@@ -163,8 +200,33 @@ func readManagedDesiredState(root string, budget *managedReadBudget, view *Manag
 	view.ApplicationPlacements = map[string]map[string]any{}
 	for id, raw := range asMap(state["applicationLibraryDeployments"]) {
 		value := asMap(raw)
-		if !validLibraryInputID(id) || value == nil || safeApplicationInput(value, 0) != nil {
-			return managedReadError("Managed application library input is unsafe", desiredDocument)
+		field := desiredDocument + ": platform_desired_state.applicationLibraryDeployments." + id
+		if !validLibraryInputID(id) || value == nil {
+			return managedReadError("Недопустимый ID библиотеки или настройки библиотеки не являются объектом.", field)
+		}
+		if err := safeApplicationInput(value, 0); err != nil {
+			var failure *writerError
+			if errors.As(err, &failure) {
+				messages := map[string]string{
+					"Application input nesting exceeds its limit":                              "Превышен лимит вложенности настроек библиотеки (16).",
+					"Application input exceeds its limit":                                      "Превышен лимит полей объекта настроек библиотеки (128).",
+					"Application list exceeds its limit":                                       "Превышен лимит элементов списка настроек библиотеки (256).",
+					"Registry credentials must contain runtime references":                     "registry_credentials должен быть объектом ссылок на сессионные секреты.",
+					"Registry must be a host or host:port without scheme, path or credentials": "Имя registry должно содержать хост и необязательный порт, без схемы, пути и учётных данных.",
+					"Registry credentials require username and password references":            "Для registry необходимы ровно две ссылки: username и password.",
+					"Registry credentials accept runtime references only":                      "username и password registry должны использовать source.kind: runtime_secret_ref и допустимый ref.",
+					"Shared secret descriptors must be a map":                                  "shared_secrets должен быть объектом источников секретов.",
+					"Shared secret source is invalid":                                          "Некорректный источник общего секрета shared_secrets.",
+					"Account descriptor must be a map":                                         "Настройки учётной записи должны быть объектом.",
+					"Account credentials are invalid":                                          "credentials учётной записи должен содержать только username и password.",
+					"Credential source is invalid":                                             "Некорректный источник секрета учётной записи.",
+					"Secret material is not accepted":                                          "В настройках библиотеки обнаружен закрытый ключ; хранение ключей в проекте запрещено.",
+				}
+				if message := messages[failure.message]; message != "" {
+					return managedReadError(message, field)
+				}
+			}
+			return managedReadError("Некорректная структура настроек библиотеки.", field)
 		}
 		view.ApplicationLibraries[id] = asMap(deepCopy(value))
 		normalizeLibraryVaultBinding(view.ApplicationLibraries[id])
@@ -172,7 +234,7 @@ func readManagedDesiredState(root string, budget *managedReadBudget, view *Manag
 			binding := asMap(raw)
 			ref, ok := binding["endpointGroupRef"].(string)
 			if !ok || len(binding) != 1 || !validLibraryInputID(ref) {
-				return managedReadError("Library endpoint binding is malformed", desiredDocument)
+				return managedReadError("bindings.endpoint должен содержать только endpointGroupRef с допустимым ID группы.", field+".bindings.endpoint")
 			}
 			view.LibraryEndpointGroups[id] = ref
 		}
@@ -181,41 +243,41 @@ func readManagedDesiredState(root string, budget *managedReadBudget, view *Manag
 	if raw, found := document["platform_data_root_directory"]; found {
 		value, ok := raw.(string)
 		if !ok || !validProjectSetting("platform_data_root_directory", value) {
-			return managedReadError("Managed service data root is invalid", desiredDocument)
+			return managedReadError("Некорректен корневой каталог данных platform_data_root_directory.", desiredDocument)
 		}
 		view.DataRootDirectory = value
 	}
 	if raw, found := document["platform_name_prefix"]; found {
 		value, ok := raw.(string)
 		if !ok || !validProjectSetting("platform_name_prefix", value) {
-			return managedReadError("Managed resource name prefix is invalid", desiredDocument)
+			return managedReadError("Некорректен префикс имён platform_name_prefix.", desiredDocument)
 		}
 		view.NamePrefix = value
 	}
 	deployments := asMap(state["serviceDeployments"])
 	groups := asMap(state["endpointGroups"])
 	if state == nil || deployments == nil {
-		return managedReadError("Managed desired-state roots are missing or malformed", desiredDocument)
+		return managedReadError("Отсутствует объект platform_desired_state.serviceDeployments.", desiredDocument)
 	}
 	if groups == nil {
 		groups = map[string]any{}
 	}
 	for id, raw := range deployments {
 		if len(view.Deployments) >= maxManagedEntities || !identifierPattern.MatchString(id) {
-			return managedReadError("Managed deployment collection is invalid or exceeds its limit", desiredDocument)
+			return managedReadError("Недопустимый ID развёртывания или превышен лимит развёртываний.", desiredDocument)
 		}
 		deployment := asMap(raw)
 		serviceType, serviceOK := deployment["serviceType"].(string)
 		mode, modeOK := deployment["mode"].(string)
 		endpointGroup, endpointOK := optionalString(deployment, "endpointGroup")
 		if deployment == nil || !serviceOK || !validDesiredStateIdentifier(serviceType) || !modeOK || !validDesiredStateIdentifier(mode) || !endpointOK || (endpointGroup != "" && !identifierPattern.MatchString(endpointGroup)) {
-			return managedReadError("Managed deployment is malformed", desiredDocument)
+			return managedReadError("У развёртывания должны быть строковые serviceType и mode, а endpointGroup — допустимым ID.", desiredDocument+": platform_desired_state.serviceDeployments."+id)
 		}
 		provider, providerErr := managedProviderProjection(deployment)
 		if providerErr != nil {
 			return providerErr
 		}
-		configuration, configurationErr := managedConfigurationProjection(deployment, serviceType, catalog, desiredDocument)
+		configuration, configurationErr := managedConfigurationProjection(deployment, serviceType, catalog, desiredDocument+": platform_desired_state.serviceDeployments."+id)
 		if configurationErr != nil {
 			return configurationErr
 		}
@@ -225,14 +287,14 @@ func readManagedDesiredState(root string, budget *managedReadBudget, view *Manag
 	}
 	for id, raw := range groups {
 		if len(view.EndpointGroups) >= maxManagedEntities || !identifierPattern.MatchString(id) {
-			return managedReadError("Managed endpoint-group collection is invalid or exceeds its limit", desiredDocument)
+			return managedReadError("Недопустимый ID группы endpoint или превышен лимит групп.", desiredDocument)
 		}
 		group := asMap(raw)
 		address := asMap(group["address"])
 		domain, domainOK := address["domain"].(string)
 		wildcard, wildcardOK := address["wildcard"].(bool)
 		if group == nil || address == nil || !domainOK || domain == "" || !wildcardOK {
-			return managedReadError("Managed endpoint group is malformed", desiredDocument)
+			return managedReadError("Группа должна содержать address.domain (непустая строка) и address.wildcard (логическое значение).", desiredDocument+": platform_desired_state.endpointGroups."+id)
 		}
 		view.EndpointGroups[id] = ManagedEndpointGroup{EndpointGroupID: id, Domain: domain, Wildcard: wildcard}
 	}
@@ -247,12 +309,12 @@ func readManagedDesiredState(root string, budget *managedReadBudget, view *Manag
 		}
 		values := asMap(rawValues)
 		if values == nil || len(values) > maxManagedEntities {
-			return managedReadError("Managed PKI collection is malformed or exceeds its limit", desiredDocument)
+			return managedReadError("Настройки PKI должны быть объектом в пределах лимита записей.", desiredDocument)
 		}
 		for id, raw := range values {
 			entity := asMap(raw)
 			if !validDesiredStateIdentifier(id) || validPKIEntity(entry.operation, entity) != nil {
-				return managedReadError("Managed PKI entity is malformed", desiredDocument)
+				return managedReadError("Некорректный ID или структура записи PKI.", desiredDocument+": platform_desired_state."+entry.key+"."+id)
 			}
 			entry.target[id] = deepCopy(entity).(map[string]any)
 		}
@@ -278,21 +340,21 @@ func managedProviderProjection(deployment map[string]any) (managedProviderView, 
 	if hasRef {
 		ref, ok := refRaw.(string)
 		if !ok {
-			return result, managedReadError("Managed provider endpoint-group reference is malformed", desiredDocument)
+			return result, managedReadError("Некорректная ссылка endpointGroupRef провайдера.", desiredDocument)
 		}
 		result.endpointGroupRef = ref
 	}
 	if hasRouter {
 		routerID, ok := yamlInteger(routerRaw)
 		if !ok {
-			return result, managedReadError("Managed provider virtual router ID is malformed", desiredDocument)
+			return result, managedReadError("Некорректный virtualRouterId провайдера.", desiredDocument)
 		}
 		result.virtualRouterID = &routerID
 	}
 	if hasAddresses {
 		values := asSlice(addressesRaw)
 		if values == nil || len(values) > maxManagedEntities {
-			return result, managedReadError("Managed provider address collection is malformed or exceeds its limit", desiredDocument)
+			return result, managedReadError("Некорректный список виртуальных адресов провайдера или превышен лимит.", desiredDocument)
 		}
 		result.virtualAddresses = make([]VirtualAddress, 0, len(values))
 		for _, raw := range values {
@@ -300,7 +362,7 @@ func managedProviderProjection(deployment map[string]any) (managedProviderView, 
 			address, addressOK := value["address"].(string)
 			iface, interfaceOK := value["interface"].(string)
 			if value == nil || len(value) != 2 || !addressOK || !interfaceOK {
-				return result, managedReadError("Managed provider virtual address is malformed", desiredDocument)
+				return result, managedReadError("Некорректный виртуальный адрес провайдера.", desiredDocument)
 			}
 			result.virtualAddresses = append(result.virtualAddresses, VirtualAddress{Address: address, Interface: iface})
 		}
@@ -339,7 +401,7 @@ func readManagedHostPlacements(root string, budget *managedReadBudget, view *Man
 	}
 	sort.Strings(hostIDs)
 	if len(hostIDs) > maxManagedHostDocuments {
-		return managedReadError("Managed host document collection exceeds its limit", "inventory/host_vars")
+		return managedReadError("Превышен лимит документов host_vars.", "inventory/host_vars")
 	}
 	for _, hostID := range hostIDs {
 		logical := managedHostDocument(hostID)
@@ -354,37 +416,37 @@ func readManagedHostPlacements(root string, budget *managedReadBudget, view *Man
 		}
 		if placements := asMap(document["platform_application_libraries"]); placements != nil {
 			if safeApplicationInput(placements, 0) != nil {
-				return managedReadError("Managed application placement is unsafe", logical)
+				return managedReadError("Некорректная структура размещения библиотеки приложений.", logical)
 			}
 			view.ApplicationPlacements[hostID] = asMap(deepCopy(placements))
 		}
 		placements := asMap(document["platform_deployments"])
 		if placements == nil {
-			return managedReadError("Managed placement root is missing or malformed", logical)
+			return managedReadError("Отсутствует объект platform_deployments в документе сервера.", logical)
 		}
 		for deploymentID, raw := range placements {
 			if !identifierPattern.MatchString(deploymentID) {
-				return managedReadError("Managed placement deployment identifier is invalid", logical)
+				return managedReadError("Недопустимый ID развёртывания в размещении.", logical)
 			}
 			placement := asMap(raw)
 			if placement == nil {
-				return managedReadError("Managed placement is malformed", logical)
+				return managedReadError("Размещение должно быть объектом.", logical)
 			}
 			members, hasMembers := placement["members"]
 			_, hasRoles := placement["roles"]
 			if hasMembers && hasRoles {
-				return managedReadError("Managed placement ambiguously mixes member and host forms", logical)
+				return managedReadError("Размещение одновременно содержит формы экземпляра и сервера.", logical)
 			}
 			if hasMembers {
 				memberMap := asMap(members)
 				if memberMap == nil {
-					return managedReadError("Managed member placement is malformed", logical)
+					return managedReadError("Некорректная структура размещения экземпляра.", logical)
 				}
 				for memberID, memberRaw := range memberMap {
 					member := asMap(memberRaw)
 					roles, rolesErr := managedRoles(member["roles"], logical)
 					if rolesErr != nil || !identifierPattern.MatchString(memberID) || len(view.MemberPlacements)+len(view.HostPlacements) >= maxManagedPlacements {
-						return managedReadError("Managed member placement is invalid or exceeds its limit", logical)
+						return managedReadError("Недопустимый экземпляр или превышен лимит размещений.", logical)
 					}
 					deployment := view.Deployments[deploymentID]
 					configuration, configurationErr := managedConfigurationProjection(member, deployment.ServiceType, catalog, logical)
@@ -397,13 +459,13 @@ func readManagedHostPlacements(root string, budget *managedReadBudget, view *Man
 			}
 			roles, rolesErr := managedRoles(placement["roles"], logical)
 			if rolesErr != nil || len(view.MemberPlacements)+len(view.HostPlacements) >= maxManagedPlacements {
-				return managedReadError("Managed host placement is invalid or exceeds its limit", logical)
+				return managedReadError("Недопустимое размещение на сервере или превышен лимит.", logical)
 			}
 			var priority *int
 			if rawPriority, present := placement["priority"]; present {
 				value, valid := yamlInteger(rawPriority)
 				if !valid || value < 1 || value > 254 {
-					return managedReadError("Managed host placement priority is invalid", logical)
+					return managedReadError("Приоритет размещения должен быть целым числом.", logical)
 				}
 				priority = &value
 			}
@@ -420,12 +482,12 @@ func managedConfigurationProjection(owner map[string]any, serviceType string, ca
 	}
 	configuration := asMap(raw)
 	if configuration == nil || len(configuration) > maxManagedEntities {
-		return nil, managedReadError("Managed configuration is malformed or exceeds its limit", field)
+		return nil, managedReadError("Конфигурация должна быть объектом в пределах лимита параметров.", field)
 	}
 	result := make([]ManagedConfigurationOverride, 0, len(configuration))
 	for settingID, value := range configuration {
 		if len(settingID) > 128 || !configurationSettingPattern.MatchString(settingID) {
-			return nil, managedReadError("Managed configuration setting identifier is invalid", field)
+			return nil, managedReadError("Недопустимый идентификатор параметра конфигурации.", field)
 		}
 		entry := ManagedConfigurationOverride{Setting: settingID, OverridePresent: true, State: "UNKNOWN"}
 		if catalog != nil && catalog.Status == "READY" {
@@ -434,7 +496,7 @@ func managedConfigurationProjection(owner map[string]any, serviceType string, ca
 				entry.State = "UNSUPPORTED"
 			} else {
 				if err := validateConfigurationValue(descriptor, value); err != nil {
-					return nil, managedReadError("Managed configuration value does not match its catalog descriptor", field)
+					return nil, managedReadError("Тип или структура значения параметра не соответствует каталогу сервиса.", field+".configuration."+settingID)
 				}
 				entry.State, entry.Value = "EDITABLE", deepCopy(value)
 			}
@@ -460,14 +522,14 @@ func managedRoles(raw any, field string) ([]string, error) {
 	}
 	values := asSlice(raw)
 	if values == nil || len(values) > maxManagedRoles {
-		return nil, managedReadError("Managed placement roles are malformed or exceed their limit", field)
+		return nil, managedReadError("Роли размещения должны быть списком в пределах лимита.", field)
 	}
 	seen := make(map[string]bool, len(values))
 	roles := make([]string, 0, len(values))
 	for _, rawRole := range values {
 		role, ok := rawRole.(string)
 		if !ok || !identifierPattern.MatchString(role) || seen[role] {
-			return nil, managedReadError("Managed placement roles are invalid", field)
+			return nil, managedReadError("Список ролей содержит недопустимое или повторяющееся имя.", field)
 		}
 		seen[role] = true
 		roles = append(roles, role)

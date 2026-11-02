@@ -15,15 +15,18 @@ var managedHeader = []byte("# Managed by Platform Installer.\n# This is standard
 
 func parseManagedYAML(content []byte) (map[string]any, error) {
 	if !bytes.HasPrefix(content, managedHeader) {
-		return nil, blocked("WRITE_NOT_ALLOWED", "Document is not explicitly Installer-owned", "document")
+		return nil, blocked("WRITE_NOT_ALLOWED", "Отсутствует точный заголовок владения Managed by Platform Installer.", "document")
 	}
 	var node yaml.Node
-	if err := yaml.Unmarshal(content, &node); err != nil || managedYAMLDuplicateKeys(&node) {
-		return nil, blocked("MANAGED_DOCUMENT_INVALID", "Installer-owned document is invalid YAML", "document")
+	if err := yaml.Unmarshal(content, &node); err != nil {
+		return nil, blocked("MANAGED_DOCUMENT_INVALID", "Нарушен синтаксис YAML.", "document")
+	}
+	if managedYAMLDuplicateKeys(&node) {
+		return nil, blocked("MANAGED_DOCUMENT_INVALID", "В YAML повторяется ключ или ключ имеет недопустимый тип.", "document")
 	}
 	var document map[string]any
 	if err := yaml.Unmarshal(content, &document); err != nil {
-		return nil, blocked("MANAGED_DOCUMENT_INVALID", "Installer-owned document is invalid YAML", "document")
+		return nil, blocked("MANAGED_DOCUMENT_INVALID", "YAML должен содержать объект с именованными полями.", "document")
 	}
 	if document == nil {
 		document = make(map[string]any)

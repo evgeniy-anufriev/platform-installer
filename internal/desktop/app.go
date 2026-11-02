@@ -495,7 +495,11 @@ func (a *App) OpenProject(root string) ProjectOpenResult {
 		if local.Classification == projectlifecycle.ClassificationManaged && local.Project != nil {
 			managed, managedErr := installer.ReadManagedProjectViewWithCatalog(local.Root, local.Catalog)
 			if managedErr != nil {
-				return a.failure(projectErrorCode(managedErr))
+				result := a.failure(projectErrorCode(managedErr))
+				if finding := installer.ManagedDocumentFinding(managedErr); finding != nil {
+					result.Error.Message += " " + finding.SafeMessage + " Документ / поле: «" + finding.Field + "»."
+				}
+				return result
 			}
 			r1, afterErr := a.projectRevision(local.Root)
 			if afterErr != nil {

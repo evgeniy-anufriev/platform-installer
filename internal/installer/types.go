@@ -2,6 +2,7 @@ package installer
 
 import (
 	"encoding/json"
+	"errors"
 	"time"
 )
 
@@ -395,6 +396,16 @@ type writerError struct {
 }
 
 func (e *writerError) Error() string { return e.code }
+
+// ManagedDocumentFinding exposes only controlled reader diagnostics, never raw parser errors.
+func ManagedDocumentFinding(err error) *Finding {
+	var failure *writerError
+	if !errors.As(err, &failure) || (failure.code != "MANAGED_DOCUMENT_INVALID" && failure.code != "WRITE_NOT_ALLOWED") {
+		return nil
+	}
+	finding := failure.finding()
+	return &finding
+}
 
 func (e *writerError) finding() Finding {
 	return Finding{APIVersion: "platform.installer/finding/v1alpha1", Kind: "Finding",

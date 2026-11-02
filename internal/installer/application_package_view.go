@@ -20,7 +20,7 @@ func managedApplicationPackages(records []exportRecord) (map[string]ManagedAppli
 	for _, record := range records {
 		parts := strings.Split(record.LogicalPath, "/")
 		if len(parts) < 4 {
-			return nil, managedReadError("Invalid application package path", "package")
+			return nil, managedReadError("Некорректная структура пути пакета приложения.", record.LogicalPath)
 		}
 		key := strings.Join(parts[:3], "/")
 		groups[key] = append(groups[key], record)
@@ -31,7 +31,7 @@ func managedApplicationPackages(records []exportRecord) (map[string]ManagedAppli
 		kind := strings.TrimSuffix(parts[0], "-packages")
 		digest, err := checkPackageManifest(group, kind, parts[1], parts[2])
 		if err != nil {
-			return nil, managedReadError("Application package validation failed", key)
+			return nil, managedReadError("Содержимое пакета не соответствует его описанию или требованиям к структуре пакета.", key)
 		}
 		for _, r := range group {
 			if r.LogicalPath != key+"/roles/"+kind+"_"+parts[1]+"/defaults/main.yml" {
@@ -39,7 +39,7 @@ func managedApplicationPackages(records []exportRecord) (map[string]ManagedAppli
 			}
 			var doc map[string]any
 			if yaml.Unmarshal(r.content, &doc) != nil {
-				return nil, managedReadError("Invalid package definition", key)
+				return nil, managedReadError("Некорректный YAML определения пакета.", r.LogicalPath)
 			}
 			ref := parts[1] + "@" + parts[2]
 			result[kind+":"+ref] = ManagedApplicationPackage{Kind: kind, Ref: ref, Digest: digest, Definition: asMap(doc["platform_"+kind+"_definition"])}

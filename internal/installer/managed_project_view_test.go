@@ -8,6 +8,27 @@ import (
 	"testing"
 )
 
+func TestManagedReadDiagnosticKeepsDocumentAndHidesYAMLValues(t *testing.T) {
+	for _, test := range []struct{ body, message string }{
+		{"platform_desired_state: [\npassword: private-test-value\n", "синтаксис YAML"},
+		{"platform_desired_state: {}\nplatform_desired_state: {}\npassword: private-test-value\n", "повторяется ключ"},
+		{"platform_desired_state:\n  serviceDeployments: {}\n  applicationLibraryDeployments:\n    szi:\n      registry_credentials:\n        example.test: {}\n", "username и password"},
+	} {
+		t.Run(test.message, func(t *testing.T) {
+			root := managedReadProject(t)
+			path := filepath.Join(root, filepath.FromSlash(desiredDocument))
+			if err := os.WriteFile(path, append(append([]byte(nil), managedHeader...), []byte(test.body)...), 0600); err != nil {
+				t.Fatal(err)
+			}
+			_, err := ReadManagedProjectView(root)
+			finding := ManagedDocumentFinding(err)
+			if finding == nil || !strings.Contains(finding.Field, desiredDocument) || !strings.Contains(finding.SafeMessage, test.message) || strings.Contains(finding.SafeMessage, "private-test-value") {
+				t.Fatalf("finding=%+v err=%v", finding, err)
+			}
+		})
+	}
+}
+
 func TestReadManagedProjectViewProjectsOnlyOwnedTopologyFields(t *testing.T) {
 	root := managedReadProject(t)
 	view, err := ReadManagedProjectView(root)
