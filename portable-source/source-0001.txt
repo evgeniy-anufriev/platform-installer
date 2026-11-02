@@ -445,7 +445,7 @@ class ActionModule(ActionBase):
             return {'changed': False, 'status': 'BLOCKED', 'sources': {}, 'findings': [{'code': code}]}
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/prepare_application_images.py","mode":420,"size":5072,"sha256":"b2f5fba519a600eab29c367278de8cb148866c482f420766fa95134877949027","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5072}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/prepare_application_images.py","mode":420,"size":5113,"sha256":"e1f2153392f4e7e87a5f5b36fe732ecf508ca1a0d7093572e0c544841b4967f0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5113}
 """Controller-only preparation inputs from native Ansible rows and bundle metadata."""
 import json
 import os
@@ -483,7 +483,7 @@ class ActionModule(ActionBase):
                 legacy = selected_image(lock, reference, row['libraryId'], row['instanceId'], row['hostId'])
                 request = registry_request(reference, legacy)
                 host = values['hostvars'][row['hostId']]
-                policy = list(host.get('platform_application_approved_registries', []))
+                policy = set(host.get('platform_application_approved_registries', [])) | set(row.get('registryCredentials', {}))
                 if legacy:
                     ready[placement_key(row)] = dict(reference=reference, image=legacy)
                     continue
@@ -22270,7 +22270,7 @@ def shared_vault_jobs(jobs, inputs, completed, delivered=()):
     return result
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_libraries.py","mode":420,"size":57513,"sha256":"67196d3bed507183c1e9a0480e382855cad0d113d159c93cd6c16185e7dc0cfe","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_libraries.py","mode":420,"size":58090,"sha256":"f3c513364c6a1fe8bbc9ab7a9f16d00b95a6fb840c98c1d428ebdf04b5d3588b","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
 """Read-only application contract checks. Ansible owns composition and templating."""
 import hashlib
 import copy
@@ -22513,6 +22513,11 @@ def prepare(root, desired, memberships, contract, loader, contracts_root):
             if (library_id not in deployments or not isinstance(group, str) or not ID.fullmatch(group)
                     or group not in desired.get('endpointGroups', {})):
                 findings.append(finding('APPLICATION_LIBRARY_ENDPOINT_INVALID', 'x-applicationLibraryEndpointGroups.' + str(library_id)))
+    for library_id, deployment in sorted(deployments.items()):
+        bindings = deployment.get('bindings') if isinstance(deployment, dict) else None
+        binding = bindings.get('endpoint') if isinstance(bindings, dict) else None
+        if binding is not None and (not isinstance(binding, dict) or not isinstance(binding.get('endpointGroupRef'), str) or binding['endpointGroupRef'] not in desired.get('endpointGroups', {})):
+            findings.append(finding('APPLICATION_LIBRARY_ENDPOINT_INVALID', 'applicationLibraryDeployments.' + library_id + '.bindings.endpoint'))
     for host, membership in sorted(memberships.items()):
         findings.extend(validator.validate(membership, os.path.join(contracts_root, "application-libraries", "v1alpha1", "membership.schema.json")))
         for library in membership if isinstance(membership, dict) else []:
@@ -22983,14 +22988,14 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
                                                         for source in [credential["source"]] if source["kind"] == "runtime_secret_ref"})
         instance["approle"] = {"bind_secret_id": False, "token_bound_cidrs": "RUNTIME_HOST_SUBNET_AND_LOOPBACK"} if agent_required else None
         # Settings safe projection is explicit: do not send raw defaults/hostvars to callers.
-        instance["placements"][host] = {"SERVER_ID": host, "runtimeRef": runtime_ref, "command": settings.get("command", []),
+   
+@@END
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_libraries.py","mode":420,"size":58090,"sha256":"f3c513364c6a1fe8bbc9ab7a9f16d00b95a6fb840c98c1d428ebdf04b5d3588b","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":10090}
+     instance["placements"][host] = {"SERVER_ID": host, "runtimeRef": runtime_ref, "command": settings.get("command", []),
                                           "commonDefaults": row.get('commonDefaults', {}), "inherited": row.get('inherited', {}),
                                           "imageRequirement": {"image": settings.get("image"), "artifactType": "container-image"},
                                           "origin": {"resolution": "ANSIBLE", "precision": "RESOLUTION_SCOPE",
-                                                     "applicationPackage": row['ap
-@@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_libraries.py","mode":420,"size":57513,"sha256":"67196d3bed507183c1e9a0480e382855cad0d113d159c93cd6c16185e7dc0cfe","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":9513}
-plicationName'] + '@' + row['applicationVersion'],
+                                                     "applicationPackage": row['applicationName'] + '@' + row['applicationVersion'],
                                                      "libraryPackage": row['libraryRef'], "host": host},
                                           "connectionSettings": settings.get('connections', {}),
                                           "parameters": settings.get("parameters", {}), "environment": settings.get("environment", {}),
@@ -24552,7 +24557,7 @@ def integration_consumers(snapshot, provider_library_id, desired=None):
     return result
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_vault.py","mode":420,"size":14533,"sha256":"177809974d3af2f2366bbdc01b10cd2ff46be08727619d27d91212b6e927372c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":14533}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_vault.py","mode":420,"size":14555,"sha256":"13e57f815f12d6da6821845105ed835ee72be2957a467e2ec3093e1ed786a392","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":14555}
 """Target-free Vault jobs; no values, network access or Installer lifecycle."""
 import hashlib
 import json
@@ -24620,7 +24625,7 @@ def project_vault(rows, prepared):
             raise ValueError('APPLICATION_VAULT_GENERATED_PASSWORD_SCOPE_INVALID')
         if not active and not sources:
             continue
-        auth = row.get('vaultRef', {})
+        auth = row.get('vaultRef') or {'binding': 'secrets'}
         ref = row['bindings'].get(auth.get('binding'), {}).get('deploymentRef')
         if not ref:
             raise ValueError('APPLICATION_VAULT_BINDING_REQUIRED')
@@ -32636,7 +32641,7 @@ application_runtime_verify_vault: true
   when: "'@' not in application_runtime_job.settings.image"
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/preflight.yml","mode":420,"size":25101,"sha256":"5a79700ee4e6ffdd2fb49fc97d5f7cb11d9a093b78910d3248e4c0a48b10484b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":25101}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/preflight.yml","mode":420,"size":25177,"sha256":"b121015f8b52fdcd130f92af2e2a21de9c50c193501ea320181f204700ad1b0d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":25177}
 ---
 - name: Привязка учётной записи операции приложения и ключа обнаружения конфигурации Docker
   ansible.builtin.set_fact:
@@ -32700,7 +32705,7 @@ application_runtime_verify_vault: true
 - name: Проверка явного одобрения реестра на целевом узле приложения
   ansible.builtin.assert:
     that:
-      - application_runtime_job.authority.repository.reference.split('/')[0] in platform_application_approved_registries
+      - application_runtime_job.authority.repository.reference.split('/')[0] in platform_application_approved_registries or (application_runtime_job.registryCredentials | default({}) | length > 0)
     fail_msg: APPLICATION_REGISTRY_NOT_APPROVED
   when: application_runtime_job.authority.repository.reference is defined
 
@@ -35746,7 +35751,7 @@ platform_pki_materialization_plans: []
     fail_msg: PKI_TARGET_MATERIALIZATION_MISMATCH
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/prepare_application_images/tasks/main.yml","mode":420,"size":4199,"sha256":"ff10b0281fdf9a0ce19a5f611e975500323ed7be9df6f13e729db08c55591ebd","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4199}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/prepare_application_images/tasks/main.yml","mode":420,"size":4164,"sha256":"47da9e0a8ec53b35195cd4b8a4cebbe54098ef14d03567c0f4946c23a87aaa37","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4164}
 ---
 - name: Привязка платформы и исходных параметров размещения образа
   ansible.builtin.set_fact:
@@ -35757,6 +35762,7 @@ platform_pki_materialization_plans: []
     _image_username: ''
     _image_password: ''
     _image_token: ''
+    _image_registry_approved: "{{ application_image_input.request.registry in (platform_application_approved_registries | default([])) or (application_image_input.credentials | length > 0) }}"
     _image_request_key: "{{ [application_image_input.request, application_image_input.credentials, application_image_input.account, application_image_input.configDirectory] | to_json | hash('sha256') }}"
   no_log: true
 
@@ -35785,19 +35791,19 @@ platform_pki_materialization_plans: []
   ansible.builtin.include_tasks: node_credentials.yml
   when:
     - application_image_input.credentials | length == 0
-    - application_image_input.request.registry in (platform_application_approved_registries | default([]))
+    - _image_registry_approved
     - _image_request_key not in (_image_registry_cache | default({}))
 
 - name: Чтение метаданных утверждённого реестра через сеть целевого узла подготовки образов
   ansible.builtin.include_tasks: registry.yml
   when:
-    - application_image_input.request.registry in (platform_application_approved_registries | default([]))
+    - _image_registry_approved
     - _image_request_key not in (_image_registry_cache | default({}))
 
 - name: Сохранение несекретных метаданных реестра для повторных размещений образа на целевом узле
   ansible.builtin.set_fact:
     _image_registry_cache: "{{ (_image_registry_cache | default({})) | combine({_image_request_key: _image_registry}) }}"
-  when: application_image_input.request.registry in (platform_application_approved_registries | default([]))
+  when: _image_registry_approved
   no_log: true
 
 - name: Сопоставление метаданных offline-источника с выбранным образом
@@ -36082,7 +36088,7 @@ platform_name_prefix: ''
     quiet: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/resolve_application_libraries/tasks/connection_topology.yml","mode":420,"size":4901,"sha256":"24c7dafdfe3cfa71ed91ec8bc1c650f1ba6b69c0e8be4cac58685eaaa4088027","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4901}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/resolve_application_libraries/tasks/connection_topology.yml","mode":420,"size":5066,"sha256":"cd3e064e3984e79f65745c28e5af9be07e3af91240db366febd19a1bb2ecd3b2","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5066}
 ---
 - name: Расчёт настроек с безопасной диагностикой отказа
   block:
@@ -36090,8 +36096,8 @@ platform_name_prefix: ''
       ansible.builtin.set_fact:
         library_instance_id: "{{ application_job.libraryId }}"
         _application_library_endpoint: >-
-          {{ {'endpoint_group': platform_desired_state['x-applicationLibraryEndpointGroups'][application_job.libraryId]}
-             if platform_desired_state['x-applicationLibraryEndpointGroups'][application_job.libraryId] is defined else {} }}
+          {{ {'endpoint_group': application_job.deployment.bindings.endpoint.endpointGroupRef | default(platform_desired_state['x-applicationLibraryEndpointGroups'][application_job.libraryId] | default(''))}
+             if (application_job.deployment.bindings.endpoint.endpointGroupRef | default(platform_desired_state['x-applicationLibraryEndpointGroups'][application_job.libraryId] | default(''))) else {} }}
       no_log: true
       become: false
 
@@ -36170,7 +36176,7 @@ platform_name_prefix: ''
       become: false
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/resolve_application_libraries/tasks/instance.yml","mode":420,"size":16622,"sha256":"d1062a7ea6355172db0ec0089b4a8961e050fd41464589927a97a9b9592dce58","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":16622}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/resolve_application_libraries/tasks/instance.yml","mode":420,"size":16875,"sha256":"f4355482ca94275ac8ac5ee601f2a18bea311e8c1f4c97963d3e4ff66a749f51","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":16875}
 ---
 - name: Расчёт настроек с безопасной диагностикой отказа
   block:
@@ -36190,8 +36196,8 @@ platform_name_prefix: ''
              else application_job.application.name ~ '-' ~ application_job.libraryId }}
         library_instance_id: "{{ application_job.libraryId }}"
         _application_library_endpoint: >-
-          {{ {'endpoint_group': platform_desired_state['x-applicationLibraryEndpointGroups'][application_job.libraryId]}
-             if platform_desired_state['x-applicationLibraryEndpointGroups'][application_job.libraryId] is defined else {} }}
+          {{ {'endpoint_group': application_job.deployment.bindings.endpoint.endpointGroupRef | default(platform_desired_state['x-applicationLibraryEndpointGroups'][application_job.libraryId] | default(''))}
+             if (application_job.deployment.bindings.endpoint.endpointGroupRef | default(platform_desired_state['x-applicationLibraryEndpointGroups'][application_job.libraryId] | default(''))) else {} }}
         application_topics: {}
         application_databases: {}
         _application_connections: {}
@@ -36371,7 +36377,7 @@ platform_name_prefix: ''
             'providedConnections': (platform_application_connection_rows |
               selectattr('libraryId', 'equalto', application_job.libraryId) | first).providedConnections,
             'bindings': application_job.deployment.bindings | default({}),
-            'vaultRef': application_job.deployment.vault_ref | default({}),
+            'vaultRef': {'binding': 'secrets'} if application_job.deployment.bindings.secrets is defined else (application_job.deployment.vault_ref | default({})),
             'registryCredentials': application_job.deployment.registry_credentials | default({}),
             'resources': _application_resources,
             'resourceDefaults': _application_resource_defaults,
@@ -47394,7 +47400,7 @@ libraryExecutionPriorities:
 }
 
 @@END
-@@PORTABLE {"path":"contracts/application-libraries/v1alpha1/deployments.schema.json","mode":420,"size":11617,"sha256":"e5bc1f7ea3893d8e83e6e1d5f644d1f9c2715671f1d1cc7df9df81441b371eb8","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":11617}
+@@PORTABLE {"path":"contracts/application-libraries/v1alpha1/deployments.schema.json","mode":420,"size":12062,"sha256":"f5ef110ebe2a6698f77b72a179605dd8765391d71eca3f7dbeb4b5c1794b3a5e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":12062}
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Application library deployments v1alpha1",
@@ -47523,7 +47529,23 @@ libraryExecutionPriorities:
             ]
           }
         },
-        "maxProperties": 128
+        "maxProperties": 128,
+        "properties": {
+          "endpoint": {
+            "type": "object",
+            "required": [
+              "endpointGroupRef"
+            ],
+            "properties": {
+              "endpointGroupRef": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+                "maxLength": 128
+              }
+            },
+            "additionalProperties": false
+          }
+        }
       },
       "resources": {
         "type": "object",
@@ -80937,7 +80959,7 @@ ent-Type"] = "applapplication/json",
 end
 
 @@END
-@@PORTABLE {"path":"examples/szi/application-packages/nginx/1.0.0/roles/application_nginx/defaults/main.yml","mode":420,"size":2166,"sha256":"9392e102bfc29a0fb1ec7ab82e2779cbf88054c74b27cf1706a7a31f54b936c9","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2166}
+@@PORTABLE {"path":"examples/szi/application-packages/nginx/1.0.0/roles/application_nginx/defaults/main.yml","mode":420,"size":2406,"sha256":"bfa05f41fe428442f9dd29162086d1c39d37ed29a2588f83278503dc114cb47d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2406}
 platform_application_definition:
   name: nginx
   version: 1.0.0
@@ -80967,13 +80989,13 @@ platform_application_definition:
     environment:
       NGINX_HOST: >-
         {%- set group = platform_desired_state.applicationLibraryDeployments[library_instance_id].applications.nginx.overrides.endpoint.endpoint_group |
-          default(platform_desired_state['x-applicationLibraryEndpointGroups'][library_instance_id] | default('')) -%}
+          default(platform_desired_state.applicationLibraryDeployments[library_instance_id].bindings.endpoint.endpointGroupRef | default(platform_desired_state['x-applicationLibraryEndpointGroups'][library_instance_id] | default(''))) -%}
         {{ ('nginx.' ~ platform_desired_state.endpointGroups[group].address.domain)
           if group and (platform_desired_state.endpointGroups[group].address.domain | default('')) else '' }}
       REALM: '{{ application_connections.sso.parameters.realm }}'
       GA_HOST: >-
         {%- set group = platform_desired_state.applicationLibraryDeployments[library_instance_id].applications['grant-access'].overrides.endpoint.endpoint_group |
-          default(platform_desired_state['x-applicationLibraryEndpointGroups'][library_instance_id] | default('')) -%}
+          default(platform_desired_state.applicationLibraryDeployments[library_instance_id].bindings.endpoint.endpointGroupRef | default(platform_desired_state['x-applicationLibraryEndpointGroups'][library_instance_id] | default(''))) -%}
         {{ ('https://grant-access.' ~ platform_desired_state.endpointGroups[group].address.domain)
           if group and (platform_desired_state.endpointGroups[group].address.domain | default('')) else '' }}
     ports:
@@ -81184,7 +81206,7 @@ exec /bin/sh ./application-packages/keycloak/1.0.0/assets/scripts/integration.sh
 }
 
 @@END
-@@PORTABLE {"path":"examples/szi/library-packages/szi/1.0.0/roles/library_szi/defaults/main.yml","mode":420,"size":2752,"sha256":"220f9fac10aed9ffb3db53b21a3407d3709a9e6380a997d8773e1e66d052ee21","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2752}
+@@PORTABLE {"path":"examples/szi/library-packages/szi/1.0.0/roles/library_szi/defaults/main.yml","mode":420,"size":2872,"sha256":"8e3f8e81f4888424ed50542ebc2f0c1012c5feee5e0ab9a568ea92cb27a323b0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2872}
 platform_library_definition:
   name: szi
   version: 1.0.0
@@ -81203,7 +81225,7 @@ platform_library_definition:
         realm: master
         proxy_url: >-
           {%- set group = platform_desired_state.applicationLibraryDeployments[library_instance_id].applications.nginx.overrides.endpoint.endpoint_group |
-            default(platform_desired_state['x-applicationLibraryEndpointGroups'][library_instance_id] | default('')) -%}
+            default(platform_desired_state.applicationLibraryDeployments[library_instance_id].bindings.endpoint.endpointGroupRef | default(platform_desired_state['x-applicationLibraryEndpointGroups'][library_instance_id] | default(''))) -%}
           {{ ('https://nginx.' ~ platform_desired_state.endpointGroups[group].address.domain)
             if group and (platform_desired_state.endpointGroups[group].address.domain | default('')) else '' }}
       credentials:
@@ -91552,7 +91574,7 @@ export function ApplicationRedisAccess({
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/ApplicationBindings.tsx","mode":420,"size":12211,"sha256":"28cf859803ac09ed18e528bf7fcbf892f3280174796746186699f4949c79f20b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":12211}
+@@PORTABLE {"path":"frontend/src/ApplicationBindings.tsx","mode":420,"size":11373,"sha256":"1ec64c4a0034f332f958b4588cf95e003e3765571706bbe2e705dc79ca86b956","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":11373}
 import { useState, useRef } from "react";
 import { objectValue } from "./application-draft";
 
@@ -91608,9 +91630,6 @@ export function ApplicationBindings({
   disabled,
   onSave,
   onDirtyChange,
-  vaultBinding,
-  deploymentTypes = {},
-  onSelectVault,
   candidates,
   endpointGroups = [],
   endpointGroupRef,
@@ -91627,9 +91646,6 @@ export function ApplicationBindings({
       kind?: string;
     }
   >;
-  vaultBinding?: string;
-  deploymentTypes?: Record<string, string>;
-  onSelectVault?: (binding: string) => Promise<boolean>;
   value: Obj;
   hints: Record<string, string>;
   deployments: string[];
@@ -91645,7 +91661,7 @@ export function ApplicationBindings({
   const [adding, setAdding] = useState(false);
   const names = [
     ...new Set([...Object.keys(hints), ...Object.keys(value), ...added]),
-  ];
+  ].filter((name) => name !== "endpoint" || !onSaveEndpointGroup);
   const mark = (key: string, dirty: boolean) => {
     if (dirty) dirtyRows.current.add(key);
     else dirtyRows.current.delete(key);
@@ -91684,7 +91700,6 @@ export function ApplicationBindings({
                 profiles={[]}
                 endpointGroups={endpointGroups}
                 disabled={disabled}
-                isVault={false}
                 selectedVault={false}
                 onDirtyChange={(dirty) => mark("$library-endpoint", dirty)}
                 onSave={(entry) =>
@@ -91702,15 +91717,7 @@ export function ApplicationBindings({
                   JSON.stringify(value[key])
                 }
                 name={key}
-                isVault={
-                  deploymentTypes[
-                    String(objectValue(value[key]).deploymentRef)
-                  ] === "vault"
-                }
-                selectedVault={vaultBinding === key}
-                onSelectVault={
-                  onSelectVault ? () => onSelectVault(key) : undefined
-                }
+                selectedVault={key === "secrets"}
                 value={objectValue(value[key])}
                 hint={
                   hints[key] === "pki"
@@ -91792,9 +91799,7 @@ export function ApplicationBindings({
 }
 function BindingRow({
   name,
-  isVault,
   selectedVault,
-  onSelectVault,
   value,
   hint,
   deployments,
@@ -91808,9 +91813,7 @@ function BindingRow({
 }: {
   endpointGroups?: string[];
   name: string;
-  isVault: boolean;
   selectedVault: boolean;
-  onSelectVault?: () => Promise<boolean>;
   value: Obj;
   hint?: string;
   deployments: string[];
@@ -91936,15 +91939,6 @@ function BindingRow({
           >
             Сбросить
           </button>
-          {isVault && !selectedVault && onSelectVault && (
-            <button
-              className="outline"
-              disabled={disabled || dirty}
-              onClick={() => void onSelectVault()}
-            >
-              Для секретов
-            </button>
-          )}
         </div>
       </td>
     </tr>
@@ -94127,14 +94121,10 @@ export function ApplicationReadiness({
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/ApplicationRegistryCredentials.tsx","mode":420,"size":3578,"sha256":"31f3c119dccfa9a856d707cf222b88a874f37747c31ff68c7c1e038834e8025d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3578}
+@@PORTABLE {"path":"frontend/src/ApplicationRegistryCredentials.tsx","mode":420,"size":6682,"sha256":"38ed0a6f29e6bab28561b187a7475dd3b1ac354a47aae3a57e2ba7314a0d0100","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":6682}
 import { useState } from "react";
-import { ApplicationSecretInputs } from "./ApplicationSecretInputs";
 import { objectValue, type ObjectValue } from "./application-draft";
-import type {
-  RuntimeSecretDescriptorOperation,
-  RuntimeSecretValuesInput,
-} from "./backend";
+import type { RuntimeSecretValuesInput } from "./backend";
 
 export function ApplicationRegistryCredentials({
   libraryId,
@@ -94143,8 +94133,8 @@ export function ApplicationRegistryCredentials({
   disabled,
   runtimeDisabled,
   onChange,
-  load,
   save,
+  projectRevision = "",
 }: {
   libraryId: string;
   value: unknown;
@@ -94152,11 +94142,30 @@ export function ApplicationRegistryCredentials({
   disabled: boolean;
   runtimeDisabled: boolean;
   onChange: (value: ObjectValue) => void;
-  load?: () => Promise<RuntimeSecretDescriptorOperation>;
   save?: (input: RuntimeSecretValuesInput) => Promise<void>;
+  projectRevision?: string;
 }) {
   const entries = objectValue(value);
   const [registry, setRegistry] = useState("");
+  const [open, setOpen] = useState(false);
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const fields = Object.entries(entries).flatMap(([name, raw]) =>
+    ["username", "password"].flatMap((field) => {
+      const source = objectValue(objectValue(objectValue(raw)[field]).source);
+      return source.kind === "runtime_secret_ref" &&
+        typeof source.ref === "string"
+        ? [
+            {
+              source: source.ref,
+              label: `${field === "username" ? "Логин" : "Пароль"}: ${name}`,
+              password: field === "password",
+            },
+          ]
+        : [];
+    }),
+  );
   const options = [...new Set([...registries, ...Object.keys(entries)])];
   return (
     <section className="application-registry-credentials">
@@ -94229,22 +94238,89 @@ export function ApplicationRegistryCredentials({
           </button>
         </div>
       ))}
-      {Object.keys(entries).length > 0 && load && save && (
+      {fields.length > 0 && save && (
         <>
           {runtimeDisabled && (
             <p className="muted">
               Сохраните настройки библиотеки перед вводом логина и пароля.
             </p>
           )}
-          <ApplicationSecretInputs
-            inline
-            registryOnly
-            libraryId={libraryId}
-            disabled={runtimeDisabled}
-            title="Логин и пароль registry"
-            load={load}
-            save={save}
-          />
+          <button
+            type="button"
+            disabled={runtimeDisabled || saving}
+            onClick={() => {
+              setOpen(true);
+              setValues({});
+              setMessage("");
+            }}
+          >
+            Логин и пароль registry
+          </button>
+          {message && <p role="status">{message}</p>}
+          {open && (
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (runtimeDisabled || saving || !projectRevision) return;
+                const submitted = values;
+                setValues({});
+                setSaving(true);
+                void save({
+                  projectRevision,
+                  descriptorSetFingerprint: "",
+                  serviceDeployment: "",
+                  applicationLibrary: libraryId,
+                  applicationSourceValues: submitted,
+                  values: {},
+                })
+                  .then(() => {
+                    setOpen(false);
+                    setMessage("Логин и пароль сохранены только в сессии");
+                  })
+                  .catch(() =>
+                    setMessage(
+                      "Не удалось сохранить логин и пароль. Проверьте, что настройки registry сохранены в проекте.",
+                    ),
+                  )
+                  .finally(() => setSaving(false));
+              }}
+            >
+              {fields.map((field) => (
+                <label key={field.source}>
+                  {field.label}
+                  <input
+                    type={field.password ? "password" : "text"}
+                    autoComplete={field.password ? "new-password" : "username"}
+                    required
+                    disabled={runtimeDisabled || saving}
+                    value={values[field.source] || ""}
+                    onChange={(event) =>
+                      setValues((current) => ({
+                        ...current,
+                        [field.source]: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+              ))}
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => {
+                  setOpen(false);
+                  setValues({});
+                }}
+              >
+                Отмена
+              </button>
+              <button
+                type="submit"
+                disabled={runtimeDisabled || saving || !projectRevision}
+              >
+                Сохранить в сессии
+              </button>
+            </form>
+          )}
         </>
       )}
     </section>
@@ -95728,7 +95804,7 @@ export function inferParameterValue(text: string): string | number | boolean {
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":77412,"sha256":"b6a4ca8db2817e32936c24ed6dba0fa897999e03bf7ed5b058f48cb54b5febb2","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":49869}
+@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":76406,"sha256":"2c1b36ebfab0c82ddff83019478905d9536550bdc38c7034c85cb7b488cad413","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":49869}
 import { ApplicationProvidedConnections } from "./ApplicationProvidedConnections";
 import { type ApplicationSecretSession } from "./ApplicationRuntimeSecretField";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -96863,8 +96939,9 @@ export function ApplicationsPage({
                       </p>
                     </section>
                     <ApplicationRegistryCredentials
-                      key={selected}
+                      key={`${selected}:${managed?.projectRevision}`}
                       libraryId={selected}
+                      projectRevision={managed?.projectRevision}
                       value={library.registry_credentials}
                       registries={resolved?.registries ?? []}
                       disabled={busy}
@@ -96876,7 +96953,6 @@ export function ApplicationsPage({
                           entity: { registry_credentials: value },
                         })
                       }
-                      load={loadSecrets ? loadApplicationSecrets : undefined}
                       save={saveSecrets ? saveApplicationSecrets : undefined}
                     />
                     <section className="application-library-placement">
@@ -96973,29 +97049,6 @@ export function ApplicationsPage({
                   <div className="application-library-connections">
                     <ApplicationBindings
                       key={selected + "bindings"}
-                      vaultBinding={
-                        typeof objectValue(library.vault_ref).binding ===
-                        "string"
-                          ? String(objectValue(library.vault_ref).binding)
-                          : undefined
-                      }
-                      deploymentTypes={Object.fromEntries(
-                        Object.entries(managed?.deployments ?? {}).map(
-                          ([id, row]) => [id, row.serviceType],
-                        ),
-                      )}
-                      onSelectVault={(binding) =>
-                        send({
-                          operation: "UpdateApplicationLibraryDeployment",
-                          deploymentId: selected,
-                          entity: {
-                            vault_ref: {
-                              ...objectValue(library.vault_ref),
-                              binding,
-                            },
-                          },
-                        })
-                      }
                       value={objectValue(library.bindings)}
                       endpointGroups={Object.keys(
                         managed?.endpointGroups ?? {},
@@ -97014,10 +97067,7 @@ export function ApplicationsPage({
                       candidates={connectionCandidates(
                         bindingConnectionNames,
                         Object.fromEntries(
-                          Obje
-@@END
-@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":77412,"sha256":"b6a4ca8db2817e32936c24ed6dba0fa897999e03bf7ed5b058f48cb54b5febb2","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":27543}
-ct.entries(managed?.deployments ?? {}).map(
+                          Object.entries(managed?.deployments ?? {}).map(
                             ([id, row]) => [id, row.serviceType],
                           ),
                         ),
@@ -97037,7 +97087,10 @@ ct.entries(managed?.deployments ?? {}).map(
                       }
                     />
                     <ApplicationProvidedConnections
-                      secretSession={librarySecretSession}
+                      secretSession={librarySecretSes
+@@END
+@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":76406,"sha256":"2c1b36ebfab0c82ddff83019478905d9536550bdc38c7034c85cb7b488cad413","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":26537}
+sion}
                       definitions={objectValue(definition.provided_connections)}
                       value={objectValue(library.provided_connections)}
                       resolved={

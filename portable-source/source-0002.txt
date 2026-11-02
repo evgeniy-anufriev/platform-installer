@@ -8896,7 +8896,7 @@ ap((item) => item.displayName).join(", ")
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/application-draft.ts","mode":420,"size":4381,"sha256":"6dce9a0fa43dc7b7a0ec904de7d1b66c0f0a95cb2cbd8efaa1b7cf6ee65bd9b1","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4381}
+@@PORTABLE {"path":"frontend/src/application-draft.ts","mode":420,"size":4676,"sha256":"acb002e4235d9c69fc352460c78695c6a863500a42f1e7181e70bf3326d9c089","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4676}
 import type { OpenResult } from "./backend";
 export type ObjectValue = Record<string, unknown>;
 export type ApplicationIntent = {
@@ -8946,11 +8946,18 @@ export function applicationDraft(
   const libraryEndpointGroups = { ...managed?.libraryEndpointGroups };
   for (const c of intents) {
     const id = c.deploymentId;
-    if (c.operation === "SetApplicationLibraryEndpointGroup")
+    if (c.operation === "SetApplicationLibraryEndpointGroup") {
       libraryEndpointGroups[id] = String(c.value);
-    else if (c.operation === "ClearApplicationLibraryEndpointGroup")
+      libraries[id].bindings = {
+        ...objectValue(libraries[id].bindings),
+        endpoint: { endpointGroupRef: String(c.value) },
+      };
+    } else if (c.operation === "ClearApplicationLibraryEndpointGroup") {
       delete libraryEndpointGroups[id];
-    else if (c.operation === "CreateApplicationLibraryDeployment")
+      const bindings = { ...objectValue(libraries[id].bindings) };
+      delete bindings.endpoint;
+      libraries[id].bindings = bindings;
+    } else if (c.operation === "CreateApplicationLibraryDeployment")
       libraries[id] = { ...c.entity };
     else if (
       c.operation === "DeleteApplicationLibraryDeployment" ||
@@ -10395,7 +10402,7 @@ export function applicationDraft(
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/backend.ts","mode":420,"size":28588,"sha256":"88fb1a841c753c3f4dfa5aafa6ffafc51a2762a8151dcf75c1f14884ba1f2471","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":28588}
+@@PORTABLE {"path":"frontend/src/backend.ts","mode":420,"size":28640,"sha256":"24928303d2d4ea1b0a6d92f59b898a64046ed76ae3f91adea132e746729c8d03","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":28640}
 import {
   ProbeServerInformation,
   CheckServerInformation,
@@ -10887,6 +10894,7 @@ export type RuntimeSecretValuesInput = {
   serviceDeployment: string;
   applicationLibrary?: string;
   applicationRequirementRef?: string;
+  applicationSourceValues?: Record<string, string>;
   values: Record<string, string>;
 };
 export type PendingRuntimeSecretValuesInput = {
@@ -17026,7 +17034,7 @@ export function VerifyProject() {
 }
 
 @@END
-@@PORTABLE {"path":"frontend/wailsjs/go/models.ts","mode":420,"size":117585,"sha256":"dc4db1d1dbe3cfc1c012f521667e4ff4232b0e029acfac271c6dfb42545eb1b3","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"frontend/wailsjs/go/models.ts","mode":420,"size":117711,"sha256":"71bef8f568943b5cda2db3a182ee19b9f29bc0adb5700b0050d0f2261f52e6ae","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
 export namespace appconfig {
   export class LibraryExecutionPriority {
     libraryName: string;
@@ -18600,7 +18608,7 @@ export namespace desktop {
             a[key] = new classs(a[key]);
    
 @@END
-@@PORTABLE {"path":"frontend/wailsjs/go/models.ts","mode":420,"size":117585,"sha256":"dc4db1d1dbe3cfc1c012f521667e4ff4232b0e029acfac271c6dfb42545eb1b3","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"frontend/wailsjs/go/models.ts","mode":420,"size":117711,"sha256":"71bef8f568943b5cda2db3a182ee19b9f29bc0adb5700b0050d0f2261f52e6ae","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
        }
           return a;
         }
@@ -18945,6 +18953,7 @@ export namespace desktop {
     serviceDeployment: string;
     applicationLibrary?: string;
     applicationRequirementRef?: string;
+    applicationSourceValues?: Record<string, string>;
     values: Record<string, string>;
 
     static createFrom(source: any = {}) {
@@ -18958,6 +18967,7 @@ export namespace desktop {
       this.serviceDeployment = source["serviceDeployment"];
       this.applicationLibrary = source["applicationLibrary"];
       this.applicationRequirementRef = source["applicationRequirementRef"];
+      this.applicationSourceValues = source["applicationSourceValues"];
       this.values = source["values"];
     }
   }
@@ -20199,13 +20209,13 @@ export namespace installer {
       this.validation = this.convertValues(source["validation"], Validation);
       this.expectedEffectiveState = source["expectedEffectiveState"];
       this.expectedSnapshotFingerprint = source["expectedSnapshotFingerprint"];
-      this.reviewDiff = source["reviewDiff"];
+      this.reviewDiff = sour
+@@END
+@@PORTABLE {"path":"frontend/wailsjs/go/models.ts","mode":420,"size":117711,"sha256":"71bef8f568943b5cda2db3a182ee19b9f29bc0adb5700b0050d0f2261f52e6ae","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":21711}
+ce["reviewDiff"];
       this.commitAllowed = source["commitAllowed"];
       this.applyRequired = source["applyRequired"];
-    
-@@END
-@@PORTABLE {"path":"frontend/wailsjs/go/models.ts","mode":420,"size":117585,"sha256":"dc4db1d1dbe3cfc1c012f521667e4ff4232b0e029acfac271c6dfb42545eb1b3","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":21585}
-  this.expiresAt = this.convertValues(source["expiresAt"], null);
+      this.expiresAt = this.convertValues(source["expiresAt"], null);
       this.timing = this.convertValues(source["timing"], PlanTiming);
     }
 
@@ -22436,7 +22446,7 @@ func (a *CommandAdapter) BuildSnapshot(ctx context.Context, projectRoot string, 
 }
 
 @@END
-@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":112278,"sha256":"e74dd71f04cfbe5ad13a340af422b053ed5ebc59527f074f69ca7cdf3dba46aa","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48373}
+@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":114428,"sha256":"6118a42f268b543b4e6ae34f709c8d727a0819e56da8f9563d4e1c5e9f5dc5ea","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48373}
 package desktop
 
 import (
@@ -22622,13 +22632,14 @@ type RuntimeSecretDescriptorOperation struct {
 }
 
 // RuntimeSecretValuesInput is one non-persistent submission for a single
-// Core-derived service deployment or application library. Values are never returned.
+// Core-derived requirements or saved application source references. Values are never returned.
 type RuntimeSecretValuesInput struct {
 	ProjectRevision           string            `json:"projectRevision"`
 	DescriptorSetFingerprint  string            `json:"descriptorSetFingerprint"`
 	ServiceDeployment         string            `json:"serviceDeployment"`
 	ApplicationLibrary        string            `json:"applicationLibrary,omitempty"`
 	ApplicationRequirementRef string            `json:"applicationRequirementRef,omitempty"`
+	ApplicationSourceValues   map[string]string `json:"applicationSourceValues,omitempty"`
 	Values                    map[string]string `json:"values"`
 }
 
@@ -23270,14 +23281,59 @@ func (a *App) GetApplicationRuntimeSecretAvailability() RuntimeSecretDescriptorO
 	return RuntimeSecretDescriptorOperation{Status: "READY", ProjectRevision: revision, DescriptorSetFingerprint: evidence.fingerprint, ApplicationSecretAvailability: availability}
 }
 
-// SetDeploymentRuntimeSecretValues accepts values only for the current,
-// Core-derived descriptor set. It never persists or returns secret values.
+// SetDeploymentRuntimeSecretValues accepts Core-bound values or locally saved
+// application sources pending Core attestation. It never persists/returns values.
 func (a *App) SetDeploymentRuntimeSecretValues(input RuntimeSecretValuesInput) error {
 	a.editMu.Lock()
 	defer a.editMu.Unlock()
 	binding, err := a.credentialBindingLocked()
 	if err != nil {
 		return err
+	}
+	if input.ApplicationSourceValues != nil {
+		if input.ApplicationLibrary == "" || input.ServiceDeployment != "" || input.ApplicationRequirementRef != "" || input.DescriptorSetFingerprint != "" || len(input.Values) != 0 || a.current.Managed == nil || a.activeSession != "" {
+			return errors.New("RUNTIME_SECRET_INPUT_INVALID")
+		}
+		revision, err := a.projectRevision(a.current.Root)
+		if err != nil || revision != input.ProjectRevision || revision != a.current.Managed.ProjectRevision {
+			return errors.New("RUNTIME_SECRET_DESCRIPTORS_STALE")
+		}
+		library := a.current.Managed.ApplicationLibraries[input.ApplicationLibrary]
+		registries, _ := library["registry_credentials"].(map[string]any)
+		allowed := map[string]bool{}
+		for _, raw := range registries {
+			pair, _ := raw.(map[string]any)
+			for _, field := range []string{"username", "password"} {
+				credential, _ := pair[field].(map[string]any)
+				source, _ := credential["source"].(map[string]any)
+				if source["kind"] == "runtime_secret_ref" {
+					if ref, ok := source["ref"].(string); ok {
+						allowed[ref] = true
+					}
+				}
+			}
+		}
+		for source := range input.ApplicationSourceValues {
+			if !allowed[source] {
+				return errors.New("RUNTIME_SECRET_DESCRIPTOR_NOT_FOUND")
+			}
+		}
+		if err := a.secrets.SetPendingApplicationSecretValues(binding, input.ApplicationSourceValues); err != nil {
+			return err
+		}
+		if evidence := a.runtimeSecretEvidence; evidence != nil && a.runtimeSecretEvidenceDescriptorsLocked(revision) != nil {
+			requirements := []string{}
+			for _, item := range evidence.descriptors {
+				if item.Purpose == "SERVICE_PASSWORD" {
+					requirements = append(requirements, item.RequirementRef)
+				}
+			}
+			for _, item := range evidence.applicationInputs {
+				requirements = append(requirements, item.RequirementRef)
+			}
+			return a.secrets.PromotePendingRuntimeSecretValues(binding, requirements, applicationSecretSourceRequirements(evidence.applicationInputs))
+		}
+		return nil
 	}
 	evidence := a.runtimeSecretEvidence
 	if evidence == nil || a.binding == nil || a.current.Project == nil || input.ProjectRevision == "" || input.ProjectRevision != evidence.projectRevision || input.DescriptorSetFingerprint == "" || input.DescriptorSetFingerprint != evidence.fingerprint || evidence.projectID != a.current.Project.ID || evidence.nodeID != a.execution.context.SelectedHostID || !runtimeEvidenceMatchesExpected(evidence.runtime, a.binding.reader.runtimeRelease) {
@@ -23512,7 +23568,10 @@ func (a *App) pendingRuntimeSecretDescriptorsLocked(serviceDeployment string) ([
 	if mode == nil || (len(mode.RequiredRuntimeSecretSettings) == 0 && len(service.SecretInputs) == 0) {
 		return nil, errors.New("RUNTIME_SECRET_DESCRIPTOR_NOT_FOUND")
 	}
-	settings := make(map[string]projectlifecycle.ProjectCatalogSetting, len(service.ConfigurationSettings))
+	settings := make(map[string]projectlifecycl
+@@END
+@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":114428,"sha256":"6118a42f268b543b4e6ae34f709c8d727a0819e56da8f9563d4e1c5e9f5dc5ea","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48332}
+e.ProjectCatalogSetting, len(service.ConfigurationSettings))
 	for _, setting := range service.ConfigurationSettings {
 		settings[setting.ID] = setting
 	}
@@ -23545,10 +23604,7 @@ func (a *App) pendingRuntimeSecretDescriptorsLocked(serviceDeployment string) ([
 		result = append(result, RuntimeSecretDescriptorView{RequirementRef: setting.RuntimeSecretRequirementRef, Purpose: "SERVICE_PASSWORD", ServiceDeployment: serviceDeployment, Setting: settingID, DisplayLabel: setting.Label, ReferenceConfigured: referenceConfigured, DeploymentBound: setting.RuntimeSecretDeploymentBound})
 	}
 	for _, input := range service.SecretInputs {
-		if !runtimeSecretDescriptorRequirement.MatchString(input.RequirementRef) || input.Displ
-@@END
-@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":112278,"sha256":"e74dd71f04cfbe5ad13a340af422b053ed5ebc59527f074f69ca7cdf3dba46aa","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49506}
-ayLabel == "" || (input.Purpose != secretfiles.PurposeAdminToken && input.Purpose != secretfiles.PurposeUnsealShares) || input.RequiredWhen == "" || len(input.Operations) == 0 {
+		if !runtimeSecretDescriptorRequirement.MatchString(input.RequirementRef) || input.DisplayLabel == "" || (input.Purpose != secretfiles.PurposeAdminToken && input.Purpose != secretfiles.PurposeUnsealShares) || input.RequiredWhen == "" || len(input.Operations) == 0 {
 			return nil, errors.New("RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE")
 		}
 		result = append(result, RuntimeSecretDescriptorView{RequirementRef: input.RequirementRef, Purpose: input.Purpose, ServiceDeployment: serviceDeployment, DisplayLabel: input.DisplayLabel, RequiredWhen: input.RequiredWhen, Operations: append([]string(nil), input.Operations...)})
@@ -23759,7 +23815,7 @@ func (a *App) getRuntimeSecretDescriptorsLocked(clearAttached bool) RuntimeSecre
 		}
 	}
 	if credentialBinding, bindingErr := a.credentialBindingLocked(); bindingErr == nil {
-		if err := a.secrets.PromotePendingRuntimeSecretValues(credentialBinding, requirements); err != nil {
+		if err := a.secrets.PromotePendingRuntimeSecretValues(credentialBinding, requirements, applicationSecretSourceRequirements(view.ApplicationInputs)); err != nil {
 			a.runtimeSecretEvidence = nil
 			return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: projectErrorCode(err), Message: projectErrorMessage(projectErrorCode(err))}}
 		}
@@ -24502,7 +24558,10 @@ func projectErrorMessage(code string) string {
 		return "Выбор пропуска библиотек не соответствует сохранённому проекту. Обновите выбор библиотек."
 	case "SESSION_CREDENTIAL_UNAVAILABLE":
 		return "Учётные данные SSH-сеанса недоступны или срок их действия истёк. Укажите пароль или приватный ключ PEM на странице «Серверы»."
-	case "SESSION_CREDENTIAL_PASSWORD_FORMAT_UNSUPPORTED":
+	case "SESSION_CREDENTIAL_PASSWORD_FORMAT_UNSUPPORTED"
+@@END
+@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":114428,"sha256":"6118a42f268b543b4e6ae34f709c8d727a0819e56da8f9563d4e1c5e9f5dc5ea","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":17723}
+:
 		return "Пароль SSH или sudo не должен содержать перенос строки или нулевой символ. Введите пароль заново."
 	case "INSTALLATION_RUN_ACTIVE":
 		return "Новый набор пока нельзя проверить: прежний запуск не подтверждён как завершённый. Нажмите «Проверить прежний запуск»; не запускайте план повторно."
@@ -24529,10 +24588,7 @@ func projectErrorMessage(code string) string {
 	case "EXECUTION_NODE_PREPARE_WORKSPACE_FAILED":
 		return "Не удалось передать рабочий каталог Execution Node текущему SSH-пользователю. Проверьте владельца каталога и отсутствие симлинков, затем повторите подготовку."
 	case "EXECUTION_NODE_PREPARE_STAGE_FAILED":
-		return "Подготовка остановилась при передаче проверенного runtime bundle. Проверьте доступность узла и своб
-@@END
-@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":112278,"sha256":"e74dd71f04cfbe5ad13a340af422b053ed5ebc59527f074f69ca7cdf3dba46aa","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":14399}
-одное место. Проект не изменён."
+		return "Подготовка остановилась при передаче проверенного runtime bundle. Проверьте доступность узла и свободное место. Проект не изменён."
 	case "EXECUTION_NODE_PREPARE_ACTIVATE_FAILED":
 		return "Подготовка остановилась при активации runtime на узле. Проверьте состояние узла; повторная подготовка безопасна. Проект не изменён."
 	case "EXECUTION_NODE_READY_REQUIRED":
@@ -24910,7 +24966,7 @@ func WailsLifecycle(app *App) (func(context.Context), func(context.Context)) {
 }
 
 @@END
-@@PORTABLE {"path":"internal/desktop/application_image_preparation.go","mode":420,"size":3128,"sha256":"4eee5450e1f8d6fc8116526c80b6409ae307bf8ae567018c7b1446ea65fbbaf0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3128}
+@@PORTABLE {"path":"internal/desktop/application_image_preparation.go","mode":420,"size":3208,"sha256":"d0036ffc18aac102c5f75e8e3dc8a675bcdd6f01569fbb99cd51dd8ea4c3562b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3208}
 package desktop
 
 import (
@@ -24964,7 +25020,7 @@ func (a *App) imagePreparationCredentialsLocked(scope executionnode.ImagePrepara
 		for _, item := range a.runtimeSecretEvidence.applicationInputs {
 			requirements = append(requirements, item.RequirementRef)
 		}
-		if err := a.secrets.PromotePendingRuntimeSecretValues(binding, requirements); err != nil {
+		if err := a.secrets.PromotePendingRuntimeSecretValues(binding, requirements, applicationSecretSourceRequirements(a.runtimeSecretEvidence.applicationInputs)); err != nil {
 			return result, err
 		}
 	}
@@ -25027,7 +25083,7 @@ func (a *App) ReviewApplicationPackageImport(sessionID, source, kind, name, vers
 }
 
 @@END
-@@PORTABLE {"path":"internal/desktop/application_secret_descriptors.go","mode":420,"size":1988,"sha256":"939680d7f0e85cbaa74ce771fe6e5370aba0c2bab24188a0f5f1e5869af72c1d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1988}
+@@PORTABLE {"path":"internal/desktop/application_secret_descriptors.go","mode":420,"size":2382,"sha256":"dfb63376390286765442ba4432f49c0a893913a0f45d79b509b0b3653929e0bd","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2382}
 package desktop
 
 import (
@@ -25039,6 +25095,16 @@ import (
 var applicationSecretRequirement = regexp.MustCompile(`^application-secret-[a-f0-9]{32}$`)
 var applicationSecretID = regexp.MustCompile(`^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$`)
 var applicationSecretHost = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
+
+func applicationSecretSourceRequirements(inputs []executionnode.ApplicationSecretDescriptor) map[string]string {
+	result := map[string]string{}
+	for _, item := range inputs {
+		if item.Purpose == "APPLICATION_SECRET" || item.Purpose == "APPLICATION_REGISTRY_USERNAME" || item.Purpose == "APPLICATION_REGISTRY_PASSWORD" {
+			result[item.SourceRef] = item.RequirementRef
+		}
+	}
+	return result
+}
 
 func validApplicationSecretDescriptor(item executionnode.ApplicationSecretDescriptor) bool {
 	if !applicationSecretRequirement.MatchString(item.RequirementRef) || !applicationSecretID.MatchString(item.SourceRef) || item.DisplayLabel == "" || len([]byte(item.DisplayLabel)) > 256 ||
@@ -39863,7 +39929,7 @@ func (t OpenSSHTransport) withSudoInput(ctx context.Context, program string, arg
 }
 
 @@END
-@@PORTABLE {"path":"internal/installer/application_library_save.go","mode":420,"size":25719,"sha256":"38fdb79e08978a94a58c5ef69c703fee079fb2658df3db77e49ff9daa5a80af9","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":25719}
+@@PORTABLE {"path":"internal/installer/application_library_save.go","mode":420,"size":27434,"sha256":"898b93d5181e4e9ebb8f51efe8d4df4b0d982b80bb2623d73f110d670db5b37f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":27434}
 package installer
 
 import (
@@ -39925,7 +39991,7 @@ func validateApplicationEdit(c EditCommand) error {
 		}
 	case "CreateApplicationLibraryDeployment", "UpdateApplicationLibraryDeployment":
 		fields = append(fields, "entity")
-		if c.Entity == nil || !applicationKeys(c.Entity, "libraryRef", "runtimeRef", "runtime_directory", "bindings", "resources", "shared_secrets", "vault_ref", "applications", "overrides", "registry_credentials", "provided_connections") {
+		if c.Entity == nil || !applicationKeys(c.Entity, "libraryRef", "runtimeRef", "runtime_directory", "bindings", "resources", "shared_secrets", "vaultRef", "vault_ref", "applications", "overrides", "registry_credentials", "provided_connections") {
 			return invalid
 		}
 		if c.Operation == "CreateApplicationLibraryDeployment" {
@@ -40337,23 +40403,49 @@ func (c *structuralCandidate) reduceApplicationEdit(cmd EditCommand) error {
 	if err != nil {
 		return err
 	}
+	// Move the former root extension only during an explicit application Save.
+	// A binding already authored inside the library is authoritative.
+	if raw, exists := state[libraryEndpointGroupsKey]; exists {
+		groups := asMap(raw)
+		if groups == nil {
+			return managedReadError("Library endpoint selections are malformed", libraryEndpointGroupsKey)
+		}
+		for id, rawRef := range groups {
+			ref, ok := rawRef.(string)
+			library := asMap(libraries[id])
+			if !ok || !validLibraryInputID(ref) || library == nil {
+				return referenceNotFound("bindings.endpoint")
+			}
+			bindings, e := applicationMap(library, "bindings")
+			if e != nil {
+				return e
+			}
+			if _, exists := bindings["endpoint"]; !exists {
+				bindings["endpoint"] = map[string]any{"endpointGroupRef": ref}
+			}
+		}
+		delete(state, libraryEndpointGroupsKey)
+	}
+	for _, raw := range libraries {
+		normalizeLibraryVaultBinding(asMap(raw))
+	}
 	owner := asMap(libraries[cmd.DeploymentID])
 	switch cmd.Operation {
 	case "SetApplicationLibraryEndpointGroup", "ClearApplicationLibraryEndpointGroup":
 		if owner == nil {
 			return referenceNotFound("deploymentId")
 		}
-		groups, e := applicationMap(state, libraryEndpointGroupsKey)
+		bindings, e := applicationMap(owner, "bindings")
 		if e != nil {
 			return e
 		}
 		if cmd.Operation == "SetApplicationLibraryEndpointGroup" {
-			groups[cmd.DeploymentID] = cmd.Value
+			bindings["endpoint"] = map[string]any{"endpointGroupRef": cmd.Value}
 		} else {
-			delete(groups, cmd.DeploymentID)
+			delete(bindings, "endpoint")
 		}
-		if len(groups) == 0 {
-			delete(state, libraryEndpointGroupsKey)
+		if len(bindings) == 0 {
+			delete(owner, "bindings")
 		}
 	case "CreateApplicationLibraryDeployment":
 		if owner != nil {
@@ -40490,9 +40582,27 @@ func (c *structuralCandidate) reduceApplicationEdit(cmd EditCommand) error {
 		c.dirty[logical] = true
 		return nil
 	}
+	for _, raw := range libraries {
+		normalizeLibraryVaultBinding(asMap(raw))
+	}
 	c.documents[desiredDocument]["platform_desired_state_contract"] = "platform.installer/project-desired-state/v3alpha1"
 	c.dirty[desiredDocument] = true
 	return nil
+}
+
+func normalizeLibraryVaultBinding(library map[string]any) {
+	legacy := asMap(library["vault_ref"])
+	if legacy == nil {
+		legacy = asMap(library["vaultRef"])
+	}
+	bindings := asMap(library["bindings"])
+	if bindings["secrets"] == nil {
+		if name, ok := legacy["binding"].(string); ok && bindings[name] != nil {
+			bindings["secrets"] = deepCopy(bindings[name])
+		}
+	}
+	delete(library, "vault_ref")
+	delete(library, "vaultRef")
 }
 
 func (c *structuralCandidate) validateApplicationReferences() error {
@@ -40549,7 +40659,14 @@ func (c *structuralCandidate) validateApplicationReferences() error {
 				}
 			}
 		}
-		for _, rawBinding := range asMap(library["bindings"]) {
+		for name, rawBinding := range asMap(library["bindings"]) {
+			if name == "endpoint" {
+				binding := asMap(rawBinding)
+				ref, ok := binding["endpointGroupRef"].(string)
+				if len(binding) != 1 || !ok || !validLibraryInputID(ref) || endpointGroups[ref] == nil {
+					return referenceNotFound("bindings.endpoint.endpointGroupRef")
+				}
+			}
 			ref, _ := asMap(rawBinding)["deploymentRef"].(string)
 			if ref != "" && deployments[ref] == nil {
 				return referenceNotFound("bindings")
@@ -43390,7 +43507,7 @@ func presentBeforeDigest(document DocumentChange) string {
 }
 
 @@END
-@@PORTABLE {"path":"internal/installer/local_save.go","mode":420,"size":24646,"sha256":"dbfa31c11f9e407fe860ee16c538be7e3c44165c0ac4817fcb945dd9d8a2f7c0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":24646}
+@@PORTABLE {"path":"internal/installer/local_save.go","mode":420,"size":25048,"sha256":"c604753ce55e39ded997bc3226d13bbd6bd0f7f3ad9cedf2a3253964407407c2","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":25048}
 package installer
 
 import (
@@ -43560,6 +43677,15 @@ func readManagedDesiredState(root string, budget *managedReadBudget, view *Manag
 			return managedReadError("Managed application library input is unsafe", desiredDocument)
 		}
 		view.ApplicationLibraries[id] = asMap(deepCopy(value))
+		normalizeLibraryVaultBinding(view.ApplicationLibraries[id])
+		if raw, exists := asMap(value["bindings"])["endpoint"]; exists {
+			binding := asMap(raw)
+			ref, ok := binding["endpointGroupRef"].(string)
+			if !ok || len(binding) != 1 || !validLibraryInputID(ref) {
+				return managedReadError("Library endpoint binding is malformed", desiredDocument)
+			}
+			view.LibraryEndpointGroups[id] = ref
+		}
 	}
 	view.DataRootDirectory = "/var/lib"
 	if raw, found := document["platform_data_root_directory"]; found {
@@ -52818,7 +52944,7 @@ func ReadLocks(ctx context.Context, projectRoot string, _ executionbundle.Verifi
 }
 
 @@END
-@@PORTABLE {"path":"internal/runtimesecret/broker.go","mode":420,"size":43778,"sha256":"5e416a0927c715502a2798592b7ef4306644512acda4559d5ea8ea23554073d7","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":43778}
+@@PORTABLE {"path":"internal/runtimesecret/broker.go","mode":420,"size":45859,"sha256":"5ab7db18a2796d103269d1425656e932e9a8f21c63c8485c5eee41d637410af1","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":45859}
 // Package runtimesecret holds short-lived, application-local target session
 // credentials. It deliberately has no persistence or transport capability.
 package runtimesecret
@@ -52946,12 +53072,13 @@ type runExecutionIdentityHold struct {
 // and PKCS passwords, independently of a target credential. It is project-bound,
 // short-lived and cannot be used for SSH or expose values through Status.
 type pendingRuntimeSecrets struct {
-	binding          Binding
-	values           map[string][]byte
-	pkiStorePassword []byte
-	typed            map[string]RuntimeSecretInput
-	expiresAt        time.Time
-	generation       uint64
+	binding           Binding
+	values            map[string][]byte
+	applicationValues map[string][]byte
+	pkiStorePassword  []byte
+	typed             map[string]RuntimeSecretInput
+	expiresAt         time.Time
+	generation        uint64
 }
 
 // SetPendingServiceSecretInput stores a locally catalog-authorized typed
@@ -53171,6 +53298,39 @@ func (b *Broker) SetRuntimeSecretValuesForRequirements(binding Binding, requirem
 	return nil
 }
 
+// SetPendingApplicationSecretValues holds authored source values without Core
+// requirement IDs. Only a later Core-provided source-to-requirement mapping can
+// attach these values to a target credential.
+func (b *Broker) SetPendingApplicationSecretValues(binding Binding, values map[string]string) error {
+	if binding.Root == "" || binding.ID == "" || len(values) == 0 || len(values) > 128 {
+		return errors.New("RUNTIME_SECRET_INPUT_INVALID")
+	}
+	for source, value := range values {
+		if len(source) > 128 || !applicationSecretSourcePattern.MatchString(source) || !utf8.ValidString(value) || len(value) == 0 || len(value) > 4096 {
+			return errors.New("RUNTIME_SECRET_INPUT_INVALID")
+		}
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	pending := b.pendingForBindingLocked(binding)
+	next := cloneSecretMap(pending.applicationValues)
+	for source, value := range values {
+		zero(next[source])
+		next[source] = []byte(value)
+	}
+	total := 0
+	for _, value := range next {
+		total += len(value)
+	}
+	if len(next) > 128 || total > 65536 {
+		zeroSecretMap(next)
+		return errors.New("RUNTIME_SECRET_INPUT_INVALID")
+	}
+	zeroSecretMap(pending.applicationValues)
+	pending.applicationValues = next
+	return nil
+}
+
 // SetPendingRuntimeSecretValuesForRequirements accepts a locally
 // catalog-authorized service-secret subset before a READY Execution Node or a
 // target credential exists. Values are kept only in Broker memory and expire
@@ -53189,6 +53349,7 @@ func (b *Broker) SetPendingRuntimeSecretValuesForRequirements(binding Binding, r
 		merged := cloneSecretMap(b.pending.values)
 		typed := cloneTypedSecretMap(b.pending.typed)
 		pki := append([]byte(nil), b.pending.pkiStorePassword...)
+		application := cloneSecretMap(b.pending.applicationValues)
 		for _, reference := range requirements {
 			zero(merged[reference])
 			delete(merged, reference)
@@ -53201,10 +53362,11 @@ func (b *Broker) SetPendingRuntimeSecretValuesForRequirements(binding Binding, r
 			zeroSecretMap(next)
 			zeroTypedSecretMap(typed)
 			zero(pki)
+			zeroSecretMap(application)
 			return errors.New("RUNTIME_SECRET_INPUT_INVALID")
 		}
 		b.clearPendingLocked()
-		b.pending = &pendingRuntimeSecrets{binding: binding, values: next, typed: typed, pkiStorePassword: pki, expiresAt: b.now().Add(b.ttl)}
+		b.pending = &pendingRuntimeSecrets{binding: binding, values: next, applicationValues: application, typed: typed, pkiStorePassword: pki, expiresAt: b.now().Add(b.ttl)}
 		b.nextGen++
 		b.pending.generation = b.nextGen
 		b.armPendingExpiryLocked(b.pending.generation, b.pending.expiresAt)
@@ -53224,9 +53386,11 @@ func (b *Broker) SetPendingRuntimeSecretValuesForRequirements(binding Binding, r
 // PromotePendingRuntimeSecretValues copies values into the target credential
 // only after Core has produced the current descriptor set. Every pending key
 // must be in that set; stale or superseded local requirements fail closed.
+// Authored application sources attach only when the current Core set maps them;
+// unselected/removed sources remain pending and cannot reach target credentials.
 // Original inputs retain their existing project binding and expiry, like typed
 // inputs, so a later Save can revoke attached proof without asking again.
-func (b *Broker) PromotePendingRuntimeSecretValues(binding Binding, requirements []string) error {
+func (b *Broker) PromotePendingRuntimeSecretValues(binding Binding, requirements []string, applicationSources ...map[string]string) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.pending == nil || b.pending.binding != binding {
@@ -53253,13 +53417,26 @@ func (b *Broker) PromotePendingRuntimeSecretValues(binding Binding, requirements
 	}
 	// Typed inputs share this pending bucket but are authorized and bound by
 	// BindPendingServiceSecretInputs, not by password-map promotion.
-	if len(b.pending.values) == 0 {
+	if len(b.pending.values) == 0 && len(b.pending.applicationValues) == 0 {
 		return nil
 	}
 	next := cloneSecretMap(b.lease.runtimeSecretValues)
 	for reference, value := range b.pending.values {
 		zero(next[reference])
 		next[reference] = append([]byte(nil), value...)
+	}
+	if len(applicationSources) == 1 {
+		for source, reference := range applicationSources[0] {
+			value := b.pending.applicationValues[source]
+			if _, ok := allowed[reference]; !ok || len(value) == 0 {
+				continue
+			}
+			zero(next[reference])
+			next[reference] = append([]byte(nil), value...)
+		}
+	}
+	if len(next) == 0 {
+		return nil
 	}
 	if !validRuntimeSecretMap(next) {
 		zeroSecretMap(next)
@@ -53943,6 +54120,7 @@ func (b *Broker) clearPendingLocked() {
 		return
 	}
 	zeroSecretMap(b.pending.values)
+	zeroSecretMap(b.pending.applicationValues)
 	zero(b.pending.pkiStorePassword)
 	zeroTypedSecretMap(b.pending.typed)
 	b.pending = nil
@@ -53976,6 +54154,7 @@ func zero(value []byte) {
 }
 
 var runtimeSecretRequirementPattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`)
+var applicationSecretSourcePattern = regexp.MustCompile(`^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$`)
 
 func runtimeSecretID(value string) bool { return runtimeSecretRequirementPattern.MatchString(value) }
 
