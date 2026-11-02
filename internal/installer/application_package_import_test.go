@@ -346,3 +346,104 @@ func TestB2LibraryEnvAllowsUserPasswordName(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestApplicationPackagesBatchImport(t *testing.T) {
+	for _, failure := range []string{"", "invalid", "existing", "empty"} {
+		t.Run(failure, func(t *testing.T) {
+			root, b, revision := b2Project(t)
+			source := t.TempDir()
+			if failure != "empty" {
+				for _, version := range []string{"1.0.0", "2.0.0"} {
+					pkg, _ := b2Package(t)
+					err := filepath.WalkDir(pkg, func(path string, entry os.DirEntry, err error) error {
+						if err != nil || entry.IsDir() {
+							return err
+						}
+						data, err := os.ReadFile(path)
+						if err != nil {
+							return err
+						}
+						rel, err := filepath.Rel(pkg, path)
+						if err != nil {
+							return err
+						}
+						writeExportFixture(t, source, filepath.Join("gateway", version, rel), strings.ReplaceAll(string(data), "1.0.0", version))
+						return nil
+					})
+					if err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			if failure == "invalid" {
+				writeExportFixture(t, source, "gateway/2.0.0/unlisted.yml", "invalid: true\n")
+			}
+			if failure == "existing" {
+				if err := os.MkdirAll(filepath.Join(root, "application-packages/gateway/2.0.0"), 0700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			plan, err := b.PlanApplicationPackageImport(context.Background(), root, source, revision, "application", "", "", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if failure != "" {
+				if plan.Status != "BLOCKED" {
+					t.Fatalf("invalid batch accepted: %+v", plan)
+				}
+				if _, err := os.Stat(filepath.Join(root, "application-packages/gateway/1.0.0")); !os.IsNotExist(err) {
+					t.Fatal("partial import written")
+				}
+				return
+			}
+			if plan.Status != "READY" {
+				t.Fatalf("%+v", plan)
+			}
+			if _, err := os.Stat(filepath.Join(root, "application-packages")); !os.IsNotExist(err) {
+				t.Fatal("preview wrote project")
+			}
+			writeExportFixture(t, source, "gateway/1.0.0/application.yml", "changed after review")
+			if result := b.CommitStructuralSave(context.Background(), plan.PlanID); !result.Changed {
+				t.Fatalf("%+v", result)
+			}
+			for _, version := range []string{"1.0.0", "2.0.0"} {
+				data, err := os.ReadFile(filepath.Join(root, "application-packages/gateway", version, "application.yml"))
+				if err != nil || !strings.Contains(string(data), "version: "+version) {
+					t.Fatalf("reviewed bytes not saved: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestApplicationImportRepositoryLibraries(t *testing.T) {
+	for _, item := range []struct{ library, example string }{{"szi", "szi"}, {"sdku", "sdku"}, {"cspa", "sdku"}} {
+		t.Run(item.library, func(t *testing.T) {
+			root, b, revision := b2Project(t)
+			exampleRoot, err := filepath.Abs(filepath.Join("..", "..", "examples", item.example))
+			if err != nil {
+				t.Fatal(err)
+			}
+			source := filepath.Join(exampleRoot, "library-packages", item.library, "1.0.0")
+			plan, err := b.PlanApplicationPackageImport(context.Background(), root, source, revision, "library", item.library, "", "")
+			if err != nil || plan.Status != "READY" {
+				t.Fatalf("library import: %v %+v", err, plan)
+			}
+			result := b.CommitStructuralSave(context.Background(), plan.PlanID)
+			if !result.Changed {
+				t.Fatalf("library commit: %+v", result)
+			}
+			revision, err = ProjectRevision(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			plan, err = b.PlanApplicationPackageImport(context.Background(), root, filepath.Join(exampleRoot, "application-packages"), revision, "application", "", "", "")
+			if err != nil || plan.Status != "READY" {
+				t.Fatalf("application batch: %v %+v", err, plan)
+			}
+			if result := b.CommitStructuralSave(context.Background(), plan.PlanID); !result.Changed {
+				t.Fatalf("batch commit: %+v", result)
+			}
+		})
+	}
+}

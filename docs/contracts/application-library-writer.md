@@ -103,6 +103,16 @@ publication path and performs its normal transaction/revision/refresh checks.
 Source bytes are captured at preview; changing the external source afterward
 cannot replace the reviewed bytes. Dirty ordinary edits cannot mix with import.
 
+Owner refinement (2026-11-02): the page-level application import selects the
+`application-packages` directory, containing `<name>/<version>/application.yml`
+and package files. `kind=application` with empty name/version reviews all nested
+packages as one existing structural transaction. Each manifest/file closure is
+validated, aggregate project limits apply, and any invalid or existing version
+blocks the whole import without partial publication. The library import remains
+a single version directory. Single-application import is available in the
+application instance screen and is bound to that slot's exact application ref.
+Import does not create deployments, change slot refs, or authorize execution.
+
 Application Secrets edits typed credential source descriptors through existing
 slot accounts; source values use the existing descriptor-bound runtime lease.
 The UI may scope visible runtime requirements by declared applicationLibraries,

@@ -4,7 +4,9 @@ export function ApplicationPackageImport({
   disabled,
   choose,
   review,
+  applicationRef,
 }: {
+  applicationRef?: string;
   disabled: boolean;
   choose?: () => Promise<string>;
   review: (
@@ -27,7 +29,7 @@ export function ApplicationPackageImport({
         disabled={disabled || !choose}
         onClick={() => setOpen((v) => !v)}
       >
-        Импорт пакета…
+        {applicationRef ? "Импорт пакета приложения…" : "Импорт пакета…"}
       </button>
       {open && (
         <section aria-label="Импорт пакета">
@@ -47,17 +49,38 @@ export function ApplicationPackageImport({
             Выбрать папку пакета
           </button>
           <p>{source || "Папка не выбрана"}</p>
-          <label>
-            Тип
-            <select value={kind} onChange={(e) => setKind(e.target.value)}>
-              <option value="application">Приложение</option>
-              <option value="library">Библиотека</option>
-            </select>
-          </label>
-          <label>
-            Имя
-            <input value={name} onChange={(e) => setName(e.target.value)} />
-          </label>
+          {applicationRef ? (
+            <p>
+              Приложение: {applicationRef}. Выберите папку с application.yml.
+            </p>
+          ) : (
+            <>
+              <label>
+                Тип
+                <select value={kind} onChange={(e) => setKind(e.target.value)}>
+                  <option value="application">
+                    Приложения — вся папка application-packages
+                  </option>
+                  <option value="library">Библиотека</option>
+                </select>
+              </label>
+              {kind === "library" && (
+                <label>
+                  Имя
+                  <input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                  />
+                </label>
+              )}
+            </>
+          )}
+          {!applicationRef && kind === "application" && (
+            <p>
+              Выберите папку application-packages. Все вложенные приложения и
+              версии будут импортированы вместе.
+            </p>
+          )}
           <p>Версия будет прочитана из описания пакета.</p>
           <p>
             Только локальный data-only пакет. Публикация после проверки и общего
@@ -65,9 +88,23 @@ export function ApplicationPackageImport({
           </p>
           {error && <p role="alert">{error}</p>}
           <button
-            disabled={disabled || !source || !name}
+            disabled={
+              disabled ||
+              !source ||
+              (!applicationRef && kind === "library" && !name)
+            }
             onClick={() =>
-              void review(source, kind, name, "", "").then((ok) => {
+              void review(
+                source,
+                applicationRef ? "application" : kind,
+                applicationRef
+                  ? applicationRef.split("@")[0]
+                  : kind === "application"
+                    ? ""
+                    : name,
+                applicationRef ? (applicationRef.split("@")[1] ?? "") : "",
+                "",
+              ).then((ok) => {
                 if (ok) setOpen(false);
               })
             }

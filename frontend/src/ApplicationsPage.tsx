@@ -863,6 +863,15 @@ export function ApplicationsPage({
                   {slot && <span> / {slot}</span>}
                 </div>
                 <h2>{slot || selected}</h2>
+                {slot && typeof slotDefinition.applicationRef === "string" && (
+                  <ApplicationPackageImport
+                    key={slotDefinition.applicationRef}
+                    applicationRef={slotDefinition.applicationRef}
+                    disabled={busy || draftActive || dirty}
+                    choose={choosePackage}
+                    review={onImport}
+                  />
+                )}
                 <small>
                   {String(
                     slot

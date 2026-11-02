@@ -40,6 +40,11 @@ the version from its manifest. Do not request a version or expected SHA in the
 import form or compare an operator-supplied SHA. Keep manifest/file validation
 and the existing review/save transaction.
 
+The page-level import choice for applications selects the full
+`application-packages` directory and reviews every nested package together.
+Single-application import belongs in the application instance screen and uses
+its declared application ref. Library import still selects one library package.
+
 Owner refinement (2026-10-31): omit service/member settings without a supported
 editor instead of rendering read-only placeholders. Ordinary computed settings
 remain visible. Project verification is invoked from the shared header and its

@@ -229,7 +229,8 @@ func (b *Backend) PlanApplicationPackageImport(ctx context.Context, projectRoot,
 		return nil, err
 	}
 	invalid := blocked("APPLICATION_PACKAGE_INVALID", "Package metadata, paths or content are invalid", "package")
-	if (kind != "application" && kind != "library") || !validLibraryInputID(name) || (version != "" && !packageVersion.MatchString(version)) {
+	batch := kind == "application" && name == "" && version == ""
+	if (kind != "application" && kind != "library") || (!batch && !validLibraryInputID(name)) || (version != "" && !packageVersion.MatchString(version)) {
 		return blockedStructuralPlan(revision, invalid), nil
 	}
 	root, err := cleanRoot(projectRoot)
@@ -248,35 +249,32 @@ func (b *Backend) PlanApplicationPackageImport(ctx context.Context, projectRoot,
 		return blockedStructuralPlan(revision, invalid), nil
 	}
 	defer source.close()
-	manifest, _, err := source.readFile([]string{kind + ".yml"}, maxApplicationPackageFileBytes)
-	if err != nil {
-		return blockedStructuralPlan(revision, invalid), nil
-	}
-	var metadata applicationPackageManifest
-	if yaml.Unmarshal(manifest, &metadata) != nil || !packageVersion.MatchString(metadata.Version) || (version != "" && version != metadata.Version) {
-		return blockedStructuralPlan(revision, invalid), nil
-	}
-	version = metadata.Version
-	prefix := kind + "-packages/" + name + "/" + version
-	versionRoot, pathErr := safeProjectPath(root, prefix, true)
-	if pathErr != nil {
-		return blockedStructuralPlan(revision, pathErr), nil
-	}
-	if _, statErr := os.Lstat(versionRoot); !errors.Is(statErr, os.ErrNotExist) {
-		return blockedStructuralPlan(revision, blocked("APPLICATION_PACKAGE_EXISTS", "Package version already exists", "package")), nil
+	prefix := "application-packages"
+	var manifest []byte
+	if !batch {
+		manifest, _, err = source.readFile([]string{kind + ".yml"}, maxApplicationPackageFileBytes)
+		if err != nil {
+			return blockedStructuralPlan(revision, invalid), nil
+		}
+		var metadata applicationPackageManifest
+		if yaml.Unmarshal(manifest, &metadata) != nil || !packageVersion.MatchString(metadata.Version) || (version != "" && version != metadata.Version) {
+			return blockedStructuralPlan(revision, invalid), nil
+		}
+		version = metadata.Version
+		prefix = kind + "-packages/" + name + "/" + version
 	}
 	observation := exportObservation{}
-	if err := collectExportDirectory(source, prefix, &observation, map[string]bool{}, map[string]bool{}); err != nil || len(observation.documents) > maxApplicationPackageFiles {
+	if err := collectExportDirectory(source, prefix, &observation, map[string]bool{}, map[string]bool{}); err != nil || len(observation.documents) == 0 || len(observation.documents) > maxApplicationPackageFiles {
 		return blockedStructuralPlan(revision, invalid), nil
 	}
 	// Validate the captured package, without requiring an operator-supplied SHA.
 	// The manifest used to derive the destination must be the reviewed bytes.
 	for _, record := range observation.documents {
-		if record.LogicalPath == prefix+"/"+kind+".yml" && string(record.content) != string(manifest) {
+		if !batch && record.LogicalPath == prefix+"/"+kind+".yml" && string(record.content) != string(manifest) {
 			return blockedStructuralPlan(revision, invalid), nil
 		}
 	}
-	_, err = checkPackageManifest(observation.documents, kind, name, version)
+	err = validateExportPackages(observation.documents)
 	if err != nil {
 		return blockedStructuralPlan(revision, invalid), nil
 	}
@@ -292,9 +290,21 @@ func (b *Backend) PlanApplicationPackageImport(ctx context.Context, projectRoot,
 		return blockedStructuralPlan(revision, blocked("APPLICATION_PACKAGE_LIMIT", "Combined project package closure exceeds its limit", "package")), nil
 	}
 	documents := make([]storedDocument, 0, len(observation.documents))
+	versions := map[string]bool{}
 	for _, r := range observation.documents {
 		if err := ctx.Err(); err != nil {
 			return nil, err
+		}
+		versionPath := strings.Join(strings.Split(r.LogicalPath, "/")[:3], "/")
+		if !versions[versionPath] {
+			versionRoot, pathErr := safeProjectPath(root, versionPath, true)
+			if pathErr != nil {
+				return blockedStructuralPlan(revision, pathErr), nil
+			}
+			if _, statErr := os.Lstat(versionRoot); !errors.Is(statErr, os.ErrNotExist) {
+				return blockedStructuralPlan(revision, blocked("APPLICATION_PACKAGE_EXISTS", "Package version already exists", "package")), nil
+			}
+			versions[versionPath] = true
 		}
 		destination, err := safeProjectPath(root, r.LogicalPath, true)
 		if err != nil {
@@ -308,5 +318,9 @@ func (b *Backend) PlanApplicationPackageImport(ctx context.Context, projectRoot,
 	if latest, err := ProjectRevision(root); err != nil || latest != revision {
 		return blockedStructuralPlan(revision, blocked("PROJECT_CHANGED", "Project changed during package review", "project")), nil
 	}
-	return b.storeStructuralPlan(root, revision, []SemanticChange{{Operation: "ImportApplicationPackage", EntityID: name + "@" + version, SafeSummary: "Import reviewed data-only package"}}, documents)
+	entityID := name + "@" + version
+	if batch {
+		entityID = "application-packages"
+	}
+	return b.storeStructuralPlan(root, revision, []SemanticChange{{Operation: "ImportApplicationPackage", EntityID: entityID, SafeSummary: "Импорт пакетов приложений / библиотеки"}}, documents)
 }
