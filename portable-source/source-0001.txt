@@ -95462,7 +95462,7 @@ export function inferParameterValue(text: string): string | number | boolean {
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":81511,"sha256":"3a15abebf9256102cc6cbc7800ad0354704ebaebd87b040d14d006e32b2042f9","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":49935}
+@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":82172,"sha256":"f5aaf57d9f65e5bfbb85088d32eb2cb4c82719b3a97748efa9c682b1e05230a4","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":49935}
 import { ApplicationProvidedConnections } from "./ApplicationProvidedConnections";
 import {
   ApplicationRuntimeSecretField,
@@ -96314,7 +96314,23 @@ export function ApplicationsPage({
                   void send({
                     operation: "CreateApplicationLibraryDeployment",
                     deploymentId: id,
-                    entity: { libraryRef: ref, runtimeRef: selectedRuntime },
+                    entity: {
+                      libraryRef: ref,
+                      runtimeRef: selectedRuntime,
+                      applications: Object.fromEntries(
+                        Object.entries(
+                          objectValue(packageDefinition("library", ref).slots),
+                        )
+                          .filter(([, value]) =>
+                            Object.hasOwn(
+                              packages,
+                              "application:" +
+                                String(objectValue(value).applicationRef),
+                            ),
+                          )
+                          .map(([name]) => [name, {}]),
+                      ),
+                    },
                   }).then((ok) => {
                     if (ok) {
                       markChildDirty(false, "create");
@@ -96734,7 +96750,10 @@ export function ApplicationsPage({
                         ),
                       )}
                       onSelectVault={(binding) =>
-                        send({
+           
+@@END
+@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":82172,"sha256":"f5aaf57d9f65e5bfbb85088d32eb2cb4c82719b3a97748efa9c682b1e05230a4","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":32237}
+             send({
                           operation: "UpdateApplicationLibraryDeployment",
                           deploymentId: selected,
                           entity: {
@@ -96749,10 +96768,7 @@ export function ApplicationsPage({
                       hints={bindingHints}
                       candidates={connectionCandidates(
                         bindingConnectionNames,
-                 
-@@END
-@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":81511,"sha256":"3a15abebf9256102cc6cbc7800ad0354704ebaebd87b040d14d006e32b2042f9","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":31576}
-       Object.fromEntries(
+                        Object.fromEntries(
                           Object.entries(managed?.deployments ?? {}).map(
                             ([id, row]) => [id, row.serviceType],
                           ),

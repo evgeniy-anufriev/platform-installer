@@ -39822,12 +39822,13 @@ func (t OpenSSHTransport) withSudoInput(ctx context.Context, program string, arg
 }
 
 @@END
-@@PORTABLE {"path":"internal/installer/application_library_save.go","mode":420,"size":20991,"sha256":"01b51972f7200d0d4d0ff2ec0865c22b7cbeaa906632af67a03c8c8b94e78bb7","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":20991}
+@@PORTABLE {"path":"internal/installer/application_library_save.go","mode":420,"size":22524,"sha256":"292ce763a2a869a4e0af247b34b652e474b72b15abb713c82ee5cb94e5cd4f5d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":22524}
 package installer
 
 import (
 	"encoding/json"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -40215,6 +40216,49 @@ func applicationMap(parent map[string]any, key string) (map[string]any, error) {
 	return m, nil
 }
 
+// Explicit package import enrolls matching authored slots; no Ansible values
+// are resolved and existing instance settings are never replaced.
+func (c *structuralCandidate) includeImportedApplicationSlots(packages map[string]ManagedApplicationPackage, imported map[string]bool) ([]SemanticChange, error) {
+	state, _, _, err := c.desired()
+	if err != nil {
+		return nil, err
+	}
+	libraries := asMap(state["applicationLibraryDeployments"])
+	changes := []SemanticChange{}
+	ids := make([]string, 0, len(libraries))
+	for id := range libraries {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
+		library := asMap(libraries[id])
+		ref, _ := library["libraryRef"].(string)
+		slots := asMap(packages["library:"+ref].Definition["slots"])
+		names := make([]string, 0, len(slots))
+		for name := range slots {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			appRef, _ := asMap(slots[name])["applicationRef"].(string)
+			if !validLibraryInputID(name) || !imported[appRef] {
+				continue
+			}
+			apps, err := applicationMap(library, "applications")
+			if err != nil {
+				return nil, err
+			}
+			if _, exists := apps[name]; exists {
+				continue
+			}
+			apps[name] = map[string]any{}
+			c.dirty[desiredDocument] = true
+			changes = append(changes, SemanticChange{Operation: "SetApplicationLibrarySlot", EntityID: id + "/" + name, SafeSummary: "Добавить приложение «" + name + "» в библиотеку «" + id + "»"})
+		}
+	}
+	return changes, nil
+}
+
 func (c *structuralCandidate) reduceApplicationEdit(cmd EditCommand) error {
 	state, _, _, err := c.desired()
 	if err != nil {
@@ -40470,7 +40514,7 @@ func validApplicationConnectionSettings(v any) bool {
 }
 
 @@END
-@@PORTABLE {"path":"internal/installer/application_package_import.go","mode":420,"size":18335,"sha256":"c624e9b6fcfee69a42902e9088bf142a16f64dcf04d9df6b8afea83c72406ebc","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":18335}
+@@PORTABLE {"path":"internal/installer/application_package_import.go","mode":420,"size":19089,"sha256":"73fe32aed6ece7ecc8202287003bca314f3ec8237c7571608aa9342a0d5336b0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":19089}
 package installer
 
 import (
@@ -40766,7 +40810,8 @@ func (b *Backend) PlanApplicationPackageImport(ctx context.Context, projectRoot,
 	if err != nil || current != revision {
 		return blockedStructuralPlan(revision, blocked("PROJECT_CHANGED", "Проект изменился перед проверкой импорта. Повторите проверку.", "project")), nil
 	}
-	if _, err := loadStructuralCandidate(root, projectlifecycle.ClassificationManaged); err != nil {
+	candidate, err := loadStructuralCandidate(root, projectlifecycle.ClassificationManaged)
+	if err != nil {
 		return blockedStructuralPlan(revision, err), nil
 	}
 	source, err := openExportSourceDirectory(sourceRoot)
@@ -40855,6 +40900,27 @@ func (b *Backend) PlanApplicationPackageImport(ctx context.Context, projectRoot,
 		}
 		documents = append(documents, storedDocument{LogicalPath: r.LogicalPath, After: r.content, Existed: false})
 	}
+	changes := []SemanticChange{}
+	if kind == "application" {
+		packages, err := managedApplicationPackages(append(existing, observation.documents...))
+		if err != nil {
+			return blockedStructuralPlan(revision, err), nil
+		}
+		imported := map[string]bool{}
+		for path := range versions {
+			parts := strings.Split(path, "/")
+			imported[parts[1]+"@"+parts[2]] = true
+		}
+		changes, err = candidate.includeImportedApplicationSlots(packages, imported)
+		if err != nil {
+			return blockedStructuralPlan(revision, err), nil
+		}
+		managedDocuments, err := candidate.storedDocuments()
+		if err != nil {
+			return blockedStructuralPlan(revision, err), nil
+		}
+		documents = append(documents, managedDocuments...)
+	}
 	if latest, err := ProjectRevision(root); err != nil || latest != revision {
 		return blockedStructuralPlan(revision, blocked("PROJECT_CHANGED", "Проект изменился во время проверки импорта. Повторите проверку.", "project")), nil
 	}
@@ -40862,11 +40928,12 @@ func (b *Backend) PlanApplicationPackageImport(ctx context.Context, projectRoot,
 	if batch {
 		entityID = "application-packages"
 	}
-	return b.storeStructuralPlan(root, revision, []SemanticChange{{Operation: "ImportApplicationPackage", EntityID: entityID, SafeSummary: "Импорт пакетов приложений / библиотеки"}}, documents)
+	changes = append([]SemanticChange{{Operation: "ImportApplicationPackage", EntityID: entityID, SafeSummary: "Импорт пакетов приложений / библиотеки"}}, changes...)
+	return b.storeStructuralPlan(root, revision, changes, documents)
 }
 
 @@END
-@@PORTABLE {"path":"internal/installer/application_package_view.go","mode":420,"size":1545,"sha256":"a0df311931a68b347a3a2206561ce8c61e02d11b1208486da857a32bafa9d05c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1545}
+@@PORTABLE {"path":"internal/installer/application_package_view.go","mode":420,"size":1696,"sha256":"029fb563b54b5dc1d0aedb6c3d07e0dd62556eb96e4caefb81758e43ed49b38c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1696}
 package installer
 
 import (
@@ -40881,6 +40948,10 @@ func readManagedApplicationPackages(root string) (map[string]ManagedApplicationP
 	if err != nil {
 		return nil, err
 	}
+	return managedApplicationPackages(records)
+}
+
+func managedApplicationPackages(records []exportRecord) (map[string]ManagedApplicationPackage, error) {
 	groups := map[string][]exportRecord{}
 	for _, record := range records {
 		parts := strings.Split(record.LogicalPath, "/")
