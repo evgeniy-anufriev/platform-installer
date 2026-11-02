@@ -182,7 +182,9 @@ describe("application editor", () => {
       const calls: ApplicationIntent[] = [];
       render(<Harness calls={calls} view={view} />);
       await userEvent.click(screen.getByRole("button", { name: /^sdku/ }));
-      await userEvent.click(screen.getByRole("button", { name: "Подключения" }));
+      await userEvent.click(
+        screen.getByRole("button", { name: "Подключения" }),
+      );
       for (const name of ["database", "cache", "secrets", "application-pki"])
         expect(screen.getAllByLabelText("Подключение " + name)).toHaveLength(1);
       expect(screen.queryByLabelText("Подключение messaging") !== null).toBe(
@@ -926,10 +928,29 @@ describe("application editor", () => {
         expect(
           (screen.getByLabelText("ID библиотеки") as HTMLInputElement).value,
         ).toBe("newlib");
-      else
+      else {
         expect(calls[0].operation).toBe("CreateApplicationLibraryDeployment");
+        expect(calls[0].entity?.applications).toEqual({ gateway: {} });
+      }
     },
   );
+  it("creates an explicit empty selection when application packages are not imported yet", async () => {
+    const view = structuredClone(managed);
+    delete view.applicationPackages["application:gateway@1.0.0"];
+    const calls: ApplicationIntent[] = [];
+    render(<Harness calls={calls} view={view} />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Добавить библиотеку" }),
+    );
+    await userEvent.selectOptions(screen.getByLabelText("Пакет"), "sdku@1.0.0");
+    await userEvent.type(screen.getByLabelText("ID библиотеки"), "-new");
+    await userEvent.selectOptions(
+      screen.getByLabelText("Docker runtime"),
+      "docker",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "В черновик" }));
+    expect(calls[0].entity?.applications).toEqual({});
+  });
   it("opens package defaults without commands, saves image override and removes it on reset", async () => {
     const calls: ApplicationIntent[] = [];
     render(<Harness calls={calls} />);

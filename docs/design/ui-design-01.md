@@ -45,6 +45,12 @@ The page-level import choice for applications selects the full
 Single-application import belongs in the application instance screen and uses
 its declared application ref. Library import still selects one library package.
 
+Adding a library selects all its slots with locally available exact package
+refs, including optional slots. Importing applications includes the matching
+missing slots in all existing libraries in the same review/save operation.
+The review lists those additions. Preserve existing instance overrides and do
+not select unrelated versions. Save/Verify alone never changes selection.
+
 Owner refinement (2026-11-02): connection dropdowns use UI-only presentation
 filtering for standard declared roles: postgres/postgresql, redis/sentinel,
 vault, kafka/schema-registry, clickhouse and sso. Filter deployments by their

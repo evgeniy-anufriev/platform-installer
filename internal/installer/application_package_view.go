@@ -12,6 +12,10 @@ func readManagedApplicationPackages(root string) (map[string]ManagedApplicationP
 	if err != nil {
 		return nil, err
 	}
+	return managedApplicationPackages(records)
+}
+
+func managedApplicationPackages(records []exportRecord) (map[string]ManagedApplicationPackage, error) {
 	groups := map[string][]exportRecord{}
 	for _, record := range records {
 		parts := strings.Split(record.LogicalPath, "/")

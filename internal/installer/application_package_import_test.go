@@ -6,6 +6,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"platform-installer/internal/projectlifecycle"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -484,6 +486,101 @@ func TestApplicationPackageImportDiagnostics(t *testing.T) {
 			}
 			if after, err := ProjectRevision(root); err != nil || after != revision {
 				t.Fatal("blocked import changed project", err)
+			}
+		})
+	}
+}
+
+func TestImportedApplicationsEnrollAllMatchingLibrariesAtomically(t *testing.T) {
+	for _, stale := range []bool{false, true} {
+		t.Run(map[bool]string{false: "commit", true: "stale-plan"}[stale], func(t *testing.T) {
+			root, backend, _ := b2Project(t)
+			for _, pkg := range []struct{ name, version string }{{"demo", "1.0.0"}, {"other", "2.0.0"}} {
+				prefix := "library-packages/" + pkg.name + "/1.0.0/"
+				writeExportFixture(t, root, prefix+"library.yml", "apiVersion: platform.installer/application-package/v1alpha1\nkind: LibraryPackage\nname: "+pkg.name+"\nversion: 1.0.0\nfiles: [roles/library_"+pkg.name+"/defaults/main.yml]\n")
+				writeExportFixture(t, root, prefix+"roles/library_"+pkg.name+"/defaults/main.yml", "platform_library_definition:\n  name: "+pkg.name+"\n  version: 1.0.0\n  slots:\n    gateway:\n      applicationRef: gateway@"+pkg.version+"\n      required: false\n")
+			}
+			retained := map[string]any{"overrides": map[string]any{"image": "retained/image", "environment": map[string]any{"KEEP": "value"}}}
+			for _, id := range []string{"one", "two", "other"} {
+				revision, err := ProjectRevision(root)
+				if err != nil {
+					t.Fatal(err)
+				}
+				command := b2Command(revision, "CreateApplicationLibraryDeployment")
+				command.DeploymentID = id
+				ref := "demo@1.0.0"
+				if id == "other" {
+					ref = "other@1.0.0"
+				}
+				command.Entity = map[string]any{"libraryRef": ref, "runtimeRef": "kafka-main", "applications": map[string]any{}}
+				if id == "one" {
+					command.Entity["applications"] = map[string]any{"gateway": retained}
+				}
+				commitStructuralForTest(t, backend, root, projectlifecycle.ClassificationManaged, revision, []EditCommand{command})
+			}
+			revision, err := ProjectRevision(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			source, _ := b2Package(t)
+			plan, err := backend.PlanApplicationPackageImport(context.Background(), root, source, revision, "application", "gateway", "", "")
+			if err != nil || plan.Status != "READY" {
+				t.Fatalf("%v %+v", err, plan)
+			}
+			view, err := ReadManagedProjectView(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(asMap(view.ApplicationLibraries["two"]["applications"])) != 0 {
+				t.Fatal("review modified library")
+			}
+			found := false
+			for _, change := range plan.SemanticChanges {
+				if change.EntityID == "two/gateway" {
+					found = true
+				}
+			}
+			if !found {
+				t.Fatal("review omits automatic enrollment")
+			}
+			if stale {
+				file := filepath.Join(root, filepath.FromSlash(desiredDocument))
+				data, err := os.ReadFile(file)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err = os.WriteFile(file, append(data, []byte("\n# concurrent change\n")...), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			result := backend.CommitStructuralSave(context.Background(), plan.PlanID)
+			view, err = ReadManagedProjectView(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if stale {
+				if result.Changed || len(asMap(view.ApplicationLibraries["two"]["applications"])) != 0 {
+					t.Fatal("stale import published library changes")
+				}
+				if _, err := os.Stat(filepath.Join(root, "application-packages/gateway/1.0.0")); !os.IsNotExist(err) {
+					t.Fatal("stale import published package")
+				}
+				return
+			}
+			if !result.Changed {
+				t.Fatalf("%+v", result)
+			}
+			if _, ok := asMap(view.ApplicationLibraries["two"]["applications"])["gateway"]; !ok {
+				t.Fatal("optional matching slot not enrolled")
+			}
+			if !reflect.DeepEqual(asMap(view.ApplicationLibraries["one"]["applications"])["gateway"], retained) {
+				t.Fatal("existing settings overwritten")
+			}
+			if len(asMap(view.ApplicationLibraries["other"]["applications"])) != 0 {
+				t.Fatal("different version enrolled")
+			}
+			if _, err := os.Stat(filepath.Join(root, "application-packages/gateway/1.0.0/application.yml")); err != nil {
+				t.Fatal(err)
 			}
 		})
 	}

@@ -293,7 +293,8 @@ func (b *Backend) PlanApplicationPackageImport(ctx context.Context, projectRoot,
 	if err != nil || current != revision {
 		return blockedStructuralPlan(revision, blocked("PROJECT_CHANGED", "Проект изменился перед проверкой импорта. Повторите проверку.", "project")), nil
 	}
-	if _, err := loadStructuralCandidate(root, projectlifecycle.ClassificationManaged); err != nil {
+	candidate, err := loadStructuralCandidate(root, projectlifecycle.ClassificationManaged)
+	if err != nil {
 		return blockedStructuralPlan(revision, err), nil
 	}
 	source, err := openExportSourceDirectory(sourceRoot)
@@ -382,6 +383,27 @@ func (b *Backend) PlanApplicationPackageImport(ctx context.Context, projectRoot,
 		}
 		documents = append(documents, storedDocument{LogicalPath: r.LogicalPath, After: r.content, Existed: false})
 	}
+	changes := []SemanticChange{}
+	if kind == "application" {
+		packages, err := managedApplicationPackages(append(existing, observation.documents...))
+		if err != nil {
+			return blockedStructuralPlan(revision, err), nil
+		}
+		imported := map[string]bool{}
+		for path := range versions {
+			parts := strings.Split(path, "/")
+			imported[parts[1]+"@"+parts[2]] = true
+		}
+		changes, err = candidate.includeImportedApplicationSlots(packages, imported)
+		if err != nil {
+			return blockedStructuralPlan(revision, err), nil
+		}
+		managedDocuments, err := candidate.storedDocuments()
+		if err != nil {
+			return blockedStructuralPlan(revision, err), nil
+		}
+		documents = append(documents, managedDocuments...)
+	}
 	if latest, err := ProjectRevision(root); err != nil || latest != revision {
 		return blockedStructuralPlan(revision, blocked("PROJECT_CHANGED", "Проект изменился во время проверки импорта. Повторите проверку.", "project")), nil
 	}
@@ -389,5 +411,6 @@ func (b *Backend) PlanApplicationPackageImport(ctx context.Context, projectRoot,
 	if batch {
 		entityID = "application-packages"
 	}
-	return b.storeStructuralPlan(root, revision, []SemanticChange{{Operation: "ImportApplicationPackage", EntityID: entityID, SafeSummary: "Импорт пакетов приложений / библиотеки"}}, documents)
+	changes = append([]SemanticChange{{Operation: "ImportApplicationPackage", EntityID: entityID, SafeSummary: "Импорт пакетов приложений / библиотеки"}}, changes...)
+	return b.storeStructuralPlan(root, revision, changes, documents)
 }

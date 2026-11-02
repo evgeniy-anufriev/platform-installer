@@ -59,3 +59,48 @@ import/export tests and `go vet ./...` PASS. Three import React tests and the
 TypeScript/Vite production build PASS. Native regressions cover missing/unlisted
 files, forbidden paths, defaults version mismatch, unchanged blocked project
 revision and content redaction.
+
+## Automatic slot enrollment — 2026-11-02
+
+Owner-approved policy: include every declared slot whose exact package ref is
+available, including optional slots. Library creation sends an explicit authored
+applications map through the unchanged v11 Create command. Application import
+enrolls missing matching slots in all existing libraries in the same structural
+plan/transaction as the captured package files. No Core, binding, placement or
+runtime execution rules changed. Existing slot settings are not replaced.
+
+Validation: full Go tests and vet PASS; targeted native transaction regression
+covers shared package enrollment in multiple libraries, optional slots, exact
+version exclusion, existing override preservation, review without writes and
+stale-plan rejection with neither package nor YAML changes published. Twenty-nine
+React page/import tests and TypeScript/Vite build PASS.
+
+Real React/Wails checks in separate library-free QA projects:
+
+- Library first (project-2026110200000004): library creation saves applications
+  as an empty map while no application packages exist. Bulk import adds all five
+  SZI slots in the same successful commit. Final revision
+  1f90653dd5db122351eae7e486e5bab785fe3da228e2614f0c9e109666def1f7.
+- Applications first (project-2026110200000006): import applications/library,
+  then Add Library selects all five slots in its creation commit. Final revision
+  305374d4eee10e0cae8d64eb75583eabb447f8788159fa5fd6de845339631f72.
+- Both projects have an explicit node1 library placement. Actual Review/Save
+  handlers and Wails Go methods were used, without fixture writes after opening.
+  Safe results are under `.runtime/qa/import-reproduce/enrollment-library-first/`
+  and `enrollment-apps-first-final/`. No installation approval/Start was invoked.
+
+Current-source target-free Core prepare on RED OS102 using the saved library-first
+project returns jobs5/findings0: the missing applications/mandatory slot defect
+is gone. Full Project Verify is NOT PASS: the intentionally incomplete QA project
+has no Nginx endpoint override. The existing SZI provided SSO proxy_url template
+dereferences nginx.overrides when Nginx is selected; standalone Ansible templating
+confirmed AnsibleUndefinedVariable for overrides. Native snapshot stops while
+checking exported library values (changed0); Wails reports CORE_OPERATION_FAILED.
+This separate template/configuration issue was recorded, not silently repaired
+or counted as successful project validation. Service source/runtime untouched.
+
+The first applications-first automation attempt used Playwright checkbox.check(),
+which asserted before the asynchronous authored-placement response arrived. It
+was replayed from a fresh project using the same actual click handler and waiting
+for the checked state; no test-only production path was added.
+Temporary RED OS workspace was removed with qa-sync. QA services/data preserved.

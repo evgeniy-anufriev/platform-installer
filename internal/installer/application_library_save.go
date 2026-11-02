@@ -3,6 +3,7 @@ package installer
 import (
 	"encoding/json"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -388,6 +389,49 @@ func applicationMap(parent map[string]any, key string) (map[string]any, error) {
 	m := map[string]any{}
 	parent[key] = m
 	return m, nil
+}
+
+// Explicit package import enrolls matching authored slots; no Ansible values
+// are resolved and existing instance settings are never replaced.
+func (c *structuralCandidate) includeImportedApplicationSlots(packages map[string]ManagedApplicationPackage, imported map[string]bool) ([]SemanticChange, error) {
+	state, _, _, err := c.desired()
+	if err != nil {
+		return nil, err
+	}
+	libraries := asMap(state["applicationLibraryDeployments"])
+	changes := []SemanticChange{}
+	ids := make([]string, 0, len(libraries))
+	for id := range libraries {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
+		library := asMap(libraries[id])
+		ref, _ := library["libraryRef"].(string)
+		slots := asMap(packages["library:"+ref].Definition["slots"])
+		names := make([]string, 0, len(slots))
+		for name := range slots {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			appRef, _ := asMap(slots[name])["applicationRef"].(string)
+			if !validLibraryInputID(name) || !imported[appRef] {
+				continue
+			}
+			apps, err := applicationMap(library, "applications")
+			if err != nil {
+				return nil, err
+			}
+			if _, exists := apps[name]; exists {
+				continue
+			}
+			apps[name] = map[string]any{}
+			c.dirty[desiredDocument] = true
+			changes = append(changes, SemanticChange{Operation: "SetApplicationLibrarySlot", EntityID: id + "/" + name, SafeSummary: "Добавить приложение «" + name + "» в библиотеку «" + id + "»"})
+		}
+	}
+	return changes, nil
 }
 
 func (c *structuralCandidate) reduceApplicationEdit(cmd EditCommand) error {

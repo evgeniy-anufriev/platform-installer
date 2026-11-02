@@ -111,7 +111,22 @@ validated, aggregate project limits apply, and any invalid or existing version
 blocks the whole import without partial publication. The library import remains
 a single version directory. Single-application import is available in the
 application instance screen and is bound to that slot's exact application ref.
-Import does not create deployments, change slot refs, or authorize execution.
+Import does not create library deployments, change slot refs, or authorize execution.
+
+Owner refinement (2026-11-02): adding a library explicitly selects all declared
+slots whose exact `applicationRef` packages are already available. This includes
+optional slots. The UI sends this authored `applications` map through the
+existing v11 Create command; the versioned edit command schema/semantics remain
+unchanged. With no application packages available, it sends `applications: {}`.
+
+Application import adds missing matching slots to every existing library
+deployment that references a captured library package. Matching is exact
+name/version, using its authored `slots`, never guessed application identity or
+Ansible precedence. Existing slot settings (including explicit disabled fields)
+are retained. Package files, native desired-state changes and the enrollment
+review summaries share one revision-guarded structural transaction. Failure or
+stale revision publishes neither part. Library import alone does not create a
+deployment. Ordinary Save/Verify does not enroll or re-enable applications.
 
 Application Secrets edits typed credential source descriptors through existing
 slot accounts; source values use the existing descriptor-bound runtime lease.

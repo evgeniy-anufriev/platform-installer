@@ -849,7 +849,23 @@ export function ApplicationsPage({
                   void send({
                     operation: "CreateApplicationLibraryDeployment",
                     deploymentId: id,
-                    entity: { libraryRef: ref, runtimeRef: selectedRuntime },
+                    entity: {
+                      libraryRef: ref,
+                      runtimeRef: selectedRuntime,
+                      applications: Object.fromEntries(
+                        Object.entries(
+                          objectValue(packageDefinition("library", ref).slots),
+                        )
+                          .filter(([, value]) =>
+                            Object.hasOwn(
+                              packages,
+                              "application:" +
+                                String(objectValue(value).applicationRef),
+                            ),
+                          )
+                          .map(([name]) => [name, {}]),
+                      ),
+                    },
                   }).then((ok) => {
                     if (ok) {
                       markChildDirty(false, "create");
