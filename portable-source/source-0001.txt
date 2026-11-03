@@ -45442,7 +45442,7 @@ def required(manifest):
                for item in manifest.get("operations", []))
 
 @@END
-@@PORTABLE {"path":"ansible-core/tools/execution_task_error.py","mode":420,"size":13108,"sha256":"4e907cc5c7e3edbb58fc403a5de7b659b12cc08fba5c5afe83ac17b51724f828","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":13108}
+@@PORTABLE {"path":"ansible-core/tools/execution_task_error.py","mode":420,"size":15744,"sha256":"cf0044d67f60f4883d1f35c3917511be8d490d63693908c683be2fec68f12f63","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":15744}
 """Closed diagnostic vocabulary: arbitrary Ansible text never leaves this module."""
 
 
@@ -45685,11 +45685,29 @@ def safe_task_error(result, no_log=False):
                        if isinstance(result.get(key), str)).lower()
     code, summary = 'ANSIBLE_TASK_FAILED', 'Ansible task failed; untrusted result text withheld'
     for candidate, description, phrases in (
+        ('ANSIBLE_TLS_HOSTNAME_MISMATCH', 'Имя или IP-адрес узла не совпадает с сертификатом TLS',
+         ('hostname mismatch', 'ip address mismatch', 'certificate is not valid for')),
+        ('ANSIBLE_TLS_CERTIFICATE_EXPIRED', 'Срок действия сертификата TLS истёк',
+         ('certificate has expired', 'certificate expired')),
+        ('ANSIBLE_TLS_CERTIFICATE_NOT_YET_VALID', 'Сертификат TLS ещё не вступил в силу',
+         ('certificate is not yet valid',)),
+        ('ANSIBLE_TLS_CA_UNTRUSTED', 'Не удалось проверить цепочку TLS по выбранному CA',
+         ('unable to get local issuer certificate', 'unable to verify the first certificate', 'self-signed certificate', 'self signed certificate')),
+        ('ANSIBLE_TLS_CA_FILE_INVALID', 'Файл CA отсутствует, недоступен или не содержит корректный сертификат',
+         ('ca_path option must be a valid file', 'no certificate or crl found', 'no_certificate_or_crl_found', 'pem lib')),
+        ('ANSIBLE_TLS_HANDSHAKE_FAILED', 'Не удалось установить TLS-соединение',
+         ('wrong_version_number', 'alert protocol version', 'alert handshake failure', 'sslv3_alert_handshake_failure', 'eof occurred in violation of protocol')),
+        ('ANSIBLE_CONNECTION_REFUSED', 'Узел отклонил соединение: API-порт не принимает подключения',
+         ('connection refused', 'actively refused')),
+        ('ANSIBLE_DNS_RESOLUTION_FAILED', 'Не удалось разрешить DNS-имя узла',
+         ('name or service not known', 'temporary failure in name resolution', 'getaddrinfo failed', 'nodename nor servname provided')),
+        ('ANSIBLE_NETWORK_UNREACHABLE', 'Узел или сеть недоступны',
+         ('network is unreachable', 'no route to host')),
         ('ANSIBLE_UNDEFINED_VARIABLE', 'Undefined Ansible variable or attribute', ('is undefined', 'has no attribute', 'undefined variable')),
         ('ANSIBLE_BECOME_TIMEOUT', 'Privilege escalation timed out', ('timeout waiting for privilege escalation prompt',)),
         ('ANSIBLE_BECOME_FAILED', 'Privilege escalation requires valid credentials', ('missing sudo password', 'incorrect sudo password', 'sudo: a password is required')),
         ('ANSIBLE_SSH_AUTH_FAILED', 'SSH authentication failed', ('permission denied (publickey', 'permission denied (password')),
-        ('ANSIBLE_CONNECTION_TIMEOUT', 'Connection timed out', ('connection timed out', 'connection timeout')),
+        ('ANSIBLE_CONNECTION_TIMEOUT', 'Превышено время ожидания соединения или ответа API', ('timed out', 'connection timeout', 'read timeout')),
         ('ANSIBLE_CONNECTION_LOST', 'Connection closed or reset', ('connection reset by peer', 'connection closed by remote host', 'broken pipe')),
         ('ANSIBLE_FILESYSTEM_FULL', 'Filesystem has no free space', ('no space left on device',)),
         ('ANSIBLE_FILESYSTEM_READ_ONLY', 'Filesystem is read-only', ('read-only file system',)),
@@ -45697,7 +45715,9 @@ def safe_task_error(result, no_log=False):
         ('ANSIBLE_FILE_NOT_FOUND', 'Required file or executable not found', ('no such file or directory', 'could not find or access')),
         ('ANSIBLE_TLS_VERIFY_FAILED', 'TLS certificate verification failed', ('certificate verify failed', 'certificate verification failed')),
     ):
-        if any(phrase in message for phrase in phrases):
+        if (any(phrase in message for phrase in phrases) or
+                (candidate == 'ANSIBLE_TLS_HOSTNAME_MISMATCH' and 'hostname ' in message and
+                 ("doesn't match" in message or 'does not match' in message))):
             code, summary = candidate, description
             break
     else:
@@ -45705,6 +45725,10 @@ def safe_task_error(result, no_log=False):
             code, summary = 'ANSIBLE_HOST_UNREACHABLE', 'Ansible target host is unreachable'
         elif isinstance(result.get('assertion'), str):
             code, summary = 'ANSIBLE_ASSERTION_FAILED', 'Ansible assertion failed'
+        elif type(result.get('status')) is int and -1 <= result['status'] <= 599:
+            code = 'ANSIBLE_HTTP_REQUEST_FAILED'
+            summary = ('API вернул неожиданный HTTP-статус' if result['status'] >= 100
+                       else 'HTTP-запрос не получил ответа; подробности ошибки не распознаны')
     # Numeric exit/status codes are useful without exposing command/output values.
     for key, label in (('rc', 'exit code'), ('status', 'HTTP status')):
         value = result.get(key)

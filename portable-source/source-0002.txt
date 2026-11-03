@@ -81267,7 +81267,7 @@ platform_vault_bootstrap_lock_root: "/run/lock/{{ platform_vault_name }}"
     label: "{{ item.item.path }}"
 
 @@END
-@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/roles/vault_tls/tasks/verify.yml","mode":420,"size":3703,"sha256":"242732378b0a20cc62680566fad7f9caf57d37de90ccf9801ebfdd938c53a57d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3703}
+@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/roles/vault_tls/tasks/verify.yml","mode":420,"size":3853,"sha256":"f0b6d3b84593ad1c828099837e330de85d948fad05bbb54d2cad67acec0b853e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3853}
 ---
 - name: Определение экземпляров Vault на узле inventory
   ansible.builtin.set_fact:
@@ -81288,7 +81288,9 @@ platform_vault_bootstrap_lock_root: "/run/lock/{{ platform_vault_name }}"
   run_once: true
   register: _platform_vault_health
   changed_when: false
-  no_log: true
+  # Public health endpoint: no token, password or unseal share is sent.
+  # The execution journal classifies errors without copying raw result text.
+  no_log: false
 
 - name: Проверка инициализации и разблокировки всех экземпляров Vault
   ansible.builtin.assert:
