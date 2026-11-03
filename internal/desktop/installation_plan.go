@@ -142,8 +142,12 @@ func (a *App) createInstallationPlan(request InstallationPlanRequest) Installati
 		record, err = binding.plans.CreatePlanForMode(ctx, binding.node, a.current.Root, binding.reader.runtimeRelease, request.DeploymentOrder, request.ExecutionMode, request.ApplicationVaultSources, request.SkipInfrastructureVerify)
 	}
 	if err != nil {
-		if binding.dynamic {
-			a.invalidateDynamicBindingLocked()
+		// A rejected plan (for example, a missing registry password) is not
+		// evidence that the trusted Execution Node or session inputs changed.
+		// Recheck the existing identity/trust guards instead of revoking them
+		// for every planning failure and erasing unrelated pending secrets.
+		if bindingErr := a.revalidateBindingBeforePublicationLocked(binding); bindingErr != nil {
+			return installationPlanFailure(bindingErr)
 		}
 		return installationPlanFailure(err)
 	}

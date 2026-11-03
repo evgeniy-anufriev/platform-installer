@@ -88,3 +88,41 @@ Validation on base `02b1fd59023c186c17c243963d4a44eb557dc5fe`:
 - Standard real Wails bridge preflight still failed; real React/Wails acceptance
   remains unavailable/blocking. No real Start, installation, target change or
   visual acceptance was performed.
+
+## Planning and node-operation failures retain SSH (2026-11-03)
+
+Owner reproduced: missing registry password -> planning error -> enter password
+-> next planning attempt asks to check Execution Node -> recheck loses secrets.
+Owner additionally required that operation errors never reset SSH.
+
+Cause: any deployment-plan error unconditionally invalidated a dynamic node
+binding. This removed its approved SSH pin, readiness and runtime secret inputs.
+The missing registry password was incorrectly treated as loss of node trust.
+The same invalidation appeared in inspection/preparation/Verify error branches.
+
+Correction: failed planning revalidates the existing binding guards rather than
+deleting the binding. Node inspection, preparation planning, preparation and
+post-preparation inspection, and Project Verify inspection now return their
+errors without erasing SSH identity/pin or session secrets. Failed inspection
+marks readiness UNREACHABLE; failed preparation marks it NOT_PREPARED. A retry
+can use the same connection. Actual identity/endpoint/pin changes remain guarded.
+
+Validation from base `ef754291`:
+
+- Dynamic-binding regression: missing password -> exact registry error -> save
+  registry input -> successful plan. A second case repeats same-key approval and
+  CheckExecutionNode before planning. Both preserve Vault typed inputs, PKCS#12
+  password and an unrelated application password. Image preparation receives
+  only the scoped registry value.
+- Changed endpoint, tampered pin and cleared/expired session still block reuse
+  through the existing guards.
+- Five operational failure cases (Check, preparation plan, Prepare,
+  post-Prepare Check, Verify inspection) preserve SSH credential generation,
+  binding, approved pin file and existing session secrets. A subsequent Check
+  succeeds without reentering SSH data or reapproving the key.
+- Focused tests, full `go test ./...` and `go vet ./...`: PASS (existing Go cache
+  used where applicable).
+- Windows Wails backend rebuild PASS with existing frontend assets using
+  `wails build -s -skipbindings -m -nosyncgomod -nocolour`.
+- No review invoked, per owner instruction. Real React/Wails acceptance remains
+  unperformed; no real installation or Start was initiated.

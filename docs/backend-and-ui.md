@@ -60,6 +60,13 @@ retyping a retained password. Expiry, explicit clear, changed requirements or
 changed connection/project trust can require new input; presence polling alone
 neither clears inputs nor renews TTL.
 
+Operation failures do not revoke the SSH session, approved host-key pin or
+unrelated pending secrets. A failed deployment-plan request rechecks the existing
+identity/trust/runtime guards and returns its own error. Failed node inspection,
+runtime preparation or Project Verify updates the operation/readiness result
+while preserving the connection for retry. Explicit connection/project/trust
+replacement, explicit clear and credential expiry retain their existing guards.
+
 The managed Ansible project directory—`project.yml`, inventory, `group_vars` and `host_vars`—contains canonical desired state. SQLite, if retained, stores local operational data:
 
 - project index, path, revision and digest;

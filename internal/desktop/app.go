@@ -594,9 +594,7 @@ func (a *App) verifyProjectWithBindingLocked(binding *executionNodeBinding, revi
 		defer cancel()
 		inspection, err := binding.service.InspectExecutionNode(ctx, binding.node)
 		if err != nil {
-			if binding.dynamic {
-				a.invalidateDynamicBindingLocked()
-			}
+			a.execution.setStatus(string(executionnode.Unreachable))
 			return a.setVerificationUnavailableLocked(err, revision)
 		}
 		if err := a.revalidateBindingBeforePublicationLocked(binding); err != nil {

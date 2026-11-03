@@ -264,9 +264,8 @@ func (a *App) CheckExecutionNode() ExecutionNodeReadiness {
 	defer cancel()
 	inspection, err := binding.service.InspectExecutionNode(ctx, binding.node)
 	if err != nil {
-		if binding.dynamic {
-			a.invalidateDynamicBindingLocked()
-		}
+		// A failed operation is not a replacement of SSH identity or trust.
+		a.execution.setStatus(string(executionnode.Unreachable))
 		return a.readinessFailureLocked(err)
 	}
 	if err := a.revalidateTrustedConnectionLocked(binding); err != nil {
@@ -295,9 +294,6 @@ func (a *App) PlanExecutionNodePreparation() ExecutionNodePreparation {
 	defer cancel()
 	plan, err := binding.service.PlanExecutionNodePreparation(ctx, binding.node, binding.bundleRoot)
 	if err != nil {
-		if binding.dynamic {
-			a.invalidateDynamicBindingLocked()
-		}
 		return preparationFailure(err)
 	}
 	if err := a.revalidateBindingBeforePublicationLocked(binding); err != nil {
@@ -356,9 +352,7 @@ func (a *App) PrepareExecutionNode(planID string) ExecutionNodePreparation {
 	defer cancel()
 	result, err := binding.service.Prepare(ctx, binding.node, binding.bundleRoot, continuation.planID)
 	if err != nil {
-		if binding.dynamic {
-			a.invalidateDynamicBindingLocked()
-		}
+		a.execution.setStatus(executionNodeNotPrepared)
 		return preparationFailure(err)
 	}
 	if err := a.revalidateBindingBeforePublicationLocked(binding); err != nil {
@@ -370,9 +364,7 @@ func (a *App) PrepareExecutionNode(planID string) ExecutionNodePreparation {
 	}
 	inspection, err := binding.service.InspectExecutionNode(ctx, binding.node)
 	if err != nil {
-		if binding.dynamic {
-			a.invalidateDynamicBindingLocked()
-		}
+		a.execution.setStatus(string(executionnode.Unreachable))
 		return preparationFailure(err)
 	}
 	if err := a.revalidateBindingBeforePublicationLocked(binding); err != nil {
