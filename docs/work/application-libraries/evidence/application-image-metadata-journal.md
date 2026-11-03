@@ -356,3 +356,110 @@ workspaces removed through qa-sync cleanup. Twelve unstarted synthetic benchmark
 plan staging directories were removed only after exact project identity,
 containment and absence of execution status/metadata were checked. No real run
 or installed service was removed.
+
+### Owner-requested SZI installation follow-up (2026-11-03)
+
+Real full-App React/Wails integration uses the existing three RED OS QA VMs,
+SZI with all five current application packages on node3, and the installed
+PostgreSQL/Redis/Vault/Docker infrastructure. This is an Apply over an existing
+scene, not a clean install. Infrastructure Apply is disabled; the infrastructure
+Verify risk bypass is not selected. Unused ClickHouse/Kafka definitions were
+removed from this isolated fixture; no installed service was removed.
+
+Initial Verify exposed a package defect: Nginx read
+`application_connections.sso.parameters.realm` while declaring no SSO client
+connection. Declaring it would incorrectly request the Keycloak client callback
+and fail `APPLICATION_CONNECTION_CALLBACK_INVALID`. The one-line correction
+reads this library's already resolved provided SSO realm instead, leaving Nginx
+without an extra client to provision. A native Ansible regression exercises the
+real instance context and a non-default realm. RED OS stage1 tests: 12 PASS,
+one existing Docker CLI SKIP; native Keycloak script tests: four PASS. The latest
+delegation transport tests also pass (four tests). No review invoked, per owner.
+
+Current-source bundle includes the separately published delegated SSH fixes
+through `e142b089`; digest
+`sha256:597e79fc14bd722d3c28a841e33265c8fd5175b1f41ed32c2843df2309961264`.
+Built on node2, verified and published with the standard publisher, then
+activated through real React/Wails Prepare. The actual server `runtime/current`
+was checked independently. Due to limited node1 disk space, a small current-Core
+transition bundle was activated first; only the inactive owned preliminary SZI
+release `747cded6...` was then removed after containment/current/no-nonterminal-run
+checks. Prior unrelated runtime releases and installed data were retained.
+
+Vault had been sealed after the VM restart. Existing generation2 outputs for
+this same project/deployment were delivered into the established private runtime
+secret directory and used to unseal all three nodes. No initialization, key
+rotation or data reset occurred; values are absent from evidence and source.
+
+First actual Plan -> Approve -> Start:
+
+- Revision `sha256:bca83132c95dca91486a1f82362a3a24cd42452093e49cacfaf803a987459cdb`.
+- Plan `plan-bf5df040fd7a426cbe7eaf57`, EXECUTABLE, 46.0271 seconds.
+- Mode APPLICATION_LIBRARIES_ONLY; only APPLICATION_LIBRARIES_APPLY action.
+- Run `installer-3f8d6ab3030668b8b2cc918edf80524b`, terminal FAILED.
+- 1797 public events: all application parameter/connection resolution,
+  deferred-image preparation, five local image identity/platform checks,
+  Vault CA/trust discovery, generated shared-secret delivery, PostgreSQL
+  account authentication and runtime file preparation passed. Existing images
+  were reused; fresh archive load/pull is not claimed.
+- Failure: Keycloak/node3 image/owner/readiness wait, event1793,
+  ANSIBLE_FAILURE_REDACTED. Container restarted, Docker OOMKilled=false,
+  memory limit2GiB, heap1GiB. An initial diagnostic incorrectly matched the
+  printed JVM flag ExitOnOutOfMemoryError; OOM is NOT confirmed. The diagnostic
+  now excludes flag lines. No unredacted logs or secret values were recorded.
+  Final library Verify was not reached.
+
+A second full React/Wails attempt uses fixture-only heap512MiB as a resource
+experiment and Keycloak verbose startup for the 5GiB QA VM. This does not prove
+memory caused the first failure. Production package defaults are unchanged.
+The new revision is
+`sha256:80a3a546a23c59dfd5eb475ba72950ba5f308f07d1467d7c8ea49843ac44785d`;
+plan `plan-cb34e089540d7b2481095764` is EXECUTABLE (42.693 seconds), approved.
+Run `installer-082448038293309b4282c99e6de423c5` also ended FAILED at the
+Keycloak readiness wait. Verbose startup identifies
+`org.keycloak.policy.PasswordPolicyConfigException`: password policy provider
+not found. The worktree fixture omitted nine Git-ignored provider JARs that are
+present in the original working package. Those existing approved files were
+copied into the fixture (nine files, 174483 bytes), without downloading anything
+or changing database policy/data. The temporary heap override was removed.
+
+Third attempt uses standard package heap defaults, complete providers, and
+fixture-only verbose startup. Revision
+`sha256:70c2e9b396ed271c6d27e890e6450293f2cb3ff893fd6b0d1aa83038c4480e92`.
+Plan `plan-17e413277e46c5b948033631` is EXECUTABLE in 42.6682 seconds;
+approval 42.7825 seconds, authoritative Start 92.9332 seconds. Run
+`installer-c2b66d432e689f277142bf170f715100` completed **SUCCEEDED**, 3071 public
+events and zero FAILED events. Safe event summaries/raw selected metadata are
+retained under ignored `.runtime/qa/szi-plan-install-20261103`; actual run
+results remain on the Execution Node.
+
+Affected-path results:
+
+- Core resolution and inherited parameters for all five applications PASS,
+  including the corrected Nginx realm and no extra Nginx SSO client callback.
+- Deferred image preparation and five local image identity/platform checks
+  PASS. The run result is stored for shared execution stages; already installed
+  images are reused. Fresh archive load/pull is outside this acceptance.
+- Vault CA read/trust, generated shared-secret delivery, PostgreSQL account
+  authentication, AppRole login and protected secret reads PASS.
+- Keycloak starts with the original heap1GiB and all nine provider JARs,
+  RestartCount0, health=healthy. The earlier failure was an incomplete fixture,
+  not demonstrated insufficient memory or a database policy defect.
+- Exact package scripts, Keycloak administrator/consumer integration, HAProxy
+  candidate/render/activation checks, DNS updates and HTTP endpoint checks PASS.
+- Final per-container verification: grant-access event3026, audit3028,
+  frontend3030, Keycloak3032 and Nginx3034, all SUCCESS/node3. Final library
+  post-install script also succeeds. Docker observation: Keycloak/grant-access/
+  audit healthy; frontend/Nginx running (their selected readiness is container).
+- Final current-source native SZI13 PASS, Keycloak role scripts4 PASS,
+  consolidated application entrypoints6 PASS. No independent review or visual
+  inspection was invoked/claimed. This is existing-scene application acceptance,
+  not clean infrastructure installation or full SI11 acceptance.
+
+Follow-up cleanup: node2 source/build workspace removed through qa-sync;
+owned Wails/Vite processes stopped and temporary drive mapping removed. Active
+verified SZI runtime and actual run results retained. Terminal run has zero
+`.runtime-secret-*` and zero `.runtime-application-secret-*` files. Automatic
+policy review rejected deletion of the two local copied Vault input files
+(`blocked by policy`); those copies remain only under the established
+`.runtime/secrets/szi-plan-install-20261103` directory, with no value disclosure.
