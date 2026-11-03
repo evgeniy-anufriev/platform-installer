@@ -11,6 +11,7 @@
         prefix: .application-restore-
         path: /var/tmp
       delegate_to: "{{ application_provider_target.hostId }}"
+      connection: ssh
       become: true
       register: application_restore_stage
       no_log: true
@@ -21,6 +22,7 @@
         owner: "{{ application_provider_os_user }}"
         mode: '0700'
       delegate_to: "{{ application_provider_target.hostId }}"
+      connection: ssh
       become: true
       no_log: true
 
@@ -31,6 +33,7 @@
         owner: "{{ application_provider_os_user }}"
         mode: '0600'
       delegate_to: "{{ application_provider_target.hostId }}"
+      connection: ssh
       become: true
       no_log: true
 
@@ -41,6 +44,7 @@
         get_mime: false
         get_attributes: false
       delegate_to: "{{ application_provider_target.hostId }}"
+      connection: ssh
       become: true
       register: application_restore_bytes
       no_log: true
@@ -61,6 +65,7 @@
           WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = {{ application_restore_database.name | platform.postgresql.application_sql_literal }})
           \gexec
       delegate_to: "{{ application_provider_target.hostId }}"
+      connection: ssh
       become: true
       become_user: "{{ application_provider_os_user }}"
       changed_when: true
@@ -70,6 +75,7 @@
       ansible.builtin.command:
         argv: [pg_restore, --exit-on-error, --no-owner, --no-acl, --role, "{{ application_restore_database.owner }}", -h, "{{ platform_postgresql_application_socket }}", -p, "{{ application_provider_target.port }}", -U, "{{ application_provider_os_user }}", -d, "{{ application_restore_database.name }}", "{{ application_restore_stage.path }}/database.dump"]
       delegate_to: "{{ application_provider_target.hostId }}"
+      connection: ssh
       become: true
       become_user: "{{ application_provider_os_user }}"
       changed_when: true
@@ -79,6 +85,7 @@
       ansible.builtin.command:
         argv: [psql, -X, -h, "{{ platform_postgresql_application_socket }}", -p, "{{ application_provider_target.port }}", -U, "{{ application_provider_os_user }}", -d, "{{ application_restore_database.name }}", -At, -v, ON_ERROR_STOP=1, -c, "SELECT EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE c.relkind='r' AND n.nspname NOT IN ('pg_catalog','information_schema'))"]
       delegate_to: "{{ application_provider_target.hostId }}"
+      connection: ssh
       become: true
       become_user: "{{ application_provider_os_user }}"
       register: application_restore_baseline
@@ -94,6 +101,7 @@
           IS {{ application_restore_database.marker | platform.postgresql.application_sql_literal }};
           REVOKE ALL ON DATABASE {{ application_restore_database.name | platform.postgresql.application_sql_identifier }} FROM PUBLIC;
       delegate_to: "{{ application_provider_target.hostId }}"
+      connection: ssh
       become: true
       become_user: "{{ application_provider_os_user }}"
       changed_when: true
@@ -104,6 +112,7 @@
         path: "{{ application_restore_stage.path }}"
         state: absent
       delegate_to: "{{ application_provider_target.hostId }}"
+      connection: ssh
       become: true
       when: application_restore_stage.path is defined
       no_log: true

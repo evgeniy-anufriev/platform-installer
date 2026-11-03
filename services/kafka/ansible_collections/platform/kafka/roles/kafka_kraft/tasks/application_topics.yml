@@ -4,6 +4,7 @@
     file: application_topics_scope.yml
     apply:
       delegate_to: "{{ application_topic_candidate.hostId }}"
+      connection: ssh
       become: true
   vars:
     application_topic_candidate: "{{ platform_kafka_application_job.candidates | first }}"

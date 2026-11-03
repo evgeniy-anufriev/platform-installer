@@ -8,6 +8,7 @@
     name: platform.core.prepare_application_images
     apply:
       delegate_to: "{{ application_image_input.hostId }}"
+      connection: ssh
   when: _image_cached_result | length == 0
 - name: Привязка уже полученной идентичности к очередному размещению
   ansible.builtin.set_fact:

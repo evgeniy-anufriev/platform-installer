@@ -26,6 +26,7 @@
     application_provider_target: "{{ platform_application_provider_runtime[platform_postgresql_application_job.providerId].candidate }}"
     application_provider_os_user: "{{ hostvars[application_provider_target.hostId].platform_postgresql_user | default(platform_postgresql_user) }}"
   delegate_to: "{{ application_provider_target.hostId }}"
+  connection: ssh
   become: true
   become_user: "{{ application_provider_os_user }}"
   register: application_provider_catalog
@@ -50,6 +51,7 @@
     application_provider_check_objects: true
     application_provider_target: "{{ platform_application_provider_runtime[platform_postgresql_application_job.providerId].candidate }}"
   delegate_to: "{{ application_provider_target.hostId }}"
+  connection: ssh
   become: true
   become_user: "{{ platform_pki_owner | default(platform_execution_technical_user | default('root', true)) }}"
   changed_when: false
@@ -76,6 +78,7 @@
   vars:
     application_provider_target: "{{ platform_application_provider_runtime[platform_postgresql_application_job.providerId].candidate }}"
   delegate_to: "{{ application_provider_target.hostId }}"
+  connection: ssh
   become: true
   become_user: "{{ platform_pki_owner | default(platform_execution_technical_user | default('root', true)) }}"
   register: application_provider_password_probe

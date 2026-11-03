@@ -33,6 +33,7 @@
     clickhouse_application_password_refs: "{{ platform_clickhouse_application_job.accounts | map(attribute='passwordRef') | list }}"
     clickhouse_application_password_paths: "{{ clickhouse_application_password_refs | map('extract', platform_clickhouse_application_credential_files) | list }}"
   delegate_to: "{{ clickhouse_application_target.hostId }}"
+  connection: ssh
   become: true
   become_user: "{{ hostvars[clickhouse_application_target.hostId].platform_clickhouse_user | default(platform_clickhouse_user) }}"
   no_log: true

@@ -16,6 +16,7 @@
     PGPASSFILE: /dev/null
     LC_ALL: C
   delegate_to: "{{ application_provider_target.hostId }}"
+  connection: ssh
   become: true
   become_user: "{{ platform_pki_owner | default(platform_execution_technical_user | default('root', true)) }}"
   register: application_provider_login
