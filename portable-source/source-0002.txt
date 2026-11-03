@@ -22446,7 +22446,7 @@ func (a *CommandAdapter) BuildSnapshot(ctx context.Context, projectRoot string, 
 }
 
 @@END
-@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":114652,"sha256":"d81620bbb972b04f8a73b719d8f8d148a52b650d6d9e006bc7097f102e3aa283","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48387}
+@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":114877,"sha256":"3f9f106a312abf6cac52fabf56d8e00f391ea24d0c8e428e65a43aa98bb66ef6","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48387}
 package desktop
 
 import (
@@ -23571,7 +23571,7 @@ func (a *App) pendingRuntimeSecretDescriptorsLocked(serviceDeployment string) ([
 	}
 	if
 @@END
-@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":114652,"sha256":"d81620bbb972b04f8a73b719d8f8d148a52b650d6d9e006bc7097f102e3aa283","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48233}
+@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":114877,"sha256":"3f9f106a312abf6cac52fabf56d8e00f391ea24d0c8e428e65a43aa98bb66ef6","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48233}
  mode == nil || (len(mode.RequiredRuntimeSecretSettings) == 0 && len(service.SecretInputs) == 0) {
 		return nil, errors.New("RUNTIME_SECRET_DESCRIPTOR_NOT_FOUND")
 	}
@@ -24562,7 +24562,7 @@ func projectErrorMessage(code string) string {
 		return "Выбор пропуска библиотек не соответствует сохранённому проекту. Обновите выбор библиотек."
 	case "SESSION_CREDEN
 @@END
-@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":114652,"sha256":"d81620bbb972b04f8a73b719d8f8d148a52b650d6d9e006bc7097f102e3aa283","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":18032}
+@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":114877,"sha256":"3f9f106a312abf6cac52fabf56d8e00f391ea24d0c8e428e65a43aa98bb66ef6","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":18257}
 TIAL_UNAVAILABLE":
 		return "Учётные данные SSH-сеанса недоступны или срок их действия истёк. Укажите пароль или приватный ключ PEM на странице «Серверы»."
 	case "SESSION_CREDENTIAL_PASSWORD_FORMAT_UNSUPPORTED":
@@ -24617,6 +24617,8 @@ TIAL_UNAVAILABLE":
 		return "Отпечаток целевого сервера устарел. Получите его снова и сверьте независимо."
 	case "TARGET_HOST_TRUST_REQUIRED":
 		return "Перед запуском подтвердите SSH-ключ каждого целевого сервера на странице Серверы."
+	case "TARGET_CREDENTIAL_REQUIRED":
+		return "Не удалось передать данные SSH-сеанса для подготовки образов на целевых серверах. Запуск не начат."
 	case "TARGET_HOST_TRUST_INVALID":
 		return "Подтверждённые SSH-ключи не соответствуют адресам текущего плана. Запуск заблокирован."
 	case "EXECUTION_NODE_BINDING_INVALID":
@@ -28145,7 +28147,7 @@ func (a *App) executionTransport(identity runtimesecret.ExecutionIdentity, bindi
 }
 
 @@END
-@@PORTABLE {"path":"internal/desktop/installation_execution.go","mode":420,"size":42947,"sha256":"c8d13b55772edc18bbff437a75f56d2fd81eb2bba330063f0c254428aa40c2d0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":42947}
+@@PORTABLE {"path":"internal/desktop/installation_execution.go","mode":420,"size":44028,"sha256":"b1076d16f9e146954246f2b177f569f4e79cc9be120f94f42cfaf3af751f79a3","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":44028}
 package desktop
 
 import (
@@ -28665,6 +28667,20 @@ func (a *App) StartApprovedInstallation(planID string) InstallationRunOperation 
 	// Start rebuilds the authoritative plan, including offline image preparation.
 	ctx, cancel := a.operationContext(10 * time.Minute)
 	defer cancel()
+	ctx = executionnode.WithImagePreparationCredentials(ctx, func(scope executionnode.ImagePreparationScope) (executionnode.ImagePreparationCredentials, error) {
+		a.editMu.Lock()
+		defer a.editMu.Unlock()
+		// Start rebuilds outside editMu. Bind its credential callback to the
+		// captured operation so a replaced project/node cannot supply secrets.
+		currentRuntime, runtimeOK := InstallationRuntimeBinding{}, false
+		if a.binding != nil {
+			currentRuntime, runtimeOK = installationRuntimeBinding(a.binding.reader.runtimeRelease)
+		}
+		if a.installationGeneration != captured.generation || a.current.Status != "OPEN" || a.current.Root != captured.root || a.current.Project == nil || a.current.Project.ID != captured.projectID || a.binding != binding || a.installationPlanID != captured.planID || !runtimeOK || currentRuntime != captured.runtime || scope.ProjectIdentity != captured.projectID || scope.ProjectRevision != captured.revision {
+			return executionnode.ImagePreparationCredentials{}, errors.New("PLAN_STALE")
+		}
+		return a.imagePreparationCredentialsLocked(scope)
+	})
 	if outputRequired {
 		client, ok := binding.reader.transport.(secretOutputDeliveryClient)
 		if !ok {
