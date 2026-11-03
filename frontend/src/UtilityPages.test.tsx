@@ -39,6 +39,22 @@ function renderLogs(events: InstallationEventView[]) {
 }
 
 describe("UtilityPages logs", () => {
+  it("shows public Ansible output in a separate column as plain text", () => {
+    const output =
+      '{"stdout":"<script>example</script>","stderr":"actual error"}';
+    renderLogs([
+      { ...event(1), ansibleOutput: output } as InstallationEventView,
+    ]);
+    expect(
+      screen.getByRole("columnheader", { name: "Вывод Ansible" }),
+    ).toBeTruthy();
+    expect(screen.getByRole("cell", { name: output })).toBeTruthy();
+    expect(document.querySelector("script")).toBeNull();
+    expect(
+      screen.getByRole("cell", { name: "Задача 1 завершена" }),
+    ).toBeTruthy();
+  });
+
   beforeEach(() => {
     window.sessionStorage.clear();
   });
@@ -56,7 +72,7 @@ describe("UtilityPages logs", () => {
     ).toBeTruthy();
     expect(screen.getAllByText("Задача 1 завершена").length).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getByText("Колонки (6 из 17)"));
+    fireEvent.click(screen.getByText("Колонки (7 из 18)"));
     const taskColumnToggle = screen.getByLabelText("Задача");
     fireEvent.click(screen.getByLabelText("Роль задачи"));
     fireEvent.click(taskColumnToggle);
@@ -118,13 +134,13 @@ describe("UtilityPages logs", () => {
 
   it("retains selected columns when the logs page is reopened in the session", () => {
     const firstView = renderLogs([event(1)]);
-    fireEvent.click(screen.getByText("Колонки (6 из 17)"));
+    fireEvent.click(screen.getByText("Колонки (7 из 18)"));
     fireEvent.click(screen.getByLabelText("Роль задачи"));
     firstView.unmount();
 
     renderLogs([event(1)]);
 
-    expect(screen.getByText("Колонки (7 из 17)")).toBeTruthy();
+    expect(screen.getByText("Колонки (8 из 18)")).toBeTruthy();
     expect(
       screen.getByRole("columnheader", { name: "Роль задачи" }),
     ).toBeTruthy();

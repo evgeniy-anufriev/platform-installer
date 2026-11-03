@@ -629,6 +629,11 @@ const eventColumns: EventColumn[] = [
     label: "Сообщение",
     value: (event) => event.safeMessage,
   },
+  {
+    key: "ansibleOutput",
+    label: "Вывод Ansible",
+    value: (event) => event.ansibleOutput || "—",
+  },
   { key: "phaseId", label: "Этап", value: (event) => event.phaseId || "—" },
   {
     key: "actionId",
@@ -690,6 +695,7 @@ const defaultVisibleColumns = [
   "serviceDeployment",
   "host",
   "status",
+  "ansibleOutput",
 ];
 
 function initialVisibleColumns(): string[] {
@@ -864,7 +870,15 @@ function EventLog({
                     onClick={() => setSelectedSequence(event.sequence)}
                   >
                     {visible.map((column) => (
-                      <td key={column.key} title={column.value(event)}>
+                      <td
+                        key={column.key}
+                        title={column.value(event)}
+                        className={
+                          column.key === "ansibleOutput"
+                            ? "ansible-output"
+                            : undefined
+                        }
+                      >
                         {column.value(event)}
                       </td>
                     ))}

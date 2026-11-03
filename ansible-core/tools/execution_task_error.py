@@ -1,4 +1,40 @@
-"""Closed diagnostic vocabulary: arbitrary Ansible text never leaves this module."""
+"""Task diagnostics and bounded output respecting Ansible's no_log boundary."""
+
+import json
+
+
+def task_result_output(result, no_log=False, limit=8192):
+    """Render the module result without content filtering; censor nested no_log.
+
+    Use the task output byte budget, including an explicit truncation
+    marker. JSON escapes control characters so output remains transport-safe.
+    """
+    if not isinstance(result, dict) or no_log or result.get('_ansible_no_log') or 'censored' in result:
+        return ''
+
+    def public(value, depth=0):
+        if isinstance(value, dict):
+            if value.get('_ansible_no_log') or 'censored' in value:
+                return {'censored': 'result hidden by no_log'}
+            if depth >= 32:
+                return '[truncated: nesting limit]'
+            # Keep the actual diagnostic ahead of large invocation/fact data.
+            first = ('msg', 'stdout', 'stderr', 'module_stdout', 'module_stderr', 'exception', 'results')
+            keys = [key for key in first if key in value] + [key for key in value if key not in first]
+            return {key: public(value[key], depth + 1) for key in keys}
+        if isinstance(value, (list, tuple)):
+            if depth >= 32:
+                return '[truncated: nesting limit]'
+            return [public(child, depth + 1) for child in value]
+        return value
+
+    output = bytearray()
+    marker = b' ... [truncated]'
+    for chunk in json.JSONEncoder(ensure_ascii=False, default=str).iterencode(public(result)):
+        output.extend(chunk.encode('utf-8', errors='replace')[:limit + 1])
+        if len(output) > limit:
+            return bytes(output[:limit - len(marker)]).decode('utf-8', errors='ignore') + marker.decode('ascii')
+    return bytes(output).decode('utf-8')
 
 
 # Fixed Core vocabulary only; never accept arbitrary uppercase output as a code.
@@ -238,7 +274,7 @@ def safe_task_error(result, no_log=False):
                 return nested
     message = ' '.join(result[key][:8192] for key in ('msg', 'stderr', 'module_stderr')
                        if isinstance(result.get(key), str)).lower()
-    code, summary = 'ANSIBLE_TASK_FAILED', 'Ansible task failed; untrusted result text withheld'
+    code, summary = 'ANSIBLE_TASK_FAILED', 'Ansible task failed'
     for candidate, description, phrases in (
         ('ANSIBLE_TLS_HOSTNAME_MISMATCH', 'Имя или IP-адрес узла не совпадает с сертификатом TLS',
          ('hostname mismatch', 'ip address mismatch', 'certificate is not valid for')),

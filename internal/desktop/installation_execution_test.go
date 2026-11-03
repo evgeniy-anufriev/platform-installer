@@ -29,6 +29,17 @@ func TestInstallationEventViewIsClosedAndRedacted(t *testing.T) {
 	}
 }
 
+func TestInstallationEventViewPreservesPublicAnsibleOutput(t *testing.T) {
+	output := `{"msg":"actual error","stdout":"out\\n","stderr":"err"}`
+	view := installationEventView(executionnode.ExecutionEvent{
+		EventType: "TASK_COMPLETED", Status: "FAILED", SafeMessage: "Ansible task completed", AnsibleOutput: output,
+		Redaction: executionnode.ExecutionRedaction{Applied: true},
+	})
+	if view.AnsibleOutput != output || view.SafeMessage != "Ansible task completed" {
+		t.Fatal("public Ansible output lost at desktop projection")
+	}
+}
+
 func TestInstallationEventViewPreservesOnlyUnredactedTaskName(t *testing.T) {
 	base := executionnode.ExecutionEvent{
 		RunID: "installer-123", Sequence: 2, EventType: "TASK_STARTED", Status: "RUNNING",

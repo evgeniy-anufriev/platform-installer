@@ -96,17 +96,18 @@ class ExecutionTaskObservabilityTests(unittest.TestCase):
             with self.assertRaisesRegex(execution_lifecycle.LifecycleError, "RUN_EVENT_LIMIT"):
                 journal.event("ACTION_COMPLETED", "SUCCESS", "over capacity", actionId="apply:kafka")
 
-    def test_known_core_failure_survives_callback_and_journal_without_payload(self):
+    def test_known_core_failure_survives_callback_with_public_output(self):
         with tempfile.TemporaryDirectory() as root:
             journal = _active_journal(root)
             result = _Result(_Task(), {'msg': 'APPLICATION_RUNTIME_DEFERRED_FEATURE',
-                                      'stdout': 'SENSITIVE_PASSWORD', 'invocation': 'SENSITIVE_TOKEN'})
+                                      'stdout': 'qa-public-output', 'invocation': 'qa-public-arguments'})
             with mock.patch.object(execution_events_json, 'EXECUTION_STATE_ROOT', root), mock.patch.dict(
                     os.environ, {'PLATFORM_EXECUTION_RUN_ID': 'run-1'}, clear=False):
                 execution_events_json.CallbackModule().v2_runner_on_failed(result)
             events = journal.events()
             self.assertEqual('APPLICATION_RUNTIME_DEFERRED_FEATURE', events[-1]['error']['code'])
-            self.assertNotIn('SENSITIVE_', json.dumps(events))
+            self.assertIn('qa-public-output', events[-1]['ansibleOutput'])
+            self.assertIn('qa-public-arguments', events[-1]['ansibleOutput'])
             self.assert_events_match_contract(events)
 
     def test_http_diagnostic_only_promotes_tagged_closed_assertion_message(self):
@@ -135,7 +136,10 @@ class ExecutionTaskObservabilityTests(unittest.TestCase):
                 diagnostics = [event for event in journal.events() if event['eventType'] == 'DIAGNOSTIC'
                                and event['safeMessage'].startswith('HTTP backend ')]
                 self.assertEqual(int(emitted), len(diagnostics))
-                self.assertNotIn('SENSITIVE_', json.dumps(journal.events()))
+                if no_log:
+                    self.assertNotIn('SENSITIVE_', json.dumps(journal.events()))
+                else:
+                    self.assertIn('SENSITIVE_BODY_SENTINEL', journal.events()[1]['ansibleOutput'])
                 if emitted:
                     self.assertEqual(message, diagnostics[0]['safeMessage'])
                 self.assert_events_match_contract(journal.events())
@@ -291,7 +295,7 @@ class ExecutionTaskObservabilityTests(unittest.TestCase):
             task = _Task(name="Resolve providers")
             task.action = "platform.core.resolve_service_integrations"
             result = _Result(task, {"resolved_service_integrations": {"integrations": {
-                "missingHAProxySources": ["vault-ha"]}}, "secret": "never-journal-this"})
+                "missingHAProxySources": ["vault-ha"]}}, "extra": "qa-public-extra-field"})
             with mock.patch.object(execution_events_json, "EXECUTION_STATE_ROOT", root), mock.patch.dict(os.environ, {"PLATFORM_EXECUTION_RUN_ID": "run-1"}, clear=False):
                 execution_events_json.CallbackModule().v2_runner_on_ok(result)
             events = journal.events()
@@ -299,7 +303,7 @@ class ExecutionTaskObservabilityTests(unittest.TestCase):
             self.assertEqual("vault-ha", events[-2]["serviceDeployment"])
             self.assertIn("HAPROXY_ENDPOINT_PROVIDER_NOT_FOUND", events[-2]["safeMessage"])
             self.assertEqual("RUNNING", journal.status()["state"])
-            self.assertNotIn("never-journal-this", json.dumps(events))
+            self.assertIn("qa-public-extra-field", events[1]['ansibleOutput'])
             self.assert_events_match_contract(events)
 
     def test_callback_keeps_static_no_log_task_name_and_never_persists_result_payload(self):
@@ -324,7 +328,7 @@ class ExecutionTaskObservabilityTests(unittest.TestCase):
             for forbidden in ("secret-output", "secret-command", "stdout", "cmd"):
                 self.assertNotIn(forbidden, serialized)
 
-    def test_callback_sanitizes_display_name_and_failure_is_generic(self):
+    def test_callback_sanitizes_display_name_and_retains_public_exception(self):
         with tempfile.TemporaryDirectory() as root:
             journal = _active_journal(root)
             callback = execution_events_json.CallbackModule()
@@ -337,7 +341,7 @@ class ExecutionTaskObservabilityTests(unittest.TestCase):
             self.assertEqual("FAILED", completed["status"])
             self.assertEqual("ANSIBLE_TASK_FAILED", completed["error"]["code"])
             self.assertEqual("unsafe task", completed["task"]["name"])
-            self.assertNotIn("private traceback", json.dumps(completed))
+            self.assertIn("private traceback", completed['ansibleOutput'])
             self.assert_events_match_contract(journal.events())
 
     def test_event_lock_symlink_is_rejected_without_touching_target(self):
@@ -492,7 +496,24 @@ class ExecutionTaskObservabilityTests(unittest.TestCase):
 
 @unittest.skipUnless(os.environ.get("PLATFORM_TEST_CANONICAL_EXECUTION_ROOT") == "1", "requires isolated root-owned RED OS acceptance")
 class ControllerTaskStreamAcceptanceTests(unittest.TestCase):
-    def test_vault_health_error_reaches_real_journal_without_response_body(self):
+    def test_real_public_command_stdout_stderr_reach_journal_on_success_and_failure(self):
+        for exit_code, expected in ((0, 'SUCCEEDED'), (7, 'FAILED')):
+            with self.subTest(exit_code=exit_code):
+                tasks = ("    - name: Public command output\n"
+                         "      no_log: false\n"
+                         "      ansible.builtin.command:\n"
+                         "        argv: ['/bin/sh', '-c', 'printf qa-stdout; printf qa-stderr >&2; exit %d']\n" % exit_code)
+                with self.runtime(tasks) as (release, journal, manifest):
+                    events = self.dispatch(release, journal, manifest, expected)
+                    results = [event for event in events if event['eventType'] == 'TASK_COMPLETED']
+                    self.assertEqual(2, len(results))
+                    for event in results:
+                        output = json.loads(event['ansibleOutput'])
+                        self.assertEqual('qa-stdout', output['stdout'])
+                        self.assertEqual('qa-stderr', output['stderr'])
+                        self.assertEqual(exit_code, output['rc'])
+
+    def test_vault_health_error_reaches_real_journal_with_public_result(self):
         import http.server
         import ssl
         import subprocess
@@ -546,7 +567,9 @@ class ControllerTaskStreamAcceptanceTests(unittest.TestCase):
                         self.assertEqual(expected, failed[-1]['error']['code'])
                         if scenario != 'bad-ca':
                             self.assertIn('HTTP status ' + ('-1' if scenario == 'hostname' else '502'), failed[-1]['error']['summary'])
-                        self.assert_no_payload(journal, 'private-vault-response-canary', 'server.key')
+                        if scenario == 'http':
+                            self.assertIn('private-vault-response-canary', failed[-1]['ansibleOutput'])
+                        self.assert_no_payload(journal, 'server.key')
                 finally:
                     server.shutdown()
                     server.server_close()
@@ -760,6 +783,7 @@ class ControllerTaskStreamAcceptanceTests(unittest.TestCase):
             self.assertTrue(any(hosts == {"node1", "node2"} for hosts in multi_host.values()))
             self.assertEqual({"SUCCESS", "CHANGED", "SKIPPED"}, {event["status"] for event in completions})
             self.assertTrue(all("elapsedMilliseconds" in event for event in completions))
+            self.assertTrue(all(event['ansibleOutput'].startswith('{') for event in completions))
 
     def test_real_no_log_hides_templated_task_name_and_payload(self):
         for module, expected, task_status in (("debug", "SUCCEEDED", "SUCCESS"), ("fail", "FAILED", "FAILED")):
@@ -802,9 +826,10 @@ class ControllerTaskStreamAcceptanceTests(unittest.TestCase):
             for event in results:
                 self.assertEqual("FAILED", event["status"])
                 self.assertEqual("Safe expected failure", event["task"]["name"])
-                self.assertEqual({"code": "ANSIBLE_TASK_FAILED", "summary": "Ansible task failed; untrusted result text withheld"}, event["error"])
+                self.assertEqual({"code": "ANSIBLE_TASK_FAILED", "summary": "Ansible task failed"}, event["error"])
+                self.assertIn('qa-private-failure-payload', event['ansibleOutput'])
             self.assertFalse(any(event["eventType"] == "ACTION_COMPLETED" for event in events))
-            self.assert_no_payload(journal, "qa-private-failure-payload")
+            self.assert_no_payload(journal)
 
     def test_real_ansible_succeeds_when_callback_or_detail_writer_fails(self):
         for fault in ("callback_exception", "detail_writer_failure", "tiny_capacity"):

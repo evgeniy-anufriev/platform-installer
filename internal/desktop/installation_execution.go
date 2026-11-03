@@ -68,6 +68,7 @@ type InstallationEventView struct {
 	Task                *InstallationTaskView `json:"task,omitempty"`
 	ElapsedMilliseconds *int                  `json:"elapsedMilliseconds,omitempty"`
 	SafeMessage         string                `json:"safeMessage"`
+	AnsibleOutput       string                `json:"ansibleOutput,omitempty"`
 	ErrorCode           string                `json:"errorCode,omitempty"`
 	ErrorSummary        string                `json:"errorSummary,omitempty"`
 	Redacted            bool                  `json:"redacted"`
@@ -351,6 +352,7 @@ func installationResultView(run executionnode.ExecutionRun) *InstallationResultV
 }
 func installationEventView(event executionnode.ExecutionEvent) InstallationEventView {
 	view := InstallationEventView{RunID: event.RunID, Sequence: event.Sequence, Timestamp: event.Timestamp, EventType: event.EventType, Status: event.Status, PhaseID: event.PhaseID, ActionID: event.ActionID, Host: event.Host, ServiceDeployment: event.ServiceDeployment, ElapsedMilliseconds: event.ElapsedMillis, SafeMessage: event.SafeMessage, Redacted: event.Redaction.Applied}
+	view.AnsibleOutput = event.AnsibleOutput
 	// Applied marks the event as safely redacted, not every task field as hidden.
 	// The closed redaction field list identifies the withheld task name.
 	if event.Task != nil && !slices.Contains(event.Redaction.Fields, "task.name") {

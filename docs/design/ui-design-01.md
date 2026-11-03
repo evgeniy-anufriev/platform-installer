@@ -576,6 +576,12 @@ and auto-scrolls to the newest event on updates; it has no pagination. This is
 presentation-only and does not change run lifecycle, progress calculation or
 the separate «Журналы» page.
 
+Owner refinement (2026-11-03): add a separate «Вывод Ansible» column to the
+execution table and the selectable columns on «Журналы». Show Core's bounded
+`ansibleOutput` as plain text; preserve task/status/error columns. Effective
+`no_log` results have no output. The execution table may scroll horizontally
+to retain readable column widths. No additional execution controls are added.
+
 ## 3. Installation as the project home
 
 The page has six compact regions in this order:

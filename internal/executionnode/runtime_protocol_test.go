@@ -647,10 +647,12 @@ func TestDecodeEventPageRejectsWrongRunOversizeAndControlCharacters(t *testing.T
 	var value map[string]any
 	_ = json.Unmarshal(encoded, &value)
 	for name, mutate := range map[string]func(map[string]any){
-		"wrong-run": func(v map[string]any) { v["runId"] = "installer-foreign" },
-		"gap":       func(v map[string]any) { v["sequence"] = float64(2) },
-		"oversize":  func(v map[string]any) { v["safeMessage"] = strings.Repeat("x", 8193) },
-		"control":   func(v map[string]any) { v["safeMessage"] = "unsafe\x1b[31m" },
+		"wrong-run":               func(v map[string]any) { v["runId"] = "installer-foreign" },
+		"gap":                     func(v map[string]any) { v["sequence"] = float64(2) },
+		"oversize":                func(v map[string]any) { v["safeMessage"] = strings.Repeat("x", 8193) },
+		"control":                 func(v map[string]any) { v["safeMessage"] = "unsafe\x1b[31m" },
+		"ansible-output-oversize": func(v map[string]any) { v["ansibleOutput"] = strings.Repeat("я", 4097) },
+		"ansible-output-control":  func(v map[string]any) { v["ansibleOutput"] = "unsafe\noutput" },
 		"fingerprint": func(v map[string]any) {
 			v["planFingerprint"] = "sha256:not-a-digest"
 		},
@@ -669,6 +671,18 @@ func TestDecodeEventPageRejectsWrongRunOversizeAndControlCharacters(t *testing.T
 				t.Fatal("invalid event accepted")
 			}
 		})
+	}
+}
+
+func TestDecodeEventPagePreservesPublicAnsibleOutput(t *testing.T) {
+	event := validEvent("installer-output", 1)
+	event.AnsibleOutput = `{"stdout":"original output","stderr":"actual error"}`
+	encoded, _ := json.Marshal(event)
+	var value map[string]any
+	_ = json.Unmarshal(encoded, &value)
+	page, err := decodeEventPage(map[string]any{"events": []any{value}}, event.RunID, 0, 256)
+	if err != nil || len(page.Events) != 1 || page.Events[0].AnsibleOutput != event.AnsibleOutput {
+		t.Fatalf("public output lost: %v", err)
 	}
 }
 

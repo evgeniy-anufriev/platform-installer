@@ -165,3 +165,57 @@ Keepalived and `BLOCKED` paths remain regression gates.
 ### UI-BE-04E completion evidence
 
 See [historical checkpoint](evidence/documentation-checkpoints-20261012.md#ui-be-04-checkpoint-001). Current status: [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+## Public Ansible output column, 2026-11-03
+
+Owner requested removing the Installer content filter for effective
+`no_log: false`, then clarified that raw output must have its own column.
+Existing role/task no_log settings are unchanged. Core callback now passes
+all completed task results to the existing journal. Optional `ansibleOutput`
+carries the original result as JSON (msg/stdout/stderr/exception/invocation,
+response data and other fields), bounded to 8192 UTF-8 bytes with an explicit
+truncation marker. Main diagnostic fields precede potentially large invocation
+or facts. Task/module no_log, censored results and hidden nested loop results
+remain opaque. Structured error classification and safeMessage remain separate.
+
+The existing typed event transport, local replay mirror and desktop projection
+preserve the field. Execution and Logs tables expose «Вывод Ansible» as plain
+React text, with no HTML evaluation. The Logs column is default-visible for
+new column preferences and selectable for existing saved preferences. The
+execution table gains horizontal scrolling and a dedicated output width.
+No new command bridge, Ansible files, role settings, execution decision, plan
+or secret persistence mechanism was introduced. Raw unprotected task data now
+enters the existing journal/mirror, explicitly as requested; secret-bearing
+tasks continue to rely on no_log.
+
+Design check: shared ownership/interaction rules, mockup execution/log flows,
+UI-BE-04 and event contract read. The existing five-column execution design is
+superseded by the owner's explicit sixth-column request and recorded in
+ui-design-01.md. No visual inspection claimed. Review not invoked per owner.
+
+Validation of current tree:
+
+- RED OS101, qa-sync workspace
+  `/var/tmp/platform-installer-qa-44eeb95f15c04ad9be1e42eebc370d41`:
+  `test_execution_task_error`, `test_execution_task_observability` and
+  `test_execution_failure_diagnostics`: **57 PASS** (17.402s), root opt-in via
+  established platform-automation identity and sudo -n. Real Ansible command
+  success/failure preserves stdout/stderr/rc; debug/changed/skipped, real TLS
+  Vault health HTTP502/hostname/malformed CA, failed assertions and no_log
+  regressions pass. UTF-8 byte limits, nested censoring, control escaping,
+  journal event limits and terminal outcome remain covered.
+  The temporary source workspace was cleaned after QA.
+- First run exposed one old expectation that unprotected synthetic stdout is
+  absent; the test now checks public output and still checks closed error
+  summaries. No role no_log setting was relaxed to make tests pass.
+- Full `go test ./...` and `go vet ./...`: PASS. Additional Event/Task selection
+  PASS (1.636s) after adding raw-field protocol bounds and replay tests.
+- Actual React rendering tests (InstallationPage and UtilityPages): **47 PASS**.
+  Raw output is in a separate column and script-like text stays text.
+  Frontend typecheck/Vite build and lint PASS. Windows Wails build PASS.
+- Real bridge preflight: `QA_WAILS_BRIDGE_PREFLIGHT_FAILED`. Real React/Wails/
+  Execution Node acceptance remains unavailable/blocking, not replaced by
+  component/native checks. No real installation or new Start performed.
+- Applying the change in the isolated environment requires both updated
+  Installer UI and an updated standard runtime bundle; no bundle publication
+  was performed. Existing historical events are not rewritten.

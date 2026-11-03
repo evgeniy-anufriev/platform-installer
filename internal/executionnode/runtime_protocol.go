@@ -177,6 +177,7 @@ type ExecutionEvent struct {
 	Task              *ExecutionEventTask  `json:"task,omitempty"`
 	ElapsedMillis     *int                 `json:"elapsedMilliseconds,omitempty"`
 	SafeMessage       string               `json:"safeMessage"`
+	AnsibleOutput     string               `json:"ansibleOutput,omitempty"`
 	Error             *ExecutionEventError `json:"error,omitempty"`
 	Redaction         ExecutionRedaction   `json:"redaction"`
 }
@@ -1016,7 +1017,7 @@ func validateExecutionEvent(event ExecutionEvent, runID string) error {
 	if event.PlanFingerprint != "" && !validSHA256Fingerprint(event.PlanFingerprint) {
 		return errors.New("EXECUTION_EVENT_INVALID")
 	}
-	for _, value := range []string{event.SafeMessage, event.PhaseID, event.ActionID, event.Host, event.ServiceDeployment} {
+	for _, value := range []string{event.SafeMessage, event.AnsibleOutput, event.PhaseID, event.ActionID, event.Host, event.ServiceDeployment} {
 		if len(value) > 8192 || strings.ContainsAny(value, "\x00\r\n\x1b") {
 			return errors.New("EXECUTION_EVENT_INVALID")
 		}

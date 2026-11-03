@@ -1,5 +1,11 @@
 # V2 roadmap and milestone gates
 
+Owner-requested execution journal output (2026-11-03): publish bounded original
+Ansible module results for tasks without effective `no_log` in a separate
+«Вывод Ansible» column. Preserve all role no_log settings, lifecycle/approval
+rules and structured error classification. See the execution event contract;
+validation and acceptance limits belong to CURRENT_STATE.md.
+
 Owner refinement (2026-11-02): application library bindings own endpoint and
 Vault provider selection without root-level duplicate pointers. A library's
 explicit registry entry authorizes its scoped image source; ordinary Ansible

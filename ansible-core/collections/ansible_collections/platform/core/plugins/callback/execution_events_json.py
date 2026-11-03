@@ -16,6 +16,7 @@ short_description: Emit safe Ansible task progress into an owned execution journ
 version_added: "1.0.0"
 description:
   - Emits bounded task lifecycle details into the authoritative Execution Node journal.
+  - Includes original module results unless protected by no_log or censored.
   - The callback is disabled unless explicitly enabled by the trusted execution controller.
 requirements:
   - A controller-owned active Platform Installer execution journal.
@@ -140,6 +141,7 @@ class CallbackModule(CallbackBase):
                 elapsed_milliseconds=self._elapsed(task_uuid) if event_type == "TASK_COMPLETED" else None,
                 no_log=no_log,
                 failure_result=getattr(result, "_result", {}) if status == "FAILED" else None,
+                task_result=getattr(result, "_result", None),
                 **self._context(task)
             )
             # Only the tagged assertion's closed diagnostic grammar is public.
@@ -167,8 +169,8 @@ class CallbackModule(CallbackBase):
         payload = result._result if isinstance(result._result, dict) else {}
         self._emit("TASK_COMPLETED", "CHANGED" if payload.get("changed") else "SUCCESS", result._task, result)
         self._application_progress(result, payload)
-        # Only this Core module's bounded projection can report a nonfatal
-        # integration error. Never journal arbitrary task payload/message text.
+        # Only this Core module's bounded projection can report an additional
+        # nonfatal integration error. Raw task output is handled by _emit.
         if (self._no_log(result._task, result) or not self._run_id() or
                 getattr(result._task, "action", "") != "platform.core.resolve_service_integrations"):
             return

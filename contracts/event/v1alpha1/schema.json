@@ -30,6 +30,7 @@
     },
     "elapsedMilliseconds": { "type": "integer", "minimum": 0 },
     "safeMessage": { "type": "string", "maxLength": 8192 },
+    "ansibleOutput": { "type": "string", "maxLength": 8192 },
     "error": {
       "type": "object",
       "required": ["code", "summary"],

@@ -4,10 +4,37 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tools'))
-from execution_task_error import safe_task_error
+from execution_task_error import safe_task_error, task_result_output
 
 
 class TaskErrorTests(unittest.TestCase):
+    def test_public_output_retains_arbitrary_result_fields_and_escapes_controls(self):
+        result = {'msg': 'исходная ошибка', 'stdout': 'out\n\x1b[31m', 'stderr': 'err',
+                  'exception': 'traceback', 'invocation': {'module_args': {'path': '/tmp/example'}}}
+        output = task_result_output(result)
+        self.assertEqual(result, json.loads(output))
+        self.assertFalse(any(character in output for character in '\n\r\x00\x1b'))
+
+    def test_public_output_respects_task_result_and_nested_no_log(self):
+        for result in ({'msg': 'hidden'}, {'_ansible_no_log': True, 'stdout': 'hidden'},
+                       {'censored': 'hidden'}):
+            self.assertEqual('', task_result_output(result, no_log=True))
+        self.assertEqual('', task_result_output({'_ansible_no_log': True, 'msg': 'hidden'}))
+        self.assertEqual('', task_result_output({'censored': 'hidden'}))
+        result = {'results': [{'msg': 'visible'}, {'_ansible_no_log': True, 'msg': 'hidden'},
+                              {'censored': 'hidden', 'stdout': 'hidden'}]}
+        output = task_result_output(result)
+        self.assertIn('visible', output)
+        self.assertNotIn('"hidden"', output)
+        self.assertEqual('visible', result['results'][0]['msg'])
+        self.assertEqual('hidden', result['results'][1]['msg'])
+
+    def test_public_output_is_utf8_byte_bounded_and_prioritizes_error(self):
+        output = task_result_output({'invocation': 'я' * 20000, 'msg': 'actual failure'})
+        self.assertLessEqual(len(output.encode('utf-8')), 8192)
+        self.assertIn('actual failure', output)
+        self.assertTrue(output.endswith('[truncated]'))
+
     def test_http_health_failure_reasons_and_status_survive_loop_without_secret_text(self):
         for message, status, code in (
             ('Request failed: <urlopen error [Errno 111] Connection refused>', -1, 'ANSIBLE_CONNECTION_REFUSED'),

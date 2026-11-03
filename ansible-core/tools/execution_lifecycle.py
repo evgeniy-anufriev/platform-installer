@@ -351,7 +351,7 @@ class Journal(object):
         finally:
             os.close(event_lock)
 
-    def task_event(self, event_type, status, task_uuid, host="", role="", name="", elapsed_milliseconds=None, no_log=False, failure_result=None, **context):
+    def task_event(self, event_type, status, task_uuid, host="", role="", name="", elapsed_milliseconds=None, no_log=False, failure_result=None, task_result=None, **context):
         event_lock = self.event_lock()
         try:
             validate_task_journal_ownership(self)
@@ -389,6 +389,11 @@ class Journal(object):
                     event[key] = _bounded_text(context[key], MAX_MESSAGE)
             if event_type == "TASK_COMPLETED" and isinstance(elapsed_milliseconds, int) and elapsed_milliseconds >= 0:
                 event["elapsedMilliseconds"] = elapsed_milliseconds
+            if event_type == "TASK_COMPLETED":
+                from execution_task_error import task_result_output
+                output = task_result_output(task_result if task_result is not None else failure_result, no_log)
+                if output:
+                    event["ansibleOutput"] = output
             if status == "FAILED":
                 from execution_task_error import safe_task_error
                 event["error"] = safe_task_error(failure_result, no_log)

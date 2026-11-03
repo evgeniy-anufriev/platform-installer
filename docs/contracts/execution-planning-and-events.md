@@ -402,16 +402,23 @@ The journal and Go observer admit at most 32768 events per run, with the last
 remain independent of this record count.
 
 The controller passes the exact owned journal root to the task callback, including
-nondefault standalone state roots. Failed task events retain bounded static task
-identity, host and a closed diagnostic code/summary with numeric exit or HTTP
-status where available. Arbitrary module messages, stdout, stderr, commands,
-assertion expressions and tracebacks are never event payloads. Unknown failures
-remain generic; `no_log`/censored failures retain identity only and report
-`ANSIBLE_FAILURE_REDACTED`. Task names containing Jinja expressions are hidden.
-Public token-free HTTP health checks may report specific TLS, CA-file, DNS,
-connection and timeout categories plus actual HTTP status from nested URI loop
-results. These remain fixed diagnostic summaries, never raw exception text,
-response bodies or headers. Secret-bearing requests retain `no_log`.
+nondefault standalone state roots. Task events retain bounded static task
+identity and host. Per owner request (2026-11-03), TASK_COMPLETED `ansibleOutput`
+contains the original module result as JSON for tasks without effective
+`no_log`, including success, changed, skipped and failed results. This includes
+module messages, stdout, stderr, exception text, invocation and response data;
+there is no content allowlist. This optional field is displayed in a separate
+«Вывод Ansible» column; `safeMessage` retains its existing meaning.
+Output is limited to 8192 UTF-8 bytes, with `[truncated]` on
+overflow; diagnostic fields precede invocation/facts. JSON escapes control
+characters. Nested loop results carrying `no_log`/`censored` are hidden too.
+Task-level `no_log`, module `_ansible_no_log` and `censored` results retain
+identity only; failed hidden tasks report `ANSIBLE_FAILURE_REDACTED`.
+Task names containing Jinja expressions remain hidden.
+Failed tasks additionally retain the existing closed diagnostic code/summary
+and numeric exit/HTTP status for classification. The raw message is display
+data, never an execution decision or infrastructure API. Secret-bearing tasks
+must retain `no_log`; its settings are not changed by this journal policy.
 
 `CancelExecution` verifies the complete run ownership tuple, records the
 request, asks the fixed controller/unit to stop gracefully, then uses owned

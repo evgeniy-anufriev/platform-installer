@@ -1079,6 +1079,7 @@ export namespace desktop {
     safeMessage: string;
     errorCode?: string;
     errorSummary?: string;
+    ansibleOutput?: string;
     redacted: boolean;
 
     static createFrom(source: any = {}) {
@@ -1101,6 +1102,7 @@ export namespace desktop {
       this.safeMessage = source["safeMessage"];
       this.errorCode = source["errorCode"];
       this.errorSummary = source["errorSummary"];
+      this.ansibleOutput = source["ansibleOutput"];
       this.redacted = source["redacted"];
     }
 

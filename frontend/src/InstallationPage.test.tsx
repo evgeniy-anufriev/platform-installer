@@ -777,6 +777,7 @@ describe("InstallationPage", () => {
             status: "FAILED",
             timestamp: "2026-10-05T07:22:44Z",
             safeMessage: "Ansible task completed",
+            ansibleOutput: '{"msg":"qa original failure","stderr":"qa stderr"}',
             errorCode: "APPLICATION_RUNTIME_DEFERRED_FEATURE",
             errorSummary:
               "Core operation failed (APPLICATION_RUNTIME_DEFERRED_FEATURE)",
@@ -816,6 +817,14 @@ describe("InstallationPage", () => {
       screen.getByText(/Последняя завершённая задача: Проверка swap/),
     ).toBeTruthy();
     expect(screen.getByText("Проверка swap")).toBeTruthy();
+    expect(
+      screen.getByRole("columnheader", { name: "Вывод Ansible" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("cell", {
+        name: '{"msg":"qa original failure","stderr":"qa stderr"}',
+      }),
+    ).toBeTruthy();
     expect(screen.queryByText("Детали события")).toBeNull();
     expect(
       screen.getByRole("heading", { name: "Действия плана" }),

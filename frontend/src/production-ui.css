@@ -3015,6 +3015,7 @@ label.plan-action-row > span > small {
 }
 .execution-event-table {
   width: 100%;
+  min-width: 900px;
   table-layout: fixed;
   border-collapse: collapse;
   font-size: 10px;
@@ -3050,6 +3051,14 @@ label.plan-action-row > span > small {
 }
 .execution-event-table th:nth-child(5) {
   width: 70px;
+}
+.execution-event-table th:nth-child(6) {
+  width: 35%;
+}
+.ansible-output {
+  font-family: monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .execution-event-table tbody tr.is-selected {
   background: #e8f2ff;

@@ -35,6 +35,7 @@ func TestEventMirrorAppendDuplicateAndTrailingRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	first := validEvent(runID, 1)
+	first.AnsibleOutput = `{"stdout":"qa-public-output"}`
 	if appended, err := mirror.Append(first); err != nil || !appended {
 		t.Fatalf("append=%v err=%v", appended, err)
 	}
@@ -71,6 +72,9 @@ func TestEventMirrorAppendDuplicateAndTrailingRecovery(t *testing.T) {
 		t.Fatalf("recovered append=%v err=%v", appended, err)
 	}
 	data, _ := os.ReadFile(path)
+	if !strings.Contains(string(data), "qa-public-output") {
+		t.Fatal("public Ansible output lost from persistent mirror")
+	}
 	if strings.Count(string(data), "\n") != 2 || !strings.HasSuffix(string(data), "\n") {
 		t.Fatalf("mirror=%q", data)
 	}
