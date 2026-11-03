@@ -10402,7 +10402,7 @@ export function applicationDraft(
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/backend.ts","mode":420,"size":29125,"sha256":"d6949af8f38c0e1be70c16167835785cc21858db9b9c5ae60bb1dd0d1c5ec48a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":29125}
+@@PORTABLE {"path":"frontend/src/backend.ts","mode":420,"size":29149,"sha256":"547f4c343dac7a1a71453f00e35453604daa6bba11b37cf0dd9400d5ef3ac3ac","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":29149}
 import {
   ProbeServerInformation,
   CheckServerInformation,
@@ -10475,6 +10475,7 @@ import type { desktop, executionnode } from "../wailsjs/go/models";
 import { EventsOn } from "../wailsjs/runtime/runtime";
 
 export type VerificationStatus = {
+  current?: OpenResult;
   status:
     | "UNVERIFIED"
     | "VERIFYING"
@@ -17053,7 +17054,7 @@ export function VerifyProject() {
 }
 
 @@END
-@@PORTABLE {"path":"frontend/wailsjs/go/models.ts","mode":420,"size":119061,"sha256":"2e12cb2e0b0521cacd3d4e2379030b70ac6f45b74981a55a59d6891afe179555","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"frontend/wailsjs/go/models.ts","mode":420,"size":119172,"sha256":"053406fd665848b9c7c9cccef41b07223844e2e488e5ec202604af7f027dc5c6","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
 export namespace appconfig {
   export class LibraryExecutionPriority {
     libraryName: string;
@@ -17761,7 +17762,79 @@ export namespace desktop {
       this.locked = source["locked"];
     }
   }
+  export class ProjectOpenResult {
+    status: string;
+    root?: string;
+    classification?: string;
+    project?: projectlifecycle.Project;
+    counts: projectlifecycle.Counts;
+    catalog?: projectlifecycle.ProjectCatalogView;
+    snapshot?: coreadapter.Snapshot;
+    managed?: installer.ManagedProjectView;
+    verification: ProjectVerification;
+    diagnostics?: ApplicationDiagnostic[];
+    error?: ProjectOpenError;
+
+    static createFrom(source: any = {}) {
+      return new ProjectOpenResult(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.status = source["status"];
+      this.root = source["root"];
+      this.classification = source["classification"];
+      this.project = this.convertValues(
+        source["project"],
+        projectlifecycle.Project,
+      );
+      this.counts = this.convertValues(
+        source["counts"],
+        projectlifecycle.Counts,
+      );
+      this.catalog = this.convertValues(
+        source["catalog"],
+        projectlifecycle.ProjectCatalogView,
+      );
+      this.snapshot = this.convertValues(
+        source["snapshot"],
+        coreadapter.Snapshot,
+      );
+      this.managed = this.convertValues(
+        source["managed"],
+        installer.ManagedProjectView,
+      );
+      this.verification = this.convertValues(
+        source["verification"],
+        ProjectVerification,
+      );
+      this.diagnostics = this.convertValues(
+        source["diagnostics"],
+        ApplicationDiagnostic,
+      );
+      this.error = this.convertValues(source["error"], ProjectOpenError);
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
+    }
+  }
   export class ProjectVerification {
+    current?: ProjectOpenResult;
     apiVersion: string;
     kind: string;
     status: string;
@@ -17781,6 +17854,7 @@ export namespace desktop {
 
     constructor(source: any = {}) {
       if ("string" === typeof source) source = JSON.parse(source);
+      this.current = this.convertValues(source["current"], ProjectOpenResult);
       this.apiVersion = source["apiVersion"];
       this.kind = source["kind"];
       this.status = source["status"];
@@ -18550,7 +18624,10 @@ export namespace desktop {
         return (a as any[]).map((elem) => this.convertValues(elem, classs));
       } else if ("object" === typeof a) {
         if (asMap) {
-          for (const key of Object.keys(a)) {
+          for (const
+@@END
+@@PORTABLE {"path":"frontend/wailsjs/go/models.ts","mode":420,"size":119172,"sha256":"053406fd665848b9c7c9cccef41b07223844e2e488e5ec202604af7f027dc5c6","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
+ key of Object.keys(a)) {
             a[key] = new classs(a[key]);
           }
           return a;
@@ -18625,10 +18702,7 @@ export namespace desktop {
         if (asMap) {
           for (const key of Object.keys(a)) {
             a[key] = new classs(a[key]);
-   
-@@END
-@@PORTABLE {"path":"frontend/wailsjs/go/models.ts","mode":420,"size":119061,"sha256":"2e12cb2e0b0521cacd3d4e2379030b70ac6f45b74981a55a59d6891afe179555","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
-       }
+          }
           return a;
         }
         return new classs(a);
@@ -18755,78 +18829,6 @@ export namespace desktop {
       this.result = this.convertValues(
         source["result"],
         installer.ProjectExportResult,
-      );
-      this.error = this.convertValues(source["error"], ProjectOpenError);
-    }
-
-    convertValues(a: any, classs: any, asMap: boolean = false): any {
-      if (!a) {
-        return a;
-      }
-      if (a.slice && a.map) {
-        return (a as any[]).map((elem) => this.convertValues(elem, classs));
-      } else if ("object" === typeof a) {
-        if (asMap) {
-          for (const key of Object.keys(a)) {
-            a[key] = new classs(a[key]);
-          }
-          return a;
-        }
-        return new classs(a);
-      }
-      return a;
-    }
-  }
-
-  export class ProjectOpenResult {
-    status: string;
-    root?: string;
-    classification?: string;
-    project?: projectlifecycle.Project;
-    counts: projectlifecycle.Counts;
-    catalog?: projectlifecycle.ProjectCatalogView;
-    snapshot?: coreadapter.Snapshot;
-    managed?: installer.ManagedProjectView;
-    verification: ProjectVerification;
-    diagnostics?: ApplicationDiagnostic[];
-    error?: ProjectOpenError;
-
-    static createFrom(source: any = {}) {
-      return new ProjectOpenResult(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.status = source["status"];
-      this.root = source["root"];
-      this.classification = source["classification"];
-      this.project = this.convertValues(
-        source["project"],
-        projectlifecycle.Project,
-      );
-      this.counts = this.convertValues(
-        source["counts"],
-        projectlifecycle.Counts,
-      );
-      this.catalog = this.convertValues(
-        source["catalog"],
-        projectlifecycle.ProjectCatalogView,
-      );
-      this.snapshot = this.convertValues(
-        source["snapshot"],
-        coreadapter.Snapshot,
-      );
-      this.managed = this.convertValues(
-        source["managed"],
-        installer.ManagedProjectView,
-      );
-      this.verification = this.convertValues(
-        source["verification"],
-        ProjectVerification,
-      );
-      this.diagnostics = this.convertValues(
-        source["diagnostics"],
-        ApplicationDiagnostic,
       );
       this.error = this.convertValues(source["error"], ProjectOpenError);
     }
@@ -20227,13 +20229,13 @@ export namespace installer {
     baseProjectRevision: string;
     commandSummary: SemanticChange;
     semanticChanges: SemanticChange[];
-    affectedEntities: string[];
+  
+@@END
+@@PORTABLE {"path":"frontend/wailsjs/go/models.ts","mode":420,"size":119172,"sha256":"053406fd665848b9c7c9cccef41b07223844e2e488e5ec202604af7f027dc5c6","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":23172}
+  affectedEntities: string[];
     affectedDocuments: DocumentChange[];
     impacts: string[];
-    validation: V
-@@END
-@@PORTABLE {"path":"frontend/wailsjs/go/models.ts","mode":420,"size":119061,"sha256":"2e12cb2e0b0521cacd3d4e2379030b70ac6f45b74981a55a59d6891afe179555","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":23061}
-alidation;
+    validation: Validation;
     expectedEffectiveState?: any[];
     expectedSnapshotFingerprint?: string;
     reviewDiff: string;
@@ -22505,7 +22507,7 @@ func (a *CommandAdapter) BuildSnapshot(ctx context.Context, projectRoot string, 
 }
 
 @@END
-@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":115542,"sha256":"f9d1a28abc915f00411d1a21e47fc68b4d6f14dfabe6fcc43289a6ea93df135b","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48387}
+@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":115839,"sha256":"90feb08e960d6de611a29c312451f2c515cc9fbe7a818ed1d68d4a3c5caba9b5","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48387}
 package desktop
 
 import (
@@ -22605,6 +22607,7 @@ type ProjectOpenResult struct {
 }
 
 type ProjectVerification struct {
+	Current           *ProjectOpenResult             `json:"current,omitempty"`
 	APIVersion        string                         `json:"apiVersion"`
 	Kind              string                         `json:"kind"`
 	Status            string                         `json:"status"`
@@ -23157,7 +23160,12 @@ func (a *App) verifyProjectWithReaderLocked(reader interface {
 		a.current.Snapshot = verifiedSnapshot.Snapshot
 	}
 	a.current.Verification = evidence
-	return evidence
+	// Return the proof and its exact projection in one response. The cached
+	// verification metadata does not retain a second copy of the snapshot.
+	response := evidence
+	current := a.current
+	response.Current = &current
+	return response
 }
 
 func (a *App) setVerificationUnavailableLocked(err error, revision string) ProjectVerification {
@@ -23610,17 +23618,17 @@ func (a *App) pendingRuntimeSecretDescriptorsLocked(serviceDeployment string) ([
 	if a.current.Status != "OPEN" || a.current.Project == nil || a.current.Managed == nil || a.current.Catalog == nil || a.current.Catalog.Status != "READY" || serviceDeployment == "" {
 		return nil, errors.New("RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE")
 	}
-	deployment, exists := a.current.Managed.Deployments[serviceDeployment]
+	deployment, exists := a.current.Managed.Deployments[serviceDep
+@@END
+@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":115839,"sha256":"90feb08e960d6de611a29c312451f2c515cc9fbe7a818ed1d68d4a3c5caba9b5","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48091}
+loyment]
 	if !exists {
 		return nil, errors.New("RUNTIME_SECRET_DESCRIPTOR_NOT_FOUND")
 	}
 	var service *projectlifecycle.ProjectCatalogService
 	for index := range a.current.Catalog.Services {
 		if a.current.Catalog.Services[index].ID == deployment.ServiceType {
-			service = &a.current.Catalog.Ser
-@@END
-@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":115542,"sha256":"f9d1a28abc915f00411d1a21e47fc68b4d6f14dfabe6fcc43289a6ea93df135b","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48091}
-vices[index]
+			service = &a.current.Catalog.Services[index]
 			break
 		}
 	}
@@ -24603,16 +24611,16 @@ func (a *App) GetServiceConfigurationPreview() (result executionnode.ServiceConf
 	return preview, nil
 }
 
-func (a *App) failure(code string) ProjectOpenResult {
+func (a *App
+@@END
+@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":115839,"sha256":"90feb08e960d6de611a29c312451f2c515cc9fbe7a818ed1d68d4a3c5caba9b5","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":19361}
+) failure(code string) ProjectOpenResult {
 	return ProjectOpenResult{Status: "ERROR", Error: &ProjectOpenError{Code: code, Message: projectErrorMessage(code)}}
 }
 
 func projectErrorCode(err error) string {
 	var executionError *executionnode.ExecutionError
-	if errors.As(err, &executionError) && exe
-@@END
-@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":115542,"sha256":"f9d1a28abc915f00411d1a21e47fc68b4d6f14dfabe6fcc43289a6ea93df135b","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":19064}
-cutionError.Code != "" {
+	if errors.As(err, &executionError) && executionError.Code != "" {
 		return executionError.Code
 	}
 	if err == nil || err.Error() == "" {
