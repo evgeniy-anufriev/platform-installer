@@ -58038,7 +58038,7 @@ sudo find /var/lib/platform-installer/execution/runs \
   
 
 @@END
-@@PORTABLE {"path":"scripts/diagnose_vault_ca.sh","mode":493,"size":5198,"sha256":"f7f23209d55dfeb346588c305c1f1b8ab1a8cae0ba26482254984d8553705bc1","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5198}
+@@PORTABLE {"path":"scripts/diagnose_vault_ca.sh","mode":493,"size":5217,"sha256":"e3fe3abafe59f5612eeeb41f7db3994ead477ba34135a3104bfc0b553c2c6266","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5217}
 #!/usr/bin/env bash
 # Run on installer-04: sudo bash diagnose_vault_ca.sh
 # Read-only CA probe for the owner's isolated installer-5 project.
@@ -58127,17 +58127,18 @@ cat > "$WORK/probe.yml" <<'YAML'
       ansible.builtin.slurp:
         src: "{{ lookup('ansible.builtin.env', 'PLATFORM_CA_PROBE_SOURCE') }}"
       delegate_to: node1
+      connection: ssh
       become: true
       no_log: false
 YAML
 
 # Ordinary console output, without Installer event callbacks or persistent logs.
 # As in the controller, use only this run's approved host keys; never TOFU here.
-unset ANSIBLE_CALLBACK_PLUGINS ANSIBLE_CALLBACK_WHITELIST ANSIBLE_SKIP_TAGS ANSIBLE_RUN_TAGS
+unset ANSIBLE_CALLBACK_PLUGINS ANSIBLE_CALLBACK_WHITELIST ANSIBLE_CALLBACKS_ENABLED ANSIBLE_SKIP_TAGS ANSIBLE_RUN_TAGS
 unset ANSIBLE_SSH_COMMON_ARGS ANSIBLE_SSH_EXTRA_ARGS ANSIBLE_SSH_EXECUTABLE ANSIBLE_PRIVATE_KEY_FILE
 export ANSIBLE_CONFIG="$RUNTIME/ansible-core/ansible.cfg"
 export ANSIBLE_COLLECTIONS_PATH="$RUNTIME/ansible-core/collections"
-export ANSIBLE_STDOUT_CALLBACK=default ANSIBLE_CALLBACKS_ENABLED='' ANSIBLE_LOAD_CALLBACK_PLUGINS=0
+export ANSIBLE_STDOUT_CALLBACK=default ANSIBLE_LOAD_CALLBACK_PLUGINS=0
 export ANSIBLE_HOST_KEY_CHECKING=True ANSIBLE_SSH_HOST_KEY_CHECKING=True
 export ANSIBLE_SSH_ARGS="-F none -o UserKnownHostsFile=$RUN/known_hosts -o GlobalKnownHostsFile=none -o KnownHostsCommand=none -o UpdateHostKeys=no -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes"
 export ANSIBLE_LOCAL_TEMP="$WORK/local"
@@ -78642,7 +78643,7 @@ platform_vault_admin_token: ''
 platform_vault_bootstrap_output_dir: ''
 
 @@END
-@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/roles/application_provider/tasks/discover.yml","mode":420,"size":2941,"sha256":"0a78dfab7cb38b6b78234e2916520ae705e2189e455664b2361cdf3ccefbd0dc","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2941}
+@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/roles/application_provider/tasks/discover.yml","mode":420,"size":2959,"sha256":"4869edccf63275f3bfb1408ad013558f6e7102a12add2994a676caea416db2d1","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2959}
 ---
 - name: Однократное получение runtime-токена администратора провайдера
   platform.vault.application_credentials:
@@ -78655,6 +78656,7 @@ platform_vault_bootstrap_output_dir: ''
   ansible.builtin.slurp:
     src: "{{ platform_vault_application_provider.caSource }}"
   delegate_to: "{{ platform_vault_application_provider.caHost }}"
+  connection: ssh
   become: true
   register: application_vault_ca
   no_log: true
