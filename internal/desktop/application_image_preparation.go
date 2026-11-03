@@ -18,6 +18,18 @@ func (a *App) imagePreparationCredentialsLocked(scope executionnode.ImagePrepara
 	}
 	result.Approvals = approvals
 	if len(scope.Requirements) > 0 {
+		// Save revokes descriptor proof, not the project-bound pending values.
+		// Registry forms can also save before the first Core discovery. Reattest
+		// those values against the current Core set before checking this scope.
+		if a.runtimeSecretEvidenceDescriptorsLocked(scope.ProjectRevision) == nil {
+			descriptors := a.getRuntimeSecretDescriptorsLocked(true)
+			if descriptors.Status != "READY" {
+				if descriptors.Error != nil && descriptors.Error.Code != "" {
+					return result, errors.New(descriptors.Error.Code)
+				}
+				return result, errors.New("RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE")
+			}
+		}
 		evidence := a.runtimeSecretEvidence
 		if evidence == nil || evidence.projectID != scope.ProjectIdentity || evidence.projectRevision != scope.ProjectRevision || a.binding == nil || evidence.nodeID != a.binding.node.ID || !runtimeEvidenceMatchesExpected(evidence.runtime, a.binding.reader.runtimeRelease) {
 			return result, errors.New("RUNTIME_SECRET_DESCRIPTORS_STALE")
