@@ -1,4 +1,2060 @@
-@@PORTABLE {"path":"frontend/src/InstallationPage.tsx","mode":420,"size":90363,"sha256":"17ef91c4ed8cbce418e2f7c3313276e95c1842e7e71b855205dfef65f1a8ac0a","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":52106}
+@@PORTABLE {"path":"frontend/src/CertificatesPage.tsx","mode":420,"size":38024,"sha256":"cb5a98ea2d7c4cdffd880e3d0bacf4f135b80afe558d7578987ae7423cd1ff6c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":38024}
+import { useMemo, useState } from "react";
+import type {
+  OpenResult,
+  SessionCredentialStatus,
+  VerificationStatus,
+  VerifiedPKIView,
+} from "./backend";
+
+export type CertificateIntent =
+  | {
+      operation:
+        | "CreateCertificateAuthority"
+        | "UpdateCertificateAuthority"
+        | "CreateCertificateProfile"
+        | "UpdateCertificateProfile"
+        | "CreateTLSProfile"
+        | "UpdateTLSProfile"
+        | "CreateCertificateScope"
+        | "UpdateCertificateScope";
+      entityId: string;
+      entity: Record<string, unknown>;
+    }
+  | {
+      operation:
+        | "DeleteCertificateAuthority"
+        | "DeleteCertificateProfile"
+        | "DeleteTLSProfile"
+        | "DeleteCertificateScope";
+      entityId: string;
+    };
+
+type PKIKind = "authority" | "profile" | "tls" | "scope";
+type PKIEntity = Record<string, unknown>;
+type Rows = Record<string, PKIEntity>;
+export type CertificateSourceOptions = {
+  hosts: string[];
+  deployments: string[];
+  members: Array<{ deploymentId: string; memberId: string }>;
+};
+
+const labels: Record<PKIKind, string> = {
+  authority: "Управляемые центры сертификации",
+  profile: "Профили сертификатов",
+  tls: "Профили TLS",
+  scope: "Области применения сертификатов",
+};
+const kindOrder: PKIKind[] = ["authority", "profile", "tls", "scope"];
+const dependencyHints: Record<PKIKind, string> = {
+  authority: "Используется в профилях сертификатов.",
+  profile: "Ссылается на центр сертификации.",
+  tls: "Использует профиль сертификата.",
+  scope: "Тоже использует профиль сертификата.",
+};
+const operations: Record<
+  PKIKind,
+  {
+    create: CertificateIntent["operation"];
+    update: CertificateIntent["operation"];
+    remove: CertificateIntent["operation"];
+  }
+> = {
+  authority: {
+    create: "CreateCertificateAuthority",
+    update: "UpdateCertificateAuthority",
+    remove: "DeleteCertificateAuthority",
+  },
+  profile: {
+    create: "CreateCertificateProfile",
+    update: "UpdateCertificateProfile",
+    remove: "DeleteCertificateProfile",
+  },
+  tls: {
+    create: "CreateTLSProfile",
+    update: "UpdateTLSProfile",
+    remove: "DeleteTLSProfile",
+  },
+  scope: {
+    create: "CreateCertificateScope",
+    update: "UpdateCertificateScope",
+    remove: "DeleteCertificateScope",
+  },
+};
+
+function rowsFor(
+  kind: PKIKind,
+  managed: OpenResult["managed"],
+  intents: CertificateIntent[],
+): Rows {
+  const pki = managed?.pki;
+  const source =
+    kind === "authority"
+      ? pki?.authorities
+      : kind === "profile"
+        ? pki?.profiles
+        : kind === "tls"
+          ? pki?.tlsProfiles
+          : pki?.scopes;
+  const rows: Rows = { ...(source || {}) };
+  for (const intent of intents) {
+    const operation = operations[kind];
+    if (
+      (intent.operation === operation.create ||
+        intent.operation === operation.update) &&
+      "entity" in intent
+    )
+      rows[intent.entityId] = intent.entity;
+    if (intent.operation === operation.remove) delete rows[intent.entityId];
+  }
+  return rows;
+}
+
+const stringList = (value: unknown) =>
+  Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
+const listText = (value: unknown) => stringList(value).join(", ");
+const parseList = (value: string) =>
+  value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+const asRecord = (value: unknown): PKIEntity =>
+  value && typeof value === "object" && !Array.isArray(value)
+    ? (value as PKIEntity)
+    : {};
+
+function secretRefLabel(value: unknown) {
+  return typeof value === "string" && value.startsWith("runtime:")
+    ? "runtime:••••"
+    : "не задана";
+}
+
+export function CertificatesPage({
+  managed,
+  intents,
+  busy,
+  structuralDisabled,
+  commandCount,
+  sourceOptions,
+  verification,
+  verifiedPKI,
+  credentialStatus,
+  onAppend,
+  onSetPKIStorePassword,
+  onReview,
+  onDiscard,
+  onReturnToServices,
+}: {
+  managed: OpenResult["managed"];
+  intents: CertificateIntent[];
+  busy: boolean;
+  structuralDisabled: boolean;
+  commandCount: number;
+  sourceOptions: CertificateSourceOptions;
+  verification?: VerificationStatus;
+  verifiedPKI?: VerifiedPKIView;
+  credentialStatus?: SessionCredentialStatus | null;
+  onAppend: (intent: CertificateIntent) => Promise<boolean>;
+  onSetPKIStorePassword?: (value: string) => Promise<SessionCredentialStatus>;
+  onReview: () => void;
+  onDiscard: () => void;
+  onReturnToServices?: () => void;
+}) {
+  const [editor, setEditor] = useState<{ kind: PKIKind; id?: string } | null>(
+    null,
+  );
+  const [selectedKind, setSelectedKind] = useState<PKIKind>("authority");
+  const blocked = busy || structuralDisabled || commandCount >= 16;
+  const pkiPasswordPresent =
+    credentialStatus?.pkiStorePasswordStatus === "PRESENT";
+  const allRows = useMemo(
+    () => ({
+      authority: rowsFor("authority", managed, intents),
+      profile: rowsFor("profile", managed, intents),
+      tls: rowsFor("tls", managed, intents),
+      scope: rowsFor("scope", managed, intents),
+    }),
+    [managed, intents],
+  );
+  const remove = async (kind: PKIKind, entityId: string) => {
+    if (
+      await onAppend({
+        operation: operations[kind].remove as CertificateIntent["operation"],
+        entityId,
+      } as CertificateIntent)
+    )
+      setEditor(null);
+  };
+
+  return (
+    <section className="certificates-page">
+      <div className="title">
+        <div>
+          {onReturnToServices && (
+            <button className="outline" onClick={onReturnToServices}>
+              Вернуться к настройке сервиса
+            </button>
+          )}
+          <h1>Сертификаты</h1>
+          <p>
+            Желаемые параметры сертификатов проекта. Выпуск и применение
+            сертификатов выполняются отдельно.
+          </p>
+        </div>
+        <DraftActions
+          commandCount={commandCount}
+          blocked={blocked}
+          onReview={onReview}
+          onDiscard={onDiscard}
+        />
+      </div>
+      <section
+        className="certificate-dependency-guide"
+        aria-labelledby="certificate-dependency-heading"
+      >
+        <div>
+          <h2 id="certificate-dependency-heading">
+            Порядок настройки и зависимости
+          </h2>
+          <p>
+            Сначала центр и профиль сертификата; TLS-профиль и область
+            применения — независимые ветви.
+          </p>
+        </div>
+        <div
+          className="certificate-dependency-flow"
+          role="img"
+          aria-label="Центр сертификации ведёт к профилю сертификата; от него независимо зависят профиль TLS и область применения"
+        >
+          <div className="certificate-dependency-chain">
+            <span>1 · Центр сертификации</span>
+            <span aria-hidden="true">→</span>
+            <span>2 · Профиль сертификата</span>
+          </div>
+          <div className="certificate-dependency-branches">
+            <div>
+              <span aria-hidden="true">↗</span>
+              <span>3 · Профиль TLS</span>
+            </div>
+            <div>
+              <span aria-hidden="true">↘</span>
+              <span>4 · Область применения</span>
+            </div>
+          </div>
+        </div>
+      </section>
+      <div className="certificate-workspace">
+        <nav className="certificate-type-nav" aria-label="Разделы сертификатов">
+          {kindOrder.map((kind, index) => (
+            <button
+              key={kind}
+              type="button"
+              className={`certificate-type-option${
+                selectedKind === kind ? " selected" : ""
+              }`}
+              aria-label={labels[kind]}
+              aria-current={selectedKind === kind ? "page" : undefined}
+              onClick={() => setSelectedKind(kind)}
+            >
+              <span className="certificate-type-title">
+                <span className="certificate-type-step">{index + 1}</span>
+                <span>{labels[kind]}</span>
+                <span className="certificate-type-count">
+                  {Object.keys(allRows[kind]).length}
+                </span>
+              </span>
+              <small>{dependencyHints[kind]}</small>
+            </button>
+          ))}
+        </nav>
+        <article
+          className="card certificate-section"
+          aria-labelledby="selected-certificate-section"
+        >
+          <div className="section-head">
+            <div>
+              <h2 id="selected-certificate-section">{labels[selectedKind]}</h2>
+              <small>{sectionHint(selectedKind)}</small>
+            </div>
+            <button
+              className="outline"
+              disabled={blocked}
+              onClick={() => setEditor({ kind: selectedKind })}
+            >
+              Добавить
+            </button>
+          </div>
+          <CertificateRows
+            kind={selectedKind}
+            rows={allRows[selectedKind]}
+            disabled={blocked}
+            onEdit={(id) => setEditor({ kind: selectedKind, id })}
+            onDelete={remove}
+          />
+          {selectedKind === "tls" && pkiPasswordPresent && (
+            <p className="muted" role="status">
+              Пароль PKCS#12 сохранён в текущем сеансе. В проект он не записывается.
+            </p>
+          )}
+        </article>
+      </div>
+      <CertificateIdentities
+        verification={verification || { status: "UNVERIFIED" }}
+        view={verifiedPKI}
+      />
+      {editor && (
+        <CertificateDialog
+          key={`${editor.kind}:${editor.id || "new"}`}
+          kind={editor.kind}
+          entityId={editor.id}
+          entity={editor.id ? allRows[editor.kind][editor.id] : undefined}
+          authorityIds={Object.keys(allRows.authority).sort()}
+          profileIds={Object.keys(allRows.profile).sort()}
+          sourceOptions={sourceOptions}
+          disabled={blocked}
+          pkiPasswordPresent={pkiPasswordPresent}
+          onSetPKIStorePassword={onSetPKIStorePassword}
+          onClose={() => setEditor(null)}
+          onSubmit={async (entityId, entity) => {
+            const operation = editor.id
+              ? operations[editor.kind].update
+              : operations[editor.kind].create;
+            if (
+              await onAppend({
+                operation: operation as CertificateIntent["operation"],
+                entityId,
+                entity,
+              } as CertificateIntent)
+            )
+              setEditor(null);
+          }}
+        />
+      )}
+    </section>
+  );
+}
+
+function CertificateIdentities({
+  verification,
+  view,
+}: {
+  verification: VerificationStatus;
+  view?: VerifiedPKIView;
+}) {
+  if (verification.status !== "VERIFIED" || view?.status !== "CURRENT") return null;
+  return (
+    <article className="card certificate-verification">
+      <div className="section-head">
+        <div>
+          <h2>Имена сертификатов и SAN</h2>
+          <small>
+            Имена и SAN отображаются только по актуальным данным проверки Core.
+          </small>
+        </div>
+      </div>
+      <p className="muted">
+        Влияние виртуального IP поставщика определяет Core после сохранения и
+        проверки. Этот экран не выпускает и не перевыпускает сертификаты.
+      </p>
+      {view.identities?.length ? (
+        <div className="verified-identities">
+          {view.identities.map((identity) => (
+            <section key={identity.id} className="verified-identity">
+              <b>{identity.id}</b>
+              <small>
+                {identity.scope} · Профиль TLS: {identity.tlsProfileId}
+              </small>
+              <div>
+                <span>DNS: </span>
+                {identity.dnsNames.join(", ") || "—"}
+              </div>
+              <div>
+                <span>IP: </span>
+                {identity.ipAddresses.join(", ") || "—"}
+              </div>
+              <div>
+                <span>Потребители: </span>
+                {identity.consumers
+                  .map(
+                    (consumer) =>
+                      `${consumer.deploymentId}/${consumer.memberId} @ ${consumer.hostId}`,
+                  )
+                  .join(", ") || "—"}
+              </div>
+            </section>
+          ))}
+        </div>
+      ) : (
+        <p className="muted">
+          Core подтвердил проект; потребителей сертификатов нет.
+        </p>
+      )}
+    </article>
+  );
+}
+
+function sectionHint(kind: PKIKind) {
+  if (kind === "authority") return "Только управляемый центр сертификации.";
+  if (kind === "profile")
+    return "Центр сертификации, назначения ключа, правила SAN и параметры владельца.";
+  if (kind === "tls") return "Только ссылка на секрет, без самого пароля.";
+  return "Источники: серверы, сервисы, их экземпляры и явные DNS/IP.";
+}
+
+function DraftActions({
+  commandCount,
+  blocked,
+  onReview,
+  onDiscard,
+}: {
+  commandCount: number;
+  blocked: boolean;
+  onReview: () => void;
+  onDiscard: () => void;
+}) {
+  return (
+    <div className="actions">
+      <span className="muted">{commandCount} / 16 изменений</span>
+      {commandCount > 0 && (
+        <>
+          <button className="outline" disabled={blocked} onClick={onDiscard}>
+            Отменить изменения
+          </button>
+          <button disabled={blocked} onClick={onReview}>
+            Просмотреть изменения
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+function CertificateRows({
+  kind,
+  rows,
+  disabled,
+  onEdit,
+  onDelete,
+}: {
+  kind: PKIKind;
+  rows: Rows;
+  disabled: boolean;
+  onEdit: (id: string) => void;
+  onDelete: (kind: PKIKind, id: string) => Promise<void>;
+}) {
+  const values = Object.entries(rows).sort(([left], [right]) =>
+    left.localeCompare(right),
+  );
+  if (!values.length)
+    return <p className="muted">Нет сохранённых или черновых записей.</p>;
+  return (
+    <div className="certificate-rows">
+      {values.map(([id, entity]) => (
+        <div className="certificate-row" key={id}>
+          <div>
+            <b>{id}</b>
+            <small>{rowSummary(kind, entity)}</small>
+          </div>
+          <div className="actions">
+            <button
+              className="link"
+              disabled={disabled}
+              onClick={() => onEdit(id)}
+            >
+              Изменить
+            </button>
+            <button
+              className="link danger"
+              disabled={disabled}
+              onClick={() => void onDelete(kind, id)}
+            >
+              Удалить
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function rowSummary(kind: PKIKind, entity: PKIEntity) {
+  if (kind === "authority") return String(entity.commonName || "MANAGED");
+  if (kind === "profile") return `CA: ${String(entity.authorityRef || "—")}`;
+  if (kind === "tls")
+    return `Profile: ${String(entity.certificateProfileRef || "—")} · ${secretRefLabel(entity.storePasswordSecretRef)}`;
+  return `Profile: ${String(entity.profile || "—")} · ${Object.keys(asRecord(entity.sources)).length} sources`;
+}
+
+function CertificateDialog({
+  kind,
+  entityId,
+  entity,
+  authorityIds,
+  profileIds,
+  sourceOptions,
+  disabled,
+  pkiPasswordPresent,
+  onSetPKIStorePassword,
+  onClose,
+  onSubmit,
+}: {
+  kind: PKIKind;
+  entityId?: string;
+  entity?: PKIEntity;
+  authorityIds: string[];
+  profileIds: string[];
+  sourceOptions: CertificateSourceOptions;
+  disabled: boolean;
+  pkiPasswordPresent: boolean;
+  onSetPKIStorePassword?: (value: string) => Promise<SessionCredentialStatus>;
+  onClose: () => void;
+  onSubmit: (id: string, entity: PKIEntity) => Promise<void>;
+}) {
+  const existing = asRecord(entity);
+  const [id, setID] = useState(entityId || "");
+  const [displayName, setDisplayName] = useState(
+    String(existing.displayName || ""),
+  );
+  const [commonName, setCommonName] = useState(
+    String(existing.commonName || ""),
+  );
+  const [authorityRef, setAuthorityRef] = useState(
+    String(existing.authorityRef || authorityIds[0] || ""),
+  );
+  const [profileRef, setProfileRef] = useState(
+    String(
+      existing.certificateProfileRef || existing.profile || profileIds[0] || "",
+    ),
+  );
+  const [scope, setScope] = useState(String(existing.scope || ""));
+  const [secretInput, setSecretInput] = useState("");
+  const [keyAlgorithm, setKeyAlgorithm] = useState(
+    String(existing.keyAlgorithm || ""),
+  );
+  const [keySize, setKeySize] = useState(
+    existing.keySize === undefined ? "" : String(existing.keySize),
+  );
+  const [validityDays, setValidityDays] = useState(
+    existing.validityDays === undefined ? "" : String(existing.validityDays),
+  );
+  const [usages, setUsages] = useState(stringList(existing.usages));
+  const [usagesPresent, setUsagesPresent] = useState(
+    Object.hasOwn(existing, "usages"),
+  );
+  const [sanPolicy, setSanPolicy] = useState(asRecord(existing.sanPolicy));
+  const [subject, setSubject] = useState(asRecord(existing.subject));
+  const sources = asRecord(existing.sources);
+  const [hosts, setHosts] = useState(stringList(sources.hosts));
+  const [deployments, setDeployments] = useState(
+    stringList(sources.serviceDeployments),
+  );
+  const [members, setMembers] = useState(
+    (Array.isArray(sources.members) ? sources.members : []).flatMap((item) => {
+      const value = asRecord(item);
+      const deploymentId = value.deploymentId;
+      const memberId = value.memberId;
+      return typeof deploymentId === "string" && typeof memberId === "string"
+        ? [{ deploymentId, memberId }]
+        : [];
+    }),
+  );
+  const [dnsNames, setDnsNames] = useState(listText(sources.explicitDnsNames));
+  const [ipAddresses, setIPAddresses] = useState(
+    listText(sources.explicitIpAddresses),
+  );
+  const [error, setError] = useState("");
+  const tlsSettingsUnchanged =
+    kind === "tls" &&
+    !!entityId &&
+    Object.keys(existing).every((key) =>
+      ["certificateProfileRef", "storePasswordSecretRef", "scope"].includes(key),
+    ) &&
+    String(existing.certificateProfileRef || "") === profileRef &&
+    String(existing.storePasswordSecretRef || "") ===
+      "runtime:pki-store-password" &&
+    String(existing.scope || "") === scope;
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!id.trim()) return setError("Укажите ID записи.");
+    if (kind === "tls" && secretInput.length > 0) {
+      if (!onSetPKIStorePassword) {
+        setError("Не удалось сохранить пароль в текущем сеансе.");
+        return;
+      }
+      try {
+        await onSetPKIStorePassword(secretInput);
+        setSecretInput("");
+      } catch (reason) {
+        const code = reason instanceof Error ? reason.message : String(reason);
+        setError(
+          code === "PKI_STORE_PASSWORD_INPUT_INVALID"
+            ? "Пароль не соответствует допустимым ограничениям."
+            : code === "PKI_STORE_PASSWORD_UNAVAILABLE"
+              ? "Сначала сохраните учётные данные для выбранного узла выполнения."
+              : "Не удалось сохранить пароль в текущем сеансе.",
+        );
+        return;
+      }
+    }
+    const result = entityFor(kind, {
+      displayName,
+      commonName,
+      authorityRef,
+      profileRef,
+      scope,
+      keyAlgorithm,
+      keySize,
+      validityDays,
+      usages,
+      usagesPresent,
+      sanPolicy,
+      subject,
+      hosts,
+      deployments,
+      members,
+      dnsNames,
+      ipAddresses,
+    });
+    if (!result)
+      return setError("Проверьте поля области применения сертификатов.");
+    setError("");
+    if (tlsSettingsUnchanged) {
+      onClose();
+      return;
+    }
+    await onSubmit(id.trim(), result);
+  };
+  return (
+    <div className="modal" role="presentation">
+      <form className="card dialog certificate-dialog" onSubmit={submit}>
+        <h1>
+          {entityId ? "Изменить" : "Добавить"}: {labels[kind]}
+        </h1>
+        <label>
+          ID
+          <input
+            value={id}
+            disabled={!!entityId || disabled}
+            onChange={(event) => setID(event.target.value)}
+            autoFocus
+          />
+        </label>
+        {kind !== "tls" && (
+          <OptionalText
+            label="Отображаемое имя"
+            value={displayName}
+            onChange={setDisplayName}
+          />
+        )}
+        {kind === "authority" && (
+          <>
+            <label>
+              Общее имя (CN)
+              <input
+                value={commonName}
+                onChange={(event) => setCommonName(event.target.value)}
+                required
+              />
+            </label>
+            <OptionalNumber
+              label="Срок действия (дней)"
+              value={validityDays}
+              onChange={setValidityDays}
+            />
+          </>
+        )}
+        {kind === "profile" && (
+          <ProfileFields
+            authorityRef={authorityRef}
+            authorityIds={authorityIds}
+            onAuthorityRef={setAuthorityRef}
+            keyAlgorithm={keyAlgorithm}
+            onKeyAlgorithm={setKeyAlgorithm}
+            keySize={keySize}
+            onKeySize={setKeySize}
+            validityDays={validityDays}
+            onValidityDays={setValidityDays}
+            usages={usages}
+            onUsages={(value) => {
+              setUsagesPresent(true);
+              setUsages(value);
+            }}
+            sanPolicy={sanPolicy}
+            onSanPolicy={setSanPolicy}
+            subject={subject}
+            onSubject={setSubject}
+          />
+        )}
+        {kind === "tls" && (
+          <>
+            <ReferenceSelect
+              label="Профиль сертификата"
+              value={profileRef}
+              values={profileIds}
+              onChange={setProfileRef}
+            />
+            <label>
+              Область применения
+              <select
+                value={scope}
+                onChange={(event) => setScope(event.target.value)}
+              >
+                <option value="">Наследуется</option>
+                <option value="HOST">Сервер</option>
+                <option value="MEMBER">Экземпляр</option>
+                <option value="DEPLOYMENT">Развёртывание</option>
+              </select>
+            </label>
+            <label>
+              Пароль хранилищ PKCS#12
+              <input
+                type="password"
+                autoComplete="new-password"
+                value={secretInput}
+                onChange={(event) => setSecretInput(event.target.value)}
+                placeholder={
+                  pkiPasswordPresent
+                    ? "Сохранён в текущем сеансе; введите новый для замены"
+                    : "Введите пароль для хранилищ PKCS#12"
+                }
+                disabled={disabled}
+              />
+            </label>
+            <p className="muted" role="status">
+              {pkiPasswordPresent
+                ? "Пароль хранится только в текущем сеансе. Для замены введите новый; проект содержит только фиксированную ссылку на секрет."
+                : "Пароль сохранится только в текущем сеансе. Проект содержит только фиксированную ссылку на секрет."}
+            </p>
+          </>
+        )}
+        {kind === "scope" && (
+          <ScopeFields
+            profileRef={profileRef}
+            profileIds={profileIds}
+            onProfileRef={setProfileRef}
+            scope={scope}
+            onScope={setScope}
+            hosts={hosts}
+            onHosts={setHosts}
+            deployments={deployments}
+            onDeployments={setDeployments}
+            members={members}
+            onMembers={setMembers}
+            sourceOptions={sourceOptions}
+            dnsNames={dnsNames}
+            onDNSNames={setDnsNames}
+            ipAddresses={ipAddresses}
+            onIPAddresses={setIPAddresses}
+          />
+        )}
+        {error && <p className="field-error">{error}</p>}
+        <div className="actions">
+          <button type="button" className="outline" onClick={onClose}>
+            Отмена
+          </button>
+          <button disabled={disabled || (tlsSettingsUnchanged && !secretInput)} type="submit">
+            {tlsSettingsUnchanged && secretInput
+              ? "Сохранить пароль в сеансе"
+              : "Добавить в черновик"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function OptionalText({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label>
+      {label}
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder="Наследуется"
+      />
+    </label>
+  );
+}
+function OptionalNumber({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label>
+      {label}
+      <input
+        type="number"
+        min="1"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder="Наследуется"
+      />
+    </label>
+  );
+}
+function ReferenceSelect({
+  label,
+  value,
+  values,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  values: string[];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label>
+      {label}
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        required
+      >
+        <option value="">Выберите</option>
+        {values.map((item) => (
+          <option key={item}>{item}</option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function ProfileFields(props: {
+  authorityRef: string;
+  authorityIds: string[];
+  onAuthorityRef: (value: string) => void;
+  keyAlgorithm: string;
+  onKeyAlgorithm: (value: string) => void;
+  keySize: string;
+  onKeySize: (value: string) => void;
+  validityDays: string;
+  onValidityDays: (value: string) => void;
+  usages: string[];
+  onUsages: (value: string[]) => void;
+  sanPolicy: PKIEntity;
+  onSanPolicy: (value: PKIEntity) => void;
+  subject: PKIEntity;
+  onSubject: (value: PKIEntity) => void;
+}) {
+  const policyLabels: Record<string, string> = {
+    includeHostDns: "DNS-имена серверов",
+    includeHostIp: "IP-адреса серверов",
+    includeEndpointFqdns: "FQDN точек входа",
+    includeEndpointWildcard: "Wildcard-имена точек входа",
+    includeEndpointVip: "Виртуальные IP точек входа",
+  };
+  return (
+    <>
+      <ReferenceSelect
+        label="Центр сертификации"
+        value={props.authorityRef}
+        values={props.authorityIds}
+        onChange={props.onAuthorityRef}
+      />
+      <label>
+        Алгоритм ключа
+        <select
+          value={props.keyAlgorithm}
+          onChange={(event) => props.onKeyAlgorithm(event.target.value)}
+        >
+          <option value="">Наследуется</option>
+          <option>RSA</option>
+          <option>EC</option>
+        </select>
+      </label>
+      <OptionalNumber
+        label="Размер ключа"
+        value={props.keySize}
+        onChange={props.onKeySize}
+      />
+      <OptionalNumber
+        label="Срок действия (дней)"
+        value={props.validityDays}
+        onChange={props.onValidityDays}
+      />
+      <fieldset>
+        <legend>Назначение сертификата</legend>
+        {["serverAuth", "clientAuth"].map((usage) => (
+          <label key={usage}>
+            <input
+              type="checkbox"
+              checked={props.usages.includes(usage)}
+              onChange={(event) =>
+                props.onUsages(
+                  event.target.checked
+                    ? [...props.usages, usage]
+                    : props.usages.filter((item) => item !== usage),
+                )
+              }
+            />
+            {usage === "serverAuth"
+              ? "Серверная аутентификация"
+              : "Клиентская аутентификация"}
+          </label>
+        ))}
+      </fieldset>
+      <fieldset>
+        <legend>Переопределение правил SAN</legend>
+        {Object.keys(policyLabels).map((key) => (
+          <label key={key}>
+            {policyLabels[key]}
+            <select
+              aria-label={policyLabels[key]}
+              value={
+                typeof props.sanPolicy[key] === "boolean"
+                  ? String(props.sanPolicy[key])
+                  : ""
+              }
+              onChange={(event) => {
+                const next = { ...props.sanPolicy };
+                if (event.target.value === "") delete next[key];
+                else next[key] = event.target.value === "true";
+                props.onSanPolicy(next);
+              }}
+            >
+              <option value="">Наследуется</option>
+              <option value="true">Включено</option>
+              <option value="false">Выключено</option>
+            </select>
+          </label>
+        ))}
+      </fieldset>
+      <fieldset>
+        <legend>Переопределение полей субъекта</legend>
+        {["C", "ST", "L", "O", "OU"].map((key) => (
+          <label key={key}>
+            {key}
+            <input
+              value={String(props.subject[key] || "")}
+              onChange={(event) =>
+                props.onSubject({ ...props.subject, [key]: event.target.value })
+              }
+            />
+          </label>
+        ))}
+      </fieldset>
+    </>
+  );
+}
+
+function ScopeFields(props: {
+  profileRef: string;
+  profileIds: string[];
+  onProfileRef: (value: string) => void;
+  scope: string;
+  onScope: (value: string) => void;
+  hosts: string[];
+  onHosts: (value: string[]) => void;
+  deployments: string[];
+  onDeployments: (value: string[]) => void;
+  members: Array<{ deploymentId: string; memberId: string }>;
+  onMembers: (value: Array<{ deploymentId: string; memberId: string }>) => void;
+  sourceOptions: CertificateSourceOptions;
+  dnsNames: string;
+  onDNSNames: (value: string) => void;
+  ipAddresses: string;
+  onIPAddresses: (value: string) => void;
+}) {
+  return (
+    <>
+      <ReferenceSelect
+        label="Профиль сертификата"
+        value={props.profileRef}
+        values={props.profileIds}
+        onChange={props.onProfileRef}
+      />
+      <label>
+        Область применения
+        <select
+          value={props.scope}
+          onChange={(event) => props.onScope(event.target.value)}
+        >
+          <option value="">Наследуется</option>
+          <option value="HOST">Сервер</option>
+          <option value="MEMBER">Экземпляр</option>
+          <option value="DEPLOYMENT">Развёртывание</option>
+        </select>
+      </label>
+      <ReferenceChoices
+        label="Серверы"
+        values={props.sourceOptions.hosts}
+        selected={props.hosts}
+        onChange={props.onHosts}
+      />
+      <ReferenceChoices
+        label="Развёртывания"
+        values={props.sourceOptions.deployments}
+        selected={props.deployments}
+        onChange={props.onDeployments}
+      />
+      <MemberChoices
+        values={props.sourceOptions.members}
+        selected={props.members}
+        onChange={props.onMembers}
+      />
+      <OptionalText
+        label="Явные DNS-имена"
+        value={props.dnsNames}
+        onChange={props.onDNSNames}
+      />
+      <OptionalText
+        label="Явные IP-адреса"
+        value={props.ipAddresses}
+        onChange={props.onIPAddresses}
+      />
+    </>
+  );
+}
+
+function ReferenceChoices({
+  label,
+  values,
+  selected,
+  onChange,
+}: {
+  label: string;
+  values: string[];
+  selected: string[];
+  onChange: (value: string[]) => void;
+}) {
+  const options = [...new Set([...values, ...selected])].sort();
+  return (
+    <fieldset>
+      <legend>{label}</legend>
+      {!options.length && (
+        <small>Нет доступных записей в текущем черновике.</small>
+      )}
+      {options.map((value) => (
+        <label key={value}>
+          <input
+            type="checkbox"
+            checked={selected.includes(value)}
+            onChange={(event) =>
+              onChange(
+                event.target.checked
+                  ? [...selected, value]
+                  : selected.filter((item) => item !== value),
+              )
+            }
+          />
+          {value}
+        </label>
+      ))}
+    </fieldset>
+  );
+}
+
+function MemberChoices({
+  values,
+  selected,
+  onChange,
+}: {
+  values: Array<{ deploymentId: string; memberId: string }>;
+  selected: Array<{ deploymentId: string; memberId: string }>;
+  onChange: (value: Array<{ deploymentId: string; memberId: string }>) => void;
+}) {
+  const key = (value: { deploymentId: string; memberId: string }) =>
+    `${value.deploymentId}\u0000${value.memberId}`;
+  const options = [
+    ...new Map(
+      [...values, ...selected].map((value) => [key(value), value]),
+    ).values(),
+  ];
+  return (
+    <fieldset>
+      <legend>Экземпляры</legend>
+      {!options.length && (
+        <small>В текущем черновике нет размещённых экземпляров.</small>
+      )}
+      {options.map((value) => (
+        <label key={key(value)}>
+          <input
+            type="checkbox"
+            checked={selected.some((item) => key(item) === key(value))}
+            onChange={(event) =>
+              onChange(
+                event.target.checked
+                  ? [...selected, value]
+                  : selected.filter((item) => key(item) !== key(value)),
+              )
+            }
+          />
+          {value.deploymentId}/{value.memberId}
+        </label>
+      ))}
+    </fieldset>
+  );
+}
+
+function entityFor(
+  kind: PKIKind,
+  input: {
+    displayName: string;
+    commonName: string;
+    authorityRef: string;
+    profileRef: string;
+    scope: string;
+    keyAlgorithm: string;
+    keySize: string;
+    validityDays: string;
+    usages: string[];
+    usagesPresent: boolean;
+    sanPolicy: PKIEntity;
+    subject: PKIEntity;
+    hosts: string[];
+    deployments: string[];
+    members: Array<{ deploymentId: string; memberId: string }>;
+    dnsNames: string;
+    ipAddresses: string;
+  },
+): PKIEntity | null {
+  const optional = (value: string) => value.trim() || undefined;
+  const number = (value: string) => (value.trim() ? Number(value) : undefined);
+  if (kind === "authority")
+    return {
+      mode: "MANAGED",
+      commonName: input.commonName.trim(),
+      ...(optional(input.displayName) && {
+        displayName: optional(input.displayName),
+      }),
+      ...(number(input.validityDays) !== undefined && {
+        validityDays: number(input.validityDays),
+      }),
+    };
+  if (kind === "profile") {
+    const subject = Object.fromEntries(
+      Object.entries(input.subject).filter(([, value]) => String(value).trim()),
+    );
+    return {
+      authorityRef: input.authorityRef,
+      sanPolicy: input.sanPolicy,
+      ...(optional(input.displayName) && {
+        displayName: optional(input.displayName),
+      }),
+      ...(optional(input.keyAlgorithm) && {
+        keyAlgorithm: optional(input.keyAlgorithm),
+      }),
+      ...(number(input.keySize) !== undefined && {
+        keySize: number(input.keySize),
+      }),
+      ...(number(input.validityDays) !== undefined && {
+        validityDays: number(input.validityDays),
+      }),
+      ...(input.usagesPresent && { usages: input.usages }),
+      ...(Object.keys(subject).length && { subject }),
+    };
+  }
+  if (kind === "tls")
+    return {
+      certificateProfileRef: input.profileRef,
+      storePasswordSecretRef: "runtime:pki-store-password",
+      ...(optional(input.scope) && { scope: optional(input.scope) }),
+    };
+  const sources: PKIEntity = {};
+  const add = (key: string, values: string[]) => {
+    if (values.length) sources[key] = values;
+  };
+  add("hosts", input.hosts);
+  add("serviceDeployments", input.deployments);
+  if (input.members.length) sources.members = input.members;
+  add("explicitDnsNames", parseList(input.dnsNames));
+  add("explicitIpAddresses", parseList(input.ipAddresses));
+  return {
+    profile: input.profileRef,
+    sources,
+    ...(optional(input.displayName) && {
+      displayName: optional(input.displayName),
+    }),
+    ...(optional(input.scope) && { scope: optional(input.scope) }),
+  };
+}
+
+@@END
+@@PORTABLE {"path":"frontend/src/EntryPointsView.tsx","mode":420,"size":30818,"sha256":"baafa2fd5cfc6b3e6c405e76b3997b508f70b516d2013872f4c397d0b2c727c2","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":30818}
+import { useMemo, useState } from "react";
+import type { EndpointPreview, OpenResult, VerificationStatus } from "./backend";
+import type { DeploymentIntent } from "./TopologyPage";
+
+export type EndpointIntent =
+  | {
+      operation: "CreateEndpointGroup";
+      endpointGroupId: string;
+      endpointGroup: { address: { domain: string; wildcard: boolean } };
+    }
+  | {
+      operation: "UpdateEndpointGroup";
+      endpointGroupId: string;
+      endpointGroup: { address: { domain: string; wildcard: boolean } };
+    }
+  | { operation: "DeleteEndpointGroup"; endpointGroupId: string }
+  | {
+      operation: "SetServiceEndpointGroup";
+      deploymentId: string;
+      endpointGroupId: string;
+    }
+  | { operation: "ClearServiceEndpointGroup"; deploymentId: string };
+
+export type ProviderIntent =
+  | {
+      operation: "ReconcileEndpointProvider";
+      deploymentId: string;
+      endpointGroupId: string;
+      virtualRouterId: number;
+      virtualAddresses: Array<{ address: string; interface: string }>;
+    }
+  | { operation: "ClearEndpointProvider"; deploymentId: string };
+
+type EntryPointsIntent = EndpointIntent | ProviderIntent;
+
+type Group = {
+  id: string;
+  domain: string;
+  wildcard: boolean;
+  state?: "new" | "deleting";
+};
+type Deployment = {
+  id: string;
+  serviceType: string;
+  mode: string;
+  endpointGroup?: string;
+  endpointGroupRef?: string;
+  virtualRouterId?: number;
+  virtualAddresses?: Array<{ address: string; interface: string }>;
+  providerEditState?: "NONE" | "EDITABLE" | "INCOMPLETE" | "UNSUPPORTED";
+  state?: "new" | "deleting";
+};
+const idPattern = /^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$/;
+
+function finalGroups(
+  managed: OpenResult["managed"],
+  intents: EndpointIntent[],
+) {
+  const values = new Map<string, Group>();
+  for (const [id, group] of Object.entries(managed?.endpointGroups || {}))
+    values.set(id, { id, domain: group.domain, wildcard: group.wildcard });
+  for (const intent of intents) {
+    if (intent.operation === "CreateEndpointGroup")
+      values.set(intent.endpointGroupId, {
+        id: intent.endpointGroupId,
+        ...intent.endpointGroup.address,
+        state: "new",
+      });
+    if (intent.operation === "UpdateEndpointGroup") {
+      const current = values.get(intent.endpointGroupId);
+      if (current)
+        values.set(intent.endpointGroupId, {
+          ...current,
+          ...intent.endpointGroup.address,
+        });
+    }
+    if (intent.operation === "DeleteEndpointGroup") {
+      const current = values.get(intent.endpointGroupId);
+      if (current)
+        values.set(intent.endpointGroupId, { ...current, state: "deleting" });
+    }
+  }
+  return [...values.values()].sort((a, b) => a.id.localeCompare(b.id));
+}
+
+function finalDeployments(
+  managed: OpenResult["managed"],
+  deploymentIntents: DeploymentIntent[],
+  intents: EndpointIntent[],
+  providerIntents: ProviderIntent[],
+) {
+  const values = new Map<string, Deployment>();
+  for (const [id, item] of Object.entries(managed?.deployments || {}))
+    values.set(id, {
+      id,
+      serviceType: item.serviceType,
+      mode: item.mode,
+      endpointGroup: item.endpointGroup,
+      endpointGroupRef: item.endpointGroupRef,
+      virtualRouterId: item.virtualRouterId,
+      virtualAddresses: item.virtualAddresses,
+      providerEditState: item.providerEditState,
+    });
+  for (const intent of deploymentIntents) {
+    if (intent.operation === "CreateServiceDeployment")
+      values.set(intent.deploymentId, {
+        id: intent.deploymentId,
+        serviceType: intent.serviceType,
+        mode: intent.mode,
+        state: "new",
+      });
+    if (intent.operation === "DeleteServiceDeployment") {
+      const current = values.get(intent.deploymentId);
+      if (current)
+        values.set(intent.deploymentId, { ...current, state: "deleting" });
+    }
+  }
+  for (const intent of intents) {
+    if (intent.operation === "SetServiceEndpointGroup") {
+      const current = values.get(intent.deploymentId);
+      if (current)
+        values.set(intent.deploymentId, {
+          ...current,
+          endpointGroup: intent.endpointGroupId,
+        });
+    }
+    if (intent.operation === "ClearServiceEndpointGroup") {
+      const current = values.get(intent.deploymentId);
+      if (current)
+        values.set(intent.deploymentId, {
+          ...current,
+          endpointGroup: undefined,
+        });
+    }
+  }
+  for (const intent of providerIntents) {
+    const current = values.get(intent.deploymentId);
+    if (!current) continue;
+    if (intent.operation === "ReconcileEndpointProvider")
+      values.set(intent.deploymentId, {
+        ...current,
+        endpointGroupRef: intent.endpointGroupId,
+        virtualRouterId: intent.virtualRouterId,
+        virtualAddresses: intent.virtualAddresses,
+        providerEditState: "EDITABLE",
+      });
+    if (intent.operation === "ClearEndpointProvider")
+      values.set(intent.deploymentId, {
+        ...current,
+        endpointGroupRef: undefined,
+        virtualRouterId: undefined,
+        virtualAddresses: undefined,
+        providerEditState: "NONE",
+      });
+  }
+  return [...values.values()].sort((a, b) => a.id.localeCompare(b.id));
+}
+
+export function EntryPointsView({
+  managed,
+  catalog,
+  intents,
+  providerIntents,
+  deploymentIntents,
+  busy,
+  disabled,
+  commandCount,
+  onAppend,
+}: {
+  managed: OpenResult["managed"];
+  catalog: OpenResult["catalog"];
+  intents: EndpointIntent[];
+  providerIntents: ProviderIntent[];
+  deploymentIntents: DeploymentIntent[];
+  preview?: EndpointPreview;
+  verificationStatus: VerificationStatus["status"];
+  busy: boolean;
+  disabled: boolean;
+  commandCount: number;
+  onAppend: (intent: EntryPointsIntent) => Promise<boolean>;
+}) {
+  const [dialog, setDialog] = useState<{
+    mode: "add" | "edit";
+    group?: Group;
+  } | null>(null);
+  const [providerDialog, setProviderDialog] = useState<Deployment | null>(null);
+  const groups = useMemo(
+    () => finalGroups(managed, intents),
+    [managed, intents],
+  );
+  const deployments = useMemo(
+    () =>
+      finalDeployments(managed, deploymentIntents, intents, providerIntents),
+    [managed, deploymentIntents, intents, providerIntents],
+  );
+  const catalogReady = catalog?.status === "READY";
+  const limit = commandCount >= 16;
+  const groupLocked = (id: string) =>
+    intents.some(
+      (item) => "endpointGroupId" in item && item.endpointGroupId === id,
+    );
+  const deploymentLocked = (id: string) =>
+    intents.some((item) =>
+      item.operation === "SetServiceEndpointGroup" ||
+      item.operation === "ClearServiceEndpointGroup"
+        ? item.deploymentId === id
+        : false,
+    );
+  const eligible = (serviceType: string) =>
+    catalog?.services?.find((item) => item.id === serviceType)
+      ?.endpointConsumer === true;
+  const providerEligible = (serviceType: string) =>
+    catalog?.services?.find((item) => item.id === serviceType)
+      ?.endpointProvider === true;
+  const providerLocked = (id: string) =>
+    providerIntents.some((item) => item.deploymentId === id);
+  const providerDeployments = deployments.filter((item) =>
+    item.state === "deleting"
+      ? false
+      : catalogReady
+        ? providerEligible(item.serviceType)
+        : !!item.endpointGroupRef ||
+          item.providerEditState === "INCOMPLETE" ||
+          item.providerEditState === "UNSUPPORTED",
+  );
+  return (
+    <>
+      {providerIntents.length > 0 && (
+        <p className="entry-draft-notice" role="status">
+          Конфигурация provider изменена в черновике; влияние на PKI/SAN определяет только Core.
+        </p>
+      )}
+      <section className="title topology-title">
+        <div>
+          <h1>Точки входа</h1>
+          <p>
+            Группы адресов, назначения потребителей и параметры provider/VIP.
+          </p>
+          {commandCount > 0 && (
+            <p className="muted">
+              Черновик: {commandCount} из 16 · осталось {Math.max(0, 16 - commandCount)}
+            </p>
+          )}
+        </div>
+        <button
+          onClick={() => setDialog({ mode: "add" })}
+          disabled={busy || disabled || limit}
+        >
+          Добавить группу
+        </button>
+      </section>
+      <div className="entry-grid">
+        <section className="card entry-panel">
+          <h2 className="entry-panel-title">
+            <EntryPointIcon kind="groups" />
+            <span>Группы endpoint</span>
+          </h2>
+          {groups.length === 0 ? (
+            <p className="muted">Групп пока нет.</p>
+          ) : (
+            <div className="entry-list">
+              {groups.map((group) => (
+                <div key={group.id} className="entry-row">
+                  <div>
+                    <b>{group.id}</b>
+                    <span>
+                      {group.domain}
+                      {group.wildcard ? " · wildcard" : ""}
+                    </span>
+                    {group.state && (
+                      <small
+                        className={`entry-state-chip ${group.state === "new" ? "entry-state-chip--info" : "entry-state-chip--warning"}`}
+                      >
+                        <span aria-hidden="true">
+                          {group.state === "new" ? "+" : "!"}
+                        </span>
+                        {group.state === "new" ? "Новая" : "Будет удалена"}
+                      </small>
+                    )}
+                  </div>
+                  <div className="actions">
+                    <button
+                      className="outline"
+                      onClick={() => setDialog({ mode: "edit", group })}
+                      disabled={
+                        busy ||
+                        disabled ||
+                        limit ||
+                        !!group.state ||
+                        groupLocked(group.id)
+                      }
+                    >
+                      Изменить
+                    </button>
+                    <button
+                      className="outline danger"
+                      onClick={() =>
+                        onAppend({
+                          operation: "DeleteEndpointGroup",
+                          endpointGroupId: group.id,
+                        })
+                      }
+                      disabled={
+                        busy ||
+                        disabled ||
+                        limit ||
+                        !!group.state ||
+                        groupLocked(group.id)
+                      }
+                    >
+                      Удалить
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+        <section className="card entry-panel entry-consumers">
+          <h2 className="entry-panel-title">
+            <EntryPointIcon kind="consumers" />
+            <span>Назначения consumers</span>
+          </h2>
+          {deployments.length === 0 ? (
+            <p className="muted">Нет deployments.</p>
+          ) : (
+            <div className="entry-list">
+              {deployments
+                .filter((item) => item.state !== "deleting")
+                .map((deployment) => {
+                  const canSet =
+                    catalogReady && eligible(deployment.serviceType);
+                  const choices = groups.filter(
+                    (group) => !group.state || group.id === deployment.endpointGroup,
+                  );
+                  const assignmentStatus = !canSet
+                    ? {
+                        tone: "neutral",
+                        symbol: "·",
+                        label: catalogReady
+                          ? "Не поддерживает consumer"
+                          : "Каталог недоступен",
+                      }
+                    : deployment.endpointGroup
+                      ? {
+                          tone: "success",
+                          symbol: "✓",
+                          label: `Назначена: ${deployment.endpointGroup}`,
+                        }
+                      : {
+                          tone: "warning",
+                          symbol: "!",
+                          label: "Не назначена",
+                        };
+                  return (
+                    <div key={deployment.id} className="entry-row">
+                      <div>
+                        <b>{deployment.id}</b>
+                        <span>{deployment.serviceType}</span>
+                        <small
+                          className={`entry-state-chip entry-state-chip--${assignmentStatus.tone}`}
+                        >
+                          <span aria-hidden="true">{assignmentStatus.symbol}</span>
+                          {assignmentStatus.label}
+                        </small>
+                      </div>
+                      <div className="actions">
+                        <select
+                          aria-label={`Endpoint group for ${deployment.id}`}
+                          value={deployment.endpointGroup || ""}
+                          disabled={
+                            busy ||
+                            disabled ||
+                            limit ||
+                            deploymentLocked(deployment.id) ||
+                            !canSet
+                          }
+                          onChange={(event) => {
+                            if (event.target.value)
+                              void onAppend({
+                                operation: "SetServiceEndpointGroup",
+                                deploymentId: deployment.id,
+                                endpointGroupId: event.target.value,
+                              });
+                          }}
+                        >
+                          <option value="">Выберите группу</option>
+                          {choices.map((group) => (
+                            <option value={group.id} key={group.id}>
+                              {group.id}{group.state === "deleting" ? " · будет удалена" : ""}
+                            </option>
+                          ))}
+                        </select>
+                        {deployment.endpointGroup && (
+                          <button
+                            className="outline"
+                            onClick={() =>
+                              void onAppend({
+                                operation: "ClearServiceEndpointGroup",
+                                deploymentId: deployment.id,
+                              })
+                            }
+                            disabled={
+                              busy ||
+                              disabled ||
+                              limit ||
+                              deploymentLocked(deployment.id)
+                            }
+                          >
+                            Очистить
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          )}
+        </section>
+        <section className="card entry-panel">
+          <h2 className="entry-panel-title">
+            <EntryPointIcon kind="provider" />
+            <span>Provider / VIP</span>
+          </h2>
+          {providerDeployments.length === 0 ? (
+            <p className="muted">Нет доступных provider deployments.</p>
+          ) : (
+            <div className="entry-list">
+              {providerDeployments.map((deployment) => {
+                const supported = providerEligible(deployment.serviceType);
+                const readOnly = !catalogReady || !supported;
+                const canClear =
+                  !!deployment.endpointGroupRef &&
+                  !providerLocked(deployment.id);
+                const providerStatus =
+                  deployment.providerEditState === "INCOMPLETE"
+                    ? {
+                        tone: "danger",
+                        symbol: "!",
+                        label: "Неполная конфигурация",
+                      }
+                    : deployment.providerEditState === "UNSUPPORTED"
+                      ? {
+                          tone: "neutral",
+                          symbol: "·",
+                          label: "Только просмотр",
+                        }
+                      : deployment.endpointGroupRef
+                        ? {
+                            tone: "success",
+                            symbol: "✓",
+                            label: "Настроен",
+                          }
+                        : {
+                            tone: "warning",
+                            symbol: "!",
+                            label: "Не настроен",
+                          };
+                return (
+                  <div key={deployment.id} className="entry-row">
+                    <div>
+                      <b>{deployment.id}</b>
+                      <span>
+                        {deployment.endpointGroupRef
+                          ? `${deployment.endpointGroupRef} · VRID ${deployment.virtualRouterId || "—"}`
+                          : "Provider не настроен"}
+                      </span>
+                      <small
+                        className={`entry-state-chip entry-state-chip--${providerStatus.tone}`}
+                      >
+                        <span aria-hidden="true">{providerStatus.symbol}</span>
+                        {providerStatus.label}
+                      </small>
+                      {deployment.virtualAddresses?.map((address) => (
+                        <small key={`${address.address}-${address.interface}`}>
+                          {address.address} · {address.interface}
+                        </small>
+                      ))}
+                      {deployment.providerEditState === "INCOMPLETE" && (
+                        <small>
+                          Неполная конфигурация: завершите или очистите.
+                        </small>
+                      )}
+                      {deployment.providerEditState === "UNSUPPORTED" && (
+                        <small>
+                          Legacy-конфигурация вне безопасных границ редактора.
+                        </small>
+                      )}
+                      {!catalogReady && (
+                        <small>
+                          Каталог недоступен: редактирование выключено.
+                        </small>
+                      )}
+                      {catalogReady && !supported && (
+                        <small>Сервис не поддерживает endpoint provider.</small>
+                      )}
+                    </div>
+                    <div className="actions">
+                      <button
+                        className="outline"
+                        onClick={() => setProviderDialog(deployment)}
+                        disabled={
+                          busy ||
+                          disabled ||
+                          limit ||
+                          readOnly ||
+                          providerLocked(deployment.id)
+                        }
+                      >
+                        {deployment.providerEditState === "UNSUPPORTED"
+                          ? "Заменить"
+                          : "Настроить"}
+                      </button>
+                      <button
+                        className="outline danger"
+                        onClick={() =>
+                          void onAppend({
+                            operation: "ClearEndpointProvider",
+                            deploymentId: deployment.id,
+                          })
+                        }
+                        disabled={busy || disabled || limit || !canClear}
+                        title="Удаляет provider tuple из черновика. После сохранения Core потребует complete tuple или удаления deployment."
+                      >
+                        Очистить
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      </div>
+      {dialog && (
+        <EndpointGroupDialog
+          group={dialog.group}
+          busy={busy}
+          existing={new Set(groups.map((item) => item.id))}
+          onClose={() => setDialog(null)}
+          onAppend={async (intent) => {
+            const accepted = await onAppend(intent);
+            if (accepted) setDialog(null);
+            return accepted;
+          }}
+        />
+      )}
+      {providerDialog && (
+        <ProviderDialog
+          deployment={providerDialog}
+          groups={groups.filter((group) => !group.state)}
+          busy={busy}
+          onClose={() => setProviderDialog(null)}
+          onAppend={async (intent) => {
+            const accepted = await onAppend(intent);
+            if (accepted) setProviderDialog(null);
+            return accepted;
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+function EntryPointIcon({
+  kind,
+}: {
+  kind: "groups" | "consumers" | "provider";
+}) {
+  return (
+    <svg
+      className="entry-panel-icon"
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {kind === "groups" ? (
+        <>
+          <circle cx="4" cy="10" r="2" />
+          <circle cx="15.5" cy="4.5" r="2" />
+          <circle cx="15.5" cy="15.5" r="2" />
+          <path d="m6 9 7.5-3.5M6 11l7.5 3.5" />
+        </>
+      ) : kind === "consumers" ? (
+        <>
+          <path d="M10 3v5m0 0-5 5m5-5 5 5" />
+          <path d="M10 8v8m-2-2 2 2 2-2" />
+          <path d="m3 11 2 2 2-2m6 0 2 2 2-2" />
+        </>
+      ) : (
+        <>
+          <rect x="5" y="2.5" width="10" height="5" rx="1" />
+          <rect x="1.5" y="13" width="6" height="4.5" rx="1" />
+          <rect x="12.5" y="13" width="6" height="4.5" rx="1" />
+          <path d="M10 7.5v3M4.5 10.5h11m-11 0v2.5m11-2.5v2.5" />
+        </>
+      )}
+    </svg>
+  );
+}
+
+function EndpointGroupDialog({
+  group,
+  existing,
+  busy,
+  onClose,
+  onAppend,
+}: {
+  group?: Group;
+  existing: Set<string>;
+  busy: boolean;
+  onClose: () => void;
+  onAppend: (intent: EndpointIntent) => Promise<boolean>;
+}) {
+  const [id, setID] = useState(group?.id || "");
+  const [domain, setDomain] = useState(group?.domain || "");
+  const [wildcard, setWildcard] = useState(group?.wildcard || false);
+  const [error, setError] = useState("");
+  const submit = async () => {
+    const normalizedID = id.trim();
+    const normalizedDomain = domain.trim().toLowerCase();
+    if (!group && (!idPattern.test(normalizedID) || existing.has(normalizedID)))
+      return setError("Введите уникальный ID группы.");
+    if (
+      !normalizedDomain ||
+      normalizedDomain.length > 253 ||
+      !normalizedDomain.includes(".")
+    )
+      return setError("Введите корректный домен.");
+    const intent: EndpointIntent = group
+      ? {
+          operation: "UpdateEndpointGroup",
+          endpointGroupId: group.id,
+          endpointGroup: { address: { domain: normalizedDomain, wildcard } },
+        }
+      : {
+          operation: "CreateEndpointGroup",
+          endpointGroupId: normalizedID,
+          endpointGroup: { address: { domain: normalizedDomain, wildcard } },
+        };
+    await onAppend(intent);
+  };
+  return (
+    <div className="modal" role="dialog" aria-modal="true">
+      <section className="card dialog">
+        <h2>{group ? "Изменить группу" : "Добавить группу"}</h2>
+        {!group && (
+          <label>
+            ID
+            <input
+              value={id}
+              onChange={(event) => setID(event.target.value)}
+              maxLength={128}
+            />
+          </label>
+        )}
+        <label>
+          Домен
+          <input
+            value={domain}
+            onChange={(event) => setDomain(event.target.value)}
+            maxLength={253}
+          />
+        </label>
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={wildcard}
+            onChange={(event) => setWildcard(event.target.checked)}
+          />
+          Wildcard
+        </label>
+        {error && <p className="field-error">{error}</p>}
+        <div className="actions">
+          <button className="outline" onClick={onClose} disabled={busy}>
+            Отмена
+          </button>
+          <button onClick={() => void submit()} disabled={busy}>
+            {group ? "Сохранить" : "Добавить"}
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ProviderDialog({
+  deployment,
+  groups,
+  busy,
+  onClose,
+  onAppend,
+}: {
+  deployment: Deployment;
+  groups: Group[];
+  busy: boolean;
+  onClose: () => void;
+  onAppend: (intent: ProviderIntent) => Promise<boolean>;
+}) {
+  const [endpointGroupId, setEndpointGroupID] = useState(
+    deployment.endpointGroupRef || "",
+  );
+  const [vrid, setVRID] = useState(
+    deployment.virtualRouterId ? String(deployment.virtualRouterId) : "",
+  );
+  const [addresses, setAddresses] = useState(
+    deployment.providerEditState === "UNSUPPORTED"
+      ? [{ address: "", interface: "" }]
+      : deployment.virtualAddresses?.length
+        ? deployment.virtualAddresses
+        : [{ address: "", interface: "" }],
+  );
+  const [error, setError] = useState("");
+  const submit = async () => {
+    const normalized = addresses.map((item) => ({
+      address: item.address.trim(),
+      interface: item.interface.trim(),
+    }));
+    const parsedVRID = Number(vrid);
+    const ipv4 =
+      /^(?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
+    if (
+      !endpointGroupId ||
+      !Number.isInteger(parsedVRID) ||
+      parsedVRID < 1 ||
+      parsedVRID > 255
+    )
+      return setError("Выберите группу и укажите VRID от 1 до 255.");
+    if (
+      normalized.length === 0 ||
+      normalized.length > 64 ||
+      normalized.some(
+        (item) =>
+          !ipv4.test(item.address) ||
+          !item.interface ||
+          item.interface.length > 128,
+      ) ||
+      new Set(
+        normalized.map((item) => `${item.address}\\u0000${item.interface}`),
+      ).size !== normalized.length
+    )
+      return setError(
+        "Добавьте до 64 уникальных IPv4-адресов с interface длиной не более 128 символов.",
+      );
+    await onAppend({
+      operation: "ReconcileEndpointProvider",
+      deploymentId: deployment.id,
+      endpointGroupId,
+      virtualRouterId: parsedVRID,
+      virtualAddresses: normalized,
+    });
+  };
+  return (
+    <div
+      className="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Настроить provider"
+    >
+      <section className="card dialog provider-dialog">
+        <h2>Provider: {deployment.id}</h2>
+        <p className="muted">
+          Настройка сохраняется в общий черновик и будет проверена Core только
+          после сохранения.
+        </p>
+        <label>
+          Endpoint group
+          <select
+            value={endpointGroupId}
+            onChange={(event) => setEndpointGroupID(event.target.value)}
+          >
+            <option value="">Выберите группу</option>
+            {groups.map((group) => (
+              <option key={group.id} value={group.id}>
+                {group.id}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          VRID
+          <input
+            value={vrid}
+            inputMode="numeric"
+            onChange={(event) => setVRID(event.target.value)}
+          />
+        </label>
+        <h3>Virtual IP addresses</h3>
+        <div className="provider-addresses">
+          {addresses.map((item, index) => (
+            <div className="provider-address" key={index}>
+              <input
+                aria-label={`IPv4 ${index + 1}`}
+                value={item.address}
+                placeholder="192.0.2.42"
+                onChange={(event) =>
+                  setAddresses((current) =>
+                    current.map((row, rowIndex) =>
+                      rowIndex === index
+                        ? { ...row, address: event.target.value }
+                        : row,
+                    ),
+                  )
+                }
+              />
+              <input
+                aria-label={`Interface ${index + 1}`}
+                value={item.interface}
+                placeholder="eth0"
+                maxLength={128}
+                onChange={(event) =>
+                  setAddresses((current) =>
+                    current.map((row, rowIndex) =>
+                      rowIndex === index
+                        ? { ...row, interface: event.target.value }
+                        : row,
+                    ),
+                  )
+                }
+              />
+              <button
+                className="outline danger"
+                aria-label={`Удалить адрес ${index + 1}`}
+                onClick={() =>
+                  setAddresses((current) =>
+                    current.filter((_, rowIndex) => rowIndex !== index),
+                  )
+                }
+                disabled={addresses.length === 1}
+              >
+                Удалить
+              </button>
+            </div>
+          ))}
+        </div>
+        <button
+          className="outline"
+          onClick={() =>
+            setAddresses((current) =>
+              current.length < 64
+                ? [...current, { address: "", interface: "" }]
+                : current,
+            )
+          }
+          disabled={addresses.length >= 64}
+        >
+          Добавить адрес
+        </button>
+        {error && <p className="field-error">{error}</p>}
+        <div className="actions">
+          <button className="outline" onClick={onClose} disabled={busy}>
+            Отмена
+          </button>
+          <button onClick={() => void submit()} disabled={busy}>
+            Применить к черновику
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+@@END
+@@PORTABLE {"path":"frontend/src/InstallationPage.tsx","mode":420,"size":90349,"sha256":"9719de637a93944ee3a5e35e100387cb4cb908aa43bdd03135ff3411f1e7deb4","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":52106}
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type {
   InstallationEventView,
@@ -1136,7 +3192,7 @@ function PlanStage({
           </p>
         )}
         <button onClick={onCreatePlan} disabled={busy}>
-          {busy ? "Подготовка образов и плана…" : "Сформировать свежий план"}
+          {busy ? "Формирование плана…" : "Сформировать свежий план"}
         </button>
       </article>
     );
@@ -1408,10 +3464,10 @@ function PlanStage({
             open={!outputPasswordPresent}
           >
             <summary>
-            
+              Защищё
 @@END
-@@PORTABLE {"path":"frontend/src/InstallationPage.tsx","mode":420,"size":90363,"sha256":"17ef91c4ed8cbce418e2f7c3313276e95c1842e7e71b855205dfef65f1a8ac0a","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":38257}
-  Защищённые выходные файлы
+@@PORTABLE {"path":"frontend/src/InstallationPage.tsx","mode":420,"size":90349,"sha256":"9719de637a93944ee3a5e35e100387cb4cb908aa43bdd03135ff3411f1e7deb4","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":38243}
+нные выходные файлы
               {outputPasswordPresent
                 ? " · пароль задан"
                 : " · требуется пароль"}
@@ -25047,7 +27103,7 @@ func WailsLifecycle(app *App) (func(context.Context), func(context.Context)) {
 }
 
 @@END
-@@PORTABLE {"path":"internal/desktop/application_image_preparation.go","mode":420,"size":3817,"sha256":"a9637c0e9454a4bb0305f573e5a18edb56b3d8f3f5dbfe2b5b96d2015e77465c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3817}
+@@PORTABLE {"path":"internal/desktop/application_image_preparation.go","mode":420,"size":3867,"sha256":"6ed5bfc76fcd6a89400e373002568a5796ae3ee87a2ab23a5c6ad66aae2a3f14","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3867}
 package desktop
 
 import (
@@ -25118,7 +27174,10 @@ func (a *App) imagePreparationCredentialsLocked(scope executionnode.ImagePrepara
 		}
 	}
 	err = a.secrets.WithTargetCredential(binding, func(credential runtimesecret.TargetCredential) error {
-		payload := executionnode.TargetCredentialLeasePayload{Username: credential.Username, SudoPassword: string(credential.SudoSecret), RuntimeSecretValues: map[string]string{}}
+		payload := executionnode.TargetCredentialLeasePayload{Username: credential.Username, SudoPassword: string(credential.SudoSecret)}
+		if len(scope.Requirements) > 0 {
+			payload.RuntimeSecretValues = map[string]string{}
+		}
 		if credential.SSHMode == runtimesecret.SSHPassword {
 			payload.Password = string(credential.SSHSecret)
 		} else {
@@ -32915,7 +34974,7 @@ func (s *AcquisitionService) AcquireExecutionRuntime(ctx context.Context, node N
 }
 
 @@END
-@@PORTABLE {"path":"internal/executionnode/application_image.go","mode":420,"size":2072,"sha256":"dcde034b1b19c89d7f4902ba7bed18af0e629bfc73f9062032b86a8e2d01a588","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2072}
+@@PORTABLE {"path":"internal/executionnode/application_image.go","mode":420,"size":3133,"sha256":"cdc8504cdb4b017352be18ad80873e205a6a26db0a33949a7e29255b80224011","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3133}
 package executionnode
 
 import (
@@ -32937,6 +34996,7 @@ type ApplicationImageRequirement struct {
 	InstanceID         string   `json:"instanceId"`
 	Hosts              []string `json:"hosts"`
 	SourcePolicy       string   `json:"sourcePolicy"`
+	Resolution         string   `json:"resolution,omitempty"`
 	Platform           struct {
 		OS           string `json:"os"`
 		Architecture string `json:"architecture"`
@@ -32944,13 +35004,23 @@ type ApplicationImageRequirement struct {
 	} `json:"platform"`
 }
 
-func decodeApplicationImage(raw any) (ApplicationImageRequirement, error) {
+func decodeApplicationImage(raw any, deferred ...bool) (ApplicationImageRequirement, error) {
 	var image ApplicationImageRequirement
 	data, err := json.Marshal(raw)
 	if err == nil && len(data) <= 64*1024 {
 		d := json.NewDecoder(bytes.NewReader(data))
 		d.DisallowUnknownFields()
-		if d.Decode(&image) == nil && d.Decode(new(any)) == io.EOF && image.ID != "" && len(image.ID) <= 256 && image.Name != "" && len(image.Name) <= 512 && image.ArtifactType == "container-image" && validSHA256(image.ImageID) && image.LocalReference == "platform-application:sha256-"+strings.TrimPrefix(image.ImageID, "sha256:") && runtimeSecretDeploymentPattern.MatchString(image.ApplicationLibrary) && len(image.ApplicationLibrary) <= 128 && runtimeSecretDeploymentPattern.MatchString(image.InstanceID) && len(image.InstanceID) <= 128 && image.SourcePolicy == "REPOSITORY_THEN_OFFLINE" && image.Platform.OS == "linux" && (image.Platform.Architecture == "amd64" || image.Platform.Architecture == "arm64") && len(image.Platform.Variant) <= 32 {
+		if len(deferred) > 0 && deferred[0] {
+			if d.Decode(&image) == nil && d.Decode(new(any)) == io.EOF && image.Resolution == "AT_EXECUTION" && image.ImageID == "" && image.LocalReference == "" && image.Platform.OS == "" && image.Platform.Architecture == "" && image.Platform.Variant == "" && image.ID != "" && len(image.ID) <= 256 && image.Name != "" && len(image.Name) <= 512 && image.ArtifactType == "container-image" && runtimeSecretDeploymentPattern.MatchString(image.ApplicationLibrary) && len(image.ApplicationLibrary) <= 128 && runtimeSecretDeploymentPattern.MatchString(image.InstanceID) && len(image.InstanceID) <= 128 && image.SourcePolicy == "REPOSITORY_THEN_OFFLINE" {
+				if value, ok := raw.(map[string]any); ok {
+					if hosts, valid := decodePlanStringList(value["hosts"], 256); valid && len(hosts) > 0 {
+						return image, nil
+					}
+				}
+			}
+			return ApplicationImageRequirement{}, errors.New("DEPLOYMENT_PLAN_REQUIREMENT_INVALID")
+		}
+		if d.Decode(&image) == nil && d.Decode(new(any)) == io.EOF && image.ID != "" && len(image.ID) <= 256 && image.Name != "" && len(image.Name) <= 512 && image.ArtifactType == "container-image" && image.Resolution == "" && validSHA256(image.ImageID) && image.LocalReference == "platform-application:sha256-"+strings.TrimPrefix(image.ImageID, "sha256:") && runtimeSecretDeploymentPattern.MatchString(image.ApplicationLibrary) && len(image.ApplicationLibrary) <= 128 && runtimeSecretDeploymentPattern.MatchString(image.InstanceID) && len(image.InstanceID) <= 128 && image.SourcePolicy == "REPOSITORY_THEN_OFFLINE" && image.Platform.OS == "linux" && (image.Platform.Architecture == "amd64" || image.Platform.Architecture == "arm64") && len(image.Platform.Variant) <= 32 {
 			if hosts, ok := raw.(map[string]any); ok {
 				if _, valid := decodePlanStringList(hosts["hosts"], 256); valid {
 					return image, nil
@@ -32962,7 +35032,7 @@ func decodeApplicationImage(raw any) (ApplicationImageRequirement, error) {
 }
 
 @@END
-@@PORTABLE {"path":"internal/executionnode/application_image_preparation.go","mode":420,"size":6478,"sha256":"2ad733541bc4ffe0f61c5f7ccbb465a91731e77b02365b85b738d35112b31712","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":6478}
+@@PORTABLE {"path":"internal/executionnode/application_image_preparation.go","mode":420,"size":7517,"sha256":"bcefb600fc82574bb7c0832cd441b7f850c37680fd96b4ea88ec16d7de9962c1","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7517}
 package executionnode
 
 import (
@@ -32973,6 +35043,17 @@ import (
 )
 
 const imagePlanRequestVersion = "platform.installer/execution-runtime/v1alpha6"
+const availabilityPlanRequestVersion = "platform.installer/execution-runtime/v1alpha9"
+
+func availabilityPlanCapabilitySupported(c map[string]any) bool {
+	feature, ok := c["applicationImagePlanning"].(map[string]any)
+	return ok && c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha15" &&
+		contains(c["deploymentPlanRequestVersions"], availabilityPlanRequestVersion) &&
+		closedKeys(feature, "protocol", "planContract", "manifestContract") &&
+		feature["protocol"] == "RegistryAvailabilityPlanning/v1alpha1" &&
+		feature["planContract"] == "platform.installer/plan/v1alpha12" &&
+		feature["manifestContract"] == "platform.installer/execution-manifest/v1alpha9"
+}
 
 type ImagePreparationScope struct {
 	ProjectIdentity          string                           `json:"projectIdentity"`
@@ -32993,6 +35074,9 @@ type ImageTargetConnection struct {
 }
 
 func (t OpenSSHTransport) imagePlanningCapabilities(ctx context.Context, node Node, fallback string) (map[string]any, error) {
+	if capability, err := t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": availabilityPlanRequestVersion, "operation": "GetCapabilities"}); err == nil && availabilityPlanCapabilitySupported(capability) {
+		return capability, nil
+	}
 	if len(serviceSelection(ctx)) > 0 {
 		return t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": serviceSelectionRequestVersion, "operation": "GetCapabilities"})
 	}
@@ -33038,11 +35122,11 @@ func (t OpenSSHTransport) prepareApplicationImages(ctx context.Context, node Nod
 	for _, key := range []string{"executionMode", "deploymentOrder", "skipInfrastructureVerify"} {
 		describe[key] = request[key]
 	}
-	if request["apiVersion"] == selectionPlanRequestVersion || request["apiVersion"] == serviceSelectionRequestVersion {
+	if request["apiVersion"] == selectionPlanRequestVersion || request["apiVersion"] == serviceSelectionRequestVersion || request["apiVersion"] == availabilityPlanRequestVersion {
 		describe["skipApplicationLibraries"] = request["skipApplicationLibraries"]
 		describe["applicationLibraryOrder"] = request["applicationLibraryOrder"]
 	}
-	if request["apiVersion"] == serviceSelectionRequestVersion {
+	if request["apiVersion"] == serviceSelectionRequestVersion || request["apiVersion"] == availabilityPlanRequestVersion {
 		describe["skipServiceDeployments"] = request["skipServiceDeployments"]
 	}
 	response, err := t.runtimeProtocol(ctx, node, describe)
@@ -35201,7 +37285,7 @@ func newStartAttemptID() (string, error) {
 func NewRequestID() (string, error) { return newStartAttemptID() }
 
 @@END
-@@PORTABLE {"path":"internal/executionnode/infrastructure_verification.go","mode":420,"size":11505,"sha256":"cdc685b8f1a9108f46631df0634bb5ef4eba3b7a0ae7890a5078119845a34cc7","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":11505}
+@@PORTABLE {"path":"internal/executionnode/infrastructure_verification.go","mode":420,"size":12316,"sha256":"cc4efa38eb1e6aa98ca3daebe3e3e5ee5250320b9eae475a90c0f2c6aa78cbbf","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":12316}
 package executionnode
 
 import (
@@ -35289,6 +37373,19 @@ func decodeInfrastructureVerification(raw any) (*InfrastructureVerification, err
 }
 
 func b0PlanCapabilitySupported(c map[string]any) bool {
+	if c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha15" {
+		if !availabilityPlanCapabilitySupported(c) {
+			return false
+		}
+		prefix := make(map[string]any, len(c))
+		for key, value := range c {
+			if key != "applicationImagePlanning" {
+				prefix[key] = value
+			}
+		}
+		prefix["apiVersion"] = "platform.installer/execution-capabilities/v1alpha14"
+		return b0PlanCapabilitySupported(prefix)
+	}
 	if c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha14" {
 		if !serviceSelectionCapabilitySupported(c) {
 			return false
@@ -35421,6 +37518,18 @@ func (t OpenSSHTransport) buildDeploymentPlanForMode(ctx context.Context, node N
 			return DeploymentPlan{}, errors.New("SERVICE_SELECTION_RUNTIME_UNSUPPORTED")
 		}
 		request["apiVersion"] = serviceSelectionRequestVersion
+		request["skipServiceDeployments"] = selectedServices
+	}
+	if availabilityPlanCapabilitySupported(c) && libraryOrder != nil {
+		request["apiVersion"] = availabilityPlanRequestVersion
+		request["skipInfrastructureVerify"] = skip
+		if skipped == nil {
+			skipped = []string{}
+		}
+		if selectedServices == nil {
+			selectedServices = []string{}
+		}
+		request["skipApplicationLibraries"] = skipped
 		request["skipServiceDeployments"] = selectedServices
 	}
 	return t.buildDeploymentPlanRequest(ctx, node, projectRoot, request)
@@ -37875,7 +39984,7 @@ fi
 `
 
 @@END
-@@PORTABLE {"path":"internal/executionnode/runtime_protocol.go","mode":420,"size":69916,"sha256":"9ba96967637f6da153d6b647a40fa47d2f14bb64159ba82c00785c61eac825a8","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"internal/executionnode/runtime_protocol.go","mode":420,"size":71434,"sha256":"2c62c95654662244d42832d1c51f218388e57bcab76b53924c0c0f7a46c45cbe","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
 package executionnode
 
 // Typed access to the fixed UI-BE-04C runtime protocol.  This is transport
@@ -38155,7 +40264,7 @@ func (t OpenSSHTransport) buildDeploymentPlanRequest(ctx context.Context, node N
 		return DeploymentPlan{}, err
 	}
 	request["operation"], request["runId"], request["project"] = "BuildDeploymentPlan", runID, "/var/lib/platform-installer/execution/runs/"+runID+"/project"
-	if request["apiVersion"] == imagePlanRequestVersion || (request["apiVersion"] == selectionPlanRequestVersion || request["apiVersion"] == serviceSelectionRequestVersion) {
+	if request["apiVersion"] == availabilityPlanRequestVersion || request["apiVersion"] == imagePlanRequestVersion || (request["apiVersion"] == selectionPlanRequestVersion || request["apiVersion"] == serviceSelectionRequestVersion) {
 		if err := t.prepareApplicationImages(ctx, node, request); err != nil {
 			return DeploymentPlan{}, err
 		}
@@ -38168,11 +40277,15 @@ func (t OpenSSHTransport) buildDeploymentPlanRequest(ctx context.Context, node N
 	if !ok {
 		return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
 	}
+	if (value["apiVersion"] == "platform.installer/plan/v1alpha12") != (request["apiVersion"] == availabilityPlanRequestVersion) ||
+		request["apiVersion"] == availabilityPlanRequestVersion && value["imageResolution"] != "AT_EXECUTION" {
+		return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
+	}
 	postInstallSupported := false
-	if value["apiVersion"] == "platform.installer/plan/v1alpha9" || (value["apiVersion"] == "platform.installer/plan/v1alpha10" || value["apiVersion"] == "platform.installer/plan/v1alpha11") {
+	if value["apiVersion"] == "platform.installer/plan/v1alpha9" || (value["apiVersion"] == "platform.installer/plan/v1alpha10" || (value["apiVersion"] == "platform.installer/plan/v1alpha11" || value["apiVersion"] == "platform.installer/plan/v1alpha12")) {
 		capability, probeErr := t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": request["apiVersion"], "operation": "GetCapabilities"})
 		postInstallSupported = probeErr == nil && postInstallCapabilitySupported(capability)
-		if (value["apiVersion"] == "platform.installer/plan/v1alpha10" || value["apiVersion"] == "platform.installer/plan/v1alpha11") && !applicationProgressCapabilitySupported(capability) {
+		if (value["apiVersion"] == "platform.installer/plan/v1alpha10" || (value["apiVersion"] == "platform.installer/plan/v1alpha11" || value["apiVersion"] == "platform.installer/plan/v1alpha12")) && !applicationProgressCapabilitySupported(capability) {
 			return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
 		}
 		if !postInstallSupported {
@@ -38185,18 +40298,25 @@ func (t OpenSSHTransport) buildDeploymentPlanRequest(ctx context.Context, node N
 	if request["apiVersion"] == "platform.installer/execution-runtime/v1alpha5" && (value["apiVersion"] != "platform.installer/plan/v1alpha6" || value["skipInfrastructureVerify"] != request["skipInfrastructureVerify"] || value["executionMode"] != request["executionMode"]) {
 		return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
 	}
-	if request["apiVersion"] == imagePlanRequestVersion && ((value["apiVersion"] != "platform.installer/plan/v1alpha7" && !((value["apiVersion"] == "platform.installer/plan/v1alpha9" || (value["apiVersion"] == "platform.installer/plan/v1alpha10" || value["apiVersion"] == "platform.installer/plan/v1alpha11")) && postInstallSupported)) || value["skipInfrastructureVerify"] != request["skipInfrastructureVerify"] || value["executionMode"] != request["executionMode"]) {
+	if request["apiVersion"] == imagePlanRequestVersion && ((value["apiVersion"] != "platform.installer/plan/v1alpha7" && !((value["apiVersion"] == "platform.installer/plan/v1alpha9" || (value["apiVersion"] == "platform.installer/plan/v1alpha10" || (value["apiVersion"] == "platform.installer/plan/v1alpha11" || value["apiVersion"] == "platform.installer/plan/v1alpha12"))) && postInstallSupported)) || value["skipInfrastructureVerify"] != request["skipInfrastructureVerify"] || value["executionMode"] != request["executionMode"]) {
 		return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
 	}
 	plan, err := decodeDeploymentPlan(value)
 	if err != nil {
 		return DeploymentPlan{}, err
 	}
+	if request["apiVersion"] == availabilityPlanRequestVersion {
+		libraries, _ := request["skipApplicationLibraries"].([]string)
+		services, _ := request["skipServiceDeployments"].([]string)
+		if value["executionMode"] != request["executionMode"] || value["skipInfrastructureVerify"] != request["skipInfrastructureVerify"] || !sameLibrarySelection(libraries, plan.SkipApplicationLibraries) || !sameLibrarySelection(services, plan.SkipServiceDeployments) {
+			return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
+		}
+	}
 	if request["apiVersion"] == selectionPlanRequestVersion || request["apiVersion"] == serviceSelectionRequestVersion {
 		requested, _ := request["skipApplicationLibraries"].([]string)
 		requested = slices.Clone(requested)
 		slices.Sort(requested)
-		if (value["apiVersion"] != "platform.installer/plan/v1alpha8" && !((value["apiVersion"] == "platform.installer/plan/v1alpha9" || (value["apiVersion"] == "platform.installer/plan/v1alpha10" || value["apiVersion"] == "platform.installer/plan/v1alpha11")) && postInstallSupported)) || value["executionMode"] != request["executionMode"] || value["skipInfrastructureVerify"] != request["skipInfrastructureVerify"] || !slices.Equal(requested, plan.SkipApplicationLibraries) {
+		if (value["apiVersion"] != "platform.installer/plan/v1alpha8" && !((value["apiVersion"] == "platform.installer/plan/v1alpha9" || (value["apiVersion"] == "platform.installer/plan/v1alpha10" || (value["apiVersion"] == "platform.installer/plan/v1alpha11" || value["apiVersion"] == "platform.installer/plan/v1alpha12"))) && postInstallSupported)) || value["executionMode"] != request["executionMode"] || value["skipInfrastructureVerify"] != request["skipInfrastructureVerify"] || !slices.Equal(requested, plan.SkipApplicationLibraries) {
 			return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
 		}
 	}
@@ -38825,7 +40945,10 @@ func decodeEventPage(response map[string]any, runID string, afterSequence, limit
 		}
 		if rawError, present := value["error"].(map[string]any); present {
 			if rawDiagnostic, exists := rawError["diagnosticRef"]; exists {
-				text, valid := rawDiagnostic.(string)
+				text, valid := rawD
+@@END
+@@PORTABLE {"path":"internal/executionnode/runtime_protocol.go","mode":420,"size":71434,"sha256":"2c62c95654662244d42832d1c51f218388e57bcab76b53924c0c0f7a46c45cbe","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":23434}
+iagnostic.(string)
 				if !valid || text == "" {
 					return ExecutionEventPage{}, errExecutionEventResponseInvalid
 				}
@@ -38858,10 +40981,7 @@ func decodeEventPage(response map[string]any, runID string, afterSequence, limit
 	next, nextOK := nextRaw.(float64)
 	more, moreOK := moreRaw.(bool)
 	if !nextOK || next < 0 || next != float64(int(next)) || !moreOK || len(result) > limit {
-		return
-@@END
-@@PORTABLE {"path":"internal/executionnode/runtime_protocol.go","mode":420,"size":69916,"sha256":"9ba96967637f6da153d6b647a40fa47d2f14bb64159ba82c00785c61eac825a8","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":21916}
- ExecutionEventPage{}, errExecutionEventsResponseInvalid
+		return ExecutionEventPage{}, errExecutionEventsResponseInvalid
 	}
 	page.NextSequence, page.HasMore = int(next), more
 	if len(result) > 0 && page.NextSequence != result[len(result)-1].Sequence {
@@ -38944,7 +41064,7 @@ func validEventCode(value string) bool {
 }
 func decodeDeploymentPlan(value map[string]any) (DeploymentPlan, error) {
 	plan := DeploymentPlan{}
-	if value["apiVersion"] == "platform.installer/plan/v1alpha11" {
+	if value["apiVersion"] == "platform.installer/plan/v1alpha11" || value["apiVersion"] == "platform.installer/plan/v1alpha12" && value["serviceExecutionScope"] != nil {
 		values, ok := value["skipServiceDeployments"].([]any)
 		if !ok || len(values) > 256 {
 			return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
@@ -38959,7 +41079,7 @@ func decodeDeploymentPlan(value map[string]any) (DeploymentPlan, error) {
 			plan.SkipServiceDeployments = append(plan.SkipServiceDeployments, id)
 		}
 	}
-	if value["apiVersion"] == "platform.installer/plan/v1alpha8" || (value["apiVersion"] == "platform.installer/plan/v1alpha9" || (value["apiVersion"] == "platform.installer/plan/v1alpha10" || value["apiVersion"] == "platform.installer/plan/v1alpha11")) {
+	if value["apiVersion"] == "platform.installer/plan/v1alpha8" || (value["apiVersion"] == "platform.installer/plan/v1alpha9" || (value["apiVersion"] == "platform.installer/plan/v1alpha10" || (value["apiVersion"] == "platform.installer/plan/v1alpha11" || value["apiVersion"] == "platform.installer/plan/v1alpha12"))) {
 		values, ok := value["skipApplicationLibraries"].([]any)
 		if !ok {
 			return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
@@ -38972,7 +41092,7 @@ func decodeDeploymentPlan(value map[string]any) (DeploymentPlan, error) {
 			plan.SkipApplicationLibraries = append(plan.SkipApplicationLibraries, id)
 		}
 	}
-	if value["apiVersion"] == "platform.installer/plan/v1alpha7" || (value["apiVersion"] == "platform.installer/plan/v1alpha8" || (value["apiVersion"] == "platform.installer/plan/v1alpha9" || (value["apiVersion"] == "platform.installer/plan/v1alpha10" || value["apiVersion"] == "platform.installer/plan/v1alpha11"))) {
+	if value["apiVersion"] == "platform.installer/plan/v1alpha7" || (value["apiVersion"] == "platform.installer/plan/v1alpha8" || (value["apiVersion"] == "platform.installer/plan/v1alpha9" || (value["apiVersion"] == "platform.installer/plan/v1alpha10" || (value["apiVersion"] == "platform.installer/plan/v1alpha11" || value["apiVersion"] == "platform.installer/plan/v1alpha12")))) {
 		skip, ok := value["skipInfrastructureVerify"].(bool)
 		if !ok || skip && value["executionMode"] != string(ApplicationLibrariesOnly) {
 			return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
@@ -38985,7 +41105,7 @@ func decodeDeploymentPlan(value map[string]any) (DeploymentPlan, error) {
 		}
 		plan.SkipInfrastructureVerify = true
 	}
-	if value["apiVersion"] == "platform.installer/plan/v1alpha5" || value["apiVersion"] == "platform.installer/plan/v1alpha6" || value["apiVersion"] == "platform.installer/plan/v1alpha7" || (value["apiVersion"] == "platform.installer/plan/v1alpha8" || (value["apiVersion"] == "platform.installer/plan/v1alpha9" || (value["apiVersion"] == "platform.installer/plan/v1alpha10" || value["apiVersion"] == "platform.installer/plan/v1alpha11"))) {
+	if value["apiVersion"] == "platform.installer/plan/v1alpha5" || value["apiVersion"] == "platform.installer/plan/v1alpha6" || value["apiVersion"] == "platform.installer/plan/v1alpha7" || (value["apiVersion"] == "platform.installer/plan/v1alpha8" || (value["apiVersion"] == "platform.installer/plan/v1alpha9" || (value["apiVersion"] == "platform.installer/plan/v1alpha10" || (value["apiVersion"] == "platform.installer/plan/v1alpha11" || value["apiVersion"] == "platform.installer/plan/v1alpha12")))) {
 		mode, ok := value["executionMode"].(string)
 		plan.ExecutionMode = ExecutionMode(mode)
 		if !ok || !plan.ExecutionMode.valid() {
@@ -39035,7 +41155,7 @@ func decodeDeploymentPlan(value map[string]any) (DeploymentPlan, error) {
 				return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
 			}
 			if item["artifactType"] == "container-image" {
-				image, err := decodeApplicationImage(item)
+				image, err := decodeApplicationImage(item, value["apiVersion"] == "platform.installer/plan/v1alpha12")
 				if err != nil {
 					return DeploymentPlan{}, err
 				}
@@ -40169,7 +42289,7 @@ func validNode(node Node) error {
 }
 
 @@END
-@@PORTABLE {"path":"internal/executionnode/service_selection.go","mode":420,"size":1137,"sha256":"3a2ca8ca74018015bed124f46c6d442c2f7c5ca57b1b7bf0a7e72ca089de46e6","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1137}
+@@PORTABLE {"path":"internal/executionnode/service_selection.go","mode":420,"size":1215,"sha256":"871fe6c35758c07a8f6cb6c05741ba82568fd124b3ee75984858dcfdc4fb7611","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1215}
 package executionnode
 
 import (
@@ -40191,7 +42311,7 @@ func serviceSelection(ctx context.Context) []string {
 }
 func serviceSelectionCapabilitySupported(c map[string]any) bool {
 	feature, ok := c["serviceSelection"].(map[string]any)
-	return ok && c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha14" &&
+	return ok && (c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha14" || c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha15") &&
 		contains(c["deploymentPlanRequestVersions"], serviceSelectionRequestVersion) &&
 		closedKeys(feature, "protocol", "planContract", "manifestContract") &&
 		feature["protocol"] == "ServiceSelection/v1alpha1" &&
@@ -119431,40 +121551,4 @@ import _ "embed"
 //go:embed ipc_websocket.js
 var WebsocketIPC []byte
 
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/frontend/runtime/ipc_websocket.js","mode":420,"size":669198,"sha256":"3c3b999dbfdb0c430590bee44684d5b533794894be3528078a8263bc03a2077e","index":0,"count":14,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
-(()=>{function zt(e){console.log("%c wails dev %c "+e+" ","background: #aa0000; color: #fff; border-radius: 3px 0px 0px 3px; padding: 1px; font-size: 0.7rem","background: #009900; color: #fff; border-radius: 0px 3px 3px 0px; padding: 1px; font-size: 0.7rem")}typeof window<"u"&&((window.__svelte??={}).v??=new Set).add("5");var V=!1,Ue=!1,Ne=!1;function Fn(){Ue=!0}Fn();var ze={};var k=Symbol(),we=Symbol("filename");var Cr="http://www.w3.org/1999/xhtml";var qt=!0;var Pn=globalThis.process?.env?.NODE_ENV,l=Pn&&!Pn.toLowerCase().startsWith("prod");var qe=Array.isArray,Bn=Array.prototype.indexOf,Ae=Array.prototype.includes,kr=Array.from,Nr=Object.keys,U=Object.defineProperty,ue=Object.getOwnPropertyDescriptor;var Rr=Object.prototype,Hn=Array.prototype,Dt=Object.getPrototypeOf,Dr=Object.isExtensible;function Ir(e){return typeof e=="function"}var I=()=>{};function Kt(e){for(var t=0;t<e.length;t++)e[t]()}function Mr(){var e,t,r=new Promise((n,o)=>{e=n,t=o});return{promise:r,resolve:e,reject:t}}var Q=Symbol("$state"),Wt=Symbol("legacy props");var Jt=Symbol("proxy path"),Or=Symbol("attributes"),Lr=Symbol("class"),Fr=Symbol("style"),Pr=Symbol("text");var Br=Symbol("hmr anchor"),tt=new class extends Error{name="StaleReactionError";message="The reaction that called `getAbortSignal()` was re-run or destroyed"},Vn=!!globalThis.document?.contentType&&globalThis.document.contentType.includes("xml");var Xt=3,Se=8;function Yn(e){if(l){let t=new Error(`invariant_violation
-An invariant violation occurred, meaning Svelte's internal assumptions were flawed. This is a bug in Svelte, not your app \u2014 please open an issue at https://github.com/sveltejs/svelte, citing the following message: "${e}"
-https://svelte.dev/e/invariant_violation`);throw t.name="Svelte error",t}else throw new Error("https://svelte.dev/e/invariant_violation")}function Gn(){if(l){let e=new Error(`derived_references_self
-A derived value cannot reference itself recursively
-https://svelte.dev/e/derived_references_self`);throw e.name="Svelte error",e}else throw new Error("https://svelte.dev/e/derived_references_self")}function Un(){if(l){let e=new Error(`effect_update_depth_exceeded
-Maximum update depth exceeded. This typically indicates that an effect reads and writes the same piece of state
-https://svelte.dev/e/effect_update_depth_exceeded`);throw e.name="Svelte error",e}else throw new Error("https://svelte.dev/e/effect_update_depth_exceeded")}function zn(){if(l){let e=new Error(`hydration_failed
-Failed to hydrate the application
-https://svelte.dev/e/hydration_failed`);throw e.name="Svelte error",e}else throw new Error("https://svelte.dev/e/hydration_failed")}function qn(e){if(l){let t=new Error(`rune_outside_svelte
-The \`${e}\` rune is only available inside \`.svelte\` and \`.svelte.js/ts\` files
-https://svelte.dev/e/rune_outside_svelte`);throw t.name="Svelte error",t}else throw new Error("https://svelte.dev/e/rune_outside_svelte")}function Kn(){if(l){let e=new Error("state_descriptors_fixed\nProperty descriptors defined on `$state` objects must contain `value` and always be `enumerable`, `configurable` and `writable`.\nhttps://svelte.dev/e/state_descriptors_fixed");throw e.name="Svelte error",e}else throw new Error("https://svelte.dev/e/state_descriptors_fixed")}function Wn(){if(l){let e=new Error("state_prototype_fixed\nCannot set prototype of `$state` object\nhttps://svelte.dev/e/state_prototype_fixed");throw e.name="Svelte error",e}else throw new Error("https://svelte.dev/e/state_prototype_fixed")}function Jn(){if(l){let e=new Error("state_unsafe_mutation\nUpdating state inside `$derived(...)`, `$inspect(...)` or a template expression is forbidden. If the value should not be reactive, declare it without `$state`\nhttps://svelte.dev/e/state_unsafe_mutation");throw e.name="Svelte error",e}else throw new Error("https://svelte.dev/e/state_unsafe_mutation")}function Xn(){if(l){let e=new Error("svelte_boundary_reset_onerror\nA `<svelte:boundary>` `reset` function cannot be called while an error is still being handled\nhttps://svelte.dev/e/svelte_boundary_reset_onerror");throw e.name="Svelte error",e}else throw new Error("https://svelte.dev/e/svelte_boundary_reset_onerror")}var rt="font-weight: bold",nt="font-weight: normal";function Zn(e){l?console.warn(`%c[svelte] await_reactivity_loss
-%cDetected reactivity loss when reading \`${e}\`. This happens when state is read in an async function after an earlier \`await\`
-https://svelte.dev/e/await_reactivity_loss`,rt,nt):console.warn("https://svelte.dev/e/await_reactivity_loss")}function Qn(){l?console.warn(`%c[svelte] derived_inert
-%cReading a derived belonging to a now-destroyed effect may result in stale values
-https://svelte.dev/e/derived_inert`,rt,nt):console.warn("https://svelte.dev/e/derived_inert")}function yt(e){l?console.warn(`%c[svelte] hydration_mismatch
-%c${e?`Hydration failed because the initial UI does not match what was rendered on the server. The error occurred near ${e}`:"Hydration failed because the initial UI does not match what was rendered on the server"}
-https://svelte.dev/e/hydration_mismatch`,rt,nt):console.warn("https://svelte.dev/e/hydration_mismatch")}function eo(){l?console.warn(`%c[svelte] lifecycle_double_unmount
-%cTried to unmount a component that was not mounted
-https://svelte.dev/e/lifecycle_double_unmount`,rt,nt):console.warn("https://svelte.dev/e/lifecycle_double_unmount")}function Zt(e){l?console.warn(`%c[svelte] state_proxy_equality_mismatch
-%cReactive \`$state(...)\` proxies and the values they proxy have different identities. Because of this, comparisons with \`${e}\` will produce unexpected results
-https://svelte.dev/e/state_proxy_equality_mismatch`,rt,nt):console.warn("https://svelte.dev/e/state_proxy_equality_mismatch")}function to(){l?console.warn(`%c[svelte] state_proxy_unmount
-%cTried to unmount a state proxy, rather than a component
-https://svelte.dev/e/state_proxy_unmount`,rt,nt):console.warn("https://svelte.dev/e/state_proxy_unmount")}function ro(){l?console.warn("%c[svelte] svelte_boundary_reset_noop\n%cA `<svelte:boundary>` `reset` function only resets the boundary the first time it is called\nhttps://svelte.dev/e/svelte_boundary_reset_noop",rt,nt):console.warn("https://svelte.dev/e/svelte_boundary_reset_noop")}var y=!1;function z(e){y=e}var b;function M(e){if(e===null)throw yt(),ze;return b=e}function ee(){return M(ae(b))}function Hr(e=1){if(y){for(var t=e,r=b;t--;)r=ae(r);b=r}}function Ke(e=!0){for(var t=0,r=b;;){if(r.nodeType===Se){var n=r.data;if(n==="]"){if(t===0)return r;t-=1}else(n==="["||n==="[!"||n[0]==="["&&!isNaN(Number(n.slice(1))))&&(t+=1)}var o=ae(r);e&&r.remove(),r=o}}function Qt(e){if(!e||e.nodeType!==Se)throw yt(),ze;return e.data}function Vr(e){return e===this.v}function er(e,t){return e!=e?t==t:e!==t||e!==null&&typeof e=="object"||typeof e=="function"}function Yr(e){return!er(e,this.v)}var Lt=null;function te(e,t){return e.label=t,rr(e.v,t),e}function rr(e,t){return e?.[Jt]?.(t),e}function De(e){let t=new Error,r=mi();return r.length===0?null:(r.unshift(`
-`),U(t,"stack",{value:r.join(`
-`)}),U(t,"name",{value:e}),t)}function mi(){let e=Error.stackTraceLimit;Error.stackTraceLimit=1/0;let t=new Error().stack;if(Error.stackTraceLimit=e,!t)return[];let r=t.split(`
-`),n=[];for(let o=0;o<r.length;o++){let i=r[o],s=i.replaceAll("\\","/");if(i.trim()!=="Error"){if(i.includes("validate_each_keys"))return[];s.includes("svelte/src/internal")||s.includes("node_modules/.vite")||n.push(i)}}return n}function oo(e,t){if(!l)throw new Error("invariant(...) was not guarded by if (DEV)");e||Yn(t)}var E=null;function ot(e){E=e}var Be=null;function nr(e){Be=e}var $e=null;function or(e){$e=e}function jr(e,t=!1,r){E={p:E,i:!1,c:null,e:null,s:e,x:null,r:h,l:Ue&&!t?{s:null,u:null,$:[]}:null},l&&(E.function=r,$e=r)}function Gr(e){var t=E,r=t.e;if(r!==null){t.e=null;for(var n of r)so(n)}return e!==void 0&&(t.x=e),t.i=!0,E=t.p,l&&($e=E?.function??null),e??{}}function He(){return!Ue||E!==null&&E.l===null}var it=[];function ao(){var e=it;it=[],Kt(e)}function j(e){if(it.length===0&&!st){var t=it;queueMicrotask(()=>{t===it&&ao()})}it.push(e)}function fo(){for(;it.length>0;)ao()}var Ur=new WeakMap;function ir(e){var t=h;if(t===null)return g.f|=8388608,e;if(l&&e instanceof Error&&!Ur.has(e)&&Ur.set(e,hi(e,t)),(t.f&32768)===0&&(t.f&4)===0)throw l&&!t.parent&&e instanceof Error&&lo(e),e;Ie(e,t)}function Ie(e,t){for(;t!==null;){if((t.f&128)!==0){if((t.f&32768)===0)throw e;try{t.b.error(e);return}catch(r){e=r}}t=t.parent}throw l&&e instanceof Error&&lo(e),e}function hi(e,t){let r=ue(e,"message");if(!(r&&!r.configurable)){for(var n=Pt?"  ":"	",o=`
-${n}in ${t.fn?.name||"<unknown>"}`,i=t.ctx;i!==null;)o+=`
-${n}in ${i.function?.[we].split("/").pop()}`,i=i.p;return{message:e.message+`
-${o}
-`,stack:e.stack?.split(`
-`).filter(s=>!s.includes("svelte/src/internal")).join(`
-`)}}}function lo(e){let t=Ur.get(e);t&&(U(e,"message",{value:t.message}),U(e,"stack",{value:t.stack}))}var vi=-7169;function T(e,t){e.f=e.f&vi|t}function xt(e){(e.f&512)!==0||e.deps===null?T(e,1024):T(e,4096)}function co(e){if(e!==null)for(let t of e)(t.f&2)===0||(t.f&65536)===0||(t.f^=65536,co(t.deps))}function sr(e,t,r){(e.f&2048)!==0?t.add(e):(e.f&4096)!==0&&r.add(e),co(e.deps),T(e,1024)}function ar(e,t,r){if(e==null)return t(void 0),r&&r(void 0),I;let n=R(()=>e.subscribe(t,r));return n.unsubscribe?()=>n.unsubscribe():n}var wt=[];function fr(e,t=I){let r=null,n=new Set;function o(a){if(er(e,a)&&(e=a,r)){let f=!wt.length;for(let u of n)u[1](),wt.push(u,e);if(f){for(let u=0;u<wt.length;u+=2)wt[u][0](wt[u+1]);wt.length=0}}}function i(a){o(a(e))}function s(a,f=I){let u=[a,f];return n.add(u),n.size===1&&(r=t(o,i)||I),a(e),()=>{n.delete(u),n.size===0&&r&&(r(),r=null)}}return{set:o,update:i,subscribe:s}}function lr(e){let t;return ar(e,r=>t=r)(),t}var uo=!1;var zr=Symbol();function qr(e,t,r){let n=r[t]??={store:null,source:at(void 0),unsubscribe:I};if(l&&(n.source.label=t),n.store!==e&&!(zr in r))if(n.unsubscribe(),n.store=e??null,e==null)n.source.v=void 0,n.unsubscribe=I;else{var o=!0;n.unsubscribe=ar(e,i=>{o?n.source.v=i:K(n.source,i)}),o=!1}return e&&zr in r?lr(e):C(n.source)}function Kr(){let e={};function t(){W(()=>{for(var r in e)e[r].unsubscribe();U(e,zr,{enumerable:!1,value:!0})})}return[e,t]}var cr=null,Tt=null,x=null,At=null,P=null,Xr=null,st=!1,Wr=!1,ft=null,Bt=null,po=0,Jr=new Set,yi=1,de=class e{id=yi++;#e=!1;linked=!0;#t=null;#r=null;async_deriveds=new Map;current=new Map;previous=new Map;unblocked=new Set;#f=new Set;#n=new Set;#i=new Set;#o=0;#s=new Map;#p=null;#a=[];#_=[];#d=new Set;#c=new Set;#u=new Map;#l=new Set;is_fork=!1;#v=!1;#w(){if(this.is_fork)return!0;for(let n of this.#s.keys()){for(var t=n,r=!1;t.parent!==null;){if(this.#u.has(t)){r=!0;break}t=t.parent}if(!r)return!0}return!1}skip_effect(t){this.#u.has(t)||this.#u.set(t,{d:[],m:[]}),this.#l.delete(t)}unskip_effect(t,r=n=>this.schedule(n)){var n=this.#u.get(t);if(n){this.#u.delete(t);for(var o of n.d)T(o,2048),r(o);for(o of n.m)T(o,4096),r(o)}this.#l.add(t)}#h(){if(this.#e=!0,po++>1e3&&(this.#x(),xi()),l)for(let f of this.current.keys())Jr.add(f);if(!this.#w()){for(let f of this.#d)this.#c.delete(f),T(f,2048),this.schedule(f);for(let f of this.#c)T(f,4096),this.schedule(f)}let t=this.#a;this.#a=[],this.apply();var r=ft=[],n=[],o=Bt=[];for(let f of t)try{this.#b(f,r,n)}catch(u){throw vo(f),u}if(x=null,o.length>0){var i=e.ensure();for(let f of o)i.schedule(f)}if(ft=null,Bt=null,this.#w()){this.#m(n),this.#m(r);for(let[f,u]of this.#u)ho(f,u);o.length>0&&x.#h();return}let s=this.#E();if(s){s.#g(this);return}this.#d.clear(),this.#c.clear();for(let f of this.#f)f(this);this.#f.clear(),At=this,_o(n),_o(r),At=null,this.#p?.resolve();var a=x;if(this.linked&&this.#o===0&&this.#x(),V&&!this.linked&&(this.#T(),x=a),this.#a.length>0){a===null&&(a=this,this.#y());let f=a;f.#a.push(...this.#a.filter(u=>!f.#a.includes(u)))}a!==null&&a.#h()}#b(t,r,n){t.f^=1024;for(var o=t.first;o!==null;){var i=o.f,s=(i&96)!==0,a=s&&(i&1024)!==0,f=a||(i&8192)!==0||this.#u.has(o);if(!f&&o.fn!==null){s?o.f^=1024:(i&4)!==0?r.push(o):V&&(i&16777224)!==0?n.push(o):Je(o)&&((i&16)!==0&&this.#c.add(o),Me(o));var u=o.first;if(u!==null){o=u;continue}}for(;o!==null;){var m=o.next;if(m!==null){o=m;break}o=o.parent}}}#E(){for(var t=this.#t;t!==null;){if(!t.is_fork){for(let[r,[,n]]of this.current)if(t.current.has(r)&&!n)return t}t=t.#t}return null}#g(t){for(let[n,o]of t.current)!this.previous.has(n)&&t.previous.has(n)&&this.previous.set(n,t.previous.get(n)),this.current.set(n,o);for(let[n,o]of t.async_deriveds){let i=this.async_deriveds.get(n);i&&o.promise.then(i.resolve)}let r=n=>{var o=n.reactions;if(o!==null)for(let a of o){var i=a.f;if((i&2)!==0)r(a);else{var s=a;i&4194320&&!this.async_deriveds.has(s)&&(this.#c.delete(s),T(s,2048),this.schedule(s))}}};for(let n of this.current.keys())r(n);this.oncommit(()=>t.discard()),t.#x(),x=this,this.#h()}#m(t){for(var r=0;r<t.length;r+=1)sr(t[r],this.#d,this.#c)}capture(t,r,n=!1){t.v!==k&&!this.previous.has(t)&&this.previous.set(t,t.v),(t.f&8388608)===0&&(this.current.set(t,[r,n]),P?.set(t,r)),this.is_fork||(t.v=r)}activate(){x=this}deactivate(){x=null,P=null}flush(){try{l&&Jr.clear(),Wr=!0,x=this,this.#h()}finally{if(po=0,Xr=null,ft=null,Bt=null,Wr=!1,x=null,P=null,Ye.clear(),l)for(let t of Jr)t.updated=null}}discard(){for(let t of this.#n)t(this);this.#n.clear(),this.#i.clear(),this.#x()}register_created_effect(t){this.#_.push(t)}#T(){this.#x();for(let m=cr;m!==null;m=m.#r){var t=m.id<this.id,r=[];for(let[p,[c,d]]of this.current){if(m.current.has(p)){var n=m.current.get(p)[0];if(t&&c!==n)m.current.set(p,[c,d]);else continue}r.push(p)}if(t)for(let[p,c]of this.async_deriveds){let d=m.async_deriveds.get(p);d&&c.promise.then(d.resolve)}if(m.#e){var o=[...m.current.keys()].filter(p=>!this.current.has(p));if(o.length===0)t&&m.discard();else if(r.length>0){if(l&&oo(m.#a.length===0,"Batch has scheduled roots"),t)for(let p of this.#l)m.unskip_effect(p,c=>{(c.f&4194320)!==0?m.schedule(c):m.#m([c])});m.activate();var i=new Set,s=new Map;for(var a of r)mo(a,o,i,s);s=new Map;var f=[...m.current.keys()].filter(p=>this.current.has(p)?this.current.get(p)[0]!==p.v:!0);if(f.length>0)for(let p of this.#_)(p.f&155648)===0&&Zr(p,f,s)&&((p.f&4194320)!==0?(T(p,2048),m.schedule(p)):m.#d.add(p));if(m.#a.length>0){m.apply();for(var u of m.#a)m.#b(u,[],[]);m.#a=[]}m.deactivate()}}}}increment(t,r){if(this.#o+=1,t){let n=this.#s.get(r)??0;this.#s.set(r,n+1)}}decrement(t,r){if(this.#o-=1,t){let n=this.#s.get(r)??0;n===1?this.#s.delete(r):this.#s.set(r,n-1)}this.#v||(this.#v=!0,j(()=>{this.#v=!1,this.linked&&this.flush()}))}transfer_effects(t,r){for(let n of t)this.#d.add(n);for(let n of r)this.#c.add(n);t.clear(),r.clear()}oncommit(t){this.#f.add(t)}ondiscard(t){this.#n.add(t)}on_fork_commit(t){this.#i.add(t)}run_fork_commit_callbacks(){for(let t of this.#i)t(this);this.#i.clear()}settled(){return(this.#p??=Mr()).promise}static ensure(){if(x===null){let t=x=new e;t.#y(),!Wr&&!st&&j(()=>{t.#e||t.flush()})}return x}apply(){if(!V||!this.is_fork&&this.#t===null&&this.#r===null){P=null;return}P=new Map;for(let[r,[n]]of this.current)P.set(r,n);for(let r=cr;r!==null;r=r.#r)if(!(r===this||r.is_fork)){var t=!1;if(r.id<this.id){for(let[n,[,o]]of r.current)if(!o&&this.current.has(n)){t=!0;break}}if(!t)for(let[n,o]of r.previous)P.has(n)||P.set(n,o)}}schedule(t){if(Xr=t,t.b?.is_pending&&(t.f&16777228)!==0&&(t.f&32768)===0){t.b.defer_effect(t);return}for(var r=t;r.parent!==null;){r=r.parent;var n=r.f;if(ft!==null&&r===h&&(V||(g===null||(g.f&2)===0)&&!uo))return;if((n&96)!==0){if((n&1024)===0)return;r.f^=1024}}this.#a.push(r)}#y(){Tt===null?cr=Tt=this:(Tt.#r=this,this.#t=Tt),Tt=this}#x(){var t=this.#t,r=this.#r;t===null?cr=r:t.#r=r,r===null?Tt=t:r.#t=t,this.linked=!1}};function St(e){var t=st;st=!0;try{var r;for(e&&(x!==null&&!x.is_fork&&x.flush(),r=e());;){if(fo(),x===null)return r;x.flush()}}finally{st=t}}function xi(){if(l){var e=new Map;for(let r of x.current.keys())for(let[n,o]of r.updated??[]){var t=e.get(n);t||(t={error:o.error,count:0},e.set(n,t)),t.count+=o.count}for(let r of e.values())r.error&&console.error(r.error)}try{Un()}catch(r){l&&U(r,"stack",{value:""}),Ie(r,Xr)}}var Ee=null;function _o(e){var t=e.length;if(t!==0){for(var r=0;r<t;){var n=e[r++];if((n.f&24576)===0&&Je(n)&&(Ee=new Set,Me(n),n.deps===null&&n.first===null&&n.nodes===null&&n.teardown===null&&n.ac===null&&Qr(n),Ee?.size>0)){Ye.clear();for(let o of Ee){if((o.f&24576)!==0)continue;let i=[o],s=o.parent;for(;s!==null;)Ee.has(s)&&(Ee.delete(s),i.push(s)),s=s.parent;for(let a=i.length-1;a>=0;a--){let f=i[a];(f.f&24576)===0&&Me(f)}}Ee.clear()}}Ee=null}}function mo(e,t,r,n){if(!r.has(e)&&(r.add(e),e.reactions!==null))for(let o of e.reactions){let i=o.f;(i&2)!==0?mo(o,t,r,n):(i&4194320)!==0&&(i&2048)===0&&Zr(o,t,n)&&(T(o,2048),Ht(o))}}function Zr(e,t,r){let n=r.get(e);if(n!==void 0)return n;if(e.deps!==null)for(let o of e.deps){if(Ae.call(t,o))return!0;if((o.f&2)!==0&&Zr(o,t,r))return r.set(o,!0),!0}return r.set(e,!1),!1}function Ht(e){x.schedule(e)}function ho(e,t){if(!((e.f&32)!==0&&(e.f&1024)!==0)){(e.f&2048)!==0?t.d.push(e):(e.f&4096)!==0&&t.m.push(e),T(e,1024);for(var r=e.first;r!==null;)ho(r,t),r=r.next}}function vo(e){T(e,1024);for(var t=e.first;t!==null;)vo(t),t=t.next}function en(e){let t=0,r=_e(0),n;return l&&te(r,"createSubscriber version"),()=>{Pe()&&(C(r),X(()=>(t===0&&(n=R(()=>e(()=>ct(r)))),t+=1,()=>{j(()=>{t-=1,t===0&&(n?.(),n=void 0,ct(r))})})))}}var bi=589824;function rn(e,t,r,n){new tn(e,t,r,n)}var tn=class{parent;is_pending=!1;transform_error;#e;#t=y?b:null;#r;#f;#n;#i=null;#o=null;#s=null;#p=null;#a=0;#_=0;#d=!1;#c=new Set;#u=new Set;#l=null;#v=en(()=>(this.#l=_e(this.#a),l&&te(this.#l,"$effect.pending()"),()=>{this.#l=null}));constructor(t,r,n,o){this.#e=t,this.#r=r,this.#f=i=>{var s=h;s.b=this,s.f|=128,n(i)},this.parent=h.b,this.transform_error=o??this.parent?.transform_error??(i=>i),this.#n=Te(()=>{if(y){let i=this.#t;ee();let s=i.data==="[!";if(i.data.startsWith("[?")){let f=JSON.parse(i.data.slice("[?".length));this.#h(f)}else s?this.#b():this.#w()}else this.#E()},bi),y&&(this.#e=b)}#w(){try{this.#i=Z(()=>this.#f(this.#e))}catch(t){this.error(t)}}#h(t){let r=this.#r.failed;r&&(this.#s=Z(()=>{r(this.#e,()=>t,()=>()=>{})}))}#b(){let t=this.#r.pending;t&&(this.is_pending=!0,this.#o=Z(()=>t(this.#e)),j(()=>{var r=this.#p=document.createDocumentFragment(),n=me();r.append(n),this.#i=this.#m(()=>Z(()=>this.#f(n))),this.#_===0&&(this.#e.before(r),this.#p=null,Xe(this.#o,()=>{this.#o=null}),this.#g(x))}))}#E(){try{if(this.is_pending=this.has_pending_snippet(),this.#_=0,this.#a=0,this.#i=Z(()=>{this.#f(this.#e)}),this.#_>0){var t=this.#p=document.createDocumentFragment();Vt(this.#i,t);let r=this.#r.pending;this.#o=Z(()=>r(this.#e))}else this.#g(x)}catch(r){this.error(r)}}#g(t){this.is_pending=!1,t.transfer_effects(this.#c,this.#u)}defer_effect(t){sr(t,this.#c,this.#u)}is_rendered(){return!this.is_pending&&(!this.parent||this.parent.is_rendered())}has_pending_snippet(){return!!this.#r.pending}#m(t){var r=h,n=g,o=E;H(this.#n),B(this.#n),ot(this.#n.ctx);try{return de.ensure(),t()}catch(i){return ir(i),null}finally{H(r),B(n),ot(o)}}#T(t,r){if(!this.has_pending_snippet()){this.parent&&this.parent.#T(t,r);return}this.#_+=t,this.#_===0&&(this.#g(r),this.#o&&Xe(this.#o,()=>{this.#o=null}),this.#p&&(this.#e.before(this.#p),this.#p=null))}update_pending_count(t,r){this.#T(t,r),this.#a+=t,!(!this.#l||this.#d)&&(this.#d=!0,j(()=>{this.#d=!1,this.#l&&pt(this.#l,this.#a)}))}get_effect_pending(){return this.#v(),C(this.#l)}error(t){if(!this.#r.onerror&&!this.#r.failed)throw t;x?.is_fork?(this.#i&&x.skip_effect(this.#i),this.#o&&x.skip_effect(this.#o),this.#s&&x.skip_effect(this.#s),x.on_fork_commit(()=>{this.#y(t)})):this.#y(t)}#y(t){this.#i&&(O(this.#i),this.#i=null),this.#o&&(O(this.#o),this.#o=null),this.#s&&(O(this.#s),this.#s=null),y&&(M(this.#t),Hr(),M(Ke()));var r=this.#r.onerror;let n=this.#r.failed;var o=!1,i=!1;let s=()=>{if(o){ro();return}o=!0,i&&Xn(),this.#s!==null&&Xe(this.#s,()=>{this.#s=null}),this.#m(()=>{this.#E()})},a=f=>{try{i=!0,r?.(f,s),i=!1}catch(u){Ie(u,this.#n&&this.#n.parent)}n&&(this.#s=this.#m(()=>{try{return Z(()=>{var u=h;u.b=this,u.f|=128,n(this.#e,()=>f,()=>s)})}catch(u){return Ie(u,this.#n.parent),null}}))};j(()=>{var f;try{f=this.transform_error(t)}catch(u){Ie(u,this.#n&&this.#n.parent);return}f!==null&&typeof f=="object"&&typeof f.then=="function"?f.then(a,u=>Ie(u,this.#n&&this.#n.parent)):a(f)})}};var dt=null;var bo=new Set;function wo(e){var t=e.effects;if(t!==null){e.effects=null;for(var r=0;r<t.length;r+=1)O(t[r])}}var on=[];function Yt(e){var t,r=h,n=e.parent;if(!Ce&&n!==null&&(n.f&24576)!==0)return Qn(),e.v;if(H(n),l){let o=_t;pr(new Set);try{Ae.call(on,e)&&Gn(),on.push(e),e.f&=-65537,wo(e),t=_r(e)}finally{H(r),pr(o),on.pop()}}else try{e.f&=-65537,wo(e),t=_r(e)}finally{H(r)}return t}function sn(e){var t=Yt(e);if(!e.equals(t)&&(e.wv=$t(),(!x?.is_fork||e.deps===null)&&(x!==null?(x.capture(e,t,!0),At?.capture(e,t,!0)):e.v=t,e.deps===null))){T(e,1024);return}Ce||(P!==null?(Pe()||x?.is_fork)&&P.set(e,t):xt(e))}function Eo(e){if(e.effects!==null)for(let t of e.effects)(t.teardown||t.ac)&&(t.teardown?.(),t.ac?.abort(tt),t.teardown=I,t.ac=null,mt(t,0),jt(t))}function an(e){if(e.effects!==null)for(let t of e.effects)t.teardown&&Me(t)}var _t=new Set,Ye=new Map;function pr(e){_t=e}var ln=!1;function To(){ln=!0}function _e(e,t){var r={f:0,v:e,reactions:null,equals:Vr,rv:0,wv:0};return l&&Ne&&(r.created=t??De("created at"),r.updated=null,r.set_during_effect=!1,r.trace=null),r}function Oe(e,t){let r=_e(e,t);return fn(r),r}function at(e,t=!1,r=!0){let n=_e(e);return t||(n.equals=Yr),Ue&&r&&E!==null&&E.l!==null&&(E.l.s??=[]).push(n),n}function K(e,t,r=!1){g!==null&&(!se||(g.f&131072)!==0)&&He()&&(g.f&4325394)!==0&&(he===null||!Ae.call(he,e))&&Jn();let n=r?Ze(t):t;return l&&rr(n,e.label),pt(e,n,Bt)}function pt(e,t,r=null){if(!e.equals(t)){Ye.set(e,Ce?t:e.v);var n=de.ensure();if(n.capture(e,t),l){if(Ne||h!==null){e.updated??=new Map;let o=(e.updated.get("")?.count??0)+1;if(e.updated.set("",{error:null,count:o}),Ne||o>5){let i=De("updated at");if(i!==null){let s=e.updated.get(i.stack);s||(s={error:i,count:0},e.updated.set(i.stack,s)),s.count++}}}h!==null&&(e.set_during_effect=!0)}if((e.f&2)!==0){let o=e;(e.f&2048)!==0&&Yt(o),P===null&&xt(o)}e.wv=$t(),Ao(e,2048,r),He()&&h!==null&&(h.f&1024)!==0&&(h.f&96)===0&&(ve===null?So([e]):ve.push(e)),!n.is_fork&&_t.size>0&&!ln&&dr()}return t}function dr(){ln=!1;for(let e of _t){(e.f&1024)!==0&&T(e,4096);let t;try{t=Je(e)}catch{t=!0}t&&Me(e)}_t.clear()}function ct(e){K(e,e.v+1)}function Ao(e,t,r){var n=e.reactions;if(n!==null)for(var o=He(),i=n.length,s=0;s<i;s++){var a=n[s],f=a.f;if(!(!o&&a===h)){var u=(f&2048)===0;if(u&&T(a,t),(f&131072)!==0)_t.add(a);else if((f&2)!==0){var m=a;P?.delete(m),(f&65536)===0&&(f&512&&(h===null||(h.f&2097152)===0)&&(a.f|=65536),Ao(m,4096,r))}else if(u){var p=a;(f&16)!==0&&Ee!==null&&Ee.add(p),r!==null?r.push(p):Ht(p)}}}}var Si=/^[a-zA-Z_$][a-zA-Z_$0-9]*$/;function Ze(e){if(typeof e!="object"||e===null||Q in e)return e;let t=Dt(e);if(t!==Rr&&t!==Hn)return e;var r=new Map,n=qe(e),o=Oe(0),i=l&&Ne?De("created at"):null,s=Qe,a=p=>{if(Qe===s)return p();var c=g,d=Qe;B(null),cn(s);var _=p();return B(c),cn(d),_};n&&(r.set("length",Oe(e.length,i)),l&&(e=Ci(e)));var f="";let u=!1;function m(p){if(!u){u=!0,f=p,te(o,`${f} version`);for(let[c,d]of r)te(d,ht(f,c));u=!1}}return new Proxy(e,{defineProperty(p,c,d){(!("value"in d)||d.configurable===!1||d.enumerable===!1||d.writable===!1)&&Kn();var _=r.get(c);return _===void 0?a(()=>{var v=Oe(d.value,i);return r.set(c,v),l&&typeof c=="string"&&te(v,ht(f,c)),v}):K(_,d.value,!0),!0},deleteProperty(p,c){var d=r.get(c);if(d===void 0){if(c in p){let _=a(()=>Oe(k,i));r.set(c,_),ct(o),l&&te(_,ht(f,c))}}else K(d,k),ct(o);return!0},get(p,c,d){if(c===Q)return e;if(l&&c===Jt)return m;var _=r.get(c),v=c in p;if(_===void 0&&(!v||ue(p,c)?.writable)&&(_=a(()=>{var A=Ze(v?p[c]:k),D=Oe(A,i);return l&&te(D,ht(f,c)),D}),r.set(c,_)),_!==void 0){var w=C(_);return w===k?void 0:w}return Reflect.get(p,c,d)},getOwnPropertyDescriptor(p,c){var d=Reflect.getOwnPropertyDescriptor(p,c);if(d&&"value"in d){var _=r.get(c);_&&(d.value=C(_))}else if(d===void 0){var v=r.get(c),w=v?.v;if(v!==void 0&&w!==k)return{enumerable:!0,configurable:!0,value:w,writable:!0}}return d},has(p,c){if(c===Q)return!0;var d=r.get(c),_=d!==void 0&&d.v!==k||Reflect.has(p,c);if(d!==void 0||h!==null&&(!_||ue(p,c)?.writable)){d===void 0&&(d=a(()=>{var w=_?Ze(p[c]):k,A=Oe(w,i);return l&&te(A,ht(f,c)),A}),r.set(c,d));var v=C(d);if(v===k)return!1}return _},set(p,c,d,_){var v=r.get(c),w=c in p;if(n&&c==="length")for(var A=d;A<v.v;A+=1){var D=r.get(A+"");D!==void 0?K(D,k):A in p&&(D=a(()=>Oe(k,i)),r.set(A+"",D),l&&te(D,ht(f,A)))}if(v===void 0)(!w||ue(p,c)?.writable)&&(v=a(()=>Oe(void 0,i)),l&&te(v,ht(f,c)),K(v,Ze(d)),r.set(c,v));else{w=v.v!==k;var ce=a(()=>Ze(d));K(v,ce)}var Nt=Reflect.getOwnPropertyDescriptor(p,c);if(Nt?.set&&Nt.set.call(_,d),!w){if(n&&typeof c=="string"){var Rt=r.get("length"),gt=Number(c);Number.isInteger(gt)&&gt>=Rt.v&&K(Rt,gt+1)}ct(o)}return!0},ownKeys(p){C(o);var c=Reflect.ownKeys(p).filter(v=>{var w=r.get(v);return w===void 0||w.v!==k});for(var[d,_]of r)_.v!==k&&!(d in p)&&c.push(d);return c},setPrototypeOf(){Wn()}})}function ht(e,t){return typeof t=="symbol"?`${e}[Symbol(${t.description??""})]`:Si.test(t)?`${e}.${t}`:/^\d+$/.test(t)?`${e}[${t}]`:`${e}['${t}']`}function mr(e){try{if(e!==null&&typeof e=="object"&&Q in e)return e[Q]}catch{}return e}var $i=new Set(["copyWithin","fill","pop","push","reverse","shift","sort","splice","unshift"]);function Ci(e){return new Proxy(e,{get(t,r,n){var o=Reflect.get(t,r,n);return $i.has(r)?function(...i){To();var s=o.apply(this,i);return dr(),s}:o}})}function $o(){let e=Array.prototype,t=Array.__svelte_cleanup;t&&t();let{indexOf:r,lastIndexOf:n,includes:o}=e;e.indexOf=function(i,s){let a=r.call(this,i,s);if(a===-1){for(let f=s??0;f<this.length;f+=1)if(mr(this[f])===i){Zt("array.indexOf(...)");break}}return a},e.lastIndexOf=function(i,s){let a=n.call(this,i,s??this.length-1);if(a===-1){for(let f=0;f<=(s??this.length-1);f+=1)if(mr(this[f])===i){Zt("array.lastIndexOf(...)");break}}return a},e.includes=function(i,s){let a=o.call(this,i,s);if(!a){for(let f=0;f<this.length;f+=1)if(mr(this[f])===i){Zt("array.includes(...)");break}}return a},Array.__svelte_cleanup=()=>{e.indexOf=r,e.lastIndexOf=n,e.includes=o}}var un,Co,Pt,ko,No;function hr(){if(un===void 0){un=window,Co=document,Pt=/Firefox/.test(navigator.userAgent);var e=Element.prototype,t=Node.prototype,r=Text.prototype;ko=ue(t,"firstChild").get,No=ue(t,"nextSibling").get,Dr(e)&&(e[Lr]=void 0,e[Or]=null,e[Fr]=void 0,e.__e=void 0),Dr(r)&&(r[Pr]=void 0),l&&(e.__svelte_meta=null,$o())}}function me(e=""){return document.createTextNode(e)}function ge(e){return ko.call(e)}function ae(e){return No.call(e)}function pn(e,t=!1){if(!y){var r=ge(e);return r instanceof Comment&&r.data===""?ae(r):r}if(t){if(b?.nodeType!==Xt){var n=me();return b?.before(n),M(n),n}Ro(b)}return b}function vr(e){e.textContent=""}function dn(){if(!V||Ee!==null)return!1;var e=h.f;return(e&32768)!==0}function Le(e,t,r){let n=r?{is:r}:void 0;return document.createElementNS(t??Cr,e,n)}function Ro(e){if(e.nodeValue.length<65536)return;let t=e.nextSibling;for(;t!==null&&t.nodeType===Xt;)t.remove(),e.nodeValue+=t.nodeValue,t=e.nextSibling}function je(e){var t=g,r=h;B(null),H(null);try{return e()}finally{B(t),H(r)}}function Ri(e,t){var r=t.last;r===null?t.last=t.first=e:(r.next=e,e.prev=r,t.last=e)}function et(e,t){var r=h;if(l)for(;r!==null&&(r.f&131072)!==0;)r=r.parent;r!==null&&(r.f&8192)!==0&&(e|=8192);var n={ctx:E,deps:null,nodes:null,f:e|2048|512,first:null,fn:t,last:null,next:null,parent:r,b:r&&r.b,prev:null,teardown:null,wv:0,ac:null};l&&(n.component_function=$e),x?.register_created_effect(n);var o=n;if((e&4)!==0)ft!==null?ft.push(n):de.ensure().schedule(n);else if(t!==null){try{Me(n)}catch(s){throw O(n),s}o.deps===null&&o.teardown===null&&o.nodes===null&&o.first===o.last&&(o.f&524288)===0&&(o=o.first,(e&16)!==0&&(e&65536)!==0&&o!==null&&(o.f|=65536))}if(o!==null&&(o.parent=r,r!==null&&Ri(o,r),g!==null&&(g.f&2)!==0&&(e&64)===0)){var i=g;(i.effects??=[]).push(o)}return n}function Pe(){return g!==null&&!se}function W(e){let t=et(8,null);return T(t,1024),t.teardown=e,t}function so(e){return et(1048580,e)}function gr(e){de.ensure();let t=et(524352,e);return()=>{O(t)}}function Oo(e){de.ensure();let t=et(524352,e);return(r={})=>new Promise(n=>{r.outro?Xe(t,()=>{O(t),n(void 0)}):(O(t),n(void 0))})}function ye(e){return et(4,e)}function X(e,t=0){return et(8|t,e)}function Te(e,t=0){var r=et(16|t,e);return l&&(r.dev_stack=Be),r}function Z(e){return et(524320,e)}function mn(e){var t=e.teardown;if(t!==null){let r=Ce,n=g;_n(!0),B(null);try{t.call(null)}finally{_n(r),B(n)}}}function jt(e,t=!1){var r=e.first;for(e.first=e.last=null;r!==null;){let o=r.ac;o!==null&&je(()=>{o.abort(tt)});var n=r.next;(r.f&64)!==0?r.parent=null:O(r,t),r=n}}function Lo(e){for(var t=e.first;t!==null;){var r=t.next;(t.f&32)===0&&O(t),t=r}}function O(e,t=!0){var r=!1;(t||(e.f&262144)!==0)&&e.nodes!==null&&e.nodes.end!==null&&(Fo(e.nodes.start,e.nodes.end),r=!0),T(e,33554432),jt(e,t&&!r),mt(e,0);var n=e.nodes&&e.nodes.t;if(n!==null)for(let i of n)i.stop();mn(e),e.f^=33554432,e.f|=16384;var o=e.parent;o!==null&&o.first!==null&&Qr(e),l&&(e.component_function=null),e.next=e.prev=e.teardown=e.ctx=e.deps=e.fn=e.nodes=e.ac=e.b=null}function Fo(e,t){for(;e!==null;){var r=e===t?null:ae(e);e.remove(),e=r}}function Qr(e){var t=e.parent,r=e.prev,n=e.next;r!==null&&(r.next=n),n!==null&&(n.prev=r),t!==null&&(t.first===e&&(t.first=n),t.last===e&&(t.last=r))}function Xe(e,t,r=!0){var n=[];Po(e,n,!0);var o=()=>{r&&O(e),t&&t()},i=n.length;if(i>0){var s=()=>--i||o();for(var a of n)a.out(s)}else o()}function Po(e,t,r){if((e.f&8192)===0){e.f^=8192;var n=e.nodes&&e.nodes.t;if(n!==null)for(let a of n)(a.is_global||r)&&t.push(a);for(var o=e.first;o!==null;){var i=o.next;if((o.f&64)===0){var s=(o.f&65536)!==0||(o.f&32)!==0&&(e.f&16)!==0;Po(o,t,s?r:!1)}o=i}}}function hn(e){Bo(e,!0)}function Bo(e,t){if((e.f&8192)!==0){e.f^=8192,(e.f&1024)===0&&(T(e,2048),de.ensure().schedule(e));for(var r=e.first;r!==null;){var n=r.next,o=(r.f&65536)!==0||(r.f&32)!==0;Bo(r,o?t:!1),r=n}var i=e.nodes&&e.nodes.t;if(i!==null)for(let s of i)(s.is_global||t)&&s.in()}}function Vt(e,t){if(e.nodes)for(var r=e.nodes.start,n=e.nodes.end;r!==null;){var o=r===n?null:ae(r);t.append(r),r=o}}var Ho=null;var yr=!1,Ce=!1;function _n(e){Ce=e}var g=null,se=!1;function B(e){g=e}var h=null;function H(e){h=e}var he=null;function fn(e){g!==null&&(!V||(g.f&2)!==0)&&(he===null?he=[e]:he.push(e))}var ie=null,le=0,ve=null;function So(e){ve=e}var Vo=1,vt=0,Qe=vt;function cn(e){Qe=e}function $t(){return++Vo}function Je(e){var t=e.f;if((t&2048)!==0)return!0;if(t&2&&(e.f&=-65537),(t&4096)!==0){for(var r=e.deps,n=r.length,o=0;o<n;o++){var i=r[o];if(Je(i)&&sn(i),i.wv>e.wv)return!0}(t&512)!==0&&P===null&&T(e,1024)}return!1}function Yo(e,t,r=!0){var n=e.reactions;if(n!==null&&!(!V&&he!==null&&Ae.call(he,e)))for(var o=0;o<n.length;o++){var i=n[o];(i.f&2)!==0?Yo(i,t,!1):t===i&&(r?T(i,2048):(i.f&1024)!==0&&T(i,4096),Ht(i))}}function _r(e){var t=ie,r=le,n=ve,o=g,i=he,s=E,a=se,f=Qe,u=e.f;ie=null,le=0,ve=null,g=(u&96)===0?e:null,he=null,ot(e.ctx),se=!1,Qe=++vt,e.ac!==null&&(je(()=>{e.ac.abort(tt)}),e.ac=null);try{e.f|=2097152;var m=e.fn,p=m();e.f|=32768;var c=e.deps,d=x?.is_fork;if(ie!==null){var _;if(d||mt(e,le),c!==null&&le>0)for(c.length=le+ie.length,_=0;_<ie.length;_++)c[le+_]=ie[_];else e.deps=c=ie;if(Pe()&&(e.f&512)!==0)for(_=le;_<c.length;_++)(c[_].reactions??=[]).push(e)}else!d&&c!==null&&le<c.length&&(mt(e,le),c.length=le);if(He()&&ve!==null&&!se&&c!==null&&(e.f&6146)===0)for(_=0;_<ve.length;_++)Yo(ve[_],e);if(o!==null&&o!==e){if(vt++,o.deps!==null)for(let v=0;v<r;v+=1)o.deps[v].rv=vt;if(t!==null)for(let v of t)v.rv=vt;ve!==null&&(n===null?n=ve:n.push(...ve))}return(e.f&8388608)!==0&&(e.f^=8388608),p}catch(v){return ir(v)}finally{e.f^=2097152,ie=t,le=r,ve=n,g=o,he=i,ot(s),se=a,Qe=f}}function Ii(e,t){let r=t.reactions;if(r!==null){var n=Bn.call(r,e);if(n!==-1){var o=r.length-1;o===0?r=t.reactions=null:(r[n]=r[o],r.pop())}}if(r===null&&(t.f&2)!==0&&(ie===null||!Ae.call(ie,t))){var i=t;(i.f&512)!==0&&(i.f^=512,i.f&=-65537),i.v!==k&&xt(i),Eo(i),mt(i,0)}}function mt(e,t){var r=e.deps;if(r!==null)for(var n=t;n<r.length;n++)Ii(e,r[n])}function Me(e){var t=e.f;if((t&16384)===0){T(e,1024);var r=h,n=yr;if(h=e,yr=!0,l){var o=$e;or(e.component_function);var i=Be;nr(e.dev_stack??Be)}try{(t&16777232)!==0?Lo(e):jt(e),mn(e);var s=_r(e);if(e.teardown=typeof s=="function"?s:null,e.wv=Vo,l&&Ne&&(e.f&2048)!==0&&e.deps!==null)for(var a of e.deps)a.set_during_effect&&(a.wv=$t(),a.set_during_effect=!1)}finally{yr=n,h=r,l&&(or(o),nr(i))}}}function C(e){var t=e.f,r=(t&2)!==0;if(Ho?.add(e),g!==null&&!se){var n=h!==null&&(h.f&16384)!==0;if(!n&&(he===null||!Ae.call(he,e))){var o=g.deps;if((g.f&2097152)!==0)e.rv<vt&&(e.rv=vt,ie===null&&o!==null&&o[le]===e?le++:ie===null?ie=[e]:ie.push(e));else{(g.deps??=[]).push(e);var i=e.reactions;i===null?e.reactions=[g]:Ae.call(i,g)||i.push(g)}}}if(l){if(!se&&dt&&!dt.warned&&(dt.effect.f&2097152)===0&&!dt.effect_deps.has(e)){dt.warned=!0,Zn(e.label);var s=De("traced at");s&&console.warn(s)}if(bo.delete(e),Ne&&!se&&Lt!==null&&g!==null&&Lt.reaction===g){if(e.trace)e.trace();else if(s=De("traced at"),s){var a=Lt.entries.get(e);a===void 0&&(a={traces:[]},Lt.entries.set(e,a));var f=a.traces[a.traces.length-1];s.stack!==f?.stack&&a.traces.push(s)}}}if(Ce&&Ye.has(e))return Ye.get(e);if(r){var u=e;if(Ce){var m=u.v;return((u.f&1024)===0&&u.reactions!==null||Go(u))&&(m=Yt(u)),Ye.set(u,m),m}var p=(u.f&512)===0&&!se&&g!==null&&(yr||(g.f&512)!==0),c=(u.f&32768)===0;Je(u)&&(p&&(u.f|=512),sn(u)),p&&!c&&(an(u),jo(u))}if(P?.has(e))return P.get(e);if((e.f&8388608)!==0)throw e.v;return e.v}function jo(e){if(e.f|=512,e.deps!==null)for(let t of e.deps)(t.reactions??=[]).push(e),(t.f&2)!==0&&(t.f&512)===0&&(an(t),jo(t))}function Go(e){if(e.v===k)return!0;if(e.deps===null)return!1;for(let t of e.deps)if(Ye.has(t)||(t.f&2)!==0&&Go(t))return!0;return!1}function R(e){var t=se;try{return se=!0,e()}finally{se=t}}var xr=Symbol("events"),zo=new Set,vn=new Set;var Uo=null;function gn(e){var t=this,r=t.ownerDocument,n=e.type,o=e.composedPath?.()||[],i=o[0]||e.target;Uo=e;var s=0,a=Uo===e&&e[xr];if(a){var f=o.indexOf(a);if(f!==-1&&(t===document||t===window)){e[xr]=t;return}var u=o.indexOf(t);if(u===-1)return;f<=u&&(s=f)}if(i=o[s]||e.target,i!==t){U(e,"currentTarget",{configurable:!0,get(){return i||r}});var m=g,p=h;B(null),H(null);try{for(var c,d=[];i!==null;){var _=i.assignedSlot||i.parentNode||i.host||null;try{var v=i[xr]?.[n];v!=null&&(!i.disabled||e.target===i)&&v.call(i,e)}catch(w){c?d.push(w):c=w}if(e.cancelBubble||_===t||_===null)break;i=_}if(c){for(let w of d)queueMicrotask(()=>{throw w});throw c}}finally{e[xr]=t,delete e.currentTarget,B(m),H(p)}}}var Mi=globalThis?.window?.trustedTypes&&globalThis.window.trustedTypes.createPolicy("svelte-trusted-html",{createHTML:e=>e});function qo(e){return Mi?.createHTML(e)??e}function yn(e){var t=Le("template");return t.innerHTML=qo(e.replaceAll("<!>","<!---->")),t.content}function Fe(e,t){var r=h;r.nodes===null&&(r.nodes={start:e,end:t,a:null,t:null})}function wn(e,t){var r=(t&1)!==0,n=(t&2)!==0,o,i=!e.startsWith("<!>");return()=>{if(y)return Fe(b,null),b;o===void 0&&(o=yn(i?e:"<!>"+e),r||(o=ge(o)));var s=n||Pt?document.importNode(o,!0):o.cloneNode(!0);if(r){var a=ge(s),f=s.lastChild;Fe(a,f)}else Fe(s,s);return s}}function bn(){if(y)return Fe(b,null),b;var e=document.createDocumentFragment(),t=document.createComment(""),r=me();return e.append(t,r),Fe(t,r),e}function kt(e,t){if(y){var r=h;((r.f&32768)===0||r.nodes.end===null)&&(r.nodes.end=b),ee();return}e!==null&&e.before(t)}var Hi=["allowfullscreen","async","autofocus","autoplay","checked","controls","default","disabled","formnovalidate","indeterminate","inert","ismap","loop","multiple","muted","nomodule","novalidate","open","playsinline","readonly","required","reversed","seamless","selected","webkitdirectory","defer","disablepictureinpicture","disableremoteplayback"];var Iu=[...Hi,"formNoValidate","isMap","noModule","playsInline","readOnly","value","volume","defaultValue","defaultChecked","srcObject","noValidate","allowFullscreen","disablePictureInPicture","disableRemotePlayback"];var Vi=["touchstart","touchmove"];function Ko(e){return Vi.includes(e)}var Yi=["$state","$state.raw","$derived","$derived.by"],Mu=[...Yi,"$state.eager","$state.snapshot","$props","$props.id","$bindable","$effect","$effect.pre","$effect.tracking","$effect.root","$effect.pending","$inspect","$inspect().with","$inspect.trace","$host"];var br=!0;function Er(e,t){return Wo(e,t)}function Tn(e,t){hr(),t.intro=t.intro??!1;let r=t.target,n=y,o=b;try{for(var i=ge(r);i&&(i.nodeType!==Se||i.data!=="[");)i=ae(i);if(!i)throw ze;z(!0),M(i);let s=Wo(e,{...t,anchor:i});return z(!1),s}catch(s){if(s instanceof Error&&s.message.split(`
-`).some(a=>a.startsWith("https://svelte.dev/e/")))throw s;return s!==ze&&console.warn("Failed to hydrate: ",s),t.recover===!1&&zn(),hr(),vr(r),z(!1),Er(e,t)}finally{z(n),M(o)}}var wr=new Map;function Wo(e,{target:t,anchor:r,props:n={},events:o,context:i,intro:s=!0,transformError:a}){hr();var f=void 0,u=Oo(()=>{var m=r??t.appendChild(me());rn(m,{pending:()=>{}},d=>{jr({});var _=E;if(i&&(_.c=i),o&&(n.$$events=o),y&&Fe(d,null),br=s,f=e(d,n)||{},br=!0,y&&(h.nodes.end=b,b===null||b.nodeType!==Se||b.data!=="]"))throw yt(),ze;Gr()},a);var p=new Set,c=d=>{for(var _=0;_<d.length;_++){var v=d[_];if(!p.has(v)){p.add(v);var w=Ko(v);for(let ce of[t,document]){var A=wr.get(ce);A===void 0&&(A=new Map,wr.set(ce,A));var D=A.get(v);D===void 0?(ce.addEventListener(v,gn,{passive:w}),A.set(v,1)):A.set(v,D+1)}}}};return c(kr(zo)),vn.add(c),()=>{for(var d of p)for(let w of[t,document]){var _=wr.get(w),v=_.get(d);--v==0?(w.removeEventListener(d,gn),_.delete(d),_.size===0&&wr.delete(w)):_.set(d,v)}vn.delete(c),m!==r&&m.parentNode?.removeChild(m)}});return En.set(f,u),f}var En=new WeakMap;function An(e,t){let r=En.get(e);return r?(En.delete(e),r(t)):(l&&(Q in e?to():eo()),Promise.resolve())}var Ge=class{anchor;#e=new Map;#t=new Map;#r=new Map;#f=new Set;#n=!0;constructor(t,r=!0){this.anchor=t,this.#n=r}#i=t=>{if(this.#e.has(t)){var r=this.#e.get(t),n=this.#t.get(r);if(n)hn(n),this.#f.delete(r);else{var o=this.#r.get(r);o&&(this.#t.set(r,o.effect),this.#r.delete(r),l&&(o.fragment.lastChild[Br]=this.anchor),o.fragment.lastChild.remove(),this.anchor.before(o.fragment),n=o.effect)}for(let[i,s]of this.#e){if(this.#e.delete(i),i===t)break;let a=this.#r.get(s);a&&(O(a.effect),this.#r.delete(s))}for(let[i,s]of this.#t){if(i===r||this.#f.has(i))continue;let a=()=>{if(Array.from(this.#e.values()).includes(i)){var u=document.createDocumentFragment();Vt(s,u),u.append(me()),this.#r.set(i,{effect:s,fragment:u})}else O(s);this.#f.delete(i),this.#t.delete(i)};this.#n||!n?(this.#f.add(i),Xe(s,a,!1)):a()}}};#o=t=>{this.#e.delete(t);let r=Array.from(this.#e.values());for(let[n,o]of this.#r)r.includes(n)||(O(o.effect),this.#r.delete(n))};ensure(t,r){var n=x,o=dn();if(r&&!this.#t.has(t)&&!this.#r.has(t))if(o){var i=document.createDocumentFragment(),s=me();i.append(s),this.#r.set(t,{effect:Z(()=>r(s)),fragment:i})}else this.#t.set(t,Z(()=>r(this.anchor)));if(this.#e.set(n,t),o){for(let[a,f]of this.#t)a===t?n.unskip_effect(f):n.skip_effect(f);for(let[a,f]of this.#r)a===t?n.unskip_effect(f.effect):n.skip_effect(f.effect);n.oncommit(this.#i),n.ondiscard(this.#o)}else y&&(this.anchor=b),this.#i(n)}};if(l){let e=function(t){if(!(t in globalThis)){let r;Object.defineProperty(globalThis,t,{configurable:!0,get:()=>{if(r!==void 0)return r;qn(t)},set:n=>{r=n}})}};e("$state"),e("$effect"),e("$derived"),e("$inspect"),e("$props"),e("$bindable")}var ei=new Map;function ti(e,t){var r=ei.get(e);r||(r=new Set,ei.set(e,r)),r.add(t)}function Sn(e,t,r=!1){var n;y&&(n=b,ee());var o=new Ge(e),i=r?65536:0;function s(a,f){if(y){var u=Qt(n);if(a!==parseInt(u.substring(1))){var m=Ke();M(m),o.anchor=m,z(!1),o.ensure(a,f),z(!0);return}}o.ensure(a,f)}Te(()=>{var a=!1;t((f,u=0)=>{a=!0,s(u,f)}),a||s(-1,null)},i)}var Wi=qt?()=>performance.now():()=>Date.now(),ke={tick:e=>(qt?requestAnimationFrame:I)(e),now:()=>Wi(),tasks:new Set};function ri(){let e=ke.now();ke.tasks.forEach(t=>{t.c(e)||(ke.tasks.delete(t),t.f())}),ke.tasks.size!==0&&ke.tick(ri)}function ni(e){let t;return ke.tasks.size===0&&ke.tick(ri),{promise:new Promise(r=>{ke.tasks.add(t={c:e,f:r})}),abort(){ke.tasks.delete(t)}}}function Tr(e,t){je(()=>{e.dispatchEvent(new CustomEvent(t))})}function Qi(e){if(e==="float")return"cssFloat";if(e==="offset")return"cssOffset";if(e.startsWith("--"))return e;let t=e.split("-");return t.length===1?t[0]:t[0]+t.slice(1).map(r=>r[0].toUpperCase()+r.slice(1)).join("")}function oi(e){let t={},r=e.split(";");for(let n of r){let[o,i]=n.split(":");if(!o||i===void 0)break;let s=Qi(o.trim());t[s]=i.trim()}return t}var es=e=>e;function Cn(e,t,r,n){var o=(e&1)!==0,i=(e&2)!==0,s=o&&i,a=(e&4)!==0,f=s?"both":o?"in":"out",u,m=t.inert,p=t.style.overflow,c,d;function _(){return je(()=>u??=r()(t,n?.()??{},{direction:f}))}var v={is_global:a,in(){if(t.inert=m,!o){d?.abort(),d?.reset?.();return}i||c?.abort(),c=$n(t,_(),d,1,()=>{Tr(t,"introstart")},()=>{Tr(t,"introend"),c?.abort(),c=u=void 0,t.style.overflow=p})},out(ce){if(!i){ce?.(),u=void 0;return}t.inert=!0,d=$n(t,_(),c,0,()=>{Tr(t,"outrostart")},()=>{Tr(t,"outroend"),ce?.()})},stop:()=>{c?.abort(),d?.abort()}},w=h;if((w.nodes.t??=[]).push(v),o&&br){var A=a;if(!A){for(var D=w.parent;D&&(D.f&65536)!==0;)for(;(D=D.parent)&&(D.f&16)===0;);A=!D||(D.f&32768)!==0}A&&ye(()=>{R(()=>v.in())})}}function $n(e,t,r,n,o,i){var s=n===1;if(Ir(t)){var a,f=!1;return j(()=>{if(!f){var A=t({direction:s?"in":"out"});a=$n(e,A,r,n,o,i)}}),{abort:()=>{f=!0,a?.abort()},deactivate:()=>a.deactivate(),reset:()=>a.reset(),t:()=>a.t()}}if(r?.deactivate(),!t?.duration&&!t?.delay)return o(),i(),{abort:I,deactivate:I,reset:I,t:()=>n};let{delay:u=0,css:m,tick:p,easing:c=es}=t;var d=[];if(s&&r===void 0&&(p&&p(0,1),m)){var _=oi(m(0,1));d.push(_,_)}var v=()=>1-n,w=e.animate(d,{duration:u,fill:"forwards"});return w.onfinish=()=>{w.cancel(),o();var A=r?.t()??1-n;r?.abort();var D=n-A,ce=t.duration*Math.abs(D),Nt=[];if(ce>0){var Rt=!1;if(m)for(var gt=Math.ceil(ce/16.666666666666668),$r=0;$r<=gt;$r+=1){var On=A+D*c($r/gt),Ln=oi(m(On,1-On));Nt.push(Ln),Rt||=Ln.overflow==="hidden"}Rt&&(e.style.overflow="hidden"),v=()=>{var Ut=w.currentTime;return A+D*c(Ut/ce)},p&&ni(()=>{if(w.playState!=="running")return!1;var Ut=v();return p(Ut,1-Ut),!0})}w=e.animate(Nt,{duration:ce,fill:"forwards"}),w.onfinish=()=>{v=()=>n,p?.(n,1-n),i()}},{abort:()=>{w&&(w.cancel(),w.effect=null,w.onfinish=I)},deactivate:()=>{i=I},reset:()=>{n===0&&p?.(1,0)},t:()=>v()}}function kn(e,t){ye(()=>{var r=e.getRootNode(),n=r.host?r:r.head??r.ownerDocument.head;if(!n.querySelector("#"+t.hash)){let o=Le("style");o.id=t.hash,o.textContent=t.code,n.appendChild(o),l&&ti(t.hash,o)}})}var lh=[...` 	
-\r\f\xA0\v\uFEFF`];function ai(e){return new Rn(e)}var Rn=class{#e;#t;constructor(t){var r=new Map,n=(i,s)=>{var a=at(s,!1,!1);return r.set(i,a),a};let o=new Proxy({...t.props||{},$$events:{}},{get(i,s){return C(r.get(s)??n(s,Reflect.get(i,s)))},has(i,s){return s===Wt?!0:(C(r.get(s)??n(s,Reflect.get(i,s))),Reflect.has(i,s))},set(i,s,a){return K(r.get(s)??n(s,a),a),Reflect.set(i,s,a)}});this.#t=(t.hydrate?Tn:Er)(t.component,{target:t.target,anchor:t.anchor,props:o,context:t.context,intro:t.intro??!1,recover:t.recover,transformError:t.transformError}),!V&&(!t?.props?.$$host||t.sync===!1)&&St(),this.#e=o.$$events;for(let i of Object.keys(this.#t))i==="$set"||i==="$destroy"||i==="$on"||U(this,i,{get(){return this.#t[i]},set(s){this.#t[i]=s},enumerable:!0});this.#t.$set=i=>{Object.assign(o,i)},this.#t.$destroy=()=>{An(this.#t)}}$set(t){this.#t.$set(t)}$on(t,r){this.#e[t]=this.#e[t]||[];let n=(...o)=>r.call(this,...o);return this.#e[t].push(n),()=>{this.#e[t]=this.#e[t].filter(o=>o!==n)}}$destroy(){this.#t.$destroy()}};var ws;typeof HTMLElement=="function"&&(ws=class extends HTMLElement{$$ctor;$$s;$$c;$$cn=!1;$$d={};$$r=!1;$$p_d={};$$l={};$$l_u=new Map;$$me;$$shadowRoot=null;constructor(e,t,r){super(),this.$$ctor=e,this.$$s=t,r&&(this.$$shadowRoot=this.attachShadow(r))}addEventListener(e,t,r){if(this.$$l[e]=this.$$l[e]||[],this.$$l[e].push(t),this.$$c){let n=this.$$c.$on(e,t);this.$$l_u.set(t,n)}super.addEventListener(e,t,r)}removeEventListener(e,t,r){if(super.removeEventListener(e,t,r),this.$$c){let n=this.$$l_u.get(t);n&&(n(),this.$$l_u.delete(t))}}async connectedCallback(){if(this.$$cn=!0,!this.$$c){let e=function(n){return o=>{let i=Le("slot");n!=="default"&&(i.name=n),kt(o,i)}};if(await Promise.resolve(),!this.$$cn||this.$$c)return;let t={},r=bs(this);for(let n of this.$$s)n in r&&(n==="default"&&!this.$$d.children?(this.$$d.children=e(n),t.default=!0):t[n]=e(n));for(let n of this.attributes){let o=this.$$g_p(n.name);o in this.$$d||(this.$$d[o]=Dn(o,n.value,this.$$p_d,"toProp"))}for(let n in this.$$p_d)!(n in this.$$d)&&this[n]!==void 0&&(this.$$d[n]=this[n],delete this[n]);this.$$c=ai({component:this.$$ctor,target:this.$$shadowRoot||this,props:{...this.$$d,$$slots:t,$$host:this}}),this.$$me=gr(()=>{X(()=>{this.$$r=!0;for(let n of Nr(this.$$c)){if(!this.$$p_d[n]?.reflect)continue;this.$$d[n]=this.$$c[n];let o=Dn(n,this.$$d[n],this.$$p_d,"toAttribute");o==null?this.removeAttribute(this.$$p_d[n].attribute||n):this.setAttribute(this.$$p_d[n].attribute||n,o)}this.$$r=!1})});for(let n in this.$$l)for(let o of this.$$l[n]){let i=this.$$c.$on(n,o);this.$$l_u.set(o,i)}this.$$l={}}}attributeChangedCallback(e,t,r){this.$$r||(e=this.$$g_p(e),this.$$d[e]=Dn(e,r,this.$$p_d,"toProp"),this.$$c?.$set({[e]:this.$$d[e]}))}disconnectedCallback(){this.$$cn=!1,Promise.resolve().then(()=>{!this.$$cn&&this.$$c&&(this.$$c.$destroy(),this.$$me(),this.$$c=void 0)})}$$g_p(e){return Nr(this.$$p_d).find(t=>this.$$p_d[t].attribute===e||!this.$$p_d[t].attribute&&t.toLowerCase()===e)||e}});function Dn(e,t,r,n){let o=r[e]?.type;if(t=o==="Boolean"&&typeof t!="boolean"?t!=null:t,!n||!r[e])return t;if(n==="toAttribute")switch(o){case"Object":case"Array":return t==null?null:JSON.stringify(t);case"Boolean":return t?"":null;case"Number":return t??null;default:return t}else switch(o){case"Object":case"Array":return t&&JSON.parse(t);case"Boolean":return t;case"Number":return t!=null?+t:t;default:return t}}function bs(e){let t={};return e.childNodes.forEach(r=>{t[r.slot||"default"]=!0}),t}var Sr=fr(!1);function fi(){Sr.set(!0)}function li(){Sr.set(!1)}var Ts=e=>e;function ci(e,{delay:t=0,duration:r=400,easing:n=Ts}={}){let o=+getComputedStyle(e).opacity;return{delay:t,duration:r,easing:n,css:i=>`opacity: ${i*o}`}}var As=wn('<div class="wails-reconnect-overlay svelte-1wz61o"><div class="wails-reconnect-overlay-content svelte-1wz61o"><div class="wails-reconnect-overlay-loadingspinner svelte-1wz61o"></div></div></div>'),Ss={hash:"svelte-1wz61o",code:`.wails-reconnect-overlay.svelte-1wz61o {position:fixed;top:0;left:0;width:100%;height:100%;backdrop-filter:blur(2px) saturate(0%) contrast(50%) brightness(25%);z-index:999999}.wails-reconnect-overlay-content.svelte-1wz61o {position:relative;top:50%;transform:translateY(-50%);margin:0;background-image:url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEsAAAA7CAMAAAAEsocZAAAC91BMVEUAAACzQ0PjMjLkMjLZLS7XLS+vJCjkMjKlEx6uGyHjMDGiFx7GJyrAISjUKy3mMzPlMjLjMzOsGyDKJirkMjK6HyXmMjLgMDC6IiLcMjLULC3MJyrRKSy+IibmMzPmMjK7ISXlMjLIJimzHSLkMjKtGiHZLC7BIifgMDCpGSDFIivcLy+yHSKoGR+eFBzNKCvlMjKxHSPkMTKxHSLmMjLKJyq5ICXDJCe6ISXdLzDkMjLmMzPFJSm2HyTlMTLhMDGyHSKUEBmhFx24HyTCJCjHJijjMzOiFh7mMjJ6BhDaLDCuGyOKABjnMzPGJinJJiquHCGEChSmGB/pMzOiFh7VKy3OKCu1HiSvHCLjMTLMKCrBIyeICxWxHCLDIyjSKizBI
 @@END
