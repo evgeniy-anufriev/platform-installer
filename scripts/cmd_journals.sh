@@ -71,3 +71,12 @@ raise SystemExit(
 )
 PY
 #===============================================================================================================
+#CHECK_TASK
+ansible node1 \
+  -i 'node1,' \
+  -e 'ansible_host=IP_NODE1' \
+  -u scada-docker \
+  --ask-pass \
+  --become --ask-become-pass \
+  -m ansible.builtin.slurp \
+  -a 'src=/etc/platform-installer/pki/project-bc8d04c2dcc8c9e4/installer-tls--node1/ca-chain.pem'
