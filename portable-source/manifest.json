@@ -1,46 +1,46 @@
 {
   "format": "platform-installer-portable-source-v3",
   "maxPartBytes": 5000000,
-  "sourceRevision": "caeb55324a18e53237364bdfe30ea5e5d07cfc9e",
+  "sourceRevision": "e19c38422c5e3948cac7f1d245fb5153cb84e394",
   "files": 6564,
-  "sourceBytes": 68970480,
+  "sourceBytes": 68987287,
   "textFiles": 6475,
   "binaryFiles": 89,
   "parts": [
     {
       "name": "source-0001.txt",
-      "bytes": 4890823,
-      "sha256": "3d6ba34bce39a0b42234487555468f461d08e62c73b7c4a75ba737337dcf84f1"
+      "bytes": 4894848,
+      "sha256": "38ac73f31302fa704319378ddee5c2ec7b71cf20aa7244f2f979f6a130e57921"
     },
     {
       "name": "source-0002.txt",
-      "bytes": 4876862,
-      "sha256": "fb4091936e8454246b04b8e0844cef5081f510608e2f66d99475e089a36152db"
+      "bytes": 4841379,
+      "sha256": "8c01257f8286db757f44157a105b1460e81b8e186745c57616e39c1694c0c973"
     },
     {
       "name": "source-0003.txt",
-      "bytes": 4941094,
-      "sha256": "3ca81bb993d77de97130143421e9f3a7a9c6c4a64f89eac61014914265db02dc"
+      "bytes": 4963748,
+      "sha256": "bff0b302affefd018b5ea774fb87f4500fbbac72e4443908d9d917c721d5d2dd"
     },
     {
       "name": "source-0004.txt",
-      "bytes": 4951459,
-      "sha256": "1750958e7916fa07216e3bb7ece8f9f7cf5f8f46d728e43b1199228dc1ebfe03"
+      "bytes": 4929410,
+      "sha256": "27bb6d4fcc445a8320f38909d0d6a5bf8352552e3ea6e3c2c2e2b1c1b4ca301a"
     },
     {
       "name": "source-0005.txt",
-      "bytes": 4860485,
-      "sha256": "50705945f9762c5f8c30c7dbe7595a8150d9f30be539e2a09ea72b8873f94a61"
+      "bytes": 4871488,
+      "sha256": "ae9e531f35ac1c37ca7fab32264f7935cba49f3895709550c470c83d1befaa31"
     },
     {
       "name": "source-0006.txt",
-      "bytes": 4867850,
-      "sha256": "f5016887d4f3d196338c6f23b0cb71d35360bbee4076b8feb208baaca26f0263"
+      "bytes": 4885060,
+      "sha256": "b7a36a255d83ba77b7bf9048e4005716f6cff18a53a707585795ca30f2a82398"
     },
     {
       "name": "source-0007.txt",
-      "bytes": 4856228,
-      "sha256": "5a260117810ac36888154fa1b135989a1aaa1e87889cd35eb04aca2c39ddf49a"
+      "bytes": 4875677,
+      "sha256": "2d71fed1ad874447371347ac00fe61824a76da4cb70b13e12e847ed37532a9db"
     },
     {
       "name": "source-0008.txt",

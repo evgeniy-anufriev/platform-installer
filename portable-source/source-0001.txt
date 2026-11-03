@@ -87661,7 +87661,7 @@ catalogLock:
 })();
 
 @@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":135046,"sha256":"84b85714731111c87e56637adfa5b9cc6e08bb802b21e10b9b4d36e4c3560e37","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49805}
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":135133,"sha256":"c6a600a58aec93beea829b1994359dcbb97b3b5618566a9cf020c6265b0a4daa","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49805}
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   EditResult,
@@ -88979,7 +88979,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
           (!plan?.secretOutputEncryptionRequired ||
             !plan.secretOutputEncrypt
 @@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":135046,"sha256":"84b85714731111c87e56637adfa5b9cc6e08bb802b21e10b9b4d36e4c3560e37","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49750}
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":135133,"sha256":"c6a600a58aec93beea829b1994359dcbb97b3b5618566a9cf020c6265b0a4daa","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49750}
 ionPasswordPresent))
       )
         return;
@@ -90343,7 +90343,7 @@ ionPasswordPresent))
               onSelectedDeploymentChange={setSelectedTopologyDeployment}
   
 @@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":135046,"sha256":"84b85714731111c87e56637adfa5b9cc6e08bb802b21e10b9b4d36e4c3560e37","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":35491}
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":135133,"sha256":"c6a600a58aec93beea829b1994359dcbb97b3b5618566a9cf020c6265b0a4daa","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":35578}
             selectedHostId={selectedTopologyHost}
               onSelectedHostChange={setSelectedTopologyHost}
               onConfigureDeployment={(deploymentId) => {
@@ -90399,6 +90399,7 @@ ionPasswordPresent))
                 backendError={editError?.message}
                 importCompleted={importCompleted}
                 loadSecrets={api.getRuntimeSecretDescriptors}
+                loadPendingSecrets={api.getPendingApplicationRuntimeSecretDescriptors}
                 executionContextKey={JSON.stringify([
                   executionNode?.selectionKind,
                   executionNode?.selectedHostId,
@@ -91999,7 +92000,7 @@ function BindingRow({
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/ApplicationCredentials.tsx","mode":420,"size":25376,"sha256":"49457d214f17b0dc15286daf9dab8017ec4b7dd07d3d952f2e59647731025d69","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":25376}
+@@PORTABLE {"path":"frontend/src/ApplicationCredentials.tsx","mode":420,"size":26071,"sha256":"6413aec6a6f156920cfe76f1acffa77e541216b943c746cc1cbb84f0806fd01d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":26071}
 import { useRef, useState, type ReactNode } from "react";
 import { objectValue } from "./application-draft";
 import { ApplicationValueFields } from "./ApplicationValueFields";
@@ -92327,13 +92328,16 @@ export function ApplicationCredentials({
                   <ApplicationSecretAvailabilityBadge
                     session={secretSession}
                     resolved={
+                      secretSession.pending ||
                       Object.keys(objectValue(resolvedAccounts[name])).length >
-                      0
+                        0
                     }
                     sourceRefs={Object.values(
-                      objectValue(
-                        objectValue(resolvedAccounts[name]).credentials,
-                      ),
+                      secretSession.pending
+                        ? { ...base, ...credentials }
+                        : objectValue(
+                            objectValue(resolvedAccounts[name]).credentials,
+                          ),
                     )
                       .map((credential) =>
                         objectValue(objectValue(credential).source),
@@ -92344,11 +92348,11 @@ export function ApplicationCredentials({
                 )}
                 {secretSession &&
                   (secretSession.disabled ||
-                    !Object.keys(objectValue(resolvedAccounts[name]))
-                      .length) && (
+                    (!secretSession.pending &&
+                      !Object.keys(objectValue(resolvedAccounts[name]))
+                        .length)) && (
                     <small className="application-secret-prerequisite">
-                      Сохраните проект и получите актуальную проверку Core перед
-                      вводом секрета.
+                      Сохраните изменения проекта перед вводом секрета.
                     </small>
                   )}
               </h3>
@@ -92502,15 +92506,23 @@ export function ApplicationCredentials({
                                         session={secretSession}
                                         label={`${name}: ${field === "password" ? "Пароль" : "Секрет имени пользователя"}`}
                                         sourceRef={String(
-                                          objectValue(
-                                            objectValue(
-                                              objectValue(
+                                          secretSession.pending
+                                            ? ((Object.keys(source).length
+                                                ? source
+                                                : objectValue(
+                                                    objectValue(base[field])
+                                                      .source,
+                                                  )
+                                              ).ref ?? "")
+                                            : (objectValue(
                                                 objectValue(
-                                                  resolvedAccounts[name],
-                                                ).credentials,
-                                              )[field],
-                                            ).source,
-                                          ).ref ?? "",
+                                                  objectValue(
+                                                    objectValue(
+                                                      resolvedAccounts[name],
+                                                    ).credentials,
+                                                  )[field],
+                                                ).source,
+                                              ).ref ?? ""),
                                         )}
                                         shared={sharedSecretRefs.includes(
                                           String(
@@ -93861,12 +93873,13 @@ export function ApplicationPorts({
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/ApplicationProvidedConnections.tsx","mode":420,"size":6042,"sha256":"75556ebcc55857635f0720269d9454f26b6fe17246e25185dc7803abab7e910d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":6042}
+@@PORTABLE {"path":"frontend/src/ApplicationProvidedConnections.tsx","mode":420,"size":7443,"sha256":"3d75e9945079a772988586823e42d2086b88c2c8766bfc4b9cf76c5c033d11c5","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7443}
 import { objectValue } from "./application-draft";
 import { ApplicationValueFields } from "./ApplicationValueFields";
 import { CredentialSourceEditor } from "./ApplicationCredentials";
 import {
   ApplicationRuntimeSecretField,
+  ApplicationSecretAvailabilityBadge,
   type ApplicationSecretSession,
 } from "./ApplicationRuntimeSecretField";
 
@@ -93903,7 +93916,31 @@ export function ApplicationProvidedConnections({
             className="application-provided-connection"
             aria-label={`Предоставляемое подключение ${name}`}
           >
-            <h3>Предоставляемое подключение · {name}</h3>
+            <h3>
+              Предоставляемое подключение · {name}{" "}
+              {secretSession && (
+                <ApplicationSecretAvailabilityBadge
+                  session={secretSession}
+                  resolved={
+                    !!secretSession.pending ||
+                    Object.keys(objectValue(resolved[name])).length > 0
+                  }
+                  sourceRefs={Object.values(
+                    secretSession.pending
+                      ? {
+                          ...objectValue(declaration.credentials),
+                          ...credentials,
+                        }
+                      : objectValue(objectValue(resolved[name]).credentials),
+                  )
+                    .map((credential) =>
+                      objectValue(objectValue(credential).source),
+                    )
+                    .filter((source) => source.kind === "runtime_secret_ref")
+                    .map((source) => String(source.ref ?? ""))}
+                />
+              )}
+            </h3>
             <p>
               {String(declaration.application)} · {String(declaration.protocol)}{" "}
               ·{" "}
@@ -93943,14 +93980,20 @@ export function ApplicationProvidedConnections({
                                   session={secretSession}
                                   label={`${name} · ${field}`}
                                   sourceRef={String(
-                                    objectValue(
-                                      objectValue(
-                                        objectValue(
-                                          objectValue(resolved[name])
-                                            .credentials,
-                                        )[field],
-                                      ).source,
-                                    ).ref ?? "",
+                                    secretSession.pending
+                                      ? (objectValue(
+                                          objectValue(
+                                            credentials[field] ?? source,
+                                          ).source,
+                                        ).ref ?? "")
+                                      : (objectValue(
+                                          objectValue(
+                                            objectValue(
+                                              objectValue(resolved[name])
+                                                .credentials,
+                                            )[field],
+                                          ).source,
+                                        ).ref ?? ""),
                                   )}
                                 />
                               ) : undefined
@@ -94381,7 +94424,7 @@ export function ApplicationRegistryCredentials({
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/ApplicationRuntimeSecretField.tsx","mode":420,"size":6417,"sha256":"e7ebaef54d4cf97e93526e48e5f8f7aaa685c700a9f10c656202dc6b4bd81424","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":6417}
+@@PORTABLE {"path":"frontend/src/ApplicationRuntimeSecretField.tsx","mode":420,"size":6668,"sha256":"13d06c24738a3ec430137f387186fd3d566300e1f059a37fb5e42674b9e4fded","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":6668}
 import { useState } from "react";
 import type {
   RuntimeSecretDescriptorOperation,
@@ -94389,6 +94432,8 @@ import type {
 } from "./backend";
 
 type Session = {
+  pending?: boolean;
+  applicationSlot?: string;
   projectRevision: string;
   contextKey?: string;
   libraryId: string;
@@ -94510,14 +94555,20 @@ function RuntimeSecretField({
       if (
         operation.status !== "READY" ||
         operation.projectRevision !== session.projectRevision ||
-        !operation.descriptorSetFingerprint ||
+        (!session.pending && !operation.descriptorSetFingerprint) ||
         matches?.length !== 1
       )
         throw new Error("RUNTIME_SECRET_DESCRIPTOR_UNAVAILABLE");
       const requirementRef = matches[0].requirementRef;
       await session.save({
+        ...(session.pending
+          ? {
+              pendingApplicationInput: true,
+              applicationSlot: session.applicationSlot,
+            }
+          : {}),
         projectRevision: operation.projectRevision,
-        descriptorSetFingerprint: operation.descriptorSetFingerprint,
+        descriptorSetFingerprint: operation.descriptorSetFingerprint ?? "",
         serviceDeployment: "",
         applicationLibrary: session.libraryId,
         applicationRequirementRef: requirementRef,
@@ -95857,7 +95908,7 @@ export function inferParameterValue(text: string): string | number | boolean {
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":76406,"sha256":"2c1b36ebfab0c82ddff83019478905d9536550bdc38c7034c85cb7b488cad413","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":49869}
+@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":77997,"sha256":"895d41b503450bf1c40a40a1779e2ea57ff88950a505a044ef5c7625c029dd26","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":49891}
 import { ApplicationProvidedConnections } from "./ApplicationProvidedConnections";
 import { type ApplicationSecretSession } from "./ApplicationRuntimeSecretField";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -95904,6 +95955,7 @@ export function ApplicationsPage({
   onInstallation,
   onDirtyChange,
   loadSecrets,
+  loadPendingSecrets,
   saveSecrets,
   loadSecretAvailability,
   executionContextKey = "",
@@ -95926,6 +95978,10 @@ export function ApplicationsPage({
   importCompleted?: boolean;
   onProviderSecrets?: (deploymentId: string) => void;
   loadSecrets?: () => Promise<RuntimeSecretDescriptorOperation>;
+  loadPendingSecrets?: (context: {
+    applicationLibrary: string;
+    applicationSlot?: string;
+  }) => Promise<RuntimeSecretDescriptorOperation>;
   saveSecrets?: (input: RuntimeSecretValuesInput) => Promise<void>;
   loadSecretAvailability?: () => Promise<RuntimeSecretDescriptorOperation>;
   executionContextKey?: string;
@@ -96368,6 +96424,52 @@ export function ApplicationsPage({
     !dirty &&
     intents.length === 0 &&
     snapshot?.projectRevision === managed?.projectRevision;
+  const editableSecretSession =
+    !busy && !draftActive && !dirty && intents.length === 0;
+  const pendingSecretContext = JSON.stringify([
+    selected,
+    slot,
+    managed?.projectRevision,
+  ]);
+  const [pendingAvailability, setPendingAvailability] = useState<{
+    context: string;
+    value: RuntimeSecretDescriptorOperation;
+  }>();
+  const pendingGeneration = useRef(0);
+  const loadPendingApplicationSecrets = useCallback(async () => {
+    const generation = ++pendingGeneration.current;
+    const value = await loadPendingSecrets!({
+      applicationLibrary: selected,
+      applicationSlot: slot,
+    });
+    if (pendingGeneration.current === generation)
+      setPendingAvailability({ context: pendingSecretContext, value });
+    return value;
+  }, [loadPendingSecrets, selected, slot, pendingSecretContext]);
+  useEffect(() => {
+    if (
+      !loadPendingSecrets ||
+      !editableSecretSession ||
+      !["Секреты", "Подключения", "Ресурсы и секреты"].includes(selectedTab)
+    )
+      return;
+    const refresh = () => {
+      void loadPendingApplicationSecrets().catch(() =>
+        setPendingAvailability(undefined),
+      );
+    };
+    refresh();
+    const interval = window.setInterval(refresh, 10000);
+    return () => {
+      ++pendingGeneration.current;
+      window.clearInterval(interval);
+    };
+  }, [
+    loadPendingSecrets,
+    editableSecretSession,
+    selectedTab,
+    loadPendingApplicationSecrets,
+  ]);
   // Selecting an authored reference must not depend on successful Core resolution.
   const providedConnectionChoices = Object.entries(libraries).flatMap(
     ([id, lib]) =>
@@ -96387,6 +96489,7 @@ export function ApplicationsPage({
     ++availabilityGeneration.current;
     if (
       !["Секреты", "Подключения", "Ресурсы и секреты"].includes(selectedTab) ||
+      !!loadPendingSecrets ||
       !freshSecrets ||
       !loadSecrets ||
       !loadSecretAvailability
@@ -96425,6 +96528,7 @@ export function ApplicationsPage({
     selectedTab,
     freshSecrets,
     loadSecrets,
+    loadPendingSecrets,
     loadSecretAvailability,
     loadApplicationSecrets,
     refreshSecretAvailability,
@@ -96437,14 +96541,35 @@ export function ApplicationsPage({
       )
     : {};
   const librarySecretSession: ApplicationSecretSession | undefined =
-    loadSecrets && saveSecrets
+    (loadSecrets || loadPendingSecrets) && saveSecrets
       ? {
           projectRevision: managed?.projectRevision ?? "",
           contextKey: executionContextKey,
           libraryId: selected,
-          disabled: busy || !freshSecrets,
-          load: loadApplicationSecrets,
-          save: saveApplicationSecrets,
+          pending: !!loadPendingSecrets,
+          applicationSlot: slot,
+          disabled: loadPendingSecrets
+            ? !editableSecretSession
+            : busy || !freshSecrets,
+          availability: loadPendingSecrets
+            ? pendingAvailability?.context === pendingSecretContext
+              ? pendingAvailability.value
+              : undefined
+            : freshSecrets &&
+                secretAvailability &&
+                secretAvailability?.snapshot === snapshot &&
+                secretAvailability.scope === secretScope
+              ? secretAvailability.value
+              : undefined,
+          load: loadPendingSecrets
+            ? loadPendingApplicationSecrets
+            : loadApplicationSecrets,
+          save: loadPendingSecrets
+            ? async (input) => {
+                await saveSecrets(input);
+                await loadPendingApplicationSecrets();
+              }
+            : saveApplicationSecrets,
         }
       : undefined;
   const secretRefCounts: Record<string, number> = {};
@@ -97086,7 +97211,10 @@ export function ApplicationsPage({
                         disabled={busy}
                         onDirtyChange={(value) =>
                           markChildDirty(value, section)
-                        }
+               
+@@END
+@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":77997,"sha256":"895d41b503450bf1c40a40a1779e2ea57ff88950a505a044ef5c7625c029dd26","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":28106}
+         }
                         onSave={(value) =>
                           send(
                             Object.keys(value).length
@@ -97140,10 +97268,7 @@ export function ApplicationsPage({
                       }
                     />
                     <ApplicationProvidedConnections
-                      secretSession={librarySecretSes
-@@END
-@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":76406,"sha256":"2c1b36ebfab0c82ddff83019478905d9536550bdc38c7034c85cb7b488cad413","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":26537}
-sion}
+                      secretSession={librarySecretSession}
                       definitions={objectValue(definition.provided_connections)}
                       value={objectValue(library.provided_connections)}
                       resolved={
@@ -97528,25 +97653,7 @@ sion}
                       сессии.
                     </p>
                     <ApplicationCredentials
-                      secretSession={
-                        loadSecrets && saveSecrets
-                          ? {
-                              projectRevision: managed?.projectRevision ?? "",
-                              contextKey: executionContextKey,
-                              libraryId: selected,
-                              disabled: busy || !freshSecrets,
-                              availability:
-                                freshSecrets &&
-                                secretAvailability &&
-                                secretAvailability?.snapshot === snapshot &&
-                                secretAvailability.scope === secretScope
-                                  ? secretAvailability.value
-                                  : undefined,
-                              load: loadApplicationSecrets,
-                              save: saveApplicationSecrets,
-                            }
-                          : undefined
-                      }
+                      secretSession={librarySecretSession}
                       resolvedAccounts={resolvedSecretAccounts}
                       sharedSecretRefs={Object.keys(secretRefCounts).filter(
                         (ref) => secretRefCounts[ref] > 1,
@@ -97605,8 +97712,8 @@ sion}
                     />
                     {draftActive && (
                       <p>
-                        Для сессионного ввода сначала сохраните проект и
-                        проверьте текущую ревизию.
+                        Для сессионного ввода сначала сохраните изменения
+                        проекта.
                       </p>
                     )}
                   </>
