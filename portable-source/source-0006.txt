@@ -1,3 +1,1666 @@
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/index/encoder.go","mode":420,"size":5131,"sha256":"2b06923bf7c85f1d23ee8a02d773c8086acb5cd8fbcc459268648fcc0af1ec21","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5131}
+package index
+
+import (
+	"bytes"
+	"errors"
+	"fmt"
+	"io"
+	"sort"
+	"time"
+
+	"github.com/go-git/go-git/v5/plumbing/hash"
+	"github.com/go-git/go-git/v5/utils/binary"
+)
+
+var (
+	// EncodeVersionSupported is the range of supported index versions
+	EncodeVersionSupported uint32 = 4
+
+	// ErrInvalidTimestamp is returned by Encode if a Index with a Entry with
+	// negative timestamp values
+	ErrInvalidTimestamp = errors.New("negative timestamps are not allowed")
+)
+
+// An Encoder writes an Index to an output stream.
+type Encoder struct {
+	w         io.Writer
+	hash      hash.Hash
+	lastEntry *Entry
+}
+
+// NewEncoder returns a new encoder that writes to w.
+func NewEncoder(w io.Writer) *Encoder {
+	h := hash.New(hash.CryptoType)
+	mw := io.MultiWriter(w, h)
+	return &Encoder{mw, h, nil}
+}
+
+// Encode writes the Index to the stream of the encoder.
+func (e *Encoder) Encode(idx *Index) error {
+	return e.encode(idx, true)
+}
+
+func (e *Encoder) encode(idx *Index, footer bool) error {
+
+	// TODO: support extensions
+	if idx.Version > EncodeVersionSupported {
+		return ErrUnsupportedVersion
+	}
+
+	if err := e.encodeHeader(idx); err != nil {
+		return err
+	}
+
+	if err := e.encodeEntries(idx); err != nil {
+		return err
+	}
+
+	if footer {
+		return e.encodeFooter()
+	}
+	return nil
+}
+
+func (e *Encoder) encodeHeader(idx *Index) error {
+	return binary.Write(e.w,
+		indexSignature,
+		idx.Version,
+		uint32(len(idx.Entries)),
+	)
+}
+
+func (e *Encoder) encodeEntries(idx *Index) error {
+	sort.Sort(byName(idx.Entries))
+
+	for _, entry := range idx.Entries {
+		if err := e.encodeEntry(idx, entry); err != nil {
+			return err
+		}
+		entryLength := entryHeaderLength
+		if entry.IntentToAdd || entry.SkipWorktree {
+			entryLength += 2
+		}
+
+		wrote := entryLength + len(entry.Name)
+		if err := e.padEntry(idx, wrote); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (e *Encoder) encodeEntry(idx *Index, entry *Entry) error {
+	sec, nsec, err := e.timeToUint32(&entry.CreatedAt)
+	if err != nil {
+		return err
+	}
+
+	msec, mnsec, err := e.timeToUint32(&entry.ModifiedAt)
+	if err != nil {
+		return err
+	}
+
+	flags := uint16(entry.Stage&0x3) << 12
+	if l := len(entry.Name); l < nameMask {
+		flags |= uint16(l)
+	} else {
+		flags |= nameMask
+	}
+
+	flow := []interface{}{
+		sec, nsec,
+		msec, mnsec,
+		entry.Dev,
+		entry.Inode,
+		entry.Mode,
+		entry.UID,
+		entry.GID,
+		entry.Size,
+		entry.Hash[:],
+	}
+
+	flagsFlow := []interface{}{flags}
+
+	if entry.IntentToAdd || entry.SkipWorktree {
+		var extendedFlags uint16
+
+		if entry.IntentToAdd {
+			extendedFlags |= intentToAddMask
+		}
+		if entry.SkipWorktree {
+			extendedFlags |= skipWorkTreeMask
+		}
+
+		flagsFlow = []interface{}{flags | entryExtended, extendedFlags}
+	}
+
+	flow = append(flow, flagsFlow...)
+
+	if err := binary.Write(e.w, flow...); err != nil {
+		return err
+	}
+
+	switch idx.Version {
+	case 2, 3:
+		err = e.encodeEntryName(entry)
+	case 4:
+		err = e.encodeEntryNameV4(entry)
+	default:
+		err = ErrUnsupportedVersion
+	}
+
+	return err
+}
+
+func (e *Encoder) encodeEntryName(entry *Entry) error {
+	return binary.Write(e.w, []byte(entry.Name))
+}
+
+func (e *Encoder) encodeEntryNameV4(entry *Entry) error {
+	// V4 prefix compression: find the longest common prefix between the
+	// previous entry's name and the current one. The strip length tells
+	// the decoder how many bytes to remove from the end of the previous
+	// name, and the suffix is the remainder of the current name.
+	prefix := 0
+	if e.lastEntry != nil {
+		prefix = commonPrefixLen(e.lastEntry.Name, entry.Name)
+	}
+	stripLen := 0
+	if e.lastEntry != nil {
+		stripLen = len(e.lastEntry.Name) - prefix
+	}
+
+	e.lastEntry = entry
+
+	if err := binary.WriteVariableWidthInt(e.w, int64(stripLen)); err != nil {
+		return err
+	}
+
+	suffix := entry.Name[prefix:]
+	return binary.Write(e.w, append([]byte(suffix), '\x00'))
+}
+
+// commonPrefixLen returns the length of the longest common byte prefix
+// between a and b.
+func commonPrefixLen(a, b string) int {
+	n := min(len(b), len(a))
+	for i := range n {
+		if a[i] != b[i] {
+			return i
+		}
+	}
+	return n
+}
+
+func (e *Encoder) encodeRawExtension(signature string, data []byte) error {
+	if len(signature) != 4 {
+		return fmt.Errorf("invalid signature length")
+	}
+
+	_, err := e.w.Write([]byte(signature))
+	if err != nil {
+		return err
+	}
+
+	err = binary.WriteUint32(e.w, uint32(len(data)))
+	if err != nil {
+		return err
+	}
+
+	_, err = e.w.Write(data)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (e *Encoder) timeToUint32(t *time.Time) (uint32, uint32, error) {
+	if t.IsZero() {
+		return 0, 0, nil
+	}
+
+	if t.Unix() < 0 || t.UnixNano() < 0 {
+		return 0, 0, ErrInvalidTimestamp
+	}
+
+	return uint32(t.Unix()), uint32(t.Nanosecond()), nil
+}
+
+func (e *Encoder) padEntry(idx *Index, wrote int) error {
+	if idx.Version == 4 {
+		return nil
+	}
+
+	padLen := 8 - wrote%8
+
+	_, err := e.w.Write(bytes.Repeat([]byte{'\x00'}, padLen))
+	return err
+}
+
+func (e *Encoder) encodeFooter() error {
+	return binary.Write(e.w, e.hash.Sum(nil))
+}
+
+type byName []*Entry
+
+func (l byName) Len() int           { return len(l) }
+func (l byName) Swap(i, j int)      { l[i], l[j] = l[j], l[i] }
+func (l byName) Less(i, j int) bool { return l[i].Name < l[j].Name }
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/index/index.go","mode":420,"size":7110,"sha256":"e623330b42ccf20916c1b627ee5fb33e9f018b06d645a5ad9f4b176650f3f331","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7110}
+package index
+
+import (
+	"bytes"
+	"errors"
+	"fmt"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/filemode"
+)
+
+var (
+	// ErrUnsupportedVersion is returned by Decode when the index file version
+	// is not supported.
+	ErrUnsupportedVersion = errors.New("unsupported version")
+	// ErrEntryNotFound is returned by Index.Entry, if an entry is not found.
+	ErrEntryNotFound = errors.New("entry not found")
+
+	indexSignature              = []byte{'D', 'I', 'R', 'C'}
+	treeExtSignature            = []byte{'T', 'R', 'E', 'E'}
+	resolveUndoExtSignature     = []byte{'R', 'E', 'U', 'C'}
+	endOfIndexEntryExtSignature = []byte{'E', 'O', 'I', 'E'}
+)
+
+// Stage during merge
+type Stage int
+
+const (
+	// Merged is the default stage, fully merged
+	Merged Stage = 1
+	// AncestorMode is the base revision
+	AncestorMode Stage = 1
+	// OurMode is the first tree revision, ours
+	OurMode Stage = 2
+	// TheirMode is the second tree revision, theirs
+	TheirMode Stage = 3
+)
+
+// Index contains the information about which objects are currently checked out
+// in the worktree, having information about the working files. Changes in
+// worktree are detected using this Index. The Index is also used during merges
+type Index struct {
+	// Version is index version
+	Version uint32
+	// Entries collection of entries represented by this Index. The order of
+	// this collection is not guaranteed
+	Entries []*Entry
+	// Cache represents the 'Cached tree' extension
+	Cache *Tree
+	// ResolveUndo represents the 'Resolve undo' extension
+	ResolveUndo *ResolveUndo
+	// EndOfIndexEntry represents the 'End of Index Entry' extension
+	EndOfIndexEntry *EndOfIndexEntry
+	// ModTime is the modification time of the index file
+	ModTime time.Time
+}
+
+// Add creates a new Entry and returns it. The caller should first check that
+// another entry with the same path does not exist.
+func (i *Index) Add(path string) *Entry {
+	e := &Entry{
+		Name: filepath.ToSlash(path),
+	}
+
+	i.Entries = append(i.Entries, e)
+	return e
+}
+
+// Entry returns the entry that match the given path, if any.
+func (i *Index) Entry(path string) (*Entry, error) {
+	path = filepath.ToSlash(path)
+	for _, e := range i.Entries {
+		if e.Name == path {
+			return e, nil
+		}
+	}
+
+	return nil, ErrEntryNotFound
+}
+
+// Remove remove the entry that match the give path and returns deleted entry.
+func (i *Index) Remove(path string) (*Entry, error) {
+	path = filepath.ToSlash(path)
+	for index, e := range i.Entries {
+		if e.Name == path {
+			i.Entries = append(i.Entries[:index], i.Entries[index+1:]...)
+			return e, nil
+		}
+	}
+
+	return nil, ErrEntryNotFound
+}
+
+// Glob returns the all entries matching pattern or nil if there is no matching
+// entry. The syntax of patterns is the same as in filepath.Glob.
+func (i *Index) Glob(pattern string) (matches []*Entry, err error) {
+	pattern = filepath.ToSlash(pattern)
+	for _, e := range i.Entries {
+		m, err := match(pattern, e.Name)
+		if err != nil {
+			return nil, err
+		}
+
+		if m {
+			matches = append(matches, e)
+		}
+	}
+
+	return
+}
+
+// String is equivalent to `git ls-files --stage --debug`
+func (i *Index) String() string {
+	buf := bytes.NewBuffer(nil)
+	for _, e := range i.Entries {
+		buf.WriteString(e.String())
+	}
+
+	return buf.String()
+}
+
+// Entry represents a single file (or stage of a file) in the cache. An entry
+// represents exactly one stage of a file. If a file path is unmerged then
+// multiple Entry instances may appear for the same path name.
+type Entry struct {
+	// Hash is the SHA1 of the represented file
+	Hash plumbing.Hash
+	// Name is the  Entry path name relative to top level directory
+	Name string
+	// CreatedAt time when the tracked path was created
+	CreatedAt time.Time
+	// ModifiedAt time when the tracked path was changed
+	ModifiedAt time.Time
+	// Dev and Inode of the tracked path
+	Dev, Inode uint32
+	// Mode of the path
+	Mode filemode.FileMode
+	// UID and GID, userid and group id of the owner
+	UID, GID uint32
+	// Size is the length in bytes for regular files
+	Size uint32
+	// Stage on a merge is defines what stage is representing this entry
+	// https://git-scm.com/book/en/v2/Git-Tools-Advanced-Merging
+	Stage Stage
+	// SkipWorktree used in sparse checkouts
+	// https://git-scm.com/docs/git-read-tree#_sparse_checkout
+	SkipWorktree bool
+	// IntentToAdd record only the fact that the path will be added later
+	// https://git-scm.com/docs/git-add ("git add -N")
+	IntentToAdd bool
+}
+
+func (e Entry) String() string {
+	buf := bytes.NewBuffer(nil)
+
+	fmt.Fprintf(buf, "%06o %s %d\t%s\n", e.Mode, e.Hash, e.Stage, e.Name)
+	fmt.Fprintf(buf, "  ctime: %d:%d\n", e.CreatedAt.Unix(), e.CreatedAt.Nanosecond())
+	fmt.Fprintf(buf, "  mtime: %d:%d\n", e.ModifiedAt.Unix(), e.ModifiedAt.Nanosecond())
+	fmt.Fprintf(buf, "  dev: %d\tino: %d\n", e.Dev, e.Inode)
+	fmt.Fprintf(buf, "  uid: %d\tgid: %d\n", e.UID, e.GID)
+	fmt.Fprintf(buf, "  size: %d\tflags: %x\n", e.Size, 0)
+
+	return buf.String()
+}
+
+// Tree contains pre-computed hashes for trees that can be derived from the
+// index. It helps speed up tree object generation from index for a new commit.
+type Tree struct {
+	Entries []TreeEntry
+}
+
+// TreeEntry entry of a cached Tree
+type TreeEntry struct {
+	// Path component (relative to its parent directory)
+	Path string
+	// Entries is the number of entries in the index that is covered by the tree
+	// this entry represents.
+	Entries int
+	// Trees is the number that represents the number of subtrees this tree has
+	Trees int
+	// Hash object name for the object that would result from writing this span
+	// of index as a tree.
+	Hash plumbing.Hash
+}
+
+// ResolveUndo is used when a conflict is resolved (e.g. with "git add path"),
+// these higher stage entries are removed and a stage-0 entry with proper
+// resolution is added. When these higher stage entries are removed, they are
+// saved in the resolve undo extension.
+type ResolveUndo struct {
+	Entries []ResolveUndoEntry
+}
+
+// ResolveUndoEntry contains the information about a conflict when is resolved
+type ResolveUndoEntry struct {
+	Path   string
+	Stages map[Stage]plumbing.Hash
+}
+
+// EndOfIndexEntry is the End of Index Entry (EOIE) is used to locate the end of
+// the variable length index entries and the beginning of the extensions. Code
+// can take advantage of this to quickly locate the index extensions without
+// having to parse through all of the index entries.
+//
+//  Because it must be able to be loaded before the variable length cache
+//  entries and other index extensions, this extension must be written last.
+type EndOfIndexEntry struct {
+	// Offset to the end of the index entries
+	Offset uint32
+	// Hash is a SHA-1 over the extension types and their sizes (but not
+	//	their contents).
+	Hash plumbing.Hash
+}
+
+// SkipUnless applies patterns in the form of A, A/B, A/B/C
+// to the index to prevent the files from being checked out
+func (i *Index) SkipUnless(patterns []string) {
+	for _, e := range i.Entries {
+		var include bool
+		for _, pattern := range patterns {
+			if strings.HasPrefix(e.Name, pattern) {
+				include = true
+				break
+			}
+		}
+		if !include {
+			e.SkipWorktree = true
+		}
+	}
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/index/match.go","mode":420,"size":4083,"sha256":"ace8dd9a7241447803707fe788b8f1d711f81139dffff0020ac33771980d4a32","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4083}
+package index
+
+import (
+	"path/filepath"
+	"runtime"
+	"unicode/utf8"
+)
+
+// match is filepath.Match with support to match fullpath and not only filenames
+// code from:
+// https://github.com/golang/go/blob/39852bf4cce6927e01d0136c7843f65a801738cb/src/path/filepath/match.go#L44-L224
+func match(pattern, name string) (matched bool, err error) {
+Pattern:
+	for len(pattern) > 0 {
+		var star bool
+		var chunk string
+		star, chunk, pattern = scanChunk(pattern)
+
+		// Look for match at current position.
+		t, ok, err := matchChunk(chunk, name)
+		// if we're the last chunk, make sure we've exhausted the name
+		// otherwise we'll give a false result even if we could still match
+		// using the star
+		if ok && (len(t) == 0 || len(pattern) > 0) {
+			name = t
+			continue
+		}
+		if err != nil {
+			return false, err
+		}
+		if star {
+			// Look for match skipping i+1 bytes.
+			// Cannot skip /.
+			for i := 0; i < len(name); i++ {
+				t, ok, err := matchChunk(chunk, name[i+1:])
+				if ok {
+					// if we're the last chunk, make sure we exhausted the name
+					if len(pattern) == 0 && len(t) > 0 {
+						continue
+					}
+					name = t
+					continue Pattern
+				}
+				if err != nil {
+					return false, err
+				}
+			}
+		}
+		return false, nil
+	}
+	return len(name) == 0, nil
+}
+
+// scanChunk gets the next segment of pattern, which is a non-star string
+// possibly preceded by a star.
+func scanChunk(pattern string) (star bool, chunk, rest string) {
+	for len(pattern) > 0 && pattern[0] == '*' {
+		pattern = pattern[1:]
+		star = true
+	}
+	inrange := false
+	var i int
+Scan:
+	for i = 0; i < len(pattern); i++ {
+		switch pattern[i] {
+		case '\\':
+			if runtime.GOOS != "windows" {
+				// error check handled in matchChunk: bad pattern.
+				if i+1 < len(pattern) {
+					i++
+				}
+			}
+		case '[':
+			inrange = true
+		case ']':
+			inrange = false
+		case '*':
+			if !inrange {
+				break Scan
+			}
+		}
+	}
+	return star, pattern[0:i], pattern[i:]
+}
+
+// matchChunk checks whether chunk matches the beginning of s.
+// If so, it returns the remainder of s (after the match).
+// Chunk is all single-character operators: literals, char classes, and ?.
+func matchChunk(chunk, s string) (rest string, ok bool, err error) {
+	for len(chunk) > 0 {
+		if len(s) == 0 {
+			return
+		}
+		switch chunk[0] {
+		case '[':
+			// character class
+			r, n := utf8.DecodeRuneInString(s)
+			s = s[n:]
+			chunk = chunk[1:]
+			// We can't end right after '[', we're expecting at least
+			// a closing bracket and possibly a caret.
+			if len(chunk) == 0 {
+				err = filepath.ErrBadPattern
+				return
+			}
+			// possibly negated
+			negated := chunk[0] == '^'
+			if negated {
+				chunk = chunk[1:]
+			}
+			// parse all ranges
+			match := false
+			nrange := 0
+			for {
+				if len(chunk) > 0 && chunk[0] == ']' && nrange > 0 {
+					chunk = chunk[1:]
+					break
+				}
+				var lo, hi rune
+				if lo, chunk, err = getEsc(chunk); err != nil {
+					return
+				}
+				hi = lo
+				if chunk[0] == '-' {
+					if hi, chunk, err = getEsc(chunk[1:]); err != nil {
+						return
+					}
+				}
+				if lo <= r && r <= hi {
+					match = true
+				}
+				nrange++
+			}
+			if match == negated {
+				return
+			}
+
+		case '?':
+			_, n := utf8.DecodeRuneInString(s)
+			s = s[n:]
+			chunk = chunk[1:]
+
+		case '\\':
+			if runtime.GOOS != "windows" {
+				chunk = chunk[1:]
+				if len(chunk) == 0 {
+					err = filepath.ErrBadPattern
+					return
+				}
+			}
+			fallthrough
+
+		default:
+			if chunk[0] != s[0] {
+				return
+			}
+			s = s[1:]
+			chunk = chunk[1:]
+		}
+	}
+	return s, true, nil
+}
+
+// getEsc gets a possibly-escaped character from chunk, for a character class.
+func getEsc(chunk string) (r rune, nchunk string, err error) {
+	if len(chunk) == 0 || chunk[0] == '-' || chunk[0] == ']' {
+		err = filepath.ErrBadPattern
+		return
+	}
+	if chunk[0] == '\\' && runtime.GOOS != "windows" {
+		chunk = chunk[1:]
+		if len(chunk) == 0 {
+			err = filepath.ErrBadPattern
+			return
+		}
+	}
+	r, n := utf8.DecodeRuneInString(chunk)
+	if r == utf8.RuneError && n == 1 {
+		err = filepath.ErrBadPattern
+	}
+	nchunk = chunk[n:]
+	if len(nchunk) == 0 {
+		err = filepath.ErrBadPattern
+	}
+	return
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/objfile/doc.go","mode":420,"size":85,"sha256":"bb4e7fd6f4294696436fdf547befdf50351f15bc95734c276ab576818c2055be","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":85}
+// Package objfile implements encoding and decoding of object files.
+package objfile
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/objfile/reader.go","mode":420,"size":3360,"sha256":"3fc930a0f6338c2283441d311a64fd9bde094fb67ad2991f57b804c25b449258","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3360}
+package objfile
+
+import (
+	"errors"
+	"io"
+	"strconv"
+
+	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/format/packfile"
+	"github.com/go-git/go-git/v5/utils/sync"
+)
+
+var (
+	ErrClosed        = errors.New("objfile: already closed")
+	ErrHeader        = errors.New("objfile: invalid header")
+	ErrHeaderNotRead = errors.New("objfile: Header must be called before Read")
+	ErrNegativeSize  = errors.New("objfile: negative object size")
+)
+
+// Reader reads and decodes compressed objfile data from a provided io.Reader.
+// Reader implements io.ReadCloser. Close should be called when finished with
+// the Reader. Close will not close the underlying io.Reader.
+type Reader struct {
+	multi   io.Reader
+	zlib    io.Reader
+	zlibref sync.ZLibReader
+	hasher  plumbing.Hasher
+}
+
+// NewReader returns a new Reader reading from r.
+func NewReader(r io.Reader) (*Reader, error) {
+	zlib, err := sync.GetZlibReader(r)
+	if err != nil {
+		return nil, packfile.ErrZLib.AddDetails("%s", err.Error())
+	}
+
+	return &Reader{
+		zlib:    zlib.Reader,
+		zlibref: zlib,
+	}, nil
+}
+
+// Header reads the type and the size of object, and prepares the reader for read
+func (r *Reader) Header() (t plumbing.ObjectType, size int64, err error) {
+	var raw []byte
+	raw, err = r.readUntil(' ')
+	if err != nil {
+		return
+	}
+
+	t, err = plumbing.ParseObjectType(string(raw))
+	if err != nil {
+		return
+	}
+
+	raw, err = r.readUntil(0)
+	if err != nil {
+		return
+	}
+
+	size, err = strconv.ParseInt(string(raw), 10, 64)
+	if err != nil {
+		err = ErrHeader
+		return
+	}
+
+	defer r.prepareForRead(t, size)
+	return
+}
+
+// readSlice reads one byte at a time from r until it encounters delim or an
+// error.
+func (r *Reader) readUntil(delim byte) ([]byte, error) {
+	var buf [1]byte
+	value := make([]byte, 0, 16)
+	for {
+		if n, err := r.zlib.Read(buf[:]); err != nil && (err != io.EOF || n == 0) {
+			if err == io.EOF {
+				return nil, ErrHeader
+			}
+			return nil, err
+		}
+
+		if buf[0] == delim {
+			return value, nil
+		}
+
+		value = append(value, buf[0])
+	}
+}
+
+func (r *Reader) prepareForRead(t plumbing.ObjectType, size int64) {
+	r.hasher = plumbing.NewHasher(t, size)
+	r.multi = io.TeeReader(r.zlib, r.hasher)
+}
+
+// Read reads len(p) bytes into p from the object data stream. It returns
+// the number of bytes read (0 <= n <= len(p)) and any error encountered. Even
+// if Read returns n < len(p), it may use all of p as scratch space during the
+// call.
+//
+// If Read encounters the end of the data stream it will return err == io.EOF,
+// either in the current call if n > 0 or in a subsequent call.
+//
+// Read returns ErrHeaderNotRead if Header has not been called successfully.
+func (r *Reader) Read(p []byte) (n int, err error) {
+	if r.multi == nil {
+		return 0, ErrHeaderNotRead
+	}
+	return r.multi.Read(p)
+}
+
+// Hash returns the hash of the object data stream that has been read so far.
+// It returns the zero plumbing.Hash if Header has not been called
+// successfully — guarding against the nil hasher that prepareForRead has
+// not yet allocated.
+func (r *Reader) Hash() plumbing.Hash {
+	if r.multi == nil {
+		return plumbing.ZeroHash
+	}
+	return r.hasher.Sum()
+}
+
+// Close releases any resources consumed by the Reader. Calling Close does not
+// close the wrapped io.Reader originally passed to NewReader.
+func (r *Reader) Close() error {
+	sync.PutZlibReader(r.zlibref)
+	return nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/objfile/writer.go","mode":420,"size":2675,"sha256":"b0137a539f3a0db1c5b32bdbb0d4af86bb274dcf113f95d3a3743bf3285fb8c7","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2675}
+package objfile
+
+import (
+	"compress/zlib"
+	"errors"
+	"io"
+	"strconv"
+
+	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/utils/sync"
+)
+
+var (
+	ErrOverflow = errors.New("objfile: declared data length exceeded (overflow)")
+)
+
+// Writer writes and encodes data in compressed objfile format to a provided
+// io.Writer. Close should be called when finished with the Writer. Close will
+// not close the underlying io.Writer.
+type Writer struct {
+	raw    io.Writer
+	hasher plumbing.Hasher
+	multi  io.Writer
+	zlib   *zlib.Writer
+
+	closed  bool
+	pending int64 // number of unwritten bytes
+}
+
+// NewWriter returns a new Writer writing to w.
+//
+// The returned Writer implements io.WriteCloser. Close should be called when
+// finished with the Writer. Close will not close the underlying io.Writer.
+func NewWriter(w io.Writer) *Writer {
+	zlib := sync.GetZlibWriter(w)
+	return &Writer{
+		raw:  w,
+		zlib: zlib,
+	}
+}
+
+// WriteHeader writes the type and the size and prepares to accept the object's
+// contents. If an invalid t is provided, plumbing.ErrInvalidType is returned. If a
+// negative size is provided, ErrNegativeSize is returned.
+func (w *Writer) WriteHeader(t plumbing.ObjectType, size int64) error {
+	if !t.Valid() {
+		return plumbing.ErrInvalidType
+	}
+	if size < 0 {
+		return ErrNegativeSize
+	}
+
+	b := t.Bytes()
+	b = append(b, ' ')
+	b = append(b, []byte(strconv.FormatInt(size, 10))...)
+	b = append(b, 0)
+
+	defer w.prepareForWrite(t, size)
+	_, err := w.zlib.Write(b)
+
+	return err
+}
+
+func (w *Writer) prepareForWrite(t plumbing.ObjectType, size int64) {
+	w.pending = size
+
+	w.hasher = plumbing.NewHasher(t, size)
+	w.multi = io.MultiWriter(w.zlib, w.hasher)
+}
+
+// Write writes the object's contents. Write returns the error ErrOverflow if
+// more than size bytes are written after WriteHeader.
+func (w *Writer) Write(p []byte) (n int, err error) {
+	if w.closed {
+		return 0, ErrClosed
+	}
+
+	overwrite := false
+	if int64(len(p)) > w.pending {
+		p = p[0:w.pending]
+		overwrite = true
+	}
+
+	n, err = w.multi.Write(p)
+	w.pending -= int64(n)
+	if err == nil && overwrite {
+		err = ErrOverflow
+		return
+	}
+
+	return
+}
+
+// Hash returns the hash of the object data stream that has been written so far.
+// It can be called before or after Close.
+func (w *Writer) Hash() plumbing.Hash {
+	return w.hasher.Sum() // Not yet closed, return hash of data written so far
+}
+
+// Close releases any resources consumed by the Writer.
+//
+// Calling Close does not close the wrapped io.Writer originally passed to
+// NewWriter.
+func (w *Writer) Close() error {
+	defer sync.PutZlibWriter(w.zlib)
+	if err := w.zlib.Close(); err != nil {
+		return err
+	}
+
+	w.closed = true
+	return nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/packfile/common.go","mode":420,"size":1430,"sha256":"757257e51cb433d4eb7fff4252bd7f2e7d59b049bb17b97d32b004e69bddf16d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1430}
+package packfile
+
+import (
+	"io"
+
+	"github.com/go-git/go-git/v5/plumbing/storer"
+	"github.com/go-git/go-git/v5/utils/ioutil"
+)
+
+var signature = []byte{'P', 'A', 'C', 'K'}
+
+const (
+	// VersionSupported is the packfile version supported by this package
+	VersionSupported uint32 = 2
+
+	firstLengthBits = uint8(4)   // the first byte into object header has 4 bits to store the length
+	lengthBits      = uint8(7)   // subsequent bytes has 7 bits to store the length
+	maskFirstLength = 15         // 0000 1111
+	maskContinue    = 0x80       // 1000 0000
+	maskLength      = uint8(127) // 0111 1111
+	maskType        = uint8(112) // 0111 0000
+)
+
+// UpdateObjectStorage updates the storer with the objects in the given
+// packfile.
+func UpdateObjectStorage(s storer.Storer, packfile io.Reader) error {
+	if pw, ok := s.(storer.PackfileWriter); ok {
+		return WritePackfileToObjectStorage(pw, packfile)
+	}
+
+	p, err := NewParserWithStorage(NewScanner(packfile), s)
+	if err != nil {
+		return err
+	}
+
+	_, err = p.Parse()
+	return err
+}
+
+// WritePackfileToObjectStorage writes all the packfile objects into the given
+// object storage.
+func WritePackfileToObjectStorage(
+	sw storer.PackfileWriter,
+	packfile io.Reader,
+) (err error) {
+	w, err := sw.PackfileWriter()
+	if err != nil {
+		return err
+	}
+
+	defer ioutil.CheckClose(w, &err)
+
+	var n int64
+	n, err = io.Copy(w, packfile)
+	if err == nil && n == 0 {
+		return ErrEmptyPackfile
+	}
+
+	return err
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/packfile/delta_index.go","mode":420,"size":10101,"sha256":"3c380ee2f2246bbbd9c222766da05f3326ddfa8ac7a8d90e10ff7cd22412c1b4","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":10101}
+package packfile
+
+const blksz = 16
+const maxChainLength = 64
+
+// deltaIndex is a modified version of JGit's DeltaIndex adapted to our current
+// design.
+type deltaIndex struct {
+	table   []int
+	entries []int
+	mask    int
+}
+
+func (idx *deltaIndex) init(buf []byte) {
+	scanner := newDeltaIndexScanner(buf, len(buf))
+	idx.mask = scanner.mask
+	idx.table = scanner.table
+	idx.entries = make([]int, countEntries(scanner)+1)
+	idx.copyEntries(scanner)
+}
+
+// findMatch returns the offset of src where the block starting at tgtOffset
+// is and the length of the match. A length of 0 means there was no match. A
+// length of -1 means the src length is lower than the blksz and whatever
+// other positive length is the length of the match in bytes.
+func (idx *deltaIndex) findMatch(src, tgt []byte, tgtOffset int) (srcOffset, l int) {
+	if len(tgt) < tgtOffset+s {
+		return 0, len(tgt) - tgtOffset
+	}
+
+	if len(src) < blksz {
+		return 0, -1
+	}
+
+	h := hashBlock(tgt, tgtOffset)
+	tIdx := h & idx.mask
+	eIdx := idx.table[tIdx]
+	if eIdx == 0 {
+		return
+	}
+
+	srcOffset = idx.entries[eIdx]
+
+	l = matchLength(src, tgt, tgtOffset, srcOffset)
+
+	return
+}
+
+func matchLength(src, tgt []byte, otgt, osrc int) (l int) {
+	lensrc := len(src)
+	lentgt := len(tgt)
+	for (osrc < lensrc && otgt < lentgt) && src[osrc] == tgt[otgt] {
+		l++
+		osrc++
+		otgt++
+	}
+	return
+}
+
+func countEntries(scan *deltaIndexScanner) (cnt int) {
+	// Figure out exactly how many entries we need. As we do the
+	// enumeration truncate any delta chains longer than what we
+	// are willing to scan during encode. This keeps the encode
+	// logic linear in the size of the input rather than quadratic.
+	for i := 0; i < len(scan.table); i++ {
+		h := scan.table[i]
+		if h == 0 {
+			continue
+		}
+
+		size := 0
+		for {
+			size++
+			if size == maxChainLength {
+				scan.next[h] = 0
+				break
+			}
+			h = scan.next[h]
+
+			if h == 0 {
+				break
+			}
+		}
+		cnt += size
+	}
+
+	return
+}
+
+func (idx *deltaIndex) copyEntries(scanner *deltaIndexScanner) {
+	// Rebuild the entries list from the scanner, positioning all
+	// blocks in the same hash chain next to each other. We can
+	// then later discard the next list, along with the scanner.
+	//
+	next := 1
+	for i := 0; i < len(idx.table); i++ {
+		h := idx.table[i]
+		if h == 0 {
+			continue
+		}
+
+		idx.table[i] = next
+		for {
+			idx.entries[next] = scanner.entries[h]
+			next++
+			h = scanner.next[h]
+
+			if h == 0 {
+				break
+			}
+		}
+	}
+}
+
+type deltaIndexScanner struct {
+	table   []int
+	entries []int
+	next    []int
+	mask    int
+	count   int
+}
+
+func newDeltaIndexScanner(buf []byte, size int) *deltaIndexScanner {
+	size -= size % blksz
+	worstCaseBlockCnt := size / blksz
+	if worstCaseBlockCnt < 1 {
+		return new(deltaIndexScanner)
+	}
+
+	tableSize := tableSize(worstCaseBlockCnt)
+	scanner := &deltaIndexScanner{
+		table:   make([]int, tableSize),
+		mask:    tableSize - 1,
+		entries: make([]int, worstCaseBlockCnt+1),
+		next:    make([]int, worstCaseBlockCnt+1),
+	}
+
+	scanner.scan(buf, size)
+	return scanner
+}
+
+// slightly modified version of JGit's DeltaIndexScanner. We store the offset on the entries
+// instead of the entries and the key, so we avoid operations to retrieve the offset later, as
+// we don't use the key.
+// See: https://github.com/eclipse/jgit/blob/005e5feb4ecd08c4e4d141a38b9e7942accb3212/org.eclipse.jgit/src/org/eclipse/jgit/internal/storage/pack/DeltaIndexScanner.java
+func (s *deltaIndexScanner) scan(buf []byte, end int) {
+	lastHash := 0
+	ptr := end - blksz
+
+	for {
+		key := hashBlock(buf, ptr)
+		tIdx := key & s.mask
+		head := s.table[tIdx]
+		if head != 0 && lastHash == key {
+			s.entries[head] = ptr
+		} else {
+			s.count++
+			eIdx := s.count
+			s.entries[eIdx] = ptr
+			s.next[eIdx] = head
+			s.table[tIdx] = eIdx
+		}
+
+		lastHash = key
+		ptr -= blksz
+
+		if 0 > ptr {
+			break
+		}
+	}
+}
+
+func tableSize(worstCaseBlockCnt int) int {
+	shift := 32 - leadingZeros(uint32(worstCaseBlockCnt))
+	sz := 1 << uint(shift-1)
+	if sz < worstCaseBlockCnt {
+		sz <<= 1
+	}
+	return sz
+}
+
+// use https://golang.org/pkg/math/bits/#LeadingZeros32 in the future
+func leadingZeros(x uint32) (n int) {
+	if x >= 1<<16 {
+		x >>= 16
+		n = 16
+	}
+	if x >= 1<<8 {
+		x >>= 8
+		n += 8
+	}
+	n += int(len8tab[x])
+	return 32 - n
+}
+
+var len8tab = [256]uint8{
+	0x00, 0x01, 0x02, 0x02, 0x03, 0x03, 0x03, 0x03, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04,
+	0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05,
+	0x06, 0x06, 0x06, 0x06, 0x06, 0x06, 0x06, 0x06, 0x06, 0x06, 0x06, 0x06, 0x06, 0x06, 0x06, 0x06,
+	0x06, 0x06, 0x06, 0x06, 0x06, 0x06, 0x06, 0x06, 0x06, 0x06, 0x06, 0x06, 0x06, 0x06, 0x06, 0x06,
+	0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07,
+	0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07,
+	0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07,
+	0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07,
+	0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08,
+	0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08,
+	0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08,
+	0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08,
+	0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08,
+	0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08,
+	0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08,
+	0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08,
+}
+
+func hashBlock(raw []byte, ptr int) int {
+	// The first 4 steps collapse out into a 4 byte big-endian decode,
+	// with a larger right shift as we combined shift lefts together.
+	//
+	hash := ((uint32(raw[ptr]) & 0xff) << 24) |
+		((uint32(raw[ptr+1]) & 0xff) << 16) |
+		((uint32(raw[ptr+2]) & 0xff) << 8) |
+		(uint32(raw[ptr+3]) & 0xff)
+	hash ^= T[hash>>31]
+
+	hash = ((hash << 8) | (uint32(raw[ptr+4]) & 0xff)) ^ T[hash>>23]
+	hash = ((hash << 8) | (uint32(raw[ptr+5]) & 0xff)) ^ T[hash>>23]
+	hash = ((hash << 8) | (uint32(raw[ptr+6]) & 0xff)) ^ T[hash>>23]
+	hash = ((hash << 8) | (uint32(raw[ptr+7]) & 0xff)) ^ T[hash>>23]
+
+	hash = ((hash << 8) | (uint32(raw[ptr+8]) & 0xff)) ^ T[hash>>23]
+	hash = ((hash << 8) | (uint32(raw[ptr+9]) & 0xff)) ^ T[hash>>23]
+	hash = ((hash << 8) | (uint32(raw[ptr+10]) & 0xff)) ^ T[hash>>23]
+	hash = ((hash << 8) | (uint32(raw[ptr+11]) & 0xff)) ^ T[hash>>23]
+
+	hash = ((hash << 8) | (uint32(raw[ptr+12]) & 0xff)) ^ T[hash>>23]
+	hash = ((hash << 8) | (uint32(raw[ptr+13]) & 0xff)) ^ T[hash>>23]
+	hash = ((hash << 8) | (uint32(raw[ptr+14]) & 0xff)) ^ T[hash>>23]
+	hash = ((hash << 8) | (uint32(raw[ptr+15]) & 0xff)) ^ T[hash>>23]
+
+	return int(hash)
+}
+
+var T = []uint32{0x00000000, 0xd4c6b32d, 0x7d4bd577,
+	0xa98d665a, 0x2e5119c3, 0xfa97aaee, 0x531accb4, 0x87dc7f99,
+	0x5ca23386, 0x886480ab, 0x21e9e6f1, 0xf52f55dc, 0x72f32a45,
+	0xa6359968, 0x0fb8ff32, 0xdb7e4c1f, 0x6d82d421, 0xb944670c,
+	0x10c90156, 0xc40fb27b, 0x43d3cde2, 0x97157ecf, 0x3e981895,
+	0xea5eabb8, 0x3120e7a7, 0xe5e6548a, 0x4c6b32d0, 0x98ad81fd,
+	0x1f71fe64, 0xcbb74d49, 0x623a2b13, 0xb6fc983e, 0x0fc31b6f,
+	0xdb05a842, 0x7288ce18, 0xa64e7d35, 0x219202ac, 0xf554b181,
+	0x5cd9d7db, 0x881f64f6, 0x536128e9, 0x87a79bc4, 0x2e2afd9e,
+	0xfaec4eb3, 0x7d30312a, 0xa9f68207, 0x007be45d, 0xd4bd5770,
+	0x6241cf4e, 0xb6877c63, 0x1f0a1a39, 0xcbcca914, 0x4c10d68d,
+	0x98d665a0, 0x315b03fa, 0xe59db0d7, 0x3ee3fcc8, 0xea254fe5,
+	0x43a829bf, 0x976e9a92, 0x10b2e50b, 0xc4745626, 0x6df9307c,
+	0xb93f8351, 0x1f8636de, 0xcb4085f3, 0x62cde3a9, 0xb60b5084,
+	0x31d72f1d, 0xe5119c30, 0x4c9cfa6a, 0x985a4947, 0x43240558,
+	0x97e2b675, 0x3e6fd02f, 0xeaa96302, 0x6d751c9b, 0xb9b3afb6,
+	0x103ec9ec, 0xc4f87ac1, 0x7204e2ff, 0xa6c251d2, 0x0f4f3788,
+	0xdb8984a5, 0x5c55fb3c, 0x88934811, 0x211e2e4b, 0xf5d89d66,
+	0x2ea6d179, 0xfa606254, 0x53ed040e, 0x872bb723, 0x00f7c8ba,
+	0xd4317b97, 0x7dbc1dcd, 0xa97aaee0, 0x10452db1, 0xc4839e9c,
+	0x6d0ef8c6, 0xb9c84beb, 0x3e143472, 0xead2875f, 0x435fe105,
+	0x97995228, 0x4ce71e37, 0x9821ad1a, 0x31accb40, 0xe56a786d,
+	0x62b607f4, 0xb670b4d9, 0x1ffdd283, 0xcb3b61ae, 0x7dc7f990,
+	0xa9014abd, 0x008c2ce7, 0xd44a9fca, 0x5396e053, 0x8750537e,
+	0x2edd3524, 0xfa1b8609, 0x2165ca16, 0xf5a3793b, 0x5c2e1f61,
+	0x88e8ac4c, 0x0f34d3d5, 0xdbf260f8, 0x727f06a2, 0xa6b9b58f,
+	0x3f0c6dbc, 0xebcade91, 0x4247b8cb, 0x96810be6, 0x115d747f,
+	0xc59bc752, 0x6c16a108, 0xb8d01225, 0x63ae5e3a, 0xb768ed17,
+	0x1ee58b4d, 0xca233860, 0x4dff47f9, 0x9939f4d4, 0x30b4928e,
+	0xe47221a3, 0x528eb99d, 0x86480ab0, 0x2fc56cea, 0xfb03dfc7,
+	0x7cdfa05e, 0xa8191373, 0x01947529, 0xd552c604, 0x0e2c8a1b,
+	0xdaea3936, 0x73675f6c, 0xa7a1ec41, 0x207d93d8, 0xf4bb20f5,
+	0x5d3646af, 0x89f0f582, 0x30cf76d3, 0xe409c5fe, 0x4d84a3a4,
+	0x99421089, 0x1e9e6f10, 0xca58dc3d, 0x63d5ba67, 0xb713094a,
+	0x6c6d4555, 0xb8abf678, 0x11269022, 0xc5e0230f, 0x423c5c96,
+	0x96faefbb, 0x3f7789e1, 0xebb13acc, 0x5d4da2f2, 0x898b11df,
+	0x20067785, 0xf4c0c4a8, 0x731cbb31, 0xa7da081c, 0x0e576e46,
+	0xda91dd6b, 0x01ef9174, 0xd5292259, 0x7ca44403, 0xa862f72e,
+	0x2fbe88b7, 0xfb783b9a, 0x52f55dc0, 0x8633eeed, 0x208a5b62,
+	0xf44ce84f, 0x5dc18e15, 0x89073d38, 0x0edb42a1, 0xda1df18c,
+	0x739097d6, 0xa75624fb, 0x7c2868e4, 0xa8eedbc9, 0x0163bd93,
+	0xd5a50ebe, 0x52797127, 0x86bfc20a, 0x2f32a450, 0xfbf4177d,
+	0x4d088f43, 0x99ce3c6e, 0x30435a34, 0xe485e919, 0x63599680,
+	0xb79f25ad, 0x1e1243f7, 0xcad4f0da, 0x11aabcc5, 0xc56c0fe8,
+	0x6ce169b2, 0xb827da9f, 0x3ffba506, 0xeb3d162b, 0x42b07071,
+	0x9676c35c, 0x2f49400d, 0xfb8ff320, 0x5202957a, 0x86c42657,
+	0x011859ce, 0xd5deeae3, 0x7c538cb9, 0xa8953f94, 0x73eb738b,
+	0xa72dc0a6, 0x0ea0a6fc, 0xda6615d1, 0x5dba6a48, 0x897cd965,
+	0x20f1bf3f, 0xf4370c12, 0x42cb942c, 0x960d2701, 0x3f80415b,
+	0xeb46f276, 0x6c9a8def, 0xb85c3ec2, 0x11d15898, 0xc517ebb5,
+	0x1e69a7aa, 0xcaaf1487, 0x632272dd, 0xb7e4c1f0, 0x3038be69,
+	0xe4fe0d44, 0x4d736b1e, 0x99b5d833,
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/packfile/delta_selector.go","mode":420,"size":8633,"sha256":"48ecd5890e784638a2377d04c0d7cbd06f5cf44984a96ac3c2c9693aae11218f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":8633}
+package packfile
+
+import (
+	"sort"
+	"sync"
+
+	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/storer"
+)
+
+const (
+	// deltas based on deltas, how many steps we can do.
+	// 50 is the default value used in JGit
+	maxDepth = int64(50)
+)
+
+// applyDelta is the set of object types that we should apply deltas
+var applyDelta = map[plumbing.ObjectType]bool{
+	plumbing.BlobObject: true,
+	plumbing.TreeObject: true,
+}
+
+type deltaSelector struct {
+	storer storer.EncodedObjectStorer
+}
+
+func newDeltaSelector(s storer.EncodedObjectStorer) *deltaSelector {
+	return &deltaSelector{s}
+}
+
+// ObjectsToPack creates a list of ObjectToPack from the hashes
+// provided, creating deltas if it's suitable, using an specific
+// internal logic.  `packWindow` specifies the size of the sliding
+// window used to compare objects for delta compression; 0 turns off
+// delta compression entirely.
+func (dw *deltaSelector) ObjectsToPack(
+	hashes []plumbing.Hash,
+	packWindow uint,
+) ([]*ObjectToPack, error) {
+	otp, err := dw.objectsToPack(hashes, packWindow)
+	if err != nil {
+		return nil, err
+	}
+
+	if packWindow == 0 {
+		return otp, nil
+	}
+
+	dw.sort(otp)
+
+	var objectGroups [][]*ObjectToPack
+	var prev *ObjectToPack
+	i := -1
+	for _, obj := range otp {
+		if prev == nil || prev.Type() != obj.Type() {
+			objectGroups = append(objectGroups, []*ObjectToPack{obj})
+			i++
+			prev = obj
+		} else {
+			objectGroups[i] = append(objectGroups[i], obj)
+		}
+	}
+
+	var wg sync.WaitGroup
+	var once sync.Once
+	for _, objs := range objectGroups {
+		objs := objs
+		wg.Add(1)
+		go func() {
+			if walkErr := dw.walk(objs, packWindow); walkErr != nil {
+				once.Do(func() {
+					err = walkErr
+				})
+			}
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+
+	if err != nil {
+		return nil, err
+	}
+
+	return otp, nil
+}
+
+func (dw *deltaSelector) objectsToPack(
+	hashes []plumbing.Hash,
+	packWindow uint,
+) ([]*ObjectToPack, error) {
+	var objectsToPack []*ObjectToPack
+	for _, h := range hashes {
+		var o plumbing.EncodedObject
+		var err error
+		if packWindow == 0 {
+			o, err = dw.encodedObject(h)
+		} else {
+			o, err = dw.encodedDeltaObject(h)
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		otp := newObjectToPack(o)
+		if _, ok := o.(plumbing.DeltaObject); ok {
+			otp.CleanOriginal()
+		}
+
+		objectsToPack = append(objectsToPack, otp)
+	}
+
+	if packWindow == 0 {
+		return objectsToPack, nil
+	}
+
+	if err := dw.fixAndBreakChains(objectsToPack); err != nil {
+		return nil, err
+	}
+
+	return objectsToPack, nil
+}
+
+func (dw *deltaSelector) encodedDeltaObject(h plumbing.Hash) (plumbing.EncodedObject, error) {
+	edos, ok := dw.storer.(storer.DeltaObjectStorer)
+	if !ok {
+		return dw.encodedObject(h)
+	}
+
+	return edos.DeltaObject(plumbing.AnyObject, h)
+}
+
+func (dw *deltaSelector) encodedObject(h plumbing.Hash) (plumbing.EncodedObject, error) {
+	return dw.storer.EncodedObject(plumbing.AnyObject, h)
+}
+
+func (dw *deltaSelector) fixAndBreakChains(objectsToPack []*ObjectToPack) error {
+	m := make(map[plumbing.Hash]*ObjectToPack, len(objectsToPack))
+	for _, otp := range objectsToPack {
+		m[otp.Hash()] = otp
+	}
+
+	for _, otp := range objectsToPack {
+		if err := dw.fixAndBreakChainsOne(m, otp); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (dw *deltaSelector) fixAndBreakChainsOne(objectsToPack map[plumbing.Hash]*ObjectToPack, otp *ObjectToPack) error {
+	if !otp.Object.Type().IsDelta() {
+		return nil
+	}
+
+	// Initial ObjectToPack instances might have a delta assigned to Object
+	// but no actual base initially. Once Base is assigned to a delta, it means
+	// we already fixed it.
+	if otp.Base != nil {
+		return nil
+	}
+
+	do, ok := otp.Object.(plumbing.DeltaObject)
+	if !ok {
+		// if this is not a DeltaObject, then we cannot retrieve its base,
+		// so we have to break the delta chain here.
+		return dw.undeltify(otp)
+	}
+
+	base, ok := objectsToPack[do.BaseHash()]
+	if !ok {
+		// The base of the delta is not in our list of objects to pack, so
+		// we break the chain.
+		return dw.undeltify(otp)
+	}
+
+	if err := dw.fixAndBreakChainsOne(objectsToPack, base); err != nil {
+		return err
+	}
+
+	otp.SetDelta(base, otp.Object)
+	return nil
+}
+
+func (dw *deltaSelector) restoreOriginal(otp *ObjectToPack) error {
+	if otp.Original != nil {
+		return nil
+	}
+
+	if !otp.Object.Type().IsDelta() {
+		return nil
+	}
+
+	obj, err := dw.encodedObject(otp.Hash())
+	if err != nil {
+		return err
+	}
+
+	otp.SetOriginal(obj)
+
+	return nil
+}
+
+// undeltify undeltifies an *ObjectToPack by retrieving the original object from
+// the storer and resetting it.
+func (dw *deltaSelector) undeltify(otp *ObjectToPack) error {
+	if err := dw.restoreOriginal(otp); err != nil {
+		return err
+	}
+
+	otp.Object = otp.Original
+	otp.Depth = 0
+	return nil
+}
+
+func (dw *deltaSelector) sort(objectsToPack []*ObjectToPack) {
+	sort.Sort(byTypeAndSize(objectsToPack))
+}
+
+func (dw *deltaSelector) walk(
+	objectsToPack []*ObjectToPack,
+	packWindow uint,
+) error {
+	indexMap := make(map[plumbing.Hash]*deltaIndex)
+	for i := 0; i < len(objectsToPack); i++ {
+		// Clean up the index map and reconstructed delta objects for anything
+		// outside our pack window, to save memory.
+		if i > int(packWindow) {
+			obj := objectsToPack[i-int(packWindow)]
+
+			delete(indexMap, obj.Hash())
+
+			if obj.IsDelta() {
+				obj.SaveOriginalMetadata()
+				obj.CleanOriginal()
+			}
+		}
+
+		target := objectsToPack[i]
+
+		// If we already have a delta, we don't try to find a new one for this
+		// object. This happens when a delta is set to be reused from an existing
+		// packfile.
+		if target.IsDelta() {
+			continue
+		}
+
+		// We only want to create deltas from specific types.
+		if !applyDelta[target.Type()] {
+			continue
+		}
+
+		for j := i - 1; j >= 0 && i-j < int(packWindow); j-- {
+			base := objectsToPack[j]
+			// Objects must use only the same type as their delta base.
+			// Since objectsToPack is sorted by type and size, once we find
+			// a different type, we know we won't find more of them.
+			if base.Type() != target.Type() {
+				break
+			}
+
+			if err := dw.tryToDeltify(indexMap, base, target); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (dw *deltaSelector) tryToDeltify(indexMap map[plumbing.Hash]*deltaIndex, base, target *ObjectToPack) error {
+	// Original object might not be present if we're reusing a delta, so we
+	// ensure it is restored.
+	if err := dw.restoreOriginal(target); err != nil {
+		return err
+	}
+
+	if err := dw.restoreOriginal(base); err != nil {
+		return err
+	}
+
+	// If the sizes are radically different, this is a bad pairing.
+	if target.Size() < base.Size()>>4 {
+		return nil
+	}
+
+	msz := dw.deltaSizeLimit(
+		target.Object.Size(),
+		base.Depth,
+		target.Depth,
+		target.IsDelta(),
+	)
+
+	// Nearly impossible to fit useful delta.
+	if msz <= 8 {
+		return nil
+	}
+
+	// If we have to insert a lot to make this work, find another.
+	if base.Size()-target.Size() > msz {
+		return nil
+	}
+
+	if _, ok := indexMap[base.Hash()]; !ok {
+		indexMap[base.Hash()] = new(deltaIndex)
+	}
+
+	// Now we can generate the delta using originals
+	delta, err := getDelta(indexMap[base.Hash()], base.Original, target.Original)
+	if err != nil {
+		return err
+	}
+
+	// if delta better than target
+	if delta.Size() < msz {
+		target.SetDelta(base, delta)
+	}
+
+	return nil
+}
+
+func (dw *deltaSelector) deltaSizeLimit(targetSize int64, baseDepth int,
+	targetDepth int, targetDelta bool) int64 {
+	if !targetDelta {
+		// Any delta should be no more than 50% of the original size
+		// (for text files deflate of whole form should shrink 50%).
+		n := targetSize >> 1
+
+		// Evenly distribute delta size limits over allowed depth.
+		// If src is non-delta (depth = 0), delta <= 50% of original.
+		// If src is almost at limit (9/10), delta <= 10% of original.
+		return n * (maxDepth - int64(baseDepth)) / maxDepth
+	}
+
+	// With a delta base chosen any new delta must be "better".
+	// Retain the distribution described above.
+	d := int64(targetDepth)
+	n := targetSize
+
+	// If target depth is bigger than maxDepth, this delta is not suitable to be used.
+	if d >= maxDepth {
+		return 0
+	}
+
+	// If src is whole (depth=0) and base is near limit (depth=9/10)
+	// any delta using src can be 10x larger and still be better.
+	//
+	// If src is near limit (depth=9/10) and base is whole (depth=0)
+	// a new delta dependent on src must be 1/10th the size.
+	return n * (maxDepth - int64(baseDepth)) / (maxDepth - d)
+}
+
+type byTypeAndSize []*ObjectToPack
+
+func (a byTypeAndSize) Len() int { return len(a) }
+
+func (a byTypeAndSize) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+
+func (a byTypeAndSize) Less(i, j int) bool {
+	if a[i].Type() < a[j].Type() {
+		return false
+	}
+
+	if a[i].Type() > a[j].Type() {
+		return true
+	}
+
+	return a[i].Size() > a[j].Size()
+}
+
+@@END
 @@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/packfile/diff_delta.go","mode":420,"size":4327,"sha256":"b207668992f036065818ffa423cbf499be490acdc1aae459abebe25f467343e7","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4327}
 package packfile
 
@@ -106450,1052 +108113,5 @@ License
 -------
 
 under the MIT License: http://mattn.mit-license.org/2013
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/mattn/go-runewidth/runewidth.go","mode":420,"size":7712,"sha256":"56b9750f0e57f712eceb7fa648143c7cec7554098d5270088bed0dcf96d260f7","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7712}
-package runewidth
-
-import (
-	"os"
-	"strings"
-
-	"github.com/rivo/uniseg"
-)
-
-//go:generate go run script/generate.go
-
-var (
-	// EastAsianWidth will be set true if the current locale is CJK
-	EastAsianWidth bool
-
-	// StrictEmojiNeutral should be set false if handle broken fonts
-	StrictEmojiNeutral bool = true
-
-	// DefaultCondition is a condition in current locale
-	DefaultCondition = &Condition{
-		EastAsianWidth:     false,
-		StrictEmojiNeutral: true,
-	}
-)
-
-func init() {
-	handleEnv()
-}
-
-func handleEnv() {
-	env := os.Getenv("RUNEWIDTH_EASTASIAN")
-	if env == "" {
-		EastAsianWidth = IsEastAsian()
-	} else {
-		EastAsianWidth = env == "1"
-	}
-	// update DefaultCondition
-	if DefaultCondition.EastAsianWidth != EastAsianWidth {
-		DefaultCondition.EastAsianWidth = EastAsianWidth
-		if len(DefaultCondition.combinedLut) > 0 {
-			DefaultCondition.combinedLut = DefaultCondition.combinedLut[:0]
-			CreateLUT()
-		}
-	}
-}
-
-type interval struct {
-	first rune
-	last  rune
-}
-
-type table []interval
-
-func inTables(r rune, ts ...table) bool {
-	for _, t := range ts {
-		if inTable(r, t) {
-			return true
-		}
-	}
-	return false
-}
-
-func inTable(r rune, t table) bool {
-	if r < t[0].first {
-		return false
-	}
-
-	bot := 0
-	top := len(t) - 1
-	for top >= bot {
-		mid := (bot + top) >> 1
-
-		switch {
-		case t[mid].last < r:
-			bot = mid + 1
-		case t[mid].first > r:
-			top = mid - 1
-		default:
-			return true
-		}
-	}
-
-	return false
-}
-
-var private = table{
-	{0x00E000, 0x00F8FF}, {0x0F0000, 0x0FFFFD}, {0x100000, 0x10FFFD},
-}
-
-var nonprint = table{
-	{0x0000, 0x001F}, {0x007F, 0x009F}, {0x00AD, 0x00AD},
-	{0x070F, 0x070F}, {0x180B, 0x180E}, {0x200B, 0x200F},
-	{0x2028, 0x202E}, {0x206A, 0x206F}, {0xD800, 0xDFFF},
-	{0xFEFF, 0xFEFF}, {0xFFF9, 0xFFFB}, {0xFFFE, 0xFFFF},
-}
-
-// Condition have flag EastAsianWidth whether the current locale is CJK or not.
-type Condition struct {
-	combinedLut        []byte
-	EastAsianWidth     bool
-	StrictEmojiNeutral bool
-}
-
-// NewCondition return new instance of Condition which is current locale.
-func NewCondition() *Condition {
-	return &Condition{
-		EastAsianWidth:     EastAsianWidth,
-		StrictEmojiNeutral: StrictEmojiNeutral,
-	}
-}
-
-// RuneWidth returns the number of cells in r.
-// See http://www.unicode.org/reports/tr11/
-func (c *Condition) RuneWidth(r rune) int {
-	if r < 0 || r > 0x10FFFF {
-		return 0
-	}
-	if len(c.combinedLut) > 0 {
-		return int(c.combinedLut[r>>1]>>(uint(r&1)*4)) & 3
-	}
-	// optimized version, verified by TestRuneWidthChecksums()
-	if !c.EastAsianWidth {
-		switch {
-		case r < 0x20:
-			return 0
-		case (r >= 0x7F && r <= 0x9F) || r == 0xAD: // nonprint
-			return 0
-		case r < 0x300:
-			return 1
-		case inTable(r, narrow):
-			return 1
-		case inTables(r, nonprint, combining):
-			return 0
-		case inTable(r, doublewidth):
-			return 2
-		default:
-			return 1
-		}
-	} else {
-		switch {
-		case inTables(r, nonprint, combining):
-			return 0
-		case inTable(r, narrow):
-			return 1
-		case inTables(r, ambiguous, doublewidth):
-			return 2
-		case !c.StrictEmojiNeutral && inTables(r, ambiguous, emoji, narrow):
-			return 2
-		default:
-			return 1
-		}
-	}
-}
-
-// CreateLUT will create an in-memory lookup table of 557056 bytes for faster operation.
-// This should not be called concurrently with other operations on c.
-// If options in c is changed, CreateLUT should be called again.
-func (c *Condition) CreateLUT() {
-	const max = 0x110000
-	lut := c.combinedLut
-	if len(c.combinedLut) != 0 {
-		// Remove so we don't use it.
-		c.combinedLut = nil
-	} else {
-		lut = make([]byte, max/2)
-	}
-	for i := range lut {
-		i32 := int32(i * 2)
-		x0 := c.RuneWidth(i32)
-		x1 := c.RuneWidth(i32 + 1)
-		lut[i] = uint8(x0) | uint8(x1)<<4
-	}
-	c.combinedLut = lut
-}
-
-// StringWidth return width as you can see
-func (c *Condition) StringWidth(s string) (width int) {
-	g := uniseg.NewGraphemes(s)
-	for g.Next() {
-		var chWidth int
-		for _, r := range g.Runes() {
-			chWidth = c.RuneWidth(r)
-			if chWidth > 0 {
-				break // Our best guess at this point is to use the width of the first non-zero-width rune.
-			}
-		}
-		width += chWidth
-	}
-	return
-}
-
-// Truncate return string truncated with w cells
-func (c *Condition) Truncate(s string, w int, tail string) string {
-	if c.StringWidth(s) <= w {
-		return s
-	}
-	w -= c.StringWidth(tail)
-	var width int
-	pos := len(s)
-	g := uniseg.NewGraphemes(s)
-	for g.Next() {
-		var chWidth int
-		for _, r := range g.Runes() {
-			chWidth = c.RuneWidth(r)
-			if chWidth > 0 {
-				break // See StringWidth() for details.
-			}
-		}
-		if width+chWidth > w {
-			pos, _ = g.Positions()
-			break
-		}
-		width += chWidth
-	}
-	return s[:pos] + tail
-}
-
-// TruncateLeft cuts w cells from the beginning of the `s`.
-func (c *Condition) TruncateLeft(s string, w int, prefix string) string {
-	if c.StringWidth(s) <= w {
-		return prefix
-	}
-
-	var width int
-	pos := len(s)
-
-	g := uniseg.NewGraphemes(s)
-	for g.Next() {
-		var chWidth int
-		for _, r := range g.Runes() {
-			chWidth = c.RuneWidth(r)
-			if chWidth > 0 {
-				break // See StringWidth() for details.
-			}
-		}
-
-		if width+chWidth > w {
-			if width < w {
-				_, pos = g.Positions()
-				prefix += strings.Repeat(" ", width+chWidth-w)
-			} else {
-				pos, _ = g.Positions()
-			}
-
-			break
-		}
-
-		width += chWidth
-	}
-
-	return prefix + s[pos:]
-}
-
-// Wrap return string wrapped with w cells
-func (c *Condition) Wrap(s string, w int) string {
-	width := 0
-	out := ""
-	for _, r := range s {
-		cw := c.RuneWidth(r)
-		if r == '\n' {
-			out += string(r)
-			width = 0
-			continue
-		} else if width+cw > w {
-			out += "\n"
-			width = 0
-			out += string(r)
-			width += cw
-			continue
-		}
-		out += string(r)
-		width += cw
-	}
-	return out
-}
-
-// FillLeft return string filled in left by spaces in w cells
-func (c *Condition) FillLeft(s string, w int) string {
-	width := c.StringWidth(s)
-	count := w - width
-	if count > 0 {
-		b := make([]byte, count)
-		for i := range b {
-			b[i] = ' '
-		}
-		return string(b) + s
-	}
-	return s
-}
-
-// FillRight return string filled in left by spaces in w cells
-func (c *Condition) FillRight(s string, w int) string {
-	width := c.StringWidth(s)
-	count := w - width
-	if count > 0 {
-		b := make([]byte, count)
-		for i := range b {
-			b[i] = ' '
-		}
-		return s + string(b)
-	}
-	return s
-}
-
-// RuneWidth returns the number of cells in r.
-// See http://www.unicode.org/reports/tr11/
-func RuneWidth(r rune) int {
-	return DefaultCondition.RuneWidth(r)
-}
-
-// IsAmbiguousWidth returns whether is ambiguous width or not.
-func IsAmbiguousWidth(r rune) bool {
-	return inTables(r, private, ambiguous)
-}
-
-// IsNeutralWidth returns whether is neutral width or not.
-func IsNeutralWidth(r rune) bool {
-	return inTable(r, neutral)
-}
-
-// StringWidth return width as you can see
-func StringWidth(s string) (width int) {
-	return DefaultCondition.StringWidth(s)
-}
-
-// Truncate return string truncated with w cells
-func Truncate(s string, w int, tail string) string {
-	return DefaultCondition.Truncate(s, w, tail)
-}
-
-// TruncateLeft cuts w cells from the beginning of the `s`.
-func TruncateLeft(s string, w int, prefix string) string {
-	return DefaultCondition.TruncateLeft(s, w, prefix)
-}
-
-// Wrap return string wrapped with w cells
-func Wrap(s string, w int) string {
-	return DefaultCondition.Wrap(s, w)
-}
-
-// FillLeft return string filled in left by spaces in w cells
-func FillLeft(s string, w int) string {
-	return DefaultCondition.FillLeft(s, w)
-}
-
-// FillRight return string filled in left by spaces in w cells
-func FillRight(s string, w int) string {
-	return DefaultCondition.FillRight(s, w)
-}
-
-// CreateLUT will create an in-memory lookup table of 557055 bytes for faster operation.
-// This should not be called concurrently with other operations.
-func CreateLUT() {
-	if len(DefaultCondition.combinedLut) > 0 {
-		return
-	}
-	DefaultCondition.CreateLUT()
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/mattn/go-runewidth/runewidth_appengine.go","mode":420,"size":159,"sha256":"b88a249871a80f81ceea132dee721084ac0e71d009ee36195f253f2618a876b5","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":159}
-//go:build appengine
-// +build appengine
-
-package runewidth
-
-// IsEastAsian return true if the current locale is CJK
-func IsEastAsian() bool {
-	return false
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/mattn/go-runewidth/runewidth_js.go","mode":420,"size":208,"sha256":"7253819241c7653a9911be75078d04d15d36cb671f0708068246ac5cf30277d2","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":208}
-//go:build js && !appengine
-// +build js,!appengine
-
-package runewidth
-
-func IsEastAsian() bool {
-	// TODO: Implement this for the web. Detect east asian in a compatible way, and return true.
-	return false
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/mattn/go-runewidth/runewidth_posix.go","mode":420,"size":1481,"sha256":"b12863c62429bf672f85e334546c33aac4dcc7cea2cac3c59cb754d1e9e37d5a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1481}
-//go:build !windows && !js && !appengine
-// +build !windows,!js,!appengine
-
-package runewidth
-
-import (
-	"os"
-	"regexp"
-	"strings"
-)
-
-var reLoc = regexp.MustCompile(`^[a-z][a-z][a-z]?(?:_[A-Z][A-Z])?\.(.+)`)
-
-var mblenTable = map[string]int{
-	"utf-8":   6,
-	"utf8":    6,
-	"jis":     8,
-	"eucjp":   3,
-	"euckr":   2,
-	"euccn":   2,
-	"sjis":    2,
-	"cp932":   2,
-	"cp51932": 2,
-	"cp936":   2,
-	"cp949":   2,
-	"cp950":   2,
-	"big5":    2,
-	"gbk":     2,
-	"gb2312":  2,
-}
-
-func isEastAsian(locale string) bool {
-	charset := strings.ToLower(locale)
-	r := reLoc.FindStringSubmatch(locale)
-	if len(r) == 2 {
-		charset = strings.ToLower(r[1])
-	}
-
-	if strings.HasSuffix(charset, "@cjk_narrow") {
-		return false
-	}
-
-	for pos, b := range []byte(charset) {
-		if b == '@' {
-			charset = charset[:pos]
-			break
-		}
-	}
-	max := 1
-	if m, ok := mblenTable[charset]; ok {
-		max = m
-	}
-	if max > 1 && (charset[0] != 'u' ||
-		strings.HasPrefix(locale, "ja") ||
-		strings.HasPrefix(locale, "ko") ||
-		strings.HasPrefix(locale, "zh")) {
-		return true
-	}
-	return false
-}
-
-// IsEastAsian return true if the current locale is CJK
-func IsEastAsian() bool {
-	locale := os.Getenv("LC_ALL")
-	if locale == "" {
-		locale = os.Getenv("LC_CTYPE")
-	}
-	if locale == "" {
-		locale = os.Getenv("LANG")
-	}
-
-	// ignore C locale
-	if locale == "POSIX" || locale == "C" {
-		return false
-	}
-	if len(locale) > 1 && locale[0] == 'C' && (locale[1] == '.' || locale[1] == '-') {
-		return false
-	}
-
-	return isEastAsian(locale)
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/mattn/go-runewidth/runewidth_table.go","mode":420,"size":24709,"sha256":"45bc641d3875d78e0405bb40cea1214c88cdd69468afcc935e2b374f795b282a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":24709}
-// Code generated by script/generate.go. DO NOT EDIT.
-
-package runewidth
-
-var combining = table{
-	{0x0300, 0x036F}, {0x0483, 0x0489}, {0x07EB, 0x07F3},
-	{0x0C00, 0x0C00}, {0x0C04, 0x0C04}, {0x0CF3, 0x0CF3},
-	{0x0D00, 0x0D01}, {0x135D, 0x135F}, {0x1A7F, 0x1A7F},
-	{0x1AB0, 0x1ACE}, {0x1B6B, 0x1B73}, {0x1DC0, 0x1DFF},
-	{0x20D0, 0x20F0}, {0x2CEF, 0x2CF1}, {0x2DE0, 0x2DFF},
-	{0x3099, 0x309A}, {0xA66F, 0xA672}, {0xA674, 0xA67D},
-	{0xA69E, 0xA69F}, {0xA6F0, 0xA6F1}, {0xA8E0, 0xA8F1},
-	{0xFE20, 0xFE2F}, {0x101FD, 0x101FD}, {0x10376, 0x1037A},
-	{0x10EAB, 0x10EAC}, {0x10F46, 0x10F50}, {0x10F82, 0x10F85},
-	{0x11300, 0x11301}, {0x1133B, 0x1133C}, {0x11366, 0x1136C},
-	{0x11370, 0x11374}, {0x16AF0, 0x16AF4}, {0x1CF00, 0x1CF2D},
-	{0x1CF30, 0x1CF46}, {0x1D165, 0x1D169}, {0x1D16D, 0x1D172},
-	{0x1D17B, 0x1D182}, {0x1D185, 0x1D18B}, {0x1D1AA, 0x1D1AD},
-	{0x1D242, 0x1D244}, {0x1E000, 0x1E006}, {0x1E008, 0x1E018},
-	{0x1E01B, 0x1E021}, {0x1E023, 0x1E024}, {0x1E026, 0x1E02A},
-	{0x1E08F, 0x1E08F}, {0x1E8D0, 0x1E8D6},
-}
-
-var doublewidth = table{
-	{0x1100, 0x115F}, {0x231A, 0x231B}, {0x2329, 0x232A},
-	{0x23E9, 0x23EC}, {0x23F0, 0x23F0}, {0x23F3, 0x23F3},
-	{0x25FD, 0x25FE}, {0x2614, 0x2615}, {0x2648, 0x2653},
-	{0x267F, 0x267F}, {0x2693, 0x2693}, {0x26A1, 0x26A1},
-	{0x26AA, 0x26AB}, {0x26BD, 0x26BE}, {0x26C4, 0x26C5},
-	{0x26CE, 0x26CE}, {0x26D4, 0x26D4}, {0x26EA, 0x26EA},
-	{0x26F2, 0x26F3}, {0x26F5, 0x26F5}, {0x26FA, 0x26FA},
-	{0x26FD, 0x26FD}, {0x2705, 0x2705}, {0x270A, 0x270B},
-	{0x2728, 0x2728}, {0x274C, 0x274C}, {0x274E, 0x274E},
-	{0x2753, 0x2755}, {0x2757, 0x2757}, {0x2795, 0x2797},
-	{0x27B0, 0x27B0}, {0x27BF, 0x27BF}, {0x2B1B, 0x2B1C},
-	{0x2B50, 0x2B50}, {0x2B55, 0x2B55}, {0x2E80, 0x2E99},
-	{0x2E9B, 0x2EF3}, {0x2F00, 0x2FD5}, {0x2FF0, 0x303E},
-	{0x3041, 0x3096}, {0x3099, 0x30FF}, {0x3105, 0x312F},
-	{0x3131, 0x318E}, {0x3190, 0x31E3}, {0x31EF, 0x321E},
-	{0x3220, 0x3247}, {0x3250, 0x4DBF}, {0x4E00, 0xA48C},
-	{0xA490, 0xA4C6}, {0xA960, 0xA97C}, {0xAC00, 0xD7A3},
-	{0xF900, 0xFAFF}, {0xFE10, 0xFE19}, {0xFE30, 0xFE52},
-	{0xFE54, 0xFE66}, {0xFE68, 0xFE6B}, {0xFF01, 0xFF60},
-	{0xFFE0, 0xFFE6}, {0x16FE0, 0x16FE4}, {0x16FF0, 0x16FF1},
-	{0x17000, 0x187F7}, {0x18800, 0x18CD5}, {0x18D00, 0x18D08},
-	{0x1AFF0, 0x1AFF3}, {0x1AFF5, 0x1AFFB}, {0x1AFFD, 0x1AFFE},
-	{0x1B000, 0x1B122}, {0x1B132, 0x1B132}, {0x1B150, 0x1B152},
-	{0x1B155, 0x1B155}, {0x1B164, 0x1B167}, {0x1B170, 0x1B2FB},
-	{0x1F004, 0x1F004}, {0x1F0CF, 0x1F0CF}, {0x1F18E, 0x1F18E},
-	{0x1F191, 0x1F19A}, {0x1F200, 0x1F202}, {0x1F210, 0x1F23B},
-	{0x1F240, 0x1F248}, {0x1F250, 0x1F251}, {0x1F260, 0x1F265},
-	{0x1F300, 0x1F320}, {0x1F32D, 0x1F335}, {0x1F337, 0x1F37C},
-	{0x1F37E, 0x1F393}, {0x1F3A0, 0x1F3CA}, {0x1F3CF, 0x1F3D3},
-	{0x1F3E0, 0x1F3F0}, {0x1F3F4, 0x1F3F4}, {0x1F3F8, 0x1F43E},
-	{0x1F440, 0x1F440}, {0x1F442, 0x1F4FC}, {0x1F4FF, 0x1F53D},
-	{0x1F54B, 0x1F54E}, {0x1F550, 0x1F567}, {0x1F57A, 0x1F57A},
-	{0x1F595, 0x1F596}, {0x1F5A4, 0x1F5A4}, {0x1F5FB, 0x1F64F},
-	{0x1F680, 0x1F6C5}, {0x1F6CC, 0x1F6CC}, {0x1F6D0, 0x1F6D2},
-	{0x1F6D5, 0x1F6D7}, {0x1F6DC, 0x1F6DF}, {0x1F6EB, 0x1F6EC},
-	{0x1F6F4, 0x1F6FC}, {0x1F7E0, 0x1F7EB}, {0x1F7F0, 0x1F7F0},
-	{0x1F90C, 0x1F93A}, {0x1F93C, 0x1F945}, {0x1F947, 0x1F9FF},
-	{0x1FA70, 0x1FA7C}, {0x1FA80, 0x1FA88}, {0x1FA90, 0x1FABD},
-	{0x1FABF, 0x1FAC5}, {0x1FACE, 0x1FADB}, {0x1FAE0, 0x1FAE8},
-	{0x1FAF0, 0x1FAF8}, {0x20000, 0x2FFFD}, {0x30000, 0x3FFFD},
-}
-
-var ambiguous = table{
-	{0x00A1, 0x00A1}, {0x00A4, 0x00A4}, {0x00A7, 0x00A8},
-	{0x00AA, 0x00AA}, {0x00AD, 0x00AE}, {0x00B0, 0x00B4},
-	{0x00B6, 0x00BA}, {0x00BC, 0x00BF}, {0x00C6, 0x00C6},
-	{0x00D0, 0x00D0}, {0x00D7, 0x00D8}, {0x00DE, 0x00E1},
-	{0x00E6, 0x00E6}, {0x00E8, 0x00EA}, {0x00EC, 0x00ED},
-	{0x00F0, 0x00F0}, {0x00F2, 0x00F3}, {0x00F7, 0x00FA},
-	{0x00FC, 0x00FC}, {0x00FE, 0x00FE}, {0x0101, 0x0101},
-	{0x0111, 0x0111}, {0x0113, 0x0113}, {0x011B, 0x011B},
-	{0x0126, 0x0127}, {0x012B, 0x012B}, {0x0131, 0x0133},
-	{0x0138, 0x0138}, {0x013F, 0x0142}, {0x0144, 0x0144},
-	{0x0148, 0x014B}, {0x014D, 0x014D}, {0x0152, 0x0153},
-	{0x0166, 0x0167}, {0x016B, 0x016B}, {0x01CE, 0x01CE},
-	{0x01D0, 0x01D0}, {0x01D2, 0x01D2}, {0x01D4, 0x01D4},
-	{0x01D6, 0x01D6}, {0x01D8, 0x01D8}, {0x01DA, 0x01DA},
-	{0x01DC, 0x01DC}, {0x0251, 0x0251}, {0x0261, 0x0261},
-	{0x02C4, 0x02C4}, {0x02C7, 0x02C7}, {0x02C9, 0x02CB},
-	{0x02CD, 0x02CD}, {0x02D0, 0x02D0}, {0x02D8, 0x02DB},
-	{0x02DD, 0x02DD}, {0x02DF, 0x02DF}, {0x0300, 0x036F},
-	{0x0391, 0x03A1}, {0x03A3, 0x03A9}, {0x03B1, 0x03C1},
-	{0x03C3, 0x03C9}, {0x0401, 0x0401}, {0x0410, 0x044F},
-	{0x0451, 0x0451}, {0x2010, 0x2010}, {0x2013, 0x2016},
-	{0x2018, 0x2019}, {0x201C, 0x201D}, {0x2020, 0x2022},
-	{0x2024, 0x2027}, {0x2030, 0x2030}, {0x2032, 0x2033},
-	{0x2035, 0x2035}, {0x203B, 0x203B}, {0x203E, 0x203E},
-	{0x2074, 0x2074}, {0x207F, 0x207F}, {0x2081, 0x2084},
-	{0x20AC, 0x20AC}, {0x2103, 0x2103}, {0x2105, 0x2105},
-	{0x2109, 0x2109}, {0x2113, 0x2113}, {0x2116, 0x2116},
-	{0x2121, 0x2122}, {0x2126, 0x2126}, {0x212B, 0x212B},
-	{0x2153, 0x2154}, {0x215B, 0x215E}, {0x2160, 0x216B},
-	{0x2170, 0x2179}, {0x2189, 0x2189}, {0x2190, 0x2199},
-	{0x21B8, 0x21B9}, {0x21D2, 0x21D2}, {0x21D4, 0x21D4},
-	{0x21E7, 0x21E7}, {0x2200, 0x2200}, {0x2202, 0x2203},
-	{0x2207, 0x2208}, {0x220B, 0x220B}, {0x220F, 0x220F},
-	{0x2211, 0x2211}, {0x2215, 0x2215}, {0x221A, 0x221A},
-	{0x221D, 0x2220}, {0x2223, 0x2223}, {0x2225, 0x2225},
-	{0x2227, 0x222C}, {0x222E, 0x222E}, {0x2234, 0x2237},
-	{0x223C, 0x223D}, {0x2248, 0x2248}, {0x224C, 0x224C},
-	{0x2252, 0x2252}, {0x2260, 0x2261}, {0x2264, 0x2267},
-	{0x226A, 0x226B}, {0x226E, 0x226F}, {0x2282, 0x2283},
-	{0x2286, 0x2287}, {0x2295, 0x2295}, {0x2299, 0x2299},
-	{0x22A5, 0x22A5}, {0x22BF, 0x22BF}, {0x2312, 0x2312},
-	{0x2460, 0x24E9}, {0x24EB, 0x254B}, {0x2550, 0x2573},
-	{0x2580, 0x258F}, {0x2592, 0x2595}, {0x25A0, 0x25A1},
-	{0x25A3, 0x25A9}, {0x25B2, 0x25B3}, {0x25B6, 0x25B7},
-	{0x25BC, 0x25BD}, {0x25C0, 0x25C1}, {0x25C6, 0x25C8},
-	{0x25CB, 0x25CB}, {0x25CE, 0x25D1}, {0x25E2, 0x25E5},
-	{0x25EF, 0x25EF}, {0x2605, 0x2606}, {0x2609, 0x2609},
-	{0x260E, 0x260F}, {0x261C, 0x261C}, {0x261E, 0x261E},
-	{0x2640, 0x2640}, {0x2642, 0x2642}, {0x2660, 0x2661},
-	{0x2663, 0x2665}, {0x2667, 0x266A}, {0x266C, 0x266D},
-	{0x266F, 0x266F}, {0x269E, 0x269F}, {0x26BF, 0x26BF},
-	{0x26C6, 0x26CD}, {0x26CF, 0x26D3}, {0x26D5, 0x26E1},
-	{0x26E3, 0x26E3}, {0x26E8, 0x26E9}, {0x26EB, 0x26F1},
-	{0x26F4, 0x26F4}, {0x26F6, 0x26F9}, {0x26FB, 0x26FC},
-	{0x26FE, 0x26FF}, {0x273D, 0x273D}, {0x2776, 0x277F},
-	{0x2B56, 0x2B59}, {0x3248, 0x324F}, {0xE000, 0xF8FF},
-	{0xFE00, 0xFE0F}, {0xFFFD, 0xFFFD}, {0x1F100, 0x1F10A},
-	{0x1F110, 0x1F12D}, {0x1F130, 0x1F169}, {0x1F170, 0x1F18D},
-	{0x1F18F, 0x1F190}, {0x1F19B, 0x1F1AC}, {0xE0100, 0xE01EF},
-	{0xF0000, 0xFFFFD}, {0x100000, 0x10FFFD},
-}
-var narrow = table{
-	{0x0020, 0x007E}, {0x00A2, 0x00A3}, {0x00A5, 0x00A6},
-	{0x00AC, 0x00AC}, {0x00AF, 0x00AF}, {0x27E6, 0x27ED},
-	{0x2985, 0x2986},
-}
-
-var neutral = table{
-	{0x0000, 0x001F}, {0x007F, 0x00A0}, {0x00A9, 0x00A9},
-	{0x00AB, 0x00AB}, {0x00B5, 0x00B5}, {0x00BB, 0x00BB},
-	{0x00C0, 0x00C5}, {0x00C7, 0x00CF}, {0x00D1, 0x00D6},
-	{0x00D9, 0x00DD}, {0x00E2, 0x00E5}, {0x00E7, 0x00E7},
-	{0x00EB, 0x00EB}, {0x00EE, 0x00EF}, {0x00F1, 0x00F1},
-	{0x00F4, 0x00F6}, {0x00FB, 0x00FB}, {0x00FD, 0x00FD},
-	{0x00FF, 0x0100}, {0x0102, 0x0110}, {0x0112, 0x0112},
-	{0x0114, 0x011A}, {0x011C, 0x0125}, {0x0128, 0x012A},
-	{0x012C, 0x0130}, {0x0134, 0x0137}, {0x0139, 0x013E},
-	{0x0143, 0x0143}, {0x0145, 0x0147}, {0x014C, 0x014C},
-	{0x014E, 0x0151}, {0x0154, 0x0165}, {0x0168, 0x016A},
-	{0x016C, 0x01CD}, {0x01CF, 0x01CF}, {0x01D1, 0x01D1},
-	{0x01D3, 0x01D3}, {0x01D5, 0x01D5}, {0x01D7, 0x01D7},
-	{0x01D9, 0x01D9}, {0x01DB, 0x01DB}, {0x01DD, 0x0250},
-	{0x0252, 0x0260}, {0x0262, 0x02C3}, {0x02C5, 0x02C6},
-	{0x02C8, 0x02C8}, {0x02CC, 0x02CC}, {0x02CE, 0x02CF},
-	{0x02D1, 0x02D7}, {0x02DC, 0x02DC}, {0x02DE, 0x02DE},
-	{0x02E0, 0x02FF}, {0x0370, 0x0377}, {0x037A, 0x037F},
-	{0x0384, 0x038A}, {0x038C, 0x038C}, {0x038E, 0x0390},
-	{0x03AA, 0x03B0}, {0x03C2, 0x03C2}, {0x03CA, 0x0400},
-	{0x0402, 0x040F}, {0x0450, 0x0450}, {0x0452, 0x052F},
-	{0x0531, 0x0556}, {0x0559, 0x058A}, {0x058D, 0x058F},
-	{0x0591, 0x05C7}, {0x05D0, 0x05EA}, {0x05EF, 0x05F4},
-	{0x0600, 0x070D}, {0x070F, 0x074A}, {0x074D, 0x07B1},
-	{0x07C0, 0x07FA}, {0x07FD, 0x082D}, {0x0830, 0x083E},
-	{0x0840, 0x085B}, {0x085E, 0x085E}, {0x0860, 0x086A},
-	{0x0870, 0x088E}, {0x0890, 0x0891}, {0x0898, 0x0983},
-	{0x0985, 0x098C}, {0x098F, 0x0990}, {0x0993, 0x09A8},
-	{0x09AA, 0x09B0}, {0x09B2, 0x09B2}, {0x09B6, 0x09B9},
-	{0x09BC, 0x09C4}, {0x09C7, 0x09C8}, {0x09CB, 0x09CE},
-	{0x09D7, 0x09D7}, {0x09DC, 0x09DD}, {0x09DF, 0x09E3},
-	{0x09E6, 0x09FE}, {0x0A01, 0x0A03}, {0x0A05, 0x0A0A},
-	{0x0A0F, 0x0A10}, {0x0A13, 0x0A28}, {0x0A2A, 0x0A30},
-	{0x0A32, 0x0A33}, {0x0A35, 0x0A36}, {0x0A38, 0x0A39},
-	{0x0A3C, 0x0A3C}, {0x0A3E, 0x0A42}, {0x0A47, 0x0A48},
-	{0x0A4B, 0x0A4D}, {0x0A51, 0x0A51}, {0x0A59, 0x0A5C},
-	{0x0A5E, 0x0A5E}, {0x0A66, 0x0A76}, {0x0A81, 0x0A83},
-	{0x0A85, 0x0A8D}, {0x0A8F, 0x0A91}, {0x0A93, 0x0AA8},
-	{0x0AAA, 0x0AB0}, {0x0AB2, 0x0AB3}, {0x0AB5, 0x0AB9},
-	{0x0ABC, 0x0AC5}, {0x0AC7, 0x0AC9}, {0x0ACB, 0x0ACD},
-	{0x0AD0, 0x0AD0}, {0x0AE0, 0x0AE3}, {0x0AE6, 0x0AF1},
-	{0x0AF9, 0x0AFF}, {0x0B01, 0x0B03}, {0x0B05, 0x0B0C},
-	{0x0B0F, 0x0B10}, {0x0B13, 0x0B28}, {0x0B2A, 0x0B30},
-	{0x0B32, 0x0B33}, {0x0B35, 0x0B39}, {0x0B3C, 0x0B44},
-	{0x0B47, 0x0B48}, {0x0B4B, 0x0B4D}, {0x0B55, 0x0B57},
-	{0x0B5C, 0x0B5D}, {0x0B5F, 0x0B63}, {0x0B66, 0x0B77},
-	{0x0B82, 0x0B83}, {0x0B85, 0x0B8A}, {0x0B8E, 0x0B90},
-	{0x0B92, 0x0B95}, {0x0B99, 0x0B9A}, {0x0B9C, 0x0B9C},
-	{0x0B9E, 0x0B9F}, {0x0BA3, 0x0BA4}, {0x0BA8, 0x0BAA},
-	{0x0BAE, 0x0BB9}, {0x0BBE, 0x0BC2}, {0x0BC6, 0x0BC8},
-	{0x0BCA, 0x0BCD}, {0x0BD0, 0x0BD0}, {0x0BD7, 0x0BD7},
-	{0x0BE6, 0x0BFA}, {0x0C00, 0x0C0C}, {0x0C0E, 0x0C10},
-	{0x0C12, 0x0C28}, {0x0C2A, 0x0C39}, {0x0C3C, 0x0C44},
-	{0x0C46, 0x0C48}, {0x0C4A, 0x0C4D}, {0x0C55, 0x0C56},
-	{0x0C58, 0x0C5A}, {0x0C5D, 0x0C5D}, {0x0C60, 0x0C63},
-	{0x0C66, 0x0C6F}, {0x0C77, 0x0C8C}, {0x0C8E, 0x0C90},
-	{0x0C92, 0x0CA8}, {0x0CAA, 0x0CB3}, {0x0CB5, 0x0CB9},
-	{0x0CBC, 0x0CC4}, {0x0CC6, 0x0CC8}, {0x0CCA, 0x0CCD},
-	{0x0CD5, 0x0CD6}, {0x0CDD, 0x0CDE}, {0x0CE0, 0x0CE3},
-	{0x0CE6, 0x0CEF}, {0x0CF1, 0x0CF3}, {0x0D00, 0x0D0C},
-	{0x0D0E, 0x0D10}, {0x0D12, 0x0D44}, {0x0D46, 0x0D48},
-	{0x0D4A, 0x0D4F}, {0x0D54, 0x0D63}, {0x0D66, 0x0D7F},
-	{0x0D81, 0x0D83}, {0x0D85, 0x0D96}, {0x0D9A, 0x0DB1},
-	{0x0DB3, 0x0DBB}, {0x0DBD, 0x0DBD}, {0x0DC0, 0x0DC6},
-	{0x0DCA, 0x0DCA}, {0x0DCF, 0x0DD4}, {0x0DD6, 0x0DD6},
-	{0x0DD8, 0x0DDF}, {0x0DE6, 0x0DEF}, {0x0DF2, 0x0DF4},
-	{0x0E01, 0x0E3A}, {0x0E3F, 0x0E5B}, {0x0E81, 0x0E82},
-	{0x0E84, 0x0E84}, {0x0E86, 0x0E8A}, {0x0E8C, 0x0EA3},
-	{0x0EA5, 0x0EA5}, {0x0EA7, 0x0EBD}, {0x0EC0, 0x0EC4},
-	{0x0EC6, 0x0EC6}, {0x0EC8, 0x0ECE}, {0x0ED0, 0x0ED9},
-	{0x0EDC, 0x0EDF}, {0x0F00, 0x0F47}, {0x0F49, 0x0F6C},
-	{0x0F71, 0x0F97}, {0x0F99, 0x0FBC}, {0x0FBE, 0x0FCC},
-	{0x0FCE, 0x0FDA}, {0x1000, 0x10C5}, {0x10C7, 0x10C7},
-	{0x10CD, 0x10CD}, {0x10D0, 0x10FF}, {0x1160, 0x1248},
-	{0x124A, 0x124D}, {0x1250, 0x1256}, {0x1258, 0x1258},
-	{0x125A, 0x125D}, {0x1260, 0x1288}, {0x128A, 0x128D},
-	{0x1290, 0x12B0}, {0x12B2, 0x12B5}, {0x12B8, 0x12BE},
-	{0x12C0, 0x12C0}, {0x12C2, 0x12C5}, {0x12C8, 0x12D6},
-	{0x12D8, 0x1310}, {0x1312, 0x1315}, {0x1318, 0x135A},
-	{0x135D, 0x137C}, {0x1380, 0x1399}, {0x13A0, 0x13F5},
-	{0x13F8, 0x13FD}, {0x1400, 0x169C}, {0x16A0, 0x16F8},
-	{0x1700, 0x1715}, {0x171F, 0x1736}, {0x1740, 0x1753},
-	{0x1760, 0x176C}, {0x176E, 0x1770}, {0x1772, 0x1773},
-	{0x1780, 0x17DD}, {0x17E0, 0x17E9}, {0x17F0, 0x17F9},
-	{0x1800, 0x1819}, {0x1820, 0x1878}, {0x1880, 0x18AA},
-	{0x18B0, 0x18F5}, {0x1900, 0x191E}, {0x1920, 0x192B},
-	{0x1930, 0x193B}, {0x1940, 0x1940}, {0x1944, 0x196D},
-	{0x1970, 0x1974}, {0x1980, 0x19AB}, {0x19B0, 0x19C9},
-	{0x19D0, 0x19DA}, {0x19DE, 0x1A1B}, {0x1A1E, 0x1A5E},
-	{0x1A60, 0x1A7C}, {0x1A7F, 0x1A89}, {0x1A90, 0x1A99},
-	{0x1AA0, 0x1AAD}, {0x1AB0, 0x1ACE}, {0x1B00, 0x1B4C},
-	{0x1B50, 0x1B7E}, {0x1B80, 0x1BF3}, {0x1BFC, 0x1C37},
-	{0x1C3B, 0x1C49}, {0x1C4D, 0x1C88}, {0x1C90, 0x1CBA},
-	{0x1CBD, 0x1CC7}, {0x1CD0, 0x1CFA}, {0x1D00, 0x1F15},
-	{0x1F18, 0x1F1D}, {0x1F20, 0x1F45}, {0x1F48, 0x1F4D},
-	{0x1F50, 0x1F57}, {0x1F59, 0x1F59}, {0x1F5B, 0x1F5B},
-	{0x1F5D, 0x1F5D}, {0x1F5F, 0x1F7D}, {0x1F80, 0x1FB4},
-	{0x1FB6, 0x1FC4}, {0x1FC6, 0x1FD3}, {0x1FD6, 0x1FDB},
-	{0x1FDD, 0x1FEF}, {0x1FF2, 0x1FF4}, {0x1FF6, 0x1FFE},
-	{0x2000, 0x200F}, {0x2011, 0x2012}, {0x2017, 0x2017},
-	{0x201A, 0x201B}, {0x201E, 0x201F}, {0x2023, 0x2023},
-	{0x2028, 0x202F}, {0x2031, 0x2031}, {0x2034, 0x2034},
-	{0x2036, 0x203A}, {0x203C, 0x203D}, {0x203F, 0x2064},
-	{0x2066, 0x2071}, {0x2075, 0x207E}, {0x2080, 0x2080},
-	{0x2085, 0x208E}, {0x2090, 0x209C}, {0x20A0, 0x20A8},
-	{0x20AA, 0x20AB}, {0x20AD, 0x20C0}, {0x20D0, 0x20F0},
-	{0x2100, 0x2102}, {0x2104, 0x2104}, {0x2106, 0x2108},
-	{0x210A, 0x2112}, {0x2114, 0x2115}, {0x2117, 0x2120},
-	{0x2123, 0x2125}, {0x2127, 0x212A}, {0x212C, 0x2152},
-	{0x2155, 0x215A}, {0x215F, 0x215F}, {0x216C, 0x216F},
-	{0x217A, 0x2188}, {0x218A, 0x218B}, {0x219A, 0x21B7},
-	{0x21BA, 0x21D1}, {0x21D3, 0x21D3}, {0x21D5, 0x21E6},
-	{0x21E8, 0x21FF}, {0x2201, 0x2201}, {0x2204, 0x2206},
-	{0x2209, 0x220A}, {0x220C, 0x220E}, {0x2210, 0x2210},
-	{0x2212, 0x2214}, {0x2216, 0x2219}, {0x221B, 0x221C},
-	{0x2221, 0x2222}, {0x2224, 0x2224}, {0x2226, 0x2226},
-	{0x222D, 0x222D}, {0x222F, 0x2233}, {0x2238, 0x223B},
-	{0x223E, 0x2247}, {0x2249, 0x224B}, {0x224D, 0x2251},
-	{0x2253, 0x225F}, {0x2262, 0x2263}, {0x2268, 0x2269},
-	{0x226C, 0x226D}, {0x2270, 0x2281}, {0x2284, 0x2285},
-	{0x2288, 0x2294}, {0x2296, 0x2298}, {0x229A, 0x22A4},
-	{0x22A6, 0x22BE}, {0x22C0, 0x2311}, {0x2313, 0x2319},
-	{0x231C, 0x2328}, {0x232B, 0x23E8}, {0x23ED, 0x23EF},
-	{0x23F1, 0x23F2}, {0x23F4, 0x2426}, {0x2440, 0x244A},
-	{0x24EA, 0x24EA}, {0x254C, 0x254F}, {0x2574, 0x257F},
-	{0x2590, 0x2591}, {0x2596, 0x259F}, {0x25A2, 0x25A2},
-	{0x25AA, 0x25B1}, {0x25B4, 0x25B5}, {0x25B8, 0x25BB},
-	{0x25BE, 0x25BF}, {0x25C2, 0x25C5}, {0x25C9, 0x25CA},
-	{0x25CC, 0x25CD}, {0x25D2, 0x25E1}, {0x25E6, 0x25EE},
-	{0x25F0, 0x25FC}, {0x25FF, 0x2604}, {0x2607, 0x2608},
-	{0x260A, 0x260D}, {0x2610, 0x2613}, {0x2616, 0x261B},
-	{0x261D, 0x261D}, {0x261F, 0x263F}, {0x2641, 0x2641},
-	{0x2643, 0x2647}, {0x2654, 0x265F}, {0x2662, 0x2662},
-	{0x2666, 0x2666}, {0x266B, 0x266B}, {0x266E, 0x266E},
-	{0x2670, 0x267E}, {0x2680, 0x2692}, {0x2694, 0x269D},
-	{0x26A0, 0x26A0}, {0x26A2, 0x26A9}, {0x26AC, 0x26BC},
-	{0x26C0, 0x26C3}, {0x26E2, 0x26E2}, {0x26E4, 0x26E7},
-	{0x2700, 0x2704}, {0x2706, 0x2709}, {0x270C, 0x2727},
-	{0x2729, 0x273C}, {0x273E, 0x274B}, {0x274D, 0x274D},
-	{0x274F, 0x2752}, {0x2756, 0x2756}, {0x2758, 0x2775},
-	{0x2780, 0x2794}, {0x2798, 0x27AF}, {0x27B1, 0x27BE},
-	{0x27C0, 0x27E5}, {0x27EE, 0x2984}, {0x2987, 0x2B1A},
-	{0x2B1D, 0x2B4F}, {0x2B51, 0x2B54}, {0x2B5A, 0x2B73},
-	{0x2B76, 0x2B95}, {0x2B97, 0x2CF3}, {0x2CF9, 0x2D25},
-	{0x2D27, 0x2D27}, {0x2D2D, 0x2D2D}, {0x2D30, 0x2D67},
-	{0x2D6F, 0x2D70}, {0x2D7F, 0x2D96}, {0x2DA0, 0x2DA6},
-	{0x2DA8, 0x2DAE}, {0x2DB0, 0x2DB6}, {0x2DB8, 0x2DBE},
-	{0x2DC0, 0x2DC6}, {0x2DC8, 0x2DCE}, {0x2DD0, 0x2DD6},
-	{0x2DD8, 0x2DDE}, {0x2DE0, 0x2E5D}, {0x303F, 0x303F},
-	{0x4DC0, 0x4DFF}, {0xA4D0, 0xA62B}, {0xA640, 0xA6F7},
-	{0xA700, 0xA7CA}, {0xA7D0, 0xA7D1}, {0xA7D3, 0xA7D3},
-	{0xA7D5, 0xA7D9}, {0xA7F2, 0xA82C}, {0xA830, 0xA839},
-	{0xA840, 0xA877}, {0xA880, 0xA8C5}, {0xA8CE, 0xA8D9},
-	{0xA8E0, 0xA953}, {0xA95F, 0xA95F}, {0xA980, 0xA9CD},
-	{0xA9CF, 0xA9D9}, {0xA9DE, 0xA9FE}, {0xAA00, 0xAA36},
-	{0xAA40, 0xAA4D}, {0xAA50, 0xAA59}, {0xAA5C, 0xAAC2},
-	{0xAADB, 0xAAF6}, {0xAB01, 0xAB06}, {0xAB09, 0xAB0E},
-	{0xAB11, 0xAB16}, {0xAB20, 0xAB26}, {0xAB28, 0xAB2E},
-	{0xAB30, 0xAB6B}, {0xAB70, 0xABED}, {0xABF0, 0xABF9},
-	{0xD7B0, 0xD7C6}, {0xD7CB, 0xD7FB}, {0xD800, 0xDFFF},
-	{0xFB00, 0xFB06}, {0xFB13, 0xFB17}, {0xFB1D, 0xFB36},
-	{0xFB38, 0xFB3C}, {0xFB3E, 0xFB3E}, {0xFB40, 0xFB41},
-	{0xFB43, 0xFB44}, {0xFB46, 0xFBC2}, {0xFBD3, 0xFD8F},
-	{0xFD92, 0xFDC7}, {0xFDCF, 0xFDCF}, {0xFDF0, 0xFDFF},
-	{0xFE20, 0xFE2F}, {0xFE70, 0xFE74}, {0xFE76, 0xFEFC},
-	{0xFEFF, 0xFEFF}, {0xFFF9, 0xFFFC}, {0x10000, 0x1000B},
-	{0x1000D, 0x10026}, {0x10028, 0x1003A}, {0x1003C, 0x1003D},
-	{0x1003F, 0x1004D}, {0x10050, 0x1005D}, {0x10080, 0x100FA},
-	{0x10100, 0x10102}, {0x10107, 0x10133}, {0x10137, 0x1018E},
-	{0x10190, 0x1019C}, {0x101A0, 0x101A0}, {0x101D0, 0x101FD},
-	{0x10280, 0x1029C}, {0x102A0, 0x102D0}, {0x102E0, 0x102FB},
-	{0x10300, 0x10323}, {0x1032D, 0x1034A}, {0x10350, 0x1037A},
-	{0x10380, 0x1039D}, {0x1039F, 0x103C3}, {0x103C8, 0x103D5},
-	{0x10400, 0x1049D}, {0x104A0, 0x104A9}, {0x104B0, 0x104D3},
-	{0x104D8, 0x104FB}, {0x10500, 0x10527}, {0x10530, 0x10563},
-	{0x1056F, 0x1057A}, {0x1057C, 0x1058A}, {0x1058C, 0x10592},
-	{0x10594, 0x10595}, {0x10597, 0x105A1}, {0x105A3, 0x105B1},
-	{0x105B3, 0x105B9}, {0x105BB, 0x105BC}, {0x10600, 0x10736},
-	{0x10740, 0x10755}, {0x10760, 0x10767}, {0x10780, 0x10785},
-	{0x10787, 0x107B0}, {0x107B2, 0x107BA}, {0x10800, 0x10805},
-	{0x10808, 0x10808}, {0x1080A, 0x10835}, {0x10837, 0x10838},
-	{0x1083C, 0x1083C}, {0x1083F, 0x10855}, {0x10857, 0x1089E},
-	{0x108A7, 0x108AF}, {0x108E0, 0x108F2}, {0x108F4, 0x108F5},
-	{0x108FB, 0x1091B}, {0x1091F, 0x10939}, {0x1093F, 0x1093F},
-	{0x10980, 0x109B7}, {0x109BC, 0x109CF}, {0x109D2, 0x10A03},
-	{0x10A05, 0x10A06}, {0x10A0C, 0x10A13}, {0x10A15, 0x10A17},
-	{0x10A19, 0x10A35}, {0x10A38, 0x10A3A}, {0x10A3F, 0x10A48},
-	{0x10A50, 0x10A58}, {0x10A60, 0x10A9F}, {0x10AC0, 0x10AE6},
-	{0x10AEB, 0x10AF6}, {0x10B00, 0x10B35}, {0x10B39, 0x10B55},
-	{0x10B58, 0x10B72}, {0x10B78, 0x10B91}, {0x10B99, 0x10B9C},
-	{0x10BA9, 0x10BAF}, {0x10C00, 0x10C48}, {0x10C80, 0x10CB2},
-	{0x10CC0, 0x10CF2}, {0x10CFA, 0x10D27}, {0x10D30, 0x10D39},
-	{0x10E60, 0x10E7E}, {0x10E80, 0x10EA9}, {0x10EAB, 0x10EAD},
-	{0x10EB0, 0x10EB1}, {0x10EFD, 0x10F27}, {0x10F30, 0x10F59},
-	{0x10F70, 0x10F89}, {0x10FB0, 0x10FCB}, {0x10FE0, 0x10FF6},
-	{0x11000, 0x1104D}, {0x11052, 0x11075}, {0x1107F, 0x110C2},
-	{0x110CD, 0x110CD}, {0x110D0, 0x110E8}, {0x110F0, 0x110F9},
-	{0x11100, 0x11134}, {0x11136, 0x11147}, {0x11150, 0x11176},
-	{0x11180, 0x111DF}, {0x111E1, 0x111F4}, {0x11200, 0x11211},
-	{0x11213, 0x11241}, {0x11280, 0x11286}, {0x11288, 0x11288},
-	{0x1128A, 0x1128D}, {0x1128F, 0x1129D}, {0x1129F, 0x112A9},
-	{0x112B0, 0x112EA}, {0x112F0, 0x112F9}, {0x11300, 0x11303},
-	{0x11305, 0x1130C}, {0x1130F, 0x11310}, {0x11313, 0x11328},
-	{0x1132A, 0x11330}, {0x11332, 0x11333}, {0x11335, 0x11339},
-	{0x1133B, 0x11344}, {0x11347, 0x11348}, {0x1134B, 0x1134D},
-	{0x11350, 0x11350}, {0x11357, 0x11357}, {0x1135D, 0x11363},
-	{0x11366, 0x1136C}, {0x11370, 0x11374}, {0x11400, 0x1145B},
-	{0x1145D, 0x11461}, {0x11480, 0x114C7}, {0x114D0, 0x114D9},
-	{0x11580, 0x115B5}, {0x115B8, 0x115DD}, {0x11600, 0x11644},
-	{0x11650, 0x11659}, {0x11660, 0x1166C}, {0x11680, 0x116B9},
-	{0x116C0, 0x116C9}, {0x11700, 0x1171A}, {0x1171D, 0x1172B},
-	{0x11730, 0x11746}, {0x11800, 0x1183B}, {0x118A0, 0x118F2},
-	{0x118FF, 0x11906}, {0x11909, 0x11909}, {0x1190C, 0x11913},
-	{0x11915, 0x11916}, {0x11918, 0x11935}, {0x11937, 0x11938},
-	{0x1193B, 0x11946}, {0x11950, 0x11959}, {0x119A0, 0x119A7},
-	{0x119AA, 0x119D7}, {0x119DA, 0x119E4}, {0x11A00, 0x11A47},
-	{0x11A50, 0x11AA2}, {0x11AB0, 0x11AF8}, {0x11B00, 0x11B09},
-	{0x11C00, 0x11C08}, {0x11C0A, 0x11C36}, {0x11C38, 0x11C45},
-	{0x11C50, 0x11C6C}, {0x11C70, 0x11C8F}, {0x11C92, 0x11CA7},
-	{0x11CA9, 0x11CB6}, {0x11D00, 0x11D06}, {0x11D08, 0x11D09},
-	{0x11D0B, 0x11D36}, {0x11D3A, 0x11D3A}, {0x11D3C, 0x11D3D},
-	{0x11D3F, 0x11D47}, {0x11D50, 0x11D59}, {0x11D60, 0x11D65},
-	{0x11D67, 0x11D68}, {0x11D6A, 0x11D8E}, {0x11D90, 0x11D91},
-	{0x11D93, 0x11D98}, {0x11DA0, 0x11DA9}, {0x11EE0, 0x11EF8},
-	{0x11F00, 0x11F10}, {0x11F12, 0x11F3A}, {0x11F3E, 0x11F59},
-	{0x11FB0, 0x11FB0}, {0x11FC0, 0x11FF1}, {0x11FFF, 0x12399},
-	{0x12400, 0x1246E}, {0x12470, 0x12474}, {0x12480, 0x12543},
-	{0x12F90, 0x12FF2}, {0x13000, 0x13455}, {0x14400, 0x14646},
-	{0x16800, 0x16A38}, {0x16A40, 0x16A5E}, {0x16A60, 0x16A69},
-	{0x16A6E, 0x16ABE}, {0x16AC0, 0x16AC9}, {0x16AD0, 0x16AED},
-	{0x16AF0, 0x16AF5}, {0x16B00, 0x16B45}, {0x16B50, 0x16B59},
-	{0x16B5B, 0x16B61}, {0x16B63, 0x16B77}, {0x16B7D, 0x16B8F},
-	{0x16E40, 0x16E9A}, {0x16F00, 0x16F4A}, {0x16F4F, 0x16F87},
-	{0x16F8F, 0x16F9F}, {0x1BC00, 0x1BC6A}, {0x1BC70, 0x1BC7C},
-	{0x1BC80, 0x1BC88}, {0x1BC90, 0x1BC99}, {0x1BC9C, 0x1BCA3},
-	{0x1CF00, 0x1CF2D}, {0x1CF30, 0x1CF46}, {0x1CF50, 0x1CFC3},
-	{0x1D000, 0x1D0F5}, {0x1D100, 0x1D126}, {0x1D129, 0x1D1EA},
-	{0x1D200, 0x1D245}, {0x1D2C0, 0x1D2D3}, {0x1D2E0, 0x1D2F3},
-	{0x1D300, 0x1D356}, {0x1D360, 0x1D378}, {0x1D400, 0x1D454},
-	{0x1D456, 0x1D49C}, {0x1D49E, 0x1D49F}, {0x1D4A2, 0x1D4A2},
-	{0x1D4A5, 0x1D4A6}, {0x1D4A9, 0x1D4AC}, {0x1D4AE, 0x1D4B9},
-	{0x1D4BB, 0x1D4BB}, {0x1D4BD, 0x1D4C3}, {0x1D4C5, 0x1D505},
-	{0x1D507, 0x1D50A}, {0x1D50D, 0x1D514}, {0x1D516, 0x1D51C},
-	{0x1D51E, 0x1D539}, {0x1D53B, 0x1D53E}, {0x1D540, 0x1D544},
-	{0x1D546, 0x1D546}, {0x1D54A, 0x1D550}, {0x1D552, 0x1D6A5},
-	{0x1D6A8, 0x1D7CB}, {0x1D7CE, 0x1DA8B}, {0x1DA9B, 0x1DA9F},
-	{0x1DAA1, 0x1DAAF}, {0x1DF00, 0x1DF1E}, {0x1DF25, 0x1DF2A},
-	{0x1E000, 0x1E006}, {0x1E008, 0x1E018}, {0x1E01B, 0x1E021},
-	{0x1E023, 0x1E024}, {0x1E026, 0x1E02A}, {0x1E030, 0x1E06D},
-	{0x1E08F, 0x1E08F}, {0x1E100, 0x1E12C}, {0x1E130, 0x1E13D},
-	{0x1E140, 0x1E149}, {0x1E14E, 0x1E14F}, {0x1E290, 0x1E2AE},
-	{0x1E2C0, 0x1E2F9}, {0x1E2FF, 0x1E2FF}, {0x1E4D0, 0x1E4F9},
-	{0x1E7E0, 0x1E7E6}, {0x1E7E8, 0x1E7EB}, {0x1E7ED, 0x1E7EE},
-	{0x1E7F0, 0x1E7FE}, {0x1E800, 0x1E8C4}, {0x1E8C7, 0x1E8D6},
-	{0x1E900, 0x1E94B}, {0x1E950, 0x1E959}, {0x1E95E, 0x1E95F},
-	{0x1EC71, 0x1ECB4}, {0x1ED01, 0x1ED3D}, {0x1EE00, 0x1EE03},
-	{0x1EE05, 0x1EE1F}, {0x1EE21, 0x1EE22}, {0x1EE24, 0x1EE24},
-	{0x1EE27, 0x1EE27}, {0x1EE29, 0x1EE32}, {0x1EE34, 0x1EE37},
-	{0x1EE39, 0x1EE39}, {0x1EE3B, 0x1EE3B}, {0x1EE42, 0x1EE42},
-	{0x1EE47, 0x1EE47}, {0x1EE49, 0x1EE49}, {0x1EE4B, 0x1EE4B},
-	{0x1EE4D, 0x1EE4F}, {0x1EE51, 0x1EE52}, {0x1EE54, 0x1EE54},
-	{0x1EE57, 0x1EE57}, {0x1EE59, 0x1EE59}, {0x1EE5B, 0x1EE5B},
-	{0x1EE5D, 0x1EE5D}, {0x1EE5F, 0x1EE5F}, {0x1EE61, 0x1EE62},
-	{0x1EE64, 0x1EE64}, {0x1EE67, 0x1EE6A}, {0x1EE6C, 0x1EE72},
-	{0x1EE74, 0x1EE77}, {0x1EE79, 0x1EE7C}, {0x1EE7E, 0x1EE7E},
-	{0x1EE80, 0x1EE89}, {0x1EE8B, 0x1EE9B}, {0x1EEA1, 0x1EEA3},
-	{0x1EEA5, 0x1EEA9}, {0x1EEAB, 0x1EEBB}, {0x1EEF0, 0x1EEF1},
-	{0x1F000, 0x1F003}, {0x1F005, 0x1F02B}, {0x1F030, 0x1F093},
-	{0x1F0A0, 0x1F0AE}, {0x1F0B1, 0x1F0BF}, {0x1F0C1, 0x1F0CE},
-	{0x1F0D1, 0x1F0F5}, {0x1F10B, 0x1F10F}, {0x1F12E, 0x1F12F},
-	{0x1F16A, 0x1F16F}, {0x1F1AD, 0x1F1AD}, {0x1F1E6, 0x1F1FF},
-	{0x1F321, 0x1F32C}, {0x1F336, 0x1F336}, {0x1F37D, 0x1F37D},
-	{0x1F394, 0x1F39F}, {0x1F3CB, 0x1F3CE}, {0x1F3D4, 0x1F3DF},
-	{0x1F3F1, 0x1F3F3}, {0x1F3F5, 0x1F3F7}, {0x1F43F, 0x1F43F},
-	{0x1F441, 0x1F441}, {0x1F4FD, 0x1F4FE}, {0x1F53E, 0x1F54A},
-	{0x1F54F, 0x1F54F}, {0x1F568, 0x1F579}, {0x1F57B, 0x1F594},
-	{0x1F597, 0x1F5A3}, {0x1F5A5, 0x1F5FA}, {0x1F650, 0x1F67F},
-	{0x1F6C6, 0x1F6CB}, {0x1F6CD, 0x1F6CF}, {0x1F6D3, 0x1F6D4},
-	{0x1F6E0, 0x1F6EA}, {0x1F6F0, 0x1F6F3}, {0x1F700, 0x1F776},
-	{0x1F77B, 0x1F7D9}, {0x1F800, 0x1F80B}, {0x1F810, 0x1F847},
-	{0x1F850, 0x1F859}, {0x1F860, 0x1F887}, {0x1F890, 0x1F8AD},
-	{0x1F8B0, 0x1F8B1}, {0x1F900, 0x1F90B}, {0x1F93B, 0x1F93B},
-	{0x1F946, 0x1F946}, {0x1FA00, 0x1FA53}, {0x1FA60, 0x1FA6D},
-	{0x1FB00, 0x1FB92}, {0x1FB94, 0x1FBCA}, {0x1FBF0, 0x1FBF9},
-	{0xE0001, 0xE0001}, {0xE0020, 0xE007F},
-}
-
-var emoji = table{
-	{0x203C, 0x203C}, {0x2049, 0x2049}, {0x2122, 0x2122},
-	{0x2139, 0x2139}, {0x2194, 0x2199}, {0x21A9, 0x21AA},
-	{0x231A, 0x231B}, {0x2328, 0x2328}, {0x2388, 0x2388},
-	{0x23CF, 0x23CF}, {0x23E9, 0x23F3}, {0x23F8, 0x23FA},
-	{0x24C2, 0x24C2}, {0x25AA, 0x25AB}, {0x25B6, 0x25B6},
-	{0x25C0, 0x25C0}, {0x25FB, 0x25FE}, {0x2600, 0x2605},
-	{0x2607, 0x2612}, {0x2614, 0x2685}, {0x2690, 0x2705},
-	{0x2708, 0x2712}, {0x2714, 0x2714}, {0x2716, 0x2716},
-	{0x271D, 0x271D}, {0x2721, 0x2721}, {0x2728, 0x2728},
-	{0x2733, 0x2734}, {0x2744, 0x2744}, {0x2747, 0x2747},
-	{0x274C, 0x274C}, {0x274E, 0x274E}, {0x2753, 0x2755},
-	{0x2757, 0x2757}, {0x2763, 0x2767}, {0x2795, 0x2797},
-	{0x27A1, 0x27A1}, {0x27B0, 0x27B0}, {0x27BF, 0x27BF},
-	{0x2934, 0x2935}, {0x2B05, 0x2B07}, {0x2B1B, 0x2B1C},
-	{0x2B50, 0x2B50}, {0x2B55, 0x2B55}, {0x3030, 0x3030},
-	{0x303D, 0x303D}, {0x3297, 0x3297}, {0x3299, 0x3299},
-	{0x1F000, 0x1F0FF}, {0x1F10D, 0x1F10F}, {0x1F12F, 0x1F12F},
-	{0x1F16C, 0x1F171}, {0x1F17E, 0x1F17F}, {0x1F18E, 0x1F18E},
-	{0x1F191, 0x1F19A}, {0x1F1AD, 0x1F1E5}, {0x1F201, 0x1F20F},
-	{0x1F21A, 0x1F21A}, {0x1F22F, 0x1F22F}, {0x1F232, 0x1F23A},
-	{0x1F23C, 0x1F23F}, {0x1F249, 0x1F3FA}, {0x1F400, 0x1F53D},
-	{0x1F546, 0x1F64F}, {0x1F680, 0x1F6FF}, {0x1F774, 0x1F77F},
-	{0x1F7D5, 0x1F7FF}, {0x1F80C, 0x1F80F}, {0x1F848, 0x1F84F},
-	{0x1F85A, 0x1F85F}, {0x1F888, 0x1F88F}, {0x1F8AE, 0x1F8FF},
-	{0x1F90C, 0x1F93A}, {0x1F93C, 0x1F945}, {0x1F947, 0x1FAFF},
-	{0x1FC00, 0x1FFFD},
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/mattn/go-runewidth/runewidth_windows.go","mode":420,"size":479,"sha256":"bae563e793ad613d99377f3a904411f2138699ff7eac517cfee929b3e407c016","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":479}
-//go:build windows && !appengine
-// +build windows,!appengine
-
-package runewidth
-
-import (
-	"syscall"
-)
-
-var (
-	kernel32               = syscall.NewLazyDLL("kernel32")
-	procGetConsoleOutputCP = kernel32.NewProc("GetConsoleOutputCP")
-)
-
-// IsEastAsian return true if the current locale is CJK
-func IsEastAsian() bool {
-	r1, _, _ := procGetConsoleOutputCP.Call()
-	if r1 == 0 {
-		return false
-	}
-
-	switch int(r1) {
-	case 932, 51932, 936, 949, 950:
-		return true
-	}
-
-	return false
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/microcosm-cc/bluemonday/CONTRIBUTING.md","mode":420,"size":3802,"sha256":"c82014c4d28d7a2c960927b5af464108bb8ed2f93ee3748c1a920d58d6aade7a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3802}
-# Contributing to bluemonday
-
-Third-party patches are essential for keeping bluemonday secure and offering the features developers want. However there are a few guidelines that we need contributors to follow so that we can maintain the quality of work that developers who use bluemonday expect.
-
-## Getting Started
-
-* Make sure you have a [Github account](https://github.com/signup/free)
-
-## Guidelines
-
-1. Do not vendor dependencies. Vendoring is a project problem, not a package problem. 
-2. I do not care about spelling mistakes or whitespace and I do not believe that you should either. PRs therefore must be functional in their nature or be substantial and impactful if documentation or examples.
-3. This module does not participate in hacktober, please make your contributions meaningful.
-
-## Submitting an Issue
-
-* Submit a ticket for your issue, assuming one does not already exist
-* Clearly describe the issue including the steps to reproduce (with sample input and output) if it is a bug
-
-If you are reporting a security flaw, you may expect that we will provide the code to fix it for you. Otherwise you may want to submit a pull request to ensure the resolution is applied sooner rather than later:
-
-* Fork the repository on Github
-* Issue a pull request containing code to resolve the issue
-
-## Submitting a Pull Request
-
-* Submit a ticket for your issue, assuming one does not already exist
-* Describe the reason for the pull request and if applicable show some example inputs and outputs to demonstrate what the patch does
-* Fork the repository on Github
-* Before submitting the pull request you should
-  1. Include tests for your patch, 1 test should encapsulate the entire patch and should refer to the Github issue
-  1. If you have added new exposed/public functionality, you should ensure it is documented appropriately
-  1. If you have added new exposed/public functionality, you should consider demonstrating how to use it within one of the helpers or shipped policies if appropriate or within a test if modifying a helper or policy is not appropriate
-  1. Run all of the tests `go test -v ./...` and ensure all tests pass
-  1. Run gofmt `go fmt ./...`
-  1. Run vet `go vet ./...` and resolve any issues
-* When submitting the pull request you should
-  1. Note the issue(s) it resolves, i.e. `Closes #6` in the pull request comment to close issue #6 when the pull request is accepted
-
-Once you have submitted a pull request, we *may* merge it without changes. If we have any comments or feedback, or need you to make changes to your pull request we will update the Github pull request or the associated issue. We expect responses from you within two weeks, and we may close the pull request is there is no activity.
-
-### Contributor Licence Agreement
-
-We haven't gone for the formal "Sign a Contributor Licence Agreement" thing that projects like [puppet](https://cla.puppetlabs.com/), [Mojito](https://developer.yahoo.com/cocktails/mojito/cla/) and companies like [Google](http://code.google.com/legal/individual-cla-v1.0.html) are using.
-
-But we do need to know that we can accept and merge your contributions, so for now the act of contributing a pull request should be considered equivalent to agreeing to a contributor licence agreement, specifically:
-
-* You accept that the act of submitting code to the bluemonday project is to grant a copyright licence to the project that is perpetual, worldwide, non-exclusive, no-charge, royalty free and irrevocable.
-* You accept that all who comply with the licence of the project (BSD 3-clause) are permitted to use your contributions to the project.
-* You accept, and by submitting code do declare, that you have the legal right to grant such a licence to the project and that each of the contributions is your own original creation.
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/microcosm-cc/bluemonday/CREDITS.md","mode":420,"size":385,"sha256":"8c2b710069b4cc1223c02c430f490ae456a9895ded8d031f42f0448cf30ccf12","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":385}
-1. John Graham-Cumming http://jgc.org/
-1. Mohammad Gufran https://github.com/Gufran
-1. Steven Gutzwiller https://github.com/StevenGutzwiller
-1. Andrew Krasichkov @buglloc https://github.com/buglloc
-1. Mike Samuel mikesamuel@gmail.com
-1. Dmitri Shuralyov shurcooL@gmail.com
-1. opennota https://github.com/opennota https://gitlab.com/opennota
-1. Tom Anthony https://www.tomanthony.co.uk/
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/microcosm-cc/bluemonday/LICENSE.md","mode":420,"size":1518,"sha256":"a8e8489f1168b5f3e0ebb43d7fe1c78a2fd7db9939c1a6cb555940a4b631f8d2","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1518}
-Copyright (c) 2014, David Kitchen <david@buro9.com>
-
-All rights reserved.
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
-
-* Redistributions of source code must retain the above copyright notice, this
-  list of conditions and the following disclaimer.
-
-* Redistributions in binary form must reproduce the above copyright notice,
-  this list of conditions and the following disclaimer in the documentation
-  and/or other materials provided with the distribution.
-
-* Neither the name of the organisation (Microcosm) nor the names of its
-  contributors may be used to endorse or promote products derived from
-  this software without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 @@END

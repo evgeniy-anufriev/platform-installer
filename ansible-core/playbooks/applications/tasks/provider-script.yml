@@ -12,6 +12,7 @@
         database: passwd
         key: "{{ application_script_target_job.account }}"
       delegate_to: "{{ application_provider_script_host }}"
+      connection: ssh
       register: application_script_identity
       when: application_provider_script.runOn | default('target') != 'execution_node'
       no_log: true
@@ -21,6 +22,7 @@
         name: platform.core.package_script
         apply:
           delegate_to: "{{ 'localhost' if application_provider_script.runOn | default('target') == 'execution_node' else application_provider_script_host }}"
+          connection: "{{ 'local' if application_provider_script.runOn | default('target') == 'execution_node' else 'ssh' }}"
           become: "{{ application_provider_script.runOn | default('target') != 'execution_node' }}"
       vars:
         platform_script_job:

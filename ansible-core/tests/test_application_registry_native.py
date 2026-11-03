@@ -76,6 +76,11 @@ class ApplicationRegistryNativeTests(unittest.TestCase):
                 play = yaml.safe_load((ROOT / 'ansible-core/playbooks/applications/images/prepare.yml').read_text())
                 for item in play:
                     item['module_defaults'] = {'ansible.builtin.uri': dict(ca_path=str(ca))}
+                    # The instrumented play lives in a temporary directory;
+                    # retain the production include's source-relative location.
+                    for task in item.get('tasks', []):
+                        if task.get('ansible.builtin.include_tasks') == 'placement.yml':
+                            task['ansible.builtin.include_tasks'] = str(ROOT / 'ansible-core/playbooks/applications/images/placement.yml')
                 variables['platform_application_image_inputs'] = dict(
                     targetConnections={'localhost': dict(address='127.0.0.1', port=22)},
                     placements=[variables['application_image_input']], ready={})
@@ -84,8 +89,11 @@ class ApplicationRegistryNativeTests(unittest.TestCase):
             play_path = root / 'play.yml'; play_path.write_text(yaml.safe_dump(play))
             environment = dict(os.environ, ANSIBLE_CONFIG=str(ROOT / 'ansible-core/ansible.cfg'),
                                ANSIBLE_COLLECTIONS_PATH=str(ROOT / 'ansible-core/collections'))
+            inventory_path = root / 'inventory.yml'
+            inventory_path.write_text(yaml.safe_dump({'all': {'hosts': {
+                'localhost': {'ansible_connection': 'local'}}}}))
             try:
-                argv = ['ansible-playbook', '-i', 'localhost,', '-c', 'local', str(play_path)]
+                argv = ['ansible-playbook', '-i', str(inventory_path), '-c', 'local', str(play_path)]
                 if standalone:
                     argv.extend(['-vvv', '-e', '@' + str(vars_path)])
                 result = subprocess.run(argv,

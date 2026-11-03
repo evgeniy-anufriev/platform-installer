@@ -10,6 +10,7 @@
   ansible.builtin.slurp:
     src: "{{ platform_vault_application_provider.caSource }}"
   delegate_to: "{{ platform_vault_application_provider.caHost }}"
+  connection: ssh
   become: true
   register: application_vault_ca
   no_log: true

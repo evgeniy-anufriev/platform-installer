@@ -660,6 +660,16 @@ new planning worker or persistent secret store is introduced. An older runtime
 retains its explicit legacy-lock path. Source/identity policy and verification
 remain in Core. See [the plan](work/application-libraries/application-image-metadata-plan.md).
 
+### Application task transports
+
+Application stages may run on `localhost` with `connection: local`. Tasks
+delegated to provider/image target hosts explicitly select `connection: ssh`,
+including inherited `include_role`/`include_tasks` apply blocks. `delegate_to`
+alone does not guarantee a remote transport. Controller operations remain
+local; package scripts select `local` for `runOn: execution_node` and `ssh` for
+the default/explicit target mode. Explicit inventory connection variables
+retain ordinary Ansible precedence.
+
 ### Terminal package scripts
 
 Application/LibraryPackage v1alpha3 adds `phase: post_install`. The resolved

@@ -5,6 +5,7 @@
   vars:
     application_vault_provider: "{{ platform_application_vault_runtime[platform_vault_application_job.providerId] }}"
   delegate_to: "{{ item }}"
+  connection: ssh
   loop: "{{ platform_vault_application_job.hosts }}"
   register: application_vault_addresses
   changed_when: false
@@ -15,6 +16,7 @@
   vars:
     application_vault_provider: "{{ platform_application_vault_runtime[platform_vault_application_job.providerId] }}"
   delegate_to: "{{ item.item }}"
+  connection: ssh
   loop: "{{ application_vault_addresses.results }}"
   register: application_vault_routes
   changed_when: false
@@ -23,6 +25,7 @@
   ansible.builtin.command:
     argv: [ip, -json, -4, address, show, dev, "{{ hostvars[item].platform_docker_lxc_bridge | default('lxcbr0') }}"]
   delegate_to: "{{ item }}"
+  connection: ssh
   loop: "{{ platform_vault_application_job.hosts }}"
   register: application_vault_lxc_addresses
   changed_when: false

@@ -13,6 +13,7 @@
         follow_redirects: none
         timeout: 10
       delegate_to: "{{ item.hostId }}"
+      connection: ssh
       loop: "{{ platform_application_image_inputs.placements }}"
       changed_when: false
       no_log: true

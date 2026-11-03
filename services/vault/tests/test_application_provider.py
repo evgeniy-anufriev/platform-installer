@@ -1,13 +1,17 @@
 """CAS, identity normalization and scope checks for the application Vault hook."""
 import copy
 import importlib.util
+import json
 import os
 from pathlib import Path
+import shutil
+import subprocess
 import sys
 import tempfile
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
+import yaml
 
 ROOT=Path(__file__).resolve().parents[3]
 PLUGIN=ROOT/'services/vault/ansible_collections/platform/vault/plugins/filter/application_provider.py'
@@ -22,6 +26,38 @@ document_action=importlib.util.module_from_spec(spec);spec.loader.exec_module(do
 
 
 class ApplicationProviderTest(unittest.TestCase):
+    @unittest.skipUnless(shutil.which('ansible-playbook'), 'native Ansible required')
+    def test_ca_delegation_does_not_read_controller_file(self):
+        tasks = yaml.safe_load((PLUGIN.parents[2] / 'roles/application_provider/tasks/discover.yml').read_text())
+        task = next(item for item in tasks if 'ansible.builtin.slurp' in item)
+        with tempfile.TemporaryDirectory(prefix='vault-ca-delegation-') as work:
+            root = Path(work)
+            source = root / 'controller-only-ca.pem'
+            source.write_text('public-controller-file-must-not-be-read')
+            inventory = root / 'hosts.ini'
+            inventory.write_text('[targets]\nnode1 ansible_host=127.0.0.1 ansible_port=1\n')
+            playbook = root / 'probe.json'
+            config = root / 'ansible.cfg'
+            config.write_text('[defaults]\nretry_files_enabled = False\n')
+            environment = dict(os.environ, ANSIBLE_CONFIG=str(config), ANSIBLE_STDOUT_CALLBACK='default')
+            for key in list(environment):
+                if key.startswith('ANSIBLE_') and key not in ('ANSIBLE_CONFIG', 'ANSIBLE_STDOUT_CALLBACK'):
+                    del environment[key]
+            for original in (False, True):
+                candidate = copy.deepcopy(task)
+                if not original:
+                    candidate.pop('connection', None)
+                playbook.write_text(json.dumps([dict(hosts='localhost', connection='local', gather_facts=False,
+                    vars=dict(platform_vault_application_provider=dict(caHost='node1', caSource=str(source))),
+                    tasks=[candidate])]))
+                result = subprocess.run(['ansible-playbook', '-i', str(inventory), str(playbook), '--timeout', '2'],
+                    env=environment, capture_output=True, text=True, timeout=30)
+                if original:
+                    self.assertEqual(result.returncode, 4, result.stdout + result.stderr)
+                    self.assertIn('unreachable=1', result.stdout)
+                else:
+                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_shared_client_secret_profile_creates_once_reuses_and_rejects_unknown(self):
         with tempfile.TemporaryDirectory() as root:
             ref = 'pla-generated-' + 'b' * 40

@@ -80,3 +80,10 @@ ansible node1 \
   --become --ask-become-pass \
   -m ansible.builtin.slurp \
   -a 'src=/etc/platform-installer/pki/project-bc8d04c2dcc8c9e4/installer-tls--node1/ca-chain.pem'
+
+
+sudo find /var/lib/platform-installer/execution/runs \
+  -type f -path '*/raw-ansible-diagnostics/ansible-output-*.log' \
+  -printf '%TY-%Tm-%Td %TH:%TM:%TS %p\n'
+
+  

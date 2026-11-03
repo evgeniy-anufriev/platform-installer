@@ -33,6 +33,7 @@
   vars:
     redis_application_directory: "{{ hostvars[item.1.hostId].platform_redis_config_root | default(platform_redis_config_root) }}/{{ item.1.memberId }}"
   delegate_to: "{{ item.1.hostId }}"
+  connection: ssh
   become: true
   become_user: "{{ hostvars[item.1.hostId].platform_redis_user | default(platform_redis_user) }}"
   loop: "{{ platform_redis_application_job.accounts | subelements('candidates') }}"

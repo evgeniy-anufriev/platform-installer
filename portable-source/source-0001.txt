@@ -161,7 +161,7 @@ class ActionModule(ActionBase):
                 "_ansible_facts_cacheable": False, "_ansible_no_log": True}
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/build_deployment_plan.py","mode":420,"size":7195,"sha256":"d143a3187df3bc55e6cbae1e4a888303de1498dc0b07a96027ec91f6019409d4","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7195}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/build_deployment_plan.py","mode":420,"size":7673,"sha256":"f919f3862829521743395cef0f8016f84691a967dc2814a2b30693e86f4ae235","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7673}
 import json
 import os
 import tempfile
@@ -228,6 +228,11 @@ class ActionModule(ActionBase):
                     raise ValueError('SERVICE_SELECTION_MODE_INVALID')
                 scope = service_scope(snapshot['serviceDeployments'], self._task.args['deployment_order'], self._task.args['skip_service_deployments'])
                 result = promote_services(result, scope)
+            if self._task.args.get('deferred_application_images'):
+                result['deploymentPlan'].update(apiVersion='platform.installer/plan/v1alpha12', imageResolution='AT_EXECUTION')
+                if result.get('executionManifest'):
+                    result['executionManifest'].update(apiVersion='platform.installer/execution-manifest/v1alpha9',
+                        applicationImageIntentsDigest=canonical_digest(self._task.args['application_image_lock']))
             result['executionManifestDigest'] = canonical_digest(result['executionManifest']) if result.get('executionManifest') else None
             destination = os.environ.get("PLATFORM_EXECUTION_MANIFEST_OUTPUT")
             manifest = result["executionManifest"]
@@ -445,7 +450,7 @@ class ActionModule(ActionBase):
             return {'changed': False, 'status': 'BLOCKED', 'sources': {}, 'findings': [{'code': code}]}
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/prepare_application_images.py","mode":420,"size":8327,"sha256":"c9717428c59d8da63bf19a148c8ec9f61d600448d629e438f17ea73eb8232745","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":8327}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/prepare_application_images.py","mode":420,"size":10226,"sha256":"d7011a9def165badfc38246495b60905c97b8cb1fb8a6fd6edc1fb6ee76321f8","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":10226}
 """Controller-only preparation inputs from native Ansible rows and bundle metadata."""
 import json
 import os
@@ -462,6 +467,27 @@ from ansible_collections.platform.core.plugins.module_utils.project_validation i
 class ActionModule(ActionBase):
     TRANSFERS_FILES = False
 
+    def _availability_inputs(self, args, values, snapshot):
+        from ansible_collections.platform.core.plugins.module_utils.application_selection import execution_scope
+        scope = execution_scope(snapshot, values.get('platform_execution_application_library_order'), values.get('platform_execution_skip_application_libraries'))
+        intents, probes, targets = {}, {}, set()
+        rows = [] if values.get('platform_execution_mode') == 'INFRASTRUCTURE_VERIFY_ONLY' else args.get('application_rows', values.get('platform_application_rows', []))
+        for row in rows:
+            if row['libraryId'] not in scope['installLibraries']:
+                continue
+            reference = row['settings']['image']
+            request = registry_request(reference)
+            policy = set(values['hostvars'][row['hostId']].get('platform_application_approved_registries', [])) | set(row.get('registryCredentials', {}))
+            registry = request['registry'] in policy
+            intents[placement_key(row)] = dict(reference=reference, registry=registry)
+            if registry:
+                probes[(row['hostId'], request['registry'])] = dict(hostId=row['hostId'], endpoint=request['endpoint'])
+                targets.add(row['hostId'])
+        return dict(projectIdentity=snapshot['project']['id'], projectRevision=snapshot['projectRevision'],
+                    placements=list(probes.values()), ready=dict(apiVersion='platform.installer/application-image-intents/v1alpha1', placements=intents),
+                    targetConnections={host: args['connections'][host] for host in sorted(targets)},
+                    requirements=[], descriptorSetFingerprint=canonical_digest([]), availabilityOnly=True)
+
     def run(self, tmp=None, task_vars=None):
         values = task_vars or {}
         args = self._task.args
@@ -475,6 +501,8 @@ class ActionModule(ActionBase):
             snapshot = args['snapshot']
             if snapshot.get('validation', {}).get('status') != 'PASS':
                 raise ValueError('APPLICATION_IMAGE_PROJECT_INVALID')
+            if values.get('platform_application_image_availability_only'):
+                return dict(changed=False, inputs=self._availability_inputs(args, values, snapshot))
             stage = 'bundle-manifest'
             bundle = self._loader.load_from_file(os.path.join(args['bundle_root'], 'manifest.yaml'))
             from ansible_collections.platform.core.plugins.module_utils.application_selection import execution_scope
@@ -869,7 +897,7 @@ class ActionModule(ActionBase):
             return dict(failed=True, changed=False, msg=code, error_code=code)
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/project_snapshot.py","mode":420,"size":47228,"sha256":"e7538ae8f1b37aa193be17ae13438ddd852e3078ddbab3d1259722d9e554f3c1","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":47228}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/project_snapshot.py","mode":420,"size":47283,"sha256":"48101ed61f5bd875ab3ee8afb47d24cb2c374fb978e18df3435162c5eca40daa","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":47283}
 from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
@@ -1594,7 +1622,7 @@ class ActionModule(ActionBase):
                                                         None if self._task.args.get('desired_only') else task_vars.get('platform_prepared_application_images'))
                 if task_vars.get('platform_application_expected_fingerprint'):
                     scope = task_vars.get('platform_application_execution_scope', {})
-                    model = application_execution_model(snapshot, private_image_lock,
+                    model = application_execution_model(snapshot, task_vars.get('platform_application_image_intents') or private_image_lock,
                                                        scope.get('libraryOrder', task_vars.get('platform_application_expected_library_ids')),
                                                        scope.get('skippedLibraries'))
                     if (model['semanticFingerprint'] != task_vars['platform_application_expected_fingerprint'] or
@@ -2185,10 +2213,11 @@ class FilterModule:
                 'application_script_failure': script_failure}
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/filter/application_images.py","mode":420,"size":788,"sha256":"46d53f150eec9a201e8b567be91a24e2f56a5fde8e45e9d6579eb51d36153dc5","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":788}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/filter/application_images.py","mode":420,"size":1053,"sha256":"5675f6294fb48eb3ec33eae36919a3c265a64ca2db4ada1ae06ec1908de3f265","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1053}
 from ansible_collections.platform.core.plugins.module_utils.application_images import (
     normalize_image, placement_key, selected_image, offline_image, registry_request,
     registry_manifest, registry_config, prepared_image, prepared_lock,
+    image_credential_key, image_registry_key, cached_image,
 )
 
 
@@ -2198,7 +2227,10 @@ class FilterModule:
                     application_selected_image=selected_image, application_offline_image=offline_image,
                     application_registry_request=registry_request, application_registry_manifest=registry_manifest,
                     application_registry_config=registry_config, application_prepared_image=prepared_image,
-                    application_prepared_image_lock=prepared_lock)
+                    application_prepared_image_lock=prepared_lock,
+                    application_image_credential_key=image_credential_key,
+                    application_image_registry_key=image_registry_key,
+                    application_cached_image=cached_image)
 
 @@END
 @@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/filter/application_integrations.py","mode":420,"size":844,"sha256":"e2513331be6d4c60853d844370670b64bf0009e383d6d9b2610c5e0707aead60","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":844}
@@ -21982,7 +22014,7 @@ def project_endpoint_sources(rows, desired, hosts):
     return sources
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_images.py","mode":420,"size":9959,"sha256":"cfd648fe2f0de896c131068b7a913a091f4d149c481677aab497423a5e48273b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":9959}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_images.py","mode":420,"size":11691,"sha256":"506acca35087b9faa21ed5d43c0ca3784ccbb74bb7bc49f8223e3c72b4562cea","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":11691}
 """Image format parsing; source policy and orchestration remain in Ansible."""
 import hashlib
 import json
@@ -22017,7 +22049,38 @@ def placement_key(row):
     return ':'.join(row[key] for key in ('libraryId', 'instanceId', 'hostId'))
 
 
+def image_credential_key(row):
+    return hashlib.sha256(json.dumps([row['hostId'], row['request']['registry'], row['account'],
+                                    row['configDirectory']], sort_keys=True).encode()).hexdigest()
+
+
+def image_registry_key(row, platform, approved, node_authenticated):
+    context = image_credential_key(row) if not row['credentials'] and node_authenticated else ''
+    return hashlib.sha256(json.dumps([row['request'], row['credentials'], platform, approved, context],
+                                    sort_keys=True).encode()).hexdigest()
+
+
+def cached_image(manifest, row, platform, approved, node_credentials, registry_cache):
+    """Reuse only an already-proved invocation credential context, never a new node login."""
+    if not approved:
+        return {}
+    context = node_credentials.get(image_credential_key(row))
+    if not row['credentials'] and context is None:
+        return {}
+    key = image_registry_key(row, platform, approved,
+                             bool(context and (context['username'] or context['password'])))
+    if key not in registry_cache:
+        return {}
+    offline = offline_image(manifest, row['reference'], platform, row['legacy'])
+    return dict(reference=row['reference'], image=prepared_image(registry_cache[key], offline, row['legacy']))
+
+
 def selected_image(lock, reference, library_id, instance_id, host_id):
+    if lock.get('apiVersion') == 'platform.installer/application-image-intents/v1alpha1':
+        entry = lock.get('placements', {}).get(':'.join((library_id, instance_id, host_id)), {})
+        if normalize_image(entry.get('reference')) != normalize_image(reference):
+            raise ValueError('APPLICATION_IMAGE_NOT_LOCKED')
+        return {'registry': {'reference': reference}} if entry['registry'] else {}
     if lock.get('apiVersion') == 'platform.installer/container-images/v1alpha2':
         entry = lock.get('placements', {}).get(':'.join((library_id, instance_id, host_id)), {})
         if normalize_image(entry.get('reference')) != normalize_image(reference):
@@ -23157,7 +23220,7 @@ def validate_public_projection(projection):
     return findings
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_plan.py","mode":420,"size":18725,"sha256":"d542bbbb93c10064926f6d4ecbd32dd9477b1660da8c1e52d3419249380b3f52","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":18725}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_plan.py","mode":420,"size":19173,"sha256":"847d352f3e768ae43ba083d2c4d779d59cd921f59bc140316f9fcf62e86c28d6","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":19173}
 """Target-free application descriptors; image source selection stays in execution."""
 import os
 try:
@@ -23219,9 +23282,10 @@ def application_execution_model(snapshot, image_lock=None, library_order=None, s
         item['safeDetails'] = {'providerLibraryId': provider}
         findings.append(item)
     contracts = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../../../../../contracts'))
+    deferred_images = (image_lock or {}).get('apiVersion') == 'platform.installer/application-image-intents/v1alpha1'
     invalid_lock = bool(active_libraries) and bool(SchemaValidator(contracts).validate(
         image_lock or {}, os.path.join(contracts, 'artifact-source/v1alpha2/' +
-        ('prepared-images.schema.json' if (image_lock or {}).get('apiVersion') == 'platform.installer/container-images/v1alpha2' else 'image-lock.schema.json'))))
+        ('image-intents.schema.json' if deferred_images else 'prepared-images.schema.json' if (image_lock or {}).get('apiVersion') == 'platform.installer/container-images/v1alpha2' else 'image-lock.schema.json'))))
     if invalid_lock:
         findings.append(finding('APPLICATION_IMAGE_LOCK_INVALID', 'artifactLock.x-container-images'))
         images = {}
@@ -23294,7 +23358,10 @@ def application_execution_model(snapshot, image_lock=None, library_order=None, s
                 image_name = instance['placements'][host].get('imageRequirement', instance.get('imageRequirement', {})).get('image')
                 try:
                     image = selected_image(image_lock or {}, image_name, library_id, instance_id, host)
-                    requirement = image_requirement(instance_id + ':' + host, image_name, image)
+                    requirement = (dict(id=instance_id + ':' + host + ':image', name=image_name,
+                                        artifactType='container-image', resolution='AT_EXECUTION')
+                                   if deferred_images and not invalid_lock else
+                                   image_requirement(instance_id + ':' + host, image_name, image))
                     requirements.append(dict(requirement, applicationLibrary=library_id, instanceId=instance_id,
                                              hosts=[host], sourcePolicy='REPOSITORY_THEN_OFFLINE'))
                 except (ValueError, KeyError, TypeError):
@@ -23948,7 +24015,7 @@ def split_provider_jobs(providers):
     return library_jobs, instance_jobs
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_runtime.py","mode":420,"size":21363,"sha256":"56ac9f6c1834fbe2ea822140f62013952e8705097e8a9417bcb1a98d0033fd06","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":21363}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_runtime.py","mode":420,"size":21489,"sha256":"0cb7e9a3abb79bc98fd467ca62f2da34658ee635a6f31b081250374226946e11","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":21489}
 """Typed A2 preflight. Ansible owns precedence, templates and target execution."""
 import base64
 import hashlib
@@ -24013,6 +24080,8 @@ def resolve_image_lock(native_lock, manifest_lock, prepared=None):
         raise ValueError('APPLICATION_ARTIFACT_LOCK_CONFLICT')
     legacy = (native_lock or manifest_lock or {}).get('x-container-images', {})
     if prepared is not None:
+        if prepared.get('apiVersion') == 'platform.installer/application-image-intents/v1alpha1':
+            return prepared
         for entry in prepared.get('placements', {}).values():
             original = selected_image(legacy, entry['reference'], '', '', '')
             if original is not None and original != entry['image']:
@@ -35799,24 +35868,17 @@ platform_pki_materialization_plans: []
     fail_msg: PKI_TARGET_MATERIALIZATION_MISMATCH
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/prepare_application_images/tasks/main.yml","mode":420,"size":4164,"sha256":"47da9e0a8ec53b35195cd4b8a4cebbe54098ef14d03567c0f4946c23a87aaa37","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4164}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/prepare_application_images/tasks/main.yml","mode":420,"size":5583,"sha256":"a3617e390786f1069ae420b80d213ba5620cc254cbe01542b94f88a962a70d8b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5583}
 ---
 - name: Привязка платформы и исходных параметров размещения образа
   ansible.builtin.set_fact:
-    _image_platform:
-      os: "{{ ansible_facts.system | lower }}"
-      architecture: "{{ {'x86_64': 'amd64', 'aarch64': 'arm64'}.get(ansible_facts.architecture, ansible_facts.architecture) }}"
+    _image_platform: "{{ application_image_platform if application_image_platform is defined else {'os': ansible_facts.system | lower, 'architecture': {'x86_64': 'amd64', 'aarch64': 'arm64'}.get(ansible_facts.architecture, ansible_facts.architecture)} }}"
     _image_registry: {}
     _image_username: ''
     _image_password: ''
     _image_token: ''
-    _image_registry_approved: "{{ application_image_input.request.registry in (platform_application_approved_registries | default([])) or (application_image_input.credentials | length > 0) }}"
-    _image_request_key: "{{ [application_image_input.request, application_image_input.credentials, application_image_input.account, application_image_input.configDirectory] | to_json | hash('sha256') }}"
-  no_log: true
-
-- name: Повторное использование совпадающих метаданных реестра при подготовке образов целевого узла
-  ansible.builtin.set_fact:
-    _image_registry: "{{ (_image_registry_cache | default({})).get(_image_request_key, {}) }}"
+    _image_registry_approved: "{{ application_image_input.request.registry in (application_image_registries if application_image_registries is defined else platform_application_approved_registries | default([])) or (application_image_input.credentials | length > 0) }}"
+    _image_credential_key: "{{ application_image_input | platform.core.application_image_credential_key }}"
   no_log: true
 
 - name: Проверка назначенных runtime-учётных данных перед обращением к реестру
@@ -35840,7 +35902,35 @@ platform_pki_materialization_plans: []
   when:
     - application_image_input.credentials | length == 0
     - _image_registry_approved
-    - _image_request_key not in (_image_registry_cache | default({}))
+    - _image_credential_key not in (_image_node_credentials_cache | default({}))
+
+- name: Сохранение найденного контекста узла только в закрытой памяти текущего вызова
+  ansible.builtin.set_fact:
+    _image_node_credentials_cache: "{{ (_image_node_credentials_cache | default({})) | combine({_image_credential_key: {'username': _image_username, 'password': _image_password}}) }}"
+  when:
+    - application_image_input.credentials | length == 0
+    - _image_registry_approved
+    - _image_credential_key not in (_image_node_credentials_cache | default({}))
+  no_log: true
+
+- name: Повторное использование контекста узла без повторного чтения Docker config
+  ansible.builtin.set_fact:
+    _image_username: "{{ _image_node_credentials_cache[_image_credential_key].username }}"
+    _image_password: "{{ _image_node_credentials_cache[_image_credential_key].password }}"
+  when:
+    - application_image_input.credentials | length == 0
+    - _image_registry_approved
+  no_log: true
+
+- name: Привязка кэша метаданных к платформе, политике и источнику учётных данных
+  ansible.builtin.set_fact:
+    _image_request_key: "{{ application_image_input | platform.core.application_image_registry_key(_image_platform, _image_registry_approved, (_image_username | length > 0 or _image_password | length > 0)) }}"
+  no_log: true
+
+- name: Повторное использование совпадающих метаданных текущей подготовки
+  ansible.builtin.set_fact:
+    _image_registry: "{{ (_image_registry_cache | default({})).get(_image_request_key, {}) }}"
+  no_log: true
 
 - name: Чтение метаданных утверждённого реестра через сеть целевого узла подготовки образов
   ansible.builtin.include_tasks: registry.yml
@@ -36961,7 +37051,96 @@ artifactLock:
           no_log: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/applications/images/inputs.yml","mode":420,"size":2059,"sha256":"a216b4cbbcee2644868c63f27e42402a4e2f1aa4fda633fbec4be8437e0770f8","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2059}
+@@PORTABLE {"path":"ansible-core/playbooks/applications/images/availability.yml","mode":420,"size":668,"sha256":"9e7ba898eb8b19b2dcb302c35f1ed5044fb5e994edc5f6ddfafad8e5316b930f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":668}
+---
+- name: Проверка доступности registry без подготовки образов
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Проверка HTTPS-ответа каждого registry с каждого целевого узла
+      ansible.builtin.uri:
+        url: "https://{{ item.endpoint }}/v2/"
+        method: GET
+        status_code: [200, 401]
+        return_content: false
+        follow_redirects: none
+        timeout: 10
+      delegate_to: "{{ item.hostId }}"
+      connection: ssh
+      loop: "{{ platform_application_image_inputs.placements }}"
+      changed_when: false
+      no_log: true
+
+@@END
+@@PORTABLE {"path":"ansible-core/playbooks/applications/images/execution.yml","mode":420,"size":3811,"sha256":"ffe445e9ae5be219b83b78e78355ed70a8eeb23fb5836606e50e7c6ac10cfc31","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3811}
+---
+- name: Использование метаданных образов текущего выполнения
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Проверка наличия результата подготовки текущего выполнения
+      ansible.builtin.stat:
+        path: "{{ platform_application_resolved_images_path }}"
+        follow: false
+      register: _application_image_resolution_file
+      when: platform_application_resolved_images_path is defined
+    - name: Проверка обычного файла метаданных текущего выполнения
+      ansible.builtin.assert:
+        that:
+          - _application_image_resolution_file.stat.isreg | default(false)
+          - not (_application_image_resolution_file.stat.islnk | default(false))
+        fail_msg: APPLICATION_IMAGE_PREPARATION_STALE
+      when: _application_image_resolution_file.stat.exists | default(false)
+    - name: Определение необходимости получения метаданных образов
+      ansible.builtin.set_fact:
+        _application_resolve_images: "{{ not (_application_image_resolution_file.stat.exists | default(false)) }}"
+    - name: Повторное использование результата Apply при Verify
+      ansible.builtin.set_fact:
+        platform_prepared_application_images: "{{ lookup('ansible.builtin.file', platform_application_resolved_images_path) | from_json }}"
+      when: not _application_resolve_images
+      no_log: true
+    - name: Привязка файла результата к текущему выполнению
+      ansible.builtin.set_fact:
+        platform_application_image_result_path: "{{ platform_application_resolved_images_path }}"
+      when: platform_application_resolved_images_path is defined
+    - name: Передача вычисленного порядка библиотек штатной подготовке образов
+      ansible.builtin.set_fact:
+        platform_execution_application_library_order: "{{ platform_application_execution_scope.libraryOrder | default(platform_application_library_order) }}"
+      when:
+        - _application_resolve_images
+        - platform_application_execution_scope.libraryOrder is defined or platform_application_library_order is defined
+    - name: Передача выбранного состава библиотек штатной подготовке образов
+      ansible.builtin.set_fact:
+        platform_execution_skip_application_libraries: "{{ platform_application_execution_scope.skippedLibraries | default([]) }}"
+      when: _application_resolve_images
+
+- import_playbook: inputs.yml
+  when: hostvars['localhost']._application_resolve_images
+
+- name: Получение назначенных runtime-учётных данных реестра
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Подготовка закрытой карты входов реестра
+      ansible.builtin.set_fact:
+        platform_application_image_secret_values: {}
+      when: _application_resolve_images
+      no_log: true
+    - name: Чтение только требуемых закрытых файлов реестра
+      ansible.builtin.set_fact:
+        platform_application_image_secret_values: "{{ platform_application_image_secret_values | combine({item.runtimeReference: lookup('ansible.builtin.file', platform_application_secret_files[item.runtimeReference], rstrip=false)}) }}"
+      loop: "{{ platform_application_image_inputs.requirements | default([]) }}"
+      when: _application_resolve_images
+      no_log: true
+
+- import_playbook: prepare.yml
+  when: hostvars['localhost']._application_resolve_images
+
+@@END
+@@PORTABLE {"path":"ansible-core/playbooks/applications/images/inputs.yml","mode":420,"size":2137,"sha256":"9e3d1b7b029869b1d6a568ac68fbed0ff155316891272115cffd681ce853c258","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2137}
 ---
 - name: Обработка параметров подготовки образов без подключения к целевым узлам
   hosts: localhost
@@ -36990,12 +37169,33 @@ artifactLock:
       ansible.builtin.include_vars:
         file: "{{ platform_execution_bundle_root }}/manifest.yaml"
         name: platform_application_image_bundle
+      when: not platform_application_image_availability_only | default(false)
     - name: Сохранение защищённых параметров запроса подготовки образов приложений
       ansible.builtin.copy:
         content: "{{ platform_image_inputs.inputs | to_json }}"
         dest: "{{ platform_application_image_inputs_path }}"
         mode: '0600'
       when: platform_application_image_inputs_path is defined
+
+@@END
+@@PORTABLE {"path":"ansible-core/playbooks/applications/images/placement.yml","mode":420,"size":1280,"sha256":"44590c4cfbf027d098701bfffd8906a6772f6486d8ae981887157dc035e3a4d0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1280}
+---
+- name: Поиск совпадающих метаданных с уже проверенным контекстом текущего вызова
+  ansible.builtin.set_fact:
+    _image_cached_result: "{{ platform_application_image_bundle | platform.core.application_cached_image(application_image_input, application_image_platform, (application_image_input.request.registry in application_image_registries or application_image_input.credentials | length > 0), _image_node_credentials_cache, _image_registry_cache) }}"
+  no_log: true
+- name: Подготовка ещё не полученных метаданных штатными задачами Ansible
+  ansible.builtin.include_role:
+    name: platform.core.prepare_application_images
+    apply:
+      delegate_to: "{{ application_image_input.hostId }}"
+      connection: ssh
+  when: _image_cached_result | length == 0
+- name: Привязка уже полученной идентичности к очередному размещению
+  ansible.builtin.set_fact:
+    platform_application_image_preparations: "{{ platform_application_image_preparations | combine({(application_image_input | platform.core.application_image_key): _image_cached_result}) }}"
+  when: _image_cached_result | length > 0
+  no_log: true
 
 @@END
 @@PORTABLE {"path":"ansible-core/playbooks/applications/images/plan.yml","mode":420,"size":285,"sha256":"d9fb10e4e46b79f96093ef7c5d7836d61ba0d947a0efd1d803472d758aaa1671","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":285}
@@ -37007,7 +37207,7 @@ artifactLock:
 - import_playbook: ../../deployment-plan-machine.yml
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/applications/images/prepare.yml","mode":420,"size":2856,"sha256":"14fba55e572d559cad46d941d3e8a1a7937d9577018875c324b2f9b8ea1f4a0b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2856}
+@@PORTABLE {"path":"ansible-core/playbooks/applications/images/prepare.yml","mode":420,"size":3552,"sha256":"ee15e06b90b97ee90d4378a045ccc723c72fdf10488700f009f9f02018ed1909","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3552}
 ---
 - name: Привязка выбранных образов к целевым узлам без изменения inventory оператора
   hosts: localhost
@@ -37022,7 +37222,7 @@ artifactLock:
         platform_application_image_bundle: "{{ hostvars['localhost'].platform_application_image_bundle }}"
       loop: "{{ platform_application_image_inputs.targetConnections | list }}"
 
-- name: Чтение метаданных образа через сеть каждого выбранного целевого узла
+- name: Определение платформ целевых узлов
   hosts: platform_image_targets
   gather_facts: false
   any_errors_fatal: true
@@ -37031,14 +37231,26 @@ artifactLock:
       ansible.builtin.setup:
         gather_subset: ['!all', 'min']
         filter: ['ansible_system', 'ansible_architecture']
-    - name: "Инициализация результатов подготовки образов целевого узла"
+
+- name: Подготовка уникальных метаданных через утверждённые целевые узлы
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  any_errors_fatal: true
+  tasks:
+    - name: "Инициализация результатов и закрытого кэша текущей подготовки"
       ansible.builtin.set_fact:
         platform_application_image_preparations: {}
         _image_registry_cache: {}
+        _image_node_credentials_cache: {}
     - name: Подготовка каждого выбранного образа штатными задачами Ansible
-      ansible.builtin.include_role:
-        name: platform.core.prepare_application_images
-      loop: "{{ platform_application_image_inputs.placements | selectattr('hostId', 'equalto', inventory_hostname) | list }}"
+      ansible.builtin.include_tasks: placement.yml
+      vars:
+        application_image_platform:
+          os: "{{ hostvars[application_image_input.hostId].ansible_facts.system | lower }}"
+          architecture: "{{ {'x86_64': 'amd64', 'aarch64': 'arm64'}.get(hostvars[application_image_input.hostId].ansible_facts.architecture, hostvars[application_image_input.hostId].ansible_facts.architecture) }}"
+        application_image_registries: "{{ hostvars[application_image_input.hostId].platform_application_approved_registries | default([]) }}"
+      loop: "{{ platform_application_image_inputs.placements }}"
       loop_control:
         loop_var: application_image_input
 
@@ -37052,7 +37264,7 @@ artifactLock:
         platform_prepared_application_images: >-
           {{ {'apiVersion': 'platform.installer/container-images/v1alpha2',
               'placements': platform_application_image_inputs.ready |
-                combine((hostvars | platform.core.application_prepared_image_lock).placements)} }}
+                combine(({'resolved': {'platform_application_image_preparations': platform_application_image_preparations}} | platform.core.application_prepared_image_lock).placements)} }}
     - name: Сохранение полного результата подготовки образов в формате машинного протокола
       ansible.builtin.copy:
         content: "{{ platform_prepared_application_images | to_json }}"
@@ -37635,8 +37847,10 @@ artifactLock:
 - import_playbook: provider-verify-stage.yml
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/applications/stages/resolve-runtime.yml","mode":420,"size":5323,"sha256":"b5c087062d691c4135afe33b8c45967e99feda341df041762f86eefd1920752b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5323}
+@@PORTABLE {"path":"ansible-core/playbooks/applications/stages/resolve-runtime.yml","mode":420,"size":5420,"sha256":"c2d464163a33e90c8bde9cd663179cf437c8d2a7286952878a8d2c090282075e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5420}
 ---
+- import_playbook: ../images/execution.yml
+  when: platform_application_image_intents is defined
 - import_playbook: credential-root.yml
 - name: Определение и проверка полного состава автономной операции приложения
   hosts: localhost
@@ -38171,7 +38385,7 @@ artifactLock:
   no_log: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/applications/tasks/provider-script.yml","mode":420,"size":3048,"sha256":"9050235234924014414270935f4329e00c1666ec0f53a9aa687401b33f53586d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3048}
+@@PORTABLE {"path":"ansible-core/playbooks/applications/tasks/provider-script.yml","mode":420,"size":3196,"sha256":"97b192f3429bcc9c13733e9404423daa04b1a5dd5d42004dc8ce879bc503763e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3196}
 ---
 - name: Выполнение сценария провайдера с контекстом выбранной цели
   vars:
@@ -38186,6 +38400,7 @@ artifactLock:
         database: passwd
         key: "{{ application_script_target_job.account }}"
       delegate_to: "{{ application_provider_script_host }}"
+      connection: ssh
       register: application_script_identity
       when: application_provider_script.runOn | default('target') != 'execution_node'
       no_log: true
@@ -38195,6 +38410,7 @@ artifactLock:
         name: platform.core.package_script
         apply:
           delegate_to: "{{ 'localhost' if application_provider_script.runOn | default('target') == 'execution_node' else application_provider_script_host }}"
+          connection: "{{ 'local' if application_provider_script.runOn | default('target') == 'execution_node' else 'ssh' }}"
           become: "{{ application_provider_script.runOn | default('target') != 'execution_node' }}"
       vars:
         platform_script_job:
@@ -38262,7 +38478,7 @@ artifactLock:
     - role: platform.core.target_bootstrap
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/deployment-plan-machine.yml","mode":420,"size":2706,"sha256":"defa7ac15e9637c3bfbf30afd709fb812d8c398190e05bbca3977891be765e60","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2706}
+@@PORTABLE {"path":"ansible-core/playbooks/deployment-plan-machine.yml","mode":420,"size":2805,"sha256":"5dc9f96abec5b3e0b7897cd7ed6a2d7ea65175409300ba25e0621cb48d69d179","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2805}
 ---
 - name: Создание машиночитаемого плана развёртывания без обращения к целевым узлам
   hosts: localhost
@@ -38303,6 +38519,7 @@ artifactLock:
         skip_infrastructure_verify: "{{ platform_execution_skip_infrastructure_verify | default(false) }}"
         application_image_lock: "{{ platform_plan_snapshot.application_image_lock | default({}) }}"
         application_image_metadata: "{{ platform_application_image_metadata | default(platform_prepared_application_images is defined) }}"
+        deferred_application_images: "{{ platform_application_deferred_images | default(false) }}"
       changed_when: false
       become: false
 
@@ -39850,7 +40067,7 @@ if __name__ == "__main__":
     raise SystemExit(main())
 
 @@END
-@@PORTABLE {"path":"ansible-core/tools/execution_controller.py","mode":420,"size":72444,"sha256":"b81ff4232a32b4bcea0fc798e6d343dfbf2d0e8a74c0462c4034fd2d64c4c6b2","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"ansible-core/tools/execution_controller.py","mode":420,"size":74622,"sha256":"64473d0d2698164e4cad65934fb66c9aba410ac3dd66bca6d670681d0c46a811","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
 #!/usr/bin/env python3
 """Fixed Execution Node controller.  It never accepts a command or playbook."""
 from __future__ import print_function
@@ -40659,6 +40876,21 @@ def _materialize_runtime_projection(journal, metadata, manifest):
 
 def validate_application_manifest(manifest, external_service_ids=()):
     """Closed mixed manifest admission, used by Build, Start and the controller."""
+    if manifest.get('apiVersion') == 'platform.installer/execution-manifest/v1alpha9':
+        module_utils = os.path.abspath(os.path.join(os.path.dirname(__file__), '../collections/ansible_collections/platform/core/plugins/module_utils'))
+        if module_utils not in sys.path:
+            sys.path.insert(0, module_utils)
+        from schema_validation import SchemaValidator
+        contracts = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../contracts'))
+        if SchemaValidator(contracts).validate(manifest, os.path.join(contracts, 'execution-manifest/v1alpha9/schema.json')):
+            raise LifecycleError('EXECUTION_MANIFEST_INVALID')
+        prefix = dict(manifest)
+        del prefix['applicationImageIntentsDigest']
+        version = 'v1alpha7' if any(item['operation'] == 'APPLICATION_LIBRARIES_POST_INSTALL' for item in prefix['operations']) else 'v1alpha6'
+        prefix['apiVersion'] = 'platform.installer/execution-manifest/' + ('v1alpha8' if 'serviceExecutionScope' in prefix else version)
+        prefix['artifactRequirements'] = [item for item in prefix['artifactRequirements'] if item.get('artifactType') != 'container-image']
+        validate_application_manifest(prefix, external_service_ids)
+        return
     if manifest.get('apiVersion') == 'platform.installer/execution-manifest/v1alpha8':
         module_utils = os.path.abspath(os.path.join(os.path.dirname(__file__), '../collections/ansible_collections/platform/core/plugins/module_utils'))
         if module_utils not in sys.path:
@@ -40690,7 +40922,10 @@ def validate_application_manifest(manifest, external_service_ids=()):
         validate_application_manifest(prefix, external_service_ids)
         return
     selection_scope = manifest.get('applicationExecutionScope', {})
-    image_metadata = manifest.get('apiVersion') in ('platform.installer/execution-manifest/v1alpha5', 'platform.installer/execution-manifest/v1alpha6')
+    image_metadata = manifest.get('apiVersion') in ('platform.installer/execut
+@@END
+@@PORTABLE {"path":"ansible-core/tools/execution_controller.py","mode":420,"size":74622,"sha256":"64473d0d2698164e4cad65934fb66c9aba410ac3dd66bca6d670681d0c46a811","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":26622}
+ion-manifest/v1alpha5', 'platform.installer/execution-manifest/v1alpha6')
     if manifest.get('apiVersion') in (infra.MANIFEST_VERSION, infra.SKIP_MANIFEST_VERSION, 'platform.installer/execution-manifest/v1alpha5', 'platform.installer/execution-manifest/v1alpha6'):
         module_utils = os.path.abspath(os.path.join(os.path.dirname(__file__),
             '../collections/ansible_collections/platform/core/plugins/module_utils'))
@@ -40704,10 +40939,7 @@ def validate_application_manifest(manifest, external_service_ids=()):
             order, skipped = selection_scope['libraryOrder'], selection_scope['skippedLibraries']
             installed = selection_scope['installLibraries']
             if (manifest['skipApplicationLibraries'] != skipped or skipped != sorted(set(skipped)) or
-              
-@@END
-@@PORTABLE {"path":"ansible-core/tools/execution_controller.py","mode":420,"size":72444,"sha256":"b81ff4232a32b4bcea0fc798e6d343dfbf2d0e8a74c0462c4034fd2d64c4c6b2","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":24444}
-      set(skipped) - set(order) or installed != [key for key in order if key not in skipped] or
+                    set(skipped) - set(order) or installed != [key for key in order if key not in skipped] or
                     set(selection_scope['providerLibraries']) - set(order)):
                 raise LifecycleError('EXECUTION_MANIFEST_INVALID')
             for operation in manifest['operations']:
@@ -40867,7 +41099,16 @@ def _materialize_application_projection(journal, manifest):
             scoped['platform_application_execution_scope'] = operation['applicationExecutionScope']
         prepared_path = os.path.join(journal.directory, 'application-images.json')
         if os.path.isfile(prepared_path):
-            scoped['platform_prepared_application_images'] = execution_secret_lease._read(prepared_path)
+            prepared = execution_secret_lease._read(prepared_path)
+            if manifest.get('apiVersion') == 'platform.installer/execution-manifest/v1alpha9':
+                if digest(prepared) != manifest['applicationImageIntentsDigest'] or prepared.get('apiVersion') != 'platform.installer/application-image-intents/v1alpha1':
+                    raise LifecycleError('APPLICATION_IMAGE_PREPARATION_STALE')
+                scoped['platform_application_image_intents'] = prepared
+                scoped['platform_application_resolved_images_path'] = os.path.join(journal.directory, 'application-resolved-images.json')
+            else:
+                scoped['platform_prepared_application_images'] = prepared
+        elif manifest.get('apiVersion') == 'platform.installer/execution-manifest/v1alpha9':
+            raise LifecycleError('APPLICATION_IMAGE_PREPARATION_STALE')
         destination = os.path.join(journal.directory, '.runtime-projection-' + hashlib.sha256(operation['operationId'].encode()).hexdigest() + '.json')
         descriptor = os.open(destination, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
         with os.fdopen(descriptor, 'w') as stream:
@@ -40892,7 +41133,7 @@ def _dispatch(release, journal, manifest, stopped):
     for operation, command in commands:
         if stopped[0]:
             return "CANCELLED"
-        if not infrastructure_started and (manifest.get('apiVersion') in (infra.MANIFEST_VERSION, infra.SKIP_MANIFEST_VERSION, 'platform.installer/execution-manifest/v1alpha7', 'platform.installer/execution-manifest/v1alpha8') or
+        if not infrastructure_started and (manifest.get('apiVersion') in (infra.MANIFEST_VERSION, infra.SKIP_MANIFEST_VERSION, 'platform.installer/execution-manifest/v1alpha7', 'platform.installer/execution-manifest/v1alpha8', 'platform.installer/execution-manifest/v1alpha9') or
                 (operation['operation'] in ('SERVICE_APPLY', 'PKI_APPLY', 'PKI_REISSUE') and
                  infra.tracked(journal.root, manifest.get('projectIdentity')))):
             infra.begin(journal, manifest)
@@ -40961,7 +41202,7 @@ def _dispatch(release, journal, manifest, stopped):
                         raise
                     command.extend(["-e", "@" + secret_inputs_path])
             environment = _environment(release, journal, operation, leased_private_key=bool(credentials and "privateKey" in credentials))
-            if manifest.get('apiVersion') in (infra.MANIFEST_VERSION, infra.SKIP_MANIFEST_VERSION, 'platform.installer/execution-manifest/v1alpha7', 'platform.installer/execution-manifest/v1alpha8') and operation['operation'] == 'SERVICE_VERIFY':
+            if manifest.get('apiVersion') in (infra.MANIFEST_VERSION, infra.SKIP_MANIFEST_VERSION, 'platform.installer/execution-manifest/v1alpha7', 'platform.installer/execution-manifest/v1alpha8', 'platform.installer/execution-manifest/v1alpha9') and operation['operation'] == 'SERVICE_VERIFY':
                 infra.verify_pending(journal, operation)
                 environment['PLATFORM_EXECUTION_VERIFY_EVIDENCE'] = '1'
             process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=environment)
@@ -40985,7 +41226,7 @@ def _dispatch(release, journal, manifest, stopped):
             journal.emit_operation_failure_diagnostic(error_code, phaseId=operation.get("phaseId"), actionId=operation["operationId"], serviceDeployment=operation.get("serviceDeployment"))
             raise LifecycleError("EXECUTION_OPERATION_FAILED")
         journal.event("ACTION_COMPLETED", "SUCCESS", "Trusted operation completed", phaseId=operation.get("phaseId"), actionId=operation["operationId"], serviceDeployment=operation.get("serviceDeployment"))
-        if manifest.get('apiVersion') in (infra.MANIFEST_VERSION, infra.SKIP_MANIFEST_VERSION, 'platform.installer/execution-manifest/v1alpha7', 'platform.installer/execution-manifest/v1alpha8') and operation['operation'] == 'SERVICE_VERIFY':
+        if manifest.get('apiVersion') in (infra.MANIFEST_VERSION, infra.SKIP_MANIFEST_VERSION, 'platform.installer/execution-manifest/v1alpha7', 'platform.installer/execution-manifest/v1alpha8', 'platform.installer/execution-manifest/v1alpha9') and operation['operation'] == 'SERVICE_VERIFY':
             infra.verified(journal, operation)
         if operation.get("operation") == "PKI_APPLY":
             pki_applied_in_run = True
@@ -41058,7 +41299,7 @@ if __name__ == "__main__":
         raise SystemExit(2)
 
 @@END
-@@PORTABLE {"path":"ansible-core/tools/execution_image_preparation.py","mode":420,"size":6401,"sha256":"bc7d444430e6625f04b38968d84c6793695c7b9892f9ce6e6a3487adc6ac9748","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":6401}
+@@PORTABLE {"path":"ansible-core/tools/execution_image_preparation.py","mode":420,"size":6799,"sha256":"bd7b44de21900468abe238035484fd1a40de7d07463b36d8b164d2ad02330e72","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":6799}
 """Fixed image preparation protocol; all registry requests are Ansible tasks."""
 import json
 import os
@@ -41073,6 +41314,7 @@ import execution_secret_lease as secrets
 import execution_target_trust as trust
 
 REQUEST_VERSION = 'platform.installer/execution-runtime/v1alpha6'
+AVAILABILITY_REQUEST_VERSION = 'platform.installer/execution-runtime/v1alpha9'
 LEASE_VERSION = 'platform.installer/application-image-preparation-lease/v1alpha1'
 
 
@@ -41115,7 +41357,7 @@ def prepare(journal, value, release, runtime_release):
     if os.path.isfile(result_path):
         return dict(status='READY', preparationDigest=digest(secrets._read(result_path)))
     if not inputs['placements']:
-        result = dict(apiVersion='platform.installer/container-images/v1alpha2', placements=inputs['ready'])
+        result = inputs['ready'] if inputs.get('availabilityOnly') else dict(apiVersion='platform.installer/container-images/v1alpha2', placements=inputs['ready'])
         secrets._write(result_path, result)
         return dict(status='READY', preparationDigest=digest(result))
     payload, known_hosts, values = preparation_payload(journal, inputs, runtime_release, value.get('preparationLease'))
@@ -41131,8 +41373,10 @@ def prepare(journal, value, release, runtime_release):
         with os.fdopen(descriptor, 'wb') as stream:
             stream.write(known_hosts)
         import yaml
-        with open(os.path.join(release, 'manifest.yaml'), encoding='utf-8') as stream:
-            bundle = yaml.safe_load(stream)
+        bundle = {}
+        if not inputs.get('availabilityOnly'):
+            with open(os.path.join(release, 'manifest.yaml'), encoding='utf-8') as stream:
+                bundle = yaml.safe_load(stream)
         variables = dict(platform_application_image_inputs=inputs, platform_application_image_bundle=bundle,
                          platform_application_image_secret_values=values, platform_application_image_result_path=result_path,
                          ansible_user=payload['username'])
@@ -41141,7 +41385,8 @@ def prepare(journal, value, release, runtime_release):
         command = [sys.executable, os.path.join(release, 'ansible-core/tools/run_with_runtime_credentials.py'),
                    '--credentials-file', credentials_path, '--runtime-dir', os.path.join(temporary, 'identity'), '--',
                    'ansible-playbook', '-i', os.path.join(journal.directory, 'project/inventory/hosts.yml'),
-                   os.path.join(release, 'ansible-core/playbooks/applications/images/prepare.yml'), '-e', '@' + variables_path]
+                   os.path.join(release, 'ansible-core/playbooks/applications/images/' +
+                                ('availability.yml' if inputs.get('availabilityOnly') else 'prepare.yml')), '-e', '@' + variables_path]
         environment = _environment(release, leased_private_key=bool(payload.get('privateKey')))
         environment['ANSIBLE_SSH_ARGS'] = environment['ANSIBLE_SSH_ARGS'].replace(
             '/var/lib/platform-installer/execution/known_hosts', trust_path)
@@ -41166,6 +41411,8 @@ def prepare(journal, value, release, runtime_release):
         finally:
             for signum, handler in previous.items():
                 signal.signal(signum, handler)
+    if inputs.get('availabilityOnly'):
+        secrets._write(result_path, inputs['ready'])
     result = secrets._read(result_path)
     return dict(status='READY', preparationDigest=digest(result))
 
@@ -41902,7 +42149,7 @@ def _secret_output_retention_pending(root, journal):
     return False
 
 @@END
-@@PORTABLE {"path":"ansible-core/tools/execution_protocol.py","mode":420,"size":82526,"sha256":"d07cb337a3bdcf213d0b124e0d3f18d68ccf2068b3dd06537b1c8ffd82f4b026","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"ansible-core/tools/execution_protocol.py","mode":420,"size":84135,"sha256":"12e9561893241dad631132882e9508c5d05eb269e1a5e66f54993d28968adc1f","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
 #!/usr/bin/env python3
 """Fixed JSON protocol for the activated Execution Node runtime.
 
@@ -42015,7 +42262,8 @@ def owned(journal):
 
 SELECTION_REQUEST_VERSION = 'platform.installer/execution-runtime/v1alpha7'
 SERVICE_SELECTION_REQUEST_VERSION = 'platform.installer/execution-runtime/v1alpha8'
-SELECTION_REQUEST_VERSIONS = (SELECTION_REQUEST_VERSION, SERVICE_SELECTION_REQUEST_VERSION)
+AVAILABILITY_REQUEST_VERSION = image_preparation.AVAILABILITY_REQUEST_VERSION
+SELECTION_REQUEST_VERSIONS = (SELECTION_REQUEST_VERSION, SERVICE_SELECTION_REQUEST_VERSION, AVAILABILITY_REQUEST_VERSION)
 IMAGE_REQUEST_VERSIONS = (image_preparation.REQUEST_VERSION,) + SELECTION_REQUEST_VERSIONS
 
 
@@ -42035,7 +42283,7 @@ def request():
         return value
     if isinstance(value, dict) and value.get("apiVersion") in ("platform.installer/runtime-secret-lease/v1alpha1", "platform.installer/runtime-secret-lease/v1alpha2") and value.get("kind") == "PutRuntimeSecretLeaseRequest":
         return value
-    if not isinstance(value, dict) or value.get("apiVersion") not in ("platform.installer/execution-runtime/v1alpha1", DEPLOYMENT_PLAN_REQUEST_VERSION, APPLICATION_PLAN_REQUEST_VERSION, B0_PLAN_REQUEST_VERSION, SKIP_PLAN_REQUEST_VERSION, image_preparation.REQUEST_VERSION, SELECTION_REQUEST_VERSION, SERVICE_SELECTION_REQUEST_VERSION):
+    if not isinstance(value, dict) or value.get("apiVersion") not in ("platform.installer/execution-runtime/v1alpha1", DEPLOYMENT_PLAN_REQUEST_VERSION, APPLICATION_PLAN_REQUEST_VERSION, B0_PLAN_REQUEST_VERSION, SKIP_PLAN_REQUEST_VERSION, image_preparation.REQUEST_VERSION, SELECTION_REQUEST_VERSION, SERVICE_SELECTION_REQUEST_VERSION, AVAILABILITY_REQUEST_VERSION):
         raise LifecycleError("EXECUTION_PROTOCOL_INVALID")
     if value.get("operation") not in OPERATIONS + ('PrepareApplicationImages',):
         raise LifecycleError("EXECUTION_OPERATION_UNSUPPORTED")
@@ -42047,7 +42295,7 @@ def request():
             fields.update(('executionMode', 'deploymentOrder', 'skipInfrastructureVerify'))
             if value['apiVersion'] in SELECTION_REQUEST_VERSIONS:
                 fields.update(('skipApplicationLibraries', 'applicationLibraryOrder'))
-            if value['apiVersion'] == SERVICE_SELECTION_REQUEST_VERSION:
+            if value['apiVersion'] in (SERVICE_SELECTION_REQUEST_VERSION, AVAILABILITY_REQUEST_VERSION):
                 fields.add('skipServiceDeployments')
         elif value.get('phase') == 'PREPARE':
             fields.add('inputsDigest')
@@ -42058,7 +42306,7 @@ def request():
         if set(value) != fields:
             raise LifecycleError('APPLICATION_IMAGE_REQUEST_INVALID')
     if value.get("operation") == "BuildDeploymentPlan":
-        if value.get("apiVersion") not in (DEPLOYMENT_PLAN_REQUEST_VERSION, APPLICATION_PLAN_REQUEST_VERSION, B0_PLAN_REQUEST_VERSION, SKIP_PLAN_REQUEST_VERSION, image_preparation.REQUEST_VERSION, SELECTION_REQUEST_VERSION, SERVICE_SELECTION_REQUEST_VERSION):
+        if value.get("apiVersion") not in (DEPLOYMENT_PLAN_REQUEST_VERSION, APPLICATION_PLAN_REQUEST_VERSION, B0_PLAN_REQUEST_VERSION, SKIP_PLAN_REQUEST_VERSION, image_preparation.REQUEST_VERSION, SELECTION_REQUEST_VERSION, SERVICE_SELECTION_REQUEST_VERSION, AVAILABILITY_REQUEST_VERSION):
             raise LifecycleError("DEPLOYMENT_ORDER_REQUEST_VERSION_REQUIRED")
         expected = {"apiVersion", "operation", "runId", "project", "runtimeRelease", "deploymentOrder"}
         if 'applicationLibraryOrder' in value:
@@ -42068,18 +42316,18 @@ def request():
                     any(not isinstance(item, str) or re.fullmatch(r'[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*', item) is None
                         for item in library_order) or len(library_order) != len(set(library_order))):
                 raise LifecycleError('APPLICATION_LIBRARY_ORDER_INVALID')
-        if value['apiVersion'] in (APPLICATION_PLAN_REQUEST_VERSION, B0_PLAN_REQUEST_VERSION, SKIP_PLAN_REQUEST_VERSION, image_preparation.REQUEST_VERSION, SELECTION_REQUEST_VERSION, SERVICE_SELECTION_REQUEST_VERSION):
+        if value['apiVersion'] in (APPLICATION_PLAN_REQUEST_VERSION, B0_PLAN_REQUEST_VERSION, SKIP_PLAN_REQUEST_VERSION, image_preparation.REQUEST_VERSION, SELECTION_REQUEST_VERSION, SERVICE_SELECTION_REQUEST_VERSION, AVAILABILITY_REQUEST_VERSION):
             expected.add('applicationVaultSources')
             sources = value.get('applicationVaultSources')
             if (not isinstance(sources, dict) or len(sources) > 16 or
                     any(not isinstance(key, str) or re.fullmatch(r'[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*', key) is None or
                         kind not in ('RUNTIME_INPUT', 'CURRENT_RUN_BOOTSTRAP') for key, kind in sources.items())):
                 raise LifecycleError('APPLICATION_VAULT_SOURCE_INVALID')
-        if value['apiVersion'] in (B0_PLAN_REQUEST_VERSION, SKIP_PLAN_REQUEST_VERSION, image_preparation.REQUEST_VERSION, SELECTION_REQUEST_VERSION, SERVICE_SELECTION_REQUEST_VERSION):
+        if value['apiVersion'] in (B0_PLAN_REQUEST_VERSION, SKIP_PLAN_REQUEST_VERSION, image_preparation.REQUEST_VERSION, SELECTION_REQUEST_VERSION, SERVICE_SELECTION_REQUEST_VERSION, AVAILABILITY_REQUEST_VERSION):
             expected.add('executionMode')
             if value.get('executionMode') not in infra.MODES:
                 raise LifecycleError('EXECUTION_MODE_UNSUPPORTED')
-        if value['apiVersion'] in (SKIP_PLAN_REQUEST_VERSION, image_preparation.REQUEST_VERSION, SELECTION_REQUEST_VERSION, SERVICE_SELECTION_REQUEST_VERSION):
+        if value['apiVersion'] in (SKIP_PLAN_REQUEST_VERSION, image_preparation.REQUEST_VERSION, SELECTION_REQUEST_VERSION, SERVICE_SELECTION_REQUEST_VERSION, AVAILABILITY_REQUEST_VERSION):
             expected.add('skipInfrastructureVerify')
             if type(value.get('skipInfrastructureVerify')) is not bool or value['skipInfrastructureVerify'] and value['executionMode'] != 'APPLICATION_LIBRARIES_ONLY':
                 raise LifecycleError('INFRA_VERIFY_SKIP_INVALID')
@@ -42089,7 +42337,7 @@ def request():
                 raise LifecycleError('APPLICATION_IMAGE_PREPARATION_REQUIRED')
         if value['apiVersion'] in SELECTION_REQUEST_VERSIONS:
             expected.add('skipApplicationLibraries')
-            if value['apiVersion'] == SERVICE_SELECTION_REQUEST_VERSION:
+            if value['apiVersion'] in (SERVICE_SELECTION_REQUEST_VERSION, AVAILABILITY_REQUEST_VERSION):
                 expected.update(('skipServiceDeployments', 'applicationLibraryOrder'))
             _selection_request(value)
             if not isinstance(value.get('project'), str) or not value['project']:
@@ -42101,11 +42349,13 @@ def request():
             raise LifecycleError("DEPLOYMENT_ORDER_REQUEST_INVALID")
     if value.get('operation') == 'PrepareApplicationImages' and value.get('phase') == 'DESCRIBE' and value['apiVersion'] in SELECTION_REQUEST_VERSIONS:
         _selection_request(value)
-    if value['apiVersion'] == SERVICE_SELECTION_REQUEST_VERSION and (value.get('operation') == 'BuildDeploymentPlan' or value.get('phase') == 'DESCRIBE'):
+    if value['apiVersion'] in (SERVICE_SELECTION_REQUEST_VERSION, AVAILABILITY_REQUEST_VERSION) and (value.get('operation') == 'BuildDeploymentPlan' or value.get('phase') == 'DESCRIBE'):
         skipped = value.get('skipServiceDeployments')
         if (not isinstance(skipped, list) or len(skipped) > MAX_DEPLOYMENT_ORDER or
                 any(not isinstance(item, str) or re.fullmatch(r'[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*', item) is None for item in skipped) or
-                len(skipped) != len(set(skipped)) or value.get('executionMode') != 'FULL_PROJECT'):
+                len(skipped) != len(set(skipped)) or
+                (value.get('executionMode') != 'FULL_PROJECT' and
+                 (value['apiVersion'] != AVAILABILITY_REQUEST_VERSION or skipped))):
             raise LifecycleError('SERVICE_SELECTION_INVALID')
     return value
 
@@ -42156,7 +42406,7 @@ def _b0_capabilities(args, skip=False):
     return result
 
 
-def _image_capabilities(args, selection=False, service_selection=False):
+def _image_capabilities(args, selection=False, service_selection=False, availability=False):
     result = _b0_capabilities(args, True)
     result['apiVersion'] = 'platform.installer/execution-capabilities/v1alpha10'
     result['supportedOperations'].append('PrepareApplicationImages')
@@ -42184,6 +42434,11 @@ def _image_capabilities(args, selection=False, service_selection=False):
         result['deploymentPlanRequestVersions'].append(SERVICE_SELECTION_REQUEST_VERSION)
         result['serviceSelection'] = dict(protocol='ServiceSelection/v1alpha1',
             planContract='platform.installer/plan/v1alpha11', manifestContract='platform.installer/execution-manifest/v1alpha8')
+    if availability:
+        result['apiVersion'] = 'platform.installer/execution-capabilities/v1alpha15'
+        result['deploymentPlanRequestVersions'].append(AVAILABILITY_REQUEST_VERSION)
+        result['applicationImagePlanning'] = dict(protocol='RegistryAvailabilityPlanning/v1alpha1',
+            planContract='platform.installer/plan/v1alpha12', manifestContract='platform.installer/execution-manifest/v1alpha9')
     result['runtimeSecretDescriptors']['protocol'] = 'BuildRuntimeSecretDescriptors/v1alpha4'
     return result
 
@@ -42665,7 +42920,10 @@ def start(value, state_root, runtime_release, controller, active_bundle_digest="
             owned(journal)
             return {"run": journal.status(), "idempotent": True}
         runs = os.path.join(state_root, "runs")
-        for candidate in os.listdir(runs):
+        for candidate in os.listdir(runs)
+@@END
+@@PORTABLE {"path":"ansible-core/tools/execution_protocol.py","mode":420,"size":84135,"sha256":"12e9561893241dad631132882e9508c5d05eb269e1a5e66f54993d28968adc1f","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":36135}
+:
             if candidate == run_id: continue
             other = Journal(state_root, candidate)
             try:
@@ -42681,10 +42939,7 @@ def start(value, state_root, runtime_release, controller, active_bundle_digest="
             prelaunch(metadata, journal)
         # The bundle intentionally stores content with deterministic bytes, not
         # host executable bits.  Interpreter and controller are both fixed by
-        # this node-side protocol, never supplied by
-@@END
-@@PORTABLE {"path":"ansible-core/tools/execution_protocol.py","mode":420,"size":82526,"sha256":"d07cb337a3bdcf213d0b124e0d3f18d68ccf2068b3dd06537b1c8ffd82f4b026","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":34526}
- a client.
+        # this node-side protocol, never supplied by a client.
         subprocess.check_call(["systemd-run", "--unit=" + metadata["unit"], "--collect", "--property=KillMode=control-group", "--property=NoNewPrivileges=yes", sys.executable, controller, "--state-root", state_root, "--run-id", run_id, "--runtime-release", runtime_release, "--bundle-digest", metadata["runtimeRelease"]], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return {"run": journal.status(), "idempotent": False, "runtimeRelease": runtime_release}
     finally:
@@ -42786,6 +43041,7 @@ def _core_operation(value, state_root, runtime_release, operation, runtime_ident
                      platform_execution_bundle_root=release,
                      platform_execution_mode=value['executionMode'],
                      platform_application_image_inputs_path=os.path.join(journal.directory, 'application-image-inputs.json'))
+        extra['platform_application_image_availability_only'] = value['apiVersion'] == AVAILABILITY_REQUEST_VERSION
     elif operation in ("BuildDeploymentPlan", "BuildRuntimeSecretDescriptors"):
         # Core remains target-free (the playbook runs on localhost), but it must
         # load the staged project inventory so snapshot receives its canonical
@@ -42808,18 +43064,22 @@ def _core_operation(value, state_root, runtime_release, operation, runtime_ident
                 inputs = image_preparation.read_inputs(journal)
                 if any(inputs.get(key) != value.get(key) for key in ('runtimeRelease', 'executionMode', 'deploymentOrder', 'skipInfrastructureVerify') +
                        (('skipApplicationLibraries', 'applicationLibraryOrder') if value['apiVersion'] in SELECTION_REQUEST_VERSIONS else ()) +
-                       (('skipServiceDeployments',) if value['apiVersion'] == SERVICE_SELECTION_REQUEST_VERSION else ())):
+                       (('skipServiceDeployments',) if value['apiVersion'] in (SERVICE_SELECTION_REQUEST_VERSION, AVAILABILITY_REQUEST_VERSION) else ())):
                     raise LifecycleError('APPLICATION_IMAGE_PREPARATION_STALE')
                 extra.update(platform_prepared_application_images=prepared, platform_application_image_metadata=True)
+                if value['apiVersion'] == AVAILABILITY_REQUEST_VERSION:
+                    if prepared.get('apiVersion') != 'platform.installer/application-image-intents/v1alpha1':
+                        raise LifecycleError('APPLICATION_IMAGE_PREPARATION_STALE')
+                    extra['platform_application_deferred_images'] = True
             if value.get('apiVersion') in SELECTION_REQUEST_VERSIONS:
                 extra['platform_execution_skip_application_libraries'] = value['skipApplicationLibraries']
-            if value.get('apiVersion') == SERVICE_SELECTION_REQUEST_VERSION:
+            if value.get('apiVersion') in (SERVICE_SELECTION_REQUEST_VERSION, AVAILABILITY_REQUEST_VERSION) and value['executionMode'] == 'FULL_PROJECT':
                 extra['platform_execution_skip_service_deployments'] = value['skipServiceDeployments']
             extra["platform_execution_deployment_order"] = value["deploymentOrder"]
             if 'applicationLibraryOrder' in value:
                 extra['platform_execution_application_library_order'] = value['applicationLibraryOrder']
             extra['platform_execution_application_vault_sources'] = value.get('applicationVaultSources', {})
-            if value.get('apiVersion') in (B0_PLAN_REQUEST_VERSION, SKIP_PLAN_REQUEST_VERSION, image_preparation.REQUEST_VERSION, SELECTION_REQUEST_VERSION, SERVICE_SELECTION_REQUEST_VERSION):
+            if value.get('apiVersion') in (B0_PLAN_REQUEST_VERSION, SKIP_PLAN_REQUEST_VERSION, image_preparation.REQUEST_VERSION, SELECTION_REQUEST_VERSION, SERVICE_SELECTION_REQUEST_VERSION, AVAILABILITY_REQUEST_VERSION):
                 extra['platform_execution_mode'] = value['executionMode']
                 extra['platform_execution_skip_infrastructure_verify'] = value.get('skipInfrastructureVerify', False)
         if operation == "BuildRuntimeSecretDescriptors":
@@ -42924,7 +43184,7 @@ def _core_operation(value, state_root, runtime_release, operation, runtime_ident
         inputs.update({key: value[key] for key in ('runtimeRelease', 'executionMode', 'deploymentOrder', 'skipInfrastructureVerify')})
         if value['apiVersion'] in SELECTION_REQUEST_VERSIONS:
             inputs.update({key: value[key] for key in ('skipApplicationLibraries', 'applicationLibraryOrder')})
-        if value['apiVersion'] == SERVICE_SELECTION_REQUEST_VERSION:
+        if value['apiVersion'] in (SERVICE_SELECTION_REQUEST_VERSION, AVAILABILITY_REQUEST_VERSION):
             inputs['skipServiceDeployments'] = value['skipServiceDeployments']
         inputs['expiresAt'] = int(time.time()) + 120
         execution_secret_lease._write(os.path.join(journal.directory, 'application-image-inputs.json'), inputs)
@@ -43115,7 +43375,7 @@ def main():
         if value.get('runtimeRelease') != expected_release:
             raise LifecycleError('EXECUTION_RUNTIME_RELEASE_INVALID')
     if operation == "GetCapabilities":
-        return reply(_image_capabilities(args, value['apiVersion'] in SELECTION_REQUEST_VERSIONS, value['apiVersion'] == SERVICE_SELECTION_REQUEST_VERSION) if value['apiVersion'] in IMAGE_REQUEST_VERSIONS else _b0_capabilities(args, value['apiVersion'] == SKIP_PLAN_REQUEST_VERSION) if value['apiVersion'] in (B0_PLAN_REQUEST_VERSION, SKIP_PLAN_REQUEST_VERSION) else _application_capabilities(args) if value['apiVersion'] == APPLICATION_PLAN_REQUEST_VERSION else _capabilities_v4(args))
+        return reply(_image_capabilities(args, value['apiVersion'] in SELECTION_REQUEST_VERSIONS, value['apiVersion'] in (SERVICE_SELECTION_REQUEST_VERSION, AVAILABILITY_REQUEST_VERSION), value['apiVersion'] == AVAILABILITY_REQUEST_VERSION) if value['apiVersion'] in IMAGE_REQUEST_VERSIONS else _b0_capabilities(args, value['apiVersion'] == SKIP_PLAN_REQUEST_VERSION) if value['apiVersion'] in (B0_PLAN_REQUEST_VERSION, SKIP_PLAN_REQUEST_VERSION) else _application_capabilities(args) if value['apiVersion'] == APPLICATION_PLAN_REQUEST_VERSION else _capabilities_v4(args))
     if operation == 'PrepareApplicationImages':
         if value['phase'] == 'DESCRIBE':
             return reply(core_operation(value, args.state_root, args.runtime_release, operation, observed))
@@ -45352,7 +45612,7 @@ def safe_task_error(result, no_log=False):
     return {'code': code, 'summary': summary}
 
 @@END
-@@PORTABLE {"path":"ansible-core/tools/infrastructure_verification.py","mode":420,"size":29308,"sha256":"a7f90152298123325e42660ccdf1b43a38629e9cf2a71ece2d607fbb38bb0987","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":29308}
+@@PORTABLE {"path":"ansible-core/tools/infrastructure_verification.py","mode":420,"size":29458,"sha256":"44ff5b4007a5f65e32b7d9411729ffa8ac8ddcd8063cf9d82baf56cca5ee048b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":29458}
 """B0 bounded infrastructure evidence in the existing private execution namespace.
 
 Local clients may cache the returned summary, but only this node's journal may
@@ -45579,7 +45839,7 @@ def validate_manifest(manifest):
         except ValueError as error:
             raise LifecycleError(str(error)) from None
     skip = manifest.get('skipInfrastructureVerify', False)
-    if (type(skip) is not bool or skip and (manifest.get('apiVersion') not in (SKIP_MANIFEST_VERSION, 'platform.installer/execution-manifest/v1alpha5', 'platform.installer/execution-manifest/v1alpha6', 'platform.installer/execution-manifest/v1alpha7', 'platform.installer/execution-manifest/v1alpha8') or
+    if (type(skip) is not bool or skip and (manifest.get('apiVersion') not in (SKIP_MANIFEST_VERSION, 'platform.installer/execution-manifest/v1alpha5', 'platform.installer/execution-manifest/v1alpha6', 'platform.installer/execution-manifest/v1alpha7', 'platform.installer/execution-manifest/v1alpha8', 'platform.installer/execution-manifest/v1alpha9') or
             manifest.get('executionMode') != 'APPLICATION_LIBRARIES_ONLY' or has_library_verify_prefix(manifest))):
         raise LifecycleError('EXECUTION_MANIFEST_INVALID')
     binding = manifest.get('infrastructureVerification')
@@ -45719,7 +45979,7 @@ def record_stats(journal, action_id, stats):
     """Only bounded numeric Ansible recap counters, never task payloads."""
     manifest = _read(os.path.join(journal.directory, 'manifest.json'))
     validate_ownership(journal)
-    if (manifest.get('apiVersion') not in (MANIFEST_VERSION, SKIP_MANIFEST_VERSION, 'platform.installer/execution-manifest/v1alpha5', 'platform.installer/execution-manifest/v1alpha6', 'platform.installer/execution-manifest/v1alpha7', 'platform.installer/execution-manifest/v1alpha8') or journal.status().get('state') != 'RUNNING' or
+    if (manifest.get('apiVersion') not in (MANIFEST_VERSION, SKIP_MANIFEST_VERSION, 'platform.installer/execution-manifest/v1alpha5', 'platform.installer/execution-manifest/v1alpha6', 'platform.installer/execution-manifest/v1alpha7', 'platform.installer/execution-manifest/v1alpha8', 'platform.installer/execution-manifest/v1alpha9') or journal.status().get('state') != 'RUNNING' or
             not any(op['operationId'] == action_id and op['operation'] == 'SERVICE_VERIFY' for op in manifest['operations']) or
             not isinstance(stats, dict) or len(stats) > 257):
         raise LifecycleError('INFRA_VERIFY_COVERAGE_INCOMPLETE')
@@ -45740,7 +46000,7 @@ def publish(journal, manifest):
 
 def _publish(journal, manifest):
     """Optional derived index publication after durable terminal; never replay work."""
-    if manifest.get('apiVersion') not in (MANIFEST_VERSION, SKIP_MANIFEST_VERSION, 'platform.installer/execution-manifest/v1alpha5', 'platform.installer/execution-manifest/v1alpha6', 'platform.installer/execution-manifest/v1alpha7', 'platform.installer/execution-manifest/v1alpha8'):
+    if manifest.get('apiVersion') not in (MANIFEST_VERSION, SKIP_MANIFEST_VERSION, 'platform.installer/execution-manifest/v1alpha5', 'platform.installer/execution-manifest/v1alpha6', 'platform.installer/execution-manifest/v1alpha7', 'platform.installer/execution-manifest/v1alpha8', 'platform.installer/execution-manifest/v1alpha9'):
         return
     if manifest.get('skipInfrastructureVerify') is True:
         return
@@ -50928,6 +51188,30 @@ libraryExecutionPriorities:
 }
 
 @@END
+@@PORTABLE {"path":"contracts/artifact-source/v1alpha2/image-intents.schema.json","mode":420,"size":746,"sha256":"efd8a16c7513fc51fccb208598907f7d306534575ca043929812a49ceec7b6cd","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":746}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/artifact-source/v1alpha2/image-intents.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "placements"],
+  "properties": {
+    "apiVersion": {"const": "platform.installer/application-image-intents/v1alpha1"},
+    "placements": {
+      "type": "object", "maxProperties": 4096,
+      "additionalProperties": {
+        "type": "object", "additionalProperties": false,
+        "required": ["reference", "registry"],
+        "properties": {
+          "reference": {"type": "string", "minLength": 1, "maxLength": 512},
+          "registry": {"type": "boolean"}
+        }
+      }
+    }
+  }
+}
+
+@@END
 @@PORTABLE {"path":"contracts/artifact-source/v1alpha2/image-lock.schema.json","mode":420,"size":1783,"sha256":"f7470c3e6dd7dea6e4a860eff56a2ef361005ce97aebf27f0dddd2f08af45a28","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1783}
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -52098,6 +52382,313 @@ libraryExecutionPriorities:
           "const": "platform.installer/execution-manifest/v1alpha8"
         }
       }
+    }
+  }
+}
+
+@@END
+@@PORTABLE {"path":"contracts/execution-capabilities/v1alpha15/schema.json","mode":420,"size":8220,"sha256":"878d50036b27ea92d93ec3b5eaac5fabaf2da93f91d27368dd7f58c060737f43","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":8220}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/execution-capabilities/v1alpha15/schema.json",
+  "title": "Execution capabilities with ordered deployment planning",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "apiVersion",
+    "kind",
+    "bootstrapProtocol",
+    "coreVersion",
+    "catalogDigest",
+    "schemaDigest",
+    "runtime",
+    "supportedOperations",
+    "executionStart",
+    "runtimeSecretDescriptors",
+    "targetCredentialLease",
+    "serviceConfigurationPreview",
+    "deploymentPlanRequestVersions",
+    "applicationExecution",
+    "infrastructureVerification",
+    "skipInfrastructureVerify",
+    "applicationImages",
+    "applicationLibrarySelection",
+    "applicationPostInstall",
+    "applicationProgress",
+    "serviceSelection",
+    "applicationImagePlanning"
+  ],
+  "properties": {
+    "apiVersion": {
+      "const": "platform.installer/execution-capabilities/v1alpha15"
+    },
+    "kind": {
+      "const": "ExecutionCapabilities"
+    },
+    "bootstrapProtocol": {
+      "$ref": "../v1alpha5/schema.json#/properties/bootstrapProtocol"
+    },
+    "coreVersion": {
+      "$ref": "../v1alpha5/schema.json#/properties/coreVersion"
+    },
+    "catalogDigest": {
+      "$ref": "../v1alpha5/schema.json#/properties/catalogDigest"
+    },
+    "schemaDigest": {
+      "$ref": "../v1alpha5/schema.json#/properties/schemaDigest"
+    },
+    "runtime": {
+      "$ref": "../v1alpha5/schema.json#/properties/runtime"
+    },
+    "supportedOperations": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "GetCapabilities",
+          "ValidateProject",
+          "BuildProjectSnapshot",
+          "BuildServiceConfigurationPreview",
+          "BuildRuntimeSecretDescriptors",
+          "BuildDeploymentPlan",
+          "StartExecution",
+          "GetExecution",
+          "GetEvents",
+          "CancelExecution",
+          "PutRuntimeSecretLease",
+          "PrepareApplicationImages"
+        ]
+      },
+      "contains": {
+        "const": "BuildServiceConfigurationPreview"
+      }
+    },
+    "projectSnapshotRequestVersions": {
+      "$ref": "../v1alpha5/schema.json#/properties/projectSnapshotRequestVersions"
+    },
+    "executionStart": {
+      "$ref": "../v1alpha5/schema.json#/properties/executionStart"
+    },
+    "targetCredentialLease": {
+      "$ref": "../v1alpha5/schema.json#/properties/targetCredentialLease"
+    },
+    "runtimeSecretDescriptors": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol",
+        "maxHostsPerDescriptor",
+        "maxResponseBytes"
+      ],
+      "properties": {
+        "protocol": {
+          "const": "BuildRuntimeSecretDescriptors/v1alpha4"
+        },
+        "maxDescriptors": {
+          "const": 16
+        },
+        "maxHostsPerDescriptor": {
+          "const": 256
+        },
+        "maxResponseBytes": {
+          "const": 65536
+        }
+      }
+    },
+    "serviceConfigurationPreview": {
+      "$ref": "../v1alpha5/schema.json#/properties/serviceConfigurationPreview"
+    },
+    "deploymentPlanRequestVersions": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "applicationExecution": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "manifestContract",
+        "planContract",
+        "requiredPlanRequestVersion"
+      ],
+      "properties": {
+        "requiredPlanRequestVersion": {
+          "const": "platform.installer/execution-runtime/v1alpha3"
+        },
+        "manifestContract": {
+          "const": "platform.installer/execution-manifest/v1alpha2"
+        },
+        "planContract": {
+          "const": "platform.installer/plan/v1alpha4"
+        }
+      }
+    },
+    "infrastructureVerification": {
+      "required": [
+        "protocol",
+        "executionModes",
+        "requiredPlanRequestVersion",
+        "manifestContract",
+        "planContract"
+      ],
+      "properties": {
+        "executionModes": {
+          "const": [
+            "FULL_PROJECT",
+            "APPLICATION_LIBRARIES_ONLY",
+            "INFRASTRUCTURE_VERIFY_ONLY"
+          ]
+        },
+        "planContract": {
+          "const": "platform.installer/plan/v1alpha5"
+        },
+        "requiredPlanRequestVersion": {
+          "const": "platform.installer/execution-runtime/v1alpha4"
+        },
+        "protocol": {
+          "const": "InfrastructureVerification/v1alpha1"
+        },
+        "manifestContract": {
+          "const": "platform.installer/execution-manifest/v1alpha3"
+        }
+      },
+      "type": "object",
+      "additionalProperties": false
+    },
+    "skipInfrastructureVerify": {
+      "type": "boolean"
+    },
+    "applicationImages": {
+      "required": [
+        "protocol",
+        "leaseProtocol",
+        "planContract",
+        "manifestContract"
+      ],
+      "properties": {
+        "protocol": {
+          "const": "PrepareApplicationImages/v1alpha1"
+        },
+        "leaseProtocol": {
+          "const": "platform.installer/application-image-preparation-lease/v1alpha1"
+        },
+        "manifestContract": {
+          "const": "platform.installer/execution-manifest/v1alpha6"
+        },
+        "planContract": {
+          "const": "platform.installer/plan/v1alpha8"
+        }
+      },
+      "type": "object",
+      "additionalProperties": false
+    },
+    "applicationLibrarySelection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol",
+        "packageManifestVersions",
+        "scriptPhase",
+        "argumentSource"
+      ],
+      "properties": {
+        "protocol": {
+          "const": "ApplicationLibrarySelection/v1alpha1"
+        },
+        "packageManifestVersions": {
+          "const": [
+            "platform.installer/application-package/v1alpha1",
+            "platform.installer/application-package/v1alpha2"
+          ]
+        },
+        "scriptPhase": {
+          "const": "integration_apply"
+        },
+        "argumentSource": {
+          "const": "integration_consumers"
+        }
+      }
+    },
+    "applicationPostInstall": {
+      "required": [
+        "protocol",
+        "packageManifestVersion",
+        "planContract",
+        "manifestContract"
+      ],
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "packageManifestVersion": {
+          "const": "platform.installer/application-package/v1alpha3"
+        },
+        "manifestContract": {
+          "const": "platform.installer/execution-manifest/v1alpha7"
+        },
+        "protocol": {
+          "const": "ApplicationPostInstall/v1alpha1"
+        },
+        "planContract": {
+          "const": "platform.installer/plan/v1alpha9"
+        }
+      }
+    },
+    "applicationProgress": {
+      "required": [
+        "protocol",
+        "planContract"
+      ],
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "planContract": {
+          "const": "platform.installer/plan/v1alpha10"
+        },
+        "protocol": {
+          "const": "ApplicationProgress/v1alpha1"
+        }
+      }
+    },
+    "serviceSelection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol",
+        "planContract",
+        "manifestContract"
+      ],
+      "properties": {
+        "protocol": {
+          "const": "ServiceSelection/v1alpha1"
+        },
+        "planContract": {
+          "const": "platform.installer/plan/v1alpha11"
+        },
+        "manifestContract": {
+          "const": "platform.installer/execution-manifest/v1alpha8"
+        }
+      }
+    },
+    "applicationImagePlanning": {
+      "additionalProperties": false,
+      "properties": {
+        "planContract": {
+          "const": "platform.installer/plan/v1alpha12"
+        },
+        "manifestContract": {
+          "const": "platform.installer/execution-manifest/v1alpha9"
+        },
+        "protocol": {
+          "const": "RegistryAvailabilityPlanning/v1alpha1"
+        }
+      },
+      "type": "object",
+      "required": [
+        "protocol",
+        "planContract",
+        "manifestContract"
+      ]
     }
   }
 }
@@ -55333,6 +55924,412 @@ libraryExecutionPriorities:
 }
 
 @@END
+@@PORTABLE {"path":"contracts/execution-manifest/v1alpha9/schema.json","mode":420,"size":10547,"sha256":"ecb29a764098944c79d587c6536d20cc4098b31d1652aca6a375f858686c0bac","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":10547}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "required": [
+    "apiVersion",
+    "applicationSecretRequirements",
+    "artifactRequirements",
+    "artifactSourceAuthorities",
+    "kind",
+    "operations",
+    "pkiMaterializationPlans",
+    "planFingerprint",
+    "projectIdentity",
+    "projectRevision",
+    "requiredCredentials",
+    "runtimeRelease",
+    "runtimeSecretDescriptorSetFingerprint",
+    "runtimeSecretInputs",
+    "runtimeSecretOutputs",
+    "runtimeSecretRequirements",
+    "executionMode",
+    "infrastructureVerification",
+    "skipInfrastructureVerify",
+    "skipApplicationLibraries",
+    "applicationExecutionScope",
+    "applicationImageIntentsDigest"
+  ],
+  "type": "object",
+  "$id": "https://platform-installer.local/contracts/execution-manifest/v1alpha9/schema.json",
+  "additionalProperties": false,
+  "properties": {
+    "runtimeSecretDescriptorSetFingerprint": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "runtimeRelease": {
+      "$ref": "../../plan/v1alpha4/schema.json#/properties/runtimeRelease"
+    },
+    "apiVersion": {
+      "const": "platform.installer/execution-manifest/v1alpha9"
+    },
+    "artifactRequirements": {
+      "$ref": "../../plan/v1alpha12/schema.json#/properties/artifactRequirements"
+    },
+    "targetConnections": {
+      "type": "object"
+    },
+    "runtimeSecretRequirements": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "runtimeSecretOutputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "protocol",
+          "serviceDeployment",
+          "entries"
+        ],
+        "properties": {
+          "protocol": {
+            "const": "SecretOutputDelivery/v1alpha1"
+          },
+          "serviceDeployment": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1
+          },
+          "entries": {
+            "const": [
+              "admin-token",
+              "unseal-shares"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "maxItems": 64
+    },
+    "applicationSecretRequirements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "requirementRef",
+          "purpose",
+          "runtimeReference",
+          "providerDeployment",
+          "applicationLibraries",
+          "hosts",
+          "operations",
+          "source"
+        ],
+        "properties": {
+          "purpose": {
+            "enum": [
+              "APPLICATION_SECRET",
+              "APPLICATION_VAULT_ADMIN_TOKEN",
+              "APPLICATION_REGISTRY_USERNAME",
+              "APPLICATION_REGISTRY_PASSWORD"
+            ]
+          },
+          "providerDeployment": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "applicationLibraries": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "maxItems": 256,
+            "uniqueItems": true,
+            "minItems": 1
+          },
+          "runtimeReference": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$"
+          },
+          "hosts": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"
+            },
+            "maxItems": 256,
+            "uniqueItems": true
+          },
+          "operations": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 3,
+            "uniqueItems": true,
+            "items": {
+              "enum": [
+                "APPLICATION_LIBRARIES_APPLY",
+                "APPLICATION_LIBRARIES_VERIFY",
+                "APPLICATION_LIBRARIES_POST_INSTALL"
+              ]
+            }
+          },
+          "requirementRef": {
+            "type": "string",
+            "pattern": "^application-secret-[a-f0-9]{32}$"
+          },
+          "source": {
+            "enum": [
+              "RUNTIME_INPUT",
+              "CURRENT_RUN_BOOTSTRAP"
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "operations": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "$ref": "../v1alpha7/application-operation.schema.json"
+          },
+          {
+            "type": "object",
+            "required": [
+              "operationId",
+              "phaseId",
+              "operation",
+              "serviceDeployment",
+              "serviceType",
+              "requiresArtifactSources"
+            ],
+            "properties": {
+              "targets": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"
+                },
+                "maxItems": 256,
+                "uniqueItems": true
+              },
+              "reissueRequests": {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "requiresArtifactSources": {
+                "type": "boolean"
+              },
+              "phaseId": {
+                "type": "string",
+                "maxLength": 256,
+                "minLength": 1
+              },
+              "serviceType": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "operation": {
+                "enum": [
+                  "SERVICE_APPLY",
+                  "SERVICE_VERIFY",
+                  "PKI_APPLY",
+                  "PKI_REISSUE"
+                ]
+              },
+              "operationId": {
+                "type": "string",
+                "maxLength": 256,
+                "minLength": 1
+              },
+              "roleVariablesByHost": {
+                "type": "object"
+              },
+              "serviceDeployment": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "roleVariablesPrefix": {
+                "type": "string",
+                "maxLength": 256,
+                "minLength": 1
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
+      "maxItems": 1024,
+      "minItems": 1
+    },
+    "projectRevision": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "runtimeSecretInputs": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "planFingerprint": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "requiredCredentials": {
+      "$ref": "../../plan/v1alpha4/schema.json#/properties/requiredCredentials"
+    },
+    "projectIdentity": {
+      "type": "string",
+      "maxLength": 256,
+      "minLength": 1
+    },
+    "kind": {
+      "const": "ExecutionManifest"
+    },
+    "artifactSourceAuthorities": {
+      "items": {
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "pkiMaterializationPlans": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "maxItems": 4096
+    },
+    "executionMode": {
+      "enum": ["FULL_PROJECT", "APPLICATION_LIBRARIES_ONLY", "INFRASTRUCTURE_VERIFY_ONLY"]
+    },
+    "infrastructureVerification": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "evidenceRevision": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "model": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "hosts": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"
+              },
+              "maxItems": 256,
+              "uniqueItems": true
+            },
+            "fingerprint": {
+              "type": "string",
+              "pattern": "^sha256:[a-f0-9]{64}$"
+            },
+            "coverage": {
+              "type": "object",
+              "maxProperties": 256,
+              "propertyNames": {
+                "pattern": "^[a-z0-9][a-z0-9-]{0,127}$"
+              },
+              "minProperties": 1,
+              "additionalProperties": {
+                "type": "string",
+                "pattern": "^sha256:[a-f0-9]{64}$"
+              }
+            }
+          },
+          "required": [
+            "fingerprint",
+            "coverage",
+            "hosts"
+          ]
+        }
+      },
+      "required": [
+        "model",
+        "evidenceRevision"
+      ]
+    },
+    "skipInfrastructureVerify": {
+      "type": "boolean"
+    },
+    "skipApplicationLibraries": {
+      "$ref": "../../plan/v1alpha8/schema.json#/$defs/libraryIds"
+    },
+    "applicationExecutionScope": {
+      "$ref": "../../plan/v1alpha8/schema.json#/$defs/applicationExecutionScope"
+    },
+    "skipServiceDeployments": {
+      "type": "array",
+      "maxItems": 256,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+        "maxLength": 128
+      }
+    },
+    "serviceExecutionScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "serviceOrder",
+        "skippedServices",
+        "installServices"
+      ],
+      "properties": {
+        "serviceOrder": {
+          "type": "array",
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+            "maxLength": 128
+          }
+        },
+        "skippedServices": {
+          "type": "array",
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+            "maxLength": 128
+          }
+        },
+        "installServices": {
+          "type": "array",
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+            "maxLength": 128
+          }
+        }
+      }
+    },
+    "applicationImageIntentsDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    }
+  }
+}
+
+@@END
 @@PORTABLE {"path":"contracts/execution-runtime/v1alpha3/build-deployment-plan.schema.json","mode":420,"size":1118,"sha256":"95346ab77a67ab850c4b912a49b1d2813c0652614b86f6cbd9e9b2f946c23154","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1118}
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -55904,6 +56901,256 @@ libraryExecutionPriorities:
     },
     "executionMode": {
       "$ref": "build-deployment-plan.schema.json#/properties/executionMode"
+    },
+    "deploymentOrder": {
+      "$ref": "build-deployment-plan.schema.json#/properties/deploymentOrder"
+    },
+    "skipInfrastructureVerify": {
+      "type": "boolean"
+    },
+    "inputsDigest": {
+      "$ref": "../../artifact-source/v1alpha2/image-lock.schema.json#/$defs/digest"
+    },
+    "preparationLease": {
+      "$ref": "../../application-image-preparation-lease/v1alpha1/schema.json"
+    },
+    "skipApplicationLibraries": {
+      "$ref": "../../plan/v1alpha8/schema.json#/$defs/libraryIds"
+    },
+    "applicationLibraryOrder": {
+      "$ref": "../../plan/v1alpha8/schema.json#/$defs/libraryIds"
+    },
+    "skipServiceDeployments": {
+      "type": "array",
+      "maxItems": 256,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+        "maxLength": 128
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "phase": {
+            "const": "DESCRIBE"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "executionMode",
+          "deploymentOrder",
+          "skipInfrastructureVerify",
+          "skipApplicationLibraries",
+          "applicationLibraryOrder",
+          "skipServiceDeployments"
+        ],
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "inputsDigest"
+              ]
+            },
+            {
+              "required": [
+                "preparationLease"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "phase": {
+            "const": "PREPARE"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "inputsDigest"
+        ],
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "executionMode"
+              ]
+            },
+            {
+              "required": [
+                "deploymentOrder"
+              ]
+            },
+            {
+              "required": [
+                "skipInfrastructureVerify"
+              ]
+            },
+            {
+              "required": [
+                "skipApplicationLibraries"
+              ]
+            },
+            {
+              "required": [
+                "applicationLibraryOrder"
+              ]
+            },
+            {
+              "required": [
+                "skipServiceDeployments"
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ]
+}
+
+@@END
+@@PORTABLE {"path":"contracts/execution-runtime/v1alpha9/build-deployment-plan.schema.json","mode":420,"size":2315,"sha256":"ebe67ca08862ec3ef537b28aab9aefca0331d7c869f51687432651536d7547b0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2315}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/execution-runtime/v1alpha9/build-deployment-plan.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "apiVersion",
+    "operation",
+    "runId",
+    "project",
+    "runtimeRelease",
+    "deploymentOrder",
+    "applicationVaultSources",
+    "executionMode",
+    "skipInfrastructureVerify",
+    "applicationImagePreparation",
+    "skipApplicationLibraries",
+    "skipServiceDeployments",
+    "applicationLibraryOrder"
+  ],
+  "properties": {
+    "apiVersion": {
+      "const": "platform.installer/execution-runtime/v1alpha9"
+    },
+    "operation": {
+      "const": "BuildDeploymentPlan"
+    },
+    "runId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "project": {
+      "type": "string",
+      "minLength": 1
+    },
+    "runtimeRelease": {
+      "$ref": "../../plan/v1alpha4/schema.json#/properties/runtimeRelease"
+    },
+    "deploymentOrder": {
+      "type": "array",
+      "maxItems": 256,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9-]{0,127}$"
+      }
+    },
+    "applicationVaultSources": {
+      "type": "object",
+      "maxProperties": 16,
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$"
+      },
+      "additionalProperties": {
+        "enum": [
+          "RUNTIME_INPUT",
+          "CURRENT_RUN_BOOTSTRAP"
+        ]
+      }
+    },
+    "executionMode": {
+      "enum": [
+        "FULL_PROJECT",
+        "APPLICATION_LIBRARIES_ONLY",
+        "INFRASTRUCTURE_VERIFY_ONLY"
+      ]
+    },
+    "skipInfrastructureVerify": {
+      "type": "boolean"
+    },
+    "applicationImagePreparation": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "skipApplicationLibraries": {
+      "$ref": "../../plan/v1alpha8/schema.json#/$defs/libraryIds"
+    },
+    "applicationLibraryOrder": {
+      "$ref": "../../plan/v1alpha8/schema.json#/$defs/libraryIds"
+    },
+    "skipServiceDeployments": {
+      "type": "array",
+      "maxItems": 256,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+        "maxLength": 128
+      }
+    }
+  }
+}
+
+@@END
+@@PORTABLE {"path":"contracts/execution-runtime/v1alpha9/prepare-application-images.schema.json","mode":420,"size":3402,"sha256":"34e40809610845337a4f156ea862e893318f20ada8da3375423afeda50739ff6","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3402}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/execution-runtime/v1alpha9/prepare-application-images.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "apiVersion",
+    "operation",
+    "runId",
+    "runtimeRelease",
+    "phase"
+  ],
+  "properties": {
+    "apiVersion": {
+      "const": "platform.installer/execution-runtime/v1alpha9"
+    },
+    "operation": {
+      "const": "PrepareApplicationImages"
+    },
+    "runId": {
+      "type": "string"
+    },
+    "runtimeRelease": {
+      "$ref": "build-deployment-plan.schema.json#/properties/runtimeRelease"
+    },
+    "phase": {
+      "enum": [
+        "DESCRIBE",
+        "PREPARE"
+      ]
+    },
+    "executionMode": {
+      "enum": [
+        "FULL_PROJECT",
+        "APPLICATION_LIBRARIES_ONLY",
+        "INFRASTRUCTURE_VERIFY_ONLY"
+      ]
     },
     "deploymentOrder": {
       "$ref": "build-deployment-plan.schema.json#/properties/deploymentOrder"
@@ -57525,6 +58772,657 @@ libraryExecutionPriorities:
         "instanceId",
         "hosts",
         "sourcePolicy"
+      ]
+    },
+    "libraryIds": {
+      "minItems": 0,
+      "uniqueItems": true,
+      "type": "array",
+      "items": {
+        "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+        "type": "string"
+      },
+      "maxItems": 256,
+      "default": []
+    },
+    "applicationExecutionScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "libraryOrder",
+        "skippedLibraries",
+        "installLibraries",
+        "consumerInstances",
+        "providerInstances",
+        "providerLibraries"
+      ],
+      "properties": {
+        "libraryOrder": {
+          "$ref": "#/$defs/libraryIds"
+        },
+        "skippedLibraries": {
+          "$ref": "#/$defs/libraryIds"
+        },
+        "installLibraries": {
+          "$ref": "#/$defs/libraryIds"
+        },
+        "providerLibraries": {
+          "$ref": "#/$defs/libraryIds"
+        },
+        "consumerInstances": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_.-]*/[a-z][a-z0-9_.-]*$"
+          }
+        },
+        "providerInstances": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_.-]*/[a-z][a-z0-9_.-]*$"
+          }
+        }
+      }
+    }
+  }
+}
+
+@@END
+@@PORTABLE {"path":"contracts/plan/v1alpha12/schema.json","mode":420,"size":14704,"sha256":"bd42f3783453e47d2ac356c70e016c5e0059523e93f422c4b7da95212ed8e0f6","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":14704}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/plan/v1alpha12/schema.json",
+  "title": "Application-aware target-free deployment plan",
+  "type": "object",
+  "required": [
+    "apiVersion",
+    "kind",
+    "id",
+    "createdAt",
+    "projectIdentity",
+    "projectRevision",
+    "planner",
+    "runtimeRelease",
+    "fingerprints",
+    "status",
+    "readiness",
+    "artifactRequirements",
+    "phases",
+    "findings",
+    "executionMode",
+    "infrastructureVerification",
+    "skipInfrastructureVerify",
+    "skipApplicationLibraries",
+    "applicationExecutionScope",
+    "imageResolution"
+  ],
+  "properties": {
+    "apiVersion": {
+      "const": "platform.installer/plan/v1alpha12"
+    },
+    "kind": {
+      "const": "DeploymentPlan"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "projectIdentity": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "projectRevision": {
+      "$ref": "#/$defs/digest"
+    },
+    "planner": {
+      "type": "object",
+      "required": [
+        "coreVersion",
+        "planningProtocol"
+      ],
+      "properties": {
+        "coreVersion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "planningProtocol": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "runtimeRelease": {
+      "$ref": "#/$defs/runtimeRelease"
+    },
+    "fingerprints": {
+      "$ref": "#/$defs/fingerprints"
+    },
+    "status": {
+      "enum": [
+        "EXECUTABLE",
+        "BLOCKED"
+      ]
+    },
+    "readiness": {
+      "enum": [
+        "REQUIRES_PREPARATION",
+        "BLOCKED"
+      ]
+    },
+    "artifactRequirements": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/artifact"
+      }
+    },
+    "phases": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/phase"
+      }
+    },
+    "requiredCredentials": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "requirementRef",
+          "purpose",
+          "hosts"
+        ],
+        "properties": {
+          "requirementRef": {
+            "type": "string"
+          },
+          "purpose": {
+            "type": "string"
+          },
+          "hosts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "acknowledgements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "code",
+          "summary"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]*$"
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "$ref": "../../finding/v1alpha1/schema.json"
+      }
+    },
+    "executionMode": {
+      "enum": ["FULL_PROJECT", "APPLICATION_LIBRARIES_ONLY", "INFRASTRUCTURE_VERIFY_ONLY"]
+    },
+    "infrastructureVerification": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "enum": [
+            null,
+            "INFRA_VERIFY_MISSING",
+            "INFRA_VERIFY_STALE",
+            "INFRA_EVIDENCE_UNAVAILABLE"
+          ]
+        },
+        "status": {
+          "enum": [
+            "PASS",
+            "BLOCKED",
+            "UNKNOWN"
+          ]
+        },
+        "evidenceRevision": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "deployments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "sourceRunId": {
+                "minLength": 1,
+                "type": "string",
+                "maxLength": 128
+              },
+              "deploymentId": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9-]{0,127}$"
+              },
+              "verifiedAt": {
+                "type": "string",
+                "maxLength": 40,
+                "format": "date-time"
+              },
+              "coverageDigest": {
+                "type": "string",
+                "pattern": "^sha256:[a-f0-9]{64}$"
+              }
+            },
+            "required": [
+              "deploymentId",
+              "sourceRunId",
+              "coverageDigest",
+              "verifiedAt"
+            ]
+          },
+          "maxItems": 256
+        },
+        "infrastructureFingerprint": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "status",
+        "infrastructureFingerprint",
+        "evidenceRevision",
+        "deployments",
+        "code"
+      ]
+    },
+    "skipInfrastructureVerify": {
+      "type": "boolean"
+    },
+    "skipApplicationLibraries": {
+      "$ref": "#/$defs/libraryIds"
+    },
+    "applicationExecutionScope": {
+      "$ref": "#/$defs/applicationExecutionScope"
+    },
+    "skipServiceDeployments": {
+      "type": "array",
+      "maxItems": 256,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+        "maxLength": 128
+      }
+    },
+    "serviceExecutionScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "serviceOrder",
+        "skippedServices",
+        "installServices"
+      ],
+      "properties": {
+        "serviceOrder": {
+          "type": "array",
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+            "maxLength": 128
+          }
+        },
+        "skippedServices": {
+          "type": "array",
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+            "maxLength": 128
+          }
+        },
+        "installServices": {
+          "type": "array",
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+            "maxLength": 128
+          }
+        }
+      }
+    },
+    "imageResolution": {
+      "const": "AT_EXECUTION"
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "runtimeRelease": {
+      "type": "object",
+      "required": [
+        "bundleDigest",
+        "coreVersion",
+        "catalogDigest",
+        "planningProtocol"
+      ],
+      "properties": {
+        "bundleDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "coreVersion": {
+          "type": "string"
+        },
+        "catalogDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "planningProtocol": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "fingerprints": {
+      "type": "object",
+      "required": [
+        "project",
+        "catalog",
+        "artifacts",
+        "core",
+        "plan"
+      ],
+      "properties": {
+        "project": {
+          "$ref": "#/$defs/digest"
+        },
+        "catalog": {
+          "$ref": "#/$defs/digest"
+        },
+        "artifacts": {
+          "$ref": "#/$defs/digest"
+        },
+        "core": {
+          "$ref": "#/$defs/digest"
+        },
+        "plan": {
+          "$ref": "#/$defs/digest"
+        }
+      },
+      "additionalProperties": false
+    },
+    "artifact": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/serviceArtifact"
+        },
+        {
+          "$ref": "#/$defs/imageArtifact"
+        }
+      ]
+    },
+    "phase": {
+      "type": "object",
+      "required": [
+        "id",
+        "order",
+        "actions"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "order": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/action"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "action": {
+      "type": "object",
+      "if": {
+        "required": [
+          "progressSteps"
+        ]
+      },
+      "then": {
+        "properties": {
+          "id": {
+            "const": "applications:apply"
+          },
+          "type": {
+            "const": "APPLICATION_LIBRARIES_APPLY"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "targets",
+        "dependsOn",
+        "mutating",
+        "reboot",
+        "summary"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]*$",
+          "enum": [
+            "PKI_APPLY",
+            "PKI_REISSUE",
+            "SERVICE_APPLY",
+            "SERVICE_VERIFY",
+            "APPLICATION_LIBRARIES_APPLY",
+            "APPLICATION_LIBRARIES_VERIFY",
+            "APPLICATION_LIBRARIES_POST_INSTALL"
+          ]
+        },
+        "serviceDeployment": {
+          "type": "string"
+        },
+        "targets": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "dependsOn": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "mutating": {
+          "type": "boolean"
+        },
+        "reboot": {
+          "enum": [
+            "NONE",
+            "RECOMMENDED",
+            "REQUIRED"
+          ]
+        },
+        "summary": {
+          "type": "string"
+        },
+        "progressSteps": {
+          "minItems": 1,
+          "maxItems": 257,
+          "type": "array",
+          "items": {
+            "properties": {
+              "id": {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              },
+              "summary": {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "summary"
+            ],
+            "additionalProperties": false,
+            "type": "object"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "serviceArtifact": {
+      "type": "object",
+      "required": [
+        "id",
+        "serviceDeployment",
+        "serviceType",
+        "requirementId",
+        "version",
+        "digest",
+        "requiredOffline"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "serviceDeployment": {
+          "type": "string"
+        },
+        "serviceType": {
+          "type": "string"
+        },
+        "requirementId": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "os": {
+          "type": "string"
+        },
+        "architecture": {
+          "type": "string"
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "requiredOffline": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "imageArtifact": {
+      "oneOf": [
+        {
+          "$ref": "../../plan/v1alpha11/schema.json#/$defs/imageArtifact"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "artifactType": {
+              "const": "container-image"
+            },
+            "id": {
+              "type": "string",
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "name": {
+              "type": "string",
+              "maxLength": 512,
+              "minLength": 1
+            },
+            "hosts": {
+              "items": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "type": "array",
+              "uniqueItems": true,
+              "maxItems": 256,
+              "minItems": 1
+            },
+            "sourcePolicy": {
+              "const": "REPOSITORY_THEN_OFFLINE"
+            },
+            "resolution": {
+              "const": "AT_EXECUTION"
+            },
+            "applicationLibrary": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "instanceId": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "type": "object",
+          "required": [
+            "id",
+            "name",
+            "artifactType",
+            "resolution",
+            "applicationLibrary",
+            "instanceId",
+            "hosts",
+            "sourcePolicy"
+          ]
+        }
       ]
     },
     "libraryIds": {
@@ -97849,2062 +99747,6 @@ export function ApplicationsPage({
         </article>
       </div>
     </section>
-  );
-}
-
-@@END
-@@PORTABLE {"path":"frontend/src/CertificatesPage.tsx","mode":420,"size":38024,"sha256":"cb5a98ea2d7c4cdffd880e3d0bacf4f135b80afe558d7578987ae7423cd1ff6c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":38024}
-import { useMemo, useState } from "react";
-import type {
-  OpenResult,
-  SessionCredentialStatus,
-  VerificationStatus,
-  VerifiedPKIView,
-} from "./backend";
-
-export type CertificateIntent =
-  | {
-      operation:
-        | "CreateCertificateAuthority"
-        | "UpdateCertificateAuthority"
-        | "CreateCertificateProfile"
-        | "UpdateCertificateProfile"
-        | "CreateTLSProfile"
-        | "UpdateTLSProfile"
-        | "CreateCertificateScope"
-        | "UpdateCertificateScope";
-      entityId: string;
-      entity: Record<string, unknown>;
-    }
-  | {
-      operation:
-        | "DeleteCertificateAuthority"
-        | "DeleteCertificateProfile"
-        | "DeleteTLSProfile"
-        | "DeleteCertificateScope";
-      entityId: string;
-    };
-
-type PKIKind = "authority" | "profile" | "tls" | "scope";
-type PKIEntity = Record<string, unknown>;
-type Rows = Record<string, PKIEntity>;
-export type CertificateSourceOptions = {
-  hosts: string[];
-  deployments: string[];
-  members: Array<{ deploymentId: string; memberId: string }>;
-};
-
-const labels: Record<PKIKind, string> = {
-  authority: "Управляемые центры сертификации",
-  profile: "Профили сертификатов",
-  tls: "Профили TLS",
-  scope: "Области применения сертификатов",
-};
-const kindOrder: PKIKind[] = ["authority", "profile", "tls", "scope"];
-const dependencyHints: Record<PKIKind, string> = {
-  authority: "Используется в профилях сертификатов.",
-  profile: "Ссылается на центр сертификации.",
-  tls: "Использует профиль сертификата.",
-  scope: "Тоже использует профиль сертификата.",
-};
-const operations: Record<
-  PKIKind,
-  {
-    create: CertificateIntent["operation"];
-    update: CertificateIntent["operation"];
-    remove: CertificateIntent["operation"];
-  }
-> = {
-  authority: {
-    create: "CreateCertificateAuthority",
-    update: "UpdateCertificateAuthority",
-    remove: "DeleteCertificateAuthority",
-  },
-  profile: {
-    create: "CreateCertificateProfile",
-    update: "UpdateCertificateProfile",
-    remove: "DeleteCertificateProfile",
-  },
-  tls: {
-    create: "CreateTLSProfile",
-    update: "UpdateTLSProfile",
-    remove: "DeleteTLSProfile",
-  },
-  scope: {
-    create: "CreateCertificateScope",
-    update: "UpdateCertificateScope",
-    remove: "DeleteCertificateScope",
-  },
-};
-
-function rowsFor(
-  kind: PKIKind,
-  managed: OpenResult["managed"],
-  intents: CertificateIntent[],
-): Rows {
-  const pki = managed?.pki;
-  const source =
-    kind === "authority"
-      ? pki?.authorities
-      : kind === "profile"
-        ? pki?.profiles
-        : kind === "tls"
-          ? pki?.tlsProfiles
-          : pki?.scopes;
-  const rows: Rows = { ...(source || {}) };
-  for (const intent of intents) {
-    const operation = operations[kind];
-    if (
-      (intent.operation === operation.create ||
-        intent.operation === operation.update) &&
-      "entity" in intent
-    )
-      rows[intent.entityId] = intent.entity;
-    if (intent.operation === operation.remove) delete rows[intent.entityId];
-  }
-  return rows;
-}
-
-const stringList = (value: unknown) =>
-  Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === "string")
-    : [];
-const listText = (value: unknown) => stringList(value).join(", ");
-const parseList = (value: string) =>
-  value
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-const asRecord = (value: unknown): PKIEntity =>
-  value && typeof value === "object" && !Array.isArray(value)
-    ? (value as PKIEntity)
-    : {};
-
-function secretRefLabel(value: unknown) {
-  return typeof value === "string" && value.startsWith("runtime:")
-    ? "runtime:••••"
-    : "не задана";
-}
-
-export function CertificatesPage({
-  managed,
-  intents,
-  busy,
-  structuralDisabled,
-  commandCount,
-  sourceOptions,
-  verification,
-  verifiedPKI,
-  credentialStatus,
-  onAppend,
-  onSetPKIStorePassword,
-  onReview,
-  onDiscard,
-  onReturnToServices,
-}: {
-  managed: OpenResult["managed"];
-  intents: CertificateIntent[];
-  busy: boolean;
-  structuralDisabled: boolean;
-  commandCount: number;
-  sourceOptions: CertificateSourceOptions;
-  verification?: VerificationStatus;
-  verifiedPKI?: VerifiedPKIView;
-  credentialStatus?: SessionCredentialStatus | null;
-  onAppend: (intent: CertificateIntent) => Promise<boolean>;
-  onSetPKIStorePassword?: (value: string) => Promise<SessionCredentialStatus>;
-  onReview: () => void;
-  onDiscard: () => void;
-  onReturnToServices?: () => void;
-}) {
-  const [editor, setEditor] = useState<{ kind: PKIKind; id?: string } | null>(
-    null,
-  );
-  const [selectedKind, setSelectedKind] = useState<PKIKind>("authority");
-  const blocked = busy || structuralDisabled || commandCount >= 16;
-  const pkiPasswordPresent =
-    credentialStatus?.pkiStorePasswordStatus === "PRESENT";
-  const allRows = useMemo(
-    () => ({
-      authority: rowsFor("authority", managed, intents),
-      profile: rowsFor("profile", managed, intents),
-      tls: rowsFor("tls", managed, intents),
-      scope: rowsFor("scope", managed, intents),
-    }),
-    [managed, intents],
-  );
-  const remove = async (kind: PKIKind, entityId: string) => {
-    if (
-      await onAppend({
-        operation: operations[kind].remove as CertificateIntent["operation"],
-        entityId,
-      } as CertificateIntent)
-    )
-      setEditor(null);
-  };
-
-  return (
-    <section className="certificates-page">
-      <div className="title">
-        <div>
-          {onReturnToServices && (
-            <button className="outline" onClick={onReturnToServices}>
-              Вернуться к настройке сервиса
-            </button>
-          )}
-          <h1>Сертификаты</h1>
-          <p>
-            Желаемые параметры сертификатов проекта. Выпуск и применение
-            сертификатов выполняются отдельно.
-          </p>
-        </div>
-        <DraftActions
-          commandCount={commandCount}
-          blocked={blocked}
-          onReview={onReview}
-          onDiscard={onDiscard}
-        />
-      </div>
-      <section
-        className="certificate-dependency-guide"
-        aria-labelledby="certificate-dependency-heading"
-      >
-        <div>
-          <h2 id="certificate-dependency-heading">
-            Порядок настройки и зависимости
-          </h2>
-          <p>
-            Сначала центр и профиль сертификата; TLS-профиль и область
-            применения — независимые ветви.
-          </p>
-        </div>
-        <div
-          className="certificate-dependency-flow"
-          role="img"
-          aria-label="Центр сертификации ведёт к профилю сертификата; от него независимо зависят профиль TLS и область применения"
-        >
-          <div className="certificate-dependency-chain">
-            <span>1 · Центр сертификации</span>
-            <span aria-hidden="true">→</span>
-            <span>2 · Профиль сертификата</span>
-          </div>
-          <div className="certificate-dependency-branches">
-            <div>
-              <span aria-hidden="true">↗</span>
-              <span>3 · Профиль TLS</span>
-            </div>
-            <div>
-              <span aria-hidden="true">↘</span>
-              <span>4 · Область применения</span>
-            </div>
-          </div>
-        </div>
-      </section>
-      <div className="certificate-workspace">
-        <nav className="certificate-type-nav" aria-label="Разделы сертификатов">
-          {kindOrder.map((kind, index) => (
-            <button
-              key={kind}
-              type="button"
-              className={`certificate-type-option${
-                selectedKind === kind ? " selected" : ""
-              }`}
-              aria-label={labels[kind]}
-              aria-current={selectedKind === kind ? "page" : undefined}
-              onClick={() => setSelectedKind(kind)}
-            >
-              <span className="certificate-type-title">
-                <span className="certificate-type-step">{index + 1}</span>
-                <span>{labels[kind]}</span>
-                <span className="certificate-type-count">
-                  {Object.keys(allRows[kind]).length}
-                </span>
-              </span>
-              <small>{dependencyHints[kind]}</small>
-            </button>
-          ))}
-        </nav>
-        <article
-          className="card certificate-section"
-          aria-labelledby="selected-certificate-section"
-        >
-          <div className="section-head">
-            <div>
-              <h2 id="selected-certificate-section">{labels[selectedKind]}</h2>
-              <small>{sectionHint(selectedKind)}</small>
-            </div>
-            <button
-              className="outline"
-              disabled={blocked}
-              onClick={() => setEditor({ kind: selectedKind })}
-            >
-              Добавить
-            </button>
-          </div>
-          <CertificateRows
-            kind={selectedKind}
-            rows={allRows[selectedKind]}
-            disabled={blocked}
-            onEdit={(id) => setEditor({ kind: selectedKind, id })}
-            onDelete={remove}
-          />
-          {selectedKind === "tls" && pkiPasswordPresent && (
-            <p className="muted" role="status">
-              Пароль PKCS#12 сохранён в текущем сеансе. В проект он не записывается.
-            </p>
-          )}
-        </article>
-      </div>
-      <CertificateIdentities
-        verification={verification || { status: "UNVERIFIED" }}
-        view={verifiedPKI}
-      />
-      {editor && (
-        <CertificateDialog
-          key={`${editor.kind}:${editor.id || "new"}`}
-          kind={editor.kind}
-          entityId={editor.id}
-          entity={editor.id ? allRows[editor.kind][editor.id] : undefined}
-          authorityIds={Object.keys(allRows.authority).sort()}
-          profileIds={Object.keys(allRows.profile).sort()}
-          sourceOptions={sourceOptions}
-          disabled={blocked}
-          pkiPasswordPresent={pkiPasswordPresent}
-          onSetPKIStorePassword={onSetPKIStorePassword}
-          onClose={() => setEditor(null)}
-          onSubmit={async (entityId, entity) => {
-            const operation = editor.id
-              ? operations[editor.kind].update
-              : operations[editor.kind].create;
-            if (
-              await onAppend({
-                operation: operation as CertificateIntent["operation"],
-                entityId,
-                entity,
-              } as CertificateIntent)
-            )
-              setEditor(null);
-          }}
-        />
-      )}
-    </section>
-  );
-}
-
-function CertificateIdentities({
-  verification,
-  view,
-}: {
-  verification: VerificationStatus;
-  view?: VerifiedPKIView;
-}) {
-  if (verification.status !== "VERIFIED" || view?.status !== "CURRENT") return null;
-  return (
-    <article className="card certificate-verification">
-      <div className="section-head">
-        <div>
-          <h2>Имена сертификатов и SAN</h2>
-          <small>
-            Имена и SAN отображаются только по актуальным данным проверки Core.
-          </small>
-        </div>
-      </div>
-      <p className="muted">
-        Влияние виртуального IP поставщика определяет Core после сохранения и
-        проверки. Этот экран не выпускает и не перевыпускает сертификаты.
-      </p>
-      {view.identities?.length ? (
-        <div className="verified-identities">
-          {view.identities.map((identity) => (
-            <section key={identity.id} className="verified-identity">
-              <b>{identity.id}</b>
-              <small>
-                {identity.scope} · Профиль TLS: {identity.tlsProfileId}
-              </small>
-              <div>
-                <span>DNS: </span>
-                {identity.dnsNames.join(", ") || "—"}
-              </div>
-              <div>
-                <span>IP: </span>
-                {identity.ipAddresses.join(", ") || "—"}
-              </div>
-              <div>
-                <span>Потребители: </span>
-                {identity.consumers
-                  .map(
-                    (consumer) =>
-                      `${consumer.deploymentId}/${consumer.memberId} @ ${consumer.hostId}`,
-                  )
-                  .join(", ") || "—"}
-              </div>
-            </section>
-          ))}
-        </div>
-      ) : (
-        <p className="muted">
-          Core подтвердил проект; потребителей сертификатов нет.
-        </p>
-      )}
-    </article>
-  );
-}
-
-function sectionHint(kind: PKIKind) {
-  if (kind === "authority") return "Только управляемый центр сертификации.";
-  if (kind === "profile")
-    return "Центр сертификации, назначения ключа, правила SAN и параметры владельца.";
-  if (kind === "tls") return "Только ссылка на секрет, без самого пароля.";
-  return "Источники: серверы, сервисы, их экземпляры и явные DNS/IP.";
-}
-
-function DraftActions({
-  commandCount,
-  blocked,
-  onReview,
-  onDiscard,
-}: {
-  commandCount: number;
-  blocked: boolean;
-  onReview: () => void;
-  onDiscard: () => void;
-}) {
-  return (
-    <div className="actions">
-      <span className="muted">{commandCount} / 16 изменений</span>
-      {commandCount > 0 && (
-        <>
-          <button className="outline" disabled={blocked} onClick={onDiscard}>
-            Отменить изменения
-          </button>
-          <button disabled={blocked} onClick={onReview}>
-            Просмотреть изменения
-          </button>
-        </>
-      )}
-    </div>
-  );
-}
-
-function CertificateRows({
-  kind,
-  rows,
-  disabled,
-  onEdit,
-  onDelete,
-}: {
-  kind: PKIKind;
-  rows: Rows;
-  disabled: boolean;
-  onEdit: (id: string) => void;
-  onDelete: (kind: PKIKind, id: string) => Promise<void>;
-}) {
-  const values = Object.entries(rows).sort(([left], [right]) =>
-    left.localeCompare(right),
-  );
-  if (!values.length)
-    return <p className="muted">Нет сохранённых или черновых записей.</p>;
-  return (
-    <div className="certificate-rows">
-      {values.map(([id, entity]) => (
-        <div className="certificate-row" key={id}>
-          <div>
-            <b>{id}</b>
-            <small>{rowSummary(kind, entity)}</small>
-          </div>
-          <div className="actions">
-            <button
-              className="link"
-              disabled={disabled}
-              onClick={() => onEdit(id)}
-            >
-              Изменить
-            </button>
-            <button
-              className="link danger"
-              disabled={disabled}
-              onClick={() => void onDelete(kind, id)}
-            >
-              Удалить
-            </button>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function rowSummary(kind: PKIKind, entity: PKIEntity) {
-  if (kind === "authority") return String(entity.commonName || "MANAGED");
-  if (kind === "profile") return `CA: ${String(entity.authorityRef || "—")}`;
-  if (kind === "tls")
-    return `Profile: ${String(entity.certificateProfileRef || "—")} · ${secretRefLabel(entity.storePasswordSecretRef)}`;
-  return `Profile: ${String(entity.profile || "—")} · ${Object.keys(asRecord(entity.sources)).length} sources`;
-}
-
-function CertificateDialog({
-  kind,
-  entityId,
-  entity,
-  authorityIds,
-  profileIds,
-  sourceOptions,
-  disabled,
-  pkiPasswordPresent,
-  onSetPKIStorePassword,
-  onClose,
-  onSubmit,
-}: {
-  kind: PKIKind;
-  entityId?: string;
-  entity?: PKIEntity;
-  authorityIds: string[];
-  profileIds: string[];
-  sourceOptions: CertificateSourceOptions;
-  disabled: boolean;
-  pkiPasswordPresent: boolean;
-  onSetPKIStorePassword?: (value: string) => Promise<SessionCredentialStatus>;
-  onClose: () => void;
-  onSubmit: (id: string, entity: PKIEntity) => Promise<void>;
-}) {
-  const existing = asRecord(entity);
-  const [id, setID] = useState(entityId || "");
-  const [displayName, setDisplayName] = useState(
-    String(existing.displayName || ""),
-  );
-  const [commonName, setCommonName] = useState(
-    String(existing.commonName || ""),
-  );
-  const [authorityRef, setAuthorityRef] = useState(
-    String(existing.authorityRef || authorityIds[0] || ""),
-  );
-  const [profileRef, setProfileRef] = useState(
-    String(
-      existing.certificateProfileRef || existing.profile || profileIds[0] || "",
-    ),
-  );
-  const [scope, setScope] = useState(String(existing.scope || ""));
-  const [secretInput, setSecretInput] = useState("");
-  const [keyAlgorithm, setKeyAlgorithm] = useState(
-    String(existing.keyAlgorithm || ""),
-  );
-  const [keySize, setKeySize] = useState(
-    existing.keySize === undefined ? "" : String(existing.keySize),
-  );
-  const [validityDays, setValidityDays] = useState(
-    existing.validityDays === undefined ? "" : String(existing.validityDays),
-  );
-  const [usages, setUsages] = useState(stringList(existing.usages));
-  const [usagesPresent, setUsagesPresent] = useState(
-    Object.hasOwn(existing, "usages"),
-  );
-  const [sanPolicy, setSanPolicy] = useState(asRecord(existing.sanPolicy));
-  const [subject, setSubject] = useState(asRecord(existing.subject));
-  const sources = asRecord(existing.sources);
-  const [hosts, setHosts] = useState(stringList(sources.hosts));
-  const [deployments, setDeployments] = useState(
-    stringList(sources.serviceDeployments),
-  );
-  const [members, setMembers] = useState(
-    (Array.isArray(sources.members) ? sources.members : []).flatMap((item) => {
-      const value = asRecord(item);
-      const deploymentId = value.deploymentId;
-      const memberId = value.memberId;
-      return typeof deploymentId === "string" && typeof memberId === "string"
-        ? [{ deploymentId, memberId }]
-        : [];
-    }),
-  );
-  const [dnsNames, setDnsNames] = useState(listText(sources.explicitDnsNames));
-  const [ipAddresses, setIPAddresses] = useState(
-    listText(sources.explicitIpAddresses),
-  );
-  const [error, setError] = useState("");
-  const tlsSettingsUnchanged =
-    kind === "tls" &&
-    !!entityId &&
-    Object.keys(existing).every((key) =>
-      ["certificateProfileRef", "storePasswordSecretRef", "scope"].includes(key),
-    ) &&
-    String(existing.certificateProfileRef || "") === profileRef &&
-    String(existing.storePasswordSecretRef || "") ===
-      "runtime:pki-store-password" &&
-    String(existing.scope || "") === scope;
-  const submit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!id.trim()) return setError("Укажите ID записи.");
-    if (kind === "tls" && secretInput.length > 0) {
-      if (!onSetPKIStorePassword) {
-        setError("Не удалось сохранить пароль в текущем сеансе.");
-        return;
-      }
-      try {
-        await onSetPKIStorePassword(secretInput);
-        setSecretInput("");
-      } catch (reason) {
-        const code = reason instanceof Error ? reason.message : String(reason);
-        setError(
-          code === "PKI_STORE_PASSWORD_INPUT_INVALID"
-            ? "Пароль не соответствует допустимым ограничениям."
-            : code === "PKI_STORE_PASSWORD_UNAVAILABLE"
-              ? "Сначала сохраните учётные данные для выбранного узла выполнения."
-              : "Не удалось сохранить пароль в текущем сеансе.",
-        );
-        return;
-      }
-    }
-    const result = entityFor(kind, {
-      displayName,
-      commonName,
-      authorityRef,
-      profileRef,
-      scope,
-      keyAlgorithm,
-      keySize,
-      validityDays,
-      usages,
-      usagesPresent,
-      sanPolicy,
-      subject,
-      hosts,
-      deployments,
-      members,
-      dnsNames,
-      ipAddresses,
-    });
-    if (!result)
-      return setError("Проверьте поля области применения сертификатов.");
-    setError("");
-    if (tlsSettingsUnchanged) {
-      onClose();
-      return;
-    }
-    await onSubmit(id.trim(), result);
-  };
-  return (
-    <div className="modal" role="presentation">
-      <form className="card dialog certificate-dialog" onSubmit={submit}>
-        <h1>
-          {entityId ? "Изменить" : "Добавить"}: {labels[kind]}
-        </h1>
-        <label>
-          ID
-          <input
-            value={id}
-            disabled={!!entityId || disabled}
-            onChange={(event) => setID(event.target.value)}
-            autoFocus
-          />
-        </label>
-        {kind !== "tls" && (
-          <OptionalText
-            label="Отображаемое имя"
-            value={displayName}
-            onChange={setDisplayName}
-          />
-        )}
-        {kind === "authority" && (
-          <>
-            <label>
-              Общее имя (CN)
-              <input
-                value={commonName}
-                onChange={(event) => setCommonName(event.target.value)}
-                required
-              />
-            </label>
-            <OptionalNumber
-              label="Срок действия (дней)"
-              value={validityDays}
-              onChange={setValidityDays}
-            />
-          </>
-        )}
-        {kind === "profile" && (
-          <ProfileFields
-            authorityRef={authorityRef}
-            authorityIds={authorityIds}
-            onAuthorityRef={setAuthorityRef}
-            keyAlgorithm={keyAlgorithm}
-            onKeyAlgorithm={setKeyAlgorithm}
-            keySize={keySize}
-            onKeySize={setKeySize}
-            validityDays={validityDays}
-            onValidityDays={setValidityDays}
-            usages={usages}
-            onUsages={(value) => {
-              setUsagesPresent(true);
-              setUsages(value);
-            }}
-            sanPolicy={sanPolicy}
-            onSanPolicy={setSanPolicy}
-            subject={subject}
-            onSubject={setSubject}
-          />
-        )}
-        {kind === "tls" && (
-          <>
-            <ReferenceSelect
-              label="Профиль сертификата"
-              value={profileRef}
-              values={profileIds}
-              onChange={setProfileRef}
-            />
-            <label>
-              Область применения
-              <select
-                value={scope}
-                onChange={(event) => setScope(event.target.value)}
-              >
-                <option value="">Наследуется</option>
-                <option value="HOST">Сервер</option>
-                <option value="MEMBER">Экземпляр</option>
-                <option value="DEPLOYMENT">Развёртывание</option>
-              </select>
-            </label>
-            <label>
-              Пароль хранилищ PKCS#12
-              <input
-                type="password"
-                autoComplete="new-password"
-                value={secretInput}
-                onChange={(event) => setSecretInput(event.target.value)}
-                placeholder={
-                  pkiPasswordPresent
-                    ? "Сохранён в текущем сеансе; введите новый для замены"
-                    : "Введите пароль для хранилищ PKCS#12"
-                }
-                disabled={disabled}
-              />
-            </label>
-            <p className="muted" role="status">
-              {pkiPasswordPresent
-                ? "Пароль хранится только в текущем сеансе. Для замены введите новый; проект содержит только фиксированную ссылку на секрет."
-                : "Пароль сохранится только в текущем сеансе. Проект содержит только фиксированную ссылку на секрет."}
-            </p>
-          </>
-        )}
-        {kind === "scope" && (
-          <ScopeFields
-            profileRef={profileRef}
-            profileIds={profileIds}
-            onProfileRef={setProfileRef}
-            scope={scope}
-            onScope={setScope}
-            hosts={hosts}
-            onHosts={setHosts}
-            deployments={deployments}
-            onDeployments={setDeployments}
-            members={members}
-            onMembers={setMembers}
-            sourceOptions={sourceOptions}
-            dnsNames={dnsNames}
-            onDNSNames={setDnsNames}
-            ipAddresses={ipAddresses}
-            onIPAddresses={setIPAddresses}
-          />
-        )}
-        {error && <p className="field-error">{error}</p>}
-        <div className="actions">
-          <button type="button" className="outline" onClick={onClose}>
-            Отмена
-          </button>
-          <button disabled={disabled || (tlsSettingsUnchanged && !secretInput)} type="submit">
-            {tlsSettingsUnchanged && secretInput
-              ? "Сохранить пароль в сеансе"
-              : "Добавить в черновик"}
-          </button>
-        </div>
-      </form>
-    </div>
-  );
-}
-
-function OptionalText({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <label>
-      {label}
-      <input
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder="Наследуется"
-      />
-    </label>
-  );
-}
-function OptionalNumber({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <label>
-      {label}
-      <input
-        type="number"
-        min="1"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder="Наследуется"
-      />
-    </label>
-  );
-}
-function ReferenceSelect({
-  label,
-  value,
-  values,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  values: string[];
-  onChange: (value: string) => void;
-}) {
-  return (
-    <label>
-      {label}
-      <select
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        required
-      >
-        <option value="">Выберите</option>
-        {values.map((item) => (
-          <option key={item}>{item}</option>
-        ))}
-      </select>
-    </label>
-  );
-}
-
-function ProfileFields(props: {
-  authorityRef: string;
-  authorityIds: string[];
-  onAuthorityRef: (value: string) => void;
-  keyAlgorithm: string;
-  onKeyAlgorithm: (value: string) => void;
-  keySize: string;
-  onKeySize: (value: string) => void;
-  validityDays: string;
-  onValidityDays: (value: string) => void;
-  usages: string[];
-  onUsages: (value: string[]) => void;
-  sanPolicy: PKIEntity;
-  onSanPolicy: (value: PKIEntity) => void;
-  subject: PKIEntity;
-  onSubject: (value: PKIEntity) => void;
-}) {
-  const policyLabels: Record<string, string> = {
-    includeHostDns: "DNS-имена серверов",
-    includeHostIp: "IP-адреса серверов",
-    includeEndpointFqdns: "FQDN точек входа",
-    includeEndpointWildcard: "Wildcard-имена точек входа",
-    includeEndpointVip: "Виртуальные IP точек входа",
-  };
-  return (
-    <>
-      <ReferenceSelect
-        label="Центр сертификации"
-        value={props.authorityRef}
-        values={props.authorityIds}
-        onChange={props.onAuthorityRef}
-      />
-      <label>
-        Алгоритм ключа
-        <select
-          value={props.keyAlgorithm}
-          onChange={(event) => props.onKeyAlgorithm(event.target.value)}
-        >
-          <option value="">Наследуется</option>
-          <option>RSA</option>
-          <option>EC</option>
-        </select>
-      </label>
-      <OptionalNumber
-        label="Размер ключа"
-        value={props.keySize}
-        onChange={props.onKeySize}
-      />
-      <OptionalNumber
-        label="Срок действия (дней)"
-        value={props.validityDays}
-        onChange={props.onValidityDays}
-      />
-      <fieldset>
-        <legend>Назначение сертификата</legend>
-        {["serverAuth", "clientAuth"].map((usage) => (
-          <label key={usage}>
-            <input
-              type="checkbox"
-              checked={props.usages.includes(usage)}
-              onChange={(event) =>
-                props.onUsages(
-                  event.target.checked
-                    ? [...props.usages, usage]
-                    : props.usages.filter((item) => item !== usage),
-                )
-              }
-            />
-            {usage === "serverAuth"
-              ? "Серверная аутентификация"
-              : "Клиентская аутентификация"}
-          </label>
-        ))}
-      </fieldset>
-      <fieldset>
-        <legend>Переопределение правил SAN</legend>
-        {Object.keys(policyLabels).map((key) => (
-          <label key={key}>
-            {policyLabels[key]}
-            <select
-              aria-label={policyLabels[key]}
-              value={
-                typeof props.sanPolicy[key] === "boolean"
-                  ? String(props.sanPolicy[key])
-                  : ""
-              }
-              onChange={(event) => {
-                const next = { ...props.sanPolicy };
-                if (event.target.value === "") delete next[key];
-                else next[key] = event.target.value === "true";
-                props.onSanPolicy(next);
-              }}
-            >
-              <option value="">Наследуется</option>
-              <option value="true">Включено</option>
-              <option value="false">Выключено</option>
-            </select>
-          </label>
-        ))}
-      </fieldset>
-      <fieldset>
-        <legend>Переопределение полей субъекта</legend>
-        {["C", "ST", "L", "O", "OU"].map((key) => (
-          <label key={key}>
-            {key}
-            <input
-              value={String(props.subject[key] || "")}
-              onChange={(event) =>
-                props.onSubject({ ...props.subject, [key]: event.target.value })
-              }
-            />
-          </label>
-        ))}
-      </fieldset>
-    </>
-  );
-}
-
-function ScopeFields(props: {
-  profileRef: string;
-  profileIds: string[];
-  onProfileRef: (value: string) => void;
-  scope: string;
-  onScope: (value: string) => void;
-  hosts: string[];
-  onHosts: (value: string[]) => void;
-  deployments: string[];
-  onDeployments: (value: string[]) => void;
-  members: Array<{ deploymentId: string; memberId: string }>;
-  onMembers: (value: Array<{ deploymentId: string; memberId: string }>) => void;
-  sourceOptions: CertificateSourceOptions;
-  dnsNames: string;
-  onDNSNames: (value: string) => void;
-  ipAddresses: string;
-  onIPAddresses: (value: string) => void;
-}) {
-  return (
-    <>
-      <ReferenceSelect
-        label="Профиль сертификата"
-        value={props.profileRef}
-        values={props.profileIds}
-        onChange={props.onProfileRef}
-      />
-      <label>
-        Область применения
-        <select
-          value={props.scope}
-          onChange={(event) => props.onScope(event.target.value)}
-        >
-          <option value="">Наследуется</option>
-          <option value="HOST">Сервер</option>
-          <option value="MEMBER">Экземпляр</option>
-          <option value="DEPLOYMENT">Развёртывание</option>
-        </select>
-      </label>
-      <ReferenceChoices
-        label="Серверы"
-        values={props.sourceOptions.hosts}
-        selected={props.hosts}
-        onChange={props.onHosts}
-      />
-      <ReferenceChoices
-        label="Развёртывания"
-        values={props.sourceOptions.deployments}
-        selected={props.deployments}
-        onChange={props.onDeployments}
-      />
-      <MemberChoices
-        values={props.sourceOptions.members}
-        selected={props.members}
-        onChange={props.onMembers}
-      />
-      <OptionalText
-        label="Явные DNS-имена"
-        value={props.dnsNames}
-        onChange={props.onDNSNames}
-      />
-      <OptionalText
-        label="Явные IP-адреса"
-        value={props.ipAddresses}
-        onChange={props.onIPAddresses}
-      />
-    </>
-  );
-}
-
-function ReferenceChoices({
-  label,
-  values,
-  selected,
-  onChange,
-}: {
-  label: string;
-  values: string[];
-  selected: string[];
-  onChange: (value: string[]) => void;
-}) {
-  const options = [...new Set([...values, ...selected])].sort();
-  return (
-    <fieldset>
-      <legend>{label}</legend>
-      {!options.length && (
-        <small>Нет доступных записей в текущем черновике.</small>
-      )}
-      {options.map((value) => (
-        <label key={value}>
-          <input
-            type="checkbox"
-            checked={selected.includes(value)}
-            onChange={(event) =>
-              onChange(
-                event.target.checked
-                  ? [...selected, value]
-                  : selected.filter((item) => item !== value),
-              )
-            }
-          />
-          {value}
-        </label>
-      ))}
-    </fieldset>
-  );
-}
-
-function MemberChoices({
-  values,
-  selected,
-  onChange,
-}: {
-  values: Array<{ deploymentId: string; memberId: string }>;
-  selected: Array<{ deploymentId: string; memberId: string }>;
-  onChange: (value: Array<{ deploymentId: string; memberId: string }>) => void;
-}) {
-  const key = (value: { deploymentId: string; memberId: string }) =>
-    `${value.deploymentId}\u0000${value.memberId}`;
-  const options = [
-    ...new Map(
-      [...values, ...selected].map((value) => [key(value), value]),
-    ).values(),
-  ];
-  return (
-    <fieldset>
-      <legend>Экземпляры</legend>
-      {!options.length && (
-        <small>В текущем черновике нет размещённых экземпляров.</small>
-      )}
-      {options.map((value) => (
-        <label key={key(value)}>
-          <input
-            type="checkbox"
-            checked={selected.some((item) => key(item) === key(value))}
-            onChange={(event) =>
-              onChange(
-                event.target.checked
-                  ? [...selected, value]
-                  : selected.filter((item) => key(item) !== key(value)),
-              )
-            }
-          />
-          {value.deploymentId}/{value.memberId}
-        </label>
-      ))}
-    </fieldset>
-  );
-}
-
-function entityFor(
-  kind: PKIKind,
-  input: {
-    displayName: string;
-    commonName: string;
-    authorityRef: string;
-    profileRef: string;
-    scope: string;
-    keyAlgorithm: string;
-    keySize: string;
-    validityDays: string;
-    usages: string[];
-    usagesPresent: boolean;
-    sanPolicy: PKIEntity;
-    subject: PKIEntity;
-    hosts: string[];
-    deployments: string[];
-    members: Array<{ deploymentId: string; memberId: string }>;
-    dnsNames: string;
-    ipAddresses: string;
-  },
-): PKIEntity | null {
-  const optional = (value: string) => value.trim() || undefined;
-  const number = (value: string) => (value.trim() ? Number(value) : undefined);
-  if (kind === "authority")
-    return {
-      mode: "MANAGED",
-      commonName: input.commonName.trim(),
-      ...(optional(input.displayName) && {
-        displayName: optional(input.displayName),
-      }),
-      ...(number(input.validityDays) !== undefined && {
-        validityDays: number(input.validityDays),
-      }),
-    };
-  if (kind === "profile") {
-    const subject = Object.fromEntries(
-      Object.entries(input.subject).filter(([, value]) => String(value).trim()),
-    );
-    return {
-      authorityRef: input.authorityRef,
-      sanPolicy: input.sanPolicy,
-      ...(optional(input.displayName) && {
-        displayName: optional(input.displayName),
-      }),
-      ...(optional(input.keyAlgorithm) && {
-        keyAlgorithm: optional(input.keyAlgorithm),
-      }),
-      ...(number(input.keySize) !== undefined && {
-        keySize: number(input.keySize),
-      }),
-      ...(number(input.validityDays) !== undefined && {
-        validityDays: number(input.validityDays),
-      }),
-      ...(input.usagesPresent && { usages: input.usages }),
-      ...(Object.keys(subject).length && { subject }),
-    };
-  }
-  if (kind === "tls")
-    return {
-      certificateProfileRef: input.profileRef,
-      storePasswordSecretRef: "runtime:pki-store-password",
-      ...(optional(input.scope) && { scope: optional(input.scope) }),
-    };
-  const sources: PKIEntity = {};
-  const add = (key: string, values: string[]) => {
-    if (values.length) sources[key] = values;
-  };
-  add("hosts", input.hosts);
-  add("serviceDeployments", input.deployments);
-  if (input.members.length) sources.members = input.members;
-  add("explicitDnsNames", parseList(input.dnsNames));
-  add("explicitIpAddresses", parseList(input.ipAddresses));
-  return {
-    profile: input.profileRef,
-    sources,
-    ...(optional(input.displayName) && {
-      displayName: optional(input.displayName),
-    }),
-    ...(optional(input.scope) && { scope: optional(input.scope) }),
-  };
-}
-
-@@END
-@@PORTABLE {"path":"frontend/src/EntryPointsView.tsx","mode":420,"size":30818,"sha256":"baafa2fd5cfc6b3e6c405e76b3997b508f70b516d2013872f4c397d0b2c727c2","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":30818}
-import { useMemo, useState } from "react";
-import type { EndpointPreview, OpenResult, VerificationStatus } from "./backend";
-import type { DeploymentIntent } from "./TopologyPage";
-
-export type EndpointIntent =
-  | {
-      operation: "CreateEndpointGroup";
-      endpointGroupId: string;
-      endpointGroup: { address: { domain: string; wildcard: boolean } };
-    }
-  | {
-      operation: "UpdateEndpointGroup";
-      endpointGroupId: string;
-      endpointGroup: { address: { domain: string; wildcard: boolean } };
-    }
-  | { operation: "DeleteEndpointGroup"; endpointGroupId: string }
-  | {
-      operation: "SetServiceEndpointGroup";
-      deploymentId: string;
-      endpointGroupId: string;
-    }
-  | { operation: "ClearServiceEndpointGroup"; deploymentId: string };
-
-export type ProviderIntent =
-  | {
-      operation: "ReconcileEndpointProvider";
-      deploymentId: string;
-      endpointGroupId: string;
-      virtualRouterId: number;
-      virtualAddresses: Array<{ address: string; interface: string }>;
-    }
-  | { operation: "ClearEndpointProvider"; deploymentId: string };
-
-type EntryPointsIntent = EndpointIntent | ProviderIntent;
-
-type Group = {
-  id: string;
-  domain: string;
-  wildcard: boolean;
-  state?: "new" | "deleting";
-};
-type Deployment = {
-  id: string;
-  serviceType: string;
-  mode: string;
-  endpointGroup?: string;
-  endpointGroupRef?: string;
-  virtualRouterId?: number;
-  virtualAddresses?: Array<{ address: string; interface: string }>;
-  providerEditState?: "NONE" | "EDITABLE" | "INCOMPLETE" | "UNSUPPORTED";
-  state?: "new" | "deleting";
-};
-const idPattern = /^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$/;
-
-function finalGroups(
-  managed: OpenResult["managed"],
-  intents: EndpointIntent[],
-) {
-  const values = new Map<string, Group>();
-  for (const [id, group] of Object.entries(managed?.endpointGroups || {}))
-    values.set(id, { id, domain: group.domain, wildcard: group.wildcard });
-  for (const intent of intents) {
-    if (intent.operation === "CreateEndpointGroup")
-      values.set(intent.endpointGroupId, {
-        id: intent.endpointGroupId,
-        ...intent.endpointGroup.address,
-        state: "new",
-      });
-    if (intent.operation === "UpdateEndpointGroup") {
-      const current = values.get(intent.endpointGroupId);
-      if (current)
-        values.set(intent.endpointGroupId, {
-          ...current,
-          ...intent.endpointGroup.address,
-        });
-    }
-    if (intent.operation === "DeleteEndpointGroup") {
-      const current = values.get(intent.endpointGroupId);
-      if (current)
-        values.set(intent.endpointGroupId, { ...current, state: "deleting" });
-    }
-  }
-  return [...values.values()].sort((a, b) => a.id.localeCompare(b.id));
-}
-
-function finalDeployments(
-  managed: OpenResult["managed"],
-  deploymentIntents: DeploymentIntent[],
-  intents: EndpointIntent[],
-  providerIntents: ProviderIntent[],
-) {
-  const values = new Map<string, Deployment>();
-  for (const [id, item] of Object.entries(managed?.deployments || {}))
-    values.set(id, {
-      id,
-      serviceType: item.serviceType,
-      mode: item.mode,
-      endpointGroup: item.endpointGroup,
-      endpointGroupRef: item.endpointGroupRef,
-      virtualRouterId: item.virtualRouterId,
-      virtualAddresses: item.virtualAddresses,
-      providerEditState: item.providerEditState,
-    });
-  for (const intent of deploymentIntents) {
-    if (intent.operation === "CreateServiceDeployment")
-      values.set(intent.deploymentId, {
-        id: intent.deploymentId,
-        serviceType: intent.serviceType,
-        mode: intent.mode,
-        state: "new",
-      });
-    if (intent.operation === "DeleteServiceDeployment") {
-      const current = values.get(intent.deploymentId);
-      if (current)
-        values.set(intent.deploymentId, { ...current, state: "deleting" });
-    }
-  }
-  for (const intent of intents) {
-    if (intent.operation === "SetServiceEndpointGroup") {
-      const current = values.get(intent.deploymentId);
-      if (current)
-        values.set(intent.deploymentId, {
-          ...current,
-          endpointGroup: intent.endpointGroupId,
-        });
-    }
-    if (intent.operation === "ClearServiceEndpointGroup") {
-      const current = values.get(intent.deploymentId);
-      if (current)
-        values.set(intent.deploymentId, {
-          ...current,
-          endpointGroup: undefined,
-        });
-    }
-  }
-  for (const intent of providerIntents) {
-    const current = values.get(intent.deploymentId);
-    if (!current) continue;
-    if (intent.operation === "ReconcileEndpointProvider")
-      values.set(intent.deploymentId, {
-        ...current,
-        endpointGroupRef: intent.endpointGroupId,
-        virtualRouterId: intent.virtualRouterId,
-        virtualAddresses: intent.virtualAddresses,
-        providerEditState: "EDITABLE",
-      });
-    if (intent.operation === "ClearEndpointProvider")
-      values.set(intent.deploymentId, {
-        ...current,
-        endpointGroupRef: undefined,
-        virtualRouterId: undefined,
-        virtualAddresses: undefined,
-        providerEditState: "NONE",
-      });
-  }
-  return [...values.values()].sort((a, b) => a.id.localeCompare(b.id));
-}
-
-export function EntryPointsView({
-  managed,
-  catalog,
-  intents,
-  providerIntents,
-  deploymentIntents,
-  busy,
-  disabled,
-  commandCount,
-  onAppend,
-}: {
-  managed: OpenResult["managed"];
-  catalog: OpenResult["catalog"];
-  intents: EndpointIntent[];
-  providerIntents: ProviderIntent[];
-  deploymentIntents: DeploymentIntent[];
-  preview?: EndpointPreview;
-  verificationStatus: VerificationStatus["status"];
-  busy: boolean;
-  disabled: boolean;
-  commandCount: number;
-  onAppend: (intent: EntryPointsIntent) => Promise<boolean>;
-}) {
-  const [dialog, setDialog] = useState<{
-    mode: "add" | "edit";
-    group?: Group;
-  } | null>(null);
-  const [providerDialog, setProviderDialog] = useState<Deployment | null>(null);
-  const groups = useMemo(
-    () => finalGroups(managed, intents),
-    [managed, intents],
-  );
-  const deployments = useMemo(
-    () =>
-      finalDeployments(managed, deploymentIntents, intents, providerIntents),
-    [managed, deploymentIntents, intents, providerIntents],
-  );
-  const catalogReady = catalog?.status === "READY";
-  const limit = commandCount >= 16;
-  const groupLocked = (id: string) =>
-    intents.some(
-      (item) => "endpointGroupId" in item && item.endpointGroupId === id,
-    );
-  const deploymentLocked = (id: string) =>
-    intents.some((item) =>
-      item.operation === "SetServiceEndpointGroup" ||
-      item.operation === "ClearServiceEndpointGroup"
-        ? item.deploymentId === id
-        : false,
-    );
-  const eligible = (serviceType: string) =>
-    catalog?.services?.find((item) => item.id === serviceType)
-      ?.endpointConsumer === true;
-  const providerEligible = (serviceType: string) =>
-    catalog?.services?.find((item) => item.id === serviceType)
-      ?.endpointProvider === true;
-  const providerLocked = (id: string) =>
-    providerIntents.some((item) => item.deploymentId === id);
-  const providerDeployments = deployments.filter((item) =>
-    item.state === "deleting"
-      ? false
-      : catalogReady
-        ? providerEligible(item.serviceType)
-        : !!item.endpointGroupRef ||
-          item.providerEditState === "INCOMPLETE" ||
-          item.providerEditState === "UNSUPPORTED",
-  );
-  return (
-    <>
-      {providerIntents.length > 0 && (
-        <p className="entry-draft-notice" role="status">
-          Конфигурация provider изменена в черновике; влияние на PKI/SAN определяет только Core.
-        </p>
-      )}
-      <section className="title topology-title">
-        <div>
-          <h1>Точки входа</h1>
-          <p>
-            Группы адресов, назначения потребителей и параметры provider/VIP.
-          </p>
-          {commandCount > 0 && (
-            <p className="muted">
-              Черновик: {commandCount} из 16 · осталось {Math.max(0, 16 - commandCount)}
-            </p>
-          )}
-        </div>
-        <button
-          onClick={() => setDialog({ mode: "add" })}
-          disabled={busy || disabled || limit}
-        >
-          Добавить группу
-        </button>
-      </section>
-      <div className="entry-grid">
-        <section className="card entry-panel">
-          <h2 className="entry-panel-title">
-            <EntryPointIcon kind="groups" />
-            <span>Группы endpoint</span>
-          </h2>
-          {groups.length === 0 ? (
-            <p className="muted">Групп пока нет.</p>
-          ) : (
-            <div className="entry-list">
-              {groups.map((group) => (
-                <div key={group.id} className="entry-row">
-                  <div>
-                    <b>{group.id}</b>
-                    <span>
-                      {group.domain}
-                      {group.wildcard ? " · wildcard" : ""}
-                    </span>
-                    {group.state && (
-                      <small
-                        className={`entry-state-chip ${group.state === "new" ? "entry-state-chip--info" : "entry-state-chip--warning"}`}
-                      >
-                        <span aria-hidden="true">
-                          {group.state === "new" ? "+" : "!"}
-                        </span>
-                        {group.state === "new" ? "Новая" : "Будет удалена"}
-                      </small>
-                    )}
-                  </div>
-                  <div className="actions">
-                    <button
-                      className="outline"
-                      onClick={() => setDialog({ mode: "edit", group })}
-                      disabled={
-                        busy ||
-                        disabled ||
-                        limit ||
-                        !!group.state ||
-                        groupLocked(group.id)
-                      }
-                    >
-                      Изменить
-                    </button>
-                    <button
-                      className="outline danger"
-                      onClick={() =>
-                        onAppend({
-                          operation: "DeleteEndpointGroup",
-                          endpointGroupId: group.id,
-                        })
-                      }
-                      disabled={
-                        busy ||
-                        disabled ||
-                        limit ||
-                        !!group.state ||
-                        groupLocked(group.id)
-                      }
-                    >
-                      Удалить
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-        <section className="card entry-panel entry-consumers">
-          <h2 className="entry-panel-title">
-            <EntryPointIcon kind="consumers" />
-            <span>Назначения consumers</span>
-          </h2>
-          {deployments.length === 0 ? (
-            <p className="muted">Нет deployments.</p>
-          ) : (
-            <div className="entry-list">
-              {deployments
-                .filter((item) => item.state !== "deleting")
-                .map((deployment) => {
-                  const canSet =
-                    catalogReady && eligible(deployment.serviceType);
-                  const choices = groups.filter(
-                    (group) => !group.state || group.id === deployment.endpointGroup,
-                  );
-                  const assignmentStatus = !canSet
-                    ? {
-                        tone: "neutral",
-                        symbol: "·",
-                        label: catalogReady
-                          ? "Не поддерживает consumer"
-                          : "Каталог недоступен",
-                      }
-                    : deployment.endpointGroup
-                      ? {
-                          tone: "success",
-                          symbol: "✓",
-                          label: `Назначена: ${deployment.endpointGroup}`,
-                        }
-                      : {
-                          tone: "warning",
-                          symbol: "!",
-                          label: "Не назначена",
-                        };
-                  return (
-                    <div key={deployment.id} className="entry-row">
-                      <div>
-                        <b>{deployment.id}</b>
-                        <span>{deployment.serviceType}</span>
-                        <small
-                          className={`entry-state-chip entry-state-chip--${assignmentStatus.tone}`}
-                        >
-                          <span aria-hidden="true">{assignmentStatus.symbol}</span>
-                          {assignmentStatus.label}
-                        </small>
-                      </div>
-                      <div className="actions">
-                        <select
-                          aria-label={`Endpoint group for ${deployment.id}`}
-                          value={deployment.endpointGroup || ""}
-                          disabled={
-                            busy ||
-                            disabled ||
-                            limit ||
-                            deploymentLocked(deployment.id) ||
-                            !canSet
-                          }
-                          onChange={(event) => {
-                            if (event.target.value)
-                              void onAppend({
-                                operation: "SetServiceEndpointGroup",
-                                deploymentId: deployment.id,
-                                endpointGroupId: event.target.value,
-                              });
-                          }}
-                        >
-                          <option value="">Выберите группу</option>
-                          {choices.map((group) => (
-                            <option value={group.id} key={group.id}>
-                              {group.id}{group.state === "deleting" ? " · будет удалена" : ""}
-                            </option>
-                          ))}
-                        </select>
-                        {deployment.endpointGroup && (
-                          <button
-                            className="outline"
-                            onClick={() =>
-                              void onAppend({
-                                operation: "ClearServiceEndpointGroup",
-                                deploymentId: deployment.id,
-                              })
-                            }
-                            disabled={
-                              busy ||
-                              disabled ||
-                              limit ||
-                              deploymentLocked(deployment.id)
-                            }
-                          >
-                            Очистить
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-            </div>
-          )}
-        </section>
-        <section className="card entry-panel">
-          <h2 className="entry-panel-title">
-            <EntryPointIcon kind="provider" />
-            <span>Provider / VIP</span>
-          </h2>
-          {providerDeployments.length === 0 ? (
-            <p className="muted">Нет доступных provider deployments.</p>
-          ) : (
-            <div className="entry-list">
-              {providerDeployments.map((deployment) => {
-                const supported = providerEligible(deployment.serviceType);
-                const readOnly = !catalogReady || !supported;
-                const canClear =
-                  !!deployment.endpointGroupRef &&
-                  !providerLocked(deployment.id);
-                const providerStatus =
-                  deployment.providerEditState === "INCOMPLETE"
-                    ? {
-                        tone: "danger",
-                        symbol: "!",
-                        label: "Неполная конфигурация",
-                      }
-                    : deployment.providerEditState === "UNSUPPORTED"
-                      ? {
-                          tone: "neutral",
-                          symbol: "·",
-                          label: "Только просмотр",
-                        }
-                      : deployment.endpointGroupRef
-                        ? {
-                            tone: "success",
-                            symbol: "✓",
-                            label: "Настроен",
-                          }
-                        : {
-                            tone: "warning",
-                            symbol: "!",
-                            label: "Не настроен",
-                          };
-                return (
-                  <div key={deployment.id} className="entry-row">
-                    <div>
-                      <b>{deployment.id}</b>
-                      <span>
-                        {deployment.endpointGroupRef
-                          ? `${deployment.endpointGroupRef} · VRID ${deployment.virtualRouterId || "—"}`
-                          : "Provider не настроен"}
-                      </span>
-                      <small
-                        className={`entry-state-chip entry-state-chip--${providerStatus.tone}`}
-                      >
-                        <span aria-hidden="true">{providerStatus.symbol}</span>
-                        {providerStatus.label}
-                      </small>
-                      {deployment.virtualAddresses?.map((address) => (
-                        <small key={`${address.address}-${address.interface}`}>
-                          {address.address} · {address.interface}
-                        </small>
-                      ))}
-                      {deployment.providerEditState === "INCOMPLETE" && (
-                        <small>
-                          Неполная конфигурация: завершите или очистите.
-                        </small>
-                      )}
-                      {deployment.providerEditState === "UNSUPPORTED" && (
-                        <small>
-                          Legacy-конфигурация вне безопасных границ редактора.
-                        </small>
-                      )}
-                      {!catalogReady && (
-                        <small>
-                          Каталог недоступен: редактирование выключено.
-                        </small>
-                      )}
-                      {catalogReady && !supported && (
-                        <small>Сервис не поддерживает endpoint provider.</small>
-                      )}
-                    </div>
-                    <div className="actions">
-                      <button
-                        className="outline"
-                        onClick={() => setProviderDialog(deployment)}
-                        disabled={
-                          busy ||
-                          disabled ||
-                          limit ||
-                          readOnly ||
-                          providerLocked(deployment.id)
-                        }
-                      >
-                        {deployment.providerEditState === "UNSUPPORTED"
-                          ? "Заменить"
-                          : "Настроить"}
-                      </button>
-                      <button
-                        className="outline danger"
-                        onClick={() =>
-                          void onAppend({
-                            operation: "ClearEndpointProvider",
-                            deploymentId: deployment.id,
-                          })
-                        }
-                        disabled={busy || disabled || limit || !canClear}
-                        title="Удаляет provider tuple из черновика. После сохранения Core потребует complete tuple или удаления deployment."
-                      >
-                        Очистить
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </section>
-      </div>
-      {dialog && (
-        <EndpointGroupDialog
-          group={dialog.group}
-          busy={busy}
-          existing={new Set(groups.map((item) => item.id))}
-          onClose={() => setDialog(null)}
-          onAppend={async (intent) => {
-            const accepted = await onAppend(intent);
-            if (accepted) setDialog(null);
-            return accepted;
-          }}
-        />
-      )}
-      {providerDialog && (
-        <ProviderDialog
-          deployment={providerDialog}
-          groups={groups.filter((group) => !group.state)}
-          busy={busy}
-          onClose={() => setProviderDialog(null)}
-          onAppend={async (intent) => {
-            const accepted = await onAppend(intent);
-            if (accepted) setProviderDialog(null);
-            return accepted;
-          }}
-        />
-      )}
-    </>
-  );
-}
-
-function EntryPointIcon({
-  kind,
-}: {
-  kind: "groups" | "consumers" | "provider";
-}) {
-  return (
-    <svg
-      className="entry-panel-icon"
-      viewBox="0 0 20 20"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      {kind === "groups" ? (
-        <>
-          <circle cx="4" cy="10" r="2" />
-          <circle cx="15.5" cy="4.5" r="2" />
-          <circle cx="15.5" cy="15.5" r="2" />
-          <path d="m6 9 7.5-3.5M6 11l7.5 3.5" />
-        </>
-      ) : kind === "consumers" ? (
-        <>
-          <path d="M10 3v5m0 0-5 5m5-5 5 5" />
-          <path d="M10 8v8m-2-2 2 2 2-2" />
-          <path d="m3 11 2 2 2-2m6 0 2 2 2-2" />
-        </>
-      ) : (
-        <>
-          <rect x="5" y="2.5" width="10" height="5" rx="1" />
-          <rect x="1.5" y="13" width="6" height="4.5" rx="1" />
-          <rect x="12.5" y="13" width="6" height="4.5" rx="1" />
-          <path d="M10 7.5v3M4.5 10.5h11m-11 0v2.5m11-2.5v2.5" />
-        </>
-      )}
-    </svg>
-  );
-}
-
-function EndpointGroupDialog({
-  group,
-  existing,
-  busy,
-  onClose,
-  onAppend,
-}: {
-  group?: Group;
-  existing: Set<string>;
-  busy: boolean;
-  onClose: () => void;
-  onAppend: (intent: EndpointIntent) => Promise<boolean>;
-}) {
-  const [id, setID] = useState(group?.id || "");
-  const [domain, setDomain] = useState(group?.domain || "");
-  const [wildcard, setWildcard] = useState(group?.wildcard || false);
-  const [error, setError] = useState("");
-  const submit = async () => {
-    const normalizedID = id.trim();
-    const normalizedDomain = domain.trim().toLowerCase();
-    if (!group && (!idPattern.test(normalizedID) || existing.has(normalizedID)))
-      return setError("Введите уникальный ID группы.");
-    if (
-      !normalizedDomain ||
-      normalizedDomain.length > 253 ||
-      !normalizedDomain.includes(".")
-    )
-      return setError("Введите корректный домен.");
-    const intent: EndpointIntent = group
-      ? {
-          operation: "UpdateEndpointGroup",
-          endpointGroupId: group.id,
-          endpointGroup: { address: { domain: normalizedDomain, wildcard } },
-        }
-      : {
-          operation: "CreateEndpointGroup",
-          endpointGroupId: normalizedID,
-          endpointGroup: { address: { domain: normalizedDomain, wildcard } },
-        };
-    await onAppend(intent);
-  };
-  return (
-    <div className="modal" role="dialog" aria-modal="true">
-      <section className="card dialog">
-        <h2>{group ? "Изменить группу" : "Добавить группу"}</h2>
-        {!group && (
-          <label>
-            ID
-            <input
-              value={id}
-              onChange={(event) => setID(event.target.value)}
-              maxLength={128}
-            />
-          </label>
-        )}
-        <label>
-          Домен
-          <input
-            value={domain}
-            onChange={(event) => setDomain(event.target.value)}
-            maxLength={253}
-          />
-        </label>
-        <label className="checkbox">
-          <input
-            type="checkbox"
-            checked={wildcard}
-            onChange={(event) => setWildcard(event.target.checked)}
-          />
-          Wildcard
-        </label>
-        {error && <p className="field-error">{error}</p>}
-        <div className="actions">
-          <button className="outline" onClick={onClose} disabled={busy}>
-            Отмена
-          </button>
-          <button onClick={() => void submit()} disabled={busy}>
-            {group ? "Сохранить" : "Добавить"}
-          </button>
-        </div>
-      </section>
-    </div>
-  );
-}
-
-function ProviderDialog({
-  deployment,
-  groups,
-  busy,
-  onClose,
-  onAppend,
-}: {
-  deployment: Deployment;
-  groups: Group[];
-  busy: boolean;
-  onClose: () => void;
-  onAppend: (intent: ProviderIntent) => Promise<boolean>;
-}) {
-  const [endpointGroupId, setEndpointGroupID] = useState(
-    deployment.endpointGroupRef || "",
-  );
-  const [vrid, setVRID] = useState(
-    deployment.virtualRouterId ? String(deployment.virtualRouterId) : "",
-  );
-  const [addresses, setAddresses] = useState(
-    deployment.providerEditState === "UNSUPPORTED"
-      ? [{ address: "", interface: "" }]
-      : deployment.virtualAddresses?.length
-        ? deployment.virtualAddresses
-        : [{ address: "", interface: "" }],
-  );
-  const [error, setError] = useState("");
-  const submit = async () => {
-    const normalized = addresses.map((item) => ({
-      address: item.address.trim(),
-      interface: item.interface.trim(),
-    }));
-    const parsedVRID = Number(vrid);
-    const ipv4 =
-      /^(?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
-    if (
-      !endpointGroupId ||
-      !Number.isInteger(parsedVRID) ||
-      parsedVRID < 1 ||
-      parsedVRID > 255
-    )
-      return setError("Выберите группу и укажите VRID от 1 до 255.");
-    if (
-      normalized.length === 0 ||
-      normalized.length > 64 ||
-      normalized.some(
-        (item) =>
-          !ipv4.test(item.address) ||
-          !item.interface ||
-          item.interface.length > 128,
-      ) ||
-      new Set(
-        normalized.map((item) => `${item.address}\\u0000${item.interface}`),
-      ).size !== normalized.length
-    )
-      return setError(
-        "Добавьте до 64 уникальных IPv4-адресов с interface длиной не более 128 символов.",
-      );
-    await onAppend({
-      operation: "ReconcileEndpointProvider",
-      deploymentId: deployment.id,
-      endpointGroupId,
-      virtualRouterId: parsedVRID,
-      virtualAddresses: normalized,
-    });
-  };
-  return (
-    <div
-      className="modal"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Настроить provider"
-    >
-      <section className="card dialog provider-dialog">
-        <h2>Provider: {deployment.id}</h2>
-        <p className="muted">
-          Настройка сохраняется в общий черновик и будет проверена Core только
-          после сохранения.
-        </p>
-        <label>
-          Endpoint group
-          <select
-            value={endpointGroupId}
-            onChange={(event) => setEndpointGroupID(event.target.value)}
-          >
-            <option value="">Выберите группу</option>
-            {groups.map((group) => (
-              <option key={group.id} value={group.id}>
-                {group.id}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          VRID
-          <input
-            value={vrid}
-            inputMode="numeric"
-            onChange={(event) => setVRID(event.target.value)}
-          />
-        </label>
-        <h3>Virtual IP addresses</h3>
-        <div className="provider-addresses">
-          {addresses.map((item, index) => (
-            <div className="provider-address" key={index}>
-              <input
-                aria-label={`IPv4 ${index + 1}`}
-                value={item.address}
-                placeholder="192.0.2.42"
-                onChange={(event) =>
-                  setAddresses((current) =>
-                    current.map((row, rowIndex) =>
-                      rowIndex === index
-                        ? { ...row, address: event.target.value }
-                        : row,
-                    ),
-                  )
-                }
-              />
-              <input
-                aria-label={`Interface ${index + 1}`}
-                value={item.interface}
-                placeholder="eth0"
-                maxLength={128}
-                onChange={(event) =>
-                  setAddresses((current) =>
-                    current.map((row, rowIndex) =>
-                      rowIndex === index
-                        ? { ...row, interface: event.target.value }
-                        : row,
-                    ),
-                  )
-                }
-              />
-              <button
-                className="outline danger"
-                aria-label={`Удалить адрес ${index + 1}`}
-                onClick={() =>
-                  setAddresses((current) =>
-                    current.filter((_, rowIndex) => rowIndex !== index),
-                  )
-                }
-                disabled={addresses.length === 1}
-              >
-                Удалить
-              </button>
-            </div>
-          ))}
-        </div>
-        <button
-          className="outline"
-          onClick={() =>
-            setAddresses((current) =>
-              current.length < 64
-                ? [...current, { address: "", interface: "" }]
-                : current,
-            )
-          }
-          disabled={addresses.length >= 64}
-        >
-          Добавить адрес
-        </button>
-        {error && <p className="field-error">{error}</p>}
-        <div className="actions">
-          <button className="outline" onClick={onClose} disabled={busy}>
-            Отмена
-          </button>
-          <button onClick={() => void submit()} disabled={busy}>
-            Применить к черновику
-          </button>
-        </div>
-      </section>
-    </div>
   );
 }
 
