@@ -1877,7 +1877,7 @@ class CallbackModule(CallbackBase):
         self._write(payload, "PLATFORM_CORE_DIAGNOSTIC_OUTPUT")
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/callback/execution_events_json.py","mode":420,"size":11045,"sha256":"649c2e8ff9f66b5b37f5decadf4794a5d79560e05662e47f2810f16daada3300","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":11045}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/callback/execution_events_json.py","mode":420,"size":11182,"sha256":"06f807a8302a678a974ed9c938e17da49d9d39fa1ef58d6a0658d122a3c01933","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":11182}
 from __future__ import absolute_import, division, print_function
 
 import os
@@ -1896,6 +1896,7 @@ short_description: Emit safe Ansible task progress into an owned execution journ
 version_added: "1.0.0"
 description:
   - Emits bounded task lifecycle details into the authoritative Execution Node journal.
+  - Includes original module results unless protected by no_log or censored.
   - The callback is disabled unless explicitly enabled by the trusted execution controller.
 requirements:
   - A controller-owned active Platform Installer execution journal.
@@ -2020,6 +2021,7 @@ class CallbackModule(CallbackBase):
                 elapsed_milliseconds=self._elapsed(task_uuid) if event_type == "TASK_COMPLETED" else None,
                 no_log=no_log,
                 failure_result=getattr(result, "_result", {}) if status == "FAILED" else None,
+                task_result=getattr(result, "_result", None),
                 **self._context(task)
             )
             # Only the tagged assertion's closed diagnostic grammar is public.
@@ -2047,8 +2049,8 @@ class CallbackModule(CallbackBase):
         payload = result._result if isinstance(result._result, dict) else {}
         self._emit("TASK_COMPLETED", "CHANGED" if payload.get("changed") else "SUCCESS", result._task, result)
         self._application_progress(result, payload)
-        # Only this Core module's bounded projection can report a nonfatal
-        # integration error. Never journal arbitrary task payload/message text.
+        # Only this Core module's bounded projection can report an additional
+        # nonfatal integration error. Raw task output is handled by _emit.
         if (self._no_log(result._task, result) or not self._run_id() or
                 getattr(result._task, "action", "") != "platform.core.resolve_service_integrations"):
             return
@@ -41518,7 +41520,7 @@ def prepare(journal, value, release, runtime_release):
     return dict(status='READY', preparationDigest=digest(result))
 
 @@END
-@@PORTABLE {"path":"ansible-core/tools/execution_lifecycle.py","mode":420,"size":35589,"sha256":"dfa1e1bc944fb18d41ba8316c3ca374b9184b623e44287f3f5b85d66701345e7","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":35589}
+@@PORTABLE {"path":"ansible-core/tools/execution_lifecycle.py","mode":420,"size":35913,"sha256":"93c7c9affbd9363cf7141128927aff13415959f4a42d4e8082194e7ddf05651d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":35913}
 """Private, durable Execution Node lifecycle primitives for UI-BE-04C.
 
 This module deliberately has no Installer, SSH or arbitrary-command API.  The
@@ -41872,7 +41874,7 @@ class Journal(object):
         finally:
             os.close(event_lock)
 
-    def task_event(self, event_type, status, task_uuid, host="", role="", name="", elapsed_milliseconds=None, no_log=False, failure_result=None, **context):
+    def task_event(self, event_type, status, task_uuid, host="", role="", name="", elapsed_milliseconds=None, no_log=False, failure_result=None, task_result=None, **context):
         event_lock = self.event_lock()
         try:
             validate_task_journal_ownership(self)
@@ -41910,6 +41912,11 @@ class Journal(object):
                     event[key] = _bounded_text(context[key], MAX_MESSAGE)
             if event_type == "TASK_COMPLETED" and isinstance(elapsed_milliseconds, int) and elapsed_milliseconds >= 0:
                 event["elapsedMilliseconds"] = elapsed_milliseconds
+            if event_type == "TASK_COMPLETED":
+                from execution_task_error import task_result_output
+                output = task_result_output(task_result if task_result is not None else failure_result, no_log)
+                if output:
+                    event["ansibleOutput"] = output
             if status == "FAILED":
                 from execution_task_error import safe_task_error
                 event["error"] = safe_task_error(failure_result, no_log)
@@ -45442,8 +45449,44 @@ def required(manifest):
                for item in manifest.get("operations", []))
 
 @@END
-@@PORTABLE {"path":"ansible-core/tools/execution_task_error.py","mode":420,"size":15744,"sha256":"cf0044d67f60f4883d1f35c3917511be8d490d63693908c683be2fec68f12f63","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":15744}
-"""Closed diagnostic vocabulary: arbitrary Ansible text never leaves this module."""
+@@PORTABLE {"path":"ansible-core/tools/execution_task_error.py","mode":420,"size":17405,"sha256":"475ab0c5199b4fb271b7e89dcd62118edc8a882f3ec0fd30e2eb2a7e91b560e0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":17405}
+"""Task diagnostics and bounded output respecting Ansible's no_log boundary."""
+
+import json
+
+
+def task_result_output(result, no_log=False, limit=8192):
+    """Render the module result without content filtering; censor nested no_log.
+
+    Use the task output byte budget, including an explicit truncation
+    marker. JSON escapes control characters so output remains transport-safe.
+    """
+    if not isinstance(result, dict) or no_log or result.get('_ansible_no_log') or 'censored' in result:
+        return ''
+
+    def public(value, depth=0):
+        if isinstance(value, dict):
+            if value.get('_ansible_no_log') or 'censored' in value:
+                return {'censored': 'result hidden by no_log'}
+            if depth >= 32:
+                return '[truncated: nesting limit]'
+            # Keep the actual diagnostic ahead of large invocation/fact data.
+            first = ('msg', 'stdout', 'stderr', 'module_stdout', 'module_stderr', 'exception', 'results')
+            keys = [key for key in first if key in value] + [key for key in value if key not in first]
+            return {key: public(value[key], depth + 1) for key in keys}
+        if isinstance(value, (list, tuple)):
+            if depth >= 32:
+                return '[truncated: nesting limit]'
+            return [public(child, depth + 1) for child in value]
+        return value
+
+    output = bytearray()
+    marker = b' ... [truncated]'
+    for chunk in json.JSONEncoder(ensure_ascii=False, default=str).iterencode(public(result)):
+        output.extend(chunk.encode('utf-8', errors='replace')[:limit + 1])
+        if len(output) > limit:
+            return bytes(output[:limit - len(marker)]).decode('utf-8', errors='ignore') + marker.decode('ascii')
+    return bytes(output).decode('utf-8')
 
 
 # Fixed Core vocabulary only; never accept arbitrary uppercase output as a code.
@@ -45683,7 +45726,7 @@ def safe_task_error(result, no_log=False):
                 return nested
     message = ' '.join(result[key][:8192] for key in ('msg', 'stderr', 'module_stderr')
                        if isinstance(result.get(key), str)).lower()
-    code, summary = 'ANSIBLE_TASK_FAILED', 'Ansible task failed; untrusted result text withheld'
+    code, summary = 'ANSIBLE_TASK_FAILED', 'Ansible task failed'
     for candidate, description, phrases in (
         ('ANSIBLE_TLS_HOSTNAME_MISMATCH', 'Имя или IP-адрес узла не совпадает с сертификатом TLS',
          ('hostname mismatch', 'ip address mismatch', 'certificate is not valid for')),
@@ -51455,7 +51498,7 @@ libraryExecutionPriorities:
 }
 
 @@END
-@@PORTABLE {"path":"contracts/event/v1alpha1/schema.json","mode":420,"size":2344,"sha256":"cd601213a9cafb4da18e1a39379c583fc66cd26270e04de8324d30d541910168","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2344}
+@@PORTABLE {"path":"contracts/event/v1alpha1/schema.json","mode":420,"size":2406,"sha256":"62d66005946c72f9b020d79c99adc2d3fd429dad8c67bc70461514ca3430f666","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2406}
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://platform-installer.local/contracts/event/v1alpha1/schema.json",
@@ -51488,6 +51531,7 @@ libraryExecutionPriorities:
     },
     "elapsedMilliseconds": { "type": "integer", "minimum": 0 },
     "safeMessage": { "type": "string", "maxLength": 8192 },
+    "ansibleOutput": { "type": "string", "maxLength": 8192 },
     "error": {
       "type": "object",
       "required": ["code", "summary"],

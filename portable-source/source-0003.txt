@@ -1,3 +1,18 @@
+@@PORTABLE {"path":"third_party/wails/internal/frontend/runtime/dev/store.js","mode":420,"size":233,"sha256":"01ab7f485facaa76709476d096b4461b2ca4044e051b90c2f037d02e42bcc04c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":233}
+import {writable} from 'svelte/store';
+
+/** Overlay */
+export const overlayVisible = writable(false);
+
+export function showOverlay() {
+    overlayVisible.set(true);
+}
+
+export function hideOverlay() {
+    overlayVisible.set(false);
+}
+
+@@END
 @@PORTABLE {"path":"third_party/wails/internal/frontend/runtime/events.go","mode":420,"size":4453,"sha256":"287e5931802f27a3a0e569e993e708a55a3b1ef91b7d5a9a4ca5b3f1c8fed1c0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4453}
 package runtime
 

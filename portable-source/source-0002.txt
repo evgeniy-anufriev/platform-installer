@@ -9476,7 +9476,7 @@ function DeleteDeploymentDialog({
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/UtilityPages.tsx","mode":420,"size":67854,"sha256":"c12fdcbd6ead013efaf64f28be32743d53d6a75d98098ca3c438b4f34f5a701d","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":62487}
+@@PORTABLE {"path":"frontend/src/UtilityPages.tsx","mode":420,"size":68270,"sha256":"49c81af8457afbf02d3ca04b9fe6a1e947fa54bda4a0c3511fa839340d7c7c50","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":62435}
 import { useEffect, useMemo, useState } from "react";
 import type {
   EditResult,
@@ -10108,6 +10108,11 @@ const eventColumns: EventColumn[] = [
     label: "Сообщение",
     value: (event) => event.safeMessage,
   },
+  {
+    key: "ansibleOutput",
+    label: "Вывод Ansible",
+    value: (event) => event.ansibleOutput || "—",
+  },
   { key: "phaseId", label: "Этап", value: (event) => event.phaseId || "—" },
   {
     key: "actionId",
@@ -10169,6 +10174,7 @@ const defaultVisibleColumns = [
   "serviceDeployment",
   "host",
   "status",
+  "ansibleOutput",
 ];
 
 function initialVisibleColumns(): string[] {
@@ -10343,7 +10349,15 @@ function EventLog({
                     onClick={() => setSelectedSequence(event.sequence)}
                   >
                     {visible.map((column) => (
-                      <td key={column.key} title={column.value(event)}>
+                      <td
+                        key={column.key}
+                        title={column.value(event)}
+                        className={
+                          column.key === "ansibleOutput"
+                            ? "ansible-output"
+                            : undefined
+                        }
+                      >
                         {column.value(event)}
                       </td>
                     ))}
@@ -10800,7 +10814,10 @@ export function UtilityPages({
             <h2>Сведения о программе</h2>
             <dl className="about-details">
               <dt>Продукт</dt>
-              <dd>Platform Installer V2</dd>
+              <dd>Platform Installer V2</d
+@@END
+@@PORTABLE {"path":"frontend/src/UtilityPages.tsx","mode":420,"size":68270,"sha256":"49c81af8457afbf02d3ca04b9fe6a1e947fa54bda4a0c3511fa839340d7c7c50","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":5835}
+d>
               <dt>Интерфейс</dt>
               <dd>Wails · React</dd>
               <dt>Схема конфигурации приложения</dt>
@@ -10812,10 +10829,7 @@ export function UtilityPages({
               <dt>Типы серверов</dt>
               <dd>
                 {serverTypes.length
-                  ? serverTypes.m
-@@END
-@@PORTABLE {"path":"frontend/src/UtilityPages.tsx","mode":420,"size":67854,"sha256":"c12fdcbd6ead013efaf64f28be32743d53d6a75d98098ca3c438b4f34f5a701d","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":5367}
-ap((item) => item.displayName).join(", ")
+                  ? serverTypes.map((item) => item.displayName).join(", ")
                   : "Недоступны"}
               </dd>
             </dl>
@@ -14779,7 +14793,7 @@ const qaE4 =
 renderApplication(qaE4 ? qaE4Backend : backend);
 
 @@END
-@@PORTABLE {"path":"frontend/src/production-ui.css","mode":420,"size":73391,"sha256":"8c4c5bb5f63cec0b4771a524ed5c2f1322d7dbebdd0943180360f898e92c23d0","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48107}
+@@PORTABLE {"path":"frontend/src/production-ui.css","mode":420,"size":73506,"sha256":"4c379a1f03172021127a7f7a2d82c5e359dd45d556511ec5c89a9801815c71bd","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48107}
 /* Desktop target from UI-DESIGN-01. Work regions, not the window, own overflow. */
 :root {
   --ui-font-page-title: 22px;
@@ -16905,7 +16919,7 @@ button:disabled {
 }
 .service
 @@END
-@@PORTABLE {"path":"frontend/src/production-ui.css","mode":420,"size":73391,"sha256":"8c4c5bb5f63cec0b4771a524ed5c2f1322d7dbebdd0943180360f898e92c23d0","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":25284}
+@@PORTABLE {"path":"frontend/src/production-ui.css","mode":420,"size":73506,"sha256":"4c379a1f03172021127a7f7a2d82c5e359dd45d556511ec5c89a9801815c71bd","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":25399}
 s-detail {
   display: flex;
   flex-direction: column;
@@ -17835,6 +17849,11 @@ label.plan-action-row > span > small {
 }
 .execution-event-table th:nth-child(5) {
   width: 70px;
+}
+.event-log-table .ansible-output {
+  font-family: monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .execution-event-table tbody tr.is-selected {
   background: #e8f2ff;
@@ -19110,7 +19129,7 @@ export function VerifyProject() {
 }
 
 @@END
-@@PORTABLE {"path":"frontend/wailsjs/go/models.ts","mode":420,"size":119172,"sha256":"053406fd665848b9c7c9cccef41b07223844e2e488e5ec202604af7f027dc5c6","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"frontend/wailsjs/go/models.ts","mode":420,"size":119252,"sha256":"efe0460ae38c1ca2cc013aff2992cf0258a1723441fdd12d7403f5da41d38dbc","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
 export namespace appconfig {
   export class LibraryExecutionPriority {
     libraryName: string;
@@ -20192,6 +20211,7 @@ export namespace desktop {
     safeMessage: string;
     errorCode?: string;
     errorSummary?: string;
+    ansibleOutput?: string;
     redacted: boolean;
 
     static createFrom(source: any = {}) {
@@ -20214,6 +20234,7 @@ export namespace desktop {
       this.safeMessage = source["safeMessage"];
       this.errorCode = source["errorCode"];
       this.errorSummary = source["errorSummary"];
+      this.ansibleOutput = source["ansibleOutput"];
       this.redacted = source["redacted"];
     }
 
@@ -20678,12 +20699,12 @@ export namespace desktop {
       }
       if (a.slice && a.map) {
         return (a as any[]).map((elem) => this.convertValues(elem, classs));
-      } else if ("object" === typeof a) {
-        if (asMap) {
-          for (const
+   
 @@END
-@@PORTABLE {"path":"frontend/wailsjs/go/models.ts","mode":420,"size":119172,"sha256":"053406fd665848b9c7c9cccef41b07223844e2e488e5ec202604af7f027dc5c6","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
- key of Object.keys(a)) {
+@@PORTABLE {"path":"frontend/wailsjs/go/models.ts","mode":420,"size":119252,"sha256":"efe0460ae38c1ca2cc013aff2992cf0258a1723441fdd12d7403f5da41d38dbc","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
+   } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
             a[key] = new classs(a[key]);
           }
           return a;
@@ -22282,13 +22303,13 @@ export namespace installer {
     kind: string;
     status: string;
     planId?: string;
-    baseProjectRevision: string;
+    baseProjectRevision: strin
+@@END
+@@PORTABLE {"path":"frontend/wailsjs/go/models.ts","mode":420,"size":119252,"sha256":"efe0460ae38c1ca2cc013aff2992cf0258a1723441fdd12d7403f5da41d38dbc","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":23252}
+g;
     commandSummary: SemanticChange;
     semanticChanges: SemanticChange[];
-  
-@@END
-@@PORTABLE {"path":"frontend/wailsjs/go/models.ts","mode":420,"size":119172,"sha256":"053406fd665848b9c7c9cccef41b07223844e2e488e5ec202604af7f027dc5c6","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":23172}
-  affectedEntities: string[];
+    affectedEntities: string[];
     affectedDocuments: DocumentChange[];
     impacts: string[];
     validation: Validation;
@@ -30490,7 +30511,7 @@ func (a *App) executionTransport(identity runtimesecret.ExecutionIdentity, bindi
 }
 
 @@END
-@@PORTABLE {"path":"internal/desktop/installation_execution.go","mode":420,"size":44028,"sha256":"b1076d16f9e146954246f2b177f569f4e79cc9be120f94f42cfaf3af751f79a3","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":44028}
+@@PORTABLE {"path":"internal/desktop/installation_execution.go","mode":420,"size":44146,"sha256":"673d49c8fdd12d60fac28ecf4580def4297e400d788a26d96ecd72c5e08ffc4f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":44146}
 package desktop
 
 import (
@@ -30561,6 +30582,7 @@ type InstallationEventView struct {
 	Task                *InstallationTaskView `json:"task,omitempty"`
 	ElapsedMilliseconds *int                  `json:"elapsedMilliseconds,omitempty"`
 	SafeMessage         string                `json:"safeMessage"`
+	AnsibleOutput       string                `json:"ansibleOutput,omitempty"`
 	ErrorCode           string                `json:"errorCode,omitempty"`
 	ErrorSummary        string                `json:"errorSummary,omitempty"`
 	Redacted            bool                  `json:"redacted"`
@@ -30844,6 +30866,7 @@ func installationResultView(run executionnode.ExecutionRun) *InstallationResultV
 }
 func installationEventView(event executionnode.ExecutionEvent) InstallationEventView {
 	view := InstallationEventView{RunID: event.RunID, Sequence: event.Sequence, Timestamp: event.Timestamp, EventType: event.EventType, Status: event.Status, PhaseID: event.PhaseID, ActionID: event.ActionID, Host: event.Host, ServiceDeployment: event.ServiceDeployment, ElapsedMilliseconds: event.ElapsedMillis, SafeMessage: event.SafeMessage, Redacted: event.Redaction.Applied}
+	view.AnsibleOutput = event.AnsibleOutput
 	// Applied marks the event as safely redacted, not every task field as hidden.
 	// The closed redaction field list identifies the withheld task name.
 	if event.Task != nil && !slices.Contains(event.Redaction.Fields, "task.name") {
@@ -39985,7 +40008,7 @@ fi
 `
 
 @@END
-@@PORTABLE {"path":"internal/executionnode/runtime_protocol.go","mode":420,"size":71434,"sha256":"2c62c95654662244d42832d1c51f218388e57bcab76b53924c0c0f7a46c45cbe","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"internal/executionnode/runtime_protocol.go","mode":420,"size":71528,"sha256":"e8e2549cb98d75cfe2dccadf81f512cde38fbf639784c08cddf30cf39317f466","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
 package executionnode
 
 // Typed access to the fixed UI-BE-04C runtime protocol.  This is transport
@@ -40165,6 +40188,7 @@ type ExecutionEvent struct {
 	Task              *ExecutionEventTask  `json:"task,omitempty"`
 	ElapsedMillis     *int                 `json:"elapsedMilliseconds,omitempty"`
 	SafeMessage       string               `json:"safeMessage"`
+	AnsibleOutput     string               `json:"ansibleOutput,omitempty"`
 	Error             *ExecutionEventError `json:"error,omitempty"`
 	Redaction         ExecutionRedaction   `json:"redaction"`
 }
@@ -40945,11 +40969,11 @@ func decodeEventPage(response map[string]any, runID string, afterSequence, limit
 			}
 		}
 		if rawError, present := value["error"].(map[string]any); present {
-			if rawDiagnostic, exists := rawError["diagnosticRef"]; exists {
-				text, valid := rawD
+			if rawDiagnost
 @@END
-@@PORTABLE {"path":"internal/executionnode/runtime_protocol.go","mode":420,"size":71434,"sha256":"2c62c95654662244d42832d1c51f218388e57bcab76b53924c0c0f7a46c45cbe","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":23434}
-iagnostic.(string)
+@@PORTABLE {"path":"internal/executionnode/runtime_protocol.go","mode":420,"size":71528,"sha256":"e8e2549cb98d75cfe2dccadf81f512cde38fbf639784c08cddf30cf39317f466","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":23528}
+ic, exists := rawError["diagnosticRef"]; exists {
+				text, valid := rawDiagnostic.(string)
 				if !valid || text == "" {
 					return ExecutionEventPage{}, errExecutionEventResponseInvalid
 				}
@@ -41007,7 +41031,7 @@ func validateExecutionEvent(event ExecutionEvent, runID string) error {
 	if event.PlanFingerprint != "" && !validSHA256Fingerprint(event.PlanFingerprint) {
 		return errors.New("EXECUTION_EVENT_INVALID")
 	}
-	for _, value := range []string{event.SafeMessage, event.PhaseID, event.ActionID, event.Host, event.ServiceDeployment} {
+	for _, value := range []string{event.SafeMessage, event.AnsibleOutput, event.PhaseID, event.ActionID, event.Host, event.ServiceDeployment} {
 		if len(value) > 8192 || strings.ContainsAny(value, "\x00\r\n\x1b") {
 			return errors.New("EXECUTION_EVENT_INVALID")
 		}
@@ -121687,21 +121711,6 @@ function handleMessage(message) {
     "npm-run-all": "^4.1.5",
     "svelte": "^5.55.7"
   }
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/frontend/runtime/dev/store.js","mode":420,"size":233,"sha256":"01ab7f485facaa76709476d096b4461b2ca4044e051b90c2f037d02e42bcc04c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":233}
-import {writable} from 'svelte/store';
-
-/** Overlay */
-export const overlayVisible = writable(false);
-
-export function showOverlay() {
-    overlayVisible.set(true);
-}
-
-export function hideOverlay() {
-    overlayVisible.set(false);
 }
 
 @@END
