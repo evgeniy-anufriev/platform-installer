@@ -54,3 +54,37 @@ flow. No React rendering or interaction changes are part of this correction.
 
 Implementation base: `20c9a17486fddb71c4a80e108eb45c4345354386`.
 Unrelated working-tree changes are excluded from this correction.
+
+## Start credential callback correction (2026-11-03)
+
+Owner subsequently reported `TARGET_CREDENTIAL_REQUIRED` after successful plan
+preparation and server checks, and requested its correction. Start rebuilds the
+authoritative plan, including image preparation, but its context did not carry
+the image preparation credential provider used by Create Plan. The transport
+therefore stopped before the broker could supply any already-entered values.
+
+Start now registers that same provider. Because the rebuild runs outside
+`editMu`, the callback acquires the mutex and checks the captured operation's
+generation, root, project, plan, binding, runtime and requested project/revision
+before delegating to the existing scoped credential preparation. It introduces
+no storage or wire change. The error now has an explicit SSH preparation message
+instead of the generic project-open fallback. UI interaction remains unchanged.
+
+Validation on base `02b1fd59023c186c17c243963d4a44eb557dc5fe`:
+
+- Focused Start regression PASS: actual Go Start -> ExecutionService authoritative
+  rebuild -> OpenSSH image preparation, using a synthetic command runner.
+  Existing SSH credentials, both registry values and approved target key reach
+  preparation. The runner deliberately stops before execution dispatch.
+- Changed generation, foreign revision/library, missing credential session and
+  missing target trust block preparation. Error-message regression PASS.
+- Full `go test ./...` and `go vet ./...`: PASS.
+- Windows Wails production build PASS using `-s -skipbindings -m -nosyncgomod`:
+  backend rebuilt with existing frontend assets; no frontend rebuild claimed.
+  Output: `build/bin/platform-installer-ui.exe`.
+- Race checks unavailable with this toolchain's `CGO_ENABLED=0`.
+- FULL DIFF review was started, then interrupted at the owner's explicit request
+  not to invoke review. No review verdict or approval is claimed for this fix.
+- Standard real Wails bridge preflight still failed; real React/Wails acceptance
+  remains unavailable/blocking. No real Start, installation, target change or
+  visual acceptance was performed.

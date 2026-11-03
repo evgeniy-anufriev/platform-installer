@@ -14,6 +14,12 @@ descriptors when Save revoked proof or no discovery has run. Focused Go checks
 and full `go test ./...`/vet PASS; independent FULL DIFF APPROVE, zero blockers.
 Real React/Wails acceptance blocked
 by unavailable bridge; no installation/Start. See [evidence](docs/work/project-lifecycle/runtime-secret-save-reattestation.md).
+Follow-up Start correction: its authoritative plan rebuild now receives the
+scoped image preparation credential callback, preventing missing-provider
+`TARGET_CREDENTIAL_REQUIRED` after successful plan/server checks. Focused Start
+regression/full Go tests/vet and Windows Wails backend build PASS (existing
+frontend assets). Review interrupted at owner's request; real bridge acceptance
+still unavailable, no real Start performed. Evidence is in the same document.
 
 Runtime19 FULL_PROJECT installer-e2453d71f377fdb282e8c4e1ccfaa5b0 SUCCEEDED29.10/13:30:23MSK. Fresh plan-c684b53a48af4b17e6cf2ae6, revision2558809c, unchanged bundle09af0b9c70 (mastercdf24a0e). All10infra Apply/Verify, SZI/SDKU/CSPA and post-install SUCCESS, no skipped services/libraries; failed0. Final19216 unique events/no gaps/CHANGED44: Vault tmpfs lock1 +Docker permissions3 +package script directory/copies6 +temporary provider batch1 +CSPA image staging/load/tag18 +first containers3 +HAProxy archive/publish/reload9 +DNS1 +demo project creations2. Global changed0 NOT achieved; Redis/Kafka/SDKU reported changed0. All11 application containers running, all9 configured healthchecks healthy; audit Vault=Agent/Java=PG SCRAM/both SQL logins PASS/fresh auth markers0, private token removed. Actual React/Wails log column shows application IDs and library IDs; runtime19 post-install create-project event context was absent. Owner-requested source fix now binds existing scoped application_instance_id/application_library_id from the post-install target with script fallback; actual native runner context/security3 tests PASS and event regression PASS. Not yet bundled or checked in a new React/Wails run; runtime19 historical events remain unchanged. No source/target repair, UI reload or new Start during run. Heartbeat run-runtime19-changed completed and removed after checks. Detailed causes/sequence groups/proofs in existing execution journal. No next run authorized.
 

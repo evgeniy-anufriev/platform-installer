@@ -517,6 +517,20 @@ func (a *App) StartApprovedInstallation(planID string) InstallationRunOperation 
 	// Start rebuilds the authoritative plan, including offline image preparation.
 	ctx, cancel := a.operationContext(10 * time.Minute)
 	defer cancel()
+	ctx = executionnode.WithImagePreparationCredentials(ctx, func(scope executionnode.ImagePreparationScope) (executionnode.ImagePreparationCredentials, error) {
+		a.editMu.Lock()
+		defer a.editMu.Unlock()
+		// Start rebuilds outside editMu. Bind its credential callback to the
+		// captured operation so a replaced project/node cannot supply secrets.
+		currentRuntime, runtimeOK := InstallationRuntimeBinding{}, false
+		if a.binding != nil {
+			currentRuntime, runtimeOK = installationRuntimeBinding(a.binding.reader.runtimeRelease)
+		}
+		if a.installationGeneration != captured.generation || a.current.Status != "OPEN" || a.current.Root != captured.root || a.current.Project == nil || a.current.Project.ID != captured.projectID || a.binding != binding || a.installationPlanID != captured.planID || !runtimeOK || currentRuntime != captured.runtime || scope.ProjectIdentity != captured.projectID || scope.ProjectRevision != captured.revision {
+			return executionnode.ImagePreparationCredentials{}, errors.New("PLAN_STALE")
+		}
+		return a.imagePreparationCredentialsLocked(scope)
+	})
 	if outputRequired {
 		client, ok := binding.reader.transport.(secretOutputDeliveryClient)
 		if !ok {

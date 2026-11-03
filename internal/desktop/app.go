@@ -2162,6 +2162,8 @@ func projectErrorMessage(code string) string {
 		return "Отпечаток целевого сервера устарел. Получите его снова и сверьте независимо."
 	case "TARGET_HOST_TRUST_REQUIRED":
 		return "Перед запуском подтвердите SSH-ключ каждого целевого сервера на странице Серверы."
+	case "TARGET_CREDENTIAL_REQUIRED":
+		return "Не удалось передать данные SSH-сеанса для подготовки образов на целевых серверах. Запуск не начат."
 	case "TARGET_HOST_TRUST_INVALID":
 		return "Подтверждённые SSH-ключи не соответствуют адресам текущего плана. Запуск заблокирован."
 	case "EXECUTION_NODE_BINDING_INVALID":
