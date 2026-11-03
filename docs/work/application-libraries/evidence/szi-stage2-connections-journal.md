@@ -470,3 +470,38 @@ Main checkout prior SZI discussion files and its old state row saved in stash 'p
 Promotion full Core regression completed:836 tests in2245.737s, OK/skipped24 (812 passed), failures0/errors0; includes the long real Ansible PKI mutation/recovery/rotation/repeat block. Exact production/Core test source was the merged tree dd510b381fa2482dbfe102906d5a1bb8; only later validation-context and Vault unit-expectation changes were verified separately in synced35/027 workspaces. All promotion logs copied back to .runtime/qa/szi-stage2/results/promotion-*.log. Four source workspaces126/dd/35/027 cleaned through qa-sync after evidence transfer. Earlier isolated Stage2 evidence/fixtures and active runtime unchanged. Implementation2244f2dc and integration0e20217e are ready for final fast-forward/push; previous runtime installation evidence is unchanged, no extra plan or review invoked.
 
 Master promotion completed: master fast-forward99110cdc→6c398fd8 and normal push to origin/master succeeded; both refs verified at6c398fd85e8f7b684e780414f57b925384cc3566, main worktree clean after integration. Updated examples/szi and ignored binary inputs are present in the main checkout; old discussion drafts remain recoverable in the named stash/backup. Promotion logs also copied into main .runtime/qa/szi-stage2-promotion-results-20261024. Final checkout audit found only seven Jinja files changed by Windows automatic CRLF checkout; added the same explicit LF rule already used for SDKU and normalized local SZI templates to the exact tested bytes. No template semantics changed; package closure byte comparison is the final packaging check. No new plan, review, service restart or runtime bundle activation.
+
+## 2026-11-03 — nginx endpoint-template correction
+
+Owner reported a SZI failure at the protected configuration-render task for
+nginx/app2 in an isolated system. Supplied template screenshots match the
+example's unconditional `overrides.endpoint.endpoint_group` access in
+`assets/scada-lawellet.conf`; the exact remote exception remains unavailable.
+The template now consumes the resolved Core FQDN from `platform_endpoint_sources`,
+matching `data.env`, without reconstructing endpoint inheritance or inventing
+an address. This is a bounded correction within the existing contract (LOW risk),
+with no ownership/security/public-contract change or independent review required.
+
+Inspected all 17 SZI render templates (14 `.j2`, `data.env`, frontend `config.json`,
+nginx `.conf`) and the endpoint expressions in package defaults. The latter
+already protect optional application overrides with the existing `default` chain.
+Native tests exercise those expressions and every template, including the exact
+production configuration-render task. Cases: missing application override with
+library binding; explicit override with effective nginx port 28443 and a distinct
+resolved FQDN; missing resolved nginx endpoint must fail in the protected task.
+The old server_name was restored only in the disposable QA copy: the positive
+inherited-endpoint test failed as expected; the fixed file was then restored.
+
+Current working-tree sources transferred with `scripts/qa-sync.ps1` to RED OS101
+`/var/tmp/platform-installer-qa-e0182594170d44e38ef82d9fcafed5a3`, using the established
+platform-automation identity. `examples/szi/tests`: 6 PASS (14.550s), including
+3 new native render tests. `test_szi_stage1.py`: initial 11 PASS/1 fixture ERROR
+(`settings['parameters']`, removed from Keycloak defaults); removed that unused
+render argument, then 12 PASS (2.652s), including Docker Compose configuration
+validation. No target deployment/container/provider mutation or runtime credentials
+were used by the new tests. Temporary source workspace cleaned after checks.
+
+No runtime bundle build/publication, package reimport, installation or real
+React/Wails acceptance was performed. The isolated-system reproduction remains
+unverified; an existing project must receive the updated nginx package through
+normal same-version package replacement before a fresh Verify/plan/approval/Start.

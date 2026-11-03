@@ -298,7 +298,7 @@ esac
             template = env.from_string((package / 'roles/application_keycloak/templates/compose.yml.j2').read_text())
             compose = instance / 'compose.yml'
             compose.write_text(template.render(
-                application_instance_id='keycloak', application_effective=settings, application_parameters=settings['parameters'],
+                application_instance_id='keycloak', application_effective=settings,
                 application_environment=settings['environment'], application_project_id='project',
                 application_config_digest=digest, library_runtime={'library_id': 'szi', 'host_id': 'node2'},
                 application_runtime={'base_compose_path': str(base), 'base_service': 'base',
