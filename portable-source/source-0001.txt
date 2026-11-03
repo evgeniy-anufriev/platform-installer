@@ -79587,7 +79587,7 @@ printf '\n'
 {{ {'owner': 'platform.application.routes/v1:' ~ application_runtime_job.projectId ~ ':' ~ application_runtime_job.libraryId ~ ':' ~ application_instance_id, 'routes': ns.routes} | to_json }}
 
 @@END
-@@PORTABLE {"path":"examples/szi/application-packages/nginx/1.0.0/assets/scada-lawellet.conf","mode":420,"size":6256,"sha256":"653abf16382a81fb02dd90ab3119b3a8a9ea77bd943ae6c44c2360b23a466099","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":6256}
+@@PORTABLE {"path":"examples/szi/application-packages/nginx/1.0.0/assets/scada-lawellet.conf","mode":420,"size":6092,"sha256":"e8c85c55d77f0842b6d4172c566b5d6103d7a7d66305479bc3c027452d9dd336","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":6092}
 pcre_jit on;
 error_log /dev/stdout warn;
 pid /tmp/nginx.pid;
@@ -79627,7 +79627,7 @@ http {
         listen {{ application_runtime_job.settings.ports['port-1'].container }} ssl default_server;
         ssl_certificate /etc/nginx/ssl/host.pem;
         ssl_certificate_key /etc/nginx/ssl/host.key;
-        server_name {{ application_instance_id }}.{{ platform_desired_state.endpointGroups[platform_desired_state.applicationLibraryDeployments[application_runtime_job.libraryId].applications[application_runtime_job.slotId].overrides.endpoint.endpoint_group].address.domain }};
+        server_name {{ hostvars['localhost'].platform_endpoint_sources[application_instance_id].endpoint.fqdn }};
 
         proxy_cache off;
         proxy_max_temp_file_size 0;
