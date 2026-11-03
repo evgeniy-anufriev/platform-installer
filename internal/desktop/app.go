@@ -97,6 +97,7 @@ type ProjectOpenResult struct {
 }
 
 type ProjectVerification struct {
+	Current           *ProjectOpenResult             `json:"current,omitempty"`
 	APIVersion        string                         `json:"apiVersion"`
 	Kind              string                         `json:"kind"`
 	Status            string                         `json:"status"`
@@ -649,7 +650,12 @@ func (a *App) verifyProjectWithReaderLocked(reader interface {
 		a.current.Snapshot = verifiedSnapshot.Snapshot
 	}
 	a.current.Verification = evidence
-	return evidence
+	// Return the proof and its exact projection in one response. The cached
+	// verification metadata does not retain a second copy of the snapshot.
+	response := evidence
+	current := a.current
+	response.Current = &current
+	return response
 }
 
 func (a *App) setVerificationUnavailableLocked(err error, revision string) ProjectVerification {

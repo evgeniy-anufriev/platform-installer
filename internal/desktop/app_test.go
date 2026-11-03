@@ -853,6 +853,9 @@ func TestLocalSaveReopenVerifyAndStaleEvidence(t *testing.T) {
 	if verified.Status != "VERIFIED" || reader.calls != 1 || verified.ProjectRevision != reopened.Managed.ProjectRevision || verified.Runtime == nil {
 		t.Fatalf("verify=%#v calls=%d", verified, reader.calls)
 	}
+	if verified.Current == nil || verified.Current.Snapshot != app.current.Snapshot || verified.Current.Verification.Status != verified.Status || verified.Current.Verification.Current != nil || app.current.Verification.Current != nil {
+		t.Fatal("verification response must contain one coherent current project without recursive cached responses")
+	}
 	if after := fileDigest(t, filepath.Join(root, "inventory", "hosts.yml")); after != canonicalBefore {
 		t.Fatalf("Verify mutated canonical bytes: before=%s after=%s", canonicalBefore, after)
 	}
@@ -861,6 +864,9 @@ func TestLocalSaveReopenVerifyAndStaleEvidence(t *testing.T) {
 	invalid := app.VerifyProject()
 	if invalid.Status != "INVALID" || len(invalid.Findings) != 1 || fileDigest(t, filepath.Join(root, "inventory", "hosts.yml")) != canonicalBefore {
 		t.Fatalf("invalid verify=%#v", invalid)
+	}
+	if invalid.Current == nil || invalid.Current.Snapshot != app.current.Snapshot || invalid.Current.Verification.Status != "INVALID" {
+		t.Fatal("invalid verification response lost its snapshot/findings projection")
 	}
 	reader.status = "PASS"
 	if app.VerifyProject().Status != "VERIFIED" {
@@ -1195,6 +1201,9 @@ func TestE5TrustedBindingAndPreparationContinuation(t *testing.T) {
 	completed := app.PrepareExecutionNode(preparation.PlanID)
 	if completed.Status != "PREPARED" || completed.Verification == nil || completed.Verification.Status != "VERIFIED" || stub.prepareCalls != 1 || stub.inspectCalls < 2 {
 		t.Fatalf("completed=%#v prepareCalls=%d inspectCalls=%d", completed, stub.prepareCalls, stub.inspectCalls)
+	}
+	if completed.Verification.Current == nil || completed.Verification.Current.Snapshot != app.current.Snapshot || completed.Verification.Current.Verification.Status != "VERIFIED" {
+		t.Fatal("automatic verification did not return its coherent project projection")
 	}
 	stub.plan = executionnode.Plan{State: executionnode.Incompatible, Findings: []executionnode.Finding{{Code: "EXECUTION_NODE_PLATFORM_INCOMPATIBLE", SafeMessage: "Платформа узла не поддерживается."}}}
 	incompatible := app.PlanExecutionNodePreparation()

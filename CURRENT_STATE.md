@@ -8,6 +8,15 @@ new destructive operation still requires explicit owner authorization.
 
 ## Active work and acceptance
 
+Owner-requested coherent Verify publication (2026-11-03): manual and automatic
+Verify return current project/snapshot with status in one Go response and share
+one atomic UI publication path. Automatic Keycloak/SSO URL and stale-context
+regressions added. Real full-App React/Wails/RED OS automatic+manual Verify PASS
+on isolated QA project/current READY bundle; no second CurrentProject request,
+no service install/Start. Full Go tests/vet, final App110, lint/frontend/Wails
+build PASS; frontend full run379 PASS/2 unchanged B4 text assertions FAIL. See
+[evidence](docs/work/project-lifecycle/verification-projection-refresh.md).
+
 Owner-requested runtime-secret Save correction (2026-11-03): image preparation
 now reattests retained session inputs through current Execution Node Core
 descriptors when Save revoked proof or no discovery has run. Focused Go checks

@@ -517,7 +517,7 @@ function api(overrides: Record<string, unknown> = {}): MockApi {
     discardEditSession: vi.fn().mockResolvedValue({ status: "DISCARDED" }),
     verifyProject: vi
       .fn()
-      .mockResolvedValue({ status: "VERIFIED", projectRevision: "sha256:old" }),
+      .mockResolvedValue({ status: "VERIFIED", projectRevision: "sha256:old", current: project }),
     getSessionCredentialStatus: vi.fn().mockResolvedValue({
       status: "MISSING",
       sudoPasswordStatus: "NOT_PROVIDED",
@@ -922,7 +922,7 @@ it("refreshes Installation verification after header Verify without checking the
     getInstallationState,
     verifyProject: vi.fn().mockImplementation(async () => {
       verificationStatus = "VERIFIED";
-      return { status: "VERIFIED", projectRevision: "sha256:old" };
+      return { status: "VERIFIED", projectRevision: "sha256:old", current: project };
     }),
   });
   await openServers(value);
@@ -1492,7 +1492,7 @@ describe("UI-01E2 server editor", () => {
       }),
       prepareExecutionNode: vi.fn().mockResolvedValue({
         status: "PREPARED",
-        verification: { status: "VERIFIED" },
+        verification: { status: "VERIFIED", projectRevision: "sha256:old", current: project },
       }),
     });
     await openServers(value);
@@ -2026,6 +2026,7 @@ describe("UI-01E2 server editor", () => {
       verifyProject: vi.fn().mockResolvedValue({
         status: "VERIFIED",
         projectRevision: "sha256:new",
+        current: {...saved, snapshot: {...project.snapshot, projectRevision: "sha256:new"}},
       }),
     });
     await openServers(value);
@@ -2664,7 +2665,7 @@ describe("UI-01H2 services navigation and safe settings", () => {
           "kafka-main": { configuration: { replicaCount: { state: "RESOLVED", source: "ROLE_DEFAULT", value: 5 } }, members: {} },
         } })
         .mockImplementation(() => new Promise((resolve) => { complete = resolve; })),
-      verifyProject: vi.fn().mockResolvedValue({ status: "VERIFIED", projectRevision: "sha256:new" }),
+      verifyProject: vi.fn().mockResolvedValue({ status: "VERIFIED", projectRevision: "sha256:new", current: {...project, managed: {...project.managed, projectRevision:"sha256:new"}, snapshot:{...project.snapshot,projectRevision:"sha256:new"}} }),
       getCurrentProject: vi.fn().mockResolvedValue({ ...project, managed: { ...project.managed, projectRevision: "sha256:new" } }),
       createInstallationPlan: vi.fn(),
     });
@@ -4249,13 +4250,183 @@ it("shows a safe terminal status when verification binding rejects", async () =>
   expect(screen.queryByText("private transport detail")).toBeNull();
 });
 
+it("publishes the SSO address together with automatic verification after node preparation", async () => {
+  let ready = false;
+  const applicationProject = {
+    ...project,
+    managed: {
+      ...project.managed,
+      applicationLibraries: {
+        szi: { libraryRef: "szi@1", applications: { keycloak: {} } },
+      },
+      applicationPackages: {
+        "library:szi@1": {
+          definition: {
+            slots: { keycloak: { applicationRef: "keycloak@1" } },
+            provided_connections: {
+              sso: { application: "keycloak", protocol: "https" },
+            },
+          },
+        },
+        "application:keycloak@1": { definition: { defaults: {} } },
+      },
+    },
+  } as unknown as OpenResult;
+  const current = {
+    ...applicationProject,
+    snapshot: {
+      ...project.snapshot,
+      applicationLibraries: {
+        libraries: {
+          szi: {
+            instances: {},
+            providedConnections: {
+              sso: { url: "https://keycloak.example.test" },
+            },
+          },
+        },
+      },
+    },
+  };
+  const getCurrentProject = vi.fn();
+  const value = api({
+    getCurrentProject,
+    getExecutionNodeContext: vi
+      .fn()
+      .mockImplementation(async () => ({
+        status: ready ? "READY" : "UPDATE_REQUIRED",
+        selectionKind: "PROJECT_SERVER",
+        selectedHostId: "node1",
+        runtimeDigest: "sha256:runtime-a",
+      })),
+    planExecutionNodePreparation: vi
+      .fn()
+      .mockResolvedValue({
+        status: "CONFIRMATION_REQUIRED",
+        planId: "prepare-plan",
+      }),
+    prepareExecutionNode: vi.fn().mockImplementation(async () => {
+      ready = true;
+      return {
+        status: "PREPARED",
+        verification: {
+          status: "VERIFIED",
+          projectRevision: "sha256:old",
+          executionNodeId: "node1",
+          current,
+        },
+      };
+    }),
+    checkExecutionNode: vi.fn().mockResolvedValue({ status: "READY" }),
+  });
+  await openServers(value, applicationProject);
+  await userEvent.click(
+    screen.getByRole("button", { name: "Спланировать подготовку" }),
+  );
+  vi.spyOn(window, "confirm").mockReturnValue(true);
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Подтвердить подготовку" }),
+  );
+  await waitFor(() =>
+    expect(screen.getAllByText("Проверено").length).toBeGreaterThan(0),
+  );
+  await userEvent.click(screen.getByRole("button", { name: "Приложения" }));
+  await userEvent.click(screen.getByRole("button", { name: /^szi/ }));
+  await userEvent.click(screen.getByRole("button", { name: "Подключения" }));
+  expect(
+    await screen.findByText(/https:\/\/keycloak.example.test/),
+  ).toBeTruthy();
+  expect(screen.queryByText(/Адрес ещё не рассчитан/)).toBeNull();
+  expect(value.verifyProject).not.toHaveBeenCalled();
+  expect(getCurrentProject).not.toHaveBeenCalled();
+});
+
+it.each([
+  "missing",
+  "snapshot-revision",
+  "managed-revision",
+  "project-root",
+  "node",
+  "runtime",
+])("does not publish VERIFIED with a %s projection", async (change) => {
+  const current = structuredClone(project) as unknown as OpenResult;
+  if (change === "snapshot-revision")
+    current.snapshot!.projectRevision = "sha256:foreign";
+  if (change === "managed-revision")
+    current.managed!.projectRevision = "sha256:foreign";
+  if (change === "project-root") current.root = "C:/Projects/foreign";
+  const value = api({
+    verifyProject: vi
+      .fn()
+      .mockResolvedValue({
+        status: "VERIFIED",
+        projectRevision: "sha256:old",
+        executionNodeId: change === "node" ? "foreign" : "node1",
+        runtime: change === "runtime" ? {bundleDigest:"sha256:foreign"} : undefined,
+        current: change === "missing" ? undefined : current,
+      }),
+  });
+  await openServers(value);
+  await userEvent.click(screen.getByRole("button", { name: "Проверить" }));
+  expect(
+    await screen.findByRole("button", { name: "Проверка недоступна" }),
+  ).toBeTruthy();
+  expect(screen.queryByText("Проверено", { selector: "span" })).toBeNull();
+});
+
+it("ignores automatic verification arriving after another project was opened", async () => {
+  let finish!: (value: unknown) => void;
+  const value = api({
+    planExecutionNodePreparation: vi
+      .fn()
+      .mockResolvedValue({
+        status: "CONFIRMATION_REQUIRED",
+        planId: "prepare-plan",
+      }),
+    prepareExecutionNode: vi.fn().mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    ),
+    getVerifiedPKIView: vi.fn(),
+  });
+  await openServers(value);
+  await userEvent.click(
+    screen.getByRole("button", { name: "Спланировать подготовку" }),
+  );
+  vi.spyOn(window, "confirm").mockReturnValue(true);
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Подтвердить подготовку" }),
+  );
+  value.chooseProject.mockResolvedValue({
+    ...project,
+    root: "C:/Projects/other",
+    project: { name: "Other project" },
+  });
+  await userEvent.click(screen.getByRole("button", { name: "Открыть проект" }));
+  await screen.findByText("C:/Projects/other");
+  await act(async () =>
+    finish({
+      status: "PREPARED",
+      verification: {
+        status: "VERIFIED",
+        projectRevision: "sha256:old",
+        current: project,
+      },
+    }),
+  );
+  expect(screen.queryByText("Проверено", { selector: "span" })).toBeNull();
+  expect(value.getVerifiedPKIView).not.toHaveBeenCalled();
+});
+
 it("refreshes the Core snapshot after successful Project Verify", async () => {
   const getCurrentProject = vi.fn().mockResolvedValue({
     ...project,
     snapshot: { ...project.snapshot, project: { name: "Verified Core" } },
   });
   const value = api({
-    verifyProject: vi.fn().mockResolvedValue({ status: "VERIFIED" }),
+    verifyProject: vi.fn().mockResolvedValue({ status: "VERIFIED", projectRevision:"sha256:old", current:{...project,snapshot:{...project.snapshot,project:{name:"Verified Core"}}} }),
     getCurrentProject,
   });
   value.chooseProject.mockResolvedValue(project);
@@ -4264,7 +4435,7 @@ it("refreshes the Core snapshot after successful Project Verify", async () => {
     screen.getByRole("button", { name: "Открыть папку проекта" }),
   );
   await userEvent.click(screen.getByRole("button", { name: "Проверить" }));
-  await waitFor(() => expect(getCurrentProject).toHaveBeenCalledOnce());
+  expect(getCurrentProject).not.toHaveBeenCalled();
   expect(
     await screen.findByRole("heading", { name: "Verified Core" }),
   ).toBeTruthy();

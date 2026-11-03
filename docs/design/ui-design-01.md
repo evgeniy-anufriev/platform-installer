@@ -108,6 +108,13 @@ Show «Секрет задан» / «Секрет не задан» beside the c
 connection heading, based on read-only session presence, and refresh it after
 submission and tab reentry. Unsaved source changes must be saved first.
 
+Owner refinement (2026-11-03): manual Project Verify and automatic Verify after
+Execution Node preparation update «Проверено» and the corresponding Core
+snapshot together. Applications' provided-connection addresses must refresh from
+that same snapshot without requiring another click on Verify. An absent or
+mismatched verified projection cannot be shown as a new successful verification;
+late replies for a replaced project/revision/node/runtime are ignored.
+
 Owner refinement (2026-11-02): library registry entries authorize their scoped
 image sources without a separate node-list edit. Endpoint selection is stored
 in `bindings.endpoint.endpointGroupRef`. `bindings.secrets` automatically selects

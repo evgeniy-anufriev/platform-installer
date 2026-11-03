@@ -80,6 +80,16 @@ transport/readiness/runtime evidence failure returns a typed error while the
 project remains `UNVERIFIED`.
 A failed/cancelled Verify never undoes Save.
 
+Owner follow-up (2026-11-03): manual Verify and the automatic Verify after
+Execution Node preparation publish one coherent UI result. The returned
+`ProjectVerification.current` contains the canonical Go `ProjectOpenResult`
+with its exact verified snapshot and verification metadata. This response-only
+field is absent from cached verification metadata, avoiding recursive response
+trees or another snapshot store. React applies status/current projection in one
+state update through a shared handler; it does not issue a second CurrentProject
+request. Mismatched/missing projections never produce a new VERIFIED badge.
+Late results after project/revision/node/runtime replacement are discarded.
+
 Services, Applications and Installation initially require one successfully
 received, revision/runtime-matched Core configuration projection for the open
 project. After that first success, navigation and mounted screens remain

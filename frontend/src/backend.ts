@@ -70,6 +70,7 @@ import type { desktop, executionnode } from "../wailsjs/go/models";
 import { EventsOn } from "../wailsjs/runtime/runtime";
 
 export type VerificationStatus = {
+  current?: OpenResult;
   status:
     | "UNVERIFIED"
     | "VERIFYING"

@@ -22,6 +22,7 @@ import type {
   SessionCredentialInput,
   SessionCredentialStatus,
   VerifiedPKIView,
+  VerificationStatus,
   SecretOutputPackagesOperation,
   SecretOutputDeliveryOperation,
   ServiceConfigurationPreview,
@@ -922,6 +923,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   );
   const informationBinding = JSON.stringify([
     result.root,
+    result.project?.id,
     result.managed?.projectRevision,
     credentialStatus?.expiresAt,
     credentialStatus?.status,
@@ -932,6 +934,8 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   ]);
   const informationBindingRef = useRef(informationBinding);
   informationBindingRef.current = informationBinding;
+  const verificationRuntimeRef = useRef(executionNode?.runtimeDigest);
+  verificationRuntimeRef.current = executionNode?.runtimeDigest;
   const [nodePreparation, setNodePreparation] = useState<{
     binding: string; value: ExecutionNodePreparation;
   } | null>(null);
@@ -1955,47 +1959,97 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       setEditBusy(false);
     }
   };
+  const applyProjectVerification = async (
+    next: VerificationStatus,
+    requestToken: number,
+    binding: string,
+    allowPreparedRuntime = false,
+  ) => {
+    const current = () =>
+      requestToken === endpointPreviewRequest.current &&
+      binding === informationBindingRef.current &&
+      (verificationRuntimeRef.current === executionNode?.runtimeDigest ||
+        (allowPreparedRuntime &&
+          !!next.runtime?.bundleDigest &&
+          verificationRuntimeRef.current === next.runtime.bundleDigest));
+    if (!current()) return;
+    const { current: checkedProject, ...verification } = next;
+    const snapshot = checkedProject?.snapshot;
+    const hasProjection = ["VERIFIED", "INVALID"].includes(verification.status);
+    const matchingProjection =
+      !!snapshot &&
+      snapshot.projectRevision === verification.projectRevision &&
+      (!checkedProject?.managed ||
+        verification.projectRevision ===
+          checkedProject.managed.projectRevision) &&
+      checkedProject?.root === result.root &&
+      checkedProject?.project?.id === result.project?.id &&
+      (allowPreparedRuntime ||
+        !verification.runtime?.bundleDigest ||
+        !executionNode?.runtimeDigest ||
+        verification.runtime.bundleDigest === executionNode.runtimeDigest) &&
+      (!verification.executionNodeId ||
+        !executionNode?.selectedHostId ||
+        verification.executionNodeId === executionNode.selectedHostId);
+    setResult((previous) => {
+      if (
+        !current() ||
+        previous.root !== result.root ||
+        previous.project?.id !== result.project?.id ||
+        previous.managed?.projectRevision !== result.managed?.projectRevision
+      )
+        return previous;
+      return {
+        ...previous,
+        ...(hasProjection && matchingProjection ? checkedProject : {}),
+        snapshot: hasProjection && matchingProjection ? snapshot : undefined,
+        verification:
+          verification.status === "VERIFIED" && !matchingProjection
+            ? {
+                status: "UNAVAILABLE",
+                error: {
+                  code: "PROJECT_VERIFICATION_SNAPSHOT_UNAVAILABLE",
+                  message:
+                    "Результат проверки не содержит актуального снимка проекта. Повторите проверку.",
+                },
+              }
+            : verification,
+      } as OpenResult;
+    });
+    if (!hasProjection || !matchingProjection) return;
+    if (api.getEndpointPreview) {
+      const preview = await api.getEndpointPreview().catch(() => undefined);
+      if (!current()) return;
+      setEndpointPreview(preview);
+    }
+    if (api.getVerifiedPKIView) {
+      const view = await api.getVerifiedPKIView().catch(() => undefined);
+      if (!current()) return;
+      setVerifiedPKI(view);
+    }
+  };
   const verify = async () => {
     if (!api.verifyProject) return;
     const requestToken = ++endpointPreviewRequest.current;
+    const binding = informationBindingRef.current;
     setEditBusy(true);
     // Do not let a previously loaded PKI projection mask the result of this
     // verification attempt or keep old identity/SAN evidence visible.
     setVerifiedPKI(undefined);
+    setEndpointPreview(undefined);
     setResult(
       (current) =>
         ({ ...current, verification: { status: "VERIFYING" } }) as OpenResult,
     );
     try {
-      const next = await api.verifyProject().catch(() => ({
+      const next = await api.verifyProject().catch((): VerificationStatus => ({
         status: "UNVERIFIED",
         error: {
           code: "PROJECT_VERIFY_FAILED",
           message: "Не удалось выполнить проверку проекта.",
         },
       }));
-      const verifiedProject =
-        next.status === "VERIFIED" && api.getCurrentProject
-          ? await api.getCurrentProject()
-          : undefined;
-      if (requestToken !== endpointPreviewRequest.current) return;
-      setResult(
-        (current) =>
-          ({
-            ...(verifiedProject ?? current),
-            verification: next,
-          }) as OpenResult,
-      );
-      if (api.getEndpointPreview) {
-        const preview = await api.getEndpointPreview();
-        if (requestToken !== endpointPreviewRequest.current) return;
-        setEndpointPreview(preview);
-      }
-      if (api.getVerifiedPKIView) {
-        const view = await api.getVerifiedPKIView();
-        if (requestToken !== endpointPreviewRequest.current) return;
-        setVerifiedPKI(view);
-      }
+      await applyProjectVerification(next, requestToken, binding);
     } finally {
       setEditBusy(false);
     }
@@ -2167,6 +2221,9 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     if (!api.prepareExecutionNode)
       throw new Error("EXECUTION_NODE_PREPARATION_UNAVAILABLE");
     const binding = informationBindingRef.current;
+    const requestToken = ++endpointPreviewRequest.current;
+    setVerifiedPKI(undefined);
+    setEndpointPreview(undefined);
     setNodePreparation({ binding, value: { status: "PREPARING" } });
     let preparation: ExecutionNodePreparation;
     try {
@@ -2179,18 +2236,10 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       throw new Error("SERVER_INFORMATION_BINDING_CHANGED");
     setNodePreparation({ binding, value: preparation });
     if (preparation.verification) {
-      setResult(
-        (current) =>
-          ({
-            ...current,
-            verification: preparation.verification,
-          }) as OpenResult,
-      );
-      if (api.getVerifiedPKIView) {
-        const view = await api.getVerifiedPKIView();
-        setVerifiedPKI(view);
-      }
+      await applyProjectVerification(preparation.verification, requestToken, binding, true);
     }
+    if (binding !== informationBindingRef.current || requestToken !== endpointPreviewRequest.current)
+      throw new Error("SERVER_INFORMATION_BINDING_CHANGED");
     if (preparation.status === "PREPARED") {
       await checkExecutionNode();
     } else {

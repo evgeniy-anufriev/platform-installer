@@ -705,7 +705,79 @@ export namespace desktop {
       this.locked = source["locked"];
     }
   }
+  export class ProjectOpenResult {
+    status: string;
+    root?: string;
+    classification?: string;
+    project?: projectlifecycle.Project;
+    counts: projectlifecycle.Counts;
+    catalog?: projectlifecycle.ProjectCatalogView;
+    snapshot?: coreadapter.Snapshot;
+    managed?: installer.ManagedProjectView;
+    verification: ProjectVerification;
+    diagnostics?: ApplicationDiagnostic[];
+    error?: ProjectOpenError;
+
+    static createFrom(source: any = {}) {
+      return new ProjectOpenResult(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.status = source["status"];
+      this.root = source["root"];
+      this.classification = source["classification"];
+      this.project = this.convertValues(
+        source["project"],
+        projectlifecycle.Project,
+      );
+      this.counts = this.convertValues(
+        source["counts"],
+        projectlifecycle.Counts,
+      );
+      this.catalog = this.convertValues(
+        source["catalog"],
+        projectlifecycle.ProjectCatalogView,
+      );
+      this.snapshot = this.convertValues(
+        source["snapshot"],
+        coreadapter.Snapshot,
+      );
+      this.managed = this.convertValues(
+        source["managed"],
+        installer.ManagedProjectView,
+      );
+      this.verification = this.convertValues(
+        source["verification"],
+        ProjectVerification,
+      );
+      this.diagnostics = this.convertValues(
+        source["diagnostics"],
+        ApplicationDiagnostic,
+      );
+      this.error = this.convertValues(source["error"], ProjectOpenError);
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
+    }
+  }
   export class ProjectVerification {
+    current?: ProjectOpenResult;
     apiVersion: string;
     kind: string;
     status: string;
@@ -725,6 +797,7 @@ export namespace desktop {
 
     constructor(source: any = {}) {
       if ("string" === typeof source) source = JSON.parse(source);
+      this.current = this.convertValues(source["current"], ProjectOpenResult);
       this.apiVersion = source["apiVersion"];
       this.kind = source["kind"];
       this.status = source["status"];
@@ -1696,78 +1769,6 @@ export namespace desktop {
       this.result = this.convertValues(
         source["result"],
         installer.ProjectExportResult,
-      );
-      this.error = this.convertValues(source["error"], ProjectOpenError);
-    }
-
-    convertValues(a: any, classs: any, asMap: boolean = false): any {
-      if (!a) {
-        return a;
-      }
-      if (a.slice && a.map) {
-        return (a as any[]).map((elem) => this.convertValues(elem, classs));
-      } else if ("object" === typeof a) {
-        if (asMap) {
-          for (const key of Object.keys(a)) {
-            a[key] = new classs(a[key]);
-          }
-          return a;
-        }
-        return new classs(a);
-      }
-      return a;
-    }
-  }
-
-  export class ProjectOpenResult {
-    status: string;
-    root?: string;
-    classification?: string;
-    project?: projectlifecycle.Project;
-    counts: projectlifecycle.Counts;
-    catalog?: projectlifecycle.ProjectCatalogView;
-    snapshot?: coreadapter.Snapshot;
-    managed?: installer.ManagedProjectView;
-    verification: ProjectVerification;
-    diagnostics?: ApplicationDiagnostic[];
-    error?: ProjectOpenError;
-
-    static createFrom(source: any = {}) {
-      return new ProjectOpenResult(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.status = source["status"];
-      this.root = source["root"];
-      this.classification = source["classification"];
-      this.project = this.convertValues(
-        source["project"],
-        projectlifecycle.Project,
-      );
-      this.counts = this.convertValues(
-        source["counts"],
-        projectlifecycle.Counts,
-      );
-      this.catalog = this.convertValues(
-        source["catalog"],
-        projectlifecycle.ProjectCatalogView,
-      );
-      this.snapshot = this.convertValues(
-        source["snapshot"],
-        coreadapter.Snapshot,
-      );
-      this.managed = this.convertValues(
-        source["managed"],
-        installer.ManagedProjectView,
-      );
-      this.verification = this.convertValues(
-        source["verification"],
-        ProjectVerification,
-      );
-      this.diagnostics = this.convertValues(
-        source["diagnostics"],
-        ApplicationDiagnostic,
       );
       this.error = this.convertValues(source["error"], ProjectOpenError);
     }
