@@ -179,18 +179,18 @@ or facts. Task/module no_log, censored results and hidden nested loop results
 remain opaque. Structured error classification and safeMessage remain separate.
 
 The existing typed event transport, local replay mirror and desktop projection
-preserve the field. Execution and Logs tables expose «Вывод Ansible» as plain
+preserve the field. The Logs table alone exposes «Вывод Ansible» as plain
 React text, with no HTML evaluation. The Logs column is default-visible for
 new column preferences and selectable for existing saved preferences. The
-execution table gains horizontal scrolling and a dedicated output width.
+execution table keeps its existing five columns and does not render raw output.
 No new command bridge, Ansible files, role settings, execution decision, plan
 or secret persistence mechanism was introduced. Raw unprotected task data now
 enters the existing journal/mirror, explicitly as requested; secret-bearing
 tasks continue to rely on no_log.
 
 Design check: shared ownership/interaction rules, mockup execution/log flows,
-UI-BE-04 and event contract read. The existing five-column execution design is
-superseded by the owner's explicit sixth-column request and recorded in
+UI-BE-04 and event contract read. The owner's final clarification limits the
+column to Logs; the five-column execution design is retained, as recorded in
 ui-design-01.md. No visual inspection claimed. Review not invoked per owner.
 
 Validation of current tree:
@@ -211,7 +211,8 @@ Validation of current tree:
 - Full `go test ./...` and `go vet ./...`: PASS. Additional Event/Task selection
   PASS (1.636s) after adding raw-field protocol bounds and replay tests.
 - Actual React rendering tests (InstallationPage and UtilityPages): **47 PASS**.
-  Raw output is in a separate column and script-like text stays text.
+  Raw output is in a separate Logs column and script-like text stays text;
+  the execution screen does not render raw output even when present in events.
   Frontend typecheck/Vite build and lint PASS. Windows Wails build PASS.
 - Real bridge preflight: `QA_WAILS_BRIDGE_PREFLIGHT_FAILED`. Real React/Wails/
   Execution Node acceptance remains unavailable/blocking, not replaced by

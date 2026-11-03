@@ -818,13 +818,13 @@ describe("InstallationPage", () => {
     ).toBeTruthy();
     expect(screen.getByText("Проверка swap")).toBeTruthy();
     expect(
-      screen.getByRole("columnheader", { name: "Вывод Ansible" }),
-    ).toBeTruthy();
+      screen.queryByRole("columnheader", { name: "Вывод Ansible" }),
+    ).toBeNull();
     expect(
-      screen.getByRole("cell", {
+      screen.queryByRole("cell", {
         name: '{"msg":"qa original failure","stderr":"qa stderr"}',
       }),
-    ).toBeTruthy();
+    ).toBeNull();
     expect(screen.queryByText("Детали события")).toBeNull();
     expect(
       screen.getByRole("heading", { name: "Действия плана" }),

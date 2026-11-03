@@ -1025,7 +1025,7 @@ The owner explicitly requested original Ansible results for tasks with
 column. This supersedes the earlier blanket exclusion of arbitrary task output
 from events. The optional `ansibleOutput` field carries the result as bounded
 JSON through Core journal, Go validation/mirror and desktop projection to both
-execution and Logs tables. It is display data; structured codes remain the
+Logs table only. It is display data; structured codes remain the
 machine contract. No second output store or raw process/command interface is
 introduced. Existing role `no_log` values are unchanged. Effective task/module
 no_log and censored nested results remain hidden; secret-bearing role tasks

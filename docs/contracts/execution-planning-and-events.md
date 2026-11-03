@@ -408,7 +408,8 @@ contains the original module result as JSON for tasks without effective
 `no_log`, including success, changed, skipped and failed results. This includes
 module messages, stdout, stderr, exception text, invocation and response data;
 there is no content allowlist. This optional field is displayed in a separate
-«Вывод Ansible» column; `safeMessage` retains its existing meaning.
+«Вывод Ansible» column on «Журналы» only; the execution screen retains its
+existing columns and `safeMessage` retains its existing meaning.
 Output is limited to 8192 UTF-8 bytes, with `[truncated]` on
 overflow; diagnostic fields precede invocation/facts. JSON escapes control
 characters. Nested loop results carrying `no_log`/`censored` are hidden too.

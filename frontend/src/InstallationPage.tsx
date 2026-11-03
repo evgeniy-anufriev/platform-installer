@@ -1909,7 +1909,6 @@ function ExecutionStage({
                       <th scope="col">Развёртывание</th>
                       <th scope="col">Узел</th>
                       <th scope="col">Результат</th>
-                      <th scope="col">Вывод Ansible</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1937,9 +1936,6 @@ function ExecutionStage({
                         <td>{event.serviceDeployment || "—"}</td>
                         <td>{event.host || "—"}</td>
                         <td>{eventStatusLabel(event.status)}</td>
-                        <td className="ansible-output">
-                          {event.ansibleOutput || "—"}
-                        </td>
                       </tr>
                     ))}
                   </tbody>
