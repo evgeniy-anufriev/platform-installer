@@ -68,7 +68,10 @@ func (a *App) imagePreparationCredentialsLocked(scope executionnode.ImagePrepara
 		}
 	}
 	err = a.secrets.WithTargetCredential(binding, func(credential runtimesecret.TargetCredential) error {
-		payload := executionnode.TargetCredentialLeasePayload{Username: credential.Username, SudoPassword: string(credential.SudoSecret), RuntimeSecretValues: map[string]string{}}
+		payload := executionnode.TargetCredentialLeasePayload{Username: credential.Username, SudoPassword: string(credential.SudoSecret)}
+		if len(scope.Requirements) > 0 {
+			payload.RuntimeSecretValues = map[string]string{}
+		}
 		if credential.SSHMode == runtimesecret.SSHPassword {
 			payload.Password = string(credential.SSHSecret)
 		} else {

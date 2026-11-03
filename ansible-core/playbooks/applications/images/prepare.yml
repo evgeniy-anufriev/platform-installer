@@ -12,7 +12,7 @@
         platform_application_image_bundle: "{{ hostvars['localhost'].platform_application_image_bundle }}"
       loop: "{{ platform_application_image_inputs.targetConnections | list }}"
 
-- name: Чтение метаданных образа через сеть каждого выбранного целевого узла
+- name: Определение платформ целевых узлов
   hosts: platform_image_targets
   gather_facts: false
   any_errors_fatal: true
@@ -21,14 +21,26 @@
       ansible.builtin.setup:
         gather_subset: ['!all', 'min']
         filter: ['ansible_system', 'ansible_architecture']
-    - name: "Инициализация результатов подготовки образов целевого узла"
+
+- name: Подготовка уникальных метаданных через утверждённые целевые узлы
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  any_errors_fatal: true
+  tasks:
+    - name: "Инициализация результатов и закрытого кэша текущей подготовки"
       ansible.builtin.set_fact:
         platform_application_image_preparations: {}
         _image_registry_cache: {}
+        _image_node_credentials_cache: {}
     - name: Подготовка каждого выбранного образа штатными задачами Ansible
-      ansible.builtin.include_role:
-        name: platform.core.prepare_application_images
-      loop: "{{ platform_application_image_inputs.placements | selectattr('hostId', 'equalto', inventory_hostname) | list }}"
+      ansible.builtin.include_tasks: placement.yml
+      vars:
+        application_image_platform:
+          os: "{{ hostvars[application_image_input.hostId].ansible_facts.system | lower }}"
+          architecture: "{{ {'x86_64': 'amd64', 'aarch64': 'arm64'}.get(hostvars[application_image_input.hostId].ansible_facts.architecture, hostvars[application_image_input.hostId].ansible_facts.architecture) }}"
+        application_image_registries: "{{ hostvars[application_image_input.hostId].platform_application_approved_registries | default([]) }}"
+      loop: "{{ platform_application_image_inputs.placements }}"
       loop_control:
         loop_var: application_image_input
 
@@ -42,7 +54,7 @@
         platform_prepared_application_images: >-
           {{ {'apiVersion': 'platform.installer/container-images/v1alpha2',
               'placements': platform_application_image_inputs.ready |
-                combine((hostvars | platform.core.application_prepared_image_lock).placements)} }}
+                combine(({'resolved': {'platform_application_image_preparations': platform_application_image_preparations}} | platform.core.application_prepared_image_lock).placements)} }}
     - name: Сохранение полного результата подготовки образов в формате машинного протокола
       ansible.builtin.copy:
         content: "{{ platform_prepared_application_images | to_json }}"

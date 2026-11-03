@@ -1,0 +1,64 @@
+---
+- name: Использование метаданных образов текущего выполнения
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Проверка наличия результата подготовки текущего выполнения
+      ansible.builtin.stat:
+        path: "{{ platform_application_resolved_images_path }}"
+        follow: false
+      register: _application_image_resolution_file
+      when: platform_application_resolved_images_path is defined
+    - name: Проверка обычного файла метаданных текущего выполнения
+      ansible.builtin.assert:
+        that:
+          - _application_image_resolution_file.stat.isreg | default(false)
+          - not (_application_image_resolution_file.stat.islnk | default(false))
+        fail_msg: APPLICATION_IMAGE_PREPARATION_STALE
+      when: _application_image_resolution_file.stat.exists | default(false)
+    - name: Определение необходимости получения метаданных образов
+      ansible.builtin.set_fact:
+        _application_resolve_images: "{{ not (_application_image_resolution_file.stat.exists | default(false)) }}"
+    - name: Повторное использование результата Apply при Verify
+      ansible.builtin.set_fact:
+        platform_prepared_application_images: "{{ lookup('ansible.builtin.file', platform_application_resolved_images_path) | from_json }}"
+      when: not _application_resolve_images
+      no_log: true
+    - name: Привязка файла результата к текущему выполнению
+      ansible.builtin.set_fact:
+        platform_application_image_result_path: "{{ platform_application_resolved_images_path }}"
+      when: platform_application_resolved_images_path is defined
+    - name: Передача вычисленного порядка библиотек штатной подготовке образов
+      ansible.builtin.set_fact:
+        platform_execution_application_library_order: "{{ platform_application_execution_scope.libraryOrder | default(platform_application_library_order) }}"
+      when:
+        - _application_resolve_images
+        - platform_application_execution_scope.libraryOrder is defined or platform_application_library_order is defined
+    - name: Передача выбранного состава библиотек штатной подготовке образов
+      ansible.builtin.set_fact:
+        platform_execution_skip_application_libraries: "{{ platform_application_execution_scope.skippedLibraries | default([]) }}"
+      when: _application_resolve_images
+
+- import_playbook: inputs.yml
+  when: hostvars['localhost']._application_resolve_images
+
+- name: Получение назначенных runtime-учётных данных реестра
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Подготовка закрытой карты входов реестра
+      ansible.builtin.set_fact:
+        platform_application_image_secret_values: {}
+      when: _application_resolve_images
+      no_log: true
+    - name: Чтение только требуемых закрытых файлов реестра
+      ansible.builtin.set_fact:
+        platform_application_image_secret_values: "{{ platform_application_image_secret_values | combine({item.runtimeReference: lookup('ansible.builtin.file', platform_application_secret_files[item.runtimeReference], rstrip=false)}) }}"
+      loop: "{{ platform_application_image_inputs.requirements | default([]) }}"
+      when: _application_resolve_images
+      no_log: true
+
+- import_playbook: prepare.yml
+  when: hostvars['localhost']._application_resolve_images

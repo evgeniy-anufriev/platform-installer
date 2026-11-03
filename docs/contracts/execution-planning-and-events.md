@@ -527,3 +527,23 @@ executes the original approved manifest and reuses existing events/lease/trust
 and cancellation. Runtime inputs remain operation-scoped; exact existing Vault
 source fields, including generated account bindings, are rematerialized by the
 terminal Ansible process and removed by invocation and run cleanup.
+
+## Registry availability planning (request v1alpha9)
+
+Capabilities v1alpha15 advertises `applicationImagePlanning` with protocol
+`RegistryAvailabilityPlanning/v1alpha1`, plan v1alpha12 and manifest v1alpha9.
+All three execution modes retain existing selection and infrastructure rules.
+Create Plan probes HTTPS `/v2/` once per unique target/registry (200/401), without
+image/token/config inspection or offline archive work. Registry credentials are
+still required by the existing execution approval/lease mechanism when selected.
+
+Private `application-image-intents/v1alpha1` binds placement references and the
+configured source policy. Its digest is included in the immutable manifest.
+Public image requirements declare `resolution: AT_EXECUTION`; no imageId/platform
+is invented. The existing controller passes these intents to Ansible, which
+resolves identity before Apply, validates normal source/platform/archive rules,
+and saves a private run-owned result for Verify. Equivalent metadata is shared
+only within the same invocation and proved credential context. Different node
+logins, platforms or policies cannot reuse another context. The prepared run
+result is reused without another registry request. Legacy request versions
+keep their existing metadata-at-Plan meaning and are negotiated separately.

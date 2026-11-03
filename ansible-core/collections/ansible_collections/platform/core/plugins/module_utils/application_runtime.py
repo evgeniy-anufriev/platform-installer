@@ -62,6 +62,8 @@ def resolve_image_lock(native_lock, manifest_lock, prepared=None):
         raise ValueError('APPLICATION_ARTIFACT_LOCK_CONFLICT')
     legacy = (native_lock or manifest_lock or {}).get('x-container-images', {})
     if prepared is not None:
+        if prepared.get('apiVersion') == 'platform.installer/application-image-intents/v1alpha1':
+            return prepared
         for entry in prepared.get('placements', {}).values():
             original = selected_image(legacy, entry['reference'], '', '', '')
             if original is not None and original != entry['image']:

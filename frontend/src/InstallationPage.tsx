@@ -1135,7 +1135,7 @@ function PlanStage({
           </p>
         )}
         <button onClick={onCreatePlan} disabled={busy}>
-          {busy ? "Подготовка образов и плана…" : "Сформировать свежий план"}
+          {busy ? "Формирование плана…" : "Сформировать свежий план"}
         </button>
       </article>
     );

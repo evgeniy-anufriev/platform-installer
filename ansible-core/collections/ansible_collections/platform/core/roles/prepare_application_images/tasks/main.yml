@@ -1,20 +1,13 @@
 ---
 - name: Привязка платформы и исходных параметров размещения образа
   ansible.builtin.set_fact:
-    _image_platform:
-      os: "{{ ansible_facts.system | lower }}"
-      architecture: "{{ {'x86_64': 'amd64', 'aarch64': 'arm64'}.get(ansible_facts.architecture, ansible_facts.architecture) }}"
+    _image_platform: "{{ application_image_platform if application_image_platform is defined else {'os': ansible_facts.system | lower, 'architecture': {'x86_64': 'amd64', 'aarch64': 'arm64'}.get(ansible_facts.architecture, ansible_facts.architecture)} }}"
     _image_registry: {}
     _image_username: ''
     _image_password: ''
     _image_token: ''
-    _image_registry_approved: "{{ application_image_input.request.registry in (platform_application_approved_registries | default([])) or (application_image_input.credentials | length > 0) }}"
-    _image_request_key: "{{ [application_image_input.request, application_image_input.credentials, application_image_input.account, application_image_input.configDirectory] | to_json | hash('sha256') }}"
-  no_log: true
-
-- name: Повторное использование совпадающих метаданных реестра при подготовке образов целевого узла
-  ansible.builtin.set_fact:
-    _image_registry: "{{ (_image_registry_cache | default({})).get(_image_request_key, {}) }}"
+    _image_registry_approved: "{{ application_image_input.request.registry in (application_image_registries if application_image_registries is defined else platform_application_approved_registries | default([])) or (application_image_input.credentials | length > 0) }}"
+    _image_credential_key: "{{ application_image_input | platform.core.application_image_credential_key }}"
   no_log: true
 
 - name: Проверка назначенных runtime-учётных данных перед обращением к реестру
@@ -38,7 +31,35 @@
   when:
     - application_image_input.credentials | length == 0
     - _image_registry_approved
-    - _image_request_key not in (_image_registry_cache | default({}))
+    - _image_credential_key not in (_image_node_credentials_cache | default({}))
+
+- name: Сохранение найденного контекста узла только в закрытой памяти текущего вызова
+  ansible.builtin.set_fact:
+    _image_node_credentials_cache: "{{ (_image_node_credentials_cache | default({})) | combine({_image_credential_key: {'username': _image_username, 'password': _image_password}}) }}"
+  when:
+    - application_image_input.credentials | length == 0
+    - _image_registry_approved
+    - _image_credential_key not in (_image_node_credentials_cache | default({}))
+  no_log: true
+
+- name: Повторное использование контекста узла без повторного чтения Docker config
+  ansible.builtin.set_fact:
+    _image_username: "{{ _image_node_credentials_cache[_image_credential_key].username }}"
+    _image_password: "{{ _image_node_credentials_cache[_image_credential_key].password }}"
+  when:
+    - application_image_input.credentials | length == 0
+    - _image_registry_approved
+  no_log: true
+
+- name: Привязка кэша метаданных к платформе, политике и источнику учётных данных
+  ansible.builtin.set_fact:
+    _image_request_key: "{{ application_image_input | platform.core.application_image_registry_key(_image_platform, _image_registry_approved, (_image_username | length > 0 or _image_password | length > 0)) }}"
+  no_log: true
+
+- name: Повторное использование совпадающих метаданных текущей подготовки
+  ansible.builtin.set_fact:
+    _image_registry: "{{ (_image_registry_cache | default({})).get(_image_request_key, {}) }}"
+  no_log: true
 
 - name: Чтение метаданных утверждённого реестра через сеть целевого узла подготовки образов
   ansible.builtin.include_tasks: registry.yml

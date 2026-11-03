@@ -1,6 +1,7 @@
 from ansible_collections.platform.core.plugins.module_utils.application_images import (
     normalize_image, placement_key, selected_image, offline_image, registry_request,
     registry_manifest, registry_config, prepared_image, prepared_lock,
+    image_credential_key, image_registry_key, cached_image,
 )
 
 
@@ -10,4 +11,7 @@ class FilterModule:
                     application_selected_image=selected_image, application_offline_image=offline_image,
                     application_registry_request=registry_request, application_registry_manifest=registry_manifest,
                     application_registry_config=registry_config, application_prepared_image=prepared_image,
-                    application_prepared_image_lock=prepared_lock)
+                    application_prepared_image_lock=prepared_lock,
+                    application_image_credential_key=image_credential_key,
+                    application_image_registry_key=image_registry_key,
+                    application_cached_image=cached_image)

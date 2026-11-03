@@ -866,6 +866,19 @@ is transient and scoped to the selected registry. No background planning worker,
 new desired-state store, automatic project migration or persistent Docker login.
 See the [approved plan](work/application-libraries/application-image-metadata-plan.md).
 
+Owner amendment 2026-11-03: negotiated runtime request v1alpha9 checks only
+HTTPS `/v2/` reachability once per selected host/registry during Create Plan.
+HTTP 200/401 proves availability, not authentication or image existence. Offline
+images require no preparation at Plan. Plan v1alpha12 and manifest v1alpha9 bind
+declared placement/image references and source policy through private derived
+image intents; approval of a mutable tag no longer freezes its current digest.
+Ansible resolves and pins exact image identity before application Apply and
+reuses the run-owned result for Verify. Legacy requests retain metadata-at-Plan
+semantics. Invocation-local reuse combines identical reference/platform/policy
+and credential-source contexts; node-specific login contexts remain isolated.
+No desired-state cache or credential persistence is added. See the
+[measured evidence](work/application-libraries/evidence/application-image-metadata-journal.md#registry-availability-planning-2026-11-03).
+
 Owner review decision 2026-10-20: AIM-D01 and AIM-D03 are rejected; current
 deployments use amd64 and identical image identity may come from either source.
 No extra platform discovery or sourceRef uniqueness mechanism is introduced.

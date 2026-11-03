@@ -1,0 +1,18 @@
+---
+- name: Проверка доступности registry без подготовки образов
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Проверка HTTPS-ответа каждого registry с каждого целевого узла
+      ansible.builtin.uri:
+        url: "https://{{ item.endpoint }}/v2/"
+        method: GET
+        status_code: [200, 401]
+        return_content: false
+        follow_redirects: none
+        timeout: 10
+      delegate_to: "{{ item.hostId }}"
+      loop: "{{ platform_application_image_inputs.placements }}"
+      changed_when: false
+      no_log: true

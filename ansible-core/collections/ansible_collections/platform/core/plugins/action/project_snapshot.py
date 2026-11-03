@@ -722,7 +722,7 @@ class ActionModule(ActionBase):
                                                         None if self._task.args.get('desired_only') else task_vars.get('platform_prepared_application_images'))
                 if task_vars.get('platform_application_expected_fingerprint'):
                     scope = task_vars.get('platform_application_execution_scope', {})
-                    model = application_execution_model(snapshot, private_image_lock,
+                    model = application_execution_model(snapshot, task_vars.get('platform_application_image_intents') or private_image_lock,
                                                        scope.get('libraryOrder', task_vars.get('platform_application_expected_library_ids')),
                                                        scope.get('skippedLibraries'))
                     if (model['semanticFingerprint'] != task_vars['platform_application_expected_fingerprint'] or

@@ -85,6 +85,19 @@ func decodeInfrastructureVerification(raw any) (*InfrastructureVerification, err
 }
 
 func b0PlanCapabilitySupported(c map[string]any) bool {
+	if c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha15" {
+		if !availabilityPlanCapabilitySupported(c) {
+			return false
+		}
+		prefix := make(map[string]any, len(c))
+		for key, value := range c {
+			if key != "applicationImagePlanning" {
+				prefix[key] = value
+			}
+		}
+		prefix["apiVersion"] = "platform.installer/execution-capabilities/v1alpha14"
+		return b0PlanCapabilitySupported(prefix)
+	}
 	if c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha14" {
 		if !serviceSelectionCapabilitySupported(c) {
 			return false
@@ -217,6 +230,18 @@ func (t OpenSSHTransport) buildDeploymentPlanForMode(ctx context.Context, node N
 			return DeploymentPlan{}, errors.New("SERVICE_SELECTION_RUNTIME_UNSUPPORTED")
 		}
 		request["apiVersion"] = serviceSelectionRequestVersion
+		request["skipServiceDeployments"] = selectedServices
+	}
+	if availabilityPlanCapabilitySupported(c) && libraryOrder != nil {
+		request["apiVersion"] = availabilityPlanRequestVersion
+		request["skipInfrastructureVerify"] = skip
+		if skipped == nil {
+			skipped = []string{}
+		}
+		if selectedServices == nil {
+			selectedServices = []string{}
+		}
+		request["skipApplicationLibraries"] = skipped
 		request["skipServiceDeployments"] = selectedServices
 	}
 	return t.buildDeploymentPlanRequest(ctx, node, projectRoot, request)

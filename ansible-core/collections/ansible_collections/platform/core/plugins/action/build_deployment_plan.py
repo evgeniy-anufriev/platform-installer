@@ -64,6 +64,11 @@ class ActionModule(ActionBase):
                     raise ValueError('SERVICE_SELECTION_MODE_INVALID')
                 scope = service_scope(snapshot['serviceDeployments'], self._task.args['deployment_order'], self._task.args['skip_service_deployments'])
                 result = promote_services(result, scope)
+            if self._task.args.get('deferred_application_images'):
+                result['deploymentPlan'].update(apiVersion='platform.installer/plan/v1alpha12', imageResolution='AT_EXECUTION')
+                if result.get('executionManifest'):
+                    result['executionManifest'].update(apiVersion='platform.installer/execution-manifest/v1alpha9',
+                        applicationImageIntentsDigest=canonical_digest(self._task.args['application_image_lock']))
             result['executionManifestDigest'] = canonical_digest(result['executionManifest']) if result.get('executionManifest') else None
             destination = os.environ.get("PLATFORM_EXECUTION_MANIFEST_OUTPUT")
             manifest = result["executionManifest"]

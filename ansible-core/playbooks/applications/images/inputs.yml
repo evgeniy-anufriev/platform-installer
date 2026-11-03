@@ -26,6 +26,7 @@
       ansible.builtin.include_vars:
         file: "{{ platform_execution_bundle_root }}/manifest.yaml"
         name: platform_application_image_bundle
+      when: not platform_application_image_availability_only | default(false)
     - name: Сохранение защищённых параметров запроса подготовки образов приложений
       ansible.builtin.copy:
         content: "{{ platform_image_inputs.inputs | to_json }}"

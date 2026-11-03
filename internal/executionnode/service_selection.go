@@ -19,7 +19,7 @@ func serviceSelection(ctx context.Context) []string {
 }
 func serviceSelectionCapabilitySupported(c map[string]any) bool {
 	feature, ok := c["serviceSelection"].(map[string]any)
-	return ok && c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha14" &&
+	return ok && (c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha14" || c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha15") &&
 		contains(c["deploymentPlanRequestVersions"], serviceSelectionRequestVersion) &&
 		closedKeys(feature, "protocol", "planContract", "manifestContract") &&
 		feature["protocol"] == "ServiceSelection/v1alpha1" &&

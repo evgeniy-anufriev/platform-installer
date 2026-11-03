@@ -32,7 +32,38 @@ def placement_key(row):
     return ':'.join(row[key] for key in ('libraryId', 'instanceId', 'hostId'))
 
 
+def image_credential_key(row):
+    return hashlib.sha256(json.dumps([row['hostId'], row['request']['registry'], row['account'],
+                                    row['configDirectory']], sort_keys=True).encode()).hexdigest()
+
+
+def image_registry_key(row, platform, approved, node_authenticated):
+    context = image_credential_key(row) if not row['credentials'] and node_authenticated else ''
+    return hashlib.sha256(json.dumps([row['request'], row['credentials'], platform, approved, context],
+                                    sort_keys=True).encode()).hexdigest()
+
+
+def cached_image(manifest, row, platform, approved, node_credentials, registry_cache):
+    """Reuse only an already-proved invocation credential context, never a new node login."""
+    if not approved:
+        return {}
+    context = node_credentials.get(image_credential_key(row))
+    if not row['credentials'] and context is None:
+        return {}
+    key = image_registry_key(row, platform, approved,
+                             bool(context and (context['username'] or context['password'])))
+    if key not in registry_cache:
+        return {}
+    offline = offline_image(manifest, row['reference'], platform, row['legacy'])
+    return dict(reference=row['reference'], image=prepared_image(registry_cache[key], offline, row['legacy']))
+
+
 def selected_image(lock, reference, library_id, instance_id, host_id):
+    if lock.get('apiVersion') == 'platform.installer/application-image-intents/v1alpha1':
+        entry = lock.get('placements', {}).get(':'.join((library_id, instance_id, host_id)), {})
+        if normalize_image(entry.get('reference')) != normalize_image(reference):
+            raise ValueError('APPLICATION_IMAGE_NOT_LOCKED')
+        return {'registry': {'reference': reference}} if entry['registry'] else {}
     if lock.get('apiVersion') == 'platform.installer/container-images/v1alpha2':
         entry = lock.get('placements', {}).get(':'.join((library_id, instance_id, host_id)), {})
         if normalize_image(entry.get('reference')) != normalize_image(reference):

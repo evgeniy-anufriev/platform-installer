@@ -1,0 +1,16 @@
+---
+- name: Поиск совпадающих метаданных с уже проверенным контекстом текущего вызова
+  ansible.builtin.set_fact:
+    _image_cached_result: "{{ platform_application_image_bundle | platform.core.application_cached_image(application_image_input, application_image_platform, (application_image_input.request.registry in application_image_registries or application_image_input.credentials | length > 0), _image_node_credentials_cache, _image_registry_cache) }}"
+  no_log: true
+- name: Подготовка ещё не полученных метаданных штатными задачами Ansible
+  ansible.builtin.include_role:
+    name: platform.core.prepare_application_images
+    apply:
+      delegate_to: "{{ application_image_input.hostId }}"
+  when: _image_cached_result | length == 0
+- name: Привязка уже полученной идентичности к очередному размещению
+  ansible.builtin.set_fact:
+    platform_application_image_preparations: "{{ platform_application_image_preparations | combine({(application_image_input | platform.core.application_image_key): _image_cached_result}) }}"
+  when: _image_cached_result | length > 0
+  no_log: true

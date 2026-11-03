@@ -59,9 +59,10 @@ def application_execution_model(snapshot, image_lock=None, library_order=None, s
         item['safeDetails'] = {'providerLibraryId': provider}
         findings.append(item)
     contracts = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../../../../../contracts'))
+    deferred_images = (image_lock or {}).get('apiVersion') == 'platform.installer/application-image-intents/v1alpha1'
     invalid_lock = bool(active_libraries) and bool(SchemaValidator(contracts).validate(
         image_lock or {}, os.path.join(contracts, 'artifact-source/v1alpha2/' +
-        ('prepared-images.schema.json' if (image_lock or {}).get('apiVersion') == 'platform.installer/container-images/v1alpha2' else 'image-lock.schema.json'))))
+        ('image-intents.schema.json' if deferred_images else 'prepared-images.schema.json' if (image_lock or {}).get('apiVersion') == 'platform.installer/container-images/v1alpha2' else 'image-lock.schema.json'))))
     if invalid_lock:
         findings.append(finding('APPLICATION_IMAGE_LOCK_INVALID', 'artifactLock.x-container-images'))
         images = {}
@@ -134,7 +135,10 @@ def application_execution_model(snapshot, image_lock=None, library_order=None, s
                 image_name = instance['placements'][host].get('imageRequirement', instance.get('imageRequirement', {})).get('image')
                 try:
                     image = selected_image(image_lock or {}, image_name, library_id, instance_id, host)
-                    requirement = image_requirement(instance_id + ':' + host, image_name, image)
+                    requirement = (dict(id=instance_id + ':' + host + ':image', name=image_name,
+                                        artifactType='container-image', resolution='AT_EXECUTION')
+                                   if deferred_images and not invalid_lock else
+                                   image_requirement(instance_id + ':' + host, image_name, image))
                     requirements.append(dict(requirement, applicationLibrary=library_id, instanceId=instance_id,
                                              hosts=[host], sourcePolicy='REPOSITORY_THEN_OFFLINE'))
                 except (ValueError, KeyError, TypeError):

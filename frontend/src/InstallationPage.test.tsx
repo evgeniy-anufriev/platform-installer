@@ -1543,7 +1543,7 @@ describe("InstallationPage", () => {
       />,
     );
     expect(
-      screen.getByRole("button", { name: "Подготовка образов и плана…" }),
+      screen.getByRole("button", { name: "Формирование плана…" }),
     ).toHaveProperty("disabled", true);
   });
 

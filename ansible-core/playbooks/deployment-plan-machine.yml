@@ -38,5 +38,6 @@
         skip_infrastructure_verify: "{{ platform_execution_skip_infrastructure_verify | default(false) }}"
         application_image_lock: "{{ platform_plan_snapshot.application_image_lock | default({}) }}"
         application_image_metadata: "{{ platform_application_image_metadata | default(platform_prepared_application_images is defined) }}"
+        deferred_application_images: "{{ platform_application_deferred_images | default(false) }}"
       changed_when: false
       become: false

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/artifact-source/v1alpha2/image-intents.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "placements"],
+  "properties": {
+    "apiVersion": {"const": "platform.installer/application-image-intents/v1alpha1"},
+    "placements": {
+      "type": "object", "maxProperties": 4096,
+      "additionalProperties": {
+        "type": "object", "additionalProperties": false,
+        "required": ["reference", "registry"],
+        "properties": {
+          "reference": {"type": "string", "minLength": 1, "maxLength": 512},
+          "registry": {"type": "boolean"}
+        }
+      }
+    }
+  }
+}

@@ -806,6 +806,21 @@ def _materialize_runtime_projection(journal, metadata, manifest):
 
 def validate_application_manifest(manifest, external_service_ids=()):
     """Closed mixed manifest admission, used by Build, Start and the controller."""
+    if manifest.get('apiVersion') == 'platform.installer/execution-manifest/v1alpha9':
+        module_utils = os.path.abspath(os.path.join(os.path.dirname(__file__), '../collections/ansible_collections/platform/core/plugins/module_utils'))
+        if module_utils not in sys.path:
+            sys.path.insert(0, module_utils)
+        from schema_validation import SchemaValidator
+        contracts = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../contracts'))
+        if SchemaValidator(contracts).validate(manifest, os.path.join(contracts, 'execution-manifest/v1alpha9/schema.json')):
+            raise LifecycleError('EXECUTION_MANIFEST_INVALID')
+        prefix = dict(manifest)
+        del prefix['applicationImageIntentsDigest']
+        version = 'v1alpha7' if any(item['operation'] == 'APPLICATION_LIBRARIES_POST_INSTALL' for item in prefix['operations']) else 'v1alpha6'
+        prefix['apiVersion'] = 'platform.installer/execution-manifest/' + ('v1alpha8' if 'serviceExecutionScope' in prefix else version)
+        prefix['artifactRequirements'] = [item for item in prefix['artifactRequirements'] if item.get('artifactType') != 'container-image']
+        validate_application_manifest(prefix, external_service_ids)
+        return
     if manifest.get('apiVersion') == 'platform.installer/execution-manifest/v1alpha8':
         module_utils = os.path.abspath(os.path.join(os.path.dirname(__file__), '../collections/ansible_collections/platform/core/plugins/module_utils'))
         if module_utils not in sys.path:
@@ -1011,7 +1026,16 @@ def _materialize_application_projection(journal, manifest):
             scoped['platform_application_execution_scope'] = operation['applicationExecutionScope']
         prepared_path = os.path.join(journal.directory, 'application-images.json')
         if os.path.isfile(prepared_path):
-            scoped['platform_prepared_application_images'] = execution_secret_lease._read(prepared_path)
+            prepared = execution_secret_lease._read(prepared_path)
+            if manifest.get('apiVersion') == 'platform.installer/execution-manifest/v1alpha9':
+                if digest(prepared) != manifest['applicationImageIntentsDigest'] or prepared.get('apiVersion') != 'platform.installer/application-image-intents/v1alpha1':
+                    raise LifecycleError('APPLICATION_IMAGE_PREPARATION_STALE')
+                scoped['platform_application_image_intents'] = prepared
+                scoped['platform_application_resolved_images_path'] = os.path.join(journal.directory, 'application-resolved-images.json')
+            else:
+                scoped['platform_prepared_application_images'] = prepared
+        elif manifest.get('apiVersion') == 'platform.installer/execution-manifest/v1alpha9':
+            raise LifecycleError('APPLICATION_IMAGE_PREPARATION_STALE')
         destination = os.path.join(journal.directory, '.runtime-projection-' + hashlib.sha256(operation['operationId'].encode()).hexdigest() + '.json')
         descriptor = os.open(destination, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
         with os.fdopen(descriptor, 'w') as stream:
@@ -1036,7 +1060,7 @@ def _dispatch(release, journal, manifest, stopped):
     for operation, command in commands:
         if stopped[0]:
             return "CANCELLED"
-        if not infrastructure_started and (manifest.get('apiVersion') in (infra.MANIFEST_VERSION, infra.SKIP_MANIFEST_VERSION, 'platform.installer/execution-manifest/v1alpha7', 'platform.installer/execution-manifest/v1alpha8') or
+        if not infrastructure_started and (manifest.get('apiVersion') in (infra.MANIFEST_VERSION, infra.SKIP_MANIFEST_VERSION, 'platform.installer/execution-manifest/v1alpha7', 'platform.installer/execution-manifest/v1alpha8', 'platform.installer/execution-manifest/v1alpha9') or
                 (operation['operation'] in ('SERVICE_APPLY', 'PKI_APPLY', 'PKI_REISSUE') and
                  infra.tracked(journal.root, manifest.get('projectIdentity')))):
             infra.begin(journal, manifest)
@@ -1105,7 +1129,7 @@ def _dispatch(release, journal, manifest, stopped):
                         raise
                     command.extend(["-e", "@" + secret_inputs_path])
             environment = _environment(release, journal, operation, leased_private_key=bool(credentials and "privateKey" in credentials))
-            if manifest.get('apiVersion') in (infra.MANIFEST_VERSION, infra.SKIP_MANIFEST_VERSION, 'platform.installer/execution-manifest/v1alpha7', 'platform.installer/execution-manifest/v1alpha8') and operation['operation'] == 'SERVICE_VERIFY':
+            if manifest.get('apiVersion') in (infra.MANIFEST_VERSION, infra.SKIP_MANIFEST_VERSION, 'platform.installer/execution-manifest/v1alpha7', 'platform.installer/execution-manifest/v1alpha8', 'platform.installer/execution-manifest/v1alpha9') and operation['operation'] == 'SERVICE_VERIFY':
                 infra.verify_pending(journal, operation)
                 environment['PLATFORM_EXECUTION_VERIFY_EVIDENCE'] = '1'
             process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=environment)
@@ -1129,7 +1153,7 @@ def _dispatch(release, journal, manifest, stopped):
             journal.emit_operation_failure_diagnostic(error_code, phaseId=operation.get("phaseId"), actionId=operation["operationId"], serviceDeployment=operation.get("serviceDeployment"))
             raise LifecycleError("EXECUTION_OPERATION_FAILED")
         journal.event("ACTION_COMPLETED", "SUCCESS", "Trusted operation completed", phaseId=operation.get("phaseId"), actionId=operation["operationId"], serviceDeployment=operation.get("serviceDeployment"))
-        if manifest.get('apiVersion') in (infra.MANIFEST_VERSION, infra.SKIP_MANIFEST_VERSION, 'platform.installer/execution-manifest/v1alpha7', 'platform.installer/execution-manifest/v1alpha8') and operation['operation'] == 'SERVICE_VERIFY':
+        if manifest.get('apiVersion') in (infra.MANIFEST_VERSION, infra.SKIP_MANIFEST_VERSION, 'platform.installer/execution-manifest/v1alpha7', 'platform.installer/execution-manifest/v1alpha8', 'platform.installer/execution-manifest/v1alpha9') and operation['operation'] == 'SERVICE_VERIFY':
             infra.verified(journal, operation)
         if operation.get("operation") == "PKI_APPLY":
             pki_applied_in_run = True

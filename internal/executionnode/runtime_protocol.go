@@ -277,7 +277,7 @@ func (t OpenSSHTransport) buildDeploymentPlanRequest(ctx context.Context, node N
 		return DeploymentPlan{}, err
 	}
 	request["operation"], request["runId"], request["project"] = "BuildDeploymentPlan", runID, "/var/lib/platform-installer/execution/runs/"+runID+"/project"
-	if request["apiVersion"] == imagePlanRequestVersion || (request["apiVersion"] == selectionPlanRequestVersion || request["apiVersion"] == serviceSelectionRequestVersion) {
+	if request["apiVersion"] == availabilityPlanRequestVersion || request["apiVersion"] == imagePlanRequestVersion || (request["apiVersion"] == selectionPlanRequestVersion || request["apiVersion"] == serviceSelectionRequestVersion) {
 		if err := t.prepareApplicationImages(ctx, node, request); err != nil {
 			return DeploymentPlan{}, err
 		}
@@ -290,11 +290,15 @@ func (t OpenSSHTransport) buildDeploymentPlanRequest(ctx context.Context, node N
 	if !ok {
 		return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
 	}
+	if (value["apiVersion"] == "platform.installer/plan/v1alpha12") != (request["apiVersion"] == availabilityPlanRequestVersion) ||
+		request["apiVersion"] == availabilityPlanRequestVersion && value["imageResolution"] != "AT_EXECUTION" {
+		return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
+	}
 	postInstallSupported := false
-	if value["apiVersion"] == "platform.installer/plan/v1alpha9" || (value["apiVersion"] == "platform.installer/plan/v1alpha10" || value["apiVersion"] == "platform.installer/plan/v1alpha11") {
+	if value["apiVersion"] == "platform.installer/plan/v1alpha9" || (value["apiVersion"] == "platform.installer/plan/v1alpha10" || (value["apiVersion"] == "platform.installer/plan/v1alpha11" || value["apiVersion"] == "platform.installer/plan/v1alpha12")) {
 		capability, probeErr := t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": request["apiVersion"], "operation": "GetCapabilities"})
 		postInstallSupported = probeErr == nil && postInstallCapabilitySupported(capability)
-		if (value["apiVersion"] == "platform.installer/plan/v1alpha10" || value["apiVersion"] == "platform.installer/plan/v1alpha11") && !applicationProgressCapabilitySupported(capability) {
+		if (value["apiVersion"] == "platform.installer/plan/v1alpha10" || (value["apiVersion"] == "platform.installer/plan/v1alpha11" || value["apiVersion"] == "platform.installer/plan/v1alpha12")) && !applicationProgressCapabilitySupported(capability) {
 			return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
 		}
 		if !postInstallSupported {
@@ -307,18 +311,25 @@ func (t OpenSSHTransport) buildDeploymentPlanRequest(ctx context.Context, node N
 	if request["apiVersion"] == "platform.installer/execution-runtime/v1alpha5" && (value["apiVersion"] != "platform.installer/plan/v1alpha6" || value["skipInfrastructureVerify"] != request["skipInfrastructureVerify"] || value["executionMode"] != request["executionMode"]) {
 		return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
 	}
-	if request["apiVersion"] == imagePlanRequestVersion && ((value["apiVersion"] != "platform.installer/plan/v1alpha7" && !((value["apiVersion"] == "platform.installer/plan/v1alpha9" || (value["apiVersion"] == "platform.installer/plan/v1alpha10" || value["apiVersion"] == "platform.installer/plan/v1alpha11")) && postInstallSupported)) || value["skipInfrastructureVerify"] != request["skipInfrastructureVerify"] || value["executionMode"] != request["executionMode"]) {
+	if request["apiVersion"] == imagePlanRequestVersion && ((value["apiVersion"] != "platform.installer/plan/v1alpha7" && !((value["apiVersion"] == "platform.installer/plan/v1alpha9" || (value["apiVersion"] == "platform.installer/plan/v1alpha10" || (value["apiVersion"] == "platform.installer/plan/v1alpha11" || value["apiVersion"] == "platform.installer/plan/v1alpha12"))) && postInstallSupported)) || value["skipInfrastructureVerify"] != request["skipInfrastructureVerify"] || value["executionMode"] != request["executionMode"]) {
 		return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
 	}
 	plan, err := decodeDeploymentPlan(value)
 	if err != nil {
 		return DeploymentPlan{}, err
 	}
+	if request["apiVersion"] == availabilityPlanRequestVersion {
+		libraries, _ := request["skipApplicationLibraries"].([]string)
+		services, _ := request["skipServiceDeployments"].([]string)
+		if value["executionMode"] != request["executionMode"] || value["skipInfrastructureVerify"] != request["skipInfrastructureVerify"] || !sameLibrarySelection(libraries, plan.SkipApplicationLibraries) || !sameLibrarySelection(services, plan.SkipServiceDeployments) {
+			return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
+		}
+	}
 	if request["apiVersion"] == selectionPlanRequestVersion || request["apiVersion"] == serviceSelectionRequestVersion {
 		requested, _ := request["skipApplicationLibraries"].([]string)
 		requested = slices.Clone(requested)
 		slices.Sort(requested)
-		if (value["apiVersion"] != "platform.installer/plan/v1alpha8" && !((value["apiVersion"] == "platform.installer/plan/v1alpha9" || (value["apiVersion"] == "platform.installer/plan/v1alpha10" || value["apiVersion"] == "platform.installer/plan/v1alpha11")) && postInstallSupported)) || value["executionMode"] != request["executionMode"] || value["skipInfrastructureVerify"] != request["skipInfrastructureVerify"] || !slices.Equal(requested, plan.SkipApplicationLibraries) {
+		if (value["apiVersion"] != "platform.installer/plan/v1alpha8" && !((value["apiVersion"] == "platform.installer/plan/v1alpha9" || (value["apiVersion"] == "platform.installer/plan/v1alpha10" || (value["apiVersion"] == "platform.installer/plan/v1alpha11" || value["apiVersion"] == "platform.installer/plan/v1alpha12"))) && postInstallSupported)) || value["executionMode"] != request["executionMode"] || value["skipInfrastructureVerify"] != request["skipInfrastructureVerify"] || !slices.Equal(requested, plan.SkipApplicationLibraries) {
 			return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
 		}
 	}
@@ -1063,7 +1074,7 @@ func validEventCode(value string) bool {
 }
 func decodeDeploymentPlan(value map[string]any) (DeploymentPlan, error) {
 	plan := DeploymentPlan{}
-	if value["apiVersion"] == "platform.installer/plan/v1alpha11" {
+	if value["apiVersion"] == "platform.installer/plan/v1alpha11" || value["apiVersion"] == "platform.installer/plan/v1alpha12" && value["serviceExecutionScope"] != nil {
 		values, ok := value["skipServiceDeployments"].([]any)
 		if !ok || len(values) > 256 {
 			return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
@@ -1078,7 +1089,7 @@ func decodeDeploymentPlan(value map[string]any) (DeploymentPlan, error) {
 			plan.SkipServiceDeployments = append(plan.SkipServiceDeployments, id)
 		}
 	}
-	if value["apiVersion"] == "platform.installer/plan/v1alpha8" || (value["apiVersion"] == "platform.installer/plan/v1alpha9" || (value["apiVersion"] == "platform.installer/plan/v1alpha10" || value["apiVersion"] == "platform.installer/plan/v1alpha11")) {
+	if value["apiVersion"] == "platform.installer/plan/v1alpha8" || (value["apiVersion"] == "platform.installer/plan/v1alpha9" || (value["apiVersion"] == "platform.installer/plan/v1alpha10" || (value["apiVersion"] == "platform.installer/plan/v1alpha11" || value["apiVersion"] == "platform.installer/plan/v1alpha12"))) {
 		values, ok := value["skipApplicationLibraries"].([]any)
 		if !ok {
 			return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
@@ -1091,7 +1102,7 @@ func decodeDeploymentPlan(value map[string]any) (DeploymentPlan, error) {
 			plan.SkipApplicationLibraries = append(plan.SkipApplicationLibraries, id)
 		}
 	}
-	if value["apiVersion"] == "platform.installer/plan/v1alpha7" || (value["apiVersion"] == "platform.installer/plan/v1alpha8" || (value["apiVersion"] == "platform.installer/plan/v1alpha9" || (value["apiVersion"] == "platform.installer/plan/v1alpha10" || value["apiVersion"] == "platform.installer/plan/v1alpha11"))) {
+	if value["apiVersion"] == "platform.installer/plan/v1alpha7" || (value["apiVersion"] == "platform.installer/plan/v1alpha8" || (value["apiVersion"] == "platform.installer/plan/v1alpha9" || (value["apiVersion"] == "platform.installer/plan/v1alpha10" || (value["apiVersion"] == "platform.installer/plan/v1alpha11" || value["apiVersion"] == "platform.installer/plan/v1alpha12")))) {
 		skip, ok := value["skipInfrastructureVerify"].(bool)
 		if !ok || skip && value["executionMode"] != string(ApplicationLibrariesOnly) {
 			return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
@@ -1104,7 +1115,7 @@ func decodeDeploymentPlan(value map[string]any) (DeploymentPlan, error) {
 		}
 		plan.SkipInfrastructureVerify = true
 	}
-	if value["apiVersion"] == "platform.installer/plan/v1alpha5" || value["apiVersion"] == "platform.installer/plan/v1alpha6" || value["apiVersion"] == "platform.installer/plan/v1alpha7" || (value["apiVersion"] == "platform.installer/plan/v1alpha8" || (value["apiVersion"] == "platform.installer/plan/v1alpha9" || (value["apiVersion"] == "platform.installer/plan/v1alpha10" || value["apiVersion"] == "platform.installer/plan/v1alpha11"))) {
+	if value["apiVersion"] == "platform.installer/plan/v1alpha5" || value["apiVersion"] == "platform.installer/plan/v1alpha6" || value["apiVersion"] == "platform.installer/plan/v1alpha7" || (value["apiVersion"] == "platform.installer/plan/v1alpha8" || (value["apiVersion"] == "platform.installer/plan/v1alpha9" || (value["apiVersion"] == "platform.installer/plan/v1alpha10" || (value["apiVersion"] == "platform.installer/plan/v1alpha11" || value["apiVersion"] == "platform.installer/plan/v1alpha12")))) {
 		mode, ok := value["executionMode"].(string)
 		plan.ExecutionMode = ExecutionMode(mode)
 		if !ok || !plan.ExecutionMode.valid() {
@@ -1154,7 +1165,7 @@ func decodeDeploymentPlan(value map[string]any) (DeploymentPlan, error) {
 				return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
 			}
 			if item["artifactType"] == "container-image" {
-				image, err := decodeApplicationImage(item)
+				image, err := decodeApplicationImage(item, value["apiVersion"] == "platform.installer/plan/v1alpha12")
 				if err != nil {
 					return DeploymentPlan{}, err
 				}

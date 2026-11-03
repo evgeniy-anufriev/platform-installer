@@ -1,4 +1,6 @@
 ---
+- import_playbook: ../images/execution.yml
+  when: platform_application_image_intents is defined
 - import_playbook: credential-root.yml
 - name: Определение и проверка полного состава автономной операции приложения
   hosts: localhost

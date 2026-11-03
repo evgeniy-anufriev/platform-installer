@@ -247,3 +247,112 @@ claimed for combined master; integration checks do not replace that evidence.
 Scoped review dispositions D01/D03 and D02/D04/D05 are unchanged. Main's unrelated
 uncommitted Kafka documentation edits are preserved separately and restored
 outside the AIM commit. No runtime-secret or QA .runtime file is staged.
+
+## Registry availability planning, 2026-11-03
+
+Owner requested at least 2x faster Create Plan, no offline image preparation,
+and only registry availability checks from every target. Owner emphasized real
+work reduction rather than merely postponing it. Review was not invoked per
+owner instruction. Current contracts are extended additively: runtime request9,
+capabilities15, plan12, manifest9; existing versions retain their meaning.
+
+Create Plan now probes one HTTPS `/v2/` per host/registry (200/401). It neither
+reads image manifests/configs nor requests registry secrets. The immutable
+manifest binds private image intents; exact identity is resolved before Apply.
+Anonymous metadata contexts and identical explicit credential-source contexts
+share results within one invocation. Distinct node logins/platforms/policies
+remain separate. Verify reuses the run result without another registry query.
+The existing runtime credential lease, transport, Ansible role and parsers are
+reused. Empty anonymous secret maps were corrected to nil in Go admission; this
+prerequisite correction was present in both measured binaries.
+
+Measurement: actual full-App React handlers -> Wails
+`CreateInstallationPlanForMode` -> Execution Node .101, same two public image
+references (busybox1.36/alpine3.20), one library, all three RED OS target hosts.
+No layers were pulled and no container/service Apply, Approve or Start occurred.
+Each sample opened the saved fixture, set runtime-only SSH credentials, probed
+and explicitly approved the established host fingerprints, checked the node,
+ran Verify, then invoked Create Plan. Only the full synchronous Create Plan
+call was timed. Each returned PLAN_REVIEW/EXECUTABLE. Reopen cleared the prior
+session plan; no cached UI plan result was used as another timing sample.
+
+| Variant | Full Create Plan, seconds | Median |
+| --- | --- | --- |
+| Before, metadata at Plan | 122.2869 / 130.4560 / 130.6174 | 130.4560 |
+| After, availability at Plan | 21.1921 / 18.7909 / 19.1776 | 19.1776 |
+
+Median acceleration **6.80x**, exceeding the requested 2x. The final sample used
+the final source bundle and combined Go transport fixes from origin/master.
+To separate postponement from actual work reduction, a supplementary real Go ->
+Execution Node compatibility-v7 plan retained full metadata-before-Plan work:
+47.2898s and final48.8401s, six resolved placements, EXECUTABLE. The final run was
+`installer-225708537413784313568194913219555650473`, plan
+`plan-f7ebf98dc3f07d90bd82766a`. Even this path is **2.67x** faster than the old
+median. It includes fresh public host-key discovery in the credential provider;
+it is supplementary Core evidence, not a substitute for the React/Wails gate.
+
+Fixture identity `project-2026110300000031`; references, placements and native
+configuration stayed the same. Saved revisions changed only as bundle binding
+changed:
+
+- Before revision `sha256:0f5ab7702a44dded9c29517d7ede040ea783c300b1e9e11a641975789c09b20e`,
+  bundle `sha256:8af34a285138d61745dbd4250d694c4d15ff37a7ed682b1177b9b75198c0c29a`,
+  plan `plan-76c6ffa1cbad0c81face65ed`. Staging runs:
+  `installer-231327343489178516514229704181463922146`,
+  `installer-179367423509237543953974826307878697100`,
+  `installer-67567772514452038619969374881204551489`.
+- Initial after revision `sha256:0e183e6d8c063b9fab3ceb472ad280f112d6713647db850bb8d4b73d08ad0082`,
+  bundle `sha256:fc254be435576aca25c16c27c3cf17ac1adbb9a3274f3ed8febe5124f3a54f5d`,
+  plan `plan-d12a67c8fc74d6e1f25fb157`. Runs:
+  `installer-290353611859461754769663439092450402500`,
+  `installer-161894316807220236271743010099979235236`.
+- Final revision `sha256:027fe555a2b7bc9111f4bae5c8182353012d09920ea2bac006c88c79fdef60e4`,
+  bundle `sha256:aaef188bfefd8655cd0a83e298504ffc5da29e27fb82c4d90e81d2dbef599311`,
+  plan `plan-b05743b6a815f6e35d4d0796`, run
+  `installer-68228882367848811826548731991767135237`.
+
+An initial five-image/three-target baseline exceeded the old preparation lease
+and failed; excluded from timing. Automation retries without a new React plan
+invocation and a duplicate test dialog handler were also excluded. Actual
+before/after timings above are successful full calls only. No production
+registry credentials, operator private keys or secret payloads were recorded.
+
+Validation: eight new RED OS tests PASS, including actual native Ansible TLS
+registry probe, two manifest/two config reads for six placements, no queries
+when reusing the result, native fresh offline execution preparation, all three
+plan/manifest execution modes, reference binding and credential-context
+isolation. Existing image preparation7, image parsing5 and application plan17
+PASS. Full Go tests/vet PASS; InstallationPage38/typecheck/lint/frontend build
+PASS; production Windows Wails build PASS. Fresh worktree QA needed the existing
+ignored SZI themes archive from the original checkout; no artifact acquisition
+or source package change was made.
+
+One existing Core protocol test remains failing at its earlier candidate
+BuildRuntimeSecretDescriptors fixture with CORE_OPERATION_FAILED; the exact
+same failure was reproduced in the untouched baseline workspace before this
+change. It was not hidden or reported as PASS. Actual new-protocol and legacy
+compatibility planning above passed. Full service installation, image pull/load,
+visual inspection and ALT acceptance are outside this measurement scope.
+
+Bundles were built on trusted node2 from qa-sync current sources, verified and
+published with the standard publisher before UI use. Raw timings and bounded
+automation helpers remain ignored under `.runtime/qa/plan-registry-availability`.
+
+Final entry-point check moved image result loading into shared
+`stages/resolve-runtime.yml`, covering Apply, Verify and post_install equally.
+The native offline test also executes that shared stage with the desired-state
+technical image lock removed; it consumes the saved run result successfully.
+All eight tests and syntax checks of Apply/Verify/post_install PASS after this
+wiring correction. Release bundle
+`sha256:1b8537ad8d0c879ba394678495dad9d77bbbe3df0c6460c222c41ed09fb98ec9`
+was built and validated. The timed aaef bundle has the same Plan/preparation
+code; the final shared execution-entry wiring was not used for another timing
+sample or claimed as service installation acceptance.
+
+Cleanup complete: previous c97e77d7 runtime restored to READY through real
+React/Wails preparation; both touched caches restored with the standard
+publisher. Owned Vite/Wails processes stopped. All four temporary node2 source
+workspaces removed through qa-sync cleanup. Twelve unstarted synthetic benchmark
+plan staging directories were removed only after exact project identity,
+containment and absence of execution status/metadata were checked. No real run
+or installed service was removed.

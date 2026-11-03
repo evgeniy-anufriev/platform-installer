@@ -916,6 +916,14 @@ No operator-authored image SHA/size, new persistence or planning daemon. See the
 [implementation plan](work/application-libraries/application-image-metadata-plan.md)
 and ADR-046; current gates and blockers are recorded only in CURRENT_STATE.
 
+Owner amendment 2026-11-03: Create Plan checks unique target/registry availability
+only, with no offline image work. Declared image references are approved; exact
+identity is resolved once before Apply and reused during Verify. Native Ansible
+metadata preparation also shares equivalent invocation contexts across placements
+to reduce actual work. This requires negotiated request v9/plan v12/manifest v9;
+older runtime protocols keep their prior image preparation contract. Timing and
+acceptance limits are in the existing image metadata journal.
+
 The owner-approved [runtime optimization](work/execution/service-runtime-optimization-phase4-plan.md)
 adds explicit compatible provider-script batching and removes repeated delivery
 preparation. Focused QA and independent review are separate from updated-bundle,

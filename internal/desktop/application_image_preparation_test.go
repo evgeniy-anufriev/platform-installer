@@ -21,6 +21,26 @@ type refreshingRegistryDescriptorTransport struct {
 	fail  bool
 }
 
+func TestAnonymousRegistryProbeNeedsTransportButNoSecretDiscovery(t *testing.T) {
+	app, _, _ := installationPlanApp(t, false)
+	binding, err := app.credentialBindingLocked()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = app.secrets.Set(binding, runtimesecret.Input{Username: "operator", SSHMode: runtimesecret.SSHPassword, SSHPassword: "synthetic-transport", ElevationMode: runtimesecret.ElevationNone}); err != nil {
+		t.Fatal(err)
+	}
+	scope := executionnode.ImagePreparationScope{ProjectIdentity: app.current.Project.ID, ProjectRevision: app.current.Managed.ProjectRevision,
+		TargetConnections: map[string]executionnode.ImageTargetConnection{"node1": {Address: "192.0.2.10", Port: 22}}}
+	credentials, err := app.imagePreparationCredentialsLocked(scope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if credentials.Payload.Username != "operator" || credentials.Payload.RuntimeSecretValues != nil || app.runtimeSecretEvidence != nil {
+		t.Fatal("anonymous probe acquired unrelated secrets or constructed an invalid empty secret map")
+	}
+}
+
 func (transport *refreshingRegistryDescriptorTransport) BuildRuntimeSecretDescriptors(ctx context.Context, node executionnode.Node, root string, runtime map[string]any, request executionnode.RuntimeSecretDescriptorRequest) (executionnode.RuntimeSecretDescriptorResult, error) {
 	transport.calls++
 	if transport.fail {

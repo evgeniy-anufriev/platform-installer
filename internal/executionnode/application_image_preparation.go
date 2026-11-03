@@ -8,6 +8,17 @@ import (
 )
 
 const imagePlanRequestVersion = "platform.installer/execution-runtime/v1alpha6"
+const availabilityPlanRequestVersion = "platform.installer/execution-runtime/v1alpha9"
+
+func availabilityPlanCapabilitySupported(c map[string]any) bool {
+	feature, ok := c["applicationImagePlanning"].(map[string]any)
+	return ok && c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha15" &&
+		contains(c["deploymentPlanRequestVersions"], availabilityPlanRequestVersion) &&
+		closedKeys(feature, "protocol", "planContract", "manifestContract") &&
+		feature["protocol"] == "RegistryAvailabilityPlanning/v1alpha1" &&
+		feature["planContract"] == "platform.installer/plan/v1alpha12" &&
+		feature["manifestContract"] == "platform.installer/execution-manifest/v1alpha9"
+}
 
 type ImagePreparationScope struct {
 	ProjectIdentity          string                           `json:"projectIdentity"`
@@ -28,6 +39,9 @@ type ImageTargetConnection struct {
 }
 
 func (t OpenSSHTransport) imagePlanningCapabilities(ctx context.Context, node Node, fallback string) (map[string]any, error) {
+	if capability, err := t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": availabilityPlanRequestVersion, "operation": "GetCapabilities"}); err == nil && availabilityPlanCapabilitySupported(capability) {
+		return capability, nil
+	}
 	if len(serviceSelection(ctx)) > 0 {
 		return t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": serviceSelectionRequestVersion, "operation": "GetCapabilities"})
 	}
@@ -73,11 +87,11 @@ func (t OpenSSHTransport) prepareApplicationImages(ctx context.Context, node Nod
 	for _, key := range []string{"executionMode", "deploymentOrder", "skipInfrastructureVerify"} {
 		describe[key] = request[key]
 	}
-	if request["apiVersion"] == selectionPlanRequestVersion || request["apiVersion"] == serviceSelectionRequestVersion {
+	if request["apiVersion"] == selectionPlanRequestVersion || request["apiVersion"] == serviceSelectionRequestVersion || request["apiVersion"] == availabilityPlanRequestVersion {
 		describe["skipApplicationLibraries"] = request["skipApplicationLibraries"]
 		describe["applicationLibraryOrder"] = request["applicationLibraryOrder"]
 	}
-	if request["apiVersion"] == serviceSelectionRequestVersion {
+	if request["apiVersion"] == serviceSelectionRequestVersion || request["apiVersion"] == availabilityPlanRequestVersion {
 		describe["skipServiceDeployments"] = request["skipServiceDeployments"]
 	}
 	response, err := t.runtimeProtocol(ctx, node, describe)

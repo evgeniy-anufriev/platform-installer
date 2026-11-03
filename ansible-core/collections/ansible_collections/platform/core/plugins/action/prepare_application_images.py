@@ -14,6 +14,27 @@ from ansible_collections.platform.core.plugins.module_utils.project_validation i
 class ActionModule(ActionBase):
     TRANSFERS_FILES = False
 
+    def _availability_inputs(self, args, values, snapshot):
+        from ansible_collections.platform.core.plugins.module_utils.application_selection import execution_scope
+        scope = execution_scope(snapshot, values.get('platform_execution_application_library_order'), values.get('platform_execution_skip_application_libraries'))
+        intents, probes, targets = {}, {}, set()
+        rows = [] if values.get('platform_execution_mode') == 'INFRASTRUCTURE_VERIFY_ONLY' else args.get('application_rows', values.get('platform_application_rows', []))
+        for row in rows:
+            if row['libraryId'] not in scope['installLibraries']:
+                continue
+            reference = row['settings']['image']
+            request = registry_request(reference)
+            policy = set(values['hostvars'][row['hostId']].get('platform_application_approved_registries', [])) | set(row.get('registryCredentials', {}))
+            registry = request['registry'] in policy
+            intents[placement_key(row)] = dict(reference=reference, registry=registry)
+            if registry:
+                probes[(row['hostId'], request['registry'])] = dict(hostId=row['hostId'], endpoint=request['endpoint'])
+                targets.add(row['hostId'])
+        return dict(projectIdentity=snapshot['project']['id'], projectRevision=snapshot['projectRevision'],
+                    placements=list(probes.values()), ready=dict(apiVersion='platform.installer/application-image-intents/v1alpha1', placements=intents),
+                    targetConnections={host: args['connections'][host] for host in sorted(targets)},
+                    requirements=[], descriptorSetFingerprint=canonical_digest([]), availabilityOnly=True)
+
     def run(self, tmp=None, task_vars=None):
         values = task_vars or {}
         args = self._task.args
@@ -27,6 +48,8 @@ class ActionModule(ActionBase):
             snapshot = args['snapshot']
             if snapshot.get('validation', {}).get('status') != 'PASS':
                 raise ValueError('APPLICATION_IMAGE_PROJECT_INVALID')
+            if values.get('platform_application_image_availability_only'):
+                return dict(changed=False, inputs=self._availability_inputs(args, values, snapshot))
             stage = 'bundle-manifest'
             bundle = self._loader.load_from_file(os.path.join(args['bundle_root'], 'manifest.yaml'))
             from ansible_collections.platform.core.plugins.module_utils.application_selection import execution_scope

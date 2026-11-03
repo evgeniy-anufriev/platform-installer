@@ -12,6 +12,7 @@ import execution_secret_lease as secrets
 import execution_target_trust as trust
 
 REQUEST_VERSION = 'platform.installer/execution-runtime/v1alpha6'
+AVAILABILITY_REQUEST_VERSION = 'platform.installer/execution-runtime/v1alpha9'
 LEASE_VERSION = 'platform.installer/application-image-preparation-lease/v1alpha1'
 
 
@@ -54,7 +55,7 @@ def prepare(journal, value, release, runtime_release):
     if os.path.isfile(result_path):
         return dict(status='READY', preparationDigest=digest(secrets._read(result_path)))
     if not inputs['placements']:
-        result = dict(apiVersion='platform.installer/container-images/v1alpha2', placements=inputs['ready'])
+        result = inputs['ready'] if inputs.get('availabilityOnly') else dict(apiVersion='platform.installer/container-images/v1alpha2', placements=inputs['ready'])
         secrets._write(result_path, result)
         return dict(status='READY', preparationDigest=digest(result))
     payload, known_hosts, values = preparation_payload(journal, inputs, runtime_release, value.get('preparationLease'))
@@ -70,8 +71,10 @@ def prepare(journal, value, release, runtime_release):
         with os.fdopen(descriptor, 'wb') as stream:
             stream.write(known_hosts)
         import yaml
-        with open(os.path.join(release, 'manifest.yaml'), encoding='utf-8') as stream:
-            bundle = yaml.safe_load(stream)
+        bundle = {}
+        if not inputs.get('availabilityOnly'):
+            with open(os.path.join(release, 'manifest.yaml'), encoding='utf-8') as stream:
+                bundle = yaml.safe_load(stream)
         variables = dict(platform_application_image_inputs=inputs, platform_application_image_bundle=bundle,
                          platform_application_image_secret_values=values, platform_application_image_result_path=result_path,
                          ansible_user=payload['username'])
@@ -80,7 +83,8 @@ def prepare(journal, value, release, runtime_release):
         command = [sys.executable, os.path.join(release, 'ansible-core/tools/run_with_runtime_credentials.py'),
                    '--credentials-file', credentials_path, '--runtime-dir', os.path.join(temporary, 'identity'), '--',
                    'ansible-playbook', '-i', os.path.join(journal.directory, 'project/inventory/hosts.yml'),
-                   os.path.join(release, 'ansible-core/playbooks/applications/images/prepare.yml'), '-e', '@' + variables_path]
+                   os.path.join(release, 'ansible-core/playbooks/applications/images/' +
+                                ('availability.yml' if inputs.get('availabilityOnly') else 'prepare.yml')), '-e', '@' + variables_path]
         environment = _environment(release, leased_private_key=bool(payload.get('privateKey')))
         environment['ANSIBLE_SSH_ARGS'] = environment['ANSIBLE_SSH_ARGS'].replace(
             '/var/lib/platform-installer/execution/known_hosts', trust_path)
@@ -105,5 +109,7 @@ def prepare(journal, value, release, runtime_release):
         finally:
             for signum, handler in previous.items():
                 signal.signal(signum, handler)
+    if inputs.get('availabilityOnly'):
+        secrets._write(result_path, inputs['ready'])
     result = secrets._read(result_path)
     return dict(status='READY', preparationDigest=digest(result))
