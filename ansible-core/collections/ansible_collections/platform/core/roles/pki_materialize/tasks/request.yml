@@ -91,6 +91,63 @@
          (platform_pki_reissue_marker_value.stdout | default('') | trim) == platform_pki_request.certificateRequestFingerprint and
          platform_pki_request.id in platform_pki_reissue_request_ids }}
 
+- name: Чтение существующего маркера отпечатка запроса PKI
+  ansible.builtin.command:
+    argv: [cat, "{{ _platform_pki_request_dir }}/request-fingerprint"]
+  register: platform_pki_existing_request_fingerprint
+  changed_when: false
+  when: platform_pki_request_marker.stat.exists
+
+- name: Получение открытого ключа сохранённого закрытого ключа перед повторным Apply
+  ansible.builtin.command:
+    argv: [openssl, pkey, -in, "{{ _platform_pki_request_dir }}/leaf.key", -passin, 'pass:', -pubout]
+  register: _platform_pki_existing_key_public
+  changed_when: false
+  failed_when: false
+  when:
+    - platform_pki_request_marker.stat.exists
+    - platform_pki_request_files.results[0].stat.isreg | default(false)
+    - platform_pki_request_files.results[1].stat.isreg | default(false)
+  no_log: true
+
+- name: Получение открытого ключа сохранённого сертификата перед повторным Apply
+  ansible.builtin.command:
+    argv: [openssl, x509, -in, "{{ _platform_pki_request_dir }}/leaf.crt", -pubkey, -noout]
+  register: _platform_pki_existing_certificate_public
+  changed_when: false
+  failed_when: false
+  when:
+    - platform_pki_request_marker.stat.exists
+    - platform_pki_request_files.results[0].stat.isreg | default(false)
+    - platform_pki_request_files.results[1].stat.isreg | default(false)
+  no_log: true
+
+- name: Отклонение технической ошибки проверки сохранённой пары PKI
+  ansible.builtin.assert:
+    that:
+      - _platform_pki_existing_key_public.rc in [0, 1]
+      - _platform_pki_existing_certificate_public.rc in [0, 1]
+    fail_msg: PKI_AUTHORITATIVE_PEM_INVALID
+  when:
+    - platform_pki_request_marker.stat.exists
+    - platform_pki_request_files.results[0].stat.isreg | default(false)
+    - platform_pki_request_files.results[1].stat.isreg | default(false)
+  no_log: true
+
+- name: Автоматический выбор перевыпуска при утрате подходящего закрытого ключа
+  ansible.builtin.set_fact:
+    _platform_pki_reissue_requested: >-
+      {{ _platform_pki_reissue_requested or
+         (platform_pki_request_marker.stat.exists and not platform_pki_reissue_marker.stat.exists and
+          (platform_pki_existing_request_fingerprint.stdout | default('') | trim) == platform_pki_request.certificateRequestFingerprint and
+          (not (platform_pki_request_files.results[0].stat.isreg | default(false)) or
+           not (platform_pki_request_files.results[1].stat.isreg | default(false)) or
+           (_platform_pki_existing_key_public.rc | default(0)) == 1 or
+           (_platform_pki_existing_certificate_public.rc | default(0)) == 1 or
+           ((_platform_pki_existing_key_public.stdout | default('') | trim) !=
+            (_platform_pki_existing_certificate_public.stdout | default('') | trim)))) }}
+  no_log: true
+
 - name: Отклонение частичного состояния запроса PKI
   ansible.builtin.assert:
     that:
@@ -100,7 +157,8 @@
         (platform_pki_request_marker.stat.exists and
          (platform_pki_request_files.results[0].stat.isreg | default(false)) and
          (platform_pki_request_files.results[1].stat.isreg | default(false))) or
-        _platform_pki_reissue_resumable
+        _platform_pki_reissue_resumable or
+        (platform_pki_request_marker.stat.exists and _platform_pki_reissue_requested)
     fail_msg: PKI_REQUEST_STATE_INCOMPLETE
 
 - name: Проверка явного разрешения на возобновление перевыпуска PKI
@@ -109,20 +167,17 @@
       - not platform_pki_reissue_marker.stat.exists or _platform_pki_reissue_resumable
     fail_msg: PKI_REISSUE_RESUME_REQUIRED
 
-- name: Чтение существующего маркера отпечатка запроса PKI
-  ansible.builtin.command:
-    argv: [cat, "{{ _platform_pki_request_dir }}/request-fingerprint"]
-  register: platform_pki_existing_request_fingerprint
-  changed_when: false
-  when: platform_pki_request_marker.stat.exists
-
 - name: Определение прерванного перевыпуска с уже записанным идентификатором конечного сертификата
   ansible.builtin.set_fact:
     _platform_pki_reissue_materialized: >-
       {{ _platform_pki_reissue_resumable and platform_pki_request_marker.stat.exists and
          (platform_pki_existing_request_fingerprint.stdout | default('') | trim) == platform_pki_request.certificateRequestFingerprint and
          (platform_pki_request_files.results[0].stat.isreg | default(false)) and
-         (platform_pki_request_files.results[1].stat.isreg | default(false)) }}
+         (platform_pki_request_files.results[1].stat.isreg | default(false)) and
+         (_platform_pki_existing_key_public.rc | default(-1)) == 0 and
+         (_platform_pki_existing_certificate_public.rc | default(-1)) == 0 and
+         (_platform_pki_existing_key_public.stdout | default('') | trim) ==
+         (_platform_pki_existing_certificate_public.stdout | default('') | trim) }}
 
 - name: Определение необходимости повторного выпуска сертификата
   ansible.builtin.set_fact:
@@ -181,6 +236,34 @@
         not (platform_pki_request_marker.stat.exists or platform_pki_reissue_marker.stat.exists) or platform_pki_authority_marker.stat.exists
     fail_msg: CERTIFICATE_REISSUE_REQUIRED
 
+- name: Проверка подписи сохранённого конечного сертификата текущим CA
+  ansible.builtin.command:
+    argv: [openssl, verify, -no_check_time, -CAfile, "{{ _platform_pki_authority_dir }}/ca.crt", "{{ _platform_pki_request_dir }}/leaf.crt"]
+  register: _platform_pki_leaf_signature
+  changed_when: false
+  failed_when: false
+  when: (_platform_pki_existing_certificate_public.rc | default(-1)) == 0
+  no_log: true
+
+- name: Отклонение технической ошибки проверки подписи конечного сертификата
+  ansible.builtin.assert:
+    that:
+      - (_platform_pki_leaf_signature.rc | default(0)) in [0, 2]
+    fail_msg: PKI_AUTHORITATIVE_PEM_COMPARISON_FAILED
+  no_log: true
+
+- name: Выбор перевыпуска конечного сертификата с повреждённой подписью
+  ansible.builtin.set_fact:
+    _platform_pki_reissue_requested: "{{ _platform_pki_reissue_requested or _platform_pki_bad_leaf_signature }}"
+    _platform_pki_reissue_required: "{{ _platform_pki_reissue_required or (not _platform_pki_reissue_resumable and _platform_pki_bad_leaf_signature) }}"
+    _platform_pki_reissue_active: "{{ _platform_pki_reissue_active or (_platform_pki_reissue_resumable and _platform_pki_bad_leaf_signature) }}"
+  vars:
+    _platform_pki_bad_leaf_signature: >-
+      {{ platform_pki_request_marker.stat.exists and
+         (platform_pki_existing_request_fingerprint.stdout | default('') | trim) == platform_pki_request.certificateRequestFingerprint and
+         (_platform_pki_leaf_signature.rc | default(0)) == 2 }}
+  no_log: true
+
 - name: Создание защищенного каталога транзакций перевыпуска PKI
   ansible.builtin.file:
     path: "{{ platform_pki_state_root }}/{{ platform_pki_project_id }}/reissues"
@@ -208,7 +291,10 @@
     group: "{{ platform_pki_group }}"
     mode: '0600'
   loop: [leaf.key, leaf.crt, request-fingerprint]
-  when: _platform_pki_reissue_required
+  when:
+    - _platform_pki_reissue_required
+    - item != 'leaf.key' or (platform_pki_request_files.results[0].stat.isreg | default(false))
+    - item != 'leaf.crt' or (platform_pki_request_files.results[1].stat.isreg | default(false))
   no_log: true
 
 - name: Сохранение существующих производных хранилищ PKCS12 перед явным повторным выпуском
@@ -333,11 +419,13 @@
     - "{{ _platform_pki_request_dir }}/leaf.key"
   no_log: true
 
-- name: Создание запроса на подпись сертификата один раз
+- name: Создание запроса на подпись сертификата из текущего закрытого ключа
   ansible.builtin.command:
     argv: [openssl, req, -new, -key, "{{ _platform_pki_request_dir }}/leaf.key", -out, "{{ _platform_pki_request_runtime_dir }}/leaf.csr", -config, "{{ _platform_pki_request_runtime_dir }}/request.cnf"]
   args:
-    creates: "{{ _platform_pki_request_runtime_dir }}/leaf.csr"
+    # CSR is derived runtime state. A leftover CSR may belong to an older key;
+    # only an existing authoritative certificate makes signing unnecessary.
+    creates: "{{ _platform_pki_request_dir }}/leaf.crt"
   no_log: true
 
 - name: Однократная подпись сертификата запроса

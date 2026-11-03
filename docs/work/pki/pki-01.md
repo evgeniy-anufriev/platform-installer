@@ -49,20 +49,41 @@ a later consumer such as SERVICE-02A must resolve the same SecretRef again.
 Values never enter project data, inventory, plans, fingerprints, logs or argv.
 Sensitive OpenSSL/keytool/copy tasks use `no_log`.
 
-Ordinary reconcile never replaces an initialized certificate identity. A changed
+Ordinary reconcile preserves a valid initialized certificate identity. A changed
 certificate or authority fingerprint returns `CERTIFICATE_REISSUE_REQUIRED`.
+Owner decision 2026-11-03: if managed leaf key/certificate material is missing,
+cannot be decoded, has an invalid certificate signature/issuer chain, or the
+key does not match the saved certificate,
+the same running `PKI_APPLY` selects the existing request-scoped reissue path.
+This repairs generated state without a new plan or separate `PKI_REISSUE`
+operation. It applies only when the saved request fingerprint still equals the
+current desired fingerprint, no interrupted-reissue marker exists, and the
+existing authority guards pass. Existing available leaf/store files are backed
+up before replacement; missing files are skipped during backup. CA key,
+certificate and policy are preserved. Missing or corrupt CA is NOT recovered
+automatically; the existing CA state/policy guards remain. Symlinks, unknown
+partial state and technical comparison failures still block. Failure
+of the one reissue stops Apply; there is no retry loop or rollback claim.
+
+CSR is derived runtime state. If a leaf certificate must be created, its CSR
+is regenerated from the current private key even if an old CSR exists.
+An existing certificate suppresses CSR creation; a valid repeat keeps identity
+and returns no changes. Previously damaged pairs are repaired by the above
+reissue path, not by silently signing another certificate outside Apply.
+
 The runtime password for derived PKCS12 stores may be changed independently:
 when valid persistent PEM key/certificate material still matches the request
 and CA identity, Core rebuilds only the keystore/truststore pair with the newly
 provided runtime password. If the stores already validate against that
 password and expected PEM identity, they remain unchanged. Missing or invalid
-authoritative PEM continues to block store repair. This password-only recovery
+authoritative certificate PEM uses full leaf-request recovery as described
+above; valid leaf PEM uses password-only store recovery. Password-only recovery
 does not issue a new certificate or bypass explicit reissue authorization.
 The MANAGED CA private key and marker are persistent Execution Node state under
 `platform_execution_state_root` (default
 `/var/lib/platform-installer/execution/pki`), never the ephemeral private
 workspace. A missing previously-created CA key is partial state and blocks;
-the role never regenerates it. Partial authority/request state returns a
+the role never regenerates it. Other partial authority/request state returns a
 blocking diagnostic. Automatic renewal and CA rotation remain outside PKI-01.
 An explicit leaf-certificate reissue is available only through
 `ansible-core/playbooks/pki-reissue.yml` with a non-empty runtime
@@ -73,7 +94,8 @@ is unchanged, then clears the marker after materialization and store repair. Thi
 an operator-authorized certificate/key reissue without inventing a
 CN/SAN/profile change. Password-only PKCS12 rebuilding is separate and
 preserves leaf identity. Ordinary `pki-apply.yml` still blocks changed request
-identities and does not reissue selected material. The certificate profile
+identities and preserves valid initialized material; automatic lost-leaf-key
+recovery is the owner-approved exception described above. The certificate profile
 `usages` collection already supports
 `serverAuth`, `clientAuth`, or both; the current product default is both
 `serverAuth` and `clientAuth`. Explicit profile `usages` override this default.
@@ -102,6 +124,49 @@ Ansible запуске без этого контекста разрешён т�
 plan и не создаёт PKI-каталоги Execution Node или файлы на targets. Отдельный
 Core `pki-apply.yml` остаётся без фильтра и намеренно reconcile’ит всех
 TLS-потребителей проекта.
+
+## CSR and leaf recovery validation, 2026-11-03
+
+Owner's isolated-system evidence: the saved CSR dated November 1 matches the
+certificate written November 3, while the newly written private key differs.
+The root cause of the older private key's disappearance remains unproven.
+The role's CSR `creates` guard previously accepted that stale runtime CSR;
+it now guards on the authoritative leaf certificate instead, so an issuance
+always uses the current private key.
+
+Final owner scope: automatic recovery of missing/corrupt **leaf** key/certificate
+inside the same Apply; no automatic CA recovery, no container changes, no new
+Ansible files, no review. Intermediate CA recovery work was removed. The original
+CA state/policy assertions and CA-generation task block match the baseline.
+Only the existing request/stores task files and read-only planning state guard
+changed. The latter admits missing leaf PEM for a known request so planning does
+not prevent the current Apply from performing the authorized recovery.
+
+Native validation used current working-tree sources on RED OS101 in verified
+qa-sync workspace `/var/tmp/platform-installer-qa-a5867b091ec94ab586247c22c44a51f8`.
+All PKI roots, generated identities, password files and trust-boundary fixtures
+were isolated; no installed services or production PKI were changed.
+
+- Final focused state/resolution/contracts/controller-lock/dispatch and native
+  completed-reissue guard selection: 40 PASS (2.905s).
+- Native stale-CSR issuance and unchanged repeat passed in its 22-case selection
+  (133.062s): new key, CSR and certificate match; repeat `changed=0`.
+- Native missing-key and different-key recovery plus comparison-tool failure:
+  2 PASS (520.591s). Exactly the damaged request is reissued; another resolved
+  request and CA bytes remain unchanged; available source material is backed up;
+  recovery marker is cleared and repeat `changed=0`.
+- Final missing/invalid/signature-corrupt leaf certificate selection: 35 PASS
+  (205.121s, includes repeated unit cases), with clean repeat.
+- Existing changed-authority refusal test PASS; it retained prior CA/request
+  material. Initial test assertions incorrectly counted skipped task headings as
+  executed reissues; corrected assertions count changed outcomes. A missing YAML
+  import in the added test was corrected before the final PASS.
+
+These selections cover 45 distinct tests; they are focused checks, not full Core
+regression or installation acceptance. Temporary QA workspace was cleaned with
+the standard helper. No runtime bundle build/publication/rebind, real
+React/Wails flow, installation or Start was performed. The isolated installation
+requires an updated runtime bundle; existing failed-run history is unchanged.
 
 ## Deferred integration
 

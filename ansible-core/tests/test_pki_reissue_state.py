@@ -79,6 +79,16 @@ class PKIReissueStateTests(unittest.TestCase):
         self.recovery()
         self.assertEqual(NEW, self.inspect()[0]["recoveryFingerprint"])
 
+    def test_missing_key_of_unchanged_request_is_recovered_by_current_apply(self):
+        self.marker(NEW)
+        (self.request_dir / "leaf.key").unlink()
+        self.assertEqual([], self.inspect())
+        (self.request_dir / "leaf.crt").unlink()
+        self.assertEqual([], self.inspect())
+        self.marker(NEW)
+        (self.request_dir / "leaf.crt").unlink()
+        self.assertEqual([], self.inspect())
+
     def test_changed_authority_blocks_and_stales_committed_observation(self):
         self.marker()
         expected = self.inspect()

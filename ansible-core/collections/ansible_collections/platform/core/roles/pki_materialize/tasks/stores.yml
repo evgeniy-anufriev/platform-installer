@@ -150,6 +150,13 @@
       failed_when: false
       no_log: true
 
+    - name: Проверка успешного выполнения сравнения открытых ключей
+      ansible.builtin.assert:
+        that:
+          - _platform_pki_leaf_key_certificate_match.rc in [0, 1]
+        fail_msg: PKI_AUTHORITATIVE_PEM_COMPARISON_FAILED
+      no_log: true
+
     - name: Отклонение несовпадения исходного закрытого ключа и конечного сертификата
       ansible.builtin.assert:
         that:

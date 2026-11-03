@@ -96,7 +96,9 @@ def inspect_reissue(state_root, project_identity, requests):
                 raise ValueError("PKI_REISSUE_RECOVERY_MISMATCH")
             if recovery is None:
                 material = [_file(request_dir, name) is not None for name in _MATERIAL_FILES]
-                if (old is None and any(material)) or (old is not None and not all(material[:2])):
+                # A known request with missing leaf PEM is recovered once by
+                # PKI_APPLY itself under the unchanged request/CA guards.
+                if old is None and any(material):
                     raise ValueError("PKI_REISSUE_STATE_INCOMPLETE")
             if recovery is not None or (old is not None and old != desired):
                 authority_marker = _file(authority_dir, "authority-fingerprint", marker=True)

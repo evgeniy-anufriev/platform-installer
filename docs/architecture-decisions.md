@@ -1,5 +1,24 @@
 # Architecture decisions
 
+## ADR-049: Recover damaged managed leaf material inside current PKI Apply
+
+Status: Owner authorized implementation, 2026-11-03.
+
+For a known request with unchanged desired fingerprint, absent or unusable
+leaf PEM, a damaged certificate signature or a key/certificate mismatch is
+loss of generated leaf identity. `pki_materialize` uses the existing request-scoped backup/reissue
+sequence inside the same `PKI_APPLY`; it does not require a second planning or
+Start operation. The CA and certificate policy remain unchanged, and the
+existing authority/symlink/recovery guards remain mandatory. A failure stops
+Apply without a retry loop. CSR must be derived from the current key whenever
+issuing a certificate. A valid existing pair remains unchanged.
+
+Core/Ansible owns this recovery. Go/UI, desired project state, wire contracts,
+container applications and their restart behavior are unchanged. Missing or
+damaged CA and unrecognized partial state still block; policy changes use the
+existing explicitly planned reissue procedure.
+Contract and evidence: [PKI-01](work/pki/pki-01.md).
+
 ## ADR-048: Library progress reuses the application execution lifecycle
 
 Status: Owner authorized implementation, 2026-10-25.

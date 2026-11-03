@@ -415,6 +415,11 @@ SERVICE-01D passed with repeat apply and verify at `changed=0`.
 
 ### PKI-01: Certificate and Java-store materialization
 
+Owner-approved leaf-key recovery (2026-11-03, ADR-049) belongs to the current
+PKI Apply: missing or damaged leaf PEM for an unchanged managed request uses
+the existing scoped backup/reissue sequence. This does not introduce automatic
+renewal, CA rotation or container-application restart changes.
+
 Historical checkpoint: [source record](history/roadmap-checkpoints-20261012.md#pki-01-certificate-and-java-store-materialization). Current status is in [CURRENT_STATE](../CURRENT_STATE.md).
 
 Kafka TLS, JKS, mTLS, imported/external CA, renewal and rotation remain

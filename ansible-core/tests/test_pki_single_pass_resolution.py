@@ -18,6 +18,8 @@ import tempfile
 import unittest
 from pki_test_fixture import isolated_deploy_role
 
+import yaml
+
 if os.name == "posix":
     import grp
     import pwd
@@ -394,6 +396,106 @@ class PKISinglePassResolutionTests(unittest.TestCase):
         authority = next((state / "authorities").iterdir())
         return request, authority
 
+    def _single_request(self):
+        self.desired["serviceDeployments"].pop("bravo")
+
+    def _public_key(self, path, certificate=False, csr=False):
+        if certificate:
+            argv = ["openssl", "x509", "-in", str(path), "-pubkey", "-noout"]
+        elif csr:
+            argv = ["openssl", "req", "-in", str(path), "-pubkey", "-noout"]
+        else:
+            argv = ["openssl", "pkey", "-in", str(path), "-pubout", "-passin", "pass:"]
+        result = subprocess.run(argv, capture_output=True, timeout=15)
+        self.assertEqual(0, result.returncode, "synthetic public-key extraction failed")
+        return result.stdout
+
+    def test_stale_csr_is_replaced_before_first_certificate_and_repeat_preserves_identity(self):
+        self._single_request()
+        request_id = self.resolve_in_fresh_process()["requests"][0]["id"]
+        runtime = self.root / "pki-runtime" / "single-pass-qa" / request_id
+        runtime.mkdir(parents=True)
+        stale_key = self.root / "stale-fixture.key"
+        subprocess.run(["openssl", "req", "-new", "-newkey", "rsa:2048", "-nodes",
+                        "-keyout", str(stale_key), "-out", str(runtime / "leaf.csr"),
+                        "-subj", "/CN=stale-csr.example"], capture_output=True, check=True, timeout=30)
+        old_public = self._public_key(runtime / "leaf.csr", csr=True)
+        stale_key.unlink()
+        self._pki_store_apply("qa-stale-csr-password")
+        request, _ = self._pki_request_material_paths()
+        current_public = self._public_key(request / "leaf.key")
+        self.assertNotEqual(old_public, current_public)
+        self.assertEqual(current_public, self._public_key(runtime / "leaf.csr", csr=True))
+        self.assertEqual(current_public, self._public_key(request / "leaf.crt", certificate=True))
+        before = {name: (request / name).read_bytes() for name in ("leaf.key", "leaf.crt", "keystore.p12", "truststore.p12")}
+        repeated = self._pki_store_apply("qa-stale-csr-password")
+        self.assertRegex(repeated, r"localhost\s+:.*changed=0.*failed=0")
+        self.assertTrue(before == {name: (request / name).read_bytes() for name in before}, "repeat must retain PEM/store bytes")
+
+    def test_current_apply_recovers_missing_or_mismatching_key_once(self):
+        password = "qa-current-apply-repair-password"
+        self._pki_store_apply(password)
+        request, authority = self._pki_request_material_paths()
+        ca_before = {name: (authority / name).read_bytes() for name in ("ca.key", "ca.crt", "authority-fingerprint")}
+        state = self.root / "pki-state" / "single-pass-qa"
+        other_requests = {path: path.read_bytes() for path in (state / "requests").rglob("*")
+                          if path.is_file() and path.parent != request}
+        self.assertTrue(other_requests, "fixture must include an unaffected request")
+        for failure in ("missing", "mismatch"):
+            with self.subTest(failure=failure):
+                cert_before = (request / "leaf.crt").read_bytes()
+                if failure == "missing":
+                    (request / "leaf.key").unlink()
+                else:
+                    subprocess.run(["openssl", "genpkey", "-algorithm", "RSA", "-pkeyopt", "rsa_keygen_bits:2048",
+                                    "-out", str(request / "leaf.key")], capture_output=True, check=True, timeout=30)
+                healed = self._pki_store_apply(password)
+                reissues = re.findall(r"Запуск явно авторизованного повторного выпуска PKI после полного резервного копирования[^\n]*\n([^\n]*)", healed)
+                self.assertEqual(1, sum(line.startswith("changed:") for line in reissues), "only the damaged request may be reissued")
+                self.assertNotEqual(cert_before, (request / "leaf.crt").read_bytes())
+                self.assertEqual(self._public_key(request / "leaf.key"), self._public_key(request / "leaf.crt", certificate=True))
+                self.assertTrue(list((state / "reissue-backups").glob(request.name + "*/leaf.crt")))
+                self.assertFalse((state / "reissues" / (request.name + ".fingerprint")).exists())
+                self.assertTrue(ca_before == {name: (authority / name).read_bytes() for name in ca_before}, "automatic leaf repair must preserve CA")
+                repeated = self._pki_store_apply(password)
+                self.assertRegex(repeated, r"localhost\s+:.*changed=0.*failed=0")
+        self.assertTrue(other_requests == {path: path.read_bytes() for path in other_requests}, "unaffected requests must retain all bytes")
+
+    def test_comparison_tool_failure_does_not_trigger_leaf_reissue(self):
+        self._single_request()
+        binary = self.root / "bin"
+        binary.mkdir()
+        fake_cmp = binary / "cmp"
+        fake_cmp.write_text("#!/bin/sh\nexit 2\n", encoding="ascii")
+        fake_cmp.chmod(0o700)
+        self.environment["PATH"] = str(binary) + os.pathsep + os.environ["PATH"]
+        output = self._pki_store_apply("qa-comparison-tool-password", success=False)
+        self.assertIn("Проверка успешного выполнения сравнения открытых ключей", output)
+        reissues = re.findall(r"Запуск явно авторизованного повторного выпуска PKI после полного резервного копирования[^\n]*\n([^\n]*)", output)
+        self.assertTrue(all(line.startswith("skipping:") for line in reissues), "comparison failure must not reissue")
+        request, _ = self._pki_request_material_paths()
+        self.assertEqual(self._public_key(request / "leaf.key"), self._public_key(request / "leaf.crt", certificate=True))
+        self.assertFalse((self.root / "pki-state" / "single-pass-qa" / "reissue-backups").exists())
+
+    def test_completed_reissue_requires_a_readable_matching_leaf_pair(self):
+        tasks = yaml.safe_load((CORE / "collections/ansible_collections/platform/core/roles/pki_materialize/tasks/request.yml").read_text())
+        selected = next(task for task in tasks if "_platform_pki_reissue_materialized" in task.get("ansible.builtin.set_fact", {}))
+        fingerprint = "sha256:" + "a" * 64
+        for key_rc, cert_rc, cert_public, expected in ((0, 0, "public", True), (1, 0, "public", False),
+                                                       (0, 1, "public", False), (0, 0, "different", False)):
+            with self.subTest(key_rc=key_rc, cert_rc=cert_rc, expected=expected):
+                variables = {
+                    "_platform_pki_reissue_resumable": True,
+                    "platform_pki_request_marker": {"stat": {"exists": True}},
+                    "platform_pki_request": {"certificateRequestFingerprint": fingerprint},
+                    "platform_pki_existing_request_fingerprint": {"stdout": fingerprint},
+                    "platform_pki_request_files": {"results": [{"stat": {"isreg": True}}, {"stat": {"isreg": True}}]},
+                    "_platform_pki_existing_key_public": {"rc": key_rc, "stdout": "public"},
+                    "_platform_pki_existing_certificate_public": {"rc": cert_rc, "stdout": cert_public},
+                }
+                self.run_play([self.play([selected, {"ansible.builtin.assert": {
+                    "that": "_platform_pki_reissue_materialized == " + str(expected).lower()}}])], extra=variables)
+
     def test_store_password_rotation_preserves_pem_identity_and_repeat_is_clean(self):
         self._pki_store_apply("qa-initial-store-password")
         request, authority = self._pki_request_material_paths()
@@ -462,17 +564,27 @@ class PKISinglePassResolutionTests(unittest.TestCase):
             ], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=False)
             self.assertEqual(0, check.returncode, filename)
 
-    def test_invalid_authoritative_pem_blocks_store_replacement(self):
-        self._pki_store_apply("qa-before-invalid-pem")
+    def test_missing_or_invalid_leaf_certificate_is_reissued_in_current_apply(self):
+        self._single_request()
+        password = "qa-leaf-certificate-recovery-password"
+        self._pki_store_apply(password)
         request, _ = self._pki_request_material_paths()
-        stores_before = {name: (request / name).read_bytes()
-                         for name in ("keystore.p12", "truststore.p12")}
-        (request / "leaf.crt").write_text("not a certificate\n", encoding="ascii")
-
-        output = self._pki_store_apply("qa-after-invalid-pem", success=False)
-        self.assertIn("failed=1", output)
-        for name, content in stores_before.items():
-            self.assertEqual(content, (request / name).read_bytes(), name)
+        for failure in ("missing", "invalid", "signature"):
+            with self.subTest(failure=failure):
+                if failure == "missing":
+                    (request / "leaf.crt").unlink()
+                elif failure == "invalid":
+                    (request / "leaf.crt").write_text("not a certificate\n", encoding="ascii")
+                else:
+                    encoded = subprocess.run(["openssl", "x509", "-in", str(request / "leaf.crt"), "-outform", "DER"],
+                                             capture_output=True, check=True, timeout=15).stdout
+                    damaged = encoded[:-1] + bytes([encoded[-1] ^ 1])
+                    subprocess.run(["openssl", "x509", "-inform", "DER", "-out", str(request / "leaf.crt")],
+                                   input=damaged, capture_output=True, check=True, timeout=15)
+                self._pki_store_apply(password)
+                self.assertEqual(self._public_key(request / "leaf.key"), self._public_key(request / "leaf.crt", certificate=True))
+        repeated = self._pki_store_apply(password)
+        self.assertRegex(repeated, r"localhost\s+:.*changed=0.*failed=0")
 
     def test_no_consumers_stays_empty_and_clean_with_and_without_skip(self):
         for skip in (False, True):
