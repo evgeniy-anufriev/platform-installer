@@ -110,6 +110,10 @@ class VaultRoleContractTests(unittest.TestCase):
         self.assertTrue(health["run_once"])
         self.assertEqual(health["delegate_to"], "{{ item.host }}")
         self.assertEqual(health["loop"], "{{ _platform_vault_instances }}")
+        self.assertFalse(health["no_log"])
+        self.assertNotIn("headers", health["ansible.builtin.uri"])
+        self.assertTrue(all(task.get("no_log") for task in tasks if
+                            "X-Vault-Token" in str(task.get("ansible.builtin.uri", {}).get("headers", {}))))
         hostvars = {
             host: {"platform_pki_selected_consumer_plan": {"targetDirectory": f"/pki/{host}"}}
             for host in ("node1", "node2", "node3")

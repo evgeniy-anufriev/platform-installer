@@ -8,6 +8,33 @@ from execution_task_error import safe_task_error
 
 
 class TaskErrorTests(unittest.TestCase):
+    def test_http_health_failure_reasons_and_status_survive_loop_without_secret_text(self):
+        for message, status, code in (
+            ('Request failed: <urlopen error [Errno 111] Connection refused>', -1, 'ANSIBLE_CONNECTION_REFUSED'),
+            ('Request failed: <urlopen error timed out>', -1, 'ANSIBLE_CONNECTION_TIMEOUT'),
+            ('The read operation timed out', -1, 'ANSIBLE_CONNECTION_TIMEOUT'),
+            ('Name or service not known', -1, 'ANSIBLE_DNS_RESOLUTION_FAILED'),
+            ('IP address mismatch, certificate is not valid for 192.0.2.1', -1, 'ANSIBLE_TLS_HOSTNAME_MISMATCH'),
+            ('certificate has expired', -1, 'ANSIBLE_TLS_CERTIFICATE_EXPIRED'),
+            ('certificate is not yet valid', -1, 'ANSIBLE_TLS_CERTIFICATE_NOT_YET_VALID'),
+            ('unable to get local issuer certificate', -1, 'ANSIBLE_TLS_CA_UNTRUSTED'),
+            ('ca_path option must be a valid file', -1, 'ANSIBLE_TLS_CA_FILE_INVALID'),
+            ('[SSL: WRONG_VERSION_NUMBER] wrong version number', -1, 'ANSIBLE_TLS_HANDSHAKE_FAILED'),
+            ('No route to host', -1, 'ANSIBLE_NETWORK_UNREACHABLE'),
+            ('Status code was 502 and not [200]', 502, 'ANSIBLE_HTTP_REQUEST_FAILED'),
+            ('unclassified private exception', -1, 'ANSIBLE_HTTP_REQUEST_FAILED'),
+        ):
+            with self.subTest(code=code, message=message):
+                child = {'failed': True, 'msg': message + ' private-canary', 'status': status,
+                         'content': 'private-body', 'invocation': {'headers': {'X-Vault-Token': 'private-token'}}}
+                result = {'msg': 'One or more items failed', 'results': [child]}
+                error = safe_task_error(result)
+                self.assertEqual(code, error['code'])
+                self.assertIn('HTTP status ' + str(status), error['summary'])
+                self.assertNotIn('private', json.dumps(error))
+                self.assertEqual('ANSIBLE_FAILURE_REDACTED', safe_task_error(result, True)['code'])
+        self.assertEqual('ANSIBLE_TASK_FAILED', safe_task_error({'msg': 'checksum does not match private-canary'})['code'])
+
     def test_dynamic_quorum_failure_has_fixed_russian_diagnostic(self):
         error = safe_task_error({'msg': {'code': 'KAFKA_DYNAMIC_QUORUM_UNSUPPORTED',
                                         'message': 'private-untrusted-output'},

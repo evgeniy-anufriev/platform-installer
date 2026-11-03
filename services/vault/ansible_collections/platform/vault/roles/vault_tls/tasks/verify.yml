@@ -18,7 +18,9 @@
   run_once: true
   register: _platform_vault_health
   changed_when: false
-  no_log: true
+  # Public health endpoint: no token, password or unseal share is sent.
+  # The execution journal classifies errors without copying raw result text.
+  no_log: false
 
 - name: Проверка инициализации и разблокировки всех экземпляров Vault
   ansible.builtin.assert:

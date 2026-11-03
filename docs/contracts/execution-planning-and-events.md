@@ -408,6 +408,10 @@ status where available. Arbitrary module messages, stdout, stderr, commands,
 assertion expressions and tracebacks are never event payloads. Unknown failures
 remain generic; `no_log`/censored failures retain identity only and report
 `ANSIBLE_FAILURE_REDACTED`. Task names containing Jinja expressions are hidden.
+Public token-free HTTP health checks may report specific TLS, CA-file, DNS,
+connection and timeout categories plus actual HTTP status from nested URI loop
+results. These remain fixed diagnostic summaries, never raw exception text,
+response bodies or headers. Secret-bearing requests retain `no_log`.
 
 `CancelExecution` verifies the complete run ownership tuple, records the
 request, asks the fixed controller/unit to stop gracefully, then uses owned

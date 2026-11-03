@@ -234,3 +234,46 @@ started automatically.
 ## Acceptance evidence (2026-09-29)
 
 See [historical checkpoint](evidence/documentation-checkpoints-20261012.md#service-install-08f-vault-endpoint-ha-checkpoint-001). Current status: [CURRENT_STATE](../../../CURRENT_STATE.md).
+
+## Vault health failure diagnostics, 2026-11-03
+
+Owner reported failure of `Запрос состояния Vault по проверенному API TLS`
+on node1, with only `ANSIBLE_TASK_FAILED / untrusted result text withheld`.
+Removing no_log locally did not bypass the execution journal's separate closed
+error formatter. Raw URI payloads are not the journal contract.
+
+Only the public GET `/v1/sys/health` task now has no_log=false; it sends no
+token, password or unseal share. Authentication, initialization/unseal and
+other secret-bearing tasks retain no_log. TLS verification, expected status
+codes, delegation, request timing and service lifecycle are unchanged.
+The existing error formatter recognizes specific TLS hostname/expiry/CA/
+handshake, DNS, refusal, routing and timeout failures. Unclassified URI failures
+still expose the actual numeric HTTP status (including -1 for no response)
+without echoing arbitrary exception text. Classifying the nested failed URI
+result prevents a loop wrapper from losing its HTTP status. The UI already
+renders this existing `error.summary`; no frontend or wire-field changes.
+
+Validation on current sources transferred by qa-sync to RED OS101 workspace
+`/var/tmp/platform-installer-qa-1232f1746c2e4488801e11d048a270d8`:
+
+- Core error/observability/controller diagnostic selection: 53 PASS (14.548s),
+  with the opt-in canonical-journal native tests run using established sudo -n.
+- New native test uses the exact production Vault health task, real local TLS
+  HTTP server, Ansible uri, callback, controller and journal. HTTP502, trusted
+  CA/hostname-mismatch and malformed-CA-file failures produce specific event
+  errors and HTTP status where supplied by Ansible;
+  a private response-body canary and private-key path do not enter events/results.
+  Fixture journals, server, certificates and source workspace are cleaned.
+- Vault role contracts: 28 PASS/1 ERROR. The artifact-source peer-gate test raises
+  StopIteration on unchanged source; the exact HEAD version reproduces that same
+  error independently. No unrelated service/source-selection changes were made.
+- Go `internal/executionnode` Event/Task selection PASS (2.395s).
+- Standard `qa-wails-bridge.cjs` preflight: QA_WAILS_BRIDGE_PREFLIGHT_FAILED.
+  Real React/Wails acceptance remains unavailable/blocking; native evidence
+  does not replace it. No installed Vault, new plan/Start or runtime bundle was
+  changed. Source correction needs updated bundle distribution to the isolated
+  installer. Historical failure events cannot acquire information already lost.
+
+The shared UI execution/error design matches this bounded diagnostic change;
+there is no new UI ownership or interaction. Existing closed output/security
+contract is retained. No review invoked, per the owner's instruction.

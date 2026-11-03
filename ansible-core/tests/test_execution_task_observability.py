@@ -492,6 +492,66 @@ class ExecutionTaskObservabilityTests(unittest.TestCase):
 
 @unittest.skipUnless(os.environ.get("PLATFORM_TEST_CANONICAL_EXECUTION_ROOT") == "1", "requires isolated root-owned RED OS acceptance")
 class ControllerTaskStreamAcceptanceTests(unittest.TestCase):
+    def test_vault_health_error_reaches_real_journal_without_response_body(self):
+        import http.server
+        import ssl
+        import subprocess
+        import yaml
+
+        vault = Path(__file__).resolve().parents[2] / 'services/vault/ansible_collections/platform/vault/roles/vault_tls/tasks/verify.yml'
+        health = next(task for task in yaml.safe_load(vault.read_text())
+                      if task['name'] == 'Запрос состояния Vault по проверенному API TLS')
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(502)
+                self.send_header('Content-Type', 'text/plain')
+                self.end_headers()
+                self.wfile.write(b'private-vault-response-canary')
+
+            def log_message(self, *args):
+                pass
+
+        for scenario in ('http', 'hostname', 'bad-ca'):
+            with self.subTest(scenario=scenario), tempfile.TemporaryDirectory(prefix='vault-health-qa-') as folder:
+                root = Path(folder)
+                certificate, key = root / 'ca-chain.pem', root / 'server.key'
+                subprocess.run(['openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes',
+                                '-days', '1', '-subj', '/CN=vault-health-qa',
+                                '-addext', 'subjectAltName=' + ('DNS:vault-health-qa.invalid' if scenario == 'hostname' else 'IP:127.0.0.1'),
+                                '-keyout', str(key), '-out', str(certificate)],
+                               capture_output=True, check=True, timeout=30)
+                server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+                context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+                context.load_cert_chain(certificate, key)
+                if scenario == 'bad-ca':
+                    certificate.write_text('invalid CA fixture\n')
+                server.socket = context.wrap_socket(server.socket, server_side=True)
+                thread = threading.Thread(target=server.serve_forever, daemon=True)
+                thread.start()
+                try:
+                    setup = {'name': 'QA public Vault health inputs', 'ansible.builtin.set_fact': {
+                        'platform_pki_selected_consumer_plan': {'targetDirectory': str(root)},
+                        '_platform_vault_instances': [{'id': 'vault-qa', 'host': 'node1', 'address': '127.0.0.1',
+                                                       'api_port': server.server_port}]}}
+                    tasks = yaml.safe_dump([setup, health], allow_unicode=True, sort_keys=False)
+                    tasks = ''.join('    ' + line + '\n' for line in tasks.splitlines())
+                    with self.runtime(tasks) as (release, journal, manifest):
+                        self.dispatch(release, journal, manifest, expected='FAILED')
+                        failed = [event for event in journal.events() if event.get('error') and
+                                  event.get('task', {}).get('name') == health['name']]
+                        self.assertTrue(failed, 'production health task must publish its error')
+                        expected = {'http': 'ANSIBLE_HTTP_REQUEST_FAILED', 'hostname': 'ANSIBLE_TLS_HOSTNAME_MISMATCH',
+                                    'bad-ca': 'ANSIBLE_TLS_CA_FILE_INVALID'}[scenario]
+                        self.assertEqual(expected, failed[-1]['error']['code'])
+                        if scenario != 'bad-ca':
+                            self.assertIn('HTTP status ' + ('-1' if scenario == 'hostname' else '502'), failed[-1]['error']['summary'])
+                        self.assert_no_payload(journal, 'private-vault-response-canary', 'server.key')
+                finally:
+                    server.shutdown()
+                    server.server_close()
+                    thread.join(timeout=5)
+
     def test_real_core_failure_retains_code_without_secret_output(self):
         tasks = ("    - name: Core expected failure\n"
                  "      ansible.builtin.assert:\n"
