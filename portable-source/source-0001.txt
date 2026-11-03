@@ -82910,7 +82910,7 @@ ent-Type"] = "applapplication/json",
 end
 
 @@END
-@@PORTABLE {"path":"examples/szi/application-packages/nginx/1.0.0/roles/application_nginx/defaults/main.yml","mode":420,"size":2406,"sha256":"bfa05f41fe428442f9dd29162086d1c39d37ed29a2588f83278503dc114cb47d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2406}
+@@PORTABLE {"path":"examples/szi/application-packages/nginx/1.0.0/roles/application_nginx/defaults/main.yml","mode":420,"size":2445,"sha256":"c2a7b10c31fe72cb300ec934dc1971d92e6b74c451082c367ab47848fd4408a4","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2445}
 platform_application_definition:
   name: nginx
   version: 1.0.0
@@ -82943,7 +82943,7 @@ platform_application_definition:
           default(platform_desired_state.applicationLibraryDeployments[library_instance_id].bindings.endpoint.endpointGroupRef | default(platform_desired_state['x-applicationLibraryEndpointGroups'][library_instance_id] | default(''))) -%}
         {{ ('nginx.' ~ platform_desired_state.endpointGroups[group].address.domain)
           if group and (platform_desired_state.endpointGroups[group].address.domain | default('')) else '' }}
-      REALM: '{{ application_connections.sso.parameters.realm }}'
+      REALM: '{{ platform_application_provided_connections[library_instance_id].sso.parameters.realm }}'
       GA_HOST: >-
         {%- set group = platform_desired_state.applicationLibraryDeployments[library_instance_id].applications['grant-access'].overrides.endpoint.endpoint_group |
           default(platform_desired_state.applicationLibraryDeployments[library_instance_id].bindings.endpoint.endpointGroupRef | default(platform_desired_state['x-applicationLibraryEndpointGroups'][library_instance_id] | default(''))) -%}
