@@ -27530,7 +27530,7 @@ def materialize_managed_kafka(project_path, inventory_path, discovery, random_by
     return result
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/pki_reissue_state.py","mode":420,"size":6330,"sha256":"6f457a28a658c5efc079569a77c1f2716f887b43ae22a41160e2b797b92e47ac","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":6330}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/pki_reissue_state.py","mode":420,"size":6432,"sha256":"92c4b3ab370c9e2089fe01b76913377a19fec9bfb543fd7d35fbb2d43fec7e69","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":6432}
 """Read only the protected, request-scoped PKI markers used by reissue.
 
 This module is shared by target-free Core planning and the fixed execution
@@ -27629,7 +27629,9 @@ def inspect_reissue(state_root, project_identity, requests):
                 raise ValueError("PKI_REISSUE_RECOVERY_MISMATCH")
             if recovery is None:
                 material = [_file(request_dir, name) is not None for name in _MATERIAL_FILES]
-                if (old is None and any(material)) or (old is not None and not all(material[:2])):
+                # A known request with missing leaf PEM is recovered once by
+                # PKI_APPLY itself under the unchanged request/CA guards.
+                if old is None and any(material):
                     raise ValueError("PKI_REISSUE_STATE_INCOMPLETE")
             if recovery is not None or (old is not None and old != desired):
                 authority_marker = _file(authority_dir, "authority-fingerprint", marker=True)
@@ -34609,7 +34611,7 @@ platform_pki_keytool_package: java-21-openjdk-headless
   tags: platform_installer_pki_materialization
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/pki_materialize/tasks/request.yml","mode":420,"size":19018,"sha256":"9b44187809fdf97ac6fced5ea8964c7371e51ef48a1940036dd589e43a0a9b4b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":19018}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/pki_materialize/tasks/request.yml","mode":420,"size":24151,"sha256":"e5c42d0b64551e00450a05bf1ea0779eff7c8e52a4db197d119a341a32c3f17e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":24151}
 ---
 - name: Определение путей файлов запроса PKI
   ansible.builtin.set_fact:
@@ -34703,6 +34705,63 @@ platform_pki_keytool_package: java-21-openjdk-headless
          (platform_pki_reissue_marker_value.stdout | default('') | trim) == platform_pki_request.certificateRequestFingerprint and
          platform_pki_request.id in platform_pki_reissue_request_ids }}
 
+- name: Чтение существующего маркера отпечатка запроса PKI
+  ansible.builtin.command:
+    argv: [cat, "{{ _platform_pki_request_dir }}/request-fingerprint"]
+  register: platform_pki_existing_request_fingerprint
+  changed_when: false
+  when: platform_pki_request_marker.stat.exists
+
+- name: Получение открытого ключа сохранённого закрытого ключа перед повторным Apply
+  ansible.builtin.command:
+    argv: [openssl, pkey, -in, "{{ _platform_pki_request_dir }}/leaf.key", -passin, 'pass:', -pubout]
+  register: _platform_pki_existing_key_public
+  changed_when: false
+  failed_when: false
+  when:
+    - platform_pki_request_marker.stat.exists
+    - platform_pki_request_files.results[0].stat.isreg | default(false)
+    - platform_pki_request_files.results[1].stat.isreg | default(false)
+  no_log: true
+
+- name: Получение открытого ключа сохранённого сертификата перед повторным Apply
+  ansible.builtin.command:
+    argv: [openssl, x509, -in, "{{ _platform_pki_request_dir }}/leaf.crt", -pubkey, -noout]
+  register: _platform_pki_existing_certificate_public
+  changed_when: false
+  failed_when: false
+  when:
+    - platform_pki_request_marker.stat.exists
+    - platform_pki_request_files.results[0].stat.isreg | default(false)
+    - platform_pki_request_files.results[1].stat.isreg | default(false)
+  no_log: true
+
+- name: Отклонение технической ошибки проверки сохранённой пары PKI
+  ansible.builtin.assert:
+    that:
+      - _platform_pki_existing_key_public.rc in [0, 1]
+      - _platform_pki_existing_certificate_public.rc in [0, 1]
+    fail_msg: PKI_AUTHORITATIVE_PEM_INVALID
+  when:
+    - platform_pki_request_marker.stat.exists
+    - platform_pki_request_files.results[0].stat.isreg | default(false)
+    - platform_pki_request_files.results[1].stat.isreg | default(false)
+  no_log: true
+
+- name: Автоматический выбор перевыпуска при утрате подходящего закрытого ключа
+  ansible.builtin.set_fact:
+    _platform_pki_reissue_requested: >-
+      {{ _platform_pki_reissue_requested or
+         (platform_pki_request_marker.stat.exists and not platform_pki_reissue_marker.stat.exists and
+          (platform_pki_existing_request_fingerprint.stdout | default('') | trim) == platform_pki_request.certificateRequestFingerprint and
+          (not (platform_pki_request_files.results[0].stat.isreg | default(false)) or
+           not (platform_pki_request_files.results[1].stat.isreg | default(false)) or
+           (_platform_pki_existing_key_public.rc | default(0)) == 1 or
+           (_platform_pki_existing_certificate_public.rc | default(0)) == 1 or
+           ((_platform_pki_existing_key_public.stdout | default('') | trim) !=
+            (_platform_pki_existing_certificate_public.stdout | default('') | trim)))) }}
+  no_log: true
+
 - name: Отклонение частичного состояния запроса PKI
   ansible.builtin.assert:
     that:
@@ -34712,7 +34771,8 @@ platform_pki_keytool_package: java-21-openjdk-headless
         (platform_pki_request_marker.stat.exists and
          (platform_pki_request_files.results[0].stat.isreg | default(false)) and
          (platform_pki_request_files.results[1].stat.isreg | default(false))) or
-        _platform_pki_reissue_resumable
+        _platform_pki_reissue_resumable or
+        (platform_pki_request_marker.stat.exists and _platform_pki_reissue_requested)
     fail_msg: PKI_REQUEST_STATE_INCOMPLETE
 
 - name: Проверка явного разрешения на возобновление перевыпуска PKI
@@ -34721,20 +34781,17 @@ platform_pki_keytool_package: java-21-openjdk-headless
       - not platform_pki_reissue_marker.stat.exists or _platform_pki_reissue_resumable
     fail_msg: PKI_REISSUE_RESUME_REQUIRED
 
-- name: Чтение существующего маркера отпечатка запроса PKI
-  ansible.builtin.command:
-    argv: [cat, "{{ _platform_pki_request_dir }}/request-fingerprint"]
-  register: platform_pki_existing_request_fingerprint
-  changed_when: false
-  when: platform_pki_request_marker.stat.exists
-
 - name: Определение прерванного перевыпуска с уже записанным идентификатором конечного сертификата
   ansible.builtin.set_fact:
     _platform_pki_reissue_materialized: >-
       {{ _platform_pki_reissue_resumable and platform_pki_request_marker.stat.exists and
          (platform_pki_existing_request_fingerprint.stdout | default('') | trim) == platform_pki_request.certificateRequestFingerprint and
          (platform_pki_request_files.results[0].stat.isreg | default(false)) and
-         (platform_pki_request_files.results[1].stat.isreg | default(false)) }}
+         (platform_pki_request_files.results[1].stat.isreg | default(false)) and
+         (_platform_pki_existing_key_public.rc | default(-1)) == 0 and
+         (_platform_pki_existing_certificate_public.rc | default(-1)) == 0 and
+         (_platform_pki_existing_key_public.stdout | default('') | trim) ==
+         (_platform_pki_existing_certificate_public.stdout | default('') | trim) }}
 
 - name: Определение необходимости повторного выпуска сертификата
   ansible.builtin.set_fact:
@@ -34793,6 +34850,34 @@ platform_pki_keytool_package: java-21-openjdk-headless
         not (platform_pki_request_marker.stat.exists or platform_pki_reissue_marker.stat.exists) or platform_pki_authority_marker.stat.exists
     fail_msg: CERTIFICATE_REISSUE_REQUIRED
 
+- name: Проверка подписи сохранённого конечного сертификата текущим CA
+  ansible.builtin.command:
+    argv: [openssl, verify, -no_check_time, -CAfile, "{{ _platform_pki_authority_dir }}/ca.crt", "{{ _platform_pki_request_dir }}/leaf.crt"]
+  register: _platform_pki_leaf_signature
+  changed_when: false
+  failed_when: false
+  when: (_platform_pki_existing_certificate_public.rc | default(-1)) == 0
+  no_log: true
+
+- name: Отклонение технической ошибки проверки подписи конечного сертификата
+  ansible.builtin.assert:
+    that:
+      - (_platform_pki_leaf_signature.rc | default(0)) in [0, 2]
+    fail_msg: PKI_AUTHORITATIVE_PEM_COMPARISON_FAILED
+  no_log: true
+
+- name: Выбор перевыпуска конечного сертификата с повреждённой подписью
+  ansible.builtin.set_fact:
+    _platform_pki_reissue_requested: "{{ _platform_pki_reissue_requested or _platform_pki_bad_leaf_signature }}"
+    _platform_pki_reissue_required: "{{ _platform_pki_reissue_required or (not _platform_pki_reissue_resumable and _platform_pki_bad_leaf_signature) }}"
+    _platform_pki_reissue_active: "{{ _platform_pki_reissue_active or (_platform_pki_reissue_resumable and _platform_pki_bad_leaf_signature) }}"
+  vars:
+    _platform_pki_bad_leaf_signature: >-
+      {{ platform_pki_request_marker.stat.exists and
+         (platform_pki_existing_request_fingerprint.stdout | default('') | trim) == platform_pki_request.certificateRequestFingerprint and
+         (_platform_pki_leaf_signature.rc | default(0)) == 2 }}
+  no_log: true
+
 - name: Создание защищенного каталога транзакций перевыпуска PKI
   ansible.builtin.file:
     path: "{{ platform_pki_state_root }}/{{ platform_pki_project_id }}/reissues"
@@ -34820,7 +34905,10 @@ platform_pki_keytool_package: java-21-openjdk-headless
     group: "{{ platform_pki_group }}"
     mode: '0600'
   loop: [leaf.key, leaf.crt, request-fingerprint]
-  when: _platform_pki_reissue_required
+  when:
+    - _platform_pki_reissue_required
+    - item != 'leaf.key' or (platform_pki_request_files.results[0].stat.isreg | default(false))
+    - item != 'leaf.crt' or (platform_pki_request_files.results[1].stat.isreg | default(false))
   no_log: true
 
 - name: Сохранение существующих производных хранилищ PKCS12 перед явным повторным выпуском
@@ -34945,11 +35033,13 @@ platform_pki_keytool_package: java-21-openjdk-headless
     - "{{ _platform_pki_request_dir }}/leaf.key"
   no_log: true
 
-- name: Создание запроса на подпись сертификата один раз
+- name: Создание запроса на подпись сертификата из текущего закрытого ключа
   ansible.builtin.command:
     argv: [openssl, req, -new, -key, "{{ _platform_pki_request_dir }}/leaf.key", -out, "{{ _platform_pki_request_runtime_dir }}/leaf.csr", -config, "{{ _platform_pki_request_runtime_dir }}/request.cnf"]
   args:
-    creates: "{{ _platform_pki_request_runtime_dir }}/leaf.csr"
+    # CSR is derived runtime state. A leftover CSR may belong to an older key;
+    # only an existing authoritative certificate makes signing unnecessary.
+    creates: "{{ _platform_pki_request_dir }}/leaf.crt"
   no_log: true
 
 - name: Однократная подпись сертификата запроса
@@ -35197,7 +35287,7 @@ platform_pki_keytool_package: java-21-openjdk-headless
     platform_pki_selected_consumer_plan: "{{ _platform_pki_consumer_plans[0] }}"
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/pki_materialize/tasks/stores.yml","mode":420,"size":24575,"sha256":"6775f7f62f2ce4f8511c38683e949e0dec8f6d4026908d7985e466f053788184","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":24575}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/pki_materialize/tasks/stores.yml","mode":420,"size":24881,"sha256":"1967192e890a87e50836e688fffb009b62bbb1914d4aa47e44a300e964e1b038","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":24881}
 ---
 - name: Согласование хранилищ PKI с проверенным материалом PEM
   block:
@@ -35348,6 +35438,13 @@ platform_pki_keytool_package: java-21-openjdk-headless
       register: _platform_pki_leaf_key_certificate_match
       changed_when: false
       failed_when: false
+      no_log: true
+
+    - name: Проверка успешного выполнения сравнения открытых ключей
+      ansible.builtin.assert:
+        that:
+          - _platform_pki_leaf_key_certificate_match.rc in [0, 1]
+        fail_msg: PKI_AUTHORITATIVE_PEM_COMPARISON_FAILED
       no_log: true
 
     - name: Отклонение несовпадения исходного закрытого ключа и конечного сертификата
