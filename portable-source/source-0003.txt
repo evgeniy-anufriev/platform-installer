@@ -1,3 +1,19 @@
+@@PORTABLE {"path":"third_party/wails/internal/frontend/runtime/ipc.js","mode":420,"size":412,"sha256":"2f75a5e2282e82ec1c447291915b12636c39235a52df8ed87f9199beb4c060f2","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":412}
+(()=>{(function(){let n=function(e){for(var s=window[e.shift()];s&&e.length;)s=s[e.shift()];return s},o=n(["chrome","webview","postMessage"]),t=n(["webkit","messageHandlers","external","postMessage"]);if(!o&&!t){console.error("Unsupported Platform");return}o&&(window.WailsInvoke=e=>window.chrome.webview.postMessage(e)),t&&(window.WailsInvoke=e=>window.webkit.messageHandlers.external.postMessage(e))})();})();
+
+@@END
+@@PORTABLE {"path":"third_party/wails/internal/frontend/runtime/ipc_websocket.go","mode":420,"size":117,"sha256":"ec8ac949937b7cde3e686048faada4a22dd84035fb37e66cbefd79ea67d3df81","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":117}
+//go:build dev
+// +build dev
+
+package runtime
+
+import _ "embed"
+
+//go:embed ipc_websocket.js
+var WebsocketIPC []byte
+
+@@END
 @@PORTABLE {"path":"third_party/wails/internal/frontend/runtime/ipc_websocket.js","mode":420,"size":669198,"sha256":"3c3b999dbfdb0c430590bee44684d5b533794894be3528078a8263bc03a2077e","index":0,"count":14,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
 (()=>{function zt(e){console.log("%c wails dev %c "+e+" ","background: #aa0000; color: #fff; border-radius: 3px 0px 0px 3px; padding: 1px; font-size: 0.7rem","background: #009900; color: #fff; border-radius: 0px 3px 3px 0px; padding: 1px; font-size: 0.7rem")}typeof window<"u"&&((window.__svelte??={}).v??=new Set).add("5");var V=!1,Ue=!1,Ne=!1;function Fn(){Ue=!0}Fn();var ze={};var k=Symbol(),we=Symbol("filename");var Cr="http://www.w3.org/1999/xhtml";var qt=!0;var Pn=globalThis.process?.env?.NODE_ENV,l=Pn&&!Pn.toLowerCase().startsWith("prod");var qe=Array.isArray,Bn=Array.prototype.indexOf,Ae=Array.prototype.includes,kr=Array.from,Nr=Object.keys,U=Object.defineProperty,ue=Object.getOwnPropertyDescriptor;var Rr=Object.prototype,Hn=Array.prototype,Dt=Object.getPrototypeOf,Dr=Object.isExtensible;function Ir(e){return typeof e=="function"}var I=()=>{};function Kt(e){for(var t=0;t<e.length;t++)e[t]()}function Mr(){var e,t,r=new Promise((n,o)=>{e=n,t=o});return{promise:r,resolve:e,reject:t}}var Q=Symbol("$state"),Wt=Symbol("legacy props");var Jt=Symbol("proxy path"),Or=Symbol("attributes"),Lr=Symbol("class"),Fr=Symbol("style"),Pr=Symbol("text");var Br=Symbol("hmr anchor"),tt=new class extends Error{name="StaleReactionError";message="The reaction that called `getAbortSignal()` was re-run or destroyed"},Vn=!!globalThis.document?.contentType&&globalThis.document.contentType.includes("xml");var Xt=3,Se=8;function Yn(e){if(l){let t=new Error(`invariant_violation
 An invariant violation occurred, meaning Svelte's internal assumptions were flawed. This is a bug in Svelte, not your app \u2014 please open an issue at https://github.com/sveltejs/svelte, citing the following message: "${e}"
