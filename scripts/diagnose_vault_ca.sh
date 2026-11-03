@@ -86,17 +86,18 @@ cat > "$WORK/probe.yml" <<'YAML'
       ansible.builtin.slurp:
         src: "{{ lookup('ansible.builtin.env', 'PLATFORM_CA_PROBE_SOURCE') }}"
       delegate_to: node1
+      connection: ssh
       become: true
       no_log: false
 YAML
 
 # Ordinary console output, without Installer event callbacks or persistent logs.
 # As in the controller, use only this run's approved host keys; never TOFU here.
-unset ANSIBLE_CALLBACK_PLUGINS ANSIBLE_CALLBACK_WHITELIST ANSIBLE_SKIP_TAGS ANSIBLE_RUN_TAGS
+unset ANSIBLE_CALLBACK_PLUGINS ANSIBLE_CALLBACK_WHITELIST ANSIBLE_CALLBACKS_ENABLED ANSIBLE_SKIP_TAGS ANSIBLE_RUN_TAGS
 unset ANSIBLE_SSH_COMMON_ARGS ANSIBLE_SSH_EXTRA_ARGS ANSIBLE_SSH_EXECUTABLE ANSIBLE_PRIVATE_KEY_FILE
 export ANSIBLE_CONFIG="$RUNTIME/ansible-core/ansible.cfg"
 export ANSIBLE_COLLECTIONS_PATH="$RUNTIME/ansible-core/collections"
-export ANSIBLE_STDOUT_CALLBACK=default ANSIBLE_CALLBACKS_ENABLED='' ANSIBLE_LOAD_CALLBACK_PLUGINS=0
+export ANSIBLE_STDOUT_CALLBACK=default ANSIBLE_LOAD_CALLBACK_PLUGINS=0
 export ANSIBLE_HOST_KEY_CHECKING=True ANSIBLE_SSH_HOST_KEY_CHECKING=True
 export ANSIBLE_SSH_ARGS="-F none -o UserKnownHostsFile=$RUN/known_hosts -o GlobalKnownHostsFile=none -o KnownHostsCommand=none -o UpdateHostKeys=no -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes"
 export ANSIBLE_LOCAL_TEMP="$WORK/local"
