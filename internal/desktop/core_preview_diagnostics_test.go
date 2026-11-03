@@ -44,7 +44,7 @@ func TestProjectFindingRussianDescriptionsCoverPublishedCoreCodes(t *testing.T) 
 }
 
 func TestProjectFindingsKeepCodesAndSafeContextWithRussianDescriptions(t *testing.T) {
-	for _, code := range []string{"DNS_CLIENT_SERVER_NOT_FOUND", "DNS_ZONE_INVALID", "HAPROXY_BACKEND_TLS_IDENTITY_UNRESOLVED", "ENDPOINT_PROVIDER_FIELD_REQUIRED", "FUTURE_CORE_CODE"} {
+	for _, code := range []string{"DNS_CLIENT_SERVER_NOT_FOUND", "DNS_ZONE_INVALID", "HAPROXY_BACKEND_TLS_IDENTITY_UNRESOLVED", "HAPROXY_ENDPOINT_GROUP_REQUIRED", "ENDPOINT_PROVIDER_FIELD_REQUIRED", "FUTURE_CORE_CODE"} {
 		findings, _ := safeVerificationFindings([]map[string]any{{"code": code, "status": "BLOCKED", "safeMessage": "English diagnostic must not be rendered", "field": "serviceDeployments.vip.endpointGroupRef"}})
 		if len(findings) != 1 || findings[0].Code != code || findings[0].Severity != "BLOCKED" ||
 			strings.Contains(findings[0].Summary, "English diagnostic") || !strings.Contains(findings[0].Summary, "serviceDeployments.vip.endpointGroupRef") ||

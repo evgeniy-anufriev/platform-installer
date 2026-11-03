@@ -140,3 +140,40 @@ No independent review invoked, per the owner's explicit instruction.
 At the owner's request, routing tests and this evidence were consolidated into
 existing files. The two newly introduced files were removed. The combined
 entrypoint/transport module reran on RED OS: all six tests PASS (25.806s).
+
+### HAProxy endpoint group required (2026-11-03)
+
+Owner observed a public frontend route for the Vault group but no Vault backend.
+HAProxy was installed on node1-node3; its own endpoint consumer group was unset.
+Current Core selection reproduced on RED OS: missing assignment returns no
+HAProxy provider and `missingHAProxySources=[vault]`, despite installed HAProxy;
+assigning the same endpoint group selects all three provider hosts. The existing
+integration callback reports a nonfatal provider-not-found error and skips the
+hook. Frontend generation independently knows all desired endpoint groups.
+
+Owner explicitly requires an existing HAProxy deployment to select an endpoint
+group before Project Verify may pass. Core `validate_project` now returns the
+blocking `HAPROXY_ENDPOINT_GROUP_REQUIRED` at
+`serviceDeployments.<id>.endpointGroup` for missing, null or blank assignments.
+An unknown group retains `ENDPOINT_GROUP_NOT_FOUND`. Projects without HAProxy
+remain supported; the service is not automatically added. Go only translates
+the Core finding into Russian with guidance to the Entry Points consumer row.
+Local Save and credential lifecycle are unchanged.
+
+Validation from current working-tree sources on established RED OS QA identity:
+
+- 110 validation, snapshot/action, native infrastructure validation, deployment
+  plan, HAProxy/endpoint/integration resolver tests PASS (20.393s).
+- New validation cases cover missing/null/empty/whitespace assignments, unknown
+  groups, multiple HAProxy deployments and no endpoint groups.
+- Native `project-snapshot-machine.yml` + actual snapshot callback: the saved
+  project is BLOCKED without assignment and PASS after assigning a valid group;
+  readiness blocks appropriately, `changed=0`, desired file bytes unchanged by
+  verification. Test isolates HAProxy/Keepalived from unrelated PostgreSQL
+  credentials in the older fixture. No target connection or service mutation.
+- Affected Go desktop/coreadapter/installer tests and vet PASS; Russian finding
+  rendering retains the code, blocking severity and field context.
+- Standard real Wails bridge preflight: `QA_WAILS_BRIDGE_PREFLIGHT_FAILED`.
+  Real React/Wails acceptance remains unavailable, not replaced by native tests.
+- No review invoked, no new source/document files, no updated runtime bundle or
+  owner-stand installation. Temporary QA sources cleaned with the standard helper.

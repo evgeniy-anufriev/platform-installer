@@ -1,9 +1,11 @@
 import importlib.util
+import copy
 import json
 import os
 import sys
 import tempfile
 import unittest
+import yaml
 
 
 MODULE_PATH = os.path.join(
@@ -181,6 +183,52 @@ class ProjectValidationTests(unittest.TestCase):
         }}, "endpointGroups": {"dmz": {"address": {"domain": "dmz.scada.local", "wildcard": True}}}}
         result = VALIDATION.validate_project(manifest(), topology, {}, catalog(), ["node-1"])
         self.assertIn("ENDPOINT_SERVICE_UNSUPPORTED", [item["code"] for item in result["findings"]])
+
+    def test_every_haproxy_requires_an_existing_endpoint_group(self):
+        root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+        fixture = os.path.join(root, 'examples', 'valid', 'haproxy-routing')
+        def read(path):
+            with open(path, encoding='utf-8') as stream:
+                return yaml.safe_load(stream)
+        selected = read(os.path.join(root, 'examples', 'catalog', 'service-catalog.yml'))
+        project = read(os.path.join(fixture, 'project.yml'))
+        state = read(os.path.join(fixture, 'inventory', 'group_vars', 'all', 'platform.yml'))['platform_desired_state']
+        hosts = read(os.path.join(fixture, 'inventory', 'hosts.yml'))['all']['hosts']
+        # Isolate endpoint providers from unrelated PostgreSQL credential rules.
+        state['serviceDeployments'].pop('postgres-main')
+        for value in hosts.values():
+            value.get('platform_deployments', {}).pop('postgres-main', None)
+        placements = {deployment: {host: value['platform_deployments'][deployment]
+            for host, value in hosts.items() if deployment in value.get('platform_deployments', {})}
+            for deployment in state['serviceDeployments']}
+        addresses = {key: {'ansible_host': value.get('ansible_host', key)} for key, value in hosts.items()}
+        def validate(value):
+            return VALIDATION.validate_project(project, value, {}, selected, list(hosts),
+                host_scoped_deployments=placements, inventory_host_addresses=addresses)
+        baseline = validate(state)
+        self.assertEqual('PASS', baseline['status'], baseline['findings'])
+        for value in ('absent', None, '', '   '):
+            with self.subTest(endpoint_group=value):
+                changed = copy.deepcopy(state)
+                if value == 'absent':
+                    changed['serviceDeployments']['haproxy'].pop('endpointGroup')
+                else:
+                    changed['serviceDeployments']['haproxy']['endpointGroup'] = value
+                result = validate(changed)
+                self.assertEqual('BLOCKED', result['status'])
+                finding = next(item for item in result['findings'] if item['code'] == 'HAPROXY_ENDPOINT_GROUP_REQUIRED')
+                self.assertEqual('BLOCKED', finding['status'])
+                self.assertEqual('serviceDeployments.haproxy.endpointGroup', finding['field'])
+                self.assertEqual('haproxy', finding['safeDetails']['service'])
+        changed = copy.deepcopy(state)
+        changed['serviceDeployments']['haproxy']['endpointGroup'] = 'unknown-group'
+        self.assertIn('ENDPOINT_GROUP_NOT_FOUND', [item['code'] for item in validate(changed)['findings']])
+        changed['serviceDeployments']['second-proxy'] = dict(serviceType='haproxy', mode='https-host-routing')
+        findings = validate(changed)['findings']
+        self.assertTrue(any(item['code'] == 'HAPROXY_ENDPOINT_GROUP_REQUIRED' and
+                            item['field'] == 'serviceDeployments.second-proxy.endpointGroup' for item in findings))
+        changed['endpointGroups'] = {}
+        self.assertTrue(any(item['code'] == 'HAPROXY_ENDPOINT_GROUP_REQUIRED' for item in validate(changed)['findings']))
 
     def test_endpoint_group_reference_must_exist(self):
         selected = catalog()

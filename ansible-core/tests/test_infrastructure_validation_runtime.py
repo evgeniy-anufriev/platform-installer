@@ -15,6 +15,52 @@ PLAYBOOKS = ROOT / "ansible-core/playbooks"
 
 @unittest.skipUnless(shutil.which("ansible-playbook"), "Ansible runtime required")
 class InfrastructureValidationRuntimeTests(unittest.TestCase):
+    def test_project_verify_blocks_missing_haproxy_group_and_recovers_after_assignment(self):
+        with tempfile.TemporaryDirectory(prefix='haproxy-verify-') as directory:
+            work = Path(directory)
+            project = work / 'project'
+            shutil.copytree(ROOT / 'examples/valid/haproxy-routing', project)
+            desired_file = project / 'inventory/group_vars/all/platform.yml'
+            document = yaml.safe_load(desired_file.read_text())
+            # Only the endpoint providers participate in this verification case.
+            document['platform_desired_state']['serviceDeployments'].pop('postgres-main')
+            inventory_file = project / 'inventory/hosts.yml'
+            inventory = yaml.safe_load(inventory_file.read_text())
+            for host in inventory['all']['hosts'].values():
+                host.get('platform_deployments', {}).pop('postgres-main', None)
+            inventory_file.write_text(yaml.safe_dump(inventory))
+            deployment = document['platform_desired_state']['serviceDeployments']['haproxy']
+            group = deployment.pop('endpointGroup')
+            variables = dict(platform_project_root=str(project),
+                platform_service_catalog_path=str(ROOT / 'examples/catalog/service-catalog.yml'))
+            collections = os.pathsep.join([str(ROOT / 'ansible-core/collections')] +
+                [str(path) for path in sorted((ROOT / 'services').glob('*/ansible_collections'))])
+            for assigned in (False, True):
+                with self.subTest(assigned=assigned):
+                    if assigned:
+                        deployment['endpointGroup'] = group
+                    desired_file.write_text(yaml.safe_dump(document, sort_keys=False))
+                    before = desired_file.read_bytes()
+                    output = work / ('assigned.json' if assigned else 'missing.json')
+                    env = dict(os.environ, ANSIBLE_CONFIG=str(ROOT / 'ansible-core/ansible.cfg'),
+                        ANSIBLE_COLLECTIONS_PATH=collections,
+                        ANSIBLE_CALLBACKS_ENABLED='platform.core.project_snapshot_json',
+                        PLATFORM_PROJECT_SNAPSHOT_OUTPUT=str(output))
+                    result = subprocess.run(['ansible-playbook', '-i', str(project / 'inventory/hosts.yml'),
+                        str(PLAYBOOKS / 'project-snapshot-machine.yml'), '-e', json.dumps(variables)],
+                        env=env, capture_output=True, text=True, timeout=90)
+                    self.assertEqual(0, result.returncode, (result.stdout + result.stderr)[-4000:])
+                    snapshot = json.loads(output.read_text())
+                    findings = [item for item in snapshot['findings'] if item['code'] == 'HAPROXY_ENDPOINT_GROUP_REQUIRED']
+                    self.assertEqual(not assigned, bool(findings))
+                    self.assertEqual('PASS' if assigned else 'BLOCKED', snapshot['validation']['status'],
+                                     [(item['code'], item.get('field')) for item in snapshot['findings']])
+                    if not assigned:
+                        self.assertEqual('BLOCKED', snapshot['readiness']['status'])
+                        self.assertEqual('serviceDeployments.haproxy.endpointGroup', findings[0]['field'])
+                    self.assertEqual(before, desired_file.read_bytes())
+                    self.assertRegex(result.stdout, r'changed=0\s')
+
     def run_validation(self, root, entry, desired, success=True, stale=False):
         artifact = root / (entry + ".json")
         variables = {"platform_desired_state": desired, "platform_project_root": str(root),

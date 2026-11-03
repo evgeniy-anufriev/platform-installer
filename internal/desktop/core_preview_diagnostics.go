@@ -65,6 +65,7 @@ var projectFindingMessagesRU = map[string]string{
 	"ENDPOINT_GROUP_DOMAIN_DUPLICATE":                         "Домен группы конечных точек указан повторно.",
 	"ENDPOINT_GROUP_DOMAIN_INVALID":                           "Некорректен домен группы конечных точек.",
 	"ENDPOINT_GROUP_NOT_FOUND":                                "Указанная группа конечных точек не найдена.",
+	"HAPROXY_ENDPOINT_GROUP_REQUIRED":                         "Для HAProxy выберите группу на странице «Точки входа» в разделе consumers.",
 	"ENDPOINT_PROVIDER_FIELD_REQUIRED":                        "У поставщика конечных точек не заполнен обязательный параметр.",
 	"ENDPOINT_PROVIDER_UNSUPPORTED":                           "Сервис не поддерживает выбранную роль поставщика конечных точек.",
 	"ENDPOINT_SERVICE_UNSUPPORTED":                            "Сервис не поддерживает требуемый тип конечной точки.",

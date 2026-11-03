@@ -231,7 +231,12 @@ by package-owned named and advertised listeners.
 HAProxy backend destinations are derived by Core from the service's
 `endpointGroup`, matching Keepalived `endpointGroupRef` placements, and
 same-group HAProxy placements on those hosts. All matching provider/host
-pairs participate; partial VIP coverage does not block planning. Legacy
+pairs participate; partial VIP coverage does not block planning. Every HAProxy
+deployment must select an existing endpoint group. An absent/blank selection
+blocks Core project verification with `HAPROXY_ENDPOINT_GROUP_REQUIRED` at
+`serviceDeployments.<id>.endpointGroup`; an unknown reference remains
+`ENDPOINT_GROUP_NOT_FOUND`. This does not require adding HAProxy to projects
+that do not use it. Legacy
 `haproxy.deploymentRef` remains readable but does not select a provider.
 `haproxy.backend` overrides package-owned `x-haproxyBackendDefaults`; no
 relation object is required to activate the derived integration. Missing
