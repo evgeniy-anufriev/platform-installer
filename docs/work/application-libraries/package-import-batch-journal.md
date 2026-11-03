@@ -557,3 +557,47 @@ Prior c97e77d7 cache/runtime restored using the standard publisher and actual
 React/Wails preparation, final READY with matching digest. Temporary RED OS102
 source/fixture workspace cleaned with qa-sync; owned dev processes stopped and
 generated frontend build/runtime outputs restored. Unrelated edits were retained.
+
+### Generated callback binding regression — 2026-11-03
+
+Owner reported APPLICATION_RUNTIME_INPUT_INVALID during preparation of library
+applications. The connection callback passed the runtime job directly into the
+generated-secret reference helper, although secretBindings belongs to the
+resolved instance. The earlier unit fixture incorrectly copied it onto jobs and
+masked KeyError: secretBindings. The callback now passes the same temporary
+instance-binding context as ordinary lifecycle scripts; one production line,
+no new secret logic, state, API, source selection or persistence.
+
+Regression evidence on RED OS102 from current sources: corrected original test
+fails before the fix with KeyError: secretBindings. New native ansible-playbook
+test invokes the real prepare_application_runtime action against checked package
+copies and resolved consumer/provider instances; before the fix it returns the
+reported APPLICATION_RUNTIME_INPUT_INVALID. After the fix it returns PASS and
+the callback has the expected project/library/shared generated reference without
+secretBindings on the job/row. Combined callback/runtime/Vault/library-script/
+input-availability selection:63 tests,62 PASS/1 optional SSH file-delivery test
+skipped because PLATFORM_QA_CONFIG_INVENTORY is not selected. No provider callback
+execution, credential generation or target service installation was needed.
+
+QA-only bundle103ede23edd50aa0caf6899f5ad362af2b79895ccc96158f12eb11e20f7c0f4a
+built on trusted102 from the corrected source and standard-published. Actual
+React/Wails34175 Open -> PEM/trust Check -> Prepare READY -> Header Verify ->
+Import/Review/Save SZI -> fresh Header Verify VERIFIED PASS. Saved revision
+d8b7561558c58cc80c00d76ca3df7b7b408d335328bab14c8b5ae2ef0decc8e2,
+project project-2026110300000025; generated/client_secret retained. Safe evidence:
+.runtime/qa/generated-callback-fix/wails-result.json and flow.cjs. Native action
+regression above exercises the corrected consumer/provider callback; this UI
+fixture exercises preparation and desired-state projection, not full SZI Apply.
+Initial dev build encountered an incomplete parallel Go edit; subsequent shared
+dev reloads interrupted observation. A separate Wails port and non-watching QA
+Vite config allowed a stable repeat through ordinary React handlers, with the
+existing Header Verify performed before entering Applications. No production
+bypass, new bridge or changed readiness rule. No visual acceptance claimed.
+Only an updated runtime bundle and node re-preparation are needed for this fix;
+the Installer API and library package source contract are unchanged.
+
+Prior c97e77d7 cache/runtime restored with the standard publisher and real
+React/Wails Prepare, final READY/matching digest. Temporary102 source workspace
+removed using qa-sync; owned dev processes stopped. Only unchanged generated
+runtime files from this session were restored to their pre-session bytes;
+parallel authored/staged work was preserved. No Approve/Start/service Apply.

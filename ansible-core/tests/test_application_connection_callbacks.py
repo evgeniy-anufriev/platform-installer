@@ -53,9 +53,7 @@ class ConnectionCallbackTests(unittest.TestCase):
             snapshot, jobs, desired = fixture(root)
             library = snapshot['applicationLibraries']['libraries']['consumer']
             library['sharedSecretRequirements']['client-token']['source'] = {'kind': 'generated', 'profile': 'client_secret'}
-            for job in jobs:
-                if job['libraryId'] == 'consumer':
-                    job['secretBindings'] = library['instances']['frontend']['secretBindings']
+            self.assertTrue(all('secretBindings' not in job for job in jobs))
             result = prepare_script_jobs(root, snapshot, desired, [], jobs)
             hooks = [script for job in result for script in job['scripts'] if script['id'] == 'api.integrate']
             self.assertEqual(len(hooks), 1)

@@ -29,6 +29,56 @@ DIGEST = "sha256:" + "a" * 64
 
 class ApplicationRuntimeTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which('ansible-playbook'), 'requires native Ansible')
+    def test_native_runtime_preparation_uses_snapshot_shared_binding_in_connection_callback(self):
+        import copy
+        import yaml
+        from runtime_secret_identity import generated_password_ref
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder) / 'project'
+            shutil.copytree(ROOT / 'examples/valid/application-runtime', root)
+            package = root / 'application-packages/apigateway/1.0.0'
+            (package / 'integrate.sh').write_text('#!/bin/sh\nexit 0\n')
+            callback = dict(id='integrate', source='integrate.sh', phase='connection_apply', execution='once',
+                            secretInputs={'client': {'valueFrom': 'secret_binding', 'binding': 'CLIENT'}})
+            manifest = json.loads((package / 'application.yml').read_text())
+            manifest['files'].append('integrate.sh')
+            manifest['scripts'] = [callback]
+            (package / 'application.yml').write_text(json.dumps(manifest))
+            _, snapshot, rows, desired, lock, _, _ = self.runtime_fixture(root)
+            snapshot['project'] = {'id': 'project'}
+            snapshot['hosts'] = {host: {'ansibleHost': '127.0.0.1'} for host in ('node1', 'node2')}
+            library = snapshot['applicationLibraries']['libraries']['sdku']
+            consumer = library['instances']['apigateway-sdku']
+            consumer['credentialRequirements'] = {}
+            provider = copy.deepcopy(consumer)
+            provider.update(placements={'node2': {}}, scripts=[callback])
+            library['instances']['provider'] = provider
+            export = dict(serviceType='application', name='api', libraryId='sdku', applicationId='provider',
+                          connectionProvisioner={'apply_script': 'integrate'}, targets=[{'hostId': 'node2'}])
+            library['providedConnections'] = {'api': export}
+            library['sharedSecretRequirements'] = {'client': {'source': {'kind': 'generated', 'profile': 'client_secret'}}}
+            consumer['connections'] = {'api': export}
+            consumer['secretBindings'] = {'CLIENT': {'source': {'library_secret': 'client'}}}
+            rows.append(dict(rows[0], instanceId='provider', hostId='node2'))
+            self.assertTrue(all('secretBindings' not in row for row in rows))
+            variables = dict(platform_application_rows=rows, platform_desired_state=desired,
+                             platform_artifact_lock=lock, application_snapshot={'pki_materialization': {'materializationPlans': []}})
+            expected = generated_password_ref('project', 'sdku', '', 'client')
+            play = [{'hosts': 'localhost', 'connection': 'local', 'gather_facts': False, 'vars': variables, 'tasks': [
+                {'platform.core.prepare_application_runtime': {'project_root': str(root),
+                    'contracts_root': str(ROOT / 'contracts'), 'snapshot': snapshot}, 'register': 'prepared'},
+                {'ansible.builtin.assert': {'that': ['prepared.status == "PASS"', 'prepared.jobs | length == 2',
+                    "prepared.jobs[0].scripts[0].secretInputs.client == '" + expected + "'"],
+                    'fail_msg': '{{ prepared.code | default("Callback projection mismatch") }}'}}]}]
+            filename = Path(folder) / 'probe.yml'
+            filename.write_text(yaml.safe_dump(play))
+            environment = dict(os.environ, ANSIBLE_CONFIG=str(ROOT / 'ansible-core/ansible.cfg'),
+                               ANSIBLE_COLLECTIONS_PATH=str(ROOT / 'ansible-core/collections'))
+            result = subprocess.run(['ansible-playbook', '-i', 'localhost,', str(filename)], env=environment,
+                                    capture_output=True, text=True, timeout=60)
+            self.assertEqual(0, result.returncode, (result.stdout + result.stderr)[-2000:])
+
+    @unittest.skipUnless(shutil.which('ansible-playbook'), 'requires native Ansible')
     def test_rendered_json_configuration_remains_file_text(self):
         import yaml
         core = ROOT / 'ansible-core'

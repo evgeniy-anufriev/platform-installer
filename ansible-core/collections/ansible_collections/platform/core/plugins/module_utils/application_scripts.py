@@ -209,7 +209,7 @@ def prepare_script_jobs(root, snapshot, desired, rows, jobs, phase=None):
                 value = script_secret_source(source, library, instance, provider)
                 if value is None and source.get('optional', False):
                     continue
-                secret_inputs[key] = _secret_reference(value, source, job)
+                secret_inputs[key] = _secret_reference(value, source, dict(job, secretBindings=instance.get('secretBindings', {})))
                 if source.get('valueFrom') == 'library_secret':
                     shared_inputs.append(source['name'])
                 elif source.get('valueFrom') == 'secret_binding':
