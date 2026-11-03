@@ -28665,7 +28665,7 @@ func writeBrowserError(w http.ResponseWriter, status int, err error) {
 }
 
 @@END
-@@PORTABLE {"path":"internal/desktop/core_preview_diagnostics.go","mode":420,"size":36615,"sha256":"319f2495fb1a77a554b4d37d65a594f3cf189958e54ffbaee9bd71624bd5e3aa","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":36615}
+@@PORTABLE {"path":"internal/desktop/core_preview_diagnostics.go","mode":420,"size":36800,"sha256":"ec1476a53eb2f9e143105ac9ac4fdcd2f3efe5de0955ed8a43f14a687b491cb5","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":36800}
 package desktop
 
 import (
@@ -28733,6 +28733,7 @@ var projectFindingMessagesRU = map[string]string{
 	"ENDPOINT_GROUP_DOMAIN_DUPLICATE":                         "Домен группы конечных точек указан повторно.",
 	"ENDPOINT_GROUP_DOMAIN_INVALID":                           "Некорректен домен группы конечных точек.",
 	"ENDPOINT_GROUP_NOT_FOUND":                                "Указанная группа конечных точек не найдена.",
+	"HAPROXY_ENDPOINT_GROUP_REQUIRED":                         "Для HAProxy выберите группу на странице «Точки входа» в разделе consumers.",
 	"ENDPOINT_PROVIDER_FIELD_REQUIRED":                        "У поставщика конечных точек не заполнен обязательный параметр.",
 	"ENDPOINT_PROVIDER_UNSUPPORTED":                           "Сервис не поддерживает выбранную роль поставщика конечных точек.",
 	"ENDPOINT_SERVICE_UNSUPPORTED":                            "Сервис не поддерживает требуемый тип конечной точки.",
