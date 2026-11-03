@@ -185,6 +185,8 @@ type RuntimeSecretDescriptorOperation struct {
 // RuntimeSecretValuesInput is one non-persistent submission for a single
 // Core-derived requirements or saved application source references. Values are never returned.
 type RuntimeSecretValuesInput struct {
+	PendingApplicationInput   bool              `json:"pendingApplicationInput,omitempty"`
+	ApplicationSlot           string            `json:"applicationSlot,omitempty"`
 	ProjectRevision           string            `json:"projectRevision"`
 	DescriptorSetFingerprint  string            `json:"descriptorSetFingerprint"`
 	ServiceDeployment         string            `json:"serviceDeployment"`
@@ -843,6 +845,9 @@ func (a *App) SetDeploymentRuntimeSecretValues(input RuntimeSecretValuesInput) e
 	if err != nil {
 		return err
 	}
+	if input.PendingApplicationInput {
+		return a.setPendingApplicationSecretLocked(binding, input)
+	}
 	if input.ApplicationSourceValues != nil {
 		if input.ApplicationLibrary == "" || input.ServiceDeployment != "" || input.ApplicationRequirementRef != "" || input.DescriptorSetFingerprint != "" || len(input.Values) != 0 || a.current.Managed == nil || a.activeSession != "" {
 			return errors.New("RUNTIME_SECRET_INPUT_INVALID")
@@ -867,7 +872,7 @@ func (a *App) SetDeploymentRuntimeSecretValues(input RuntimeSecretValuesInput) e
 			}
 		}
 		for source := range input.ApplicationSourceValues {
-			if !allowed[source] {
+			if !allowed[source] || !applicationSecretID.MatchString(source) {
 				return errors.New("RUNTIME_SECRET_DESCRIPTOR_NOT_FOUND")
 			}
 		}
@@ -1365,7 +1370,12 @@ func (a *App) getRuntimeSecretDescriptorsLocked(clearAttached bool) RuntimeSecre
 		}
 	}
 	if credentialBinding, bindingErr := a.credentialBindingLocked(); bindingErr == nil {
-		if err := a.secrets.PromotePendingRuntimeSecretValues(credentialBinding, requirements, applicationSecretSourceRequirements(view.ApplicationInputs)); err != nil {
+		applicationSources, sourceErr := a.pendingApplicationSourceBindingsLocked(credentialBinding, revision, view.ApplicationInputs)
+		if sourceErr != nil {
+			a.runtimeSecretEvidence = nil
+			return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: "RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE", Message: projectErrorMessage("RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE")}}
+		}
+		if err := a.secrets.PromotePendingRuntimeSecretValues(credentialBinding, requirements, applicationSources); err != nil {
 			a.runtimeSecretEvidence = nil
 			return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: projectErrorCode(err), Message: projectErrorMessage(projectErrorCode(err))}}
 		}

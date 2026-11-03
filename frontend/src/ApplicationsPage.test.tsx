@@ -160,6 +160,81 @@ async function selectSlot() {
   await userEvent.click(screen.getByRole("button", { name: "↳ gateway" }));
 }
 describe("application editor", () => {
+  it("accepts application session inputs before project verification without calling Core", async () => {
+    let present = false;
+    const loadCore = vi.fn();
+    const structural = vi.fn();
+    const loadPending = vi.fn(
+      async (): Promise<RuntimeSecretDescriptorOperation> => ({
+        status: "READY",
+        projectRevision: "revision",
+        applicationSecretAvailability: { "pending-field": present },
+        applicationInputs: [
+          {
+            requirementRef: "pending-field",
+            purpose: "APPLICATION_SECRET",
+            providerDeployment: null,
+            applicationLibraries: ["sdku"],
+            hosts: [],
+            operations: [],
+            sourceRef: "qa-password",
+            displayLabel: "Password",
+          },
+        ],
+      }),
+    );
+    const save = vi.fn(async () => {
+      present = true;
+    });
+    const props = {
+      managed,
+      snapshot: undefined,
+      intents: [],
+      busy: false,
+      draftActive: false,
+      onAppend: structural,
+      onAmend: structural,
+      onReview: structural,
+      onInstallation: vi.fn(),
+      onDirtyChange: vi.fn(),
+      onImport: vi.fn(),
+      loadSecrets: loadCore,
+      loadPendingSecrets: loadPending,
+      saveSecrets: save,
+    };
+    const view = render(<ApplicationsPage {...props} />);
+    await selectSlot();
+    await userEvent.click(screen.getByRole("button", { name: "Секреты" }));
+    const password = screen.getByLabelText(
+      "postgres: Пароль",
+    ) as HTMLInputElement;
+    expect(password.disabled).toBe(false);
+    await userEvent.type(password, "synthetic-before-verify");
+    await userEvent.click(
+      screen.getByRole("button", {
+        name: "Сохранить в сессии: postgres: Пароль",
+      }),
+    );
+    await waitFor(() =>
+      expect(save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          pendingApplicationInput: true,
+          applicationLibrary: "sdku",
+          applicationSlot: "gateway",
+          applicationRequirementRef: "pending-field",
+          descriptorSetFingerprint: "",
+          values: { "pending-field": "synthetic-before-verify" },
+        }),
+      ),
+    );
+    await screen.findByText("Секрет задан");
+    expect(loadCore).not.toHaveBeenCalled();
+    expect(structural).not.toHaveBeenCalled();
+    view.rerender(<ApplicationsPage {...props} draftActive={true} />);
+    expect(
+      (screen.getByLabelText("postgres: Пароль") as HTMLInputElement).disabled,
+    ).toBe(true);
+  });
   it("offers placement only on hosts of the selected runtime without rewriting saved placements", async () => {
     const view = structuredClone(managed);
     Object.assign(view.servers, {
@@ -1263,7 +1338,9 @@ it("offers declared SSO without a Core snapshot and saves the library endpoint s
     value: "apps",
   });
   expect(applicationDraft(view, calls).libraryEndpointGroups.sdku).toBe("apps");
-  expect(applicationDraft(view, calls).libraries.sdku.bindings).toMatchObject({ endpoint: { endpointGroupRef: "apps" } });
+  expect(applicationDraft(view, calls).libraries.sdku.bindings).toMatchObject({
+    endpoint: { endpointGroupRef: "apps" },
+  });
   await waitFor(() =>
     expect(
       (

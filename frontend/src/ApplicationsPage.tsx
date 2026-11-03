@@ -44,6 +44,7 @@ export function ApplicationsPage({
   onInstallation,
   onDirtyChange,
   loadSecrets,
+  loadPendingSecrets,
   saveSecrets,
   loadSecretAvailability,
   executionContextKey = "",
@@ -66,6 +67,10 @@ export function ApplicationsPage({
   importCompleted?: boolean;
   onProviderSecrets?: (deploymentId: string) => void;
   loadSecrets?: () => Promise<RuntimeSecretDescriptorOperation>;
+  loadPendingSecrets?: (context: {
+    applicationLibrary: string;
+    applicationSlot?: string;
+  }) => Promise<RuntimeSecretDescriptorOperation>;
   saveSecrets?: (input: RuntimeSecretValuesInput) => Promise<void>;
   loadSecretAvailability?: () => Promise<RuntimeSecretDescriptorOperation>;
   executionContextKey?: string;
@@ -508,6 +513,52 @@ export function ApplicationsPage({
     !dirty &&
     intents.length === 0 &&
     snapshot?.projectRevision === managed?.projectRevision;
+  const editableSecretSession =
+    !busy && !draftActive && !dirty && intents.length === 0;
+  const pendingSecretContext = JSON.stringify([
+    selected,
+    slot,
+    managed?.projectRevision,
+  ]);
+  const [pendingAvailability, setPendingAvailability] = useState<{
+    context: string;
+    value: RuntimeSecretDescriptorOperation;
+  }>();
+  const pendingGeneration = useRef(0);
+  const loadPendingApplicationSecrets = useCallback(async () => {
+    const generation = ++pendingGeneration.current;
+    const value = await loadPendingSecrets!({
+      applicationLibrary: selected,
+      applicationSlot: slot,
+    });
+    if (pendingGeneration.current === generation)
+      setPendingAvailability({ context: pendingSecretContext, value });
+    return value;
+  }, [loadPendingSecrets, selected, slot, pendingSecretContext]);
+  useEffect(() => {
+    if (
+      !loadPendingSecrets ||
+      !editableSecretSession ||
+      !["Секреты", "Подключения", "Ресурсы и секреты"].includes(selectedTab)
+    )
+      return;
+    const refresh = () => {
+      void loadPendingApplicationSecrets().catch(() =>
+        setPendingAvailability(undefined),
+      );
+    };
+    refresh();
+    const interval = window.setInterval(refresh, 10000);
+    return () => {
+      ++pendingGeneration.current;
+      window.clearInterval(interval);
+    };
+  }, [
+    loadPendingSecrets,
+    editableSecretSession,
+    selectedTab,
+    loadPendingApplicationSecrets,
+  ]);
   // Selecting an authored reference must not depend on successful Core resolution.
   const providedConnectionChoices = Object.entries(libraries).flatMap(
     ([id, lib]) =>
@@ -527,6 +578,7 @@ export function ApplicationsPage({
     ++availabilityGeneration.current;
     if (
       !["Секреты", "Подключения", "Ресурсы и секреты"].includes(selectedTab) ||
+      !!loadPendingSecrets ||
       !freshSecrets ||
       !loadSecrets ||
       !loadSecretAvailability
@@ -565,6 +617,7 @@ export function ApplicationsPage({
     selectedTab,
     freshSecrets,
     loadSecrets,
+    loadPendingSecrets,
     loadSecretAvailability,
     loadApplicationSecrets,
     refreshSecretAvailability,
@@ -577,14 +630,35 @@ export function ApplicationsPage({
       )
     : {};
   const librarySecretSession: ApplicationSecretSession | undefined =
-    loadSecrets && saveSecrets
+    (loadSecrets || loadPendingSecrets) && saveSecrets
       ? {
           projectRevision: managed?.projectRevision ?? "",
           contextKey: executionContextKey,
           libraryId: selected,
-          disabled: busy || !freshSecrets,
-          load: loadApplicationSecrets,
-          save: saveApplicationSecrets,
+          pending: !!loadPendingSecrets,
+          applicationSlot: slot,
+          disabled: loadPendingSecrets
+            ? !editableSecretSession
+            : busy || !freshSecrets,
+          availability: loadPendingSecrets
+            ? pendingAvailability?.context === pendingSecretContext
+              ? pendingAvailability.value
+              : undefined
+            : freshSecrets &&
+                secretAvailability &&
+                secretAvailability?.snapshot === snapshot &&
+                secretAvailability.scope === secretScope
+              ? secretAvailability.value
+              : undefined,
+          load: loadPendingSecrets
+            ? loadPendingApplicationSecrets
+            : loadApplicationSecrets,
+          save: loadPendingSecrets
+            ? async (input) => {
+                await saveSecrets(input);
+                await loadPendingApplicationSecrets();
+              }
+            : saveApplicationSecrets,
         }
       : undefined;
   const secretRefCounts: Record<string, number> = {};
@@ -1665,25 +1739,7 @@ export function ApplicationsPage({
                       сессии.
                     </p>
                     <ApplicationCredentials
-                      secretSession={
-                        loadSecrets && saveSecrets
-                          ? {
-                              projectRevision: managed?.projectRevision ?? "",
-                              contextKey: executionContextKey,
-                              libraryId: selected,
-                              disabled: busy || !freshSecrets,
-                              availability:
-                                freshSecrets &&
-                                secretAvailability &&
-                                secretAvailability?.snapshot === snapshot &&
-                                secretAvailability.scope === secretScope
-                                  ? secretAvailability.value
-                                  : undefined,
-                              load: loadApplicationSecrets,
-                              save: saveApplicationSecrets,
-                            }
-                          : undefined
-                      }
+                      secretSession={librarySecretSession}
                       resolvedAccounts={resolvedSecretAccounts}
                       sharedSecretRefs={Object.keys(secretRefCounts).filter(
                         (ref) => secretRefCounts[ref] > 1,
@@ -1742,8 +1798,8 @@ export function ApplicationsPage({
                     />
                     {draftActive && (
                       <p>
-                        Для сессионного ввода сначала сохраните проект и
-                        проверьте текущую ревизию.
+                        Для сессионного ввода сначала сохраните изменения
+                        проекта.
                       </p>
                     )}
                   </>

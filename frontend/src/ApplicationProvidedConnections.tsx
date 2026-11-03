@@ -3,6 +3,7 @@ import { ApplicationValueFields } from "./ApplicationValueFields";
 import { CredentialSourceEditor } from "./ApplicationCredentials";
 import {
   ApplicationRuntimeSecretField,
+  ApplicationSecretAvailabilityBadge,
   type ApplicationSecretSession,
 } from "./ApplicationRuntimeSecretField";
 
@@ -39,7 +40,31 @@ export function ApplicationProvidedConnections({
             className="application-provided-connection"
             aria-label={`Предоставляемое подключение ${name}`}
           >
-            <h3>Предоставляемое подключение · {name}</h3>
+            <h3>
+              Предоставляемое подключение · {name}{" "}
+              {secretSession && (
+                <ApplicationSecretAvailabilityBadge
+                  session={secretSession}
+                  resolved={
+                    !!secretSession.pending ||
+                    Object.keys(objectValue(resolved[name])).length > 0
+                  }
+                  sourceRefs={Object.values(
+                    secretSession.pending
+                      ? {
+                          ...objectValue(declaration.credentials),
+                          ...credentials,
+                        }
+                      : objectValue(objectValue(resolved[name]).credentials),
+                  )
+                    .map((credential) =>
+                      objectValue(objectValue(credential).source),
+                    )
+                    .filter((source) => source.kind === "runtime_secret_ref")
+                    .map((source) => String(source.ref ?? ""))}
+                />
+              )}
+            </h3>
             <p>
               {String(declaration.application)} · {String(declaration.protocol)}{" "}
               ·{" "}
@@ -79,14 +104,20 @@ export function ApplicationProvidedConnections({
                                   session={secretSession}
                                   label={`${name} · ${field}`}
                                   sourceRef={String(
-                                    objectValue(
-                                      objectValue(
-                                        objectValue(
-                                          objectValue(resolved[name])
-                                            .credentials,
-                                        )[field],
-                                      ).source,
-                                    ).ref ?? "",
+                                    secretSession.pending
+                                      ? (objectValue(
+                                          objectValue(
+                                            credentials[field] ?? source,
+                                          ).source,
+                                        ).ref ?? "")
+                                      : (objectValue(
+                                          objectValue(
+                                            objectValue(
+                                              objectValue(resolved[name])
+                                                .credentials,
+                                            )[field],
+                                          ).source,
+                                        ).ref ?? ""),
                                   )}
                                 />
                               ) : undefined

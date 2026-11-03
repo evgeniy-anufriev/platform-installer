@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, within, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi } from "vitest";
 import { ApplicationProvidedConnections } from "./ApplicationProvidedConnections";
@@ -43,7 +43,7 @@ it("submits a provider credential only to the runtime session using Core referen
           descriptorSetFingerprint: "fp",
           applicationInputs: [
             {
-              purpose: "APPLICATION_SECRET",
+              purpose: "APPLICATION_SECRET" as const,
               sourceRef: "resolved-ref",
               requirementRef: "requirement",
               applicationLibraries: ["szi"],
@@ -75,6 +75,96 @@ it("submits a provider credential only to the runtime session using Core referen
   expect(
     (screen.getByLabelText("sso · password") as HTMLInputElement).value,
   ).toBe("");
+  await waitFor(() =>
+    expect(
+      (screen.getByLabelText("sso · password") as HTMLInputElement).disabled,
+    ).toBe(false),
+  );
+  expect(screen.getByText("Секрет отправлен в сессию")).toBeTruthy();
+  await userEvent.type(
+    screen.getByLabelText("sso · password"),
+    "synthetic-replacement",
+  );
+  await userEvent.click(
+    screen.getByRole("button", { name: "Сохранить в сессии: sso · password" }),
+  );
+  expect(save).toHaveBeenCalledTimes(2);
+});
+
+it("shows library connection presence from the same session evidence as application credentials", () => {
+  const input = {
+    purpose: "APPLICATION_SECRET" as const,
+    sourceRef: "admin",
+    requirementRef: "requirement",
+    applicationLibraries: ["szi"],
+    providerDeployment: null,
+    hosts: [],
+    operations: [],
+    displayLabel: "Admin",
+  };
+  const props = {
+    definitions: {
+      sso: {
+        application: "keycloak",
+        credentials: {
+          password: { source: { kind: "runtime_secret_ref", ref: "admin" } },
+        },
+      },
+    },
+    resolved: {
+      sso: {
+        credentials: {
+          password: { source: { kind: "runtime_secret_ref", ref: "admin" } },
+        },
+      },
+    },
+    value: {},
+    disabled: false,
+    onSave: vi.fn(),
+    onDirtyChange: vi.fn(),
+    secretSession: {
+      projectRevision: "rev",
+      libraryId: "szi",
+      disabled: false,
+      load: vi.fn(),
+      save: vi.fn(),
+      availability: {
+        status: "READY" as const,
+        projectRevision: "rev",
+        applicationInputs: [input],
+        applicationSecretAvailability: { requirement: false },
+      },
+    },
+  };
+  const view = render(<ApplicationProvidedConnections {...props} />);
+  expect(screen.getByText("Секрет не задан").closest("h3")).toBeTruthy();
+  view.rerender(
+    <ApplicationProvidedConnections
+      {...props}
+      secretSession={{
+        ...props.secretSession,
+        availability: {
+          ...props.secretSession.availability,
+          applicationSecretAvailability: { requirement: true },
+        },
+      }}
+    />,
+  );
+  expect(screen.getByText("Секрет задан").closest("h3")).toBeTruthy();
+  view.rerender(
+    <ApplicationProvidedConnections
+      {...props}
+      secretSession={{
+        ...props.secretSession,
+        availability: {
+          ...props.secretSession.availability,
+          projectRevision: "old",
+          applicationSecretAvailability: { requirement: true },
+        },
+      }}
+    />,
+  );
+  expect(screen.getByText("Статус секрета недоступен")).toBeTruthy();
 });
 
 describe("application provided connections", () => {
@@ -84,7 +174,9 @@ describe("application provided connections", () => {
     render(
       <ApplicationBindings
         value={{
-          identity: { deploymentRef: "old" },
+          identity: {
+            providedConnectionRef: { libraryId: "provider", name: "previous" },
+          },
           storage: { deploymentRef: "vault" },
         }}
         hints={{}}
@@ -96,10 +188,10 @@ describe("application provided connections", () => {
         onDirtyChange={vi.fn()}
       />,
     );
-    await user.selectOptions(
-      screen.getByLabelText("Тип подключения identity"),
-      "providedConnectionRef",
-    );
+    expect(
+      (screen.getByLabelText("Тип подключения identity") as HTMLSelectElement)
+        .disabled,
+    ).toBe(true);
     await user.selectOptions(
       screen.getByLabelText("Подключение identity"),
       "provider/api",

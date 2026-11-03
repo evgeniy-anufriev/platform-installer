@@ -36,7 +36,22 @@ Recommended ports:
 
 ## Persistence
 
-Application runtime credential input reuses `SetDeploymentRuntimeSecretValues`.
+Application session input also supports the same local pending lifecycle as
+service input. `GetPendingApplicationRuntimeSecretDescriptors` inventories the
+saved library/slot credential source declarations. A
+`SetDeploymentRuntimeSecretValues` submission with `pendingApplicationInput`
+stores its single value in the existing project-bound Broker; no Verify, Core
+call, SSH credential or READY node is needed. Unsaved changes must be saved
+first. Presence reads return booleans without extending expiry.
+
+Local field identities include the library, slot and opaque authored source
+reference. Go does not render references containing templates. Before attachment,
+the existing runtime-attested Core snapshot supplies the resolved credential
+source for that field, and the current Core descriptors authorize its exact
+requirement/library scope. These inputs cannot become target credentials from
+local declarations alone. They add no desired-state field or secret store.
+
+The compatibility Core-attested input reuses `SetDeploymentRuntimeSecretValues`.
 Without `applicationRequirementRef` it retains the full descriptor-set contract.
 With this optional field it accepts exactly one Core-issued APPLICATION_SECRET
 requirement in the specified application library, bound to current saved

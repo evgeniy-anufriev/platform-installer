@@ -100,6 +100,14 @@ does not stage the project or query Core. Values use the existing bounded
 project session; Core maps their sources to current requirements before use.
 Source identifiers are internal and are not shown in the form.
 
+Owner refinement (2026-11-03): application and provided-library-connection
+session secret inputs follow service input's local pending lifecycle. Saving
+the project is sufficient; Project Verify and READY Execution Node are not
+input prerequisites. Core still authorizes resolved requirements before use.
+Show «Секрет задан» / «Секрет не задан» beside the credential account or provided
+connection heading, based on read-only session presence, and refresh it after
+submission and tab reentry. Unsaved source changes must be saved first.
+
 Owner refinement (2026-11-02): library registry entries authorize their scoped
 image sources without a separate node-list edit. Endpoint selection is stored
 in `bindings.endpoint.endpointGroupRef`. `bindings.secrets` automatically selects

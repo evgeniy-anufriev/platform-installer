@@ -130,19 +130,20 @@ func browserOperations() map[string]browserOperation {
 		"appendEditCommand": twoBrowserArgs(func(app *App, sessionID string, command installer.EditCommand) EditOperationResult {
 			return app.AppendEditCommand(sessionID, command)
 		}),
-		"amendServiceConfigurationDraft":          browserAmendConfiguration(false),
-		"amendApplicationLibraryDraft":            browserAmendConfiguration(true),
-		"reviewEditSession":                       oneBrowserArg((*App).ReviewStructuralEditSession),
-		"commitEditPlan":                          twoBrowserArgs((*App).CommitStructuralEditPlan),
-		"discardEditSession":                      oneBrowserArg((*App).DiscardEditSession),
-		"getSessionCredentialStatus":              noBrowserArgsError((*App).GetSessionCredentialStatus),
-		"setSessionCredential":                    oneBrowserArgError((*App).SetSessionCredential),
-		"setPKIStorePassword":                     oneBrowserArgError((*App).SetPKIStorePassword),
-		"getRuntimeSecretDescriptors":             noBrowserArgs((*App).GetRuntimeSecretDescriptors),
-		"getApplicationRuntimeSecretAvailability": noBrowserArgs((*App).GetApplicationRuntimeSecretAvailability),
-		"setDeploymentRuntimeSecretValues":        oneBrowserError((*App).SetDeploymentRuntimeSecretValues),
-		"getPendingRuntimeSecretDescriptors":      oneBrowserArg((*App).GetPendingRuntimeSecretDescriptors),
-		"setPendingDeploymentRuntimeSecretValues": oneBrowserError((*App).SetPendingDeploymentRuntimeSecretValues),
+		"amendServiceConfigurationDraft":                browserAmendConfiguration(false),
+		"amendApplicationLibraryDraft":                  browserAmendConfiguration(true),
+		"reviewEditSession":                             oneBrowserArg((*App).ReviewStructuralEditSession),
+		"commitEditPlan":                                twoBrowserArgs((*App).CommitStructuralEditPlan),
+		"discardEditSession":                            oneBrowserArg((*App).DiscardEditSession),
+		"getSessionCredentialStatus":                    noBrowserArgsError((*App).GetSessionCredentialStatus),
+		"setSessionCredential":                          oneBrowserArgError((*App).SetSessionCredential),
+		"setPKIStorePassword":                           oneBrowserArgError((*App).SetPKIStorePassword),
+		"getRuntimeSecretDescriptors":                   noBrowserArgs((*App).GetRuntimeSecretDescriptors),
+		"getApplicationRuntimeSecretAvailability":       noBrowserArgs((*App).GetApplicationRuntimeSecretAvailability),
+		"setDeploymentRuntimeSecretValues":              oneBrowserError((*App).SetDeploymentRuntimeSecretValues),
+		"getPendingRuntimeSecretDescriptors":            oneBrowserArg((*App).GetPendingRuntimeSecretDescriptors),
+		"getPendingApplicationRuntimeSecretDescriptors": oneBrowserArg((*App).GetPendingApplicationRuntimeSecretDescriptors),
+		"setPendingDeploymentRuntimeSecretValues":       oneBrowserError((*App).SetPendingDeploymentRuntimeSecretValues),
 		"choosePendingDeploymentRuntimeSecretFile": twoBrowserArgsError(func(app *App, input PendingRuntimeSecretFileInput, fileBytes []byte) (string, error) {
 			defer clear(fileBytes)
 			return app.importPendingDeploymentRuntimeSecretFile(input, fileBytes)

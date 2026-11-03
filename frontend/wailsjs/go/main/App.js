@@ -158,6 +158,10 @@ export function GetInstallationState() {
   return window['go']['main']['App']['GetInstallationState']();
 }
 
+export function GetPendingApplicationRuntimeSecretDescriptors(arg1) {
+  return window['go']['main']['App']['GetPendingApplicationRuntimeSecretDescriptors'](arg1);
+}
+
 export function GetPendingRuntimeSecretDescriptors(arg1) {
   return window['go']['main']['App']['GetPendingRuntimeSecretDescriptors'](arg1);
 }

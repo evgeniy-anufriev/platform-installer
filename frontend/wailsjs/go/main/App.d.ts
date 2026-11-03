@@ -84,6 +84,8 @@ export function GetInstallationRun(arg1:string):Promise<desktop.InstallationRunO
 
 export function GetInstallationState():Promise<desktop.InstallationState>;
 
+export function GetPendingApplicationRuntimeSecretDescriptors(arg1:desktop.PendingApplicationSecretContext):Promise<desktop.RuntimeSecretDescriptorOperation>;
+
 export function GetPendingRuntimeSecretDescriptors(arg1:string):Promise<desktop.RuntimeSecretDescriptorOperation>;
 
 export function GetRuntimeSecretDescriptors():Promise<desktop.RuntimeSecretDescriptorOperation>;

@@ -325,13 +325,16 @@ export function ApplicationCredentials({
                   <ApplicationSecretAvailabilityBadge
                     session={secretSession}
                     resolved={
+                      secretSession.pending ||
                       Object.keys(objectValue(resolvedAccounts[name])).length >
-                      0
+                        0
                     }
                     sourceRefs={Object.values(
-                      objectValue(
-                        objectValue(resolvedAccounts[name]).credentials,
-                      ),
+                      secretSession.pending
+                        ? { ...base, ...credentials }
+                        : objectValue(
+                            objectValue(resolvedAccounts[name]).credentials,
+                          ),
                     )
                       .map((credential) =>
                         objectValue(objectValue(credential).source),
@@ -342,11 +345,11 @@ export function ApplicationCredentials({
                 )}
                 {secretSession &&
                   (secretSession.disabled ||
-                    !Object.keys(objectValue(resolvedAccounts[name]))
-                      .length) && (
+                    (!secretSession.pending &&
+                      !Object.keys(objectValue(resolvedAccounts[name]))
+                        .length)) && (
                     <small className="application-secret-prerequisite">
-                      Сохраните проект и получите актуальную проверку Core перед
-                      вводом секрета.
+                      Сохраните изменения проекта перед вводом секрета.
                     </small>
                   )}
               </h3>
@@ -500,15 +503,23 @@ export function ApplicationCredentials({
                                         session={secretSession}
                                         label={`${name}: ${field === "password" ? "Пароль" : "Секрет имени пользователя"}`}
                                         sourceRef={String(
-                                          objectValue(
-                                            objectValue(
-                                              objectValue(
+                                          secretSession.pending
+                                            ? ((Object.keys(source).length
+                                                ? source
+                                                : objectValue(
+                                                    objectValue(base[field])
+                                                      .source,
+                                                  )
+                                              ).ref ?? "")
+                                            : (objectValue(
                                                 objectValue(
-                                                  resolvedAccounts[name],
-                                                ).credentials,
-                                              )[field],
-                                            ).source,
-                                          ).ref ?? "",
+                                                  objectValue(
+                                                    objectValue(
+                                                      resolvedAccounts[name],
+                                                    ).credentials,
+                                                  )[field],
+                                                ).source,
+                                              ).ref ?? ""),
                                         )}
                                         shared={sharedSecretRefs.includes(
                                           String(

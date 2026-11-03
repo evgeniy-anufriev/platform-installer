@@ -13,6 +13,27 @@ import (
 	"time"
 )
 
+func TestPendingApplicationPresenceDoesNotAttachOrRenewInputs(t *testing.T) {
+	now := time.Now()
+	broker := NewBroker(WithClock(func() time.Time { return now }), WithTTL(time.Minute))
+	defer broker.Close()
+	binding := Binding{Root: "project-root", ID: "project-id"}
+	if err := broker.SetPendingApplicationSecretValues(binding, map[string]string{"pending-application-field": "synthetic"}); err != nil {
+		t.Fatal(err)
+	}
+	now = now.Add(59 * time.Second)
+	if !broker.PendingApplicationSecretPresence(binding, []string{"pending-application-field"})["pending-application-field"] {
+		t.Fatal("pending source not reported")
+	}
+	if broker.PendingApplicationSecretPresence(Binding{Root: "other", ID: binding.ID}, []string{"pending-application-field"})["pending-application-field"] {
+		t.Fatal("source crossed project boundary")
+	}
+	now = now.Add(2 * time.Second)
+	if broker.PendingApplicationSecretPresence(binding, []string{"pending-application-field"})["pending-application-field"] {
+		t.Fatal("presence read renewed expired input")
+	}
+}
+
 func TestServiceSecretsPresentScopesAndExpiry(t *testing.T) {
 	broker := NewBroker()
 	defer broker.Clear()

@@ -2729,6 +2729,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
                 backendError={editError?.message}
                 importCompleted={importCompleted}
                 loadSecrets={api.getRuntimeSecretDescriptors}
+                loadPendingSecrets={api.getPendingApplicationRuntimeSecretDescriptors}
                 executionContextKey={JSON.stringify([
                   executionNode?.selectionKind,
                   executionNode?.selectedHostId,

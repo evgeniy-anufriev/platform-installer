@@ -1632,6 +1632,20 @@ export namespace desktop {
       this.confirm = source["confirm"];
     }
   }
+  export class PendingApplicationSecretContext {
+    applicationLibrary: string;
+    applicationSlot?: string;
+
+    static createFrom(source: any = {}) {
+      return new PendingApplicationSecretContext(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.applicationLibrary = source["applicationLibrary"];
+      this.applicationSlot = source["applicationSlot"];
+    }
+  }
   export class PendingRuntimeSecretFileInput {
     serviceDeployment: string;
     purpose: string;
@@ -1908,6 +1922,8 @@ export namespace desktop {
   }
 
   export class RuntimeSecretValuesInput {
+    pendingApplicationInput?: boolean;
+    applicationSlot?: string;
     projectRevision: string;
     descriptorSetFingerprint: string;
     serviceDeployment: string;
@@ -1922,6 +1938,8 @@ export namespace desktop {
 
     constructor(source: any = {}) {
       if ("string" === typeof source) source = JSON.parse(source);
+      this.pendingApplicationInput = source["pendingApplicationInput"];
+      this.applicationSlot = source["applicationSlot"];
       this.projectRevision = source["projectRevision"];
       this.descriptorSetFingerprint = source["descriptorSetFingerprint"];
       this.serviceDeployment = source["serviceDeployment"];
@@ -2264,6 +2282,26 @@ export namespace executionnode {
       this.summary = source["summary"];
     }
   }
+  export class Finding {
+    Code: string;
+    SafeMessage: string;
+    serviceDeployment?: string;
+    artifactName?: string;
+    artifactVersion?: string;
+
+    static createFrom(source: any = {}) {
+      return new Finding(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.Code = source["Code"];
+      this.SafeMessage = source["SafeMessage"];
+      this.serviceDeployment = source["serviceDeployment"];
+      this.artifactName = source["artifactName"];
+      this.artifactVersion = source["artifactVersion"];
+    }
+  }
   export class InfrastructureDeploymentVerification {
     deploymentId: string;
     sourceRunId: string;
@@ -2453,6 +2491,7 @@ export namespace executionnode {
     projectRevision: string;
     services: Record<string, ServiceConfigurationScope>;
     runtimeDigest?: string;
+    diagnostic?: Finding;
 
     static createFrom(source: any = {}) {
       return new ServiceConfigurationPreview(source);
@@ -2469,6 +2508,7 @@ export namespace executionnode {
         true,
       );
       this.runtimeDigest = source["runtimeDigest"];
+      this.diagnostic = this.convertValues(source["diagnostic"], Finding);
     }
 
     convertValues(a: any, classs: any, asMap: boolean = false): any {

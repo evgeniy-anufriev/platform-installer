@@ -351,15 +351,26 @@ func (b *Broker) SetRuntimeSecretValuesForRequirements(binding Binding, requirem
 	return nil
 }
 
-// SetPendingApplicationSecretValues holds authored source values without Core
-// requirement IDs. Only a later Core-provided source-to-requirement mapping can
-// attach these values to a target credential.
+// PendingApplicationSecretPresence reports project-bound input presence without
+// returning values, attaching them to a credential or extending their expiry.
+func (b *Broker) PendingApplicationSecretPresence(binding Binding, sources []string) map[string]bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	result := make(map[string]bool, len(sources))
+	valid := b.pending != nil && b.pending.binding == binding && b.now().Before(b.pending.expiresAt)
+	for _, source := range sources {
+		result[source] = valid && len(b.pending.applicationValues[source]) > 0
+	}
+	return result
+}
+
+// SetPendingApplicationSecretValues holds source values until Core attestation.
 func (b *Broker) SetPendingApplicationSecretValues(binding Binding, values map[string]string) error {
 	if binding.Root == "" || binding.ID == "" || len(values) == 0 || len(values) > 128 {
 		return errors.New("RUNTIME_SECRET_INPUT_INVALID")
 	}
 	for source, value := range values {
-		if len(source) > 128 || !applicationSecretSourcePattern.MatchString(source) || !utf8.ValidString(value) || len(value) == 0 || len(value) > 4096 {
+		if len(source) > 128 || (!applicationSecretSourcePattern.MatchString(source) && !pendingApplicationFieldPattern.MatchString(source)) || !utf8.ValidString(value) || len(value) == 0 || len(value) > 4096 {
 			return errors.New("RUNTIME_SECRET_INPUT_INVALID")
 		}
 	}
@@ -1208,6 +1219,9 @@ func zero(value []byte) {
 
 var runtimeSecretRequirementPattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`)
 var applicationSecretSourcePattern = regexp.MustCompile(`^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$`)
+
+// Field handles cannot collide with an authored Core sourceRef (which forbids ':').
+var pendingApplicationFieldPattern = regexp.MustCompile(`^pending-application:[a-f0-9]{64}$`)
 
 func runtimeSecretID(value string) bool { return runtimeSecretRequirementPattern.MatchString(value) }
 

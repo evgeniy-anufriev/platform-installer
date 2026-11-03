@@ -5,6 +5,8 @@ import type {
 } from "./backend";
 
 type Session = {
+  pending?: boolean;
+  applicationSlot?: string;
   projectRevision: string;
   contextKey?: string;
   libraryId: string;
@@ -126,14 +128,20 @@ function RuntimeSecretField({
       if (
         operation.status !== "READY" ||
         operation.projectRevision !== session.projectRevision ||
-        !operation.descriptorSetFingerprint ||
+        (!session.pending && !operation.descriptorSetFingerprint) ||
         matches?.length !== 1
       )
         throw new Error("RUNTIME_SECRET_DESCRIPTOR_UNAVAILABLE");
       const requirementRef = matches[0].requirementRef;
       await session.save({
+        ...(session.pending
+          ? {
+              pendingApplicationInput: true,
+              applicationSlot: session.applicationSlot,
+            }
+          : {}),
         projectRevision: operation.projectRevision,
-        descriptorSetFingerprint: operation.descriptorSetFingerprint,
+        descriptorSetFingerprint: operation.descriptorSetFingerprint ?? "",
         serviceDeployment: "",
         applicationLibrary: session.libraryId,
         applicationRequirementRef: requirementRef,
