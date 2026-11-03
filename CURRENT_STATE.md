@@ -36,6 +36,14 @@ deletes dynamic SSH binding/secrets; errors in node Check/Prepare and Verify
 inspection preserve SSH identity/pin for retry. Dynamic retry/recheck and five
 operational-failure tests PASS; full Go tests, vet and Wails backend build PASS.
 Review not invoked per owner; no real UI acceptance/Start. Same evidence.
+Further owner report: password SSH, Check/Prepare -> other server checks ->
+session secrets -> first plan EXECUTION_NODE_UNAVAILABLE, recheck -> plan OK.
+Native subprocess regression reproduces that exact error when successful SSH/PAM
+stderr contaminates the runtime release path. Bounded protocol stdout is now
+separate from private stderr; subprocess buffer limits also cover io.Copy.
+Full Go tests/vet and Windows backend build PASS. Exact isolated-system cause
+and real React/Wails flow remain unconfirmed; standard bridge preflight failed.
+Same evidence; no readiness/trust/session policy change or installation.
 
 Owner-requested application secret input before Verify: implemented through
 existing pending Broker; provided library connections now show session presence.

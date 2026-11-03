@@ -126,3 +126,48 @@ Validation from base `ef754291`:
   `wails build -s -skipbindings -m -nosyncgomod -nocolour`.
 - No review invoked, per owner instruction. Real React/Wails acceptance remains
   unperformed; no real installation or Start was initiated.
+
+## Password SSH: protocol stderr can masquerade as node unavailability (2026-11-03)
+
+Owner clarified a separate sequence: Check Execution Node -> Prepare -> check
+other servers -> fill session secrets -> prepare plan returns
+`EXECUTION_NODE_UNAVAILABLE`; another node check makes the next plan work.
+SSH uses a password, elapsed time is a few minutes. The isolated installation's
+logs and runtime are not accessible, so its exact cause is not established.
+This code differs from READY_REQUIRED/BINDING_REQUIRED and does not itself
+prove that the application's readiness or SSH credential has been reset.
+
+Code investigation found that `osRunner.RunBounded` combined stdout and stderr.
+The runtime protocol uses it for the release path, active-state metadata and
+JSON response. A successful SSH/PAM/sudo notice on stderr therefore makes the
+release path invalid and produces precisely `EXECUTION_NODE_UNAVAILABLE`.
+A native subprocess regression with separate pipes reproduces the failure
+with the original runner, without a network error or readiness change.
+
+Correction reuses `RunSeparatedBounded` for bounded protocol output. Only stdout
+is parsed; stderr is independently bounded to 16384 bytes and discarded. Exit
+failures and overflow in either stream still block the operation. The subprocess
+overflow checks also exposed inherited `bytes.Buffer.ReadFrom` bypassing
+`boundedOutput.Write` during os/exec's io.Copy. A narrow ReadFrom override now
+routes copies through the existing bounded Write. No credential TTL, host-key
+guard, readiness, plan approval, retry, process lifecycle or contract changed.
+The design check agrees with Servers' independent readiness/observation model;
+no UI/design discrepancy or architecture change is introduced. This is a bounded
+fix within the approved transport contract; no independent review was invoked.
+
+Validation on base `1aefccef`:
+
+- New runtime protocol test: actual native child processes emit valid release,
+  active-state and JSON stdout plus synthetic private stderr; original runner
+  FAILS with EXECUTION_NODE_UNAVAILABLE, corrected runner PASS.
+- Native subprocess nonzero exit, stdout overflow and stderr overflow all remain
+  rejected; private stderr canary is absent from returned stdout. Existing
+  bounded-output retention test PASS.
+- Full `go test ./...` and `go vet ./...` PASS on Windows. Race unavailable with
+  CGO_ENABLED=0; no concurrency mechanism was changed.
+- `wails build -s -skipbindings -m -nosyncgomod -nocolour` PASS, existing frontend
+  assets, output `build/bin/platform-installer-ui.exe`.
+- `node scripts/qa-wails-bridge.cjs`: QA_WAILS_BRIDGE_PREFLIGHT_FAILED. Real
+  React/Wails password-SSH acceptance remains unavailable/blocking; no password
+  from the isolated system was requested or used, no real Start was initiated.
+  This fixes a reproduced failure mode, not proof of the isolated-system cause.

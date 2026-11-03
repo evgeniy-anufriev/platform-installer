@@ -69,17 +69,12 @@ func (r osRunner) Run(ctx context.Context, name string, args []string, input []b
 }
 
 func (r osRunner) RunBounded(ctx context.Context, name string, args []string, input []byte, limit int) ([]byte, error) {
-	command := exec.CommandContext(ctx, name, args...)
-	commandwindow.Configure(command)
-	command.Stdin = bytes.NewReader(input)
-	output := &boundedOutput{limit: limit}
-	command.Stdout = output
-	command.Stderr = output
-	err := r.execute(ctx, command)
-	if output.overflow {
-		return output.Bytes(), errors.New("EXECUTION_NODE_OUTPUT_LIMIT")
-	}
-	return output.Bytes(), err
+	// Bounded calls consume machine-readable stdout (release paths, state,
+	// JSON). Successful SSH/PAM/sudo notices on stderr are not protocol data.
+	// Retain the existing bounded, private stderr handling and fail closed on
+	// process errors or overflow in either stream.
+	stdout, _, err := r.RunSeparatedBounded(ctx, name, args, input, limit, 16384)
+	return stdout, err
 }
 
 func (r osRunner) RunSeparatedBounded(ctx context.Context, name string, args []string, input []byte, stdoutLimit, stderrLimit int) ([]byte, []byte, error) {
@@ -100,6 +95,12 @@ type boundedOutput struct {
 	bytes.Buffer
 	limit    int
 	overflow bool
+}
+
+// os/exec copies pipes with io.Copy, which otherwise selects the embedded
+// bytes.Buffer.ReadFrom and bypasses Write's retention limit entirely.
+func (b *boundedOutput) ReadFrom(reader io.Reader) (int64, error) {
+	return io.Copy(struct{ io.Writer }{b}, reader)
 }
 
 func (b *boundedOutput) Write(value []byte) (int, error) {
