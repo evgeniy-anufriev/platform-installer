@@ -24291,7 +24291,7 @@ def validate_agent(content, runtime):
     return True
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_scripts.py","mode":420,"size":13645,"sha256":"0f18ff5bae7429e631d830db29df88e780d84c71eff4061b860c66f9d66bada8","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":13645}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_scripts.py","mode":420,"size":13702,"sha256":"9ae09ed3b023d2bbedae5e5059e907248b1a326e89176d09dfdaad224a5efa41","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":13702}
 """Resolve versioned package scripts from the existing application projection."""
 import json
 import hashlib
@@ -24503,7 +24503,7 @@ def prepare_script_jobs(root, snapshot, desired, rows, jobs, phase=None):
                 value = script_secret_source(source, library, instance, provider)
                 if value is None and source.get('optional', False):
                     continue
-                secret_inputs[key] = _secret_reference(value, source, job)
+                secret_inputs[key] = _secret_reference(value, source, dict(job, secretBindings=instance.get('secretBindings', {})))
                 if source.get('valueFrom') == 'library_secret':
                     shared_inputs.append(source['name'])
                 elif source.get('valueFrom') == 'secret_binding':
