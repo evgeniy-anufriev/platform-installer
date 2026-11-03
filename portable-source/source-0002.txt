@@ -55826,7 +55826,7 @@ for host, variables in sorted(hosts.items()):
 PY
 
 @@END
-@@PORTABLE {"path":"scripts/cmd_journals.sh","mode":420,"size":2730,"sha256":"9853f72572ed01386adf0c53ef7235b77f1f33d4ebe3e7e79f453977baa832ba","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2730}
+@@PORTABLE {"path":"scripts/cmd_journals.sh","mode":420,"size":2998,"sha256":"38f3773bccef4f89d282a0616b2b479d0f18c7413973a934347b657888601671","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2998}
 #VERIFY PROJECT
 sudo python3 - <<'PY'
 import json
@@ -55900,6 +55900,15 @@ raise SystemExit(
 )
 PY
 #===============================================================================================================
+#CHECK_TASK
+ansible node1 \
+  -i 'node1,' \
+  -e 'ansible_host=IP_NODE1' \
+  -u scada-docker \
+  --ask-pass \
+  --become --ask-become-pass \
+  -m ansible.builtin.slurp \
+  -a 'src=/etc/platform-installer/pki/project-bc8d04c2dcc8c9e4/installer-tls--node1/ca-chain.pem'
 
 @@END
 @@PORTABLE {"path":"scripts/npm_offline.py","mode":420,"size":17225,"sha256":"bceb887c3a65c76fdfe3c7a107d278b112b0722ad5764e0bff586cd5e3ffbafb","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":17225}
