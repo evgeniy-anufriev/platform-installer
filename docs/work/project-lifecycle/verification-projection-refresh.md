@@ -73,3 +73,25 @@ no infrastructure endpoint calculation moved into React or Go.
   server creation and local Review/Save, the complete project passed both real
   paths above. Agent-started Wails/Vite processes were stopped after acceptance.
 - No independent reviewer invoked, per owner instruction.
+
+## Owner-requested B4 test follow-up (2026-11-03)
+
+The two old assertions in `InstallationPage.b4.test.tsx` expected the prior
+infrastructure-toggle behavior. Disabling infrastructure now selects explicit
+Infra Verify skip; that change invalidates approval of the displayed plan until
+a fresh libraries-only plan is requested. Tests now verify the actual warning,
+checked skip flag, disabled approval/hidden Start, absence of approval/start
+callbacks and the new plan request with `skipInfrastructureVerify: true`.
+The approved-plan fixture also uses the current plan ID so it proves scope
+invalidation rather than accidentally failing the unrelated plan-ID gate.
+
+Targeted B4 suite19 PASS. The initial full rerun had380 PASS/1 FAIL: an additional
+B4 case in `App.test.tsx` clicked Installation before asynchronous navigation
+admission completed. Its three cases now wait for the enabled navigation button
+and the Plan tab. Targeted shared B4 cases3 PASS. Final full frontend regression:
+**381 PASS, 28 files, zero failures**; typecheck and lint PASS.
+
+Only tests and this evidence/status record changed. No production behavior,
+Core/Go code, runtime bundle or target was changed. The earlier failing runs
+above remain historical evidence; no new Wails/installation acceptance is claimed
+for this test-only follow-up.

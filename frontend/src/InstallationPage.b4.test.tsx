@@ -235,22 +235,29 @@ it("owner amendment offers execution controls before Build and on Summary", () =
     screen.queryByRole("checkbox", { name: "Устанавливать инфраструктуру" }),
   ).toBeTruthy();
 });
-it("B4 excludes infrastructure, leaves libraries Apply/Verify and requests only that scope", async () => {
+it("B4 excluding infrastructure selects Verify skip and requires a fresh libraries-only plan", async () => {
   const create = vi.fn();
+  const approve = vi.fn();
   render(
-    <InstallationPage {...defaults} plan={fullPlan} onCreatePlan={create} />,
+    <InstallationPage
+      {...defaults}
+      plan={fullPlan}
+      onCreatePlan={create}
+      onApprovePlan={approve}
+    />,
   );
   const checkbox = screen.getByRole("checkbox", {
     name: "Устанавливать инфраструктуру",
   });
   expect(checkbox).toHaveProperty("checked", true);
   await userEvent.click(checkbox);
-  expect(
-    screen.getByText(
-      /При отсутствии актуального Verify Core включит проверку инфраструктуры/,
-    ),
-  ).toBeTruthy();
+  expect(screen.getByText(/Infra Verify явно пропущен/)).toBeTruthy();
   expect(screen.getAllByRole("checkbox")).toHaveLength(2);
+  expect(
+    screen.getByRole("checkbox", {
+      name: "Пропустить проверку инфраструктуры — принимаю риски",
+    }),
+  ).toHaveProperty("checked", true);
   expect(screen.queryByText("Установить сервис db")).toBeNull();
   expect(screen.getByText("Проверить сервис db")).toBeTruthy();
   expect(create).not.toHaveBeenCalled();
@@ -259,9 +266,19 @@ it("B4 excludes infrastructure, leaves libraries Apply/Verify and requests only 
       .closest(".plan-phase-card")
       ?.classList.contains("installation-phase-excluded"),
   ).toBe(true);
-  await userEvent.click(screen.getByRole("button", { name: "Одобрить план" }));
+  const approval = screen.getByRole("button", { name: "Одобрить план" });
+  expect(approval).toHaveProperty("disabled", true);
+  await userEvent.click(approval);
   expect(create).not.toHaveBeenCalled();
-  expect(defaults.onApprovePlan).toHaveBeenCalledWith("full", []);
+  expect(approve).not.toHaveBeenCalled();
+  await userEvent.click(
+    screen.getByRole("button", { name: "Сформировать свежий план" }),
+  );
+  expect(create).toHaveBeenCalledExactlyOnceWith(
+    [],
+    "APPLICATION_LIBRARIES_ONLY",
+    true,
+  );
 });
 it("requires a fresh plan when Infra Verify skip changes in either direction", async () => {
   const create = vi.fn();
@@ -331,11 +348,13 @@ it("B4 never filters actions from an authoritative Core plan for the selected sc
   );
   expect(screen.getByText("Установить сервис db")).toBeTruthy();
 });
-it("B4 hides approval for a plan from a different selected scope", async () => {
+it("B4 hides Start and blocks approval when the selected scope changes an approved plan", async () => {
+  const approve = vi.fn();
+  const start = vi.fn();
   const plan: InstallationPlanOperation = {
     status: "PLAN_APPROVED",
     plan: {
-      id: "old",
+      id: "full",
       executionMode: "FULL_PROJECT",
       status: "EXECUTABLE",
       projectRevision: "sha256:rev",
@@ -353,14 +372,34 @@ it("B4 hides approval for a plan from a different selected scope", async () => {
       phases: [],
     },
   };
-  render(<InstallationPage {...defaults} plan={plan} onCreatePlan={vi.fn()} />);
+  render(
+    <InstallationPage
+      {...defaults}
+      plan={plan}
+      onCreatePlan={vi.fn()}
+      onApprovePlan={approve}
+      onStart={start}
+    />,
+  );
+  expect(
+    screen.getByRole("button", { name: "Начать выполнение" }),
+  ).toHaveProperty("disabled", false);
   await userEvent.click(
     screen.getByRole("checkbox", { name: "Устанавливать инфраструктуру" }),
   );
   expect(
     screen.queryByRole("button", { name: "Начать выполнение" }),
   ).toBeNull();
-  expect(screen.getByText(/Состав запуска изменён/)).toBeTruthy();
+  expect(
+    screen.getByText(
+      /Параметры пропуска изменены.*Сформируйте свежий план перед одобрением/,
+    ),
+  ).toBeTruthy();
+  const approval = screen.getByRole("button", { name: "Одобрить план" });
+  expect(approval).toHaveProperty("disabled", true);
+  await userEvent.click(approval);
+  expect(approve).not.toHaveBeenCalled();
+  expect(start).not.toHaveBeenCalled();
 });
 it("B4 cached observation remains UNKNOWN and does not claim current verification", () => {
   render(

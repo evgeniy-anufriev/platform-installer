@@ -4787,8 +4787,14 @@ it.each(["blocked", "new-risk", "ready"])(
     await userEvent.click(
       screen.getByRole("button", { name: "Открыть папку проекта" }),
     );
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Установка" })).toHaveProperty(
+        "disabled",
+        false,
+      ),
+    );
     await userEvent.click(screen.getByRole("button", { name: "Установка" }));
-    await userEvent.click(screen.getByRole("tab", { name: "План" }));
+    await userEvent.click(await screen.findByRole("tab", { name: "План" }));
     await userEvent.click(
       screen.getByRole("button", { name: "Сформировать свежий план" }),
     );
