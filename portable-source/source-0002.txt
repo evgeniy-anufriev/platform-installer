@@ -22446,7 +22446,7 @@ func (a *CommandAdapter) BuildSnapshot(ctx context.Context, projectRoot string, 
 }
 
 @@END
-@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":114877,"sha256":"3f9f106a312abf6cac52fabf56d8e00f391ea24d0c8e428e65a43aa98bb66ef6","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48387}
+@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":114869,"sha256":"8899775dbd87280375cb3ed4b79c63a9e938f47617af4d62cabd88c279587178","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48387}
 package desktop
 
 import (
@@ -23043,9 +23043,7 @@ func (a *App) verifyProjectWithBindingLocked(binding *executionNodeBinding, revi
 		defer cancel()
 		inspection, err := binding.service.InspectExecutionNode(ctx, binding.node)
 		if err != nil {
-			if binding.dynamic {
-				a.invalidateDynamicBindingLocked()
-			}
+			a.execution.setStatus(string(executionnode.Unreachable))
 			return a.setVerificationUnavailableLocked(err, revision)
 		}
 		if err := a.revalidateBindingBeforePublicationLocked(binding); err != nil {
@@ -23569,10 +23567,10 @@ func (a *App) pendingRuntimeSecretDescriptorsLocked(serviceDeployment string) ([
 			break
 		}
 	}
-	if
+	if mode ==
 @@END
-@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":114877,"sha256":"3f9f106a312abf6cac52fabf56d8e00f391ea24d0c8e428e65a43aa98bb66ef6","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48233}
- mode == nil || (len(mode.RequiredRuntimeSecretSettings) == 0 && len(service.SecretInputs) == 0) {
+@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":114869,"sha256":"8899775dbd87280375cb3ed4b79c63a9e938f47617af4d62cabd88c279587178","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48233}
+ nil || (len(mode.RequiredRuntimeSecretSettings) == 0 && len(service.SecretInputs) == 0) {
 		return nil, errors.New("RUNTIME_SECRET_DESCRIPTOR_NOT_FOUND")
 	}
 	settings := make(map[string]projectlifecycle.ProjectCatalogSetting, len(service.ConfigurationSettings))
@@ -24560,10 +24558,10 @@ func projectErrorMessage(code string) string {
 		return "Текущий runtime не поддерживает пропуск библиотек. Обновите runtime bundle; установка не запущена."
 	case "APPLICATION_LIBRARY_SELECTION_INVALID":
 		return "Выбор пропуска библиотек не соответствует сохранённому проекту. Обновите выбор библиотек."
-	case "SESSION_CREDEN
+	case "SESSION_CREDENTIAL_UNA
 @@END
-@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":114877,"sha256":"3f9f106a312abf6cac52fabf56d8e00f391ea24d0c8e428e65a43aa98bb66ef6","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":18257}
-TIAL_UNAVAILABLE":
+@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":114869,"sha256":"8899775dbd87280375cb3ed4b79c63a9e938f47617af4d62cabd88c279587178","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":18249}
+VAILABLE":
 		return "Учётные данные SSH-сеанса недоступны или срок их действия истёк. Укажите пароль или приватный ключ PEM на странице «Серверы»."
 	case "SESSION_CREDENTIAL_PASSWORD_FORMAT_UNSUPPORTED":
 		return "Пароль SSH или sudo не должен содержать перенос строки или нулевой символ. Введите пароль заново."
@@ -27247,7 +27245,7 @@ func (s *executionNodeContextStore) selectProjectServer(hostID string) error {
 }
 
 @@END
-@@PORTABLE {"path":"internal/desktop/execution_node_readiness.go","mode":420,"size":16204,"sha256":"21865d7007456def6b0d6444584b73fc869963ebc81e8aa93e9385e2b1e8da90","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":16204}
+@@PORTABLE {"path":"internal/desktop/execution_node_readiness.go","mode":420,"size":16183,"sha256":"a8ce6b6ef7a728bd81ed01e31e83ef410b47ef1226b4829fe075e359b5e84dea","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":16183}
 package desktop
 
 import (
@@ -27514,9 +27512,8 @@ func (a *App) CheckExecutionNode() ExecutionNodeReadiness {
 	defer cancel()
 	inspection, err := binding.service.InspectExecutionNode(ctx, binding.node)
 	if err != nil {
-		if binding.dynamic {
-			a.invalidateDynamicBindingLocked()
-		}
+		// A failed operation is not a replacement of SSH identity or trust.
+		a.execution.setStatus(string(executionnode.Unreachable))
 		return a.readinessFailureLocked(err)
 	}
 	if err := a.revalidateTrustedConnectionLocked(binding); err != nil {
@@ -27545,9 +27542,6 @@ func (a *App) PlanExecutionNodePreparation() ExecutionNodePreparation {
 	defer cancel()
 	plan, err := binding.service.PlanExecutionNodePreparation(ctx, binding.node, binding.bundleRoot)
 	if err != nil {
-		if binding.dynamic {
-			a.invalidateDynamicBindingLocked()
-		}
 		return preparationFailure(err)
 	}
 	if err := a.revalidateBindingBeforePublicationLocked(binding); err != nil {
@@ -27606,9 +27600,7 @@ func (a *App) PrepareExecutionNode(planID string) ExecutionNodePreparation {
 	defer cancel()
 	result, err := binding.service.Prepare(ctx, binding.node, binding.bundleRoot, continuation.planID)
 	if err != nil {
-		if binding.dynamic {
-			a.invalidateDynamicBindingLocked()
-		}
+		a.execution.setStatus(executionNodeNotPrepared)
 		return preparationFailure(err)
 	}
 	if err := a.revalidateBindingBeforePublicationLocked(binding); err != nil {
@@ -27620,9 +27612,7 @@ func (a *App) PrepareExecutionNode(planID string) ExecutionNodePreparation {
 	}
 	inspection, err := binding.service.InspectExecutionNode(ctx, binding.node)
 	if err != nil {
-		if binding.dynamic {
-			a.invalidateDynamicBindingLocked()
-		}
+		a.execution.setStatus(string(executionnode.Unreachable))
 		return preparationFailure(err)
 	}
 	if err := a.revalidateBindingBeforePublicationLocked(binding); err != nil {
@@ -29077,7 +29067,7 @@ func (a *App) CancelInstallationRun(runID string) InstallationRunOperation {
 }
 
 @@END
-@@PORTABLE {"path":"internal/desktop/installation_plan.go","mode":420,"size":24544,"sha256":"0e470762225d87daa04cc40235875dce57db867f172c90f7ac51c27c0f9990de","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":24544}
+@@PORTABLE {"path":"internal/desktop/installation_plan.go","mode":420,"size":24909,"sha256":"6f0fa7be85d9f596d9b23a0fd8b2a750f30559c70c5f020875016caaae67bc92","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":24909}
 package desktop
 
 import (
@@ -29222,8 +29212,12 @@ func (a *App) createInstallationPlan(request InstallationPlanRequest) Installati
 		record, err = binding.plans.CreatePlanForMode(ctx, binding.node, a.current.Root, binding.reader.runtimeRelease, request.DeploymentOrder, request.ExecutionMode, request.ApplicationVaultSources, request.SkipInfrastructureVerify)
 	}
 	if err != nil {
-		if binding.dynamic {
-			a.invalidateDynamicBindingLocked()
+		// A rejected plan (for example, a missing registry password) is not
+		// evidence that the trusted Execution Node or session inputs changed.
+		// Recheck the existing identity/trust guards instead of revoking them
+		// for every planning failure and erasing unrelated pending secrets.
+		if bindingErr := a.revalidateBindingBeforePublicationLocked(binding); bindingErr != nil {
+			return installationPlanFailure(bindingErr)
 		}
 		return installationPlanFailure(err)
 	}
