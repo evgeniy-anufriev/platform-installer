@@ -37051,7 +37051,7 @@ artifactLock:
           no_log: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/applications/images/availability.yml","mode":420,"size":646,"sha256":"e90c3e3520012fa86c308ea49c41764daa0f83ce0da3ab8c949696af339468d4","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":646}
+@@PORTABLE {"path":"ansible-core/playbooks/applications/images/availability.yml","mode":420,"size":668,"sha256":"9e7ba898eb8b19b2dcb302c35f1ed5044fb5e994edc5f6ddfafad8e5316b930f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":668}
 ---
 - name: Проверка доступности registry без подготовки образов
   hosts: localhost
@@ -37067,6 +37067,7 @@ artifactLock:
         follow_redirects: none
         timeout: 10
       delegate_to: "{{ item.hostId }}"
+      connection: ssh
       loop: "{{ platform_application_image_inputs.placements }}"
       changed_when: false
       no_log: true
@@ -37177,7 +37178,7 @@ artifactLock:
       when: platform_application_image_inputs_path is defined
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/applications/images/placement.yml","mode":420,"size":1258,"sha256":"09142b4f6001f63f1d69d17885ec74eabbc114a154f0b6dc78fb591a7abfcb04","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1258}
+@@PORTABLE {"path":"ansible-core/playbooks/applications/images/placement.yml","mode":420,"size":1280,"sha256":"44590c4cfbf027d098701bfffd8906a6772f6486d8ae981887157dc035e3a4d0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1280}
 ---
 - name: Поиск совпадающих метаданных с уже проверенным контекстом текущего вызова
   ansible.builtin.set_fact:
@@ -37188,6 +37189,7 @@ artifactLock:
     name: platform.core.prepare_application_images
     apply:
       delegate_to: "{{ application_image_input.hostId }}"
+      connection: ssh
   when: _image_cached_result | length == 0
 - name: Привязка уже полученной идентичности к очередному размещению
   ansible.builtin.set_fact:
@@ -38383,7 +38385,7 @@ artifactLock:
   no_log: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/applications/tasks/provider-script.yml","mode":420,"size":3048,"sha256":"9050235234924014414270935f4329e00c1666ec0f53a9aa687401b33f53586d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3048}
+@@PORTABLE {"path":"ansible-core/playbooks/applications/tasks/provider-script.yml","mode":420,"size":3196,"sha256":"97b192f3429bcc9c13733e9404423daa04b1a5dd5d42004dc8ce879bc503763e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3196}
 ---
 - name: Выполнение сценария провайдера с контекстом выбранной цели
   vars:
@@ -38398,6 +38400,7 @@ artifactLock:
         database: passwd
         key: "{{ application_script_target_job.account }}"
       delegate_to: "{{ application_provider_script_host }}"
+      connection: ssh
       register: application_script_identity
       when: application_provider_script.runOn | default('target') != 'execution_node'
       no_log: true
@@ -38407,6 +38410,7 @@ artifactLock:
         name: platform.core.package_script
         apply:
           delegate_to: "{{ 'localhost' if application_provider_script.runOn | default('target') == 'execution_node' else application_provider_script_host }}"
+          connection: "{{ 'local' if application_provider_script.runOn | default('target') == 'execution_node' else 'ssh' }}"
           become: "{{ application_provider_script.runOn | default('target') != 'execution_node' }}"
       vars:
         platform_script_job:

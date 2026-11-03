@@ -61194,7 +61194,7 @@ platform_clickhouse_application_credential_files: "{{ platform_clickhouse_secret
     platform_clickhouse_application_phase: resources
 
 @@END
-@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/application_provider/tasks/scope.yml","mode":420,"size":3627,"sha256":"aa931c304d41b254e058c3206797c920a3f219d7d021d91846bdb5c797e562b7","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3627}
+@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/application_provider/tasks/scope.yml","mode":420,"size":3645,"sha256":"aa5072e6a4f1a0b172a7f824b521e24a6ab264d6d2ef2fecf3f72abbc57e9434","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3645}
 ---
 - name: Проверка защиты учётных данных выбранных ресурсов ClickHouse
   ansible.builtin.assert:
@@ -61230,6 +61230,7 @@ platform_clickhouse_application_credential_files: "{{ platform_clickhouse_secret
     clickhouse_application_password_refs: "{{ platform_clickhouse_application_job.accounts | map(attribute='passwordRef') | list }}"
     clickhouse_application_password_paths: "{{ clickhouse_application_password_refs | map('extract', platform_clickhouse_application_credential_files) | list }}"
   delegate_to: "{{ clickhouse_application_target.hostId }}"
+  connection: ssh
   become: true
   become_user: "{{ hostvars[clickhouse_application_target.hostId].platform_clickhouse_user | default(platform_clickhouse_user) }}"
   no_log: true
@@ -67352,7 +67353,7 @@ dependencies: []
   when: "'SCRAM-SHA-512' in application_kafka_description.stdout or platform_kafka_application_phase == 'apply'"
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_accounts.yml","mode":420,"size":1793,"sha256":"f7698290a66f01e412ca3b6b60ddf09391478915edb709d547f6f589f53a8d63","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1793}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_accounts.yml","mode":420,"size":1815,"sha256":"db9ec88edd6222b928d0851ef7e8c70bb5d6718512e3532037a5be42b719abc5","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1815}
 ---
 - name: Проверка защищённого хранения учётных данных Kafka
   ansible.builtin.assert:
@@ -67374,6 +67375,7 @@ dependencies: []
     file: application_accounts_scope.yml
     apply:
       delegate_to: "{{ application_topic_candidate.hostId }}"
+      connection: ssh
       become: true
   vars:
     application_topic_candidate: "{{ platform_kafka_application_job.adminCandidates | first }}"
@@ -67672,13 +67674,14 @@ dependencies: []
   no_log: true
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_topics.yml","mode":420,"size":547,"sha256":"1c38fdadeb6f2013b749efbcb56724d6fe89dd6a9a1a8ccff35afb95f9a6bae4","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":547}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_topics.yml","mode":420,"size":569,"sha256":"69265b6279bd1a7e0706041d506924eafb7d4032527bf90f1d65e13d7642d76e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":569}
 ---
 - name: Обработка топиков библиотеки на одном выбранном брокере
   ansible.builtin.include_tasks:
     file: application_topics_scope.yml
     apply:
       delegate_to: "{{ application_topic_candidate.hostId }}"
+      connection: ssh
       become: true
   vars:
     application_topic_candidate: "{{ platform_kafka_application_job.candidates | first }}"
@@ -73005,7 +73008,7 @@ platform_postgresql_application_statement_timeout: 30000
 platform_postgresql_application_phase: preflight
 
 @@END
-@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/application_provider/tasks/accounts.yml","mode":420,"size":1414,"sha256":"76eaf8476d22638291bc9262e76c5e7a8c2383a46f7dbf34813d02e7686fb12f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1414}
+@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/application_provider/tasks/accounts.yml","mode":420,"size":1432,"sha256":"a94049bf03f76c6a4a5935ada30c393001726ca79298b890b06930134509271a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1432}
 ---
 - name: Согласование учетных данных управляемого приложения за один сеанс обслуживания
   ansible.builtin.command:
@@ -73015,6 +73018,7 @@ platform_postgresql_application_phase: preflight
     application_provider_target: "{{ platform_application_provider_runtime[platform_postgresql_application_job.providerId].candidate }}"
     application_provider_os_user: "{{ hostvars[application_provider_target.hostId].platform_postgresql_user | default(platform_postgresql_user) }}"
   delegate_to: "{{ application_provider_target.hostId }}"
+  connection: ssh
   become: true
   become_user: "{{ application_provider_os_user }}"
   register: application_provider_account_result
@@ -73028,12 +73032,13 @@ platform_postgresql_application_phase: preflight
     application_provider_probe_scope: all
 
 @@END
-@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/application_provider/tasks/discover.yml","mode":420,"size":1630,"sha256":"ac055e988264b771d80e7999f933f272332f8ee3f0b4b54151efef79c759b289","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1630}
+@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/application_provider/tasks/discover.yml","mode":420,"size":1648,"sha256":"cc4b585ba1e42b12c3fae0828605f05c1ce7fb0dbd1ff9803ecedae4456ef855","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1648}
 ---
 - name: Однократная проверка всех экземпляров службы базы данных без запроса монитора
   ansible.builtin.command:
     argv: [psql, -X, -h, "{{ platform_postgresql_application_socket }}", -p, "{{ item.port }}", -U, "{{ hostvars[item.hostId].platform_postgresql_user | default(platform_postgresql_user) }}", -d, postgres, -Atqc, "SELECT CASE WHEN NOT pg_is_in_recovery() AND current_setting('transaction_read_only') = 'off' THEN 'writable' ELSE 'readonly' END"]
   delegate_to: "{{ item.hostId }}"
+  connection: ssh
   become: true
   become_user: "{{ hostvars[item.hostId].platform_postgresql_user | default(platform_postgresql_user) }}"
   loop: "{{ platform_postgresql_application_job.candidates }}"
@@ -73054,7 +73059,7 @@ platform_postgresql_application_phase: preflight
   no_log: true
 
 @@END
-@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/application_provider/tasks/login.yml","mode":420,"size":1967,"sha256":"283b35fd7929c9134a586b924a90f3d7b09acd0ead890e447b9904369d2ddad5","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1967}
+@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/application_provider/tasks/login.yml","mode":420,"size":1985,"sha256":"fb325c64b1e9875748a873558685d04f50062f48a9069d2e0a78480e3b62ff4e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1985}
 ---
 - name: Проверка подлинности выбранных логических учетных записей через проверенный TLS
   ansible.builtin.command:
@@ -73073,6 +73078,7 @@ platform_postgresql_application_phase: preflight
     PGPASSFILE: /dev/null
     LC_ALL: C
   delegate_to: "{{ application_provider_target.hostId }}"
+  connection: ssh
   become: true
   become_user: "{{ platform_pki_owner | default(platform_execution_technical_user | default('root', true)) }}"
   register: application_provider_login
@@ -73093,7 +73099,7 @@ platform_postgresql_application_phase: preflight
   when: platform_postgresql_application_phase in ['preflight', 'resources', 'accounts', 'verify']
 
 @@END
-@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/application_provider/tasks/preflight.yml","mode":420,"size":7446,"sha256":"051aff580932d317cbd4dfad24a57ae713c670aab49f50c128fd7c1c911d876b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7446}
+@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/application_provider/tasks/preflight.yml","mode":420,"size":7500,"sha256":"488f198b1164555de3835ecc4142a7d17fecbf89d4bd502d55f447af2e3aa4fb","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7500}
 ---
 - name: "Проверка входных параметров, в том числе при ручном запуске с inventory"
   ansible.builtin.assert:
@@ -73122,6 +73128,7 @@ platform_postgresql_application_phase: preflight
     application_provider_target: "{{ platform_application_provider_runtime[platform_postgresql_application_job.providerId].candidate }}"
     application_provider_os_user: "{{ hostvars[application_provider_target.hostId].platform_postgresql_user | default(platform_postgresql_user) }}"
   delegate_to: "{{ application_provider_target.hostId }}"
+  connection: ssh
   become: true
   become_user: "{{ application_provider_os_user }}"
   register: application_provider_catalog
@@ -73146,6 +73153,7 @@ platform_postgresql_application_phase: preflight
     application_provider_check_objects: true
     application_provider_target: "{{ platform_application_provider_runtime[platform_postgresql_application_job.providerId].candidate }}"
   delegate_to: "{{ application_provider_target.hostId }}"
+  connection: ssh
   become: true
   become_user: "{{ platform_pki_owner | default(platform_execution_technical_user | default('root', true)) }}"
   changed_when: false
@@ -73172,6 +73180,7 @@ platform_postgresql_application_phase: preflight
   vars:
     application_provider_target: "{{ platform_application_provider_runtime[platform_postgresql_application_job.providerId].candidate }}"
   delegate_to: "{{ application_provider_target.hostId }}"
+  connection: ssh
   become: true
   become_user: "{{ platform_pki_owner | default(platform_execution_technical_user | default('root', true)) }}"
   register: application_provider_password_probe
@@ -73195,7 +73204,7 @@ platform_postgresql_application_phase: preflight
   no_log: true
 
 @@END
-@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/application_provider/tasks/resources.yml","mode":420,"size":2542,"sha256":"04cee855f49ab34579d1d1511b11b94337f68bf4f7fc4e0294836dcb4d3c5d39","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2542}
+@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/application_provider/tasks/resources.yml","mode":420,"size":2578,"sha256":"35d23e7d8a016296cadd109f0366c2d979dbf43dd971f010485c377f07f40fce","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2578}
 ---
 - name: Создание управляемых ролей владельца, необходимых для восстановления базы данных
   ansible.builtin.command:
@@ -73205,6 +73214,7 @@ platform_postgresql_application_phase: preflight
     application_provider_target: "{{ platform_application_provider_runtime[platform_postgresql_application_job.providerId].candidate }}"
     application_provider_os_user: "{{ hostvars[application_provider_target.hostId].platform_postgresql_user | default(platform_postgresql_user) }}"
   delegate_to: "{{ application_provider_target.hostId }}"
+  connection: ssh
   become: true
   become_user: "{{ application_provider_os_user }}"
   changed_when: false
@@ -73225,6 +73235,7 @@ platform_postgresql_application_phase: preflight
     application_provider_target: "{{ platform_application_provider_runtime[platform_postgresql_application_job.providerId].candidate }}"
     application_provider_os_user: "{{ hostvars[application_provider_target.hostId].platform_postgresql_user | default(platform_postgresql_user) }}"
   delegate_to: "{{ application_provider_target.hostId }}"
+  connection: ssh
   become: true
   become_user: "{{ application_provider_os_user }}"
   register: application_provider_resource_result
@@ -73232,7 +73243,7 @@ platform_postgresql_application_phase: preflight
   no_log: true
 
 @@END
-@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/application_provider/tasks/restore_database.yml","mode":420,"size":6721,"sha256":"63062af770b48dc94becdb919be13b698c1d3f22f8215677c8be9be316cc2541","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":6721}
+@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/application_provider/tasks/restore_database.yml","mode":420,"size":6919,"sha256":"06e6ae161472b30b631caca470517deb364c7887f6e4c343a0da9aeaef80c943","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":6919}
 ---
 - name: Подготовка, восстановление и запись маркера владения новой базой данных
   when: application_restore_database.name not in platform_application_provider_runtime[platform_postgresql_application_job.providerId].catalog.databases
@@ -73246,6 +73257,7 @@ platform_postgresql_application_phase: preflight
         prefix: .application-restore-
         path: /var/tmp
       delegate_to: "{{ application_provider_target.hostId }}"
+      connection: ssh
       become: true
       register: application_restore_stage
       no_log: true
@@ -73256,6 +73268,7 @@ platform_postgresql_application_phase: preflight
         owner: "{{ application_provider_os_user }}"
         mode: '0700'
       delegate_to: "{{ application_provider_target.hostId }}"
+      connection: ssh
       become: true
       no_log: true
 
@@ -73266,6 +73279,7 @@ platform_postgresql_application_phase: preflight
         owner: "{{ application_provider_os_user }}"
         mode: '0600'
       delegate_to: "{{ application_provider_target.hostId }}"
+      connection: ssh
       become: true
       no_log: true
 
@@ -73276,6 +73290,7 @@ platform_postgresql_application_phase: preflight
         get_mime: false
         get_attributes: false
       delegate_to: "{{ application_provider_target.hostId }}"
+      connection: ssh
       become: true
       register: application_restore_bytes
       no_log: true
@@ -73296,6 +73311,7 @@ platform_postgresql_application_phase: preflight
           WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = {{ application_restore_database.name | platform.postgresql.application_sql_literal }})
           \gexec
       delegate_to: "{{ application_provider_target.hostId }}"
+      connection: ssh
       become: true
       become_user: "{{ application_provider_os_user }}"
       changed_when: true
@@ -73305,6 +73321,7 @@ platform_postgresql_application_phase: preflight
       ansible.builtin.command:
         argv: [pg_restore, --exit-on-error, --no-owner, --no-acl, --role, "{{ application_restore_database.owner }}", -h, "{{ platform_postgresql_application_socket }}", -p, "{{ application_provider_target.port }}", -U, "{{ application_provider_os_user }}", -d, "{{ application_restore_database.name }}", "{{ application_restore_stage.path }}/database.dump"]
       delegate_to: "{{ application_provider_target.hostId }}"
+      connection: ssh
       become: true
       become_user: "{{ application_provider_os_user }}"
       changed_when: true
@@ -73314,6 +73331,7 @@ platform_postgresql_application_phase: preflight
       ansible.builtin.command:
         argv: [psql, -X, -h, "{{ platform_postgresql_application_socket }}", -p, "{{ application_provider_target.port }}", -U, "{{ application_provider_os_user }}", -d, "{{ application_restore_database.name }}", -At, -v, ON_ERROR_STOP=1, -c, "SELECT EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE c.relkind='r' AND n.nspname NOT IN ('pg_catalog','information_schema'))"]
       delegate_to: "{{ application_provider_target.hostId }}"
+      connection: ssh
       become: true
       become_user: "{{ application_provider_os_user }}"
       register: application_restore_baseline
@@ -73329,6 +73347,7 @@ platform_postgresql_application_phase: preflight
           IS {{ application_restore_database.marker | platform.postgresql.application_sql_literal }};
           REVOKE ALL ON DATABASE {{ application_restore_database.name | platform.postgresql.application_sql_identifier }} FROM PUBLIC;
       delegate_to: "{{ application_provider_target.hostId }}"
+      connection: ssh
       become: true
       become_user: "{{ application_provider_os_user }}"
       changed_when: true
@@ -73339,12 +73358,13 @@ platform_postgresql_application_phase: preflight
         path: "{{ application_restore_stage.path }}"
         state: absent
       delegate_to: "{{ application_provider_target.hostId }}"
+      connection: ssh
       become: true
       when: application_restore_stage.path is defined
       no_log: true
 
 @@END
-@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/application_provider/tasks/verify.yml","mode":420,"size":1155,"sha256":"7dac7e72050c2c7f903094e6767c6faaf707068af38a8f4ab56ad2ead2767057","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1155}
+@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/application_provider/tasks/verify.yml","mode":420,"size":1173,"sha256":"545722b88944128316bef492c72ec46789036a34bc3725ec39e42a0ee7050e9d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1173}
 ---
 - name: Проверка логической области провайдера PostgreSQL без восстановления в отдельном сеансе
   ansible.builtin.command:
@@ -73354,6 +73374,7 @@ platform_postgresql_application_phase: preflight
     application_provider_target: "{{ platform_application_provider_runtime[platform_postgresql_application_job.providerId].candidate }}"
     application_provider_os_user: "{{ hostvars[application_provider_target.hostId].platform_postgresql_user | default(platform_postgresql_user) }}"
   delegate_to: "{{ application_provider_target.hostId }}"
+  connection: ssh
   become: true
   become_user: "{{ application_provider_os_user }}"
   changed_when: false
@@ -76290,7 +76311,7 @@ platform_application_secret_root: ''
 platform_redis_application_credential_files: "{{ platform_redis_secret_files | combine(platform_application_secret_files | default({})) | combine(platform_application_credential_files | default({})) }}"
 
 @@END
-@@PORTABLE {"path":"services/redis/ansible_collections/platform/redis/roles/application_provider/tasks/account_scope.yml","mode":420,"size":2264,"sha256":"09ec338f3188863706c16682ff5fa5ce68b4eee52bdf22c2e3701040dbfbd2fb","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2264}
+@@PORTABLE {"path":"services/redis/ansible_collections/platform/redis/roles/application_provider/tasks/account_scope.yml","mode":420,"size":2282,"sha256":"d9eb3c2d0fdb43b64da1baeed9772c08850c8a71571d049287f9e71f45590ebd","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2282}
 ---
 - name: Проверка параметров операции Redis и защищённых файлов учётных данных
   ansible.builtin.assert:
@@ -76326,6 +76347,7 @@ platform_redis_application_credential_files: "{{ platform_redis_secret_files | c
   vars:
     redis_application_directory: "{{ hostvars[item.1.hostId].platform_redis_config_root | default(platform_redis_config_root) }}/{{ item.1.memberId }}"
   delegate_to: "{{ item.1.hostId }}"
+  connection: ssh
   become: true
   become_user: "{{ hostvars[item.1.hostId].platform_redis_user | default(platform_redis_user) }}"
   loop: "{{ platform_redis_application_job.accounts | subelements('candidates') }}"
@@ -78933,7 +78955,7 @@ platform_vault_bootstrap_output_dir: ''
   no_log: true
 
 @@END
-@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/roles/application_provider/tasks/networks.yml","mode":420,"size":1955,"sha256":"73ebcfbb6f6ebc7892707964b3261ac82f005682cff43a97bf4ae48c9deef05d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1955}
+@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/roles/application_provider/tasks/networks.yml","mode":420,"size":2009,"sha256":"68100d4a09ef4be79618bc9fc502b7b858e69dad5c3ae460ae08ef0d892aff87","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2009}
 ---
 - name: Определение назначения клиента IPv4 для каждого размещения Docker
   ansible.builtin.command:
@@ -78941,6 +78963,7 @@ platform_vault_bootstrap_output_dir: ''
   vars:
     application_vault_provider: "{{ platform_application_vault_runtime[platform_vault_application_job.providerId] }}"
   delegate_to: "{{ item }}"
+  connection: ssh
   loop: "{{ platform_vault_application_job.hosts }}"
   register: application_vault_addresses
   changed_when: false
@@ -78951,6 +78974,7 @@ platform_vault_bootstrap_output_dir: ''
   vars:
     application_vault_provider: "{{ platform_application_vault_runtime[platform_vault_application_job.providerId] }}"
   delegate_to: "{{ item.item }}"
+  connection: ssh
   loop: "{{ application_vault_addresses.results }}"
   register: application_vault_routes
   changed_when: false
@@ -78959,6 +78983,7 @@ platform_vault_bootstrap_output_dir: ''
   ansible.builtin.command:
     argv: [ip, -json, -4, address, show, dev, "{{ hostvars[item].platform_docker_lxc_bridge | default('lxcbr0') }}"]
   delegate_to: "{{ item }}"
+  connection: ssh
   loop: "{{ platform_vault_application_job.hosts }}"
   register: application_vault_lxc_addresses
   changed_when: false
