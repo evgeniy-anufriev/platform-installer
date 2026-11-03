@@ -1,5 +1,6 @@
 """Focused checks for SZI package inputs and generic script placement."""
 import ast
+import hashlib
 import json
 import os
 import shutil
@@ -21,6 +22,37 @@ from schema_validation import SchemaValidator
 
 
 class SziStage1Tests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which('ansible-playbook'), 'native Ansible required')
+    def test_nginx_environment_reads_library_sso_without_provisioning_a_client(self):
+        defaults = ROOT/'examples/szi/application-packages/nginx/1.0.0/roles/application_nginx/defaults/main.yml'
+        application = yaml.safe_load(defaults.read_text())['platform_application_definition']
+        self.assertEqual([], application['connections'])
+        library = yaml.safe_load((ROOT/'examples/szi/library-packages/szi/1.0.0/roles/library_szi/defaults/main.yml').read_text())['platform_library_definition']
+        source = ROOT/'ansible-core/collections/ansible_collections/platform/core/roles/resolve_application_libraries/tasks/instance.yml'
+        tasks = []
+        for task in yaml.safe_load(source.read_text())[0]['block']:
+            tasks.append(task)
+            if task['name'] == 'Передача значений подключений в шаблоны приложений':
+                break
+        suffix = hashlib.sha256(b'szinginxlocalhost').hexdigest()
+        tasks.append({'ansible.builtin.assert': {'that': [
+            "lookup('vars', '_application_package_" + suffix + "').platform_application_definition.defaults.environment.REALM == 'qa-realm'"]}})
+        deployment = dict(bindings={'sso': {'providedConnectionRef': {'libraryId': 'szi', 'name': 'sso'}},
+                                    'endpoint': {'endpointGroupRef': 'front'}},
+                          applications={name: {'overrides': {'endpoint': {'endpoint_group': 'front'}}} for name in ('nginx', 'grant-access')})
+        variables = dict(application_job=dict(libraryId='szi', slotId='nginx', hostId='localhost', deployment=deployment,
+            application=dict(name='nginx', defaultsPath=str(defaults), definition={'connections': application['connections']}),
+            library=dict(definition={key: library[key] for key in ('connections', 'instance_id_strategy')})),
+            platform_desired_state=dict(applicationLibraryDeployments={'szi': deployment}, endpointGroups={'front': {'address': {'domain': 'qa.example'}}}),
+            platform_application_provided_connections={'szi': {'sso': {'parameters': {'realm': 'qa-realm'}}}})
+        with tempfile.TemporaryDirectory() as folder:
+            playbook = Path(folder)/'probe.yml'
+            playbook.write_text(yaml.safe_dump([dict(hosts='localhost', connection='local', gather_facts=False, vars=variables, tasks=tasks)]))
+            environment = dict(os.environ, ANSIBLE_CONFIG=str(ROOT/'ansible-core/ansible.cfg'), ANSIBLE_COLLECTIONS_PATH=str(ROOT/'ansible-core/collections'))
+            result = subprocess.run(['ansible-playbook', '-i', 'localhost,', str(playbook)], env=environment,
+                                    capture_output=True, text=True, timeout=60)
+            self.assertEqual(0, result.returncode, (result.stdout + result.stderr)[-2000:])
+
     @unittest.skipUnless(shutil.which('docker'), 'native Docker Compose CLI required')
     def test_grant_hazelcast_addresses_are_resolved_before_compose(self):
         settings=yaml.safe_load((ROOT/'examples/szi/application-packages/grant-access/1.0.0/roles/application_grant-access/defaults/main.yml').read_text())['platform_application_definition']['defaults']
