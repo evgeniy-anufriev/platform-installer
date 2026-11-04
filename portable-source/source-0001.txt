@@ -36965,7 +36965,7 @@ all:
       hosts: {}
 
 @@END
-@@PORTABLE {"path":"ansible-core/examples/empty/project.yml","mode":420,"size":481,"sha256":"1c8242c9875bda02c3c98dece3e0986ac0ffa8eb80ab340c0d5f430373d92149","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":481}
+@@PORTABLE {"path":"ansible-core/examples/empty/project.yml","mode":420,"size":481,"sha256":"fb8144c20ea5c9a426bb7060b0af67090c49452da510f8b61b7251ba793fd246","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":481}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -36973,7 +36973,7 @@ metadata:
 desiredStateContract: platform.installer/project-desired-state/v2alpha1
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:e5f84dce68a74525075830b1cbaa509c25677d1ce29fe91c48c3d72d9be839ff
+  digest: sha256:9cac14d787636ba2cc59ecc754c7738be82572f7034755070b7a58f27b2cb291
   services: {}
 artifactLock:
   apiVersion: platform.installer/artifacts/v1alpha1
@@ -37015,7 +37015,7 @@ all:
           ansible_host: 192.0.2.10
 
 @@END
-@@PORTABLE {"path":"ansible-core/examples/invalid-reference/project.yml","mode":420,"size":617,"sha256":"e043712db9a64ea0774b44dc26459c354f5b59c826d90e2af1a93127123d1260","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":617}
+@@PORTABLE {"path":"ansible-core/examples/invalid-reference/project.yml","mode":420,"size":617,"sha256":"76f7d59879e676167bfb7837659b77890b27f53a865a373140ea9ed2e0105823","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":617}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -37023,7 +37023,7 @@ metadata:
 desiredStateContract: platform.installer/project-desired-state/v2alpha1
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:e5f84dce68a74525075830b1cbaa509c25677d1ce29fe91c48c3d72d9be839ff
+  digest: sha256:9cac14d787636ba2cc59ecc754c7738be82572f7034755070b7a58f27b2cb291
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.3
@@ -37070,7 +37070,7 @@ all:
                   roles: [broker, controller]
 
 @@END
-@@PORTABLE {"path":"ansible-core/examples/valid/project.yml","mode":420,"size":662,"sha256":"d0d798a8c1e183b228e7e92023c5839971523a8535b8498b1944da7cfaafd356","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":662}
+@@PORTABLE {"path":"ansible-core/examples/valid/project.yml","mode":420,"size":662,"sha256":"b321d5de964bba1347785de17448ded5b9e185999d5135e645716917d9a28291","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":662}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -37079,7 +37079,7 @@ metadata:
 desiredStateContract: platform.installer/project-desired-state/v2alpha1
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:e5f84dce68a74525075830b1cbaa509c25677d1ce29fe91c48c3d72d9be839ff
+  digest: sha256:9cac14d787636ba2cc59ecc754c7738be82572f7034755070b7a58f27b2cb291
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.3
@@ -39953,7 +39953,7 @@ if __name__ == "__main__":
     raise SystemExit(main())
 
 @@END
-@@PORTABLE {"path":"ansible-core/tools/build_fixture_catalog.py","mode":420,"size":4346,"sha256":"a56ca6b576160ad254ecb399cc00b7d000e7d067c6a84457e4a4c34ee9d19f10","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4346}
+@@PORTABLE {"path":"ansible-core/tools/build_fixture_catalog.py","mode":420,"size":4414,"sha256":"38f254cb8c9dce50236e19a372a84696a0c4dce9406bedd4f0e2ca5d61e2e056","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4414}
 #!/usr/bin/env python3
 """Build/check the CORE-01 derived fixture catalog using offline PyYAML."""
 
@@ -39970,6 +39970,7 @@ from service_catalog import build_catalog as generate_catalog, canonical_bytes, 
 REPOSITORY = Path(__file__).resolve().parents[2]
 OUTPUT = REPOSITORY / "examples" / "catalog" / "service-catalog.yml"
 SOURCES = (
+    ("chrony", REPOSITORY / "services" / "chrony" / "service.yml"),
     ("clickhouse", REPOSITORY / "services" / "clickhouse" / "service.yml"),
     ("docker", REPOSITORY / "services" / "docker" / "service.yml"),
     ("kafka", REPOSITORY / "services" / "kafka" / "service.yml"),
@@ -40170,7 +40171,7 @@ if __name__ == "__main__":
     raise SystemExit(main())
 
 @@END
-@@PORTABLE {"path":"ansible-core/tools/execution_controller.py","mode":420,"size":74622,"sha256":"64473d0d2698164e4cad65934fb66c9aba410ac3dd66bca6d670681d0c46a811","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"ansible-core/tools/execution_controller.py","mode":420,"size":74632,"sha256":"c988d5cb8e3ecd6b8f35114ddae9344d3de47d7007b5959f7e0ff53edd1277ca","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
 #!/usr/bin/env python3
 """Fixed Execution Node controller.  It never accepts a command or playbook."""
 from __future__ import print_function
@@ -40198,7 +40199,7 @@ import infrastructure_verification as infra
 import execution_ssh
 
 
-SERVICE_TYPES = frozenset(("kafka", "keepalived", "postgresql", "bind", "haproxy", "dns-client", "redis", "vault", "clickhouse", "docker"))
+SERVICE_TYPES = frozenset(("kafka", "keepalived", "postgresql", "bind", "haproxy", "dns-client", "redis", "vault", "clickhouse", "docker", "chrony"))
 PROJECT_ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,127}$")
 MAX_GENERATED_STATE_BYTES = 1024 * 1024
 MAX_PKI_MATERIALIZATION_PLANS = 4096
@@ -41025,10 +41026,10 @@ def validate_application_manifest(manifest, external_service_ids=()):
         validate_application_manifest(prefix, external_service_ids)
         return
     selection_scope = manifest.get('applicationExecutionScope', {})
-    image_metadata = manifest.get('apiVersion') in ('platform.installer/execut
+    image_metadata = manifest.get('apiVersion') in ('platform.instal
 @@END
-@@PORTABLE {"path":"ansible-core/tools/execution_controller.py","mode":420,"size":74622,"sha256":"64473d0d2698164e4cad65934fb66c9aba410ac3dd66bca6d670681d0c46a811","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":26622}
-ion-manifest/v1alpha5', 'platform.installer/execution-manifest/v1alpha6')
+@@PORTABLE {"path":"ansible-core/tools/execution_controller.py","mode":420,"size":74632,"sha256":"c988d5cb8e3ecd6b8f35114ddae9344d3de47d7007b5959f7e0ff53edd1277ca","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":26632}
+ler/execution-manifest/v1alpha5', 'platform.installer/execution-manifest/v1alpha6')
     if manifest.get('apiVersion') in (infra.MANIFEST_VERSION, infra.SKIP_MANIFEST_VERSION, 'platform.installer/execution-manifest/v1alpha5', 'platform.installer/execution-manifest/v1alpha6'):
         module_utils = os.path.abspath(os.path.join(os.path.dirname(__file__),
             '../collections/ansible_collections/platform/core/plugins/module_utils'))
@@ -47680,7 +47681,7 @@ func main() {
 func fatal(message string) { fmt.Fprintln(os.Stderr, message); os.Exit(1) }
 
 @@END
-@@PORTABLE {"path":"config/application.yml","mode":420,"size":758,"sha256":"0f0af7cbdeaf648bf697450f9eae7e94c30193af0c4c9c0cae12b98b9a60ed10","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":758}
+@@PORTABLE {"path":"config/application.yml","mode":420,"size":797,"sha256":"0ca504721b841feb27f9496d87f9ca8a45d778016e0c8467d567c57a591fc2a3","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":797}
 schemaVersion: 3
 serverTypes:
   - id: infra
@@ -47690,6 +47691,7 @@ serverTypes:
   - id: db
     displayName: Базы данных
 serviceExecutionPriorities:
+  - {serviceType: chrony, priority: 0}
   - {serviceType: bind, priority: 0}
   - {serviceType: dns-client, priority: 1}
   - {serviceType: keepalived, priority: 2}
@@ -67394,10 +67396,86 @@ artifacts: []
 x-conformanceOnly: true
 
 @@END
-@@PORTABLE {"path":"examples/catalog/service-catalog.yml","mode":420,"size":60549,"sha256":"d3c8391c33af54b42f178b7dea36ac169a9d516240cc73dbad4f129e0c45782a","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":49446}
+@@PORTABLE {"path":"examples/catalog/service-catalog.yml","mode":420,"size":63003,"sha256":"32f6de5d98108f1420d900df3c8db32955cbc370e9191d6074d88286d6104d82","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":49617}
 apiVersion: platform.installer/catalog/v1alpha1
 kind: ServiceCatalog
 definitions:
+  chrony:
+    apiVersion: platform.installer/service-manifest/v1alpha1
+    kind: ServiceManifest
+    metadata:
+      id: chrony
+      version: 1.0.0-alpha.1
+      displayName: Chrony
+      description: Локальный NTP-сервер и клиенты Chrony
+      category: network
+    modes:
+      ntp:
+        displayName: NTP
+        description: Серверы и клиенты на явно назначенных хостах
+        memberRoles:
+        - server
+        - client
+        placement:
+          explicit: true
+          minMembers: 1
+          distinctHosts: true
+    capabilities:
+    - service.chrony.ntp
+    dependencies: []
+    configurationSchema:
+      $ref: ../../services/chrony/configuration.schema.json
+    configuration:
+      additionalProperties: false
+      settings:
+        ntpServer:
+          kind: MANAGED
+          roleVariable: platform_chrony_ntp_server
+          type: string
+          scopes:
+          - member
+          validation:
+            minLength: 1
+            maxLength: 253
+          ui:
+            label: NTP-сервер
+            description: Только для клиента. Укажите FQDN или IP источника времени.
+            section: NTP
+            order: 10
+        allowedClientNetworks:
+          kind: MANAGED
+          roleVariable: platform_chrony_allowed_client_networks
+          type: string
+          scopes:
+          - member
+          validation:
+            minLength: 1
+            maxLength: 512
+          ui:
+            label: Разрешённые сети клиентов
+            description: Только для сервера. Укажите сети CIDR через запятую.
+            section: NTP
+            order: 20
+    roleEntrypoints:
+      apply:
+        fqcn: platform.chrony.chrony
+        variablesPrefix: platform_chrony_
+        x-memberListVariable: platform_chrony_instances
+      verify:
+        fqcn: platform.chrony.chrony
+        variablesPrefix: platform_chrony_
+        x-memberListVariable: platform_chrony_instances
+    artifacts: []
+    runtimeRequirements:
+    - id: chrony
+      name: chrony
+      version: ''
+      os: redos
+      architecture: x86_64
+      requiredOffline: false
+    compatibilityRef: ../../services/chrony/compatibility.yml
+    x-definitionDigest: sha256:e26f2f611627a5170d040d94f2ca56f6831906a1139eb73bdcf8d417b000e35f
+    x-sourceManifest: services/chrony/service.yml
   clickhouse:
     apiVersion: platform.installer/service-manifest/v1alpha1
     kind: ServiceManifest
@@ -68964,7 +69042,10 @@ definitions:
       - requirementRef: vault-admin-token
         purpose: SERVICE_ADMIN_TOKEN
         displayLabel: Administrative token
-        requiredWhen: INITIALIZED
+        requiredWhen: INITIAL
+@@END
+@@PORTABLE {"path":"examples/catalog/service-catalog.yml","mode":420,"size":63003,"sha256":"32f6de5d98108f1420d900df3c8db32955cbc370e9191d6074d88286d6104d82","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":13386}
+IZED
         operations:
         - SERVICE_APPLY
         - SERVICE_VERIFY
@@ -69039,10 +69120,7 @@ definitions:
                 minimum: 1
                 maximum: 60
               fall:
-                type: integ
-@@END
-@@PORTABLE {"path":"examples/catalog/service-catalog.yml","mode":420,"size":60549,"sha256":"d3c8391c33af54b42f178b7dea36ac169a9d516240cc73dbad4f129e0c45782a","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":11103}
-er
+                type: integer
                 minimum: 1
                 maximum: 20
               rise:
@@ -69415,7 +69493,7 @@ er
     x-conformanceOnly: true
     x-definitionDigest: sha256:3cb015e5af12cb6b27b6264a61dd903c4327dc9b3aec5ec22cc2c6bb960a90d0
     x-sourceManifest: examples/catalog/manifests/etcd.yml
-digest: sha256:e5f84dce68a74525075830b1cbaa509c25677d1ce29fe91c48c3d72d9be839ff
+digest: sha256:9cac14d787636ba2cc59ecc754c7738be82572f7034755070b7a58f27b2cb291
 
 @@END
 @@PORTABLE {"path":"examples/invalid/invalid-placement/expected.yml","mode":420,"size":119,"sha256":"b9ebce3a64d448933d1e167792b4c808b03174d6037ccee12db52f53850d82bd","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":119}
@@ -69456,7 +69534,7 @@ all:
         redos-node1: {}
 
 @@END
-@@PORTABLE {"path":"examples/invalid/invalid-placement/project.yml","mode":420,"size":645,"sha256":"05a04684a9d03327addfdf6765df8b6cac6aab3f2ffa29b5a2861f553cf1c471","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":645}
+@@PORTABLE {"path":"examples/invalid/invalid-placement/project.yml","mode":420,"size":645,"sha256":"a334e96133e87c7501122a017706203b4e4178e57416178685613228f0a453d0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":645}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -69468,7 +69546,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:e5f84dce68a74525075830b1cbaa509c25677d1ce29fe91c48c3d72d9be839ff
+  digest: sha256:9cac14d787636ba2cc59ecc754c7738be82572f7034755070b7a58f27b2cb291
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.3
@@ -69511,7 +69589,7 @@ all:
         redos-node1: {}
 
 @@END
-@@PORTABLE {"path":"examples/invalid/missing-host-reference/project.yml","mode":420,"size":651,"sha256":"83b3b031fcc8f90b3b35d4cfc687cfe406061ddb3b7c9b2a407197da2bc96b2c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":651}
+@@PORTABLE {"path":"examples/invalid/missing-host-reference/project.yml","mode":420,"size":651,"sha256":"0967692c1e28560dcdb074f90047f8c25be904d5ed793bc12b78e7cd7b8067b3","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":651}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -69523,7 +69601,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:e5f84dce68a74525075830b1cbaa509c25677d1ce29fe91c48c3d72d9be839ff
+  digest: sha256:9cac14d787636ba2cc59ecc754c7738be82572f7034755070b7a58f27b2cb291
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.3
@@ -69566,7 +69644,7 @@ all:
         redos-node1: {}
 
 @@END
-@@PORTABLE {"path":"examples/invalid/unknown-mode/project.yml","mode":420,"size":641,"sha256":"03ef7d114d729d070173aa0ec7dcfa330d38b79f4160936a6d9083c7d50c5d1d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":641}
+@@PORTABLE {"path":"examples/invalid/unknown-mode/project.yml","mode":420,"size":641,"sha256":"9c1c4b7b3ecc635e5e564c21af1b6a501271acb8ed5c227883aaccd588e29741","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":641}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -69578,7 +69656,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:e5f84dce68a74525075830b1cbaa509c25677d1ce29fe91c48c3d72d9be839ff
+  digest: sha256:9cac14d787636ba2cc59ecc754c7738be82572f7034755070b7a58f27b2cb291
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.3
@@ -85104,7 +85182,7 @@ all:
         node3: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/bind-authoritative/project.yml","mode":420,"size":937,"sha256":"aa1648a56aec928d9806c66457c5e2ebb2d6be59abe67c359ecda541f81f79f8","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":937}
+@@PORTABLE {"path":"examples/valid/bind-authoritative/project.yml","mode":420,"size":937,"sha256":"28f1bb84135cf1c06ba5eefb8f72698af6683d17be883af405abdb413c68197b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":937}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -85116,7 +85194,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:e5f84dce68a74525075830b1cbaa509c25677d1ce29fe91c48c3d72d9be839ff
+  digest: sha256:9cac14d787636ba2cc59ecc754c7738be82572f7034755070b7a58f27b2cb291
   services:
     bind:
       definitionVersion: 1.0.0-alpha.2
@@ -85153,7 +85231,7 @@ all:
         bind1: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/bind-standalone/project.yml","mode":420,"size":646,"sha256":"af10c34d1512bfec257b42525fb4e67d098ae1ffca7db94bb23169d7561bcf28","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":646}
+@@PORTABLE {"path":"examples/valid/bind-standalone/project.yml","mode":420,"size":646,"sha256":"130aa34f4e12722ec3b95252d73536486672eb8774992ea76785594f2648f964","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":646}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -85165,7 +85243,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:e5f84dce68a74525075830b1cbaa509c25677d1ce29fe91c48c3d72d9be839ff
+  digest: sha256:9cac14d787636ba2cc59ecc754c7738be82572f7034755070b7a58f27b2cb291
   services:
     bind:
       definitionVersion: 1.0.0-alpha.2
@@ -85192,7 +85270,7 @@ all:
       hosts: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/empty/project.yml","mode":420,"size":494,"sha256":"00d7fb10318a3b89a7056254d98c8a3463552e08ede630984db01ae0606cc7de","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":494}
+@@PORTABLE {"path":"examples/valid/empty/project.yml","mode":420,"size":494,"sha256":"32007471f6a0f34468ac40434c9eba5dcd2a6898386681b84d576bc135ab79ba","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":494}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -85204,7 +85282,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:e5f84dce68a74525075830b1cbaa509c25677d1ce29fe91c48c3d72d9be839ff
+  digest: sha256:9cac14d787636ba2cc59ecc754c7738be82572f7034755070b7a58f27b2cb291
   services: {}
 
 @@END
@@ -85298,7 +85376,7 @@ all:
       hosts: {node1: {}, node2: {}, node3: {}}
 
 @@END
-@@PORTABLE {"path":"examples/valid/haproxy-routing/project.yml","mode":420,"size":929,"sha256":"954d127499875c879beab17b75ef552fc519d686bf91dfadf08e52e66fe72083","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":929}
+@@PORTABLE {"path":"examples/valid/haproxy-routing/project.yml","mode":420,"size":929,"sha256":"574d6c97f349afe8dcdf4e373f2a30625f4143e6ce78e39c4f0fb18fce5faf89","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":929}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -85310,7 +85388,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:e5f84dce68a74525075830b1cbaa509c25677d1ce29fe91c48c3d72d9be839ff
+  digest: sha256:9cac14d787636ba2cc59ecc754c7738be82572f7034755070b7a58f27b2cb291
   services:
     haproxy:
       definitionVersion: 1.0.0-alpha.1
@@ -85386,7 +85464,7 @@ all:
         redos-node1: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/kafka-distributed/project.yml","mode":420,"size":641,"sha256":"f7821e491454d2fd85b2ab01ac9f6b765b2803de6c961fcbfe2b0c9156483fb5","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":641}
+@@PORTABLE {"path":"examples/valid/kafka-distributed/project.yml","mode":420,"size":641,"sha256":"3a29674abb9405cdd885ce9729954b4e6589120c461d462158a747f61e54e44f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":641}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -85398,7 +85476,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:e5f84dce68a74525075830b1cbaa509c25677d1ce29fe91c48c3d72d9be839ff
+  digest: sha256:9cac14d787636ba2cc59ecc754c7738be82572f7034755070b7a58f27b2cb291
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.3
@@ -85487,7 +85565,7 @@ all:
         node3: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/kafka-real-multihost/project.yml","mode":420,"size":648,"sha256":"4390d9c49823c6537b3259777d19766b30c15714be002a1bf9c8b2defba0a12a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":648}
+@@PORTABLE {"path":"examples/valid/kafka-real-multihost/project.yml","mode":420,"size":648,"sha256":"70d16e52f685604b1149ad592e1eb22b7b78a4ed5ec70c04aed133a63dad9c23","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":648}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -85499,7 +85577,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:e5f84dce68a74525075830b1cbaa509c25677d1ce29fe91c48c3d72d9be839ff
+  digest: sha256:9cac14d787636ba2cc59ecc754c7738be82572f7034755070b7a58f27b2cb291
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.3
@@ -85567,7 +85645,7 @@ all:
         redos-node1: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/kafka-single/project.yml","mode":420,"size":636,"sha256":"e0d17a769bfcdb784fd60dfd3adbd652c517b8ccec9bd94bdd29badee0ad6e58","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":636}
+@@PORTABLE {"path":"examples/valid/kafka-single/project.yml","mode":420,"size":636,"sha256":"60c79a7d8face5594ea1e0127882cf98834c076b2e55202b26c96ac7e8154ac1","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":636}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -85579,7 +85657,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:e5f84dce68a74525075830b1cbaa509c25677d1ce29fe91c48c3d72d9be839ff
+  digest: sha256:9cac14d787636ba2cc59ecc754c7738be82572f7034755070b7a58f27b2cb291
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.3
@@ -85651,7 +85729,7 @@ all:
         node3: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/kafka-split-multihost/project.yml","mode":420,"size":657,"sha256":"e6990b29e685240cef770a2e19a98fadc9ed505094dbdf0b8e9facc9462b0b3f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":657}
+@@PORTABLE {"path":"examples/valid/kafka-split-multihost/project.yml","mode":420,"size":657,"sha256":"998672073e3ec580fd7a996cbb3d8670641648d5e7492a9e64086e81c2a2330e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":657}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -85663,7 +85741,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:e5f84dce68a74525075830b1cbaa509c25677d1ce29fe91c48c3d72d9be839ff
+  digest: sha256:9cac14d787636ba2cc59ecc754c7738be82572f7034755070b7a58f27b2cb291
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.3
@@ -85788,7 +85866,7 @@ all:
         node3: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/keepalived-vrrp/project.yml","mode":420,"size":656,"sha256":"c5d1e696759e85f64b71ce95cc8a26ec80243db80670ee6b481ee9eae47c4153","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":656}
+@@PORTABLE {"path":"examples/valid/keepalived-vrrp/project.yml","mode":420,"size":656,"sha256":"7a0887db5d7cabf9ae197afd19cc70ff00c037cc6a24a5ae3ec640155e1264b0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":656}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -85800,7 +85878,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:e5f84dce68a74525075830b1cbaa509c25677d1ce29fe91c48c3d72d9be839ff
+  digest: sha256:9cac14d787636ba2cc59ecc754c7738be82572f7034755070b7a58f27b2cb291
   services:
     keepalived:
       definitionVersion: 1.0.0-alpha.1
@@ -85881,7 +85959,7 @@ all:
       hosts: {node1: {}, node2: {}, node3: {}}
 
 @@END
-@@PORTABLE {"path":"examples/valid/net-04-2-integration/project.yml","mode":420,"size":1086,"sha256":"eb02fa566cef2783703695d606509c2b32c74de14493e23ba4a5a2897abe2e24","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1086}
+@@PORTABLE {"path":"examples/valid/net-04-2-integration/project.yml","mode":420,"size":1086,"sha256":"2949ae4c4b9746509b081b868031dcf146bf4cdb17eb3b003beeaaa2d06f150b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1086}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -85893,7 +85971,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:e5f84dce68a74525075830b1cbaa509c25677d1ce29fe91c48c3d72d9be839ff
+  digest: sha256:9cac14d787636ba2cc59ecc754c7738be82572f7034755070b7a58f27b2cb291
   services:
     bind:
       definitionVersion: 1.0.0-alpha.2
@@ -85953,7 +86031,7 @@ all:
         node1: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/pki-host-scope/project.yml","mode":420,"size":637,"sha256":"7c893b720426650c8d1f00dd98cbd4b66e75f3cb0826e29457588c6dcf55b995","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":637}
+@@PORTABLE {"path":"examples/valid/pki-host-scope/project.yml","mode":420,"size":637,"sha256":"b62a658b7e16ac16f05a4177fc74c3062d6d8e32af561863d27ae3f7a4154749","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":637}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -85965,7 +86043,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:e5f84dce68a74525075830b1cbaa509c25677d1ce29fe91c48c3d72d9be839ff
+  digest: sha256:9cac14d787636ba2cc59ecc754c7738be82572f7034755070b7a58f27b2cb291
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.3
@@ -86030,7 +86108,7 @@ all:
         db-node3: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/postgresql-patroni/project.yml","mode":420,"size":782,"sha256":"4ad03a1bafefe1dca01fd2718fa868d8082f5d92190fe92a1ed683499419283b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":782}
+@@PORTABLE {"path":"examples/valid/postgresql-patroni/project.yml","mode":420,"size":782,"sha256":"e6d3e82d4ab3bc13a5ac98059f48bfb481e38c8d2ecbea20f31f602f457370a3","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":782}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -86042,7 +86120,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:e5f84dce68a74525075830b1cbaa509c25677d1ce29fe91c48c3d72d9be839ff
+  digest: sha256:9cac14d787636ba2cc59ecc754c7738be82572f7034755070b7a58f27b2cb291
   services:
     postgresql:
       definitionVersion: 1.0.0-alpha.1
@@ -86087,7 +86165,7 @@ all:
       hosts: {db-node1: {}}
 
 @@END
-@@PORTABLE {"path":"examples/valid/postgresql-standalone/project.yml","mode":420,"size":656,"sha256":"f3bac10f9b6007a5fe6c1e5d0c888143ee708633b62833205b14a8fbf0b5765a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":656}
+@@PORTABLE {"path":"examples/valid/postgresql-standalone/project.yml","mode":420,"size":656,"sha256":"525aaa76382facf1e823bf610da05d7f8a406503f9c8d9ea57fe9c7a2643b055","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":656}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -86099,7 +86177,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:e5f84dce68a74525075830b1cbaa509c25677d1ce29fe91c48c3d72d9be839ff
+  digest: sha256:9cac14d787636ba2cc59ecc754c7738be82572f7034755070b7a58f27b2cb291
   services:
     postgresql:
       definitionVersion: 1.0.0-alpha.1
@@ -86215,7 +86293,7 @@ all:
       hosts: {node1: {}, node2: {}, node3: {}}
 
 @@END
-@@PORTABLE {"path":"examples/valid/ui-project-snapshot/project.yml","mode":420,"size":1353,"sha256":"58260195f65c6dcb1a6a5ab6f652768eef187748393e919ca6cb8572a4ded807","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1353}
+@@PORTABLE {"path":"examples/valid/ui-project-snapshot/project.yml","mode":420,"size":1353,"sha256":"cdf8bd0dc3256d9b78d5aa34fa293524f2d991c950995e935e876a82067b9d54","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1353}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -86227,7 +86305,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:e5f84dce68a74525075830b1cbaa509c25677d1ce29fe91c48c3d72d9be839ff
+  digest: sha256:9cac14d787636ba2cc59ecc754c7738be82572f7034755070b7a58f27b2cb291
   services:
     bind:
       definitionVersion: 1.0.0-alpha.2
@@ -99355,595 +99433,4 @@ export function ApplicationsPage({
                         onDirtyChange={(value) =>
                           markChildDirty(value, section)
                
-@@END
-@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":77997,"sha256":"895d41b503450bf1c40a40a1779e2ea57ff88950a505a044ef5c7625c029dd26","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":28106}
-         }
-                        onSave={(value) =>
-                          send(
-                            Object.keys(value).length
-                              ? override(section, value)
-                              : remove(section),
-                          )
-                        }
-                      />
-                    ))}
-                  </>
-                )}
-                {!slot && selectedTab === "Подключения" && (
-                  <div className="application-library-connections">
-                    <ApplicationBindings
-                      key={selected + "bindings"}
-                      value={objectValue(library.bindings)}
-                      endpointGroups={Object.keys(
-                        managed?.endpointGroups ?? {},
-                      )}
-                      endpointGroupRef={libraryEndpointGroups[selected]}
-                      onSaveEndpointGroup={(ref) =>
-                        send({
-                          operation: ref
-                            ? "SetApplicationLibraryEndpointGroup"
-                            : "ClearApplicationLibraryEndpointGroup",
-                          deploymentId: selected,
-                          ...(ref ? { value: ref } : {}),
-                        })
-                      }
-                      hints={bindingHints}
-                      candidates={connectionCandidates(
-                        bindingConnectionNames,
-                        Object.fromEntries(
-                          Object.entries(managed?.deployments ?? {}).map(
-                            ([id, row]) => [id, row.serviceType],
-                          ),
-                        ),
-                        providedConnectionChoices,
-                      )}
-                      deployments={Object.keys(managed?.deployments ?? {})}
-                      profiles={Object.keys(managed?.pki?.tlsProfiles ?? {})}
-                      providedConnections={providedConnectionChoices}
-                      disabled={busy}
-                      onDirtyChange={(v) => markChildDirty(v, "bindings")}
-                      onSave={(bindings) =>
-                        send({
-                          operation: "UpdateApplicationLibraryDeployment",
-                          deploymentId: selected,
-                          entity: { bindings },
-                        })
-                      }
-                    />
-                    <ApplicationProvidedConnections
-                      secretSession={librarySecretSession}
-                      definitions={objectValue(definition.provided_connections)}
-                      value={objectValue(library.provided_connections)}
-                      resolved={
-                        freshSecrets
-                          ? objectValue(resolved?.providedConnections)
-                          : {}
-                      }
-                      disabled={busy}
-                      onDirtyChange={(v, k) =>
-                        markChildDirty(v, "provided:" + k)
-                      }
-                      onSave={(provided_connections) =>
-                        send({
-                          operation: "UpdateApplicationLibraryDeployment",
-                          deploymentId: selected,
-                          entity: { provided_connections },
-                        })
-                      }
-                    />
-                  </div>
-                )}
-                {!slot && selectedTab === "Ресурсы и секреты" && (
-                  <>
-                    <ApplicationLibraryResources
-                      showAddActions={false}
-                      deployments={managed?.deployments ?? {}}
-                      key={selected + "resources"}
-                      resources={objectValue(library.resources)}
-                      resolvedTopics={resolvedTopics}
-                      resolvedResources={resolvedResources}
-                      redisDefaults={objectValue(
-                        objectValue(
-                          objectValue(definition.resource_defaults).redis,
-                        ).keys,
-                      )}
-                      databaseDefaults={objectValue(
-                        objectValue(
-                          objectValue(definition.resource_defaults).postgresql,
-                        ).databases,
-                      )}
-                      clickhouseDefaults={objectValue(
-                        objectValue(
-                          objectValue(definition.resource_defaults).clickhouse,
-                        ).databases,
-                      )}
-                      topicDefaults={objectValue(
-                        objectValue(
-                          objectValue(definition.resource_defaults).kafka,
-                        ).topics,
-                      )}
-                      bindings={objectValue(library.bindings)}
-                      disabled={busy}
-                      onDirtyChange={(v) => markChildDirty(v, "resources")}
-                      onSave={(resources) =>
-                        send({
-                          operation: "UpdateApplicationLibraryDeployment",
-                          deploymentId: selected,
-                          entity: { resources },
-                        })
-                      }
-                    />
-                  </>
-                )}
-                {slot && selectedTab === "Основное" && (
-                  <div className="application-instance-general">
-                    <section className="application-section">
-                      <div className="application-instance-name">
-                        <span>Имя экземпляра · Core</span>
-                        <strong>
-                          {Object.entries(resolved?.instances ?? {}).find(
-                            ([, instance]) => instance.slotId === slot,
-                          )?.[0] ?? "Ещё не рассчитано"}
-                        </strong>
-                        <small>
-                          Только чтение · по последней проверке проекта
-                        </small>
-                      </div>
-                      {scalar(
-                        "image",
-                        "Образ контейнера",
-                        defaults.image,
-                        overrides.image,
-                        (v) => send(override("image", v)),
-                        () => send(remove("image")),
-                      )}
-                    </section>
-                    <section
-                      className="application-section application-general-summary"
-                      aria-label="Сводка конфигурации"
-                    >
-                      <h3>Библиотека и подключения</h3>
-                      <dl className="application-overview-lines">
-                        <dt>Размещение</dt>
-                        <dd>
-                          {Object.keys(placements)
-                            .filter((host) =>
-                              Object.hasOwn(placements[host] ?? {}, selected),
-                            )
-                            .join(", ") || "Не задано"}
-                        </dd>
-                        <dt>Подключения</dt>
-                        <dd>
-                          {Object.entries(appConnections).map(([name, raw]) => {
-                            const binding = String(
-                              objectValue(raw).library_binding ?? "",
-                            );
-                            const target = objectValue(
-                              objectValue(library.bindings)[binding],
-                            );
-                            return (
-                              <span
-                                key={name}
-                                title={`${binding}: ${String(target.deploymentRef ?? target.profileRef ?? (target.providedConnectionRef ? JSON.stringify(target.providedConnectionRef) : "Не задано"))}`}
-                              >
-                                {name}
-                              </span>
-                            );
-                          })}
-                        </dd>
-                      </dl>
-                      <button
-                        className="application-link"
-                        onClick={() =>
-                          navigate(() => {
-                            setSlot("");
-                            setTab("Подключения");
-                          })
-                        }
-                      >
-                        Настроить подключения библиотеки ↗
-                      </button>
-                    </section>
-                    <ApplicationReadiness
-                      key={
-                        selected + slot + JSON.stringify(overrides.readiness)
-                      }
-                      value={objectValue(overrides.readiness)}
-                      defaults={objectValue(defaults.readiness)}
-                      disabled={busy}
-                      onDirtyChange={(v) => markChildDirty(v, "readiness")}
-                      onSave={(value) => send(override("readiness", value))}
-                      onReset={() => send(remove("readiness"))}
-                    />
-                    <div className="application-general-ports">
-                      <ApplicationPorts
-                        compact
-                        key={selected + slot + "port-sources"}
-                        sources={portSources}
-                        value={objectValue(overrides.ports)}
-                        disabled={busy}
-                        onDirtyChange={(v) => markChildDirty(v, "add-port")}
-                        onSave={(name, value) =>
-                          send(override(name, value, "ports"))
-                        }
-                      />
-                      <section className="application-section application-general-port-overrides">
-                        {" "}
-                        <h3>Host → Container</h3>
-                        {Object.entries({
-                          ...objectValue(defaults.ports),
-                          ...objectValue(overrides.ports),
-                        }).map(([listener, raw]) => {
-                          const d = objectValue(
-                            objectValue(defaults.ports)[listener],
-                          );
-                          const a = objectValue(
-                            objectValue(overrides.ports)[listener],
-                          );
-                          return (
-                            <fieldset key={listener}>
-                              <legend>{listener}</legend>
-                              {(
-                                [
-                                  ["published", "Порт хоста"],
-                                  ["container", "Порт контейнера"],
-                                ] as const
-                              ).map(([side, label]) =>
-                                scalar(
-                                  `port:${listener}:${side}`,
-                                  label,
-                                  d[side],
-                                  a[side],
-                                  (v) =>
-                                    send(
-                                      override(
-                                        listener,
-                                        { ...a, [side]: Number(v) },
-                                        "ports",
-                                      ),
-                                    ),
-                                  () => {
-                                    const remaining = { ...a };
-                                    delete remaining[side];
-                                    return send(
-                                      Object.keys(remaining).length
-                                        ? override(listener, remaining, "ports")
-                                        : remove(listener, "ports"),
-                                    );
-                                  },
-                                  "number",
-                                ),
-                              )}
-                              {raw === null && <p>Недоступная схема порта</p>}
-                            </fieldset>
-                          );
-                        })}
-                      </section>
-                      <details className="application-general-endpoint">
-                        <summary>Endpoint · публикация HAProxy / DNS</summary>
-                        <p>
-                          Публикацию и совместимость backend/TLS проверяет Core.
-                        </p>
-                        <ApplicationValueFields
-                          key={selected + slot + "endpoint"}
-                          label="Endpoint"
-                          compact
-                          value={objectValue(overrides.endpoint)}
-                          defaults={objectValue(defaults.endpoint)}
-                          disabled={busy}
-                          onDirtyChange={(v) => markChildDirty(v, "endpoint")}
-                          onSave={(value) =>
-                            send(
-                              Object.keys(value).length
-                                ? override("endpoint", value)
-                                : remove("endpoint"),
-                            )
-                          }
-                        />
-                      </details>
-                    </div>
-                  </div>
-                )}
-
-                {slot && selectedTab === "Запуск" && (
-                  <>
-                    <ApplicationTopicBindings
-                      resolvedTopics={resolvedTopics}
-                      connections={appConnections}
-                      resources={objectValue(library.resources)}
-                      bindings={objectValue(library.bindings)}
-                      deployments={managed?.deployments ?? {}}
-                      defaults={objectValue(defaults.topicBindings)}
-                      authored={objectValue(overrides.topicBindings)}
-                      disabled={busy}
-                      onSave={(value) => send(override("topicBindings", value))}
-                      onReset={() => send(remove("topicBindings"))}
-                    />
-                    {hosts.length > 1 && (
-                      <label>
-                        Наследуемые значения для сервера
-                        <select
-                          value={selectedBaselineHost}
-                          onChange={(e) =>
-                            navigate(() => setBaselineHost(e.target.value))
-                          }
-                        >
-                          {hosts.map((host) => (
-                            <option key={host}>{host}</option>
-                          ))}
-                        </select>
-                      </label>
-                    )}
-                    {commonActive && !freshBaseline && (
-                      <p className="muted">
-                        Унаследованные значения требуют проверки сохранённого
-                        проекта в Core. ENV показывают исходные defaults пакета
-                        и явные переопределения без вычисления Ansible;
-                        настройки конфигурации — только явные переопределения.
-                      </p>
-                    )}
-                    <section className="application-section application-startup-policy">
-                      <h3>Команда и политика запуска</h3>
-                      <div className="application-startup-policy-fields">
-                        {scalar(
-                          "command",
-                          "Команда · каждый аргумент с новой строки",
-                          Array.isArray(defaults.command)
-                            ? defaults.command.join("\n")
-                            : undefined,
-                          Array.isArray(overrides.command)
-                            ? overrides.command.join("\n")
-                            : undefined,
-                          (v) => send(override("command", v.split("\n"))),
-                          () => send(remove("command")),
-                          "multiline",
-                        )}
-                        {(["user", "restart"] as const).map((field) =>
-                          scalar(
-                            field,
-                            field,
-                            defaults[field],
-                            overrides[field],
-                            (v) => send(override(field, v)),
-                            () => send(remove(field)),
-                          ),
-                        )}
-                      </div>
-                    </section>
-                    <section className="application-section">
-                      <ApplicationValueFields
-                        key={selected + slot + "environment"}
-                        label="Переменные окружения (ENV)"
-                        compact
-                        addControl={{
-                          adding: addingEnvironment,
-                          setAdding: setAddingEnvironment,
-                        }}
-                        value={objectValue(overrides.environment)}
-                        defaults={objectValue(
-                          freshBaseline
-                            ? inherited.environment
-                            : defaults.environment,
-                        )}
-                        resolvedValues={
-                          freshBaseline && !dirty && !busy
-                            ? objectValue(
-                                objectValue(
-                                  instancePlacements[selectedBaselineHost],
-                                ).environment,
-                              )
-                            : {}
-                        }
-                        defaultLabel={
-                          freshBaseline
-                            ? "Унаследовано · последний расчёт Core"
-                            : undefined
-                        }
-                        disabled={busy}
-                        onDirtyChange={(v) => markChildDirty(v, "environment")}
-                        onSave={(value) =>
-                          send(
-                            Object.keys(value).length
-                              ? override("environment", value)
-                              : remove("environment"),
-                          )
-                        }
-                      />
-                      <p className="muted">
-                        ENV передаются процессу контейнера.
-                      </p>
-                    </section>
-                    {(Object.keys(objectValue(startupDefaults.parameters))
-                      .length > 0 ||
-                      commonActive ||
-                      Object.keys(objectValue(overrides.parameters)).length >
-                        0) && (
-                      <section className="application-section">
-                        <ApplicationValueFields
-                          key={selected + slot + "parameters"}
-                          label="Настройки конфигурации"
-                          value={objectValue(overrides.parameters)}
-                          defaults={objectValue(startupDefaults.parameters)}
-                          defaultLabel={
-                            freshBaseline
-                              ? "Унаследовано · последний расчёт Core"
-                              : undefined
-                          }
-                          disabled={busy}
-                          onDirtyChange={(v) => markChildDirty(v, "parameters")}
-                          onSave={(value) =>
-                            send(
-                              Object.keys(value).length
-                                ? override("parameters", value)
-                                : remove("parameters"),
-                            )
-                          }
-                        />
-                        <p className="muted">
-                          Значения для шаблонов конфигурации пакета; не ENV.
-                        </p>
-                      </section>
-                    )}
-                  </>
-                )}
-
-                {slot && selectedTab === "Секреты" && (
-                  <>
-                    <h3>Секреты подключений</h3>
-                    <p>
-                      Подключения настраиваются в библиотеке. Здесь — источники
-                      секретов, переменные приложения и права. Пароли — только в
-                      сессии.
-                    </p>
-                    <ApplicationCredentials
-                      secretSession={librarySecretSession}
-                      resolvedAccounts={resolvedSecretAccounts}
-                      sharedSecretRefs={Object.keys(secretRefCounts).filter(
-                        (ref) => secretRefCounts[ref] > 1,
-                      )}
-                      renderVariables={(account, field) => (
-                        <ApplicationSecretBindings
-                          credential={{ account, field }}
-                          value={objectValue(overrides.provisioner)}
-                          defaults={objectValue(defaults.provisioner)}
-                          accounts={[]}
-                          disabled={busy}
-                          onDirtyChange={(v) =>
-                            markChildDirty(
-                              v,
-                              `secret_bindings:${account}:${field}`,
-                            )
-                          }
-                          onSave={(value) =>
-                            send(
-                              Object.keys(value).length
-                                ? override("provisioner", value)
-                                : remove("provisioner"),
-                            )
-                          }
-                        />
-                      )}
-                      variableBindings={{
-                        ...objectValue(
-                          objectValue(defaults.provisioner).secret_bindings,
-                        ),
-                        ...objectValue(
-                          objectValue(overrides.provisioner).secret_bindings,
-                        ),
-                      }}
-                      resources={objectValue(library.resources)}
-                      resolvedResources={resolvedResources}
-                      deploymentTypes={Object.fromEntries(
-                        Object.entries(managed?.deployments ?? {}).map(
-                          ([id, row]) => [id, row.serviceType],
-                        ),
-                      )}
-                      bindings={objectValue(library.bindings)}
-                      onDirtyChange={markChildDirty}
-                      defaults={defaults}
-                      authored={authored}
-                      connections={appConnections}
-                      disabled={busy}
-                      onSave={(accounts) =>
-                        send({
-                          operation: "SetApplicationLibrarySlot",
-                          deploymentId: selected,
-                          entityId: slot,
-                          entity: { accounts },
-                        })
-                      }
-                    />
-                    {draftActive && (
-                      <p>
-                        Для сессионного ввода сначала сохраните изменения
-                        проекта.
-                      </p>
-                    )}
-                  </>
-                )}
-                {slot && selectedTab === "Файлы" && (
-                  <>
-                    <ApplicationFileSettings
-                      key={
-                        selected + slot + JSON.stringify(overrides.config_files)
-                      }
-                      authored={overrides.config_files}
-                      defaults={defaults.config_files}
-                      disabled={busy}
-                      onDirtyChange={(v) => markChildDirty(v, "files")}
-                      onSave={(value) => send(override("config_files", value))}
-                      onReset={() => send(remove("config_files"))}
-                    />
-                    <p>
-                      AppRole identity и runtime paths разрешает Core. Значения
-                      секретов не сохраняются в файлы проекта.
-                    </p>
-                  </>
-                )}
-
-                {slot && selectedTab === "Состояние" && (
-                  <>
-                    <p>
-                      Расчёт для сохранённой ревизии:{" "}
-                      {snapshot?.projectRevision ?? "Не рассчитано"}.{" "}
-                      {intents.length > 0 && "Есть изменения проекта."}
-                    </p>
-                    <p>
-                      Origin: ANSIBLE / RESOLUTION_SCOPE; точный источник
-                      каждого поля не определяется.
-                    </p>
-                    <details className="application-state-diagnostics">
-                      <summary>
-                        Рассчитанная конфигурация · диагностика Core
-                      </summary>
-                      <pre>
-                        {JSON.stringify(
-                          Object.fromEntries(
-                            Object.entries(resolved?.instances ?? {}).filter(
-                              ([, instance]) => instance.slotId === slot,
-                            ),
-                          ),
-                          null,
-                          2,
-                        )}
-                      </pre>
-                    </details>
-                    <p>
-                      Работа контейнера, подключения и endpoint Verify: нет
-                      текущих данных наблюдения. Результаты запусков доступны на
-                      странице установки.
-                    </p>
-                  </>
-                )}
-              </div>
-            </>
-          )}
-          <footer>
-            <div className="application-draft-status">
-              <strong>
-                {intents.length
-                  ? `В черновике: ${intents.length}`
-                  : "Нет изменений"}
-              </strong>
-              <small>Сохранение не запускает установку</small>
-            </div>
-            <button
-              className="outline"
-              disabled={busy || intents.length === 0 || dirty}
-              onClick={onReview}
-            >
-              Показать изменения проекта
-            </button>
-            {dirty && (
-              <span role="status">
-                Есть ввод, ещё не добавленный в черновик
-              </span>
-            )}
-          </footer>
-        </article>
-      </div>
-    </section>
-  );
-}
-
 @@END

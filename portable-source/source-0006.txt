@@ -1,3 +1,2068 @@
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/cache/buffer_lru.go","mode":420,"size":2242,"sha256":"e6d478e2a0bc49c1af61daac07ea30394a2ff829b8b62bd3e4cdbc13ea70378c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2242}
+package cache
+
+import (
+	"container/list"
+	"sync"
+)
+
+// BufferLRU implements an object cache with an LRU eviction policy and a
+// maximum size (measured in object size).
+type BufferLRU struct {
+	MaxSize FileSize
+
+	actualSize FileSize
+	ll         *list.List
+	cache      map[int64]*list.Element
+	mut        sync.Mutex
+}
+
+// NewBufferLRU creates a new BufferLRU with the given maximum size. The maximum
+// size will never be exceeded.
+func NewBufferLRU(maxSize FileSize) *BufferLRU {
+	return &BufferLRU{MaxSize: maxSize}
+}
+
+// NewBufferLRUDefault creates a new BufferLRU with the default cache size.
+func NewBufferLRUDefault() *BufferLRU {
+	return &BufferLRU{MaxSize: DefaultMaxSize}
+}
+
+type buffer struct {
+	Key   int64
+	Slice []byte
+}
+
+// Put puts a buffer into the cache. If the buffer is already in the cache, it
+// will be marked as used. Otherwise, it will be inserted. A buffers might
+// be evicted to make room for the new one.
+func (c *BufferLRU) Put(key int64, slice []byte) {
+	c.mut.Lock()
+	defer c.mut.Unlock()
+
+	if c.cache == nil {
+		c.actualSize = 0
+		c.cache = make(map[int64]*list.Element, 1000)
+		c.ll = list.New()
+	}
+
+	bufSize := FileSize(len(slice))
+	if ee, ok := c.cache[key]; ok {
+		oldBuf := ee.Value.(buffer)
+		// in this case bufSize is a delta: new size - old size
+		bufSize -= FileSize(len(oldBuf.Slice))
+		c.ll.MoveToFront(ee)
+		ee.Value = buffer{key, slice}
+	} else {
+		if bufSize > c.MaxSize {
+			return
+		}
+		ee := c.ll.PushFront(buffer{key, slice})
+		c.cache[key] = ee
+	}
+
+	c.actualSize += bufSize
+	for c.actualSize > c.MaxSize {
+		last := c.ll.Back()
+		lastObj := last.Value.(buffer)
+		lastSize := FileSize(len(lastObj.Slice))
+
+		c.ll.Remove(last)
+		delete(c.cache, lastObj.Key)
+		c.actualSize -= lastSize
+	}
+}
+
+// Get returns a buffer by its key. It marks the buffer as used. If the buffer
+// is not in the cache, (nil, false) will be returned.
+func (c *BufferLRU) Get(key int64) ([]byte, bool) {
+	c.mut.Lock()
+	defer c.mut.Unlock()
+
+	ee, ok := c.cache[key]
+	if !ok {
+		return nil, false
+	}
+
+	c.ll.MoveToFront(ee)
+	return ee.Value.(buffer).Slice, true
+}
+
+// Clear the content of this buffer cache.
+func (c *BufferLRU) Clear() {
+	c.mut.Lock()
+	defer c.mut.Unlock()
+
+	c.ll = nil
+	c.cache = nil
+	c.actualSize = 0
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/cache/common.go","mode":420,"size":1209,"sha256":"6dfd925f2ce55420dda8203b7bd2c3c07a4db73780c605417a1d56588cc9a3a4","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1209}
+package cache
+
+import "github.com/go-git/go-git/v5/plumbing"
+
+const (
+	Byte FileSize = 1 << (iota * 10)
+	KiByte
+	MiByte
+	GiByte
+)
+
+type FileSize int64
+
+const DefaultMaxSize FileSize = 96 * MiByte
+
+// Object is an interface to a object cache.
+type Object interface {
+	// Put puts the given object into the cache. Whether this object will
+	// actually be put into the cache or not is implementation specific.
+	Put(o plumbing.EncodedObject)
+	// Get gets an object from the cache given its hash. The second return value
+	// is true if the object was returned, and false otherwise.
+	Get(k plumbing.Hash) (plumbing.EncodedObject, bool)
+	// Clear clears every object from the cache.
+	Clear()
+}
+
+// Buffer is an interface to a buffer cache.
+type Buffer interface {
+	// Put puts a buffer into the cache. If the buffer is already in the cache,
+	// it will be marked as used. Otherwise, it will be inserted. Buffer might
+	// be evicted to make room for the new one.
+	Put(key int64, slice []byte)
+	// Get returns a buffer by its key. It marks the buffer as used. If the
+	// buffer is not in the cache, (nil, false) will be returned.
+	Get(key int64) ([]byte, bool)
+	// Clear clears every object from the cache.
+	Clear()
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/cache/object_lru.go","mode":420,"size":2358,"sha256":"9b2e44f73c28eead22316c45aff5329afc609ad26f13da46442ec63afbf0a80b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2358}
+package cache
+
+import (
+	"container/list"
+	"sync"
+
+	"github.com/go-git/go-git/v5/plumbing"
+)
+
+// ObjectLRU implements an object cache with an LRU eviction policy and a
+// maximum size (measured in object size).
+type ObjectLRU struct {
+	MaxSize FileSize
+
+	actualSize FileSize
+	ll         *list.List
+	cache      map[interface{}]*list.Element
+	mut        sync.Mutex
+}
+
+// NewObjectLRU creates a new ObjectLRU with the given maximum size. The maximum
+// size will never be exceeded.
+func NewObjectLRU(maxSize FileSize) *ObjectLRU {
+	return &ObjectLRU{MaxSize: maxSize}
+}
+
+// NewObjectLRUDefault creates a new ObjectLRU with the default cache size.
+func NewObjectLRUDefault() *ObjectLRU {
+	return &ObjectLRU{MaxSize: DefaultMaxSize}
+}
+
+// Put puts an object into the cache. If the object is already in the cache, it
+// will be marked as used. Otherwise, it will be inserted. A single object might
+// be evicted to make room for the new object.
+func (c *ObjectLRU) Put(obj plumbing.EncodedObject) {
+	c.mut.Lock()
+	defer c.mut.Unlock()
+
+	if c.cache == nil {
+		c.actualSize = 0
+		c.cache = make(map[interface{}]*list.Element, 1000)
+		c.ll = list.New()
+	}
+
+	objSize := FileSize(obj.Size())
+	key := obj.Hash()
+	if ee, ok := c.cache[key]; ok {
+		oldObj := ee.Value.(plumbing.EncodedObject)
+		// in this case objSize is a delta: new size - old size
+		objSize -= FileSize(oldObj.Size())
+		c.ll.MoveToFront(ee)
+		ee.Value = obj
+	} else {
+		if objSize > c.MaxSize {
+			return
+		}
+		ee := c.ll.PushFront(obj)
+		c.cache[key] = ee
+	}
+
+	c.actualSize += objSize
+	for c.actualSize > c.MaxSize {
+		last := c.ll.Back()
+		if last == nil {
+			c.actualSize = 0
+			break
+		}
+
+		lastObj := last.Value.(plumbing.EncodedObject)
+		lastSize := FileSize(lastObj.Size())
+
+		c.ll.Remove(last)
+		delete(c.cache, lastObj.Hash())
+		c.actualSize -= lastSize
+	}
+}
+
+// Get returns an object by its hash. It marks the object as used. If the object
+// is not in the cache, (nil, false) will be returned.
+func (c *ObjectLRU) Get(k plumbing.Hash) (plumbing.EncodedObject, bool) {
+	c.mut.Lock()
+	defer c.mut.Unlock()
+
+	ee, ok := c.cache[k]
+	if !ok {
+		return nil, false
+	}
+
+	c.ll.MoveToFront(ee)
+	return ee.Value.(plumbing.EncodedObject), true
+}
+
+// Clear the content of this object cache.
+func (c *ObjectLRU) Clear() {
+	c.mut.Lock()
+	defer c.mut.Unlock()
+
+	c.ll = nil
+	c.cache = nil
+	c.actualSize = 0
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/color/color.go","mode":420,"size":1094,"sha256":"ec8e583416805579d85479a9387064dbaaf3dcfc0d3e03b45bf6164258041334","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1094}
+package color
+
+// TODO read colors from a github.com/go-git/go-git/plumbing/format/config.Config struct
+// TODO implement color parsing, see https://github.com/git/git/blob/v2.26.2/color.c
+
+// Colors. See https://github.com/git/git/blob/v2.26.2/color.h#L24-L53.
+const (
+	Normal       = ""
+	Reset        = "\033[m"
+	Bold         = "\033[1m"
+	Red          = "\033[31m"
+	Green        = "\033[32m"
+	Yellow       = "\033[33m"
+	Blue         = "\033[34m"
+	Magenta      = "\033[35m"
+	Cyan         = "\033[36m"
+	BoldRed      = "\033[1;31m"
+	BoldGreen    = "\033[1;32m"
+	BoldYellow   = "\033[1;33m"
+	BoldBlue     = "\033[1;34m"
+	BoldMagenta  = "\033[1;35m"
+	BoldCyan     = "\033[1;36m"
+	FaintRed     = "\033[2;31m"
+	FaintGreen   = "\033[2;32m"
+	FaintYellow  = "\033[2;33m"
+	FaintBlue    = "\033[2;34m"
+	FaintMagenta = "\033[2;35m"
+	FaintCyan    = "\033[2;36m"
+	BgRed        = "\033[41m"
+	BgGreen      = "\033[42m"
+	BgYellow     = "\033[43m"
+	BgBlue       = "\033[44m"
+	BgMagenta    = "\033[45m"
+	BgCyan       = "\033[46m"
+	Faint        = "\033[2m"
+	FaintItalic  = "\033[2;3m"
+	Reverse      = "\033[7m"
+)
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/error.go","mode":420,"size":589,"sha256":"47064cd6c8dff6c1d039b54eb4516430eb6c81df7162074930832be8c49e6492","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":589}
+package plumbing
+
+import "fmt"
+
+type PermanentError struct {
+	Err error
+}
+
+func NewPermanentError(err error) *PermanentError {
+	if err == nil {
+		return nil
+	}
+
+	return &PermanentError{Err: err}
+}
+
+func (e *PermanentError) Error() string {
+	return fmt.Sprintf("permanent client error: %s", e.Err.Error())
+}
+
+type UnexpectedError struct {
+	Err error
+}
+
+func NewUnexpectedError(err error) *UnexpectedError {
+	if err == nil {
+		return nil
+	}
+
+	return &UnexpectedError{Err: err}
+}
+
+func (e *UnexpectedError) Error() string {
+	return fmt.Sprintf("unexpected client error: %s", e.Err.Error())
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/filemode/filemode.go","mode":420,"size":5872,"sha256":"cc688045123454f693894375f36081712d479534922619e4aac9eeab0151fd0a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5872}
+package filemode
+
+import (
+	"encoding/binary"
+	"fmt"
+	"os"
+	"strconv"
+)
+
+// A FileMode represents the kind of tree entries used by git. It
+// resembles regular file systems modes, although FileModes are
+// considerably simpler (there are not so many), and there are some,
+// like Submodule that has no file system equivalent.
+type FileMode uint32
+
+const (
+	// Empty is used as the FileMode of tree elements when comparing
+	// trees in the following situations:
+	//
+	// - the mode of tree elements before their creation.  - the mode of
+	// tree elements after their deletion.  - the mode of unmerged
+	// elements when checking the index.
+	//
+	// Empty has no file system equivalent.  As Empty is the zero value
+	// of FileMode, it is also returned by New and
+	// NewFromOsNewFromOSFileMode along with an error, when they fail.
+	Empty FileMode = 0
+	// Dir represent a Directory.
+	Dir FileMode = 0040000
+	// Regular represent non-executable files.  Please note this is not
+	// the same as golang regular files, which include executable files.
+	Regular FileMode = 0100644
+	// Deprecated represent non-executable files with the group writable
+	// bit set.  This mode was supported by the first versions of git,
+	// but it has been deprecated nowadays.  This library uses them
+	// internally, so you can read old packfiles, but will treat them as
+	// Regulars when interfacing with the outside world.  This is the
+	// standard git behaviour.
+	Deprecated FileMode = 0100664
+	// Executable represents executable files.
+	Executable FileMode = 0100755
+	// Symlink represents symbolic links to files.
+	Symlink FileMode = 0120000
+	// Submodule represents git submodules.  This mode has no file system
+	// equivalent.
+	Submodule FileMode = 0160000
+)
+
+// New takes the octal string representation of a FileMode and returns
+// the FileMode and a nil error.  If the string can not be parsed to a
+// 32 bit unsigned octal number, it returns Empty and the parsing error.
+//
+// Example: "40000" means Dir, "100644" means Regular.
+//
+// Please note this function does not check if the returned FileMode
+// is valid in git or if it is malformed.  For instance, "1" will
+// return the malformed FileMode(1) and a nil error.
+func New(s string) (FileMode, error) {
+	n, err := strconv.ParseUint(s, 8, 32)
+	if err != nil {
+		return Empty, err
+	}
+
+	return FileMode(n), nil
+}
+
+// NewFromOSFileMode returns the FileMode used by git to represent
+// the provided file system modes and a nil error on success.  If the
+// file system mode cannot be mapped to any valid git mode (as with
+// sockets or named pipes), it will return Empty and an error.
+//
+// Note that some git modes cannot be generated from os.FileModes, like
+// Deprecated and Submodule; while Empty will be returned, along with an
+// error, only when the method fails.
+func NewFromOSFileMode(m os.FileMode) (FileMode, error) {
+	if m.IsRegular() {
+		if isSetTemporary(m) {
+			return Empty, fmt.Errorf("no equivalent git mode for %s", m)
+		}
+		if isSetCharDevice(m) {
+			return Empty, fmt.Errorf("no equivalent git mode for %s", m)
+		}
+		if isSetUserExecutable(m) {
+			return Executable, nil
+		}
+		return Regular, nil
+	}
+
+	if m.IsDir() {
+		return Dir, nil
+	}
+
+	if isSetSymLink(m) {
+		return Symlink, nil
+	}
+
+	return Empty, fmt.Errorf("no equivalent git mode for %s", m)
+}
+
+func isSetCharDevice(m os.FileMode) bool {
+	return m&os.ModeCharDevice != 0
+}
+
+func isSetTemporary(m os.FileMode) bool {
+	return m&os.ModeTemporary != 0
+}
+
+func isSetUserExecutable(m os.FileMode) bool {
+	return m&0100 != 0
+}
+
+func isSetSymLink(m os.FileMode) bool {
+	return m&os.ModeSymlink != 0
+}
+
+// Bytes return a slice of 4 bytes with the mode in little endian
+// encoding.
+func (m FileMode) Bytes() []byte {
+	ret := make([]byte, 4)
+	binary.LittleEndian.PutUint32(ret, uint32(m))
+	return ret
+}
+
+// IsMalformed returns if the FileMode should not appear in a git packfile,
+// this is: Empty and any other mode not mentioned as a constant in this
+// package.
+func (m FileMode) IsMalformed() bool {
+	return m != Dir &&
+		m != Regular &&
+		m != Deprecated &&
+		m != Executable &&
+		m != Symlink &&
+		m != Submodule
+}
+
+// String returns the FileMode as a string in the standard git format,
+// this is, an octal number padded with ceros to 7 digits.  Malformed
+// modes are printed in that same format, for easier debugging.
+//
+// Example: Regular is "0100644", Empty is "0000000".
+func (m FileMode) String() string {
+	return fmt.Sprintf("%07o", uint32(m))
+}
+
+// IsRegular returns if the FileMode represents that of a regular file,
+// this is, either Regular or Deprecated.  Please note that Executable
+// are not regular even though in the UNIX tradition, they usually are:
+// See the IsFile method.
+func (m FileMode) IsRegular() bool {
+	return m == Regular ||
+		m == Deprecated
+}
+
+// IsFile returns if the FileMode represents that of a file, this is,
+// Regular, Deprecated, Executable or Link.
+func (m FileMode) IsFile() bool {
+	return m == Regular ||
+		m == Deprecated ||
+		m == Executable ||
+		m == Symlink
+}
+
+// ToOSFileMode returns the os.FileMode to be used when creating file
+// system elements with the given git mode and a nil error on success.
+//
+// When the provided mode cannot be mapped to a valid file system mode
+// (e.g.  Submodule) it returns os.FileMode(0) and an error.
+//
+// The returned file mode does not take into account the umask.
+func (m FileMode) ToOSFileMode() (os.FileMode, error) {
+	switch m {
+	case Dir:
+		return os.ModePerm | os.ModeDir, nil
+	case Submodule:
+		return os.ModePerm | os.ModeDir, nil
+	case Regular:
+		return os.FileMode(0644), nil
+	// Deprecated is no longer allowed: treated as a Regular instead
+	case Deprecated:
+		return os.FileMode(0644), nil
+	case Executable:
+		return os.FileMode(0755), nil
+	case Symlink:
+		return os.ModePerm | os.ModeSymlink, nil
+	}
+
+	return os.FileMode(0), fmt.Errorf("malformed mode (%s)", m)
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/config/common.go","mode":420,"size":2647,"sha256":"9b9280d5b8524e0314567af0234a37b3ddcd2654c1af629599ca0e756a829aa4","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2647}
+package config
+
+// New creates a new config instance.
+func New() *Config {
+	return &Config{}
+}
+
+// Config contains all the sections, comments and includes from a config file.
+type Config struct {
+	Comment  *Comment
+	Sections Sections
+	Includes Includes
+}
+
+// Includes is a list of Includes in a config file.
+type Includes []*Include
+
+// Include is a reference to an included config file.
+type Include struct {
+	Path   string
+	Config *Config
+}
+
+// Comment string without the prefix '#' or ';'.
+type Comment string
+
+const (
+	// NoSubsection token is passed to Config.Section and Config.SetSection to
+	// represent the absence of a section.
+	NoSubsection = ""
+)
+
+// Section returns a existing section with the given name or creates a new one.
+func (c *Config) Section(name string) *Section {
+	for i := len(c.Sections) - 1; i >= 0; i-- {
+		s := c.Sections[i]
+		if s.IsName(name) {
+			return s
+		}
+	}
+
+	s := &Section{Name: name}
+	c.Sections = append(c.Sections, s)
+	return s
+}
+
+// HasSection checks if the Config has a section with the specified name.
+func (c *Config) HasSection(name string) bool {
+	for _, s := range c.Sections {
+		if s.IsName(name) {
+			return true
+		}
+	}
+	return false
+}
+
+// RemoveSection removes a section from a config file.
+func (c *Config) RemoveSection(name string) *Config {
+	result := Sections{}
+	for _, s := range c.Sections {
+		if !s.IsName(name) {
+			result = append(result, s)
+		}
+	}
+
+	c.Sections = result
+	return c
+}
+
+// RemoveSubsection remove a subsection from a config file.
+func (c *Config) RemoveSubsection(section string, subsection string) *Config {
+	for _, s := range c.Sections {
+		if s.IsName(section) {
+			result := Subsections{}
+			for _, ss := range s.Subsections {
+				if !ss.IsName(subsection) {
+					result = append(result, ss)
+				}
+			}
+			s.Subsections = result
+		}
+	}
+
+	return c
+}
+
+// AddOption adds an option to a given section and subsection. Use the
+// NoSubsection constant for the subsection argument if no subsection is wanted.
+func (c *Config) AddOption(section string, subsection string, key string, value string) *Config {
+	if subsection == "" {
+		c.Section(section).AddOption(key, value)
+	} else {
+		c.Section(section).Subsection(subsection).AddOption(key, value)
+	}
+
+	return c
+}
+
+// SetOption sets an option to a given section and subsection. Use the
+// NoSubsection constant for the subsection argument if no subsection is wanted.
+func (c *Config) SetOption(section string, subsection string, key string, value string) *Config {
+	if subsection == "" {
+		c.Section(section).SetOption(key, value)
+	} else {
+		c.Section(section).Subsection(subsection).SetOption(key, value)
+	}
+
+	return c
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/config/decoder.go","mode":420,"size":736,"sha256":"e5878190c8e2c5f7c5a145ac68b925b2c751684f9b120a2c9f186a3b5ac9df81","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":736}
+package config
+
+import (
+	"io"
+
+	"github.com/go-git/gcfg"
+)
+
+// A Decoder reads and decodes config files from an input stream.
+type Decoder struct {
+	io.Reader
+}
+
+// NewDecoder returns a new decoder that reads from r.
+func NewDecoder(r io.Reader) *Decoder {
+	return &Decoder{r}
+}
+
+// Decode reads the whole config from its input and stores it in the
+// value pointed to by config.
+func (d *Decoder) Decode(config *Config) error {
+	cb := func(s string, ss string, k string, v string, bv bool) error {
+		if ss == "" && k == "" {
+			config.Section(s)
+			return nil
+		}
+
+		if ss != "" && k == "" {
+			config.Section(s).Subsection(ss)
+			return nil
+		}
+
+		config.AddOption(s, ss, k, v)
+		return nil
+	}
+	return gcfg.ReadWithCallback(d, cb)
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/config/doc.go","mode":420,"size":5084,"sha256":"e318f1a9de52ced2a93cebd276028f3fc06043a1ab957b74b61e9c316daff267","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5084}
+// Package config implements encoding and decoding of git config files.
+//
+// 	Configuration File
+// 	------------------
+//
+// 	The Git configuration file contains a number of variables that affect
+// 	the Git commands' behavior. The `.git/config` file in each repository
+// 	is used to store the configuration for that repository, and
+// 	`$HOME/.gitconfig` is used to store a per-user configuration as
+// 	fallback values for the `.git/config` file. The file `/etc/gitconfig`
+// 	can be used to store a system-wide default configuration.
+//
+// 	The configuration variables are used by both the Git plumbing
+// 	and the porcelains. The variables are divided into sections, wherein
+// 	the fully qualified variable name of the variable itself is the last
+// 	dot-separated segment and the section name is everything before the last
+// 	dot. The variable names are case-insensitive, allow only alphanumeric
+// 	characters and `-`, and must start with an alphabetic character.  Some
+// 	variables may appear multiple times; we say then that the variable is
+// 	multivalued.
+//
+// 	Syntax
+// 	~~~~~~
+//
+// 	The syntax is fairly flexible and permissive; whitespaces are mostly
+// 	ignored.  The '#' and ';' characters begin comments to the end of line,
+// 	blank lines are ignored.
+//
+// 	The file consists of sections and variables.  A section begins with
+// 	the name of the section in square brackets and continues until the next
+// 	section begins.  Section names are case-insensitive.  Only alphanumeric
+// 	characters, `-` and `.` are allowed in section names.  Each variable
+// 	must belong to some section, which means that there must be a section
+// 	header before the first setting of a variable.
+//
+// 	Sections can be further divided into subsections.  To begin a subsection
+// 	put its name in double quotes, separated by space from the section name,
+// 	in the section header, like in the example below:
+//
+// 	--------
+// 		[section "subsection"]
+//
+// 	--------
+//
+// 	Subsection names are case sensitive and can contain any characters except
+// 	newline (doublequote `"` and backslash can be included by escaping them
+// 	as `\"` and `\\`, respectively).  Section headers cannot span multiple
+// 	lines.  Variables may belong directly to a section or to a given subsection.
+// 	You can have `[section]` if you have `[section "subsection"]`, but you
+// 	don't need to.
+//
+// 	There is also a deprecated `[section.subsection]` syntax. With this
+// 	syntax, the subsection name is converted to lower-case and is also
+// 	compared case sensitively. These subsection names follow the same
+// 	restrictions as section names.
+//
+// 	All the other lines (and the remainder of the line after the section
+// 	header) are recognized as setting variables, in the form
+// 	'name = value' (or just 'name', which is a short-hand to say that
+// 	the variable is the boolean "true").
+// 	The variable names are case-insensitive, allow only alphanumeric characters
+// 	and `-`, and must start with an alphabetic character.
+//
+// 	A line that defines a value can be continued to the next line by
+// 	ending it with a `\`; the backquote and the end-of-line are
+// 	stripped.  Leading whitespaces after 'name =', the remainder of the
+// 	line after the first comment character '#' or ';', and trailing
+// 	whitespaces of the line are discarded unless they are enclosed in
+// 	double quotes.  Internal whitespaces within the value are retained
+// 	verbatim.
+//
+// 	Inside double quotes, double quote `"` and backslash `\` characters
+// 	must be escaped: use `\"` for `"` and `\\` for `\`.
+//
+// 	The following escape sequences (beside `\"` and `\\`) are recognized:
+// 	`\n` for newline character (NL), `\t` for horizontal tabulation (HT, TAB)
+// 	and `\b` for backspace (BS).  Other char escape sequences (including octal
+// 	escape sequences) are invalid.
+//
+// 	Includes
+// 	~~~~~~~~
+//
+// 	You can include one config file from another by setting the special
+// 	`include.path` variable to the name of the file to be included. The
+// 	variable takes a pathname as its value, and is subject to tilde
+// 	expansion.
+//
+// 	The included file is expanded immediately, as if its contents had been
+// 	found at the location of the include directive. If the value of the
+// 	`include.path` variable is a relative path, the path is considered to be
+// 	relative to the configuration file in which the include directive was
+// 	found.  See below for examples.
+//
+//
+// 	Example
+// 	~~~~~~~
+//
+// 		# Core variables
+// 		[core]
+// 			; Don't trust file modes
+// 			filemode = false
+//
+// 		# Our diff algorithm
+// 		[diff]
+// 			external = /usr/local/bin/diff-wrapper
+// 			renames = true
+//
+// 		[branch "devel"]
+// 			remote = origin
+// 			merge = refs/heads/devel
+//
+// 		# Proxy settings
+// 		[core]
+// 			gitProxy="ssh" for "kernel.org"
+// 			gitProxy=default-proxy ; for the rest
+//
+// 		[include]
+// 			path = /path/to/foo.inc ; include by absolute path
+// 			path = foo ; expand "foo" relative to the current file
+// 			path = ~/foo ; expand "foo" in your `$HOME` directory
+//
+package config
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/config/encoder.go","mode":420,"size":1784,"sha256":"a8249761bfdbe1270febd141f148e7ac78d8b234f4caa8afbfd3cbeabf357c52","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1784}
+package config
+
+import (
+	"fmt"
+	"io"
+	"strings"
+)
+
+// An Encoder writes config files to an output stream.
+type Encoder struct {
+	w io.Writer
+}
+
+var (
+	subsectionReplacer = strings.NewReplacer(`"`, `\"`, `\`, `\\`)
+	valueReplacer = strings.NewReplacer(`"`, `\"`, `\`, `\\`, "\n", `\n`, "\t", `\t`, "\b", `\b`)
+)
+// NewEncoder returns a new encoder that writes to w.
+func NewEncoder(w io.Writer) *Encoder {
+	return &Encoder{w}
+}
+
+// Encode writes the config in git config format to the stream of the encoder.
+func (e *Encoder) Encode(cfg *Config) error {
+	for _, s := range cfg.Sections {
+		if err := e.encodeSection(s); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (e *Encoder) encodeSection(s *Section) error {
+	if len(s.Options) > 0 {
+		if err := e.printf("[%s]\n", s.Name); err != nil {
+			return err
+		}
+
+		if err := e.encodeOptions(s.Options); err != nil {
+			return err
+		}
+	}
+
+	for _, ss := range s.Subsections {
+		if err := e.encodeSubsection(s.Name, ss); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (e *Encoder) encodeSubsection(sectionName string, s *Subsection) error {
+	if err := e.printf("[%s \"%s\"]\n", sectionName, subsectionReplacer.Replace(s.Name)); err != nil {
+		return err
+	}
+
+	return e.encodeOptions(s.Options)
+}
+
+func (e *Encoder) encodeOptions(opts Options) error {
+	for _, o := range opts {
+		var value string
+		if strings.ContainsAny(o.Value, "#;\"\t\n\\") || strings.HasPrefix(o.Value, " ") || strings.HasSuffix(o.Value, " ") {
+			value = `"`+valueReplacer.Replace(o.Value)+`"`
+		} else {
+			value = o.Value
+		}
+
+		if err := e.printf("\t%s = %s\n", o.Key, value); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (e *Encoder) printf(msg string, args ...interface{}) error {
+	_, err := fmt.Fprintf(e.w, msg, args...)
+	return err
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/config/format.go","mode":420,"size":1824,"sha256":"cf36c12615b490ec213818810c2f0728f4be7e75384ce72f218ab89745ef9ca5","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1824}
+package config
+
+// RepositoryFormatVersion represents the repository format version,
+// as per defined at:
+//
+//	https://git-scm.com/docs/repository-version
+type RepositoryFormatVersion string
+
+const (
+	// Version_0 is the format defined by the initial version of git,
+	// including but not limited to the format of the repository
+	// directory, the repository configuration file, and the object
+	// and ref storage.
+	//
+	// Specifying the complete behavior of git is beyond the scope
+	// of this document.
+	Version_0 = "0"
+
+	// Version_1 is identical to version 0, with the following exceptions:
+	//
+	//   1. When reading the core.repositoryformatversion variable, a git
+	//		implementation which supports version 1 MUST also read any
+	//		configuration keys found in the extensions section of the
+	//		configuration file.
+	//
+	//	 2. If a version-1 repository specifies any extensions.* keys that
+	//		the running git has not implemented, the operation MUST NOT proceed.
+	//		Similarly, if the value of any known key is not understood by the
+	//		implementation, the operation MUST NOT proceed.
+	//
+	// Note that if no extensions are specified in the config file, then
+	// core.repositoryformatversion SHOULD be set to 0 (setting it to 1 provides
+	// no benefit, and makes the repository incompatible with older
+	// implementations of git).
+	Version_1 = "1"
+
+	// DefaultRepositoryFormatVersion holds the default repository format version.
+	DefaultRepositoryFormatVersion = Version_0
+)
+
+// ObjectFormat defines the object format.
+type ObjectFormat string
+
+const (
+	// SHA1 represents the object format used for SHA1.
+	SHA1 ObjectFormat = "sha1"
+
+	// SHA256 represents the object format used for SHA256.
+	SHA256 ObjectFormat = "sha256"
+
+	// DefaultObjectFormat holds the default object format.
+	DefaultObjectFormat = SHA1
+)
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/config/option.go","mode":420,"size":2567,"sha256":"1b630072d26684df243fcf8197ab235ea527a33462f46f36045c0f5d2dfc97ab","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2567}
+package config
+
+import (
+	"fmt"
+	"strings"
+)
+
+// Option defines a key/value entity in a config file.
+type Option struct {
+	// Key preserving original caseness.
+	// Use IsKey instead to compare key regardless of caseness.
+	Key string
+	// Original value as string, could be not normalized.
+	Value string
+}
+
+type Options []*Option
+
+// IsKey returns true if the given key matches
+// this option's key in a case-insensitive comparison.
+func (o *Option) IsKey(key string) bool {
+	return strings.EqualFold(o.Key, key)
+}
+
+func (opts Options) GoString() string {
+	var strs []string
+	for _, opt := range opts {
+		strs = append(strs, fmt.Sprintf("%#v", opt))
+	}
+
+	return strings.Join(strs, ", ")
+}
+
+// Get gets the value for the given key if set,
+// otherwise it returns the empty string.
+//
+// Note that there is no difference
+//
+// This matches git behaviour since git v1.8.1-rc1,
+// if there are multiple definitions of a key, the
+// last one wins.
+//
+// See: http://article.gmane.org/gmane.linux.kernel/1407184
+//
+// In order to get all possible values for the same key,
+// use GetAll.
+func (opts Options) Get(key string) string {
+	for i := len(opts) - 1; i >= 0; i-- {
+		o := opts[i]
+		if o.IsKey(key) {
+			return o.Value
+		}
+	}
+	return ""
+}
+
+// Has checks if an Option exist with the given key.
+func (opts Options) Has(key string) bool {
+	for _, o := range opts {
+		if o.IsKey(key) {
+			return true
+		}
+	}
+	return false
+}
+
+// GetAll returns all possible values for the same key.
+func (opts Options) GetAll(key string) []string {
+	result := []string{}
+	for _, o := range opts {
+		if o.IsKey(key) {
+			result = append(result, o.Value)
+		}
+	}
+	return result
+}
+
+func (opts Options) withoutOption(key string) Options {
+	result := Options{}
+	for _, o := range opts {
+		if !o.IsKey(key) {
+			result = append(result, o)
+		}
+	}
+	return result
+}
+
+func (opts Options) withAddedOption(key string, value string) Options {
+	return append(opts, &Option{key, value})
+}
+
+func (opts Options) withSettedOption(key string, values ...string) Options {
+	var result Options
+	var added []string
+	for _, o := range opts {
+		if !o.IsKey(key) {
+			result = append(result, o)
+			continue
+		}
+
+		if contains(values, o.Value) {
+			added = append(added, o.Value)
+			result = append(result, o)
+			continue
+		}
+	}
+
+	for _, value := range values {
+		if contains(added, value) {
+			continue
+		}
+
+		result = result.withAddedOption(key, value)
+	}
+
+	return result
+}
+
+func contains(haystack []string, needle string) bool {
+	for _, s := range haystack {
+		if s == needle {
+			return true
+		}
+	}
+
+	return false
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/config/section.go","mode":420,"size":5245,"sha256":"deb99b5629ed7fed41ff8aabd75ccced923693816a0bff95ffbf042d889a505b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5245}
+package config
+
+import (
+	"fmt"
+	"strings"
+)
+
+// Section is the representation of a section inside git configuration files.
+// Each Section contains Options that are used by both the Git plumbing
+// and the porcelains.
+// Sections can be further divided into subsections. To begin a subsection
+// put its name in double quotes, separated by space from the section name,
+// in the section header, like in the example below:
+//
+//     [section "subsection"]
+//
+// All the other lines (and the remainder of the line after the section header)
+// are recognized as option variables, in the form "name = value" (or just name,
+// which is a short-hand to say that the variable is the boolean "true").
+// The variable names are case-insensitive, allow only alphanumeric characters
+// and -, and must start with an alphabetic character:
+//
+//     [section "subsection1"]
+//         option1 = value1
+//         option2
+//     [section "subsection2"]
+//         option3 = value2
+//
+type Section struct {
+	Name        string
+	Options     Options
+	Subsections Subsections
+}
+
+type Subsection struct {
+	Name    string
+	Options Options
+}
+
+type Sections []*Section
+
+func (s Sections) GoString() string {
+	var strs []string
+	for _, ss := range s {
+		strs = append(strs, fmt.Sprintf("%#v", ss))
+	}
+
+	return strings.Join(strs, ", ")
+}
+
+type Subsections []*Subsection
+
+func (s Subsections) GoString() string {
+	var strs []string
+	for _, ss := range s {
+		strs = append(strs, fmt.Sprintf("%#v", ss))
+	}
+
+	return strings.Join(strs, ", ")
+}
+
+// IsName checks if the name provided is equals to the Section name, case insensitive.
+func (s *Section) IsName(name string) bool {
+	return strings.EqualFold(s.Name, name)
+}
+
+// Subsection returns a Subsection from the specified Section. If the
+// Subsection does not exists, new one is created and added to Section.
+func (s *Section) Subsection(name string) *Subsection {
+	for i := len(s.Subsections) - 1; i >= 0; i-- {
+		ss := s.Subsections[i]
+		if ss.IsName(name) {
+			return ss
+		}
+	}
+
+	ss := &Subsection{Name: name}
+	s.Subsections = append(s.Subsections, ss)
+	return ss
+}
+
+// HasSubsection checks if the Section has a Subsection with the specified name.
+func (s *Section) HasSubsection(name string) bool {
+	for _, ss := range s.Subsections {
+		if ss.IsName(name) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// RemoveSubsection removes a subsection from a Section.
+func (s *Section) RemoveSubsection(name string) *Section {
+	result := Subsections{}
+	for _, s := range s.Subsections {
+		if !s.IsName(name) {
+			result = append(result, s)
+		}
+	}
+
+	s.Subsections = result
+	return s
+}
+
+// Option returns the value for the specified key. Empty string is returned if
+// key does not exists.
+func (s *Section) Option(key string) string {
+	return s.Options.Get(key)
+}
+
+// OptionAll returns all possible values for an option with the specified key.
+// If the option does not exists, an empty slice will be returned.
+func (s *Section) OptionAll(key string) []string {
+	return s.Options.GetAll(key)
+}
+
+// HasOption checks if the Section has an Option with the given key.
+func (s *Section) HasOption(key string) bool {
+	return s.Options.Has(key)
+}
+
+// AddOption adds a new Option to the Section. The updated Section is returned.
+func (s *Section) AddOption(key string, value string) *Section {
+	s.Options = s.Options.withAddedOption(key, value)
+	return s
+}
+
+// SetOption adds a new Option to the Section. If the option already exists, is replaced.
+// The updated Section is returned.
+func (s *Section) SetOption(key string, value string) *Section {
+	s.Options = s.Options.withSettedOption(key, value)
+	return s
+}
+
+// Remove an option with the specified key. The updated Section is returned.
+func (s *Section) RemoveOption(key string) *Section {
+	s.Options = s.Options.withoutOption(key)
+	return s
+}
+
+// IsName checks if the name of the subsection is exactly the specified name.
+func (s *Subsection) IsName(name string) bool {
+	return s.Name == name
+}
+
+// Option returns an option with the specified key. If the option does not exists,
+// empty spring will be returned.
+func (s *Subsection) Option(key string) string {
+	return s.Options.Get(key)
+}
+
+// OptionAll returns all possible values for an option with the specified key.
+// If the option does not exists, an empty slice will be returned.
+func (s *Subsection) OptionAll(key string) []string {
+	return s.Options.GetAll(key)
+}
+
+// HasOption checks if the Subsection has an Option with the given key.
+func (s *Subsection) HasOption(key string) bool {
+	return s.Options.Has(key)
+}
+
+// AddOption adds a new Option to the Subsection. The updated Subsection is returned.
+func (s *Subsection) AddOption(key string, value string) *Subsection {
+	s.Options = s.Options.withAddedOption(key, value)
+	return s
+}
+
+// SetOption adds a new Option to the Subsection. If the option already exists, is replaced.
+// The updated Subsection is returned.
+func (s *Subsection) SetOption(key string, value ...string) *Subsection {
+	s.Options = s.Options.withSettedOption(key, value...)
+	return s
+}
+
+// RemoveOption removes the option with the specified key. The updated Subsection is returned.
+func (s *Subsection) RemoveOption(key string) *Subsection {
+	s.Options = s.Options.withoutOption(key)
+	return s
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/diff/colorconfig.go","mode":420,"size":3460,"sha256":"87cd4d241ac9eb3b3eadccab2f6f4115bd214f5cb0242b6d36f55b6053e62a82","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3460}
+package diff
+
+import "github.com/go-git/go-git/v5/plumbing/color"
+
+// A ColorKey is a key into a ColorConfig map and also equal to the key in the
+// diff.color subsection of the config. See
+// https://github.com/git/git/blob/v2.26.2/diff.c#L83-L106.
+type ColorKey string
+
+// ColorKeys.
+const (
+	Context                   ColorKey = "context"
+	Meta                      ColorKey = "meta"
+	Frag                      ColorKey = "frag"
+	Old                       ColorKey = "old"
+	New                       ColorKey = "new"
+	Commit                    ColorKey = "commit"
+	Whitespace                ColorKey = "whitespace"
+	Func                      ColorKey = "func"
+	OldMoved                  ColorKey = "oldMoved"
+	OldMovedAlternative       ColorKey = "oldMovedAlternative"
+	OldMovedDimmed            ColorKey = "oldMovedDimmed"
+	OldMovedAlternativeDimmed ColorKey = "oldMovedAlternativeDimmed"
+	NewMoved                  ColorKey = "newMoved"
+	NewMovedAlternative       ColorKey = "newMovedAlternative"
+	NewMovedDimmed            ColorKey = "newMovedDimmed"
+	NewMovedAlternativeDimmed ColorKey = "newMovedAlternativeDimmed"
+	ContextDimmed             ColorKey = "contextDimmed"
+	OldDimmed                 ColorKey = "oldDimmed"
+	NewDimmed                 ColorKey = "newDimmed"
+	ContextBold               ColorKey = "contextBold"
+	OldBold                   ColorKey = "oldBold"
+	NewBold                   ColorKey = "newBold"
+)
+
+// A ColorConfig is a color configuration. A nil or empty ColorConfig
+// corresponds to no color.
+type ColorConfig map[ColorKey]string
+
+// A ColorConfigOption sets an option on a ColorConfig.
+type ColorConfigOption func(ColorConfig)
+
+// WithColor sets the color for key.
+func WithColor(key ColorKey, color string) ColorConfigOption {
+	return func(cc ColorConfig) {
+		cc[key] = color
+	}
+}
+
+// defaultColorConfig is the default color configuration. See
+// https://github.com/git/git/blob/v2.26.2/diff.c#L57-L81.
+var defaultColorConfig = ColorConfig{
+	Context:                   color.Normal,
+	Meta:                      color.Bold,
+	Frag:                      color.Cyan,
+	Old:                       color.Red,
+	New:                       color.Green,
+	Commit:                    color.Yellow,
+	Whitespace:                color.BgRed,
+	Func:                      color.Normal,
+	OldMoved:                  color.BoldMagenta,
+	OldMovedAlternative:       color.BoldBlue,
+	OldMovedDimmed:            color.Faint,
+	OldMovedAlternativeDimmed: color.FaintItalic,
+	NewMoved:                  color.BoldCyan,
+	NewMovedAlternative:       color.BoldYellow,
+	NewMovedDimmed:            color.Faint,
+	NewMovedAlternativeDimmed: color.FaintItalic,
+	ContextDimmed:             color.Faint,
+	OldDimmed:                 color.FaintRed,
+	NewDimmed:                 color.FaintGreen,
+	ContextBold:               color.Bold,
+	OldBold:                   color.BoldRed,
+	NewBold:                   color.BoldGreen,
+}
+
+// NewColorConfig returns a new ColorConfig.
+func NewColorConfig(options ...ColorConfigOption) ColorConfig {
+	cc := make(ColorConfig)
+	for key, value := range defaultColorConfig {
+		cc[key] = value
+	}
+	for _, option := range options {
+		option(cc)
+	}
+	return cc
+}
+
+// Reset returns the ANSI escape sequence to reset the color with key set from
+// cc. If no color was set then no reset is needed so it returns the empty
+// string.
+func (cc ColorConfig) Reset(key ColorKey) string {
+	if cc[key] == "" {
+		return ""
+	}
+	return color.Reset
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/diff/patch.go","mode":420,"size":1756,"sha256":"ca624cc58c616f5d90996a3f647f46795629f54be527e55e6ac6223c5eef87de","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1756}
+package diff
+
+import (
+	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/filemode"
+)
+
+// Operation defines the operation of a diff item.
+type Operation int
+
+const (
+	// Equal item represents an equals diff.
+	Equal Operation = iota
+	// Add item represents an insert diff.
+	Add
+	// Delete item represents a delete diff.
+	Delete
+)
+
+// Patch represents a collection of steps to transform several files.
+type Patch interface {
+	// FilePatches returns a slice of patches per file.
+	FilePatches() []FilePatch
+	// Message returns an optional message that can be at the top of the
+	// Patch representation.
+	Message() string
+}
+
+// FilePatch represents the necessary steps to transform one file into another.
+type FilePatch interface {
+	// IsBinary returns true if this patch is representing a binary file.
+	IsBinary() bool
+	// Files returns the from and to Files, with all the necessary metadata
+	// about them. If the patch creates a new file, "from" will be nil.
+	// If the patch deletes a file, "to" will be nil.
+	Files() (from, to File)
+	// Chunks returns a slice of ordered changes to transform "from" File into
+	// "to" File. If the file is a binary one, Chunks will be empty.
+	Chunks() []Chunk
+}
+
+// File contains all the file metadata necessary to print some patch formats.
+type File interface {
+	// Hash returns the File Hash.
+	Hash() plumbing.Hash
+	// Mode returns the FileMode.
+	Mode() filemode.FileMode
+	// Path returns the complete Path to the file, including the filename.
+	Path() string
+}
+
+// Chunk represents a portion of a file transformation into another.
+type Chunk interface {
+	// Content contains the portion of the file.
+	Content() string
+	// Type contains the Operation to do with this Chunk.
+	Type() Operation
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/diff/unified_encoder.go","mode":420,"size":9315,"sha256":"73dd42b669ae035d214bf611c558d38ce0f49a4e7d590d793acb10514ca0d922","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":9315}
+package diff
+
+import (
+	"fmt"
+	"io"
+	"regexp"
+	"strconv"
+	"strings"
+
+	"github.com/go-git/go-git/v5/plumbing"
+)
+
+// DefaultContextLines is the default number of context lines.
+const DefaultContextLines = 3
+
+var (
+	splitLinesRegexp = regexp.MustCompile(`[^\n]*(\n|$)`)
+
+	operationChar = map[Operation]byte{
+		Add:    '+',
+		Delete: '-',
+		Equal:  ' ',
+	}
+
+	operationColorKey = map[Operation]ColorKey{
+		Add:    New,
+		Delete: Old,
+		Equal:  Context,
+	}
+)
+
+// UnifiedEncoder encodes an unified diff into the provided Writer. It does not
+// support similarity index for renames or sorting hash representations.
+type UnifiedEncoder struct {
+	io.Writer
+
+	// contextLines is the count of unchanged lines that will appear surrounding
+	// a change.
+	contextLines int
+
+	// srcPrefix and dstPrefix are prepended to file paths when encoding a diff.
+	srcPrefix string
+	dstPrefix string
+
+	// colorConfig is the color configuration. The default is no color.
+	color ColorConfig
+}
+
+// NewUnifiedEncoder returns a new UnifiedEncoder that writes to w.
+func NewUnifiedEncoder(w io.Writer, contextLines int) *UnifiedEncoder {
+	return &UnifiedEncoder{
+		Writer:       w,
+		srcPrefix:    "a/",
+		dstPrefix:    "b/",
+		contextLines: contextLines,
+	}
+}
+
+// SetColor sets e's color configuration and returns e.
+func (e *UnifiedEncoder) SetColor(colorConfig ColorConfig) *UnifiedEncoder {
+	e.color = colorConfig
+	return e
+}
+
+// SetSrcPrefix sets e's srcPrefix and returns e.
+func (e *UnifiedEncoder) SetSrcPrefix(prefix string) *UnifiedEncoder {
+	e.srcPrefix = prefix
+	return e
+}
+
+// SetDstPrefix sets e's dstPrefix and returns e.
+func (e *UnifiedEncoder) SetDstPrefix(prefix string) *UnifiedEncoder {
+	e.dstPrefix = prefix
+	return e
+}
+
+// Encode encodes patch.
+func (e *UnifiedEncoder) Encode(patch Patch) error {
+	sb := &strings.Builder{}
+
+	if message := patch.Message(); message != "" {
+		sb.WriteString(message)
+		if !strings.HasSuffix(message, "\n") {
+			sb.WriteByte('\n')
+		}
+	}
+
+	for _, filePatch := range patch.FilePatches() {
+		e.writeFilePatchHeader(sb, filePatch)
+		g := newHunksGenerator(filePatch.Chunks(), e.contextLines)
+		for _, hunk := range g.Generate() {
+			hunk.writeTo(sb, e.color)
+		}
+	}
+
+	_, err := e.Write([]byte(sb.String()))
+	return err
+}
+
+func (e *UnifiedEncoder) writeFilePatchHeader(sb *strings.Builder, filePatch FilePatch) {
+	from, to := filePatch.Files()
+	if from == nil && to == nil {
+		return
+	}
+	isBinary := filePatch.IsBinary()
+
+	var lines []string
+	switch {
+	case from != nil && to != nil:
+		hashEquals := from.Hash() == to.Hash()
+		lines = append(lines,
+			fmt.Sprintf("diff --git %s%s %s%s",
+				e.srcPrefix, from.Path(), e.dstPrefix, to.Path()),
+		)
+		if from.Mode() != to.Mode() {
+			lines = append(lines,
+				fmt.Sprintf("old mode %o", from.Mode()),
+				fmt.Sprintf("new mode %o", to.Mode()),
+			)
+		}
+		if from.Path() != to.Path() {
+			lines = append(lines,
+				fmt.Sprintf("rename from %s", from.Path()),
+				fmt.Sprintf("rename to %s", to.Path()),
+			)
+		}
+		if from.Mode() != to.Mode() && !hashEquals {
+			lines = append(lines,
+				fmt.Sprintf("index %s..%s", from.Hash(), to.Hash()),
+			)
+		} else if !hashEquals {
+			lines = append(lines,
+				fmt.Sprintf("index %s..%s %o", from.Hash(), to.Hash(), from.Mode()),
+			)
+		}
+		if !hashEquals {
+			lines = e.appendPathLines(lines, e.srcPrefix+from.Path(), e.dstPrefix+to.Path(), isBinary)
+		}
+	case from == nil:
+		lines = append(lines,
+			fmt.Sprintf("diff --git %s %s", e.srcPrefix+to.Path(), e.dstPrefix+to.Path()),
+			fmt.Sprintf("new file mode %o", to.Mode()),
+			fmt.Sprintf("index %s..%s", plumbing.ZeroHash, to.Hash()),
+		)
+		lines = e.appendPathLines(lines, "/dev/null", e.dstPrefix+to.Path(), isBinary)
+	case to == nil:
+		lines = append(lines,
+			fmt.Sprintf("diff --git %s %s", e.srcPrefix+from.Path(), e.dstPrefix+from.Path()),
+			fmt.Sprintf("deleted file mode %o", from.Mode()),
+			fmt.Sprintf("index %s..%s", from.Hash(), plumbing.ZeroHash),
+		)
+		lines = e.appendPathLines(lines, e.srcPrefix+from.Path(), "/dev/null", isBinary)
+	}
+
+	sb.WriteString(e.color[Meta])
+	sb.WriteString(lines[0])
+	for _, line := range lines[1:] {
+		sb.WriteByte('\n')
+		sb.WriteString(line)
+	}
+	sb.WriteString(e.color.Reset(Meta))
+	sb.WriteByte('\n')
+}
+
+func (e *UnifiedEncoder) appendPathLines(lines []string, fromPath, toPath string, isBinary bool) []string {
+	if isBinary {
+		return append(lines,
+			fmt.Sprintf("Binary files %s and %s differ", fromPath, toPath),
+		)
+	}
+	return append(lines,
+		fmt.Sprintf("--- %s", fromPath),
+		fmt.Sprintf("+++ %s", toPath),
+	)
+}
+
+type hunksGenerator struct {
+	fromLine, toLine            int
+	ctxLines                    int
+	chunks                      []Chunk
+	current                     *hunk
+	hunks                       []*hunk
+	beforeContext, afterContext []string
+}
+
+func newHunksGenerator(chunks []Chunk, ctxLines int) *hunksGenerator {
+	return &hunksGenerator{
+		chunks:   chunks,
+		ctxLines: ctxLines,
+	}
+}
+
+func (g *hunksGenerator) Generate() []*hunk {
+	for i, chunk := range g.chunks {
+		lines := splitLines(chunk.Content())
+		nLines := len(lines)
+
+		switch chunk.Type() {
+		case Equal:
+			g.fromLine += nLines
+			g.toLine += nLines
+			g.processEqualsLines(lines, i)
+		case Delete:
+			if nLines != 0 {
+				g.fromLine++
+			}
+
+			g.processHunk(i, chunk.Type())
+			g.fromLine += nLines - 1
+			g.current.AddOp(chunk.Type(), lines...)
+		case Add:
+			if nLines != 0 {
+				g.toLine++
+			}
+			g.processHunk(i, chunk.Type())
+			g.toLine += nLines - 1
+			g.current.AddOp(chunk.Type(), lines...)
+		}
+
+		if i == len(g.chunks)-1 && g.current != nil {
+			g.hunks = append(g.hunks, g.current)
+		}
+	}
+
+	return g.hunks
+}
+
+func (g *hunksGenerator) processHunk(i int, op Operation) {
+	if g.current != nil {
+		return
+	}
+
+	var ctxPrefix string
+	linesBefore := len(g.beforeContext)
+	if linesBefore > g.ctxLines {
+		ctxPrefix = g.beforeContext[linesBefore-g.ctxLines-1]
+		g.beforeContext = g.beforeContext[linesBefore-g.ctxLines:]
+		linesBefore = g.ctxLines
+	}
+
+	g.current = &hunk{ctxPrefix: strings.TrimSuffix(ctxPrefix, "\n")}
+	g.current.AddOp(Equal, g.beforeContext...)
+
+	switch op {
+	case Delete:
+		g.current.fromLine, g.current.toLine =
+			g.addLineNumbers(g.fromLine, g.toLine, linesBefore, i, Add)
+	case Add:
+		g.current.toLine, g.current.fromLine =
+			g.addLineNumbers(g.toLine, g.fromLine, linesBefore, i, Delete)
+	}
+
+	g.beforeContext = nil
+}
+
+// addLineNumbers obtains the line numbers in a new chunk.
+func (g *hunksGenerator) addLineNumbers(la, lb int, linesBefore int, i int, op Operation) (cla, clb int) {
+	cla = la - linesBefore
+	// we need to search for a reference for the next diff
+	switch {
+	case linesBefore != 0 && g.ctxLines != 0:
+		if lb > g.ctxLines {
+			clb = lb - g.ctxLines + 1
+		} else {
+			clb = 1
+		}
+	case g.ctxLines == 0:
+		clb = lb
+	case i != len(g.chunks)-1:
+		next := g.chunks[i+1]
+		if next.Type() == op || next.Type() == Equal {
+			// this diff will be into this chunk
+			clb = lb + 1
+		}
+	}
+
+	return
+}
+
+func (g *hunksGenerator) processEqualsLines(ls []string, i int) {
+	if g.current == nil {
+		g.beforeContext = append(g.beforeContext, ls...)
+		return
+	}
+
+	g.afterContext = append(g.afterContext, ls...)
+	if len(g.afterContext) <= g.ctxLines*2 && i != len(g.chunks)-1 {
+		g.current.AddOp(Equal, g.afterContext...)
+		g.afterContext = nil
+	} else {
+		ctxLines := g.ctxLines
+		if ctxLines > len(g.afterContext) {
+			ctxLines = len(g.afterContext)
+		}
+		g.current.AddOp(Equal, g.afterContext[:ctxLines]...)
+		g.hunks = append(g.hunks, g.current)
+
+		g.current = nil
+		g.beforeContext = g.afterContext[ctxLines:]
+		g.afterContext = nil
+	}
+}
+
+func splitLines(s string) []string {
+	out := splitLinesRegexp.FindAllString(s, -1)
+	if out[len(out)-1] == "" {
+		out = out[:len(out)-1]
+	}
+	return out
+}
+
+type hunk struct {
+	fromLine int
+	toLine   int
+
+	fromCount int
+	toCount   int
+
+	ctxPrefix string
+	ops       []*op
+}
+
+func (h *hunk) writeTo(sb *strings.Builder, color ColorConfig) {
+	sb.WriteString(color[Frag])
+	sb.WriteString("@@ -")
+
+	if h.fromCount == 1 {
+		sb.WriteString(strconv.Itoa(h.fromLine))
+	} else {
+		sb.WriteString(strconv.Itoa(h.fromLine))
+		sb.WriteByte(',')
+		sb.WriteString(strconv.Itoa(h.fromCount))
+	}
+
+	sb.WriteString(" +")
+
+	if h.toCount == 1 {
+		sb.WriteString(strconv.Itoa(h.toLine))
+	} else {
+		sb.WriteString(strconv.Itoa(h.toLine))
+		sb.WriteByte(',')
+		sb.WriteString(strconv.Itoa(h.toCount))
+	}
+
+	sb.WriteString(" @@")
+	sb.WriteString(color.Reset(Frag))
+
+	if h.ctxPrefix != "" {
+		sb.WriteByte(' ')
+		sb.WriteString(color[Func])
+		sb.WriteString(h.ctxPrefix)
+		sb.WriteString(color.Reset(Func))
+	}
+
+	sb.WriteByte('\n')
+
+	for _, op := range h.ops {
+		op.writeTo(sb, color)
+	}
+}
+
+func (h *hunk) AddOp(t Operation, ss ...string) {
+	n := len(ss)
+	switch t {
+	case Add:
+		h.toCount += n
+	case Delete:
+		h.fromCount += n
+	case Equal:
+		h.toCount += n
+		h.fromCount += n
+	}
+
+	for _, s := range ss {
+		h.ops = append(h.ops, &op{s, t})
+	}
+}
+
+type op struct {
+	text string
+	t    Operation
+}
+
+func (o *op) writeTo(sb *strings.Builder, color ColorConfig) {
+	colorKey := operationColorKey[o.t]
+	sb.WriteString(color[colorKey])
+	sb.WriteByte(operationChar[o.t])
+	if strings.HasSuffix(o.text, "\n") {
+		sb.WriteString(strings.TrimSuffix(o.text, "\n"))
+	} else {
+		sb.WriteString(o.text + "\n\\ No newline at end of file")
+	}
+	sb.WriteString(color.Reset(colorKey))
+	sb.WriteByte('\n')
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/gitignore/dir.go","mode":420,"size":3764,"sha256":"287f49d5b8b99360efb382c06a971d42f7dcdafd5f882c176d3da1f88b3fcb16","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3764}
+package gitignore
+
+import (
+	"bufio"
+	"bytes"
+	"io"
+	"os"
+	"strings"
+
+	"github.com/go-git/go-billy/v5"
+	"github.com/go-git/go-git/v5/internal/path_util"
+	"github.com/go-git/go-git/v5/plumbing/format/config"
+	gioutil "github.com/go-git/go-git/v5/utils/ioutil"
+)
+
+const (
+	commentPrefix   = "#"
+	coreSection     = "core"
+	excludesfile    = "excludesfile"
+	gitDir          = ".git"
+	gitignoreFile   = ".gitignore"
+	gitconfigFile   = ".gitconfig"
+	systemFile      = "/etc/gitconfig"
+	infoExcludeFile = gitDir + "/info/exclude"
+)
+
+// readIgnoreFile reads a specific git ignore file.
+func readIgnoreFile(fs billy.Filesystem, path []string, ignoreFile string) (ps []Pattern, err error) {
+
+	ignoreFile, _ = path_util.ReplaceTildeWithHome(ignoreFile)
+
+	f, err := fs.Open(fs.Join(append(path, ignoreFile)...))
+	if err == nil {
+		defer f.Close()
+
+		scanner := bufio.NewScanner(f)
+		for scanner.Scan() {
+			s := scanner.Text()
+			if !strings.HasPrefix(s, commentPrefix) && len(strings.TrimSpace(s)) > 0 {
+				ps = append(ps, ParsePattern(s, path))
+			}
+		}
+	} else if !os.IsNotExist(err) {
+		return nil, err
+	}
+
+	return
+}
+
+// ReadPatterns reads the .git/info/exclude and then the gitignore patterns
+// recursively traversing through the directory structure. The result is in
+// the ascending order of priority (last higher).
+func ReadPatterns(fs billy.Filesystem, path []string) (ps []Pattern, err error) {
+	ps, _ = readIgnoreFile(fs, path, infoExcludeFile)
+
+	subps, _ := readIgnoreFile(fs, path, gitignoreFile)
+	ps = append(ps, subps...)
+
+	var fis []os.FileInfo
+	fis, err = fs.ReadDir(fs.Join(path...))
+	if err != nil {
+		return
+	}
+
+	for _, fi := range fis {
+		if fi.IsDir() && fi.Name() != gitDir {
+			if NewMatcher(ps).Match(append(path, fi.Name()), true) {
+				continue
+			}
+
+			var subps []Pattern
+			subps, err = ReadPatterns(fs, append(path, fi.Name()))
+			if err != nil {
+				return
+			}
+
+			if len(subps) > 0 {
+				ps = append(ps, subps...)
+			}
+		}
+	}
+
+	return
+}
+
+func loadPatterns(fs billy.Filesystem, path string) (ps []Pattern, err error) {
+	f, err := fs.Open(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	defer gioutil.CheckClose(f, &err)
+
+	b, err := io.ReadAll(f)
+	if err != nil {
+		return
+	}
+
+	d := config.NewDecoder(bytes.NewBuffer(b))
+
+	raw := config.New()
+	if err = d.Decode(raw); err != nil {
+		return
+	}
+
+	s := raw.Section(coreSection)
+	efo := s.Options.Get(excludesfile)
+	if efo == "" {
+		return nil, nil
+	}
+
+	ps, err = readIgnoreFile(fs, nil, efo)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+
+	return
+}
+
+// LoadGlobalPatterns loads gitignore patterns from the gitignore file
+// declared in a user's ~/.gitconfig file.  If the ~/.gitconfig file does not
+// exist the function will return nil.  If the core.excludesfile property
+// is not declared, the function will return nil.  If the file pointed to by
+// the core.excludesfile property does not exist, the function will return nil.
+//
+// The function assumes fs is rooted at the root filesystem.
+func LoadGlobalPatterns(fs billy.Filesystem) (ps []Pattern, err error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+
+	return loadPatterns(fs, fs.Join(home, gitconfigFile))
+}
+
+// LoadSystemPatterns loads gitignore patterns from the gitignore file
+// declared in a system's /etc/gitconfig file.  If the /etc/gitconfig file does
+// not exist the function will return nil.  If the core.excludesfile property
+// is not declared, the function will return nil.  If the file pointed to by
+// the core.excludesfile property does not exist, the function will return nil.
+//
+// The function assumes fs is rooted at the root filesystem.
+func LoadSystemPatterns(fs billy.Filesystem) (ps []Pattern, err error) {
+	return loadPatterns(fs, systemFile)
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/gitignore/doc.go","mode":420,"size":3507,"sha256":"28d8cc28e3793361bfe9d069d346541060f60d369af6eb004f4e09336f08f65d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3507}
+// Package gitignore implements matching file system paths to gitignore patterns that
+// can be automatically read from a git repository tree in the order of definition
+// priorities. It support all pattern formats as specified in the original gitignore
+// documentation, copied below:
+//
+//   Pattern format
+//   ==============
+//
+//		- A blank line matches no files, so it can serve as a separator for readability.
+//
+//		- A line starting with # serves as a comment. Put a backslash ("\") in front of
+//		  the first hash for patterns that begin with a hash.
+//
+//		- Trailing spaces are ignored unless they are quoted with backslash ("\").
+//
+//		- An optional prefix "!" which negates the pattern; any matching file excluded
+//		  by a previous pattern will become included again. It is not possible to
+//		  re-include a file if a parent directory of that file is excluded.
+//		  Git doesn’t list excluded directories for performance reasons, so
+//		  any patterns on contained files have no effect, no matter where they are
+//		  defined. Put a backslash ("\") in front of the first "!" for patterns
+//		  that begin with a literal "!", for example, "\!important!.txt".
+//
+//		- If the pattern ends with a slash, it is removed for the purpose of the
+//		  following description, but it would only find a match with a directory.
+//		  In other words, foo/ will match a directory foo and paths underneath it,
+//		  but will not match a regular file or a symbolic link foo (this is consistent
+//		  with the way how pathspec works in general in Git).
+//
+//		- If the pattern does not contain a slash /, Git treats it as a shell glob
+//		  pattern and checks for a match against the pathname relative to the location
+//		  of the .gitignore file (relative to the toplevel of the work tree if not
+//		  from a .gitignore file).
+//
+//		- Otherwise, Git treats the pattern as a shell glob suitable for consumption
+//		  by fnmatch(3) with the FNM_PATHNAME flag: wildcards in the pattern will
+//		  not match a / in the pathname. For example, "Documentation/*.html" matches
+//		  "Documentation/git.html" but not "Documentation/ppc/ppc.html" or
+//		  "tools/perf/Documentation/perf.html".
+//
+//		- A leading slash matches the beginning of the pathname. For example,
+//		  "/*.c" matches "cat-file.c" but not "mozilla-sha1/sha1.c".
+//
+//		Two consecutive asterisks ("**") in patterns matched against full pathname
+//		may have special meaning:
+//
+//		- A leading "**" followed by a slash means match in all directories.
+//		  For example, "**/foo" matches file or directory "foo" anywhere, the same as
+//		  pattern "foo". "**/foo/bar" matches file or directory "bar"
+//		  anywhere that is directly under directory "foo".
+//
+//		- A trailing "/**" matches everything inside. For example, "abc/**" matches
+//		  all files inside directory "abc", relative to the location of the
+//		  .gitignore file, with infinite depth.
+//
+//		- A slash followed by two consecutive asterisks then a slash matches
+//		  zero or more directories. For example, "a/**/b" matches "a/b", "a/x/b",
+//		  "a/x/y/b" and so on.
+//
+//		- Other consecutive asterisks are considered invalid.
+//
+//   Copyright and license
+//   =====================
+//
+//		Copyright (c) Oleg Sklyar, Silvertern and source{d}
+//
+//		The package code was donated to source{d} to include, modify and develop
+//		further as a part of the `go-git` project, release it on the license of
+//		the whole project or delete it from the project.
+package gitignore
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/gitignore/matcher.go","mode":420,"size":934,"sha256":"e104fc611ae78c88a9202fce457ef6ced879982c1d6eb179fd828996e06e69f3","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":934}
+package gitignore
+
+// Matcher defines a global multi-pattern matcher for gitignore patterns
+type Matcher interface {
+	// Match matches patterns in the order of priorities. As soon as an inclusion or
+	// exclusion is found, not further matching is performed.
+	Match(path []string, isDir bool) bool
+}
+
+// NewMatcher constructs a new global matcher. Patterns must be given in the order of
+// increasing priority. That is most generic settings files first, then the content of
+// the repo .gitignore, then content of .gitignore down the path or the repo and then
+// the content command line arguments.
+func NewMatcher(ps []Pattern) Matcher {
+	return &matcher{ps}
+}
+
+type matcher struct {
+	patterns []Pattern
+}
+
+func (m *matcher) Match(path []string, isDir bool) bool {
+	n := len(m.patterns)
+	for i := n - 1; i >= 0; i-- {
+		if match := m.patterns[i].Match(path, isDir); match > NoMatch {
+			return match == Exclude
+		}
+	}
+	return false
+}
+
+@@END
 @@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/gitignore/pattern.go","mode":420,"size":3190,"sha256":"6c8442cc541e54bc05db87c228f959249b357ffbf2487e457615fc06cb8a73ee","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3190}
 package gitignore
 
@@ -108270,10 +110335,4 @@ v":[83.4072088624658,-15.6461875861262687,78.9860459708531835],"rgb":[0.73333333
 @@END
 @@PORTABLE {"path":"third_party/wails/vendor/github.com/lucasb-eyer/go-colorful/hsluv-snapshot-rev4.json","mode":420,"size":1664600,"sha256":"fa702c58663587d1d1080ad1271be94f6c7002fcf5ba1125ac7e758ed5b98966","index":32,"count":35,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
 0148,84.9041129363740339,72.780026014363628]},"#44cc55":{"lch":[72.9371837422115732,90.1892610669535912,129.983942971096695],"luv":[72.9371837422115732,-57.9531752136704,69.1052262456084492],"rgb":[0.266666666666666663,0.8,0.333333333333333315],"xyz":[0.256152811279065251,0.45068816280448315,0.159438460225840184],"hpluv":[129.983942971096695,156.908028239254975,72.9371837422115732],"hsluv":[129.983942971096695,85.1779272269293557,72.9371837422115732]},"#44cc66":{"lch":[73.1363103507417236,83.732792729713168,133.164212643981188],"luv":[73.1363103507417236,-57.28090462038152,61.074368962666],"rgb":[0.266666666666666663,0.8,0.4],"xyz":[0.263737807052573436,0.453722161113886469,0.199386104632984118],"hpluv":[133.164212643981188,145.278670258241675,73.1363103507417236],"hsluv":[133.164212643981188,85.5122241677148764,73.1363103507417236]},"#44cc77":{"lch":[73.3796177536812309,76.5464624175537,137.569101073773794],"luv":[73.3796177536812309,-56.4983001604517625,51.6459387330839],"rgb":[0.266666666666666663,0.8,0.466666666666666674],"xyz":[0.273051820072775342,0.457447766321967264,0.248439906539382027],"hpluv":[137.569101073773794,132.369828459728325,73.3796177536812309],"hsluv":[137.569101073773794,85.9026534082125153,73.3796177536812309]},"#44cc88":{"lch":[73.6689069899719442,69.0664605730878378,143.639563525196422],"luv":[73.6689069899719442,-55.6194534086204087,40.9469459010095278],"rgb":[0.266666666666666663,0.8,0.533333333333333326],"xyz":[0.284192237174719142,0.461903933162744862,0.307112769942954222],"hpluv":[143.639563525196422,118.965846887396481,73.6689069899719442],"hsluv":[143.639563525196422,86.3428682965135863,73.6689069899719442]},"#44cc99":{"lch":[74.0056056952011,61.9424628035573548,151.940118655705163],"luv":[74.0056056952011,-54.661526046940331,29.1373689338922652],"rgb":[0.266666666666666663,0.8,0.6],"xyz":[0.297249201283791842,0.467126718806374,0.375879447584072102],"hpluv":[151.940118655705163,106.209454381597496,74.0056056952011],"hsluv":[151.940118655705163,86.8250568088678,74.0056056952011]},"#44ccaa":{"lch":[74.3907954563299256,56.0938540204294327,163.002493202880316],"luv":[74.3907954563299256,-53.6435329798001206,16.3979214631106132],"rgb":[0.266666666666666663,0.8,0.66666666666666663],"xyz":[0.312306894249044398,0.473149795992475142,0.455183297201070702],"hpluv":[163.002493202880316,95.6831366692641581,74.3907954563299256],"hsluv":[163.002493202880316,87.3405106459777727,74.3907954563299256]},"#44ccbb":{"lch":[74.8252340948823331,52.6660587979454959,176.823724318960615],"luv":[74.8252340948823331,-52.5851528012588929,2.91812511330579927],"rgb":[0.266666666666666663,0.8,0.733333333333333282],"xyz":[0.329444486356381072,0.4800048328354099,0.545441282299712449],"hpluv":[176.823724318960615,89.3145186414393493,74.8252340948823331],"hsluv":[176.823724318960615,87.8801809558037235,74.8252340948823331]},"#44cccc":{"lch":[75.3093757141467393,52.6911947618550442,192.177050630061103],"luv":[75.3093757141467393,-51.5056671360628826,-11.1143267137884898],"rgb":[0.266666666666666663,0.8,0.8],"xyz":[0.348736861800102771,0.487721783012898702,0.647047792969982605],"hpluv":[192.177050630061103,88.7826952764381758,75.3093757141467393],"hsluv":[192.177050630061103,88.4351737608208168,75.3093757141467393]},"#44ccdd":{"lch":[75.8433901234223669,56.5143539908888,206.846753698803184],"luv":[75.8433901234223669,-50.423101427505074,-25.5222069860548118],"rgb":[0.266666666666666663,0.8,0.866666666666666696],"xyz":[0.37025518735073637,0.496329113233152208,0.760377640869988602],"hpluv":[206.846753698803184,94.5540981724771257,75.8433901234223669],"hsluv":[206.846753698803184,88.9971515077065334,75.8433901234223669]},"#44ccee":{"lch":[76.4271825186181104,63.6191993934700264,219.125479385679029],"luv":[76.4271825186181104,-49.3536035237008,-40.1450414209705926],"rgb":[0.266666666666666663,0.8,0.933333333333333348],"xyz":[0.39406736761691108,0.505853985339622225,0.885788456938511826],"hpluv":[219.125479385679029,108.248092211119214,76.4271825186181104],"hsluv":[219.125479385679029,89.5586239337052,76.4271825186181104]},"#44ccff":{"lch":[77.0604138316104752,73.087044724203011,228.6232677289035],"luv":[77.0604138316104752,-48.3110621928290342,-54.8430248647743426],"rgb":[0.266666666666666663,0.8,1],"xyz":[0.420238416026742501,0.516322404703555,1.02362264523029367],"hpluv":[228.6232677289035,128.526456918779161,77.0604138316104752],"hsluv":[228.6232677289035,99.9999999999969731,77.0604138316104752]},"#44dd00":{"lch":[77.8394471675691193,114.806757868746558,124.774603647715026],"luv":[77.8394471675691193,-65.4799812263264869,94.3025116894186],"rgb":[0.266666666666666663,0.866666666666666696,0],"xyz":[0.282391618172087688,0.529398070437173462,0.0873018231630249691],"hpluv":[124.774603647715026,210.465861771712326,77.8394471675691193],"hsluv":[124.774603647715026,100.000000000002174,77.8394471675691193]},"#44dd11":{"lch":[77.8633510332093692,113.867279553553601,125.04447057905567],"luv":[77.8633510332093692,-65.3839645843072503,93.2238946202376724],"rgb":[0.266666666666666663,0.866666666666666696,0.0666666666666666657],"xyz":[0.283403283671724793,0.529802736637028371,0.0926299281277806],"hpluv":[125.04447057905567,209.014039294370775,77.8633510332093692],"hsluv":[125.04447057905567,98.7339197526847272,77.8633510332093692]},"#44dd22":{"lch":[77.9076302523257738,112.144788460185168,125.553114236235714],"luv":[77.9076302523257738,-65.2074178024426914,91.2384033306006472],"rgb":[0.266666666666666663,0.866666666666666696,0.133333333333333331],"xyz":[0.28527864181020185,0.530552879892419171,0.102506814323759798],"hpluv":[125.553114236235714,206.347170822894697,77.9076302523257738],"hsluv":[125.553114236235714,96.4050109160080382,77.9076302523257738]},"#44dd33":{"lch":[77.9804445180848802,109.362510567887881,126.41495586461761],"luv":[77.9804445180848802,-64.9207541848309546,88.0082632130877869],"rgb":[0.266666666666666663,0.866666666666666696,0.2],"xyz":[0.288366392542659555,0.531787980185402298,0.118768968181370949],"hpluv":[126.41495586461761,202.025685311970193,77.9804445180848802],"hsluv":[126.41495586461761,92.6208241654068729,77.9804445180848802]},"#44dd44":{"lch":[78.0853727898892345,105.463232003770898,127.715012949240119],"luv":[78.0853727898892345,-64.5154806081751389,83.428089194092081],"rgb":[0.266666666666666663,0.866666666666666696,0.266666666666666663],"xyz":[0.292824387786878471,0.533571178283089864,0.142247743134257587],"hpluv":[127.715012949240119,195.940425098340825,78.0853727898892345],"hsluv":[127.715012949240119,87.2650912217990395,78.0853727898892345]},"#44dd55":{"lch":[78.2253459168282888,100.46502238820301,129.562971792001804],"luv":[78.2253459168282888,-63.9887749627021662,77.4510000079714303],"rgb":[0.266666666666666663,0.866666666666666696,0.333333333333333315],"xyz":[0.298786801826240456,0.535956143898834614,0.173649790408231475],"hpluv":[129.562971792001804,188.090878204767051,78.2253459168282888],"hsluv":[129.562971792001804,87.4605090914447,78.2253459168282888]},"#44dd66":{"lch":[78.4028117957757615,94.4661355921174,132.108441056441876],"luv":[78.4028117957757615,-63.3429373931831776,70.0822592109557],"rgb":[0.266666666666666663,0.866666666666666696,0.4],"xyz":[0.306371797599748641,0.538990142208237932,0.213597434815375464],"hpluv":[132.108441056441876,178.59774401526758,78.4028117957757615],"hsluv":[132.108441056441876,87.7006053461373654,78.4028117957757615]},"#44dd77":{"lch":[78.6198227824069278,87.656024220764337,135.559861003190832],"luv":[78.6198227824069278,-62.584854150819659,61.3735660778470375],"rgb":[0.266666666666666663,0.866666666666666696,0.466666666666666674],"xyz":[0.315685810619950546,0.542715747416318783,0.262651236721773373],"hpluv":[135.559861003190832,167.73117312681623,78.6198227824069278],"hsluv":[135.559861003190832,87.9831439767702221,78.6198227824069278]},"#44dd88":{"lch":[78.8780874692010201,80.3346414261830404,140.206181380764804],"luv":[78.8780874692010201,-61.7253288138421823,51.416324216113189],"rgb":[0.266666666666666663,0.866666666666666696,0.533333333333333326],"xyz":[0.326826227721894347,0.547171914257096326,0.321324100125345513],"hpluv":[140.206181380764804,155.961921377148798,78.8780874692010201],"hsluv":[140.206181380764804,88.3044935606717729,78.8780874692010201]},"#44dd99":{"lch":[79.1790042342924,72.9438114093828602,146.430978952194238],"luv":[79.1790042342924,-60.7782665628728651,40.3336328210091182],"rgb":[0.266666666666666663,0.866666666666666696,0.6],"xyz":[0.339883191830967046,0.552394699900725539,0.390090777766463448],"hpluv":[146.430978952194238,144.047423549525234,79.1790042342924],"hsluv":[146.430978952194238,88.6599152631773109,79.1790042342924]},"#44ddaa":{"lch":[79.5236849812282,66.109750002698334,154.681927012774025],"luv":[79.5236849812282,-59.7597565852220498,28.2713731236083063],"rgb":[0.266666666666666663,0.866666666666666696,0.66666666666666663],"xyz":[0.354940884796219602,0.558417777086826606,0.469394627383462049],"hpluv":[154.681927012774025,133.15854000611057,79.5236849812282],"hsluv":[154.681927012774025,89.0438856180527267,79.5236849812282]},"#44ddbb":{"lch":[79.9129735834354733,60.6712530747818448,165.306614809553963],"luv":[79.9129735834354733,-58.687123678359157,15.3890371376899697],"rgb":[0.266666666666666663,0.866666666666666696,0.733333333333333282],"xyz":[0.372078476903556277,0.565272813929761364,0.55965261248210374],"hpluv":[165.306614809553963,125.005338667233715,79.9129735834354733],"hsluv":[165.306614809553963,89.4504295982059574,79.9129735834354733]},"#44ddcc":{"lch":[80.3474616163736783,57.6077690930220925,178.158710030216184],"luv":[80.3474616163736783,-57.5780241737671616,1.85099760130491053],"rgb":[0.266666666666666663,0.866666666666666696,0.8],"xyz":[0.391370852347278,0.572989764107250221,0.661259123152373895],"hpluv":[178.158710030216184,121.786592068950441,80.3474616163736783],"hsluv":[178.158710030216184,89.8734379183952399,80.3474616163736783]},"#44dddd":{"lch":[80.8275029051271758,57.7489755309586,192.177050630061132],"luv":[80.8275029051271758,-56.4496501662069505,-12.1811810177875159],"rgb":[0.266666666666666663,0.866666666666666696,0.866666666666666696],"xyz":[0.412889177897911575,0.581597094327503727,0.774588971052379893],"hpluv":[192.177050630061132,125.674721736272474,80.8275029051271758],"hsluv":[192.177050630061132,90.3069463225795204,80.8275029051271758]},"#44ddee":{"lch":[81.3532277894993143,61.361693698739991,205.642938459455962],"luv":[81.3532277894993143,-55.3180860243278758,-26.5549771640468073],"rgb":[0.266666666666666663,0.866666666666666696,0.933333333333333348],"xyz":[0.436701358164086284,0.591121966433973745,0.899999787120903116],"hpluv":[205.642938459455962,137.939634766348263,81.3532277894993143],"hsluv":[205.642938459455962,90.7453615563817806,81.3532277894993143]},"#44ddff":{"lch":[81.9245576129038113,68.0382655080336463,217.195369709248553],"luv":[81.9245576129038113,-54.1978382178125813,-41.1314953029609],"rgb":[0.266666666666666663,0.866666666666666696,1],"xyz":[0.462872406573917705,0.601590385797906468,1.03783397541268507],"hpluv":[217.195369709248553,158.576151866946,81.9245576129038113],"hsluv":[217.195369709248553,99.9999999999957367,81.9245576129038113]},"#44ee00":{"lch":[83.112739541513335,123.476763986331008,125.23710114083579],"luv":[83.112739541513335,-71.241317589729718,100.852297507867192],"rgb":[0.266666666666666663,0.933333333333333348,0],"xyz":[0.329570394512602505,0.623755623118204428,0.103028081943196154],"hpluv":[125.23710114083579,311.240798427125753,83.112739541513335],"hsluv":[125.23710114083579,100.000000000002402,83.112739541513335]},"#44ee11":{"lch":[83.1341682891089135,122.626446998812852,125.466600012922257],"luv":[83.1341682891089135,-71.1513320296005674,99.8735873690646656],"rgb":[0.266666666666666663,0.933333333333333348,0.0666666666666666657],"xyz":[0.330582060012239609,0.624160289318059336,0.10835618690795179],"hpluv":[125.466600012922257,309.547675363147619,83.1341682891089135],"hsluv":[125.466600012922257,98.9247180409442279,83.1341682891089135]},"#44ee22":{"lch":[83.1738669889620184,121.064908518289769,125.897986234483838],"luv":[83.1738669889620184,-70.9856689153146192,98.0701120789979],"rgb":[0.266666666666666663,0.933333333333333348,0.133333333333333331],"xyz":[0.332457418150716666,0.624910432573450136,0.118233073103930983],"hpluv":[125.897986234483838,306.432309176179558,83.1738669889620184],"hsluv":[125.897986234483838,96.9444732717922,83.1738669889620184]},"#44ee33":{"lch":[83.2391611795664517,118.535427876706891,126.625494433478437],"luv":[83.2391611795664517,-70.7161072615436694,95.1308563805026921],"rgb":[0.266666666666666663,0.933333333333333348,0.2],"xyz":[0.335545168883174372,0.626145532866433263,0.134495226961542119],"hpluv":[126.625494433478437,301.369067751793693,83.2391611795664517],"hsluv":[126.625494433478437,93.7204451717133651,83.2391611795664517]},"#44ee44":{"lch":[83.3332795320092714,114.974418092600288,127.715012949240275],"luv":[83.3332795320092714,-70.3337997514069855,90.9520391649414],"rgb":[0.266666666666666663,0.933333333333333348,0.266666666666666663],"xyz":[0.340003164127393287,0.627928730964120829,0.157974001914428758],"hpluv":[127.715012949240275,294.205765091151079,83.3332795320092714],"hsluv":[127.715012949240275,89.1439564147074321,83.3332795320092714]},"#44ee55":{"lch":[83.4588814464859183,110.379279114867671,129.248151137931956],"luv":[83.4588814464859183,-69.8347997913980123,85.479155330485213],"rgb":[0.266666666666666663,0.933333333333333348,0.333333333333333315],"xyz":[0.345965578166755272,0.630313696579865579,0.189376049188402673],"hpluv":[129.248151137931956,284.901382538762221,83.4588814464859183],"hsluv":[129.248151137931956,89.2862876088480419,83.4588814464859183]},"#44ee66":{"lch":[83.6182069813856,104.810737833959209,131.33226272314829],"luv":[83.6182069813856,-69.2195888954281,78.7015837099029],"rgb":[0.266666666666666663,0.933333333333333348,0.4],"xyz":[0.353550573940263457,0.633347694889268897,0.229323693595546635],"hpluv":[131.33226272314829,273.53562680177663,83.6182069813856],"hsluv":[131.33226272314829,89.462046779026835,83.6182069813856]},"#44ee77":{"lch":[83.8131566406418642,98.3993759238413759,134.112401675041724],"luv":[83.8131566406418642,-68.4926783274834889,70.6483559449852123],"rgb":[0.266666666666666663,0.933333333333333348,0.466666666666666674],"xyz":[0.362864586960465363,0.637073300097349748,0.278377495501944572],"hpluv":[134.112401675041724,260.333399951005049,83.8131566406418642],"hsluv":[134.112401675041724,89.6701381262035682,83.8131566406418642]},"#44ee88":{"lch":[84.045338735079568,91.3569443918750892,137.785521400150031],"luv":[84.045338735079568,-67.6621349200187439,61.3834406553211949],"rgb":[0.266666666666666663,0.933333333333333348,0.533333333333333326],"xyz":[0.374005004062409163,0.641529466938127291,0.337050358905516712],"hpluv":[137.785521400150031,245.709311488591595,84.045338735079568],"hsluv":[137.785521400150031,89.9084899734552323,84.045338735079568]},"#44ee99":{"lch":[84.3160998906388386,83.9946679616676306,142.613931790318958],"luv":[84.3160998906388386,-66.738995210465,51.0001055321292895],"rgb":[0.266666666666666663,0.933333333333333348,0.6],"xyz":[0.387061968171481863,0.646752252581756504,0.405817036546634591],"hpluv":[142.613931790318958,230.343048149298568,84.3160998906388386],"hsluv":[142.613931790318958,90.1742147406472725,84.3160998906388386]},"#44eeaa":{"lch":[84.626546237332235,76.7502660373389887,148.925817786423067],"luv":[84.626546237332235,-65.7365837009088239,39.6144531722415607],"rgb":[0.266666666666666663,0.933333333333333348,0.66666666666666663],"xyz":[0.402119661136734419,0.652775329767857571,0.485120886163633247],"hpluv":[148.925817786423067,215.298316825794302,84.626546237332235],"hsluv":[148.925817786423067,90.4637941794664897,84.626546237332235]},"#44eebb":{"lch":[84.9775593290447,70.218708007349818,157.069253127653155],"luv":[84.9775593290447,-64.6697768267590618,27.3584889823731068],"rgb":[0.266666666666666663,0.933333333333333348,0.733333333333333282],"xyz":[0.419257253244071093,0.659630366610792329,0.575378871262274938],"hpluv":[157.069253127653155,202.183693696822303,84.9775593290447],"hsluv":[157.069253127653155,90.7732788992861401,84.9775593290447]},"#44eecc":{"lch":[85.3698091329633826,65.1592886039499462,167.256585364158155],"luv":[85.3698091329633826,-63.5542641697608914,14.3731832665241086],"rgb":[0.266666666666666663,0.933333333333333348,0.8],"xyz":[0.438549628687792792,0.667347316788281186,0.676985381932545094],"hpluv":[167.256585364158155,193.290067765431047,85.3698091329633826],"hsluv":[167.256585364158155,91.0984884260964,85.3698091329633826]},"#44eedd":{"lch":[85.803765500838054,62.4110099600490216,179.263728091065275],"luv":[85.803765500838054,-62.4058570040272613,0.801982435119061421],"rgb":[0.266666666666666663,0.933333333333333348,0.866666666666666696],"xyz":[0.460067954238426391,0.675954647008534693,0.790315229832551092],"hpluv":[179.263728091065275,191.499842549603557,85.803765500838054],"hsluv":[179.263728091065275,91.4351983708881875,85.803765500838054]},"#44eeee":{"lch":[86.2797089909746546,62.6494691870182407,192.17705063006116],"luv":[86.2797089909746546,-61.2398849709435922,-13.2148582346064085],"rgb":[0.266666666666666663,0.933333333333333348,0.933333333333333348],"xyz":[0.4838801345046011,0.68547951911500471,0.915726045901074315],"hpluv":[192.17705063006116,199.700166684316315,86.2797089909746546],"hsluv":[192.17705063006116,91.7793037580661775,86.2797089909746546]},"#44eeff":{"lch":[86.7977415696122847,66.0848691943621134,204.633388514668525],"luv":[86.7977415696122847,-60.0707080483631159,-27.5448719547627086],"rgb":[0.266666666666666663,0.933333333333333348,1],"xyz":[0.510051182914432522,0.695947938478937433,1.05356023419285627],"hpluv":[204.633388514668525,219.870556477974674,86.7977415696122847],"hsluv":[204.633388514668525,99.9999999999936904,86.7977415696122847]},"#44ff00":{"lch":[88.3264513606833,131.987460278186802,125.602389702763816],"luv":[88.3264513606833,-76.837408418496949,107.315899745634312],"rgb":[0.266666666666666663,1,0],"xyz":[0.381422766942276337,0.727460367977553535,0.120312206086420265],"hpluv":[125.602389702763816,502.990651378155178,88.3264513606833],"hsluv":[125.602389702763816,100.000000000002331,88.3264513606833]},"#44ff11":{"lch":[88.3457924202418496,131.213348009411362,125.799444038401859],"luv":[88.3457924202418496,-76.7532223203665609,106.423143908077066],"rgb":[0.266666666666666663,1,0.0666666666666666657],"xyz":[0.382434432441913441,0.727865034177408443,0.125640311051175901],"hpluv":[125.799444038401859,500.950310911531346,88.3457924202418496],"hsluv":[125.799444038401859,99.9999999999917577,88.3457924202418496]},"#44ff22":{"lch":[88.3816266358799538,129.789896608084,126.169061428897493],"luv":[88.3816266358799538,-76.5980824061806089,104.776672180562713],"rgb":[0.266666666666666663,1,0.133333333333333331],"xyz":[0.384309790580390498,0.728615177432799244,0.13551719724715508],"hpluv":[126.169061428897493,497.190929074143924,88.3816266358799538],"hsluv":[126.169061428897493,99.9999999999915445,88.3816266358799538]},"#44ff33":{"lch":[88.4405736189592204,127.478814054469,126.790121098902588],"luv":[88.4405736189592204,-76.3452168675528071,102.089450454884],"rgb":[0.266666666666666663,1,0.2],"xyz":[0.387397541312848204,0.72985027772578237,0.15177935110476623],"hpluv":[126.790121098902588,491.06642972530841,88.4405736189592204],"hsluv":[126.790121098902588,99.9999999999916,88.4405736189592204]},"#44ff44":{"lch":[88.5255621746627099,124.213522374992053,127.715012949240247],"luv":[88.5255621746627099,-75.9856771103925,98.2607552122302],"rgb":[0.266666666666666663,1,0.266666666666666663],"xyz":[0.391855536557067119,0.731633475823469936,0.175258126057652869],"hpluv":[127.715012949240247,482.369437382385513,88.5255621746627099],"hsluv":[127.715012949240247,99.9999999999915872,88.5255621746627099]},"#44ff55":{"lch":[88.6390158335401,119.977757557138,129.006344472088813],"luv":[88.6390158335401,-75.5147735105559832,93.2318684253877734],"rgb":[0.266666666666666663,1,0.333333333333333315],"xyz":[0.397817950596429104,0.734018441439214686,0.206660173331626784],"hpluv":[129.006344472088813,471.012302242813519,88.6390158335401],"hsluv":[129.006344472088813,99.9999999999916724,88.6390158335401]},"#44ff66":{"lch":[88.7829895920100256,114.806361082699226,130.743859599912923],"luv":[88.7829895920100256,-74.9316504675157518,86.9813100801842438],"rgb":[0.266666666666666663,1,0.4],"xyz":[0.405402946369937289,0.737052439748618,0.246607817738770746],"hpluv":[130.743859599912923,457.03528250903878,88.7829895920100256],"hsluv":[130.743859599912923,99.999999999991374,88.7829895920100256]},"#44ff77":{"lch":[88.9592430558717524,108.789243130847709,133.032335199193767],"luv":[88.9592430558717524,-74.2389756563468239,79.5215311376676226],"rgb":[0.266666666666666663,1,0.466666666666666674],"xyz":[0.414716959390139195,0.740778044956698856,0.295661619645168683],"hpluv":[133.032335199193767,440.631455855157412,88.9592430558717524],"hsluv":[133.032335199193767,99.999999999991374,88.9592430558717524]},"#44ff88":{"lch":[89.1692840038805343,102.078340317719523,136.01097660716411],"luv":[89.1692840038805343,-73.4425963051882462,70.8955048643657904],"rgb":[0.266666666666666663,1,0.533333333333333326],"xyz":[0.425857376492083,0.745234211797476398,0.354334483048740823],"hpluv":[136.01097660716411,422.1930512248951,89.1692840038805343],"hsluv":[136.01097660716411,99.9999999999912177,89.1692840038805343]},"#44ff99":{"lch":[89.4143964062191117,94.8987049380611438,139.863519733640288],"luv":[89.4143964062191117,-72.5511163277215303,61.1727040314764139],"rgb":[0.266666666666666663,1,0.6],"xyz":[0.43891434060115575,0.750456997441105611,0.423101160689858702],"hpluv":[139.863519733640288,402.3908266141122,89.4143964062191117],"hsluv":[139.863519733640288,99.9999999999912,89.4143964062191117]},"#44ffaa":{"lch":[89.695659684091666,87.5652599917726207,144.82485232612342],"luv":[89.695659684091666,-71.5753927145854192,50.4444042008586777],"rgb":[0.266666666666666663,1,0.66666666666666663],"xyz":[0.453972033566408251,0.756480074627206678,0.502405010306857358],"hpluv":[144.82485232612342,382.304282325397367,89.695659684091666],"hsluv":[144.82485232612342,99.9999999999909335,89.695659684091666]},"#44ffbb":{"lch":[90.0139628620153616,80.5050918065685153,151.171682460988421],"luv":[90.0139628620153616,-70.527972915407986,38.8184858440859557],"rgb":[0.266666666666666663,1,0.733333333333333282],"xyz":[0.471109625673744925,0.763335111470141436,0.592662995405499],"hpluv":[151.171682460988421,363.621116250194575,90.0139628620153616],"hsluv":[151.171682460988421,99.999999999990834,90.0139628620153616]},"#44ffcc":{"lch":[90.3700157308713443,74.2777558665274853,159.169074542576084],"luv":[90.3700157308713443,-69.4225064855060481,26.4140229771485018],"rgb":[0.266666666666666663,1,0.8],"xyz":[0.490402001117466679,0.771052061647630294,0.694269506075769205],"hpluv":[159.169074542576084,348.900804743837909,90.3700157308713443],"hsluv":[159.169074542576084,99.9999999999905924,90.3700157308713443]},"#44ffdd":{"lch":[90.7643583149998,69.56728840997188,168.931262835156701],"luv":[90.7643583149998,-68.2731674827513899,13.3559806299794577],"rgb":[0.266666666666666663,1,0.866666666666666696],"xyz":[0.511920326668100167,0.7796593918678838,0.807599353975775203],"hpluv":[168.931262835156701,341.810509676969502,90.7643583149998],"hsluv":[168.931262835156701,99.9999999999902798,90.7643583149998]},"#44ffee":{"lch":[91.1973694573754869,67.0945142582603182,180.196137266844971],"luv":[91.1973694573754869,-67.094121132442,-0.229680249688981986],"rgb":[0.266666666666666663,1,0.933333333333333348],"xyz":[0.535732506934274877,0.789184263974353817,0.933010170044298426],"hpluv":[180.196137266844971,347.079488330816218,91.1973694573754869],"hsluv":[180.196137266844971,99.999999999989825,91.1973694573754869]},"#44ffff":{"lch":[91.6692750397398726,67.4158875874256,192.177050630061103],"luv":[91.6692750397398726,-65.8990611515587261,-14.2202545175369188],"rgb":[0.266666666666666663,1,1],"xyz":[0.561903555344106298,0.799652683338286541,1.07084435833608027],"hpluv":[192.177050630061103,369.886157390881351,91.6692750397398726],"hsluv":[192.177050630061103,99.9999999999897,91.6692750397398726]},"#33aa00":{"lch":[61.1785977172963129,90.1064171712311435,124.683940112874311],"luv":[61.1785977172963129,-51.2749716142469723,74.09482911373847],"rgb":[0.2,0.66666666666666663,0],"xyz":[0.157393059993970491,0.294521282349826385,0.0485535951906325494],"hpluv":[124.683940112874311,186.894073454811917,61.1785977172963129],"hsluv":[124.683940112874311,100.000000000002302,61.1785977172963129]},"#33aa11":{"lch":[61.2139288108167818,88.7849168066190089,125.171000261233829],"luv":[61.2139288108167818,-51.1417680861379793,72.5760360544852148],"rgb":[0.2,0.66666666666666663,0.0666666666666666657],"xyz":[0.158404725493607623,0.294925948549681238,0.0538817001553881791],"hpluv":[125.171000261233829,184.046797309440706,61.2139288108167818],"hsluv":[125.171000261233829,97.729263879491441,61.2139288108167818]},"#33aa22":{"lch":[61.2793378507832642,86.3832953662584657,126.10140218084841],"luv":[61.2793378507832642,-50.8984310656693708,69.7955831939783593],"rgb":[0.2,0.66666666666666663,0.133333333333333331],"xyz":[0.160280083632084625,0.295676091805072039,0.0637585863513673717],"hpluv":[126.10140218084841,178.877217305585333,61.2793378507832642],"hsluv":[126.10140218084841,93.5778090815338146,61.2793378507832642]},"#33aa33":{"lch":[61.3867923044640946,82.5646745763668548,127.715012949240119],"luv":[61.3867923044640946,-50.5076466968263134,65.3138814728533],"rgb":[0.2,0.66666666666666663,0.2],"xyz":[0.163367834364542386,0.296911192098055166,0.0800207402089785219],"hpluv":[127.715012949240119,170.670578118814461,61.3867923044640946],"hsluv":[127.715012949240119,86.9017438736093339,61.3867923044640946]},"#33aa44":{"lch":[61.5414071550205364,77.3485744588317488,130.237764523164799],"luv":[61.5414071550205364,-49.9641607354037305,59.0456146789935588],"rgb":[0.2,0.66666666666666663,0.266666666666666663],"xyz":[0.167825829608761246,0.298694390195742732,0.10349951516186516],"hpluv":[130.237764523164799,159.486606837004757,61.5414071550205364],"hsluv":[130.237764523164799,87.1702267355774723,61.5414071550205364]},"#33aa55":{"lch":[61.7472402279952775,70.9239260559490106,134.00596147156574],"luv":[61.7472402279952775,-49.2732069613111605,51.0132763399638876],"rgb":[0.2,0.66666666666666663,0.333333333333333315],"xyz":[0.173788243648123231,0.301079355811487592,0.134901562435839062],"hpluv":[134.00596147156574,145.752006815371971,61.7472402279952775],"hsluv":[134.00596147156574,87.512567621072165,61.7472402279952775]},"#33aa66":{"lch":[62.0075227235960824,63.6834089970413046,139.532932917076664],"luv":[62.0075227235960824,-48.4490087982300253,41.3312246123130436],"rgb":[0.2,0.66666666666666663,0.4],"xyz":[0.181373239421631416,0.304113354120890911,0.174849206842983024],"hpluv":[139.532932917076664,130.323054003441854,62.0075227235960824],"hsluv":[139.532932917076664,87.9225345315596769,62.0075227235960824]},"#33aa77":{"lch":[62.3247799262656201,56.2910074750267,147.571074265173024],"luv":[62.3247799262656201,-47.5128361285441727,30.1862207898839152],"rgb":[0.2,0.66666666666666663,0.466666666666666674],"xyz":[0.190687252441833321,0.307838959328971706,0.223903008749380933],"hpluv":[147.571074265173024,114.608702125460667,62.3247799262656201],"hsluv":[147.571074265173024,88.3905588997681519,62.3247799262656201]},"#33aa88":{"lch":[62.7009046876535052,49.786919253891476,159.033972270618222],"luv":[62.7009046876535052,-46.4906641824602147,17.8144736848221363],"rgb":[0.2,0.66666666666666663,0.533333333333333326],"xyz":[0.201827669543777177,0.312295126169749304,0.2825758721529531],"hpluv":[159.033972270618222,100.758286424528237,62.7009046876535052],"hsluv":[159.033972270618222,88.9048289963628804,62.7009046876535052]},"#33aa99":{"lch":[63.1372095297142835,45.6309193537352797,174.368717478757389],"luv":[63.1372095297142835,-45.4107033068770818,4.47759156711236095],"rgb":[0.2,0.66666666666666663,0.6],"xyz":[0.214884633652849877,0.317517911813378462,0.351342549794071035],"hpluv":[174.368717478757389,91.7092542399893631,63.1372095297142835],"hsluv":[174.368717478757389,89.4524406674979,63.1372095297142835]},"#33aaaa":{"lch":[63.6344696573538897,45.3208071547743288,192.17705063006116],"luv":[63.6344696573538897,-44.3011098571894,-9.5596666563997],"rgb":[0.2,0.66666666666666663,0.66666666666666663],"xyz":[0.229942326618102433,0.323540988999479584,0.430646399411069636],"hpluv":[192.17705063006116,90.3742140686623117,63.6344696573538897],"hsluv":[192.17705063006116,90.0204628815860559,63.6344696573538897]},"#33aabb":{"lch":[64.1929631055189844,49.4317459506583177,209.109442205543161],"luv":[64.1929631055189844,-43.188124160558381,-24.0475245965695663],"rgb":[0.2,0.66666666666666663,0.733333333333333282],"xyz":[0.247079918725439052,0.330396025842414343,0.520904384509711327],"hpluv":[209.109442205543161,97.7142389408223835,64.1929631055189844],"hsluv":[209.109442205543161,90.5968047396532228,64.1929631055189844]},"#33aacc":{"lch":[64.8125111239688181,57.2242456540803062,222.641155468482083],"luv":[64.8125111239688181,-42.0947673064025736,-38.7639633693247347],"rgb":[0.2,0.66666666666666663,0.8],"xyz":[0.266372294169160806,0.338112976019903144,0.622510895179981483],"hpluv":[222.641155468482083,112.036763534802631,64.8125111239688181],"hsluv":[222.641155468482083,91.1708232266795875,64.8125111239688181]},"#33aadd":{"lch":[65.4925201274692199,67.4454999587780151,232.519386199289158],"luv":[65.4925201274692199,-41.0401119544032653,-53.5220017886062465],"rgb":[0.2,0.66666666666666663,0.866666666666666696],"xyz":[0.28789061971979435,0.34672030624015665,0.73584074307998748],"hpluv":[232.519386199289158,130.67743538587149,65.4925201274692199],"hsluv":[232.519386199289158,91.7336648454097485,65.4925201274692199]},"#33aaee":{"lch":[66.23202547083838,79.0605595482254,239.573325902293959],"luv":[66.23202547083838,-40.039054494753934,-68.1721804788773],"rgb":[0.2,0.66666666666666663,0.933333333333333348],"xyz":[0.311702799985969059,0.356245178346626667,0.861251559148510704],"hpluv":[239.573325902293959,151.471586303299148,66.23202547083838],"hsluv":[239.573325902293959,92.278374899274425,66.23202547083838]},"#33aaff":{"lch":[67.0297366624436,91.3892467801412778,244.667711773110682],"luv":[67.0297366624436,-39.1024682991195291,-82.6014007142609898],"rgb":[0.2,0.66666666666666663,1],"xyz":[0.33787384839580048,0.366713597710559391,0.999085747440292549],"hpluv":[244.667711773110682,173.00828905748071,67.0297366624436],"hsluv":[244.667711773110682,99.9999999999982094,67.0297366624436]},"#33bb00":{"lch":[66.705199456007648,99.1588934495857757,125.274120260315158],"luv":[66.705199456007648,-57.2631629787864327,80.9531735993793262],"rgb":[0.2,0.733333333333333282,0],"xyz":[0.191347557902569271,0.362430278167024944,0.0598717611601651684],"hpluv":[125.274120260315158,188.630237299381349,66.705199456007648],"hsluv":[125.274120260315158,100.000000000002331,66.705199456007648]},"#33bb11":{"lch":[66.7359690986495764,97.9890755357957914,125.670572132139952],"luv":[66.7359690986495764,-57.1397853669544133,79.6046723036925385],"rgb":[0.2,0.733333333333333282,0.0666666666666666657],"xyz":[0.192359223402206403,0.362834944366879797,0.0651998661249208],"hpluv":[125.670572132139952,186.318944611331347,66.7359690986495764],"hsluv":[125.670572132139952,98.1524285745497451,66.7359690986495764]},"#33bb22":{"lch":[66.7929473545782,95.8553977164860243,126.423299967719473],"luv":[66.7929473545782,-56.9137739802675,77.1302768224563],"rgb":[0.2,0.733333333333333282,0.133333333333333331],"xyz":[0.194234581540683404,0.363585087622270597,0.0750767523209],"hpluv":[126.423299967719473,182.106434833594022,66.7929473545782],"hsluv":[126.423299967719473,94.7659081903439073,66.7929473545782]},"#33bb33":{"lch":[66.8865907457163,92.4406335233364302,127.715012949240233],"luv":[66.8865907457163,-56.5491099236273058,73.126389853740946],"rgb":[0.2,0.733333333333333282,0.2],"xyz":[0.197322332273141166,0.364820187915253724,0.0913389061785111478],"hpluv":[127.715012949240233,175.373180985258983,66.8865907457163],"hsluv":[127.715012949240233,89.2962069049265637,66.8865907457163]},"#33bb44":{"lch":[67.0214179407225572,87.725631811763563,129.70178400392939],"luv":[67.0214179407225572,-56.0384119529137763,67.4943172612971409],"rgb":[0.2,0.733333333333333282,0.266666666666666663],"xyz":[0.201780327517360025,0.36660338601294129,0.114817681131397786],"hpluv":[129.70178400392939,166.093340387543549,67.0214179407225572],"hsluv":[129.70178400392939,89.4761749642590871,67.0214179407225572]},"#33bb55":{"lch":[67.2010629421400552,81.8171313208689099,132.60288320444127],"luv":[67.2010629421400552,-55.3830806540106479,60.2225651632978796],"rgb":[0.2,0.733333333333333282,0.333333333333333315],"xyz":[0.207742741556722,0.368988351628686151,0.146219728405371674],"hpluv":[132.60288320444127,154.492511096020365,67.2010629421400552],"hsluv":[132.60288320444127,89.7076242739581,67.2010629421400552]},"#33bb66":{"lch":[67.4284803792762091,74.9653268862145,136.738510871982356],"luv":[67.4284803792762091,-54.5922668909562248,51.3759148907695788],"rgb":[0.2,0.733333333333333282,0.4],"xyz":[0.215327737330230196,0.372022349938089469,0.186167372812515663],"hpluv":[136.738510871982356,141.07705768332076,67.4284803792762091],"hsluv":[136.738510871982356,89.9877463438330096,67.4284803792762091]},"#33bb77":{"lch":[67.7060530794905446,67.5982244112705,142.572908280802977],"luv":[67.7060530794905446,-53.681598162732449,41.0829156980295878],"rgb":[0.2,0.733333333333333282,0.466666666666666674],"xyz":[0.224641750350432101,0.375747955146170265,0.235221174718913573],"hpluv":[142.572908280802977,126.69139486293237,67.7060530794905446],"hsluv":[142.572908280802977,90.3115397167098,67.7060530794905446]},"#33bb88":{"lch":[68.0356563096068641,60.380187227113133,150.730801091974854],"luv":[68.0356563096068641,-52.67158330257773,29.5206931148449],"rgb":[0.2,0.733333333333333282,0.533333333333333326],"xyz":[0.235782167452375957,0.380204121986947863,0.293894038122485712],"hpluv":[150.730801091974854,112.615249481580875,68.0356563096068641],"hsluv":[150.730801091974854,90.6723452470342437,68.0356563096068641]},"#33bb99":{"lch":[68.4187011865960244,54.2829584497859159,161.862695711717],"luv":[68.4187011865960244,-51.585814888834193,16.8980259295610082],"rgb":[0.2,0.733333333333333282,0.6],"xyz":[0.248839131561448657,0.385426907630577,0.362660715763603647],"hpluv":[161.862695711717,100.676477021468287,68.4187011865960244],"hsluv":[161.862695711717,91.0624469223214,68.4187011865960244]},"#33bbaa":{"lch":[68.8561680799326439,50.5661966451060749,176.101011456941364],"luv":[68.8561680799326439,-50.4491601398581224,3.43838397135738649],"rgb":[0.2,0.733333333333333282,0.66666666666666663],"xyz":[0.263896824526701212,0.391449984816678143,0.441964565380602248],"hpluv":[176.101011456941364,93.1873079321678404,68.8561680799326439],"hsluv":[176.101011456941364,91.473675634614068,68.8561680799326439]},"#33bbbb":{"lch":[69.3486356756669835,50.4205674478029,192.177050630061103],"luv":[69.3486356756669835,-49.286127891295429,-10.635375839212843],"rgb":[0.2,0.733333333333333282,0.733333333333333282],"xyz":[0.281034416634037831,0.398305021659612901,0.532222550479243939],"hpluv":[192.177050630061103,92.2590830970113132,69.3486356756669835],"hsluv":[192.177050630061103,91.8979539795913922,69.3486356756669835]},"#33bbcc":{"lch":[69.8963087653012423,54.2786660468549442,207.559867588447844],"luv":[69.8963087653012423,-48.1195504219082224,-25.1133919457216273],"rgb":[0.2,0.733333333333333282,0.8],"xyz":[0.300326792077759586,0.406021971837101703,0.633829061149514095],"hpluv":[207.559867588447844,98.540384199822455,69.8963087653012423],"hsluv":[207.559867588447844,92.3277362004695306,69.8963087653012423]},"#33bbdd":{"lch":[70.4990463576295241,61.569428837921933,220.28187220447964],"luv":[70.4990463576295241,-46.9696505240293618,-39.807618580850594],"rgb":[0.2,0.733333333333333282,0.866666666666666696],"xyz":[0.321845117628393129,0.414629302057355209,0.747158909049520092],"hpluv":[220.28187220447964,110.820781636478685,70.4990463576295241],"hsluv":[220.28187220447964,92.7563200135089119,70.4990463576295241]},"#33bbee":{"lch":[71.1563908243766576,71.2672074810155181,229.953995552192254],"luv":[71.1563908243766576,-45.8534981630350487,-54.557048750410388],"rgb":[0.2,0.733333333333333282,0.933333333333333348],"xyz":[0.345657297894567894,0.424154174163825226,0.872569725118043316],"hpluv":[229.953995552192254,127.091105244163856,71.1563908243766576],"hsluv":[229.953995552192254,93.1780289437208893,71.1563908243766576]},"#33bbff":{"lch":[71.8675982303626597,82.4526478797043296,237.101125866277243],"luv":[71.8675982303626597,-44.7848112977892,-69.2297610814592161],"rgb":[0.2,0.733333333333333282,1],"xyz":[0.37182834630439926,0.43462259352775795,1.01040391340982527],"hpluv":[237.101125866277243,145.583046200088774,71.8675982303626597],"hsluv":[237.101125866277243,99.9999999999977831,71.8675982303626597]},"#33cc00":{"lch":[72.1534232831706532,108.011475964841438,125.713046635977918],"luv":[72.1534232831706532,-63.0491190384013507,87.6999859098336287],"rgb":[0.2,0.8,0],"xyz":[0.229571301212186191,0.438877764786259839,0.0726130089300371234],"hpluv":[125.713046635977918,189.955680955455,72.1534232831706532],"hsluv":[125.713046635977918,100.000000000002402,72.1534232831706532]},"#33cc11":{"lch":[72.1805088449519,106.967132064598133,126.040754358939225],"luv":[72.1805088449519,-62.9352412435677095,86.493483868665578],"rgb":[0.2,0.8,0.0666666666666666657],"xyz":[0.230582966711823323,0.439282430986114691,0.0779411138947927601],"hpluv":[126.040754358939225,188.048441784684599,72.1805088449519],"hsluv":[126.040754358939225,98.4728126855506645,72.1805088449519]},"#33cc22":{"lch":[72.2306742907645543,105.057034533260762,126.660198785960176],"luv":[72.2306742907645543,-62.7261976516662614,84.2757653960309199],"rgb":[0.2,0.8,0.133333333333333331],"xyz":[0.232458324850300324,0.440032574241505492,0.0878180000907719527],"hpluv":[126.660198785960176,184.562215611711281,72.2306742907645543],"hsluv":[126.660198785960176,95.6680740449206866,72.2306742907645543]},"#33cc33":{"lch":[72.31314692234902,101.984984863208481,127.715012949240304],"luv":[72.31314692234902,-62.3877173898115416,80.6765756365369668],"rgb":[0.2,0.8,0.2],"xyz":[0.235546075582758085,0.441267674534488619,0.104080153948383103],"hpluv":[127.715012949240304,178.960959976488198,72.31314692234902],"hsluv":[127.715012949240304,91.1230258822071306,72.31314692234902]},"#33cc44":{"lch":[72.4319472107582669,97.7091257880760651,129.318260791805528],"luv":[72.4319472107582669,-61.9111863445413135,75.5915224590797123],"rgb":[0.2,0.8,0.266666666666666663],"xyz":[0.240004070826976945,0.443050872632176185,0.127558928901269741],"hpluv":[129.318260791805528,171.176559629977817,72.4319472107582669],"hsluv":[129.318260791805528,91.2471619418673612,72.4319472107582669]},"#33cc55":{"lch":[72.590341240881628,92.2844112105744756,131.621023493746776],"luv":[72.590341240881628,-61.2953573189119396,68.9876200751215407],"rgb":[0.2,0.8,0.333333333333333315],"xyz":[0.24596648486633893,0.445435838247921045,0.158960976175243629],"hpluv":[131.621023493746776,161.32023063104279,72.590341240881628],"hsluv":[131.621023493746776,91.4078622695478,72.590341240881628]},"#33cc66":{"lch":[72.7910248315973405,85.8719567505974197,134.835055825888389],"luv":[72.7910248315973405,-60.5455878238572112,60.8951948123993319],"rgb":[0.2,0.8,0.4],"xyz":[0.253551480639847115,0.448469836557324364,0.198908620582387619],"hpluv":[134.835055825888389,149.696915507144809,72.7910248315973405],"hsluv":[134.835055825888389,91.6039613293452533,72.7910248315973405]},"#33cc77":{"lch":[73.0362204241858421,78.757716060864837,139.259917231121676],"luv":[73.0362204241858421,-59.6729854923348,51.3995393126768079],"rgb":[0.2,0.8,0.466666666666666674],"xyz":[0.262865493660049,0.452195441765405159,0.247962422488785528],"hpluv":[139.259917231121676,136.834039856532058,73.0362204241858421],"hsluv":[139.259917231121676,91.8328510325735294,73.0362204241858421]},"#33cc88":{"lch":[73.3277345291399,71.3846311778678597,145.306874573990314],"luv":[73.3277345291399,-58.6933246064594201,40.6307668527313197],"rgb":[0.2,0.8,0.533333333333333326],"xyz":[0.274005910761992877,0.456651608606182757,0.306635285892357667],"hpluv":[145.306874573990314,123.530949311180805,73.3277345291399],"hsluv":[145.306874573990314,92.0907512285691894,73.3277345291399]},"#33cc99":{"lch":[73.6669954969027714,64.400374936046,153.483372150156],"luv":[73.6669954969027714,-57.6257667092137709,28.7520312861295437],"rgb":[0.2,0.8,0.6],"xyz":[0.287062874871065576,0.461874394249811915,0.375401963533475602],"hpluv":[153.483372150156,110.931469165383049,73.6669954969027714],"hsluv":[153.483372150156,92.3730273510429072,73.6669954969027714]},"#33ccaa":{"lch":[74.0550811623464114,58.6991946004706691,164.236139418897579],"luv":[74.0550811623464114,-56.4914910882685106,15.9470022690160835],"rgb":[0.2,0.8,0.66666666666666663],"xyz":[0.302120567836318132,0.467897471435913037,0.454705813150474203],"hpluv":[164.236139418897579,100.581152280716978,74.0550811623464114],"hsluv":[164.236139418897579,92.6745296641919794,74.0550811623464114]},"#33ccbb":{"lch":[74.4927414449451106,55.3647402049724846,177.507530206592946],"luv":[74.4927414449451106,-55.3123621552270137,2.40770653799565881],"rgb":[0.2,0.8,0.733333333333333282],"xyz":[0.319258159943654751,0.474752508278847796,0.544963798249115894],"hpluv":[177.507530206592946,94.310193436061823,74.4927414449451106],"hsluv":[177.507530206592946,92.9899230693886,74.4927414449451106]},"#33cccc":{"lch":[74.9804187561532416,55.3552144916165361,192.177050630061132],"luv":[74.9804187561532416,-54.1097476482840918,-11.6762571422475752],"rgb":[0.2,0.8,0.8],"xyz":[0.338550535387376506,0.482469458456336597,0.646570308919386],"hpluv":[192.177050630061132,93.6806731785530928,74.9804187561532416],"hsluv":[192.177050630061132,93.3139795405001422,74.9804187561532416]},"#33ccdd":{"lch":[75.5182678303382602,59.0031963362726231,206.282454691493683],"luv":[75.5182678303382602,-52.9035678654544128,-26.1264173778571198],"rgb":[0.2,0.8,0.866666666666666696],"xyz":[0.360068860938010049,0.491076788676590104,0.759900156819392],"hpluv":[206.282454691493683,99.1431801932779564,75.5182678303382602],"hsluv":[206.282454691493683,93.6418135046530296,75.5182678303382602]},"#33ccee":{"lch":[76.106175853756767,65.8577115847402439,218.26062431545347],"luv":[76.106175853756767,-51.7116147040808585,-40.7817003063324606],"rgb":[0.2,0.8,0.933333333333333348],"xyz":[0.383881041204184759,0.500601660783060121,0.885310972887915271],"hpluv":[218.26062431545347,110.229350215344013,76.106175853756767],"hsluv":[218.26062431545347,93.969050662624,76.106175853756767]},"#33ccff":{"lch":[76.7437832939395435,75.0714180144803,227.674056146546604],"luv":[76.7437832939395435,-50.5491406549608,-55.5022718611574248],"rgb":[0.2,0.8,1],"xyz":[0.41005208961401618,0.511070080146992844,1.02314516117969712],"hpluv":[227.674056146546604,129.845560156838474,76.7437832939395435],"hsluv":[227.674056146546604,99.9999999999969731,76.7437832939395435]},"#33dd00":{"lch":[77.5280782787270653,116.686614644285086,126.047543424376144],"luv":[77.5280782787270653,-68.6649809221669187,94.3445092843369508],"rgb":[0.2,0.866666666666666696,0],"xyz":[0.272205291759361367,0.524145745880611358,0.0868243391124284419],"hpluv":[126.047543424376144,210.356208283509261,77.5280782787270653],"hsluv":[126.047543424376144,100.000000000002416,77.5280782787270653]},"#33dd11":{"lch":[77.5521415069474926,115.747372453695789,126.322097671746874],"luv":[77.5521415069474926,-68.5599423432795,93.2576459912042],"rgb":[0.2,0.866666666666666696,0.0666666666666666657],"xyz":[0.273216957258998472,0.524550412080466266,0.0921524440771840786],"hpluv":[126.322097671746874,208.932074165120611,77.5521415069474926],"hsluv":[126.322097671746874,98.7203227917640902,77.5521415069474926]},"#33dd22":{"lch":[77.5967156031793337,114.025807364398673,126.839335004613],"luv":[77.5967156031793337,-68.36681588768,91.2571270119929778],"rgb":[0.2,0.866666666666666696,0.133333333333333331],"xyz":[0.275092315397475529,0.525300555335857067,0.102029330273163271],"hpluv":[126.839335004613,206.31706664059891,77.5967156031793337],"hsluv":[126.839335004613,96.3665979525037102,77.5967156031793337]},"#33dd33":{"lch":[77.670013861504259,111.246421345384377,127.715012949240332],"luv":[77.670013861504259,-68.0532561222895,88.0029578668175247],"rgb":[0.2,0.866666666666666696,0.2],"xyz":[0.278180066129933234,0.526535655628840193,0.118291484130774421],"hpluv":[127.715012949240332,202.082466523340599,77.670013861504259],"hsluv":[127.715012949240332,92.5426273046004439,77.670013861504259]},"#33dd44":{"lch":[77.7756375941771267,107.354265763003397,129.034195217585733],"luv":[77.7756375941771267,-67.6100090567609726,83.3895979895470134],"rgb":[0.2,0.866666666666666696,0.266666666666666663],"xyz":[0.28263806137415215,0.52831885372652776,0.14177025908366106],"hpluv":[129.034195217585733,196.125875311323085,77.7756375941771267],"hsluv":[129.034195217585733,92.6304308505642098,77.7756375941771267]},"#33dd55":{"lch":[77.9165348137244,102.370875286307594,130.905664069221132],"luv":[77.9165348137244,-67.0340391276217105,77.3707548439410431],"rgb":[0.2,0.866666666666666696,0.333333333333333315],"xyz":[0.288600475413514135,0.530703819342272509,0.173172306357634975],"hpluv":[130.905664069221132,188.454179514464698,77.9165348137244],"hsluv":[130.905664069221132,92.7446831943234287,77.9165348137244]},"#33dd66":{"lch":[78.095166356878579,96.3992072274516261,133.476315028685519],"luv":[78.095166356878579,-66.3279238591037767,69.9529389705828777],"rgb":[0.2,0.866666666666666696,0.4],"xyz":[0.29618547118702232,0.533737817651675828,0.213119950764778909],"hpluv":[133.476315028685519,179.196222734944627,78.095166356878579],"hsluv":[133.476315028685519,92.8850067954864187,78.095166356878579]},"#33dd77":{"lch":[78.3135937781308513,89.6343875602499196,136.948304354896891],"luv":[78.3135937781308513,-65.499258897229538,61.1896275296294192],"rgb":[0.2,0.866666666666666696,0.466666666666666674],"xyz":[0.305499484207224226,0.537463422859756679,0.262173752671176818],"hpluv":[136.948304354896891,168.630388284117117,78.3135937781308513],"hsluv":[136.948304354896891,93.050064801238122,78.3135937781308513]},"#33dd88":{"lch":[78.5735314106716487,82.3820261839553609,141.59738099104726],"luv":[78.5735314106716487,-64.5599157920348432,51.1743638074698],"rgb":[0.2,0.866666666666666696,0.533333333333333326],"xyz":[0.316639901309168,0.541919589700534221,0.320846616074749],"hpluv":[141.59738099104726,157.233383580683977,78.5735314106716487],"hsluv":[141.59738099104726,93.2377028740416449,78.5735314106716487]},"#33dd99":{"lch":[78.8763801167060592,75.0869406053615762,147.781507566587862],"luv":[78.8763801167060592,-63.5251386535812799,40.0325543591259105],"rgb":[0.2,0.866666666666666696,0.6],"xyz":[0.329696865418240725,0.547142375344163434,0.389613293715866893],"hpluv":[147.781507566587862,145.760006886720333,78.8763801167060592],"hsluv":[147.781507566587862,93.4451205095912343,78.8763801167060592]},"#33ddaa":{"lch":[79.2232512041385633,68.3697583649377094,155.904677195463563],"luv":[79.2232512041385633,-62.4125308872686801,27.9123601138582131],"rgb":[0.2,0.866666666666666696,0.66666666666666663],"xyz":[0.344754558383493281,0.553165452530264501,0.468917143332865494],"hpluv":[155.904677195463563,135.355769729163313,79.2232512041385633],"hsluv":[155.904677195463563,93.6690625743759,79.2232512041385633]},"#33ddbb":{"lch":[79.6149850527770866,63.045401416642612,166.259028854183981],"luv":[79.6149850527770866,-61.2410113290283604,14.9753521221847095],"rgb":[0.2,0.866666666666666696,0.733333333333333282],"xyz":[0.361892150490829956,0.560020489373199259,0.559175128431507296],"
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/lucasb-eyer/go-colorful/hsluv-snapshot-rev4.json","mode":420,"size":1664600,"sha256":"fa702c58663587d1d1080ad1271be94f6c7002fcf5ba1125ac7e758ed5b98966","index":33,"count":35,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
-hpluv":[166.259028854183981,127.658944712944631,79.6149850527770866],"hsluv":[166.259028854183981,93.9060163408359614,79.6149850527770866]},"#33ddcc":{"lch":[80.0521670478692613,60.0458591823856054,178.675787060338223],"luv":[80.0521670478692613,-60.0298228841068138,1.3876488942262355],"rgb":[0.2,0.866666666666666696,0.8],"xyz":[0.381184525934551655,0.567737439550688117,0.660781639101777452],"hpluv":[178.675787060338223,124.734340702728062,80.0521670478692613],"hsluv":[178.675787060338223,94.1523985056595905,80.0521670478692613]},"#33dddd":{"lch":[80.5351423549551555,60.1510343961145963,192.177050630061245],"luv":[80.5351423549551555,-58.7976638126828,-12.6878551809710149],"rgb":[0.2,0.866666666666666696,0.866666666666666696],"xyz":[0.402702851485185254,0.576344769770941623,0.774111487001783449],"hpluv":[192.177050630061245,128.603021497070955,80.5351423549551555],"hsluv":[192.177050630061245,94.4047190696773271,80.5351423549551555]},"#33ddee":{"lch":[81.0640304387754,63.6213092914002303,205.209077734070348],"luv":[81.0640304387754,-57.5619892131040913,-27.0977562499646396],"rgb":[0.2,0.866666666666666696,0.933333333333333348],"xyz":[0.426515031751359963,0.58586964187741164,0.899522303070306672],"hpluv":[205.209077734070348,140.476637056352985,81.0640304387754],"hsluv":[205.209077734070348,94.6597131799347835,81.0640304387754]},"#33ddff":{"lch":[81.6387398294900208,70.0938175080633528,216.50946924270437],"luv":[81.6387398294900208,-56.3385046754299452,-41.7027114680837769],"rgb":[0.2,0.866666666666666696,1],"xyz":[0.452686080161191384,0.596338061241344364,1.03735649136208852],"hpluv":[216.50946924270437,160.421433033358312,81.6387398294900208],"hsluv":[216.50946924270437,99.999999999996,81.6387398294900208]},"#33ee00":{"lch":[82.833762600699373,125.203353646442437,126.3077634478595],"luv":[82.833762600699373,-74.1357070958390239,100.894879442497455],"rgb":[0.2,0.933333333333333348,0],"xyz":[0.319384068099876184,0.618503298561642323,0.102550597892599626],"hpluv":[126.3077634478595,309.713105305240845,82.833762600699373],"hsluv":[126.3077634478595,100.000000000002302,82.833762600699373]},"#33ee11":{"lch":[82.85531245284119,124.353122892884315,126.540515263097504],"luv":[82.85531245284119,-74.0387382831010541,99.9097813362598544],"rgb":[0.2,0.933333333333333348,0.0666666666666666657],"xyz":[0.320395733599513288,0.618907964761497231,0.107878702857355263],"hpluv":[126.540515263097504,308.054239915702169,82.85531245284119],"hsluv":[126.540515263097504,98.9149262576223833,82.85531245284119]},"#33ee22":{"lch":[82.8952353009988,122.792060636983948,126.977870705292972],"luv":[82.8952353009988,-73.860225327277135,98.0946342573363808],"rgb":[0.2,0.933333333333333348,0.133333333333333331],"xyz":[0.322271091737990345,0.619658108016888,0.117755589053334456],"hpluv":[126.977870705292972,305.002845011722627,82.8952353009988],"hsluv":[126.977870705292972,96.9167682151396264,82.8952353009988]},"#33ee33":{"lch":[82.9608975691188846,120.264250910780831,127.715012949240375],"luv":[82.9608975691188846,-73.5697721383487391,95.1366316128687259],"rgb":[0.2,0.933333333333333348,0.2],"xyz":[0.325358842470448051,0.620893208309871159,0.134017742910945592],"hpluv":[127.715012949240375,300.046240285686,82.9608975691188846],"hsluv":[127.715012949240375,93.6639064416312834,82.9608975691188846]},"#33ee44":{"lch":[83.0555452014946241,116.707569363843,128.817932535493583],"luv":[83.0555452014946241,-73.1578713419028,90.9317469728687513],"rgb":[0.2,0.933333333333333348,0.266666666666666663],"xyz":[0.329816837714666966,0.622676406407558725,0.157496517863832231],"hpluv":[128.817932535493583,293.039720989359807,83.0555452014946241],"hsluv":[128.817932535493583,93.7274034182796356,83.0555452014946241]},"#33ee55":{"lch":[83.1818510898783643,112.121671621867506,130.367812557605703],"luv":[83.1818510898783643,-72.6203079673681202,85.4257579305358092],"rgb":[0.2,0.933333333333333348,0.333333333333333315],"xyz":[0.335779251754028951,0.625061372023303474,0.188898565137806146],"hpluv":[130.367812557605703,283.950089878719211,83.1818510898783643],"hsluv":[130.367812557605703,93.8103653792530139,83.1818510898783643]},"#33ee66":{"lch":[83.3420657578551,106.5703857928128,132.470647679843353],"luv":[83.3420657578551,-71.9576476395269,78.6088040502757224],"rgb":[0.2,0.933333333333333348,0.4],"xyz":[0.343364247527537136,0.628095370332706793,0.228846209544950108],"hpluv":[132.470647679843353,272.865433725808,83.3420657578551],"hsluv":[132.470647679843353,93.912785079345241,83.3420657578551]},"#33ee77":{"lch":[83.5380975272703523,100.188150337510052,135.268396470867572],"luv":[83.5380975272703523,-71.1748024762597851,70.5110839550557387],"rgb":[0.2,0.933333333333333348,0.466666666666666674],"xyz":[0.352678260547739042,0.631820975540787644,0.277900011451348],"hpluv":[135.268396470867572,260.019238129472967,83.5380975272703523],"hsluv":[135.268396470867572,94.0340074276028304,83.5380975272703523]},"#33ee88":{"lch":[83.7715600973053682,93.1909370684561651,138.951686086792108],"luv":[83.7715600973053682,-70.2805135444840801,61.1980405537673],"rgb":[0.2,0.933333333333333348,0.533333333333333326],"xyz":[0.363818677649682842,0.636277142381565186,0.336572874854920157],"hpluv":[138.951686086792108,245.83342468256393,83.7715600973053682],"hsluv":[138.951686086792108,94.1728069818675237,83.7715600973053682]},"#33ee99":{"lch":[84.0438031984902807,85.8935006436990278,143.770719305914184],"luv":[84.0438031984902807,-69.2867121669879822,50.7646035138469784],"rgb":[0.2,0.933333333333333348,0.6],"xyz":[0.376875641758755542,0.641499928025194399,0.405339552496038091],"hpluv":[143.770719305914184,230.989810482694878,84.0438031984902807],"hsluv":[143.770719305914184,94.3274826341768886,84.0438031984902807]},"#33eeaa":{"lch":[84.3559338989094698,78.7339796376561907,150.032255922422308],"luv":[84.3559338989094698,-68.2077782157370223,39.328596980513943],"rgb":[0.2,0.933333333333333348,0.66666666666666663],"xyz":[0.391933334724008098,0.647523005211295466,0.484643402113036692],"hpluv":[150.032255922422308,216.540119706931335,84.3559338989094698],"hsluv":[150.032255922422308,94.495967075681591,84.3559338989094698]},"#33eebb":{"lch":[84.7088326356722,72.2999891840671,158.051587623557367],"luv":[84.7088326356722,-67.0597412553262,27.0236847743774931],"rgb":[0.2,0.933333333333333348,0.733333333333333282],"xyz":[0.409070926831344772,0.654378042054230225,0.574901387211678383],"hpluv":[158.051587623557367,204.04938686040532,84.7088326356722],"hsluv":[158.051587623557367,94.6759444498571838,84.7088326356722]},"#33eecc":{"lch":[85.1031663228954,67.3294619946068451,168.005441410177127],"luv":[85.1031663228954,-65.8594808644086,13.992327638881461],"rgb":[0.2,0.933333333333333348,0.8],"xyz":[0.428363302275066471,0.662094992231719082,0.676507897881948539],"hpluv":[168.005441410177127,195.708498626929867,85.1031663228954],"hsluv":[168.005441410177127,94.8649680125767389,85.1031663228954]},"#33eedd":{"lch":[85.539399954776755,64.6250931348259314,179.663789762776076],"luv":[85.539399954776755,-64.6239805156479861,0.37921629457989664],"rgb":[0.2,0.933333333333333348,0.866666666666666696],"xyz":[0.44988162782570007,0.670702322451972588,0.789837745781954537],"hpluv":[179.663789762776076,194.233009793031641,85.539399954776755],"hsluv":[179.663789762776076,95.0605698730458926,85.539399954776755]},"#33eeee":{"lch":[86.0178075751720286,64.8282855412949601,192.177050630061217],"luv":[86.0178075751720286,-63.3696789602654533,-13.6744431219908602],"rgb":[0.2,0.933333333333333348,0.933333333333333348],"xyz":[0.47369380809187478,0.680227194558442605,0.91524856185047776],"hpluv":[192.177050630061217,202.327515221469156,86.0178075751720286],"hsluv":[192.177050630061217,95.2603564020327127,86.0178075751720286]},"#33eeff":{"lch":[86.538483142230433,68.1460620684978124,204.293044736593487],"luv":[86.538483142230433,-62.1119480142598803,-28.035543321245509],"rgb":[0.2,0.933333333333333348,1],"xyz":[0.499864856501706201,0.690695613922375329,1.05308275014225972],"hpluv":[204.293044736593487,221.878852364873978,86.538483142230433],"hsluv":[204.293044736593487,99.999999999993932,86.538483142230433]},"#33ff00":{"lch":[88.074762753062231,133.577745567808222,126.513803819973305],"luv":[88.074762753062231,-79.4809541468946,107.358241597361044],"rgb":[0.2,1,0],"xyz":[0.37123644052955,0.72220804342099143,0.119834722035823737],"hpluv":[126.513803819973305,497.272976699974663,88.074762753062231],"hsluv":[126.513803819973305,100.00000000000226,88.074762753062231]},"#33ff11":{"lch":[88.0941974462199,132.80363803677966,126.71317891025123],"luv":[88.0941974462199,-79.3912833442141448,106.460464045403725],"rgb":[0.2,1,0.0666666666666666657],"xyz":[0.37224810602918712,0.722612709620846339,0.125162827000579374],"hpluv":[126.71317891025123,495.277769978645495,88.0941974462199],"hsluv":[126.71317891025123,99.9999999999917861,88.0941974462199]},"#33ff22":{"lch":[88.1302050034733355,131.38040615815558,127.087058789859782],"luv":[88.1302050034733355,-79.2260405323659285,104.804797713872986],"rgb":[0.2,1,0.133333333333333331],"xyz":[0.374123464167664177,0.723362852876237139,0.135039713196558553],"hpluv":[127.087058789859782,491.602558840386564,88.1302050034733355],"hsluv":[127.087058789859782,99.9999999999915161,88.1302050034733355]},"#33ff33":{"lch":[88.1894367416410745,129.070276381710187,127.715012949240347],"luv":[88.1894367416410745,-78.9567203165017162,102.10275491931047],"rgb":[0.2,1,0.2],"xyz":[0.377211214900121883,0.724597953169220266,0.151301867054169703],"hpluv":[127.715012949240347,485.618062737129037,88.1894367416410745],"hsluv":[127.715012949240347,99.9999999999917577,88.1894367416410745]},"#33ff44":{"lch":[88.2748349985884,125.807640063387211,128.649544439126117],"luv":[88.2748349985884,-78.5738101086462137,98.2533391968394909],"rgb":[0.2,1,0.266666666666666663],"xyz":[0.381669210144340798,0.726381151266907832,0.174780642007056342],"hpluv":[128.649544439126117,477.126267833886629,88.2748349985884],"hsluv":[128.649544439126117,99.9999999999917151,88.2748349985884]},"#33ff55":{"lch":[88.3888340150102181,121.57774004888698,129.95306271607248],"luv":[88.3888340150102181,-78.0723424240601,93.1979410921456122],"rgb":[0.2,1,0.333333333333333315],"xyz":[0.387631624183702783,0.728766116882652581,0.206182689281030257],"hpluv":[129.95306271607248,466.04908765344419,88.3888340150102181],"hsluv":[129.95306271607248,99.999999999991644,88.3888340150102181]},"#33ff66":{"lch":[88.5334972733264,116.417510431790106,131.704600668064415],"luv":[88.5334972733264,-77.4514410423726929,86.9155395518881],"rgb":[0.2,1,0.4],"xyz":[0.395216619957210968,0.7318001151920559,0.246130333688174219],"hpluv":[131.704600668064415,452.43688525451455,88.5334972733264],"hsluv":[131.704600668064415,99.9999999999913882,88.5334972733264]},"#33ff77":{"lch":[88.7105909437740081,110.419515958012653,134.007319384137503],"luv":[88.7105909437740081,-76.7139872603015505,79.419353202025647],"rgb":[0.2,1,0.466666666666666674],"xyz":[0.404530632977412874,0.735525720400136751,0.295184135594572128],"hpluv":[134.007319384137503,436.493157669178117,88.7105909437740081],"hsluv":[134.007319384137503,99.9999999999915,88.7105909437740081]},"#33ff88":{"lch":[88.9216276204312379,103.738746998712813,136.99719245927011],"luv":[88.9216276204312379,-75.8662497359534882,70.7533729221786558],"rgb":[0.2,1,0.533333333333333326],"xyz":[0.415671050079356674,0.739981887240914293,0.353856998998144268],"hpluv":[136.99719245927011,418.619650658891032,88.9216276204312379],"hsluv":[136.99719245927011,99.9999999999912603,88.9216276204312379]},"#33ff99":{"lch":[89.1678944508512359,96.6032590942606788,140.85189111032139],"luv":[89.1678944508512359,-74.9174292298428242,60.9882649796200695],"rgb":[0.2,1,0.6],"xyz":[0.428728014188429429,0.745204672884543506,0.422623676639262202],"hpluv":[140.85189111032139,399.492483487252343,89.1678944508512359],"hsluv":[140.85189111032139,99.9999999999913456,89.1678944508512359]},"#33ffaa":{"lch":[89.4504724790268426,89.3298939826383105,145.795546705853383],"luv":[89.4504724790268426,-73.8791171714821,50.2165909327964926],"rgb":[0.2,1,0.66666666666666663],"xyz":[0.44378570715368193,0.751227750070644573,0.501927526256260803],"hpluv":[145.795546705853383,380.184928602968114,89.4504724790268426],"hsluv":[145.795546705853383,99.9999999999912,89.4504724790268426]},"#33ffbb":{"lch":[89.7702508712150262,82.3444719603705,152.087330110215447],"luv":[89.7702508712150262,-72.7646918614874494,38.5475249625060314],"rgb":[0.2,1,0.733333333333333282],"xyz":[0.460923299261018604,0.758082786913579332,0.592185511354902605],"hpluv":[152.087330110215447,362.351543222333419,89.7702508712150262],"hsluv":[152.087330110215447,99.9999999999909761,89.7702508712150262]},"#33ffcc":{"lch":[90.127938152783571,76.1985663634222,159.968053619612647],"luv":[90.127938152783571,-71.5886883295869723,26.1013643147272063],"rgb":[0.2,1,0.8],"xyz":[0.480215674704740358,0.765799737091068189,0.693792022025172761],"hpluv":[159.968053619612647,348.464440630653087,90.127938152783571],"hsluv":[159.968053619612647,99.999999999990834,90.127938152783571]},"#33ffdd":{"lch":[90.5240717550146314,71.5577226375514357,169.529475161807255],"luv":[90.5240717550146314,-70.3661811113599924,13.0041618290463337],"rgb":[0.2,1,0.866666666666666696],"xyz":[0.501734000255373846,0.774407067311321695,0.807121869925178759],"hpluv":[169.529475161807255,342.013155745428833,90.5240717550146314],"hsluv":[169.529475161807255,99.9999999999904077,90.5240717550146314]},"#33ffee":{"lch":[90.9590266887802,69.1149718308150511,180.51167449693034],"luv":[90.9590266887802,-69.1122158161064561,-0.61721646306864264],"rgb":[0.2,1,0.933333333333333348],"xyz":[0.525546180521548667,0.783931939417791712,0.932532685993702],"hpluv":[180.51167449693034,347.442342228089899,90.9590266887802],"hsluv":[180.51167449693034,99.9999999999901519,90.9590266887802]},"#33ffff":{"lch":[91.4330238629877243,69.4028497051403122,192.177050630061132],"luv":[91.4330238629877243,-67.8413175363212702,-14.6393709608822622],"rgb":[0.2,1,1],"xyz":[0.55171722893138,0.794400358781724436,1.07036687428548372],"hpluv":[192.177050630061132,369.590917988860895,91.4330238629877243],"hsluv":[192.177050630061132,99.9999999999897256,91.4330238629877243]},"#22aa00":{"lch":[60.8595101229647923,91.9296409673314656,126.268252023172565],"luv":[60.8595101229647923,-54.3824975763784053,74.1188427172042594],"rgb":[0.133333333333333331,0.66666666666666663,0],"xyz":[0.150337683054585614,0.290883353615456,0.0482228743965988915],"hpluv":[126.268252023172565,191.675426474830772,60.8595101229647923],"hsluv":[126.268252023172565,100.000000000002288,60.8595101229647923]},"#22aa11":{"lch":[60.8951349805759605,90.6090655032342482,126.765726538166419],"luv":[60.8951349805759605,-54.2335583573106,72.5859759132132893],"rgb":[0.133333333333333331,0.66666666666666663,0.0666666666666666657],"xyz":[0.151349348554222746,0.291288019815310828,0.0535509793613545212],"hpluv":[126.765726538166419,188.811473003651798,60.8951349805759605],"hsluv":[126.765726538166419,97.6988909499644365,60.8951349805759605]},"#22aa22":{"lch":[60.9610867967894592,88.21068058626,127.715012949240347],"luv":[60.9610867967894592,-53.9615024560723953,69.7802294505720226],"rgb":[0.133333333333333331,0.66666666666666663,0.133333333333333331],"xyz":[0.153224706692699747,0.292038163070701628,0.0634278655573337208],"hpluv":[127.715012949240347,183.614848439340193,60.9610867967894592],"hsluv":[127.715012949240347,93.4926845994439475,60.9610867967894592]},"#22aa33":{"lch":[61.0694299105106495,84.4016098893730629,129.358188857231823],"luv":[61.0694299105106495,-53.5246691509727626,65.259034196016259],"rgb":[0.133333333333333331,0.66666666666666663,0.2],"xyz":[0.156312457425157481,0.293273263363684755,0.0796900194149448571],"hpluv":[129.358188857231823,175.374397166590711,61.0694299105106495],"hsluv":[129.358188857231823,93.5882360519160699,61.0694299105106495]},"#22aa44":{"lch":[61.2253168994486145,79.2082340196825214,131.918899994809664],"luv":[61.2253168994486145,-52.917281977470445,58.938150671985575],"rgb":[0.133333333333333331,0.66666666666666663,0.266666666666666663],"xyz":[0.160770452669376368,0.295056461461372321,0.103168794367831496],"hpluv":[131.918899994809664,164.164260791814144,61.2253168994486145],"hsluv":[131.918899994809664,93.7213426507132397,61.2253168994486145]},"#22aa55":{"lch":[61.4328316402448422,72.8294169380228169,135.724592815827151],"luv":[61.4328316402448422,-52.1453123372646488,50.8428005993127883],"rgb":[0.133333333333333331,0.66666666666666663,0.333333333333333315],"xyz":[0.166732866708738381,0.297441427077117182,0.134570841641805411],"hpluv":[135.724592815827151,150.433869175471955,61.4328316402448422],"hsluv":[135.724592815827151,93.8909627694616802,61.4328316402448422]},"#22aa66":{"lch":[61.695221435526193,65.6694032551541511,141.26425661379642],"luv":[61.695221435526193,-51.2247747289881588,41.0912761769754056],"rgb":[0.133333333333333331,0.66666666666666663,0.4],"xyz":[0.174317862482246538,0.3004754253865205,0.174518486048949373],"hpluv":[141.26425661379642,135.067502346464636,61.695221435526193],"hsluv":[141.26425661379642,94.0939374356695737,61.695221435526193]},"#22aa77":{"lch":[62.015018576984005,58.3994247120946,149.232117680428786],"luv":[62.015018576984005,-50.1795183581889,29.8748848373309741],"rgb":[0.133333333333333331,0.66666666666666663,0.466666666666666674],"xyz":[0.183631875502448472,0.304201030594601296,0.223572287955347282],"hpluv":[149.232117680428786,119.495353216490457,62.015018576984005],"hsluv":[149.232117680428786,94.3254538020573534,62.015018576984005]},"#22aa88":{"lch":[62.3941144695078265,52.0455462506657582,160.428514439052776],"luv":[62.3941144695078265,-49.0385773736463904,17.4343572780611709],"rgb":[0.133333333333333331,0.66666666666666663,0.533333333333333326],"xyz":[0.194772292604392272,0.308657197435378894,0.282245151358919477],"hpluv":[160.428514439052776,105.847175197261592,62.3941144695078265],"hsluv":[160.428514439052776,94.5795977554836753,62.3941144695078265]},"#22aa99":{"lch":[62.8338123759312168,48.0032947436357915,175.177921691935865],"luv":[62.8338123759312168,-47.8333890460383486,4.03524455451089725],"rgb":[0.133333333333333331,0.66666666666666663,0.6],"xyz":[0.207829256713465,0.313879983079008051,0.351011829000037356],"hpluv":[175.177921691935865,96.9431131493944918,62.8338123759312168],"hsluv":[175.177921691935865,94.8499327714938119,62.8338123759312168]},"#22aaaa":{"lch":[63.334871160235295,47.6677335272966047,192.177050630061132],"luv":[63.334871160235295,-46.595231466735612,-10.0547115418935782],"rgb":[0.133333333333333331,0.66666666666666663,0.66666666666666663],"xyz":[0.222886949678717528,0.319903060265109174,0.430315678617035957],"hpluv":[192.177050630061132,95.5038628742744748,63.334871160235295],"hsluv":[192.177050630061132,95.1300327368807075,63.334871160235295]},"#22aabb":{"lch":[63.8975462810157211,51.5875561200845425,208.460106210027732],"luv":[63.8975462810157211,-45.3531553267970224,-24.5838818811491713],"rgb":[0.133333333333333331,0.66666666666666663,0.733333333333333282],"xyz":[0.240024541786054202,0.326758097108043932,0.520573663715677704],"hpluv":[208.460106210027732,102.447201536891086,63.8975462810157211],"hsluv":[208.460106210027732,95.4139121453229393,63.8975462810157211]},"#22aacc":{"lch":[64.5216311304052681,59.1142282054053112,221.706391964203618],"luv":[64.5216311304052681,-44.1325525375176184,-39.3295027027292079],"rgb":[0.133333333333333331,0.66666666666666663,0.8],"xyz":[0.259316917229775901,0.334475047285532734,0.62218017438594786],"hpluv":[221.706391964203618,116.258847224370101,64.5216311304052681],"hsluv":[221.706391964203618,95.6963242429470853,64.5216311304052681]},"#22aadd":{"lch":[65.2065000175346796,69.0826091468118619,231.553565124642319],"luv":[65.2065000175346796,-42.9543721979751538,-54.1047945713593279],"rgb":[0.133333333333333331,0.66666666666666663,0.866666666666666696],"xyz":[0.2808352427804095,0.34308237750578624,0.735510022285953857],"hpluv":[231.553565124642319,134.436491082611866,65.2065000175346796],"hsluv":[231.553565124642319,95.9729250289437,65.2065000175346796]},"#22aaee":{"lch":[65.951153016283925,80.4876559434330687,238.683318882444183],"luv":[65.951153016283925,-41.8348964739996418,-68.7612114224159825],"rgb":[0.133333333333333331,0.66666666666666663,0.933333333333333348],"xyz":[0.304647423046584209,0.352607249612256257,0.86092083835447708],"hpluv":[238.683318882444183,154.862481256054423,65.951153016283925],"hsluv":[238.683318882444183,96.2403212652285305,65.951153016283925]},"#22aaff":{"lch":[66.7542622474436911,92.6475815050926741,243.881654723446388],"luv":[66.7542622474436911,-40.785937465112724,-83.187028218555227],"rgb":[0.133333333333333331,0.66666666666666663,1],"xyz":[0.33081847145641563,0.363075668976189,0.998755026646258925],"hpluv":[243.881654723446388,176.114215620682756,66.7542622474436911],"hsluv":[243.881654723446388,99.9999999999982521,66.7542622474436911]},"#22bb00":{"lch":[66.4275479271698117,100.802558180890344,126.547308547849156],"luv":[66.4275479271698117,-60.0265444602621798,80.9812922592122533],"rgb":[0.133333333333333331,0.733333333333333282,0],"xyz":[0.184292180963184393,0.358792349432654534,0.0595410403661315105],"hpluv":[126.547308547849156,192.558484368086766,66.4275479271698117],"hsluv":[126.547308547849156,100.000000000002402,66.4275479271698117]},"#22bb11":{"lch":[66.4585250929908682,99.6331665050874449,126.950333401467461],"luv":[66.4585250929908682,-59.891738470658936,79.6225315522727612],"rgb":[0.133333333333333331,0.733333333333333282,0.0666666666666666657],"xyz":[0.185303846462821525,0.359197015632509387,0.0648691453308871402],"hpluv":[126.950333401467461,190.235936561387632,66.4585250929908682],"hsluv":[126.950333401467461,98.1323711753334464,66.4585250929908682]},"#22bb22":{"lch":[66.5158870179191553,97.5011623585143496,127.715012949240375],"luv":[66.5158870179191553,-59.6448091899021904,77.1295883430057785],"rgb":[0.133333333333333331,0.733333333333333282,0.133333333333333331],"xyz":[0.187179204601298527,0.359947158887900187,0.0747460315268663328],"hpluv":[127.715012949240375,186.004620566556611,66.5158870179191553],"hsluv":[127.715012949240375,94.7095045552014341,66.5158870179191553]},"#22bb33":{"lch":[66.6101592341861561,94.091611241079562,129.025604662043349],"luv":[66.6101592341861561,-59.2464412491434089,73.0964465979998721],"rgb":[0.133333333333333331,0.733333333333333282,0.2],"xyz":[0.19026695533375626,0.361182259180883314,0.091008185384477483],"hpluv":[129.025604662043349,179.246118589082698,66.6101592341861561],"hsluv":[129.025604662043349,94.7728361420699628,66.6101592341861561]},"#22bb44":{"lch":[66.7458880420052907,89.3893698914418735,131.03732282887168],"luv":[66.7458880420052907,-58.6886365964374903,67.424797990356],"rgb":[0.133333333333333331,0.733333333333333282,0.266666666666666663],"xyz":[0.194724950577975148,0.36296545727857088,0.114486960337364121],"hpluv":[131.03732282887168,169.941985039444177,66.7458880420052907],"hsluv":[131.03732282887168,94.8616428317247511,66.7458880420052907]},"#22bb55":{"lch":[66.9267274999506,83.5071173210959472,133.96576260666626],"luv":[66.9267274999506,-57.9730125462468777,60.1046459068846488],"rgb":[0.133333333333333331,0.733333333333333282,0.333333333333333315],"xyz":[0.200687364617337161,0.365350422894315741,0.145889007611338023],"hpluv":[133.96576260666626,158.330006142604873,66.9267274999506],"hsluv":[133.96576260666626,94.9758066387206128,66.9267274999506]},"#22bb66":{"lch":[67.1556458878222315,76.7025221245859541,138.121353671725132],"luv":[67.1556458878222315,-57.1096598103208919,51.2031606116460054],"rgb":[0.133333333333333331,0.733333333333333282,0.4],"xyz":[0.208272360390845318,0.368384421203719059,0.185836652018481985],"hpluv":[138.121353671725132,144.932719296840418,67.1556458878222315],"hsluv":[138.121353671725132,95.1139083236691363,67.1556458878222315]},"#22bb77":{"lch":[67.4350338747947831,69.4107315991336407,143.945643371462126],"luv":[67.4350338747947831,-56.1157304677756557,40.8518598743670935],"rgb":[0.133333333333333331,0.733333333333333282,0.466666666666666674],"xyz":[0.217586373411047251,0.372110026411799855,0.234890453924879894],"hpluv":[143.945643371462126,130.611184627207962,67.4350338747947831],"hsluv":[143.945643371462126,95.2734443978328471,67.4350338747947831]},"#22bb88":{"lch":[67.7667691572368653,62.2973404800357571,152.016434409622292],"luv":[67.7667691572368653,-55.0136735570032656,29.2310511724943218],"rgb":[0.133333333333333331,0.733333333333333282,0.533333333333333326],"xyz":[0.228726790512991052,0.376566193252577452,0.293563317328452089],"hpluv":[152.016434409622292,116.65196328010299,67.7667691572368653],"hsluv":[152.016434409622292,95.4510958201536823,67.7667691572368653]},"#22bb99":{"lch":[68.1522602188863402,56.3167420179958214,162.907285030510934],"luv":[68.1522602188863402,-53.8292536917802948,16.552549003324323],"rgb":[0.133333333333333331,0.733333333333333282,0.6],"xyz":[0.241783754622063779,0.38178897889620661,0.362329994969569968],"hpluv":[162.907285030510934,104.856796539193,68.1522602188863402],"hsluv":[162.907285030510934,95.6430286983925555,68.1522602188863402]},"#22bbaa":{"lch":[68.5924801056558238,52.6774965449754617,176.68900923381463],"luv":[68.5924801056558238,-52.5895649511659542,3.04241688349887474],"rgb":[0.133333333333333331,0.733333333333333282,0.66666666666666663],"xyz":[0.256841447587316307,0.387812056082307732,0.441633844586568569],"hpluv":[176.68900923381463,97.4513697523019,68.5924801056558238],"hsluv":[176.68900923381463,95.8451953079369616,68.5924801056558238]},"#22bbbb":{"lch":[69.087995915136645,52.5025293878432677,192.177050630061075],"luv":[69.087995915136645,-51.3212466461144174,-11.0745309069971647],"rgb":[0.133333333333333331,0.733333333333333282,0.733333333333333282],"xyz":[0.273979039694653,0.394667092925242491,0.531891829685210316],"hpluv":[192.177050630061075,96.4310638968393903,69.087995915136645],"hsluv":[192.177050630061075,96.05360442262905,69.087995915136645]},"#22bbcc":{"lch":[69.6389970716796824,56.2104265974936,207.07804051519031],"luv":[69.6389970716796824,-50.0490518690675117,-25.5871933841835393],"rgb":[0.133333333333333331,0.733333333333333282,0.8],"xyz":[0.293271415138374736,0.402384043102731292,0.633498340355480472],"hpluv":[207.07804051519031,102.424464009042,69.6389970716796824],"hsluv":[207.07804051519031,96.2645382772070519,69.6389970716796824]},"#22bbdd":{"lch":[70.2453239794146924,63.2897284454122868,219.558412279776348],"luv":[70.2453239794146924,-48.7948432782897541,-40.3069844585422956],"rgb":[0.133333333333333331,0.733333333333333282,0.866666666666666696],"xyz":[0.314789740689008224,0.410991373322984799,0.746828188255486469],"hpluv":[219.558412279776348,114.328666738486675,70.2453239794146924],"hsluv":[219.558412279776348,96.4747049793171101,70.2453239794146924]},"#22bbee":{"lch":[70.9064977498674409,72.7777709471329644,229.176572531806158],"luv":[70.9064977498674409,-47.5770176148035588,-55.072963774560229],"rgb":[0.133333333333333331,0.733333333333333282,0.933333333333333348],"xyz":[0.338601920955183,0.420516245429454816,0.872239004324009692],"hpluv":[229.176572531806158,130.242295294742263,70.9064977498674409],"hsluv":[229.176572531806158,96.6813261778791286,70.9064977498674409]},"#22bbff":{"lch":[71.621751136046143,83.782469360031385,236.362391595167765],"luv":[71.621751136046143,-46.4103062114400586,-69.7537500742789121],"rgb":[0.133333333333333331,0.733333333333333282,1],"xyz":[0.364772969365014355,0.43098466479338754,1.01007319261579154],"hpluv":[236.362391595167765,148.438838585801221,71.621751136046143],"hsluv":[236.362391595167765,99.9999999999977405,71.621751136046143]},"#22cc00":{"lch":[71.9091745039523431,109.499123564337054,126.755635680122666],"luv":[71.9091745039523431,-65.5246489265194185,87.7301455852794732],"rgb":[0.133333333333333331,0.8,0],"xyz":[0.222515924272801313,0.435239836051889428,0.0722822881360034586],"hpluv":[126.755635680122666,193.226045742870838,71.9091745039523431],"hsluv":[126.755635680122666,100.000000000002288,71.9091745039523431]},"#22cc11":{"lch":[71.9364107151438077,108.454952609175663,127.087674169957992],"luv":[71.9364107151438077,-65.4022833696805,86.5159989567857508],"rgb":[0.133333333333333331,0.8,0.0666666666666666657],"xyz":[0.223527589772438445,0.435644502251744281,0.0776103931007591],"hpluv":[127.087674169957992,191.311003889673145,71.9364107151438077],"hsluv":[127.087674169957992,98.4591341389350418,71.9364107151438077]},"#22cc22":{"lch":[71.9868548113652196,106.54571101335867,127.715012949240403],"luv":[71.9868548113652196,-65.1776701905061771,84.2843985793322332],"rgb":[0.133333333333333331,0.8,0.133333333333333331],"xyz":[0.225402947910915447,0.436394645507135082,0.0874872792967382878],"hpluv":[127.715012949240403,187.811464536348922,71.9868548113652196],"hsluv":[127.715012949240403,95.6295101801496,71.9868548113652196]},"#22cc33":{"lch":[72.0697845089905229,103.47656324227728,128.782383231673776],"luv":[72.0697845089905229,-64.8140104316899084,80.6631464312780224],"rgb":[0.133333333333333331,0.8,0.2],"xyz":[0.22849069864337318,0.437629745800118208,0.103749433154349424],"hpluv":[128.782383231673776,182.191494825933376,72.0697845089905229],"hsluv":[128.782383231673776,95.6728206524347,72.0697845089905229]},"#22cc44":{"lch":[72.1892409305665126,99.2080881077430092,130.402545810446583],"luv":[72.1892409305665126,-64.3020931154350563,75.5479024657046381],"rgb":[0.133333333333333331,0.8,0.266666666666666663],"xyz":[0.232948693887592068,0.439412943897805774,0.127228208107236063],"hpluv":[130.402545810446583,174.38692971209278,72.1892409305665126],"hsluv":[130.402545810446583,95.7338579762306807,72.1892409305665126]},"#22cc55":{"lch":[72.3485056391290584,93.798910065649892,132.724941359454647],"luv":[72.3485056391290584,-63.6406395178356732,68.9064912128369116],"rgb":[0.133333333333333331,0.8,0.333333333333333315],"xyz":[0.23891110792695408,0.441797909513550635,0.158630255381209978],"hpluv":[132.724941359454647,164.515777124050715,72.3485056391290584],"hsluv":[132.724941359454647,95.8128514989610665,72.3485056391290584]},"#22cc66":{"lch":[72.5502856399570106,87.4149553130202577,135.957009780349864],"luv":[72.5502856399570106,-62.8354766726053597,60.7706942835425821],"rgb":[0.133333333333333331,0.8,0.4],"xyz":[0.246496103700462238,0.444831907822953954,0.19857789978835394],"hpluv":[135.957009780349864,152.89241471165704,72.5502856399570106],"hsluv":[135.957009780349864,95.9092114165347454,72.5502856399570106]},"#22cc77":{"lch":[72.7968107106438,80.347487444586676,140.388595454497391],"luv":[72.7968107106438,-61.8986076052927601,51.2277377519640922],"rgb":[0.133333333333333331,0.8,0.466666666666666674],"xyz":[0.255810116720664171,0.448557513031034749,0.247631701694751849],"hpluv":[140.388595454497391,140.055211607516185,72.7968107106438],"hsluv":[140.388595454497391,96.0216367005683651,72.7968107106438]},"#22cc88":{"lch":[73.0898911189871399,73.0433057087839899,146.410934307510047],"luv":[73.0898911189871399,-60.8470337434031379,40.4099368162836328],"rgb":[0.133333333333333331,0.8,0.533333333333333326],"xyz":[0.266950533822607972,0.453013679871812347,0.306304565098324044],"hpluv":[146.410934307510047,126.812607157634474,73.0898911189871399],"hsluv":[146.410934307510047,96.1482500942118463,73.0898911189871399]},"#22cc99":{"lch":[73.4309556061454316,66.1476907411168,154.494840416347301],"luv":[73.4309556061454316,-59.7013675833161201,28.4826912187770667],"rgb":[0.133333333333333331,0.8,0.6],"xyz":[0.280007497931680671,0.458236465515441505,0.375071242739441923],"hpluv":[154.494840416347301,114.307528246897718,73.4309556061454316],"hsluv":[154.494840416347301,96.2867563581127826,73.4309556061454316]},"#22ccaa":{"lch":[73.8210792378530272,60.5373530055450857,165.03572853292485],"luv":[73.8210792378530272,-58.4843517505691963,15.631753236079188],"rgb":[0.133333333333333331,0.8,0.66666666666666663],"xyz":[0.295065190896933227,0.464259542701542627,0.454375092356440524],"hpluv":[165.03572853292485,104.059650734936554,73.8210792378530272],"hsluv":[165.03572853292485,96.4346108423233233,73.8210792378530272]},"#22ccbb":{"lch":[74.2610062314211916,57.2561659312404601,177.947236116536601],"luv":[74.2610062314211916,-57.2194225987583565,2.05090580243043252],"rgb":[0.133333333333333331,0.8,0.733333333333333282],"xyz":[0.312202783004269901,0.471114579544477385,0.544633077455082271],"hpluv":[177.947236116536601,97.8364666306377302,74.2610062314211916],"hsluv":[177.947236116536601,96.5891828531354406,74.2610062314211916]},"#22cccc":{"lch":[74.7511706210643467,57.2167927817266,192.177050630061132],"luv":[74.7511706210643467,-55.9294412838427633,-12.0689259631595149],"rgb":[0.133333333333333331,0.8,0.8],"xyz":[0.3314951584479916,0.478831529721966187,0.646239588125352427],"hpluv":[192.177050630061132,97.128087782713564,74.7511706210643467],"hsluv":[192.177050630061132,96.747899952527,74.7511706210643467]},"#22ccdd":{"lch":[75.2917163799825602,60.7443465218384091,205.915913497891523],"luv":[75.2917163799825602,-54.6356779140553357,-26.5484148912282159],"rgb":[0.133333333333333331,0.8,0.866666666666666696],"xyz":[0.353013483998625199,0.487438859942219693,0.759569436025358424],"hpluv":[205.915913497891523,102.375961416692178,75.2917163799825602],"hsluv":[205.915913497891523,96.9083635301369,75.2917163799825602]},"#22ccee":{"lch":[75.8825178700112843,67.4282526949852894,217.691288579377613],"luv":[75.8825178700112843,-53.3570890727704779,-41.2260877015904583],"rgb":[0.133333333333333331,0.8,0.933333333333333348],"xyz":[0.376825664264799909,0.49696373204868971,0.884980252093881647],"hpluv":[217.691288579377613,112.755958051566466,75.8825178700112843],"hsluv":[217.691288579377613,97.0684311053177851,75.8825178700112843]},"#22ccff":{"lch":[76.5232010138481,76.4669756721874165,227.041443142980768],"luv":[76.5232010138481,-52.1098871667616095,-55.9621124325938553],"rgb":[0.133333333333333331,0.8,1],"xyz":[0.40299671267463133,0.507432151412622434,1.02281444038566338],"hpluv":[227.041443142980768,130.754689276117347,76.5232010138481],"hsluv":[227.041443142980768,99.999999999997,76.5232010138481]},"#22dd00":{"lch":[77.3111928538645543,118.038829613749726,126.914864539429317],"luv":[77.3111928538645543,-70.8973873693031607,94.3754510494695],"rgb":[0.133333333333333331,0.866666666666666696,0],"xyz":[0.265149914819976518,0.520507817146241,0.0864936183183947771],"hpluv":[126.914864539429317,210.347075729226248,77.3111928538645543],"hsluv":[126.914864539429317,100.000000000002288,77.3111928538645543]},"#22dd11":{"lch":[77.3353680300965323,117.099630973594756,127.192375056145337],"luv":[77.3353680300965323,-70.7859197567446756,93.2827805028547346],"rgb":[0.133333333333333331,0.866666666666666696,0.0666666666666666657],"xyz":[0.266161580319613622,0.520912483346095856,0.0918217232831504138],"hpluv":[127.192375056145337,208.941659016378082,77.3353680300965323],"hsluv":[127.192375056145337,98.7107326231664217,77.3353680300965323]},"#22dd22":{"lch":[77.3801492665193535,115.37848303888174,127.715012949240432],"luv":[77.3801492665193535,-70.5809801545768636,91.2716801027172409],"rgb":[0.133333333333333331,0.866666666666666696,0.133333333333333331],"xyz":[0.268036938458090679,0.521662626601486656,0.101698609479129606],"hpluv":[127.715012949240432,206.361699793513822,77.3801492665193535],"hsluv":[127.715012949240432,96.3395071146262154,77.3801492665193535]},"#22dd33":{"lch":[77.4537875025684315,112.600723810091978,128.59932725776207],"luv":[77.4537875025684315,-70.24826089977104,88.0005956974969195],"rgb":[0.133333333333333331,0.866666666666666696,0.2],"xyz":[0.271124689190548385,0.522897726894469783,0.117960763336740743],"hpluv":[128.59932725776207,202.185786680839726,77.4537875025684315],"hsluv":[128.59932725776207,96.3699377868481122,77.4537875025684315]},"#22dd44":{"lch":[77.5598997380018,108.71293616133481,129.930302741787841],"luv":[77.5598997380018,-69.7779723132927217,83.3638834787812],"rgb":[0.133333333333333331,0.866666666666666696,0.266666666666666663],"xyz":[0.2755826844347673,0.524680924992157349,0.141439538289627381],"hpluv":[129.930302741787841,196.316024449944422,77.5598997380018],"hsluv":[129.930302741787841,96.4129906320409162,77.5598997380018]},"#22dd55":{"lch":[77.7014460191091416,103.73899221962921,131.815952634500974],"luv":[77.7014460191091416,-69.1669361195931,77.3156740549574266],"rgb":[0.133333333333333331,0.866666666666666696,0.333333333333333315],"xyz":[0.281545098474129285,0.527065890607902099,0.172841585563601297],"hpluv":[131.815952634500974,188.764163413831653,77.7014460191091416],"hsluv":[131.815952634500974,96.4690009350202189,77.7014460191091416]},"#22dd66":{"lch":[77.880896240080375,97.784990294992113,134.401120560320578],"luv":[77.880896240080375,-68.4179393254247117,69.8633659756971923],"rgb":[0.133333333333333331,0.866666666666666696,0.4],"xyz":[0.28913009424763747,0.530099888917305417,0.212789229970745258],"hpluv":[134.401120560320578,179.664283635232721,77.880896240080375],"hsluv":[134.401120560320578,96.5377748783722467,77.880896240080375]},"#22dd77":{"lch":[78.1003183749745205,91.0497694522495635,137.883451987021573],"luv":[78.1003183749745205,-67.5390964016577584,61.0616980975421],"rgb":[0.133333333333333331,0.866666666666666696,0.466666666666666674],"xyz":[0.298444107267839376,0.533825494125386268,0.261843031877143195],"hpluv":[137.883451987021573,169.299836923025936,78.1003183749745205],"hsluv":[137.883451987021573,96.6186469084632478,78.1003183749745205]},"#22dd88":{"lch":[78.3614307373917285,83.8424849668191143,142.529576014285681],"luv":[78.3614307373917285,-66.5430534683674608,51.0057283108209205],"rgb":[0.133333333333333331,0.866666666666666696,0.533333333333333326],"xyz":[0.309584524369783176,0.538281660966163811,0.320515895280715335],"hpluv":[142.529576014285681,158.150702843881334,78.3614307373917285],"hsluv":[142.529576014285681,96.7105501690208,78.3614307373917285]},"#22dd99":{"lch":[78.665635872828048,76.6094810635621144,148.680389056502293],"luv":[78.665635872828048,-65.4460211356496586,39.8224924677044854],"rgb":[0.133333333333333331,0.866666666666666696,0.6],"xyz":[0.322641488478855876,0.543504446609793,0.389282572921833214],"hpluv":[148.680389056502293,146.968629494944878,78.665635872828048],"hsluv":[148.680389056502293,96.8121015046769884,78.665635872828048]},"#22ddaa":{"lch":[79.0140446006893882,69.96699558248838,156.711923446039975],"luv":[79.0140446006893882,-64.2666918031728613,27.6617569130368608],"rgb":[0.133333333333333331,0.866666666666666696,0.66666666666666663],"xyz":[0.337699181444108432,0.549527523795894091,0.46858642253883187],"hpluv":[156.711923446039975,136.880679993502099,79.0140446006893882],"hsluv":[156.711923446039975,96.9216963326973513,79.0140446006893882]},"#22ddbb":{"lch":[79.4074947696843196,64.7136880558744849,166.88262774299784],"luv":[79.4074947696843196,-63.0251268096233161,14.6865520944819572],"rgb":[0.133333333333333331,0.866666666666666696,0.733333333333333282],"xyz":[0.354836773551445106,0.556382560638828849,0.558844407637473561],"hpluv":[166.88262774299784,129.476815865977585,79.4074947696843196],"hsluv":[166.88262774299784,97.0376060255481,79.4074947696843196]},"#22ddcc":{"lch":[79.8465673347569123,61.7508733998812431,179.012513434233142],"luv":[79.8465673347569123,-61.7417023409151184,1.06421693934889783],"rgb":[0.133333333333333331,0.866666666666666696,0.8],"xyz":[0.374129148995166805,0.564099510816317706,0.660450918307743717],"hpluv":[179.012513434233142,126.735630147597362,79.8465673347569123],"hsluv":[179.012513434233142,97.1580701030331824,79.8465673347569123]},"#22dddd":{"lch":[80.3316012938198867,61.8272738566169,192.177050630061245],"luv":[80.3316012938198867,-60.4361886569793,-13.0414298740249546],"rgb":[0.133333333333333331,0.866666666666666696,0.866666666666666696],"xyz":[0.395647474545800404,0.572706841036571213,0.773780766207749715],"hpluv":[192.177050630061245,130.583134255532286,80.3316012938198867],"hsluv":[192.177050630061245,97.2813767637234434,80.3316012938198867]},"#22ddee":{"lch":[80.8627083873859078,65.1993477029452606,204.924336649163848],"luv":[80.8627083873859078,-59.1270126845314579,-27.4763773429615092],"rgb":[0.133333333333333331,0.866666666666666696,0.933333333333333348],"xyz":[0.419459654811975113,0.58223171314304123,0.899191582276272938],"hpluv":[204.924336649163848,142.193638870282854,80.8627083873859078],"hsluv":[204.924336649163848,97.405927410883,80.8627083873859078]},"#22ddff":{"lch":[81.4397880620905141,71.5324096951162574,216.054756332513932],"luv":[81.4397880620905141,-57.8307265123863,-42.1009822669203544],"rgb":[0.133333333333333331,0.866666666666666696,1],"xyz":[0.445630703221806534,0.592700132506974,1.03702577056805478],"hpluv":[216.054756332513932,161.676156351457934,81.4397880620905141],"hsluv":[216.054756332513932,99.9999999999961,81.4397880620905141]},"#22ee00":{"lch":[82.639607109796458,126.437751030410212,127.039022267349651],"luv":[82.639607109796458,-76.1608929793909368,100.92583052028732],"rgb":[0.133333333333333331,0.933333333333333348,0],"xyz":[0.312328691160491334,0.614865369827271913,0.102219877098565962],"hpluv":[127.039022267349651,308.746810598848469,82.639607109796458],"hsluv":[127.039022267349651,100.000000000002203,82.639607109796458]},"#22ee11":{"lch":[82.6612418520526262,125.587498690937579,127.273852876359626],"luv":[82.6612418520526262,-76.0589691017437,99.9362449095734462],"rgb":[0.133333333333333331,0.933333333333333348,0.0666666666666666657],"xyz":[0.313340356660128438,0.615270036027126821,0.107547982063321598],"hpluv":[127.273852876359626,307.111076239802628,82.6612418520526262],"hsluv":[127.273852876359626,98.9080389542438638,82.6612418520526262]},"#22ee22":{"lch":[82.7013218186993271,124.026614606467561,127.715012949240375],"luv":[82.7013218186993271,-75.8713392100017643,98.112899341636421],"rgb":[0.133333333333333331,0.933333333333333348,0.133333333333333331],"xyz":[0.315215714798605495,0.616020179282517621,0.117424868259300791],"hpluv":[127.715012949240375,304.102865014696874,82.7013218186993271],"hsluv":[127.715012949240375,96.8972824334497176,82.7013218186993271]},"#22ee33":{"lch":[82.7672420886773921,121.499708898279266,128.458265706389938],"luv":[82.7672420886773921,-75.5660658728233443,95.1417308591278754],"rgb":[0.133333333333333331,0.933333333333333348,0.2],"xyz":[0.318303465531063201,0.617255279575500748,0.133687022116911941],"hpluv":[128.458265706389938,299.21821405622444,82.7672420886773921],"hsluv":[128.458265706389938,96.9191735237910308,82.7672420886773921]},"#22ee44":{"lch":[82.8622607061112575,117.945648419515081,129.569612755667265],"luv":[82.8622607061112575,-75.1331770294334,90.918544261133448],"rgb":[0.133333333333333331,0.933333333333333348,0.266666666666666663],"xyz":[0.322761460775282116,0.619038477673188314,0.15716579706979858],"hpluv":[129.569612755667265,292.317409010606752,82.8622607061112575],"hsluv":[129.569612755667265,96.9502397298715692,82.8622607061112575]},"#22ee55":{"lch":[82.9890600071846194,113.365618159982461,131.129866929811442],"luv":[82.9890600071846194,-74.5682726576598185,85.3893207236587],"rgb":[0.133333333333333331,0.933333333333333348,0.333333333333333315],"xyz":[0.328723874814644101,0.621423443288933064,0.188567844343772495],"hpluv":[131.129866929811442,283.372415217622233,82.9890600071846194],"hsluv":[131.129866929811442,96.9908233877961266,82.9890600071846194]},"#22ee66":{"lch":[83.1498978333136,107.825536766413322,133.243989823694022],"luv":[83.1498978333136,-73.8719849852999175,78.5447402013449647],"rgb":[0.133333333333333331,0.933333333333333348,0.4],"xyz":[0.336308870588152287,0.624457441598336382,0.228515488750916429],"hpluv":[133.243989823694022,272.476761047092111,83.1498978333136],"hsluv":[133.243989823694022,97.0409162623008683,83.1498978333136]},"#22ee77":{"lch":[83.3466879629012709,101.462411308546436,136.05169958656856],"luv":[83.3466879629012709,-73.0495185954435726,70.415827350948561],"rgb":[0.133333333333333331,0.933333333333333348,0.466666666666666674],"xyz":[0.345622883608354192,0.628183046806417233,0.277569290657314338],"hpluv":[136.05169958656856,259.869348467080897,83.3466879629012709],"hsluv":[136.05169958656856,97.1001922741487391,83.3466879629012709]},"#22ee88":{"lch":[83.5810478428977746,94.494960715205238,139.739189865999265],"luv":[83.5810478428977746,-72.1101014829990277,61.0690663485185681],"rgb":[0.133333333333333331,0.933333333333333348,0.533333333333333326],"xyz":[0.356763300710298,0.632639213647194776,0.336242154060886533],"hpluv":[139.739189865999265,245.976403795765407,83.5810478428977746],"hsluv":[139.739189865999265,97.1680458209452098,83.5810478428977746]},"#22ee99":{"lch":[83.8543293451422187,87.2401092672494514,144.548413258572367],"luv":[83.8543293451422187,-71.0663081347816,50.6005584263049286],"rgb":[0.133333333333333331,0.933333333333333348,0.6],"xyz":[0.369820264819370692,0.637861999290824,0.405008831702004413],"hpluv":[144.548413258572367,231.480208097577446,83.8543293451422187],"hsluv":[144.548413258572367,97.2436385928483844,83.8543293451422187]},"#22eeaa":{"lch":[84.1676401551603846,80.1359348037682508,150.771943883792943],"luv":[84.1676401551603846,-69.9332745317766324,39.1293388665967328],"rgb":[0.133333333333333331,0.933333333333333348,0.66666666666666663],"xyz":[0.384877957784623248,0.643885076476925056,0.484312681319003],"hpluv":[150.771943883792943,217.42312560604816,84.1676401551603846],"hsluv":[150.771943883792943,97.3259536357082311,84.1676401551603846]},"#22eebb":{"lch":[84.5218598825754697,73.7647249619211181,158.704077932293842],"luv":[84.5218598825754697,-68.7278540770417834,26.7902355844945639],"rgb":[0.133333333333333331,0.933333333333333348,0.733333333333333282],"xyz":[0.402015549891959922,0.650740113319859814,0.57457066641764476],"hpluv":[158.704077932293842,205.339796192481117,84.5218598825754697],"hsluv":[158.704077932293842,97.4138533690930331,84.5218598825754697]},"#22eecc":{"lch":[84.9176532530853621,68.8500130904050422,168.499772582144715],"luv":[84.9176532530853621,-67.467774257192545,13.7267526869778429],"rgb":[0.133333333333333331,0.933333333333333348,0.8],"xyz":[0.421307925335681621,0.658457063497348671,0.676177177087914916],"hpluv":[168.499772582144715,197.354512375483154,84.9176532530853621],"hsluv":[168.499772582144715,97.5061375012374896,84.9176532530853621]},"#22eedd":{"lch":[85.3554818050158275,66.1709053937965166,179.926877690260085],"luv":[85.3554818050158275,-66.170851505859261,0.0844489448895467398],"rgb":[0.133333333333333331,0.933333333333333348,0.866666666666666696],"xyz":[0.44282625088631522,0.667064393717602178,0.789507024987920913],"hpluv":[179.926877690260085,196.075052309852396,85.3554818050158275],"hsluv":[179.926877690260085,97.6015969291830174,85.3554818050158275]},"#22eeee":{"lch":[85.8356149635753667,66.3470894225537648,192.177050630061245],"luv":[85.8356149635753667,-64.8543104533760868,-13.9948094114017536],"rgb":[0.133333333333333331,0.933333333333333348,0.933333333333333348],"xyz":[0.46663843115248993,0.676589265824072195,0.914917841056444137],"hpluv":[192.177050630061245,204.089886920334152,85.8356149635753667],"hsluv":[192.177050630061245,97.6990604766853608,85.8356149635753667]},"#22eeff":{"lch":[86.35814102124138,69.583621560973242,204.067857145017655],"luv":[86.35814102124138,-63.5342376580599435,-28.377474072755291],"rgb":[0.133333333333333331,0.933333333333333348,1],"xyz":[0.492809479562321351,0.687057685188004919,1.05275202934822598],"hpluv":[204.067857145017655,223.225826840448832,86.35814102124138],"hsluv":[204.067857145017655,99.9999999999940883,86.35814102124138]},"#22ff00":{"lch":[87.8997189713237361,134.70927246092154,127.137510750393233],"luv":[87.8997189713237361,-81.328032504319566,107.388729464162736],"rgb":[0.133333333333333331,1,0],"xyz":[0.364181063590165166,0.718570114686621,0.119504001241790073],"hpluv":[127.137510750393233,493.515561032875894,87.8997189713237361],"hsluv":[127.137510750393233,100.000000000002359,87.8997189713237361]},"#22ff11":{"lch":[87.9192191859
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/lucasb-eyer/go-colorful/hsluv-snapshot-rev4.json","mode":420,"size":1664600,"sha256":"fa702c58663587d1d1080ad1271be94f6c7002fcf5ba1125ac7e758ed5b98966","index":34,"count":35,"newline":"lf","encoding":"utf-8","payloadBytes":32600}
-362708,133.935112153716517,127.338384986715198],"luv":[87.9192191859362708,-81.2344832365115792,106.487431187561],"rgb":[0.133333333333333331,1,0.0666666666666666657],"xyz":[0.36519272908980227,0.718974780886475928,0.124832106206545709],"hpluv":[127.338384986715198,491.550771148457443,87.9192191859362708],"hsluv":[127.338384986715198,99.9999999999918572,87.9192191859362708]},"#22ff22":{"lch":[87.9553480404818089,132.511927889398493,127.71501294924046],"luv":[87.9553480404818089,-81.0620967295481449,104.825319015849075],"rgb":[0.133333333333333331,1,0.133333333333333331],"xyz":[0.367068087228279327,0.719724924141866729,0.134708992402524902],"hpluv":[127.71501294924046,487.932270281505453,87.9553480404818089],"hsluv":[127.71501294924046,99.9999999999918,87.9553480404818089]},"#22ff33":{"lch":[88.0147790356886,130.202284180175667,128.347396099003475],"luv":[88.0147790356886,-80.7811428723405101,102.112887345201102],"rgb":[0.133333333333333331,1,0.2],"xyz":[0.370155837960737033,0.720960024434849855,0.150971146260136052],"hpluv":[128.347396099003475,482.0420586134328,88.0147790356886],"hsluv":[128.347396099003475,99.9999999999918572,88.0147790356886]},"#22ff44":{"lch":[88.1004639745127349,126.941230298117631,129.288082018787549],"luv":[88.1004639745127349,-80.3817123888383,98.2489504424236486],"rgb":[0.133333333333333331,1,0.266666666666666663],"xyz":[0.374613833204955948,0.722743222532537422,0.174449921213022691],"hpluv":[129.288082018787549,473.688351575452941,88.1004639745127349],"hsluv":[129.288082018787549,99.9999999999917719,88.1004639745127349]},"#22ff55":{"lch":[88.2148445849976497,122.715034192366474,130.599301535876663],"luv":[88.2148445849976497,-79.8586444797792865,93.1749779645044498],"rgb":[0.133333333333333331,1,0.333333333333333315],"xyz":[0.380576247244317933,0.725128188148282171,0.205851968486996606],"hpluv":[130.599301535876663,462.799362736769183,88.2148445849976497],"hsluv":[130.599301535876663,99.9999999999917,88.2148445849976497]},"#22ff66":{"lch":[88.3599902775167863,117.562049147645283,132.359544385640646],"luv":[88.3599902775167863,-79.2110524978463104,86.8702743288911279],"rgb":[0.133333333333333331,1,0.4],"xyz":[0.388161243017826119,0.72816218645768549,0.24579961289414054],"hpluv":[132.359544385640646,449.432018335727776,88.3599902775167863],"hsluv":[132.359544385640646,99.999999999991644,88.3599902775167863]},"#22ff77":{"lch":[88.5376718023346427,111.576626717172417,134.67079586388752],"luv":[88.5376718023346427,-78.441973739162,79.3486004003085839],"rgb":[0.133333333333333331,1,0.466666666666666674],"xyz":[0.397475256038028,0.731887791665766341,0.294853414800538449],"hpluv":[134.67079586388752,433.796433649144,88.5376718023346427],"hsluv":[134.67079586388752,99.9999999999914593,88.5376718023346427]},"#22ff88":{"lch":[88.7494051061703,104.915784817642518,137.666744209541747],"luv":[88.7494051061703,-77.5579802767934581,70.6546643845003786],"rgb":[0.133333333333333331,1,0.533333333333333326],"xyz":[0.408615673139971824,0.736343958506543883,0.353526278204110644],"hpluv":[137.666744209541747,416.300130961303353,88.7494051061703],"hsluv":[137.666744209541747,99.9999999999915161,88.7494051061703]},"#22ff99":{"lch":[88.996479539624346,97.8095196496336143,141.520869213027311],"luv":[88.996479539624346,-76.5687003963823827,60.8599725082183696],"rgb":[0.133333333333333331,1,0.6],"xyz":[0.42167263724904458,0.741566744150173096,0.422292955845228524],"hpluv":[141.520869213027311,397.621886071746928,88.996479539624346],"hsluv":[141.520869213027311,99.9999999999913882,88.996479539624346]},"#22ffaa":{"lch":[89.2799772586324281,90.5758041558366784,146.450029989774293],"luv":[89.2799772586324281,-75.4862499862398,50.057989986528554],"rgb":[0.133333333333333331,1,0.66666666666666663],"xyz":[0.43673033021429708,0.747589821336274163,0.50159680546222718],"hpluv":[146.450029989774293,378.829469872945424,89.2799772586324281],"hsluv":[146.450029989774293,99.9999999999911893,89.2799772586324281]},"#22ffbb":{"lch":[89.6007875020334552,83.6393655876379825,152.701818689515648],"luv":[89.6007875020334552,-74.3245992165371661,38.3587985630895787],"rgb":[0.133333333333333331,1,0.733333333333333282],"xyz":[0.453867922321633754,0.754444858179208921,0.591854790560868871],"hpluv":[152.701818689515648,361.553698033539774,89.6007875020334552],"hsluv":[152.701818689515648,99.9999999999909903,89.6007875020334552]},"#22ffcc":{"lch":[89.9596178804745,77.5461751086222,160.50148390925915],"luv":[89.9596178804745,-73.0989125181650223,25.8835519710636532],"rgb":[0.133333333333333331,1,0.8],"xyz":[0.473160297765355509,0.762161808356697779,0.693461301231139],"hpluv":[160.50148390925915,348.207300802542932,89.9596178804745],"hsluv":[160.50148390925915,99.999999999990834,89.9596178804745]},"#22ffdd":{"lch":[90.3570039795250466,72.9493687180361,169.926987012389134],"luv":[90.3570039795250466,-71.8249031216737421,12.7590629719491808],"rgb":[0.133333333333333331,1,0.866666666666666696],"xyz":[0.494678623315989,0.770769138576951285,0.806791149131145],"hpluv":[169.926987012389134,342.16275562632859,90.3570039795250466],"hsluv":[169.926987012389134,99.9999999999906,90.3570039795250466]},"#22ffee":{"lch":[90.793318095908873,70.5238201303846637,180.720785562676866],"luv":[90.793318095908873,-70.5182397089352,-0.887171987837557796],"rgb":[0.133333333333333331,1,0.933333333333333348],"xyz":[0.518490803582163817,0.780294010683421302,0.932201965199668248],"hpluv":[180.720785562676866,347.681124246536797,90.793318095908873],"hsluv":[180.720785562676866,99.9999999999901661,90.793318095908873]},"#22ffff":{"lch":[91.2687776254429082,70.7867026205843786,192.177050630061217],"luv":[91.2687776254429082,-69.1940343982234225,-14.9312715999851058],"rgb":[0.133333333333333331,1,1],"xyz":[0.544661851991995127,0.790762430047354,1.0700361534914502],"hpluv":[192.177050630061217,369.384676987995,91.2687776254429082],"hsluv":[192.177050630061217,99.9999999999901803,91.2687776254429082]},"#11aa00":{"lch":[60.6644104521350869,93.0873160838275,127.211890667698796],"luv":[60.6644104521350869,-56.2958954857129186,74.1351506854346241],"rgb":[0.0666666666666666657,0.66666666666666663,0],"xyz":[0.146052570780394131,0.288673842599075969,0.0480220097587461675],"hpluv":[127.211890667698796,194.713406103753528,60.6644104521350869],"hsluv":[127.211890667698796,100.000000000002444,60.6644104521350869]},"#11aa11":{"lch":[60.7002167335786424,91.7670835597914447,127.715012949240375],"luv":[60.7002167335786424,-56.1370762813229547,72.5935692169401],"rgb":[0.0666666666666666657,0.66666666666666663,0.0666666666666666657],"xyz":[0.147064236280031263,0.289078508798930822,0.0533501147235018],"hpluv":[127.715012949240375,191.838607973199288,60.7002167335786424],"hsluv":[127.715012949240375,97.6800439707354826,60.7002167335786424]},"#11aa22":{"lch":[60.7665037483511696,89.3702510768545153,128.6744569519864],"luv":[60.7665037483511696,-55.8469935821418844,69.7721655488506229],"rgb":[0.0666666666666666657,0.66666666666666663,0.133333333333333331],"xyz":[0.148939594418508264,0.289828652054321623,0.063227000919481],"hpluv":[128.6744569519864,186.624241227076766,60.7665037483511696],"hsluv":[128.6744569519864,97.7012125574833163,60.7665037483511696]},"#11aa33":{"lch":[60.8753956347493101,85.5662665428975799,130.333267948257316],"luv":[60.8753956347493101,-55.3812688292774595,65.2265362636212274],"rgb":[0.0666666666666666657,0.66666666666666663,0.2],"xyz":[0.152027345150966,0.291063752347304749,0.0794891547770921469],"hpluv":[130.333267948257316,178.361088002118152,60.8753956347493101],"hsluv":[130.333267948257316,97.7352371443594876,60.8753956347493101]},"#11aa44":{"lch":[61.0320681383245898,80.3855440613202603,132.913331110856149],"luv":[61.0320681383245898,-54.7338170014505394,58.8731260464924233],"rgb":[0.0666666666666666657,0.66666666666666663,0.266666666666666663],"xyz":[0.156485340395184885,0.292846950444992316,0.102967929729978785],"hpluv":[132.913331110856149,167.131840298358668,61.0320681383245898],"hsluv":[132.913331110856149,97.7826211010278428,61.0320681383245898]},"#11aa55":{"lch":[61.2406211479126199,74.0326893716562466,136.73626291081149],"luv":[61.2406211479126199,-53.9110982897111626,50.7388665304739064],"rgb":[0.0666666666666666657,0.66666666666666663,0.333333333333333315],"xyz":[0.162447754434546898,0.295231916060737176,0.134369977003952701],"hpluv":[136.73626291081149,153.399260409180499,61.2406211479126199],"hsluv":[136.73626291081149,97.8429805383323412,61.2406211479126199]},"#11aa66":{"lch":[61.5043118059827236,66.9183608277608926,142.276062400218507],"luv":[61.5043118059827236,-52.9302802927860938,40.944504442006675],"rgb":[0.0666666666666666657,0.66666666666666663,0.4],"xyz":[0.170032750208055056,0.298265914370140495,0.174317621411096635],"hpluv":[142.276062400218507,138.063556785316223,61.5043118059827236],"hsluv":[142.276062400218507,97.9151756761398246,61.5043118059827236]},"#11aa77":{"lch":[61.8256765996828648,59.7171413308715628,150.193024237310198],"luv":[61.8256765996828648,-51.8168585560505335,29.6841731923518672],"rgb":[0.0666666666666666657,0.66666666666666663,0.466666666666666674],"xyz":[0.179346763228257,0.30199151957822129,0.223371423317494544],"hpluv":[150.193024237310198,122.565843528602272,61.8256765996828648],"hsluv":[150.193024237310198,97.9974781059027578,61.8256765996828648]},"#11aa88":{"lch":[62.2066058842594,53.445591933814967,161.225226782668472],"luv":[62.2066058842594,-50.6018085779820197,17.201403018159084],"rgb":[0.0666666666666666657,0.66666666666666663,0.533333333333333326],"xyz":[0.190487180330200789,0.306447686418998888,0.282044286721066739],"hpluv":[161.225226782668472,109.022142353571084,62.2066058842594],"hsluv":[161.225226782668472,98.0877698343988698,62.2066058842594]},"#11aa99":{"lch":[62.6483970296267643,49.4620441969123803,175.635441576327452],"luv":[62.6483970296267643,-49.3186051456987613,3.76417356400704],"rgb":[0.0666666666666666657,0.66666666666666663,0.6],"xyz":[0.203544144439273517,0.311670472062628046,0.350810964362184619],"hpluv":[175.635441576327452,100.184705161952,62.6483970296267643],"hsluv":[175.635441576327452,98.1837511724305756,62.6483970296267643]},"#11aaaa":{"lch":[63.1517986220979424,49.10533458105958,192.177050630061103],"luv":[63.1517986220979424,-48.0004871585874326,-10.3579494522848794],"rgb":[0.0666666666666666657,0.66666666666666663,0.66666666666666663],"xyz":[0.218601837404526045,0.317693549248729168,0.430114813979183219],"hpluv":[192.177050630061103,98.6693521766944741,63.1517986220979424],"hsluv":[192.177050630061103,98.283131385506934,63.1517986220979424]},"#11aabb":{"lch":[63.7170519890822931,52.9100997091116483,208.088870357104184],"luv":[63.7170519890822931,-46.6782604891356812,-24.9122188681885817],"rgb":[0.0666666666666666657,0.66666666666666663,0.733333333333333282],"xyz":[0.235739429511862719,0.324548586091663926,0.520372799077825],"hpluv":[208.088870357104184,105.371274370578277,63.7170519890822931],"hsluv":[208.088870357104184,98.3837818799450474,63.7170519890822931]},"#11aacc":{"lch":[64.3439331362496603,60.2774830024396,221.163749704229559],"luv":[64.3439331362496603,-45.3787880982832661,-39.6754401089704345],"rgb":[0.0666666666666666657,0.66666666666666663,0.8],"xyz":[0.255031804955584418,0.332265536269152728,0.621979309748095122],"hpluv":[221.163749704229559,118.873987633214512,64.3439331362496603],"hsluv":[221.163749704229559,98.4838416101877385,64.3439331362496603]},"#11aadd":{"lch":[65.0317963778061738,70.0923801470555,230.985682804055784],"luv":[65.0317963778061738,-44.1241742926816372,-54.4609860144708762],"rgb":[0.0666666666666666657,0.66666666666666663,0.866666666666666696],"xyz":[0.276550130506218,0.340872866489406234,0.735309157648101119],"hpluv":[230.985682804055784,136.767964522831733,65.0317963778061738],"hsluv":[230.985682804055784,98.5817742563244,65.0317963778061738]},"#11aaee":{"lch":[65.7796198544585877,81.3683973110580325,238.155251398024461],"luv":[65.7796198544585877,-42.9315457639956293,-69.1208974137644248],"rgb":[0.0666666666666666657,0.66666666666666663,0.933333333333333348],"xyz":[0.300362310772392727,0.350397738595876251,0.860719973716624343],"hpluv":[238.155251398024461,156.965326989669,65.7796198544585877],"hsluv":[238.155251398024461,98.676383948407647,65.7796198544585877]},"#11aaff":{"lch":[66.5860524818013317,93.423779787985481,243.412392023658668],"luv":[66.5860524818013317,-41.8132782993845566,-83.5443139162218529],"rgb":[0.0666666666666666657,0.66666666666666663,1],"xyz":[0.326533359182224148,0.360866157959809,0.998554162008406188],"hpluv":[243.412392023658668,178.038321821181739,66.5860524818013317],"hsluv":[243.412392023658668,99.9999999999982805,66.5860524818013317]},"#11bb00":{"lch":[66.2579979425279788,101.837028338191359,127.308350947248712],"luv":[66.2579979425279788,-61.7238643700190792,80.9996599251199285],"rgb":[0.0666666666666666657,0.733333333333333282,0],"xyz":[0.180007068688992911,0.356582838416274528,0.0593401757282787864],"hpluv":[127.308350947248712,195.032386644097869,66.2579979425279788],"hsluv":[127.308350947248712,100.000000000002416,66.2579979425279788]},"#11bb11":{"lch":[66.2891028676776,100.667761827005108,127.715012949240403],"luv":[66.2891028676776,-61.5819268253258301,79.6345688739434507],"rgb":[0.0666666666666666657,0.733333333333333282,0.0666666666666666657],"xyz":[0.181018734188630043,0.356987504616129381,0.0646682806930344162],"hpluv":[127.715012949240403,192.702610495025482,66.2891028676776],"hsluv":[127.715012949240403,98.1199752505464318,66.2891028676776]},"#11bb22":{"lch":[66.3467009890152895,98.5365229927559199,128.48627008521666],"luv":[66.3467009890152895,-61.3219466901703356,77.130183570569983],"rgb":[0.0666666666666666657,0.733333333333333282,0.133333333333333331],"xyz":[0.182894092327107044,0.357737647871520181,0.0745451668890136088],"hpluv":[128.48627008521666,188.459149582366734,66.3467009890152895],"hsluv":[128.48627008521666,98.1339007760711155,66.3467009890152895]},"#11bb33":{"lch":[66.4413603116689586,95.1297105779412107,129.807139434656818],"luv":[66.4413603116689586,-60.9025570517959949,73.0790009455219121],"rgb":[0.0666666666666666657,0.733333333333333282,0.2],"xyz":[0.185981843059564778,0.358972748164503308,0.0908073207466247589],"hpluv":[129.807139434656818,181.684126992490178,66.4413603116689586],"hsluv":[129.807139434656818,98.1563849168539093,66.4413603116689586]},"#11bb44":{"lch":[66.5776441235544,90.4345556189602888,131.832147550242752],"luv":[66.5776441235544,-60.3153845158839061,67.3829595721343679],"rgb":[0.0666666666666666657,0.733333333333333282,0.266666666666666663],"xyz":[0.190439838303783665,0.360755946262190874,0.114286095699511397],"hpluv":[131.832147550242752,172.363503065423913,66.5776441235544],"hsluv":[131.832147550242752,98.1879073212924567,66.5776441235544]},"#11bb55":{"lch":[66.7592187944261,84.5672269635890501,134.774448398028227],"luv":[66.7592187944261,-59.5621947933412841,60.0329978237906374],"rgb":[0.0666666666666666657,0.733333333333333282,0.333333333333333315],"xyz":[0.196402252343145678,0.363140911877935735,0.145688142973485313],"hpluv":[134.774448398028227,160.742297130584,66.7592187944261],"hsluv":[134.774448398028227,98.2284201297941451,66.7592187944261]},"#11bb66":{"lch":[66.9890609579081513,77.7896938122995749,138.938350400658521],"luv":[66.9890609579081513,-58.6536805127572336,51.0977712402284752],"rgb":[0.0666666666666666657,0.733333333333333282,0.4],"xyz":[0.203987248116653835,0.366174910187339053,0.185635787380629275],"hpluv":[138.938350400658521,147.352496635070423,66.9890609579081513],"hsluv":[138.938350400658521,98.2774122804504486,66.9890609579081513]},"#11bb77":{"lch":[67.2695660469751573,70.5410036497719375,144.751753478195667],"luv":[67.2695660469751573,-57.6079608572489548,40.7106379437464625],"rgb":[0.0666666666666666657,0.733333333333333282,0.466666666666666674],"xyz":[0.213301261136855769,0.369900515395419849,0.234689589287027184],"hpluv":[144.751753478195667,133.064539371584743,67.2695660469751573],"hsluv":[144.751753478195667,98.33398740837616,67.2695660469751573]},"#11bb88":{"lch":[67.6026131767386289,63.4868829762913904,152.765342955174589],"luv":[67.6026131767386289,-56.44870944299889,29.0538725863731493],"rgb":[0.0666666666666666657,0.733333333333333282,0.533333333333333326],"xyz":[0.224441678238799569,0.374356682236197447,0.293362452690599351],"hpluv":[152.765342955174589,119.168054047142519,67.6026131767386289],"hsluv":[152.765342955174589,98.3969602233376293,67.6026131767386289]},"#11bb99":{"lch":[67.9896091217093357,57.5709210660889568,163.510238814203348],"luv":[67.9896091217093357,-55.2030563361408468,16.3411604100414145],"rgb":[0.0666666666666666657,0.733333333333333282,0.6],"xyz":[0.237498642347872296,0.379579467879826604,0.362129130331717231],"hpluv":[163.510238814203348,107.448401728013394,67.9896091217093357],"hsluv":[163.510238814203348,98.464964167861,67.9896091217093357]},"#11bbaa":{"lch":[68.431522322705149,53.97217733059707,177.026074660918823],"luv":[68.431522322705149,-53.8994902384006807,2.80015675382041573],"rgb":[0.0666666666666666657,0.733333333333333282,0.66666666666666663],"xyz":[0.252556335313124825,0.385602545065927726,0.441432979948715831],"hpluv":[177.026074660918823,100.081328983600983,68.431522322705149],"hsluv":[177.026074660918823,98.5365589333087684,68.431522322705149]},"#11bbbb":{"lch":[68.9289126417652511,53.7759127589290102,192.177050630061103],"luv":[68.9289126417652511,-52.5659794775517426,-11.3431298424003177],"rgb":[0.0666666666666666657,0.733333333333333282,0.733333333333333282],"xyz":[0.269693927420461499,0.392457581908862485,0.531690965047357578],"hpluv":[192.177050630061103,98.9978332941913095,68.9289126417652511],"hsluv":[192.177050630061103,98.6103267315429122,68.9289126417652511]},"#11bbcc":{"lch":[69.4819599404948463,57.3930965266865485,206.799543430538137],"luv":[69.4819599404948463,-51.2284702417124365,-25.8768499940688805],"rgb":[0.0666666666666666657,0.733333333333333282,0.8],"xyz":[0.288986302864183253,0.400174532086351287,0.633297475717627734],"hpluv":[206.799543430538137,104.81584090136549,69.4819599404948463],"hsluv":[206.799543430538137,98.6849492658553658,69.4819599404948463]},"#11bbdd":{"lch":[70.0904930703520535,64.3454332007566876,219.135570681285316],"luv":[70.0904930703520535,-49.9098388382008054,-40.6121011637893901],"rgb":[0.0666666666666666657,0.733333333333333282,0.866666666666666696],"xyz":[0.310504628414816741,0.408781862306604793,0.746627323617633731],"hpluv":[219.135570681285316,116.492493254234162,70.0904930703520535],"hsluv":[219.135570681285316,98.7592614999562244,70.0904930703520535]},"#11bbee":{"lch":[70.7540199625255184,73.7064384587933858,228.717665412779098],"luv":[70.7540199625255184,-48.6292974270947838,-55.3879996211006826],"rgb":[0.0666666666666666657,0.733333333333333282,0.933333333333333348],"xyz":[0.334316808680991506,0.41830673441307481,0.872038139686157],"hpluv":[228.717665412779098,132.188487390259695,70.7540199625255184],"hsluv":[228.717665412779098,98.8322822642660412,70.7540199625255184]},"#11bbff":{"lch":[71.471758937406932,84.600620314641418,235.923069973878228],"luv":[71.471758937406932,-47.4021956671632836,-70.0735099988154246],"rgb":[0.0666666666666666657,0.733333333333333282,1],"xyz":[0.360487857090822872,0.428775153777007534,1.00987232797793891],"hpluv":[235.923069973878228,150.202929688167188,71.471758937406932],"hsluv":[235.923069973878228,99.9999999999978115,71.471758937406932]},"#11cc00":{"lch":[71.760164015117,110.429324102022079,127.380540485202317],"luv":[71.760164015117,-67.042304751477019,87.7494444155603617],"rgb":[0.0666666666666666657,0.8,0],"xyz":[0.21823081199860983,0.433030325035509422,0.0720814234981507346],"hpluv":[127.380540485202317,195.272154443078705,71.760164015117],"hsluv":[127.380540485202317,100.000000000002245,71.760164015117]},"#11cc11":{"lch":[71.7874927519263366,109.385174124956521,127.715012949240432],"luv":[71.7874927519263366,-66.9146672826053219,86.5305935539869466],"rgb":[0.0666666666666666657,0.8,0.0666666666666666657],"xyz":[0.219242477498246963,0.433434991235364275,0.0774095284629063712],"hpluv":[127.715012949240432,193.352149077988855,71.7874927519263366],"hsluv":[127.715012949240432,98.4507061603193563,71.7874927519263366]},"#11cc22":{"lch":[71.8381079866900905,107.476295008714118,128.346772012349533],"luv":[71.8381079866900905,-66.680384726115463,84.2904519004221129],"rgb":[0.0666666666666666657,0.8,0.133333333333333331],"xyz":[0.221117835636723964,0.434185134490755076,0.0872864146588855638],"hpluv":[128.346772012349533,189.84411001864018,71.8381079866900905],"hsluv":[128.346772012349533,98.4601754700601361,71.8381079866900905]},"#11cc33":{"lch":[71.9213183931711626,104.40864440796355,129.421122123890029],"luv":[71.9213183931711626,-66.3010906987881441,80.6556284412913556],"rgb":[0.0666666666666666657,0.8,0.2],"xyz":[0.224205586369181697,0.435420234783738203,0.103548568516496714],"hpluv":[129.421122123890029,184.212095875088124,71.9213183931711626],"hsluv":[129.421122123890029,98.4755168761512749,71.9213183931711626]},"#11cc44":{"lch":[72.0411777660314669,100.144250866202455,131.050559631523186],"luv":[72.0411777660314669,-65.7672084530810395,75.5218198525557085],"rgb":[0.0666666666666666657,0.8,0.266666666666666663],"xyz":[0.228663581613400585,0.437203432881425769,0.127027343469383353],"hpluv":[131.050559631523186,176.394298837834185,72.0411777660314669],"hsluv":[131.050559631523186,98.4971346697200261,72.0411777660314669]},"#11cc55":{"lch":[72.2009771566369523,94.7439152050601621,133.383427271112737],"luv":[72.2009771566369523,-65.077446685205,68.8573554627095],"rgb":[0.0666666666666666657,0.8,0.333333333333333315],"xyz":[0.234625995652762598,0.439588398497170629,0.158429390743357268],"hpluv":[133.383427271112737,166.512782767528847,72.2009771566369523],"hsluv":[133.383427271112737,98.5251071985599225,72.2009771566369523]},"#11cc66":{"lch":[72.4034304155724,88.37638367841096,136.624435218533876],"luv":[72.4034304155724,-64.2379326004453333,60.6949191225620339],"rgb":[0.0666666666666666657,0.8,0.4],"xyz":[0.242210991426270755,0.442622396806573948,0.198377035150501202],"hpluv":[136.624435218533876,154.887514188688357,72.4034304155724],"hsluv":[136.624435218533876,98.5592219307307289,72.4034304155724]},"#11cc77":{"lch":[72.6507717937069657,81.3359578844494422,141.057484765247835],"luv":[72.6507717937069657,-63.261234579889333,51.1229326663597],"rgb":[0.0666666666666666657,0.8,0.466666666666666674],"xyz":[0.251525004446472689,0.446348002014654743,0.247430837056899111],"hpluv":[141.057484765247835,142.063228414279422,72.6507717937069657],"hsluv":[141.057484765247835,98.5990140248714795,72.6507717937069657]},"#11cc88":{"lch":[72.9448138267759703,74.0714793913140284,147.061910762632237],"luv":[72.9448138267759703,-62.1651250648783815,40.2750702654370087],"rgb":[0.0666666666666666657,0.8,0.533333333333333326],"xyz":[0.262665421548416489,0.450804168855432341,0.306103700460471306],"hpluv":[147.061910762632237,128.853412583983044,72.9448138267759703],"hsluv":[147.061910762632237,98.6438145792393755,72.9448138267759703]},"#11cc99":{"lch":[73.286985449663689,67.2264361640895203,155.087429558943455],"luv":[73.286985449663689,-60.9711251229010074,28.3181147072320734],"rgb":[0.0666666666666666657,0.8,0.6],"xyz":[0.275722385657489188,0.456026954499061499,0.374870378101589186],"hpluv":[155.087429558943455,116.399886643338576,73.286985449663689],"hsluv":[155.087429558943455,98.6928071276572609,73.286985449663689]},"#11ccaa":{"lch":[73.6783599756885224,61.6669147974486336,165.501022011161467],"luv":[73.6783599756885224,-59.7029534543248275,15.4390974304365383],"rgb":[0.0666666666666666657,0.8,0.66666666666666663],"xyz":[0.290780078622741744,0.462050031685162621,0.454174227718587786],"hpluv":[165.501022011161467,106.206622375239988,73.6783599756885224],"hsluv":[165.501022011161467,98.7450877264532494,73.6783599756885224]},"#11ccbb":{"lch":[74.1196780643846864,58.4137876130139801,178.201908682105085],"luv":[74.1196780643846864,-58.3850250256368426,1.83287644266177074],"rgb":[0.0666666666666666657,0.8,0.733333333333333282],"xyz":[0.307917670730078419,0.46890506852809738,0.544432212817229533],"hpluv":[178.201908682105085,100.004874571957387,74.1196780643846864],"hsluv":[178.201908682105085,98.7997230732590452,74.1196780643846864]},"#11cccc":{"lch":[74.6113685470067,58.3540675645504,192.177050630061103],"luv":[74.6113685470067,-57.0411279075965751,-12.3088150671508707],"rgb":[0.0666666666666666657,0.8,0.8],"xyz":[0.327210046173800118,0.476622018705586181,0.646038723487499689],"hpluv":[192.177050630061103,99.244272920381249,74.6113685470067],"hsluv":[192.177050630061103,98.8558017207376167,74.6113685470067]},"#11ccdd":{"lch":[75.1535687293590087,61.8087365466066316,205.702276410621693],"luv":[75.1535687293590087,-55.6933672323303881,-26.8061328768737823],"rgb":[0.0666666666666666657,0.8,0.866666666666666696],"xyz":[0.348728371724433717,0.485229348925839687,0.759368571387505686],"hpluv":[205.702276410621693,104.361325002032586,75.1535687293590087],"hsluv":[205.702276410621693,98.9124749687685352,75.1535687293590087]},"#11ccee":{"lch":[75.7461450403856418,68.3900229325434168,217.356690237772426],"luv":[75.7461450403856418,-54.3614174191380712,-41.4973677827407],"rgb":[0.0666666666666666657,0.8,0.933333333333333348],"xyz":[0.372540551990608426,0.494754221032309704,0.88477938745602891],"hpluv":[217.356690237772426,114.570165581500433,75.7461450403856418],"hsluv":[217.356690237772426,98.968985855810871,75.7461450403856418]},"#11ccff":{"lch":[76.3887144168947714,77.3228649101567811,226.666757851513921],"luv":[76.3887144168947714,-53.0620799518220849,-56.2426982736496726],"rgb":[0.0666666666666666657,0.8,1],"xyz":[0.398711600400439847,0.505222640396242428,1.02261357574781075],"hpluv":[226.666757851513921,131.304642630845649,76.3887144168947714],"hsluv":[226.666757851513921,99.9999999999969162,76.3887144168947714]},"#11dd00":{"lch":[77.1789729208637851,118.880191052714352,127.435820588671049],"luv":[77.1789729208637851,-72.2639845338074,94.3950017957916572],"rgb":[0.0666666666666666657,0.866666666666666696,0],"xyz":[0.260864802545785,0.518298306129860942,0.0862927536805420531],"hpluv":[127.435820588671049,210.367240137055802,77.1789729208637851],"hsluv":[127.435820588671049,100.000000000002302,77.1789729208637851]},"#11dd11":{"lch":[77.2032167276219,117.940964566200989,127.715012949240474],"luv":[77.2032167276219,-72.148538100067,93.2987651195291],"rgb":[0.0666666666666666657,0.866666666666666696,0.0666666666666666657],"xyz":[0.261876468045422084,0.51870297232971585,0.0916208586452976897],"hpluv":[127.715012949240474,208.973000844217893,77.2032167276219],"hsluv":[127.715012949240474,98.7048375113237739,77.2032167276219]},"#11dd22":{"lch":[77.2481249515021773,116.219968574506154,128.240715222563949],"luv":[77.2481249515021773,-71.936288170647174,91.2811674974022509],"rgb":[0.0666666666666666657,0.866666666666666696,0.133333333333333331],"xyz":[0.263751826183899141,0.519453115585106651,0.101497744841276882],"hpluv":[128.240715222563949,206.413967447437244,77.2481249515021773],"hsluv":[128.240715222563949,98.7114617332334348,77.2481249515021773]},"#11dd33":{"lch":[77.3219716074714114,113.443027450646795,129.129905575085218],"luv":[77.3219716074714114,-71.591714193384675,87.9996984996024],"rgb":[0.0666666666666666657,0.866666666666666696,0.2],"xyz":[0.266839576916356847,0.520688215878089777,0.117759898698888033],"hpluv":[129.129905575085218,202.273081507843187,77.3219716074714114],"hsluv":[129.129905575085218,98.7222220245650419,77.3219716074714114]},"#11dd44":{"lch":[77.4283833065767,109.557638087167803,130.467479357182611],"luv":[77.4283833065767,-71.1046976382296378,83.3486534805139],"rgb":[0.0666666666666666657,0.866666666666666696,0.266666666666666663],"xyz":[0.271297572160575762,0.522471413975777343,0.141238673651774671],"hpluv":[130.467479357182611,196.45511110559741,77.4283833065767],"hsluv":[130.467479357182611,98.737444128486942,77.4283833065767]},"#11dd55":{"lch":[77.5703274630482156,104.589066335953675,132.360930841179908],"luv":[77.5703274630482156,-70.4719757705036471,77.2824263854860192],"rgb":[0.0666666666666666657,0.866666666666666696,0.333333333333333315],"xyz":[0.277259986199937747,0.524856379591522093,0.172640720925748559],"hpluv":[132.360930841179908,188.974657198429043,77.5703274630482156],"hsluv":[132.360930841179908,98.7572451358875583,77.5703274630482156]},"#11dd66":{"lch":[77.7502795105496176,98.645271303892585,134.953797592355841],"luv":[77.7502795105496176,-69.6964700953403167,69.8089650895062732],"rgb":[0.0666666666666666657,0.866666666666666696,0.4],"xyz":[0.284844981973445932,0.527890377900925412,0.212588365332892548],"hpluv":[134.953797592355841,179.968822287066047,77.7502795105496176],"hsluv":[134.953797592355841,98.7815546318288114,77.7502795105496176]},"#11dd77":{"lch":[77.9703113413929714,91.9272626112809377,138.440937564009943],"luv":[77.9703113413929714,-68.7866216277350588,60.9837871589344616],"rgb":[0.0666666666666666657,0.866666666666666696,0.466666666666666674],"xyz":[0.294158994993647838,0.531615983109006263,0.261642167239290457],"hpluv":[138.440937564009943,169.723893920939275,77.9703113413929714],"hsluv":[138.440937564009943,98.8101351189296,77.9703113413929714]},"#11dd88":{"lch":[78.2321436880382919,84.7462074021241705,143.083472555296623],"luv":[78.2321436880382919,-67.7555613828794492,50.90288371727776],"rgb":[0.0666666666666666657,0.866666666666666696,0.533333333333333326],"xyz":[0.305299412095591638,0.536072149949783805,0.320315030642862597],"hpluv":[143.083472555296623,158.721324423216174,78.2321436880382919],"hsluv":[143.083472555296623,98.842607114853692,78.2321436880382919]},"#11dd99":{"lch":[78.5371801027425,77.5491781494168748,149.212222309724666],"luv":[78.5371801027425,-66.6201031545698,39.6942928810235145],"rgb":[0.0666666666666666657,0.866666666666666696,0.6],"xyz":[0.318356376204664393,0.541294935593413,0.389081708283980532],"hpluv":[149.212222309724666,147.710574340426348,78.5371801027425],"hsluv":[149.212222309724666,98.8784794246756746,78.5371801027425]},"#11ddaa":{"lch":[78.8865310768390771,70.9495750262721288,157.187121587348372],"luv":[78.8865310768390771,-65.3996173248364414,27.5087667875819264],"rgb":[0.0666666666666666657,0.866666666666666696,0.66666666666666663],"xyz":[0.333414069169916893,0.547318012779514085,0.468385557900979133],"hpluv":[157.187121587348372,137.807232739715857,78.8865310768390771],"hsluv":[157.187121587348372,98.9171828916172728,78.8865310768390771]},"#11ddbb":{"lch":[79.2810328759594398,65.7363215025974483,167.247861929956969],"luv":[79.2810328759594398,-64.1148749316804611,14.5102300873497096],"rgb":[0.0666666666666666657,0.866666666666666696,0.733333333333333282],"xyz":[0.350551661277253568,0.554173049622448843,0.558643542999620824],"hpluv":[167.247861929956969,130.572542181043048,79.2810328759594398],"hsluv":[167.247861929956969,98.9581049946704496,79.2810328759594398]},"#11ddcc":{"lch":[79.7212637056701396,62.7929370759791,179.209087927276954],"luv":[79.7212637056701396,-62.7869545437069903,0.866767416521026846],"rgb":[0.0666666666666666657,0.866666666666666696,0.8],"xyz":[0.369844036720975322,0.561889999799937701,0.660250053669891],"hpluv":[179.209087927276954,127.935201467087722,79.7212637056701396],"hsluv":[179.209087927276954,99.0006225499112,79.7212637056701396]},"#11dddd":{"lch":[80.2075587483664378,62.8503941808937796,192.177050630061132],"luv":[80.2075587483664378,-61.4362892449526,-13.2572400032679489],"rgb":[0.0666666666666666657,0.866666666666666696,0.866666666666666696],"xyz":[0.39136236227160881,0.570497330020191207,0.773579901569897],"hpluv":[192.177050630061132,131.767009082741112,80.2075587483664378],"hsluv":[192.177050630061132,99.0441302201931109,80.2075587483664378]},"#11ddee":{"lch":[80.7400249746916643,66.1629514334268691,204.757295278220823],"luv":[80.7400249746916643,-60.0819052998990202,-27.707414132610225],"rgb":[0.0666666666666666657,0.866666666666666696,0.933333333333333348],"xyz":[0.415174542537783575,0.580022202126661224,0.8989907176384202],"hpluv":[204.757295278220823,143.22067561241397,80.7400249746916643],"hsluv":[204.757295278220823,99.0880633014724594,80.7400249746916643]},"#11ddff":{"lch":[81.3185562290371848,72.4120095186264194,215.786316478612605],"luv":[81.3185562290371848,-58.7408753400219084,-42.3439332940817934],"rgb":[0.0666666666666666657,0.866666666666666696,1],"xyz":[0.441345590947614941,0.590490621490594,1.03682490593020216],"hpluv":[215.786316478612605,162.428807277722512,81.3185562290371848],"hsluv":[215.786316478612605,99.9999999999959925,81.3185562290371848]}}
 @@END

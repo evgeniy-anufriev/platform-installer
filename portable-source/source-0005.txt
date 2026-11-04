@@ -1,3 +1,1927 @@
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/ProtonMail/go-crypto/openpgp/packet/aead_encrypted.go","mode":420,"size":3093,"sha256":"9643fb8b28a27671500c2437b15aa98a8ffefc006034e5e67db401f76caa8a93","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3093}
+// Copyright (C) 2019 ProtonTech AG
+
+package packet
+
+import (
+	"io"
+
+	"github.com/ProtonMail/go-crypto/openpgp/errors"
+	"github.com/ProtonMail/go-crypto/openpgp/internal/algorithm"
+)
+
+// AEADEncrypted represents an AEAD Encrypted Packet.
+// See https://www.ietf.org/archive/id/draft-koch-openpgp-2015-rfc4880bis-00.html#name-aead-encrypted-data-packet-t
+type AEADEncrypted struct {
+	cipher        CipherFunction
+	mode          AEADMode
+	chunkSizeByte byte
+	Contents      io.Reader // Encrypted chunks and tags
+	initialNonce  []byte    // Referred to as IV in RFC4880-bis
+}
+
+// Only currently defined version
+const aeadEncryptedVersion = 1
+
+func (ae *AEADEncrypted) parse(buf io.Reader) error {
+	headerData := make([]byte, 4)
+	if n, err := io.ReadFull(buf, headerData); n < 4 {
+		return errors.AEADError("could not read aead header:" + err.Error())
+	}
+	// Read initial nonce
+	mode := AEADMode(headerData[2])
+	nonceLen := mode.IvLength()
+
+	// This packet supports only EAX and OCB
+	// https://www.ietf.org/archive/id/draft-koch-openpgp-2015-rfc4880bis-00.html#name-aead-encrypted-data-packet-t
+	if nonceLen == 0 || mode > AEADModeOCB {
+		return errors.AEADError("unknown mode")
+	}
+
+	initialNonce := make([]byte, nonceLen)
+	if n, err := io.ReadFull(buf, initialNonce); n < nonceLen {
+		return errors.AEADError("could not read aead nonce:" + err.Error())
+	}
+	ae.Contents = buf
+	ae.initialNonce = initialNonce
+	c := headerData[1]
+	if _, ok := algorithm.CipherById[c]; !ok {
+		return errors.UnsupportedError("unknown cipher: " + string(c))
+	}
+	ae.cipher = CipherFunction(c)
+	ae.mode = mode
+	ae.chunkSizeByte = headerData[3]
+	return nil
+}
+
+// Decrypt returns a io.ReadCloser from which decrypted bytes can be read, or
+// an error.
+func (ae *AEADEncrypted) Decrypt(ciph CipherFunction, key []byte) (io.ReadCloser, error) {
+	return ae.decrypt(key)
+}
+
+// decrypt prepares an aeadCrypter and returns a ReadCloser from which
+// decrypted bytes can be read (see aeadDecrypter.Read()).
+func (ae *AEADEncrypted) decrypt(key []byte) (io.ReadCloser, error) {
+	blockCipher := ae.cipher.new(key)
+	aead := ae.mode.new(blockCipher)
+	// Carry the first tagLen bytes
+	chunkSize := decodeAEADChunkSize(ae.chunkSizeByte)
+	tagLen := ae.mode.TagLength()
+	chunkBytes := make([]byte, chunkSize+tagLen*2)
+	peekedBytes := chunkBytes[chunkSize+tagLen:]
+	n, err := io.ReadFull(ae.Contents, peekedBytes)
+	if n < tagLen || (err != nil && err != io.EOF) {
+		return nil, errors.AEADError("Not enough data to decrypt:" + err.Error())
+	}
+
+	return &aeadDecrypter{
+		aeadCrypter: aeadCrypter{
+			aead:           aead,
+			chunkSize:      chunkSize,
+			nonce:          ae.initialNonce,
+			associatedData: ae.associatedData(),
+			chunkIndex:     make([]byte, 8),
+			packetTag:      packetTypeAEADEncrypted,
+		},
+		reader:      ae.Contents,
+		chunkBytes:  chunkBytes,
+		peekedBytes: peekedBytes,
+	}, nil
+}
+
+// associatedData for chunks: tag, version, cipher, mode, chunk size byte
+func (ae *AEADEncrypted) associatedData() []byte {
+	return []byte{
+		0xD4,
+		aeadEncryptedVersion,
+		byte(ae.cipher),
+		byte(ae.mode),
+		ae.chunkSizeByte}
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/ProtonMail/go-crypto/openpgp/packet/compressed.go","mode":420,"size":4249,"sha256":"3c4d5c40ebc96897efd8ee3bd6ccfeea92a2c1644eae0b2598e06dbcf23dc708","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4249}
+// Copyright 2011 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package packet
+
+import (
+	"compress/bzip2"
+	"compress/flate"
+	"compress/zlib"
+	"io"
+	"strconv"
+
+	"github.com/ProtonMail/go-crypto/openpgp/errors"
+)
+
+// Compressed represents a compressed OpenPGP packet. The decompressed contents
+// will contain more OpenPGP packets. See RFC 4880, section 5.6.
+type Compressed struct {
+	Body io.Reader
+}
+
+const (
+	NoCompression      = flate.NoCompression
+	BestSpeed          = flate.BestSpeed
+	BestCompression    = flate.BestCompression
+	DefaultCompression = flate.DefaultCompression
+)
+
+// CompressionConfig contains compressor configuration settings.
+type CompressionConfig struct {
+	// Level is the compression level to use. It must be set to
+	// between -1 and 9, with -1 causing the compressor to use the
+	// default compression level, 0 causing the compressor to use
+	// no compression and 1 to 9 representing increasing (better,
+	// slower) compression levels. If Level is less than -1 or
+	// more then 9, a non-nil error will be returned during
+	// encryption. See the constants above for convenient common
+	// settings for Level.
+	Level int
+}
+
+// decompressionReader ensures that the whole compression packet is read.
+type decompressionReader struct {
+	compressed   io.Reader
+	decompressed io.ReadCloser
+	readAll      bool
+}
+
+func newDecompressionReader(r io.Reader, decompressor io.ReadCloser) *decompressionReader {
+	return &decompressionReader{
+		compressed:   r,
+		decompressed: decompressor,
+	}
+}
+
+func (dr *decompressionReader) Read(data []byte) (n int, err error) {
+	if dr.readAll {
+		return 0, io.EOF
+	}
+	n, err = dr.decompressed.Read(data)
+	if err == io.EOF {
+		dr.readAll = true
+		// Close the decompressor.
+		if errDec := dr.decompressed.Close(); errDec != nil {
+			return n, errDec
+		}
+		// Consume all remaining data from the compressed packet.
+		consumeAll(dr.compressed)
+	}
+	return n, err
+}
+
+func (c *Compressed) parse(r io.Reader) error {
+	var buf [1]byte
+	_, err := readFull(r, buf[:])
+	if err != nil {
+		return err
+	}
+
+	switch buf[0] {
+	case 0:
+		c.Body = r
+	case 1:
+		c.Body = newDecompressionReader(r, flate.NewReader(r))
+	case 2:
+		decompressor, err := zlib.NewReader(r)
+		if err != nil {
+			return err
+		}
+		c.Body = newDecompressionReader(r, decompressor)
+	case 3:
+		c.Body = newDecompressionReader(r, io.NopCloser(bzip2.NewReader(r)))
+	default:
+		err = errors.UnsupportedError("unknown compression algorithm: " + strconv.Itoa(int(buf[0])))
+	}
+
+	return err
+}
+
+// compressedWriterCloser represents the serialized compression stream
+// header and the compressor. Its Close() method ensures that both the
+// compressor and serialized stream header are closed. Its Write()
+// method writes to the compressor.
+type compressedWriteCloser struct {
+	sh io.Closer      // Stream Header
+	c  io.WriteCloser // Compressor
+}
+
+func (cwc compressedWriteCloser) Write(p []byte) (int, error) {
+	return cwc.c.Write(p)
+}
+
+func (cwc compressedWriteCloser) Close() (err error) {
+	err = cwc.c.Close()
+	if err != nil {
+		return err
+	}
+
+	return cwc.sh.Close()
+}
+
+// SerializeCompressed serializes a compressed data packet to w and
+// returns a WriteCloser to which the literal data packets themselves
+// can be written and which MUST be closed on completion. If cc is
+// nil, sensible defaults will be used to configure the compression
+// algorithm.
+func SerializeCompressed(w io.WriteCloser, algo CompressionAlgo, cc *CompressionConfig) (literaldata io.WriteCloser, err error) {
+	compressed, err := serializeStreamHeader(w, packetTypeCompressed)
+	if err != nil {
+		return
+	}
+
+	_, err = compressed.Write([]byte{uint8(algo)})
+	if err != nil {
+		return
+	}
+
+	level := DefaultCompression
+	if cc != nil {
+		level = cc.Level
+	}
+
+	var compressor io.WriteCloser
+	switch algo {
+	case CompressionZIP:
+		compressor, err = flate.NewWriter(compressed, level)
+	case CompressionZLIB:
+		compressor, err = zlib.NewWriterLevel(compressed, level)
+	default:
+		s := strconv.Itoa(int(algo))
+		err = errors.UnsupportedError("Unsupported compression algorithm: " + s)
+	}
+	if err != nil {
+		return
+	}
+
+	literaldata = compressedWriteCloser{compressed, compressor}
+
+	return
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/ProtonMail/go-crypto/openpgp/packet/config.go","mode":420,"size":14104,"sha256":"88656a73e1b0e99aa5e8221177671dab7d5e9e11e346f120a02e99b2ba3bfda9","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":14104}
+// Copyright 2012 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package packet
+
+import (
+	"crypto"
+	"crypto/rand"
+	"io"
+	"math/big"
+	"time"
+
+	"github.com/ProtonMail/go-crypto/openpgp/s2k"
+)
+
+var (
+	defaultRejectPublicKeyAlgorithms = map[PublicKeyAlgorithm]bool{
+		PubKeyAlgoElGamal: true,
+		PubKeyAlgoDSA:     true,
+	}
+	defaultRejectHashAlgorithms = map[crypto.Hash]bool{
+		crypto.MD5:       true,
+		crypto.RIPEMD160: true,
+	}
+	defaultRejectMessageHashAlgorithms = map[crypto.Hash]bool{
+		crypto.SHA1:      true,
+		crypto.MD5:       true,
+		crypto.RIPEMD160: true,
+	}
+	defaultRejectCurves = map[Curve]bool{
+		CurveSecP256k1: true,
+	}
+)
+
+// A global feature flag to indicate v5 support.
+// Can be set via a build tag, e.g.: `go build -tags v5 ./...`
+// If the build tag is missing config_v5.go will set it to true.
+//
+// Disables parsing of v5 keys and v5 signatures.
+// These are non-standard entities, which in the crypto-refresh have been superseded
+// by v6 keys, v6 signatures and SEIPDv2 encrypted data, respectively.
+var V5Disabled = false
+
+// Config collects a number of parameters along with sensible defaults.
+// A nil *Config is valid and results in all default values.
+type Config struct {
+	// Rand provides the source of entropy.
+	// If nil, the crypto/rand Reader is used.
+	Rand io.Reader
+	// DefaultHash is the default hash function to be used.
+	// If zero, SHA-256 is used.
+	DefaultHash crypto.Hash
+	// DefaultCipher is the cipher to be used.
+	// If zero, AES-128 is used.
+	DefaultCipher CipherFunction
+	// Time returns the current time as the number of seconds since the
+	// epoch. If Time is nil, time.Now is used.
+	Time func() time.Time
+	// DefaultCompressionAlgo is the compression algorithm to be
+	// applied to the plaintext before encryption. If zero, no
+	// compression is done.
+	DefaultCompressionAlgo CompressionAlgo
+	// CompressionConfig configures the compression settings.
+	CompressionConfig *CompressionConfig
+	// S2K (String to Key) config, used for key derivation in the context of secret key encryption
+	// and password-encrypted data.
+	// If nil, the default configuration is used
+	S2KConfig *s2k.Config
+	// Iteration count for Iterated S2K (String to Key).
+	// Only used if sk2.Mode is nil.
+	// This value is duplicated here from s2k.Config for backwards compatibility.
+	// It determines the strength of the passphrase stretching when
+	// the said passphrase is hashed to produce a key. S2KCount
+	// should be between 65536 and 65011712, inclusive. If Config
+	// is nil or S2KCount is 0, the value 16777216 used. Not all
+	// values in the above range can be represented. S2KCount will
+	// be rounded up to the next representable value if it cannot
+	// be encoded exactly. When set, it is strongly encrouraged to
+	// use a value that is at least 65536. See RFC 4880 Section
+	// 3.7.1.3.
+	//
+	// Deprecated: SK2Count should be configured in S2KConfig instead.
+	S2KCount int
+	// RSABits is the number of bits in new RSA keys made with NewEntity.
+	// If zero, then 2048 bit keys are created.
+	RSABits int
+	// The public key algorithm to use - will always create a signing primary
+	// key and encryption subkey.
+	Algorithm PublicKeyAlgorithm
+	// Some known primes that are optionally prepopulated by the caller
+	RSAPrimes []*big.Int
+	// Curve configures the desired packet.Curve if the Algorithm is PubKeyAlgoECDSA,
+	// PubKeyAlgoEdDSA, or PubKeyAlgoECDH. If empty Curve25519 is used.
+	Curve Curve
+	// AEADConfig configures the use of the new AEAD Encrypted Data Packet,
+	// defined in the draft of the next version of the OpenPGP specification.
+	// If a non-nil AEADConfig is passed, usage of this packet is enabled. By
+	// default, it is disabled. See the documentation of AEADConfig for more
+	// configuration options related to AEAD.
+	// **Note: using this option may break compatibility with other OpenPGP
+	// implementations, as well as future versions of this library.**
+	AEADConfig *AEADConfig
+	// V6Keys configures version 6 key generation. If false, this package still
+	// supports version 6 keys, but produces version 4 keys.
+	V6Keys bool
+	// Minimum RSA key size allowed for key generation and message signing, verification and encryption.
+	MinRSABits uint16
+	// Reject insecure algorithms, only works with v2 api
+	RejectPublicKeyAlgorithms   map[PublicKeyAlgorithm]bool
+	RejectHashAlgorithms        map[crypto.Hash]bool
+	RejectMessageHashAlgorithms map[crypto.Hash]bool
+	RejectCurves                map[Curve]bool
+	// "The validity period of the key.  This is the number of seconds after
+	// the key creation time that the key expires.  If this is not present
+	// or has a value of zero, the key never expires.  This is found only on
+	// a self-signature.""
+	// https://tools.ietf.org/html/rfc4880#section-5.2.3.6
+	KeyLifetimeSecs uint32
+	// "The validity period of the signature.  This is the number of seconds
+	// after the signature creation time that the signature expires.  If
+	// this is not present or has a value of zero, it never expires."
+	// https://tools.ietf.org/html/rfc4880#section-5.2.3.10
+	SigLifetimeSecs uint32
+	// SigningKeyId is used to specify the signing key to use (by Key ID).
+	// By default, the signing key is selected automatically, preferring
+	// signing subkeys if available.
+	SigningKeyId uint64
+	// SigningIdentity is used to specify a user ID (packet Signer's User ID, type 28)
+	// when producing a generic certification signature onto an existing user ID.
+	// The identity must be present in the signer Entity.
+	SigningIdentity string
+	// InsecureAllowUnauthenticatedMessages controls, whether it is tolerated to read
+	// encrypted messages without Modification Detection Code (MDC).
+	// MDC is mandated by the IETF OpenPGP Crypto Refresh draft and has long been implemented
+	// in most OpenPGP implementations. Messages without MDC are considered unnecessarily
+	// insecure and should be prevented whenever possible.
+	// In case one needs to deal with messages from very old OpenPGP implementations, there
+	// might be no other way than to tolerate the missing MDC. Setting this flag, allows this
+	// mode of operation. It should be considered a measure of last resort.
+	InsecureAllowUnauthenticatedMessages bool
+	// InsecureAllowDecryptionWithSigningKeys allows decryption with keys marked as signing keys in the v2 API.
+	// This setting is potentially insecure, but it is needed as some libraries
+	// ignored key flags when selecting a key for encryption.
+	// Not relevant for the v1 API, as all keys were allowed in decryption.
+	InsecureAllowDecryptionWithSigningKeys bool
+	// KnownNotations is a map of Notation Data names to bools, which controls
+	// the notation names that are allowed to be present in critical Notation Data
+	// signature subpackets.
+	KnownNotations map[string]bool
+	// SignatureNotations is a list of Notations to be added to any signatures.
+	SignatureNotations []*Notation
+	// CheckIntendedRecipients controls, whether the OpenPGP Intended Recipient Fingerprint feature
+	// should be enabled for encryption and decryption.
+	// (See https://www.ietf.org/archive/id/draft-ietf-openpgp-crypto-refresh-12.html#name-intended-recipient-fingerpr).
+	// When the flag is set, encryption produces Intended Recipient Fingerprint signature sub-packets and decryption
+	// checks whether the key it was encrypted to is one of the included fingerprints in the signature.
+	// If the flag is disabled, no Intended Recipient Fingerprint sub-packets are created or checked.
+	// The default behavior, when the config or flag is nil, is to enable the feature.
+	CheckIntendedRecipients *bool
+	// CacheSessionKey controls if decryption should return the session key used for decryption.
+	// If the flag is set, the session key is cached in the message details struct.
+	CacheSessionKey bool
+	// CheckPacketSequence is a flag that controls if the pgp message reader should strictly check
+	// that the packet sequence conforms with the grammar mandated by rfc4880.
+	// The default behavior, when the config or flag is nil, is to check the packet sequence.
+	CheckPacketSequence *bool
+	// NonDeterministicSignaturesViaNotation is a flag to enable randomization of signatures.
+	// If true, a salt notation is used to randomize signatures generated by v4 and v5 keys
+	// (v6 signatures are always non-deterministic, by design).
+	// This protects EdDSA signatures from potentially leaking the secret key in case of faults (i.e. bitflips) which, in principle, could occur
+	// during the signing computation. It is added to signatures of any algo for simplicity, and as it may also serve as protection in case of
+	// weaknesses in the hash algo, potentially hindering e.g. some chosen-prefix attacks.
+	// The default behavior, when the config or flag is nil, is to enable the feature.
+	NonDeterministicSignaturesViaNotation *bool
+
+	// InsecureAllowAllKeyFlagsWhenMissing determines how a key without valid key flags is handled.
+	// When set to true, a key without flags is treated as if all flags are enabled.
+	// This behavior is consistent with GPG.
+	InsecureAllowAllKeyFlagsWhenMissing bool
+}
+
+func (c *Config) Random() io.Reader {
+	if c == nil || c.Rand == nil {
+		return rand.Reader
+	}
+	return c.Rand
+}
+
+func (c *Config) Hash() crypto.Hash {
+	if c == nil || uint(c.DefaultHash) == 0 {
+		return crypto.SHA256
+	}
+	return c.DefaultHash
+}
+
+func (c *Config) Cipher() CipherFunction {
+	if c == nil || uint8(c.DefaultCipher) == 0 {
+		return CipherAES128
+	}
+	return c.DefaultCipher
+}
+
+func (c *Config) Now() time.Time {
+	if c == nil || c.Time == nil {
+		return time.Now().Truncate(time.Second)
+	}
+	return c.Time().Truncate(time.Second)
+}
+
+// KeyLifetime returns the validity period of the key.
+func (c *Config) KeyLifetime() uint32 {
+	if c == nil {
+		return 0
+	}
+	return c.KeyLifetimeSecs
+}
+
+// SigLifetime returns the validity period of the signature.
+func (c *Config) SigLifetime() uint32 {
+	if c == nil {
+		return 0
+	}
+	return c.SigLifetimeSecs
+}
+
+func (c *Config) Compression() CompressionAlgo {
+	if c == nil {
+		return CompressionNone
+	}
+	return c.DefaultCompressionAlgo
+}
+
+func (c *Config) RSAModulusBits() int {
+	if c == nil || c.RSABits == 0 {
+		return 2048
+	}
+	return c.RSABits
+}
+
+func (c *Config) PublicKeyAlgorithm() PublicKeyAlgorithm {
+	if c == nil || c.Algorithm == 0 {
+		return PubKeyAlgoRSA
+	}
+	return c.Algorithm
+}
+
+func (c *Config) CurveName() Curve {
+	if c == nil || c.Curve == "" {
+		return Curve25519
+	}
+	return c.Curve
+}
+
+// Deprecated: The hash iterations should now be queried via the S2K() method.
+func (c *Config) PasswordHashIterations() int {
+	if c == nil || c.S2KCount == 0 {
+		return 0
+	}
+	return c.S2KCount
+}
+
+func (c *Config) S2K() *s2k.Config {
+	if c == nil {
+		return nil
+	}
+	// for backwards compatibility
+	if c.S2KCount > 0 && c.S2KConfig == nil {
+		return &s2k.Config{
+			S2KCount: c.S2KCount,
+		}
+	}
+	return c.S2KConfig
+}
+
+func (c *Config) AEAD() *AEADConfig {
+	if c == nil {
+		return nil
+	}
+	return c.AEADConfig
+}
+
+func (c *Config) SigningKey() uint64 {
+	if c == nil {
+		return 0
+	}
+	return c.SigningKeyId
+}
+
+func (c *Config) SigningUserId() string {
+	if c == nil {
+		return ""
+	}
+	return c.SigningIdentity
+}
+
+func (c *Config) AllowUnauthenticatedMessages() bool {
+	if c == nil {
+		return false
+	}
+	return c.InsecureAllowUnauthenticatedMessages
+}
+
+func (c *Config) AllowDecryptionWithSigningKeys() bool {
+	if c == nil {
+		return false
+	}
+	return c.InsecureAllowDecryptionWithSigningKeys
+}
+
+func (c *Config) KnownNotation(notationName string) bool {
+	if c == nil {
+		return false
+	}
+	return c.KnownNotations[notationName]
+}
+
+func (c *Config) Notations() []*Notation {
+	if c == nil {
+		return nil
+	}
+	return c.SignatureNotations
+}
+
+func (c *Config) V6() bool {
+	if c == nil {
+		return false
+	}
+	return c.V6Keys
+}
+
+func (c *Config) IntendedRecipients() bool {
+	if c == nil || c.CheckIntendedRecipients == nil {
+		return true
+	}
+	return *c.CheckIntendedRecipients
+}
+
+func (c *Config) RetrieveSessionKey() bool {
+	if c == nil {
+		return false
+	}
+	return c.CacheSessionKey
+}
+
+func (c *Config) MinimumRSABits() uint16 {
+	if c == nil || c.MinRSABits == 0 {
+		return 2047
+	}
+	return c.MinRSABits
+}
+
+func (c *Config) RejectPublicKeyAlgorithm(alg PublicKeyAlgorithm) bool {
+	var rejectedAlgorithms map[PublicKeyAlgorithm]bool
+	if c == nil || c.RejectPublicKeyAlgorithms == nil {
+		// Default
+		rejectedAlgorithms = defaultRejectPublicKeyAlgorithms
+	} else {
+		rejectedAlgorithms = c.RejectPublicKeyAlgorithms
+	}
+	return rejectedAlgorithms[alg]
+}
+
+func (c *Config) RejectHashAlgorithm(hash crypto.Hash) bool {
+	var rejectedAlgorithms map[crypto.Hash]bool
+	if c == nil || c.RejectHashAlgorithms == nil {
+		// Default
+		rejectedAlgorithms = defaultRejectHashAlgorithms
+	} else {
+		rejectedAlgorithms = c.RejectHashAlgorithms
+	}
+	return rejectedAlgorithms[hash]
+}
+
+func (c *Config) RejectMessageHashAlgorithm(hash crypto.Hash) bool {
+	var rejectedAlgorithms map[crypto.Hash]bool
+	if c == nil || c.RejectMessageHashAlgorithms == nil {
+		// Default
+		rejectedAlgorithms = defaultRejectMessageHashAlgorithms
+	} else {
+		rejectedAlgorithms = c.RejectMessageHashAlgorithms
+	}
+	return rejectedAlgorithms[hash]
+}
+
+func (c *Config) RejectCurve(curve Curve) bool {
+	var rejectedCurve map[Curve]bool
+	if c == nil || c.RejectCurves == nil {
+		// Default
+		rejectedCurve = defaultRejectCurves
+	} else {
+		rejectedCurve = c.RejectCurves
+	}
+	return rejectedCurve[curve]
+}
+
+func (c *Config) StrictPacketSequence() bool {
+	if c == nil || c.CheckPacketSequence == nil {
+		return true
+	}
+	return *c.CheckPacketSequence
+}
+
+func (c *Config) RandomizeSignaturesViaNotation() bool {
+	if c == nil || c.NonDeterministicSignaturesViaNotation == nil {
+		return true
+	}
+	return *c.NonDeterministicSignaturesViaNotation
+}
+
+func (c *Config) AllowAllKeyFlagsWhenMissing() bool {
+	if c == nil {
+		return false
+	}
+	return c.InsecureAllowAllKeyFlagsWhenMissing
+}
+
+// BoolPointer is a helper function to set a boolean pointer in the Config.
+// e.g., config.CheckPacketSequence = BoolPointer(true)
+func BoolPointer(value bool) *bool {
+	return &value
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/ProtonMail/go-crypto/openpgp/packet/config_v5.go","mode":420,"size":67,"sha256":"79572b9ce8a02db7ba7b5b35413d24d85190715b2597bc185d8ba69afe8c7b70","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":67}
+//go:build !v5
+
+package packet
+
+func init() {
+	V5Disabled = true
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/ProtonMail/go-crypto/openpgp/packet/encrypted_key.go","mode":420,"size":19965,"sha256":"8771c10b85e80ffd0e6fde4f489bb790dbcb2f0a7c837914f81482d89f3b4e72","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":19965}
+// Copyright 2011 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package packet
+
+import (
+	"bytes"
+	"crypto"
+	"crypto/rsa"
+	"encoding/binary"
+	"encoding/hex"
+	"io"
+	"math/big"
+	"strconv"
+
+	"github.com/ProtonMail/go-crypto/openpgp/ecdh"
+	"github.com/ProtonMail/go-crypto/openpgp/elgamal"
+	"github.com/ProtonMail/go-crypto/openpgp/errors"
+	"github.com/ProtonMail/go-crypto/openpgp/internal/encoding"
+	"github.com/ProtonMail/go-crypto/openpgp/x25519"
+	"github.com/ProtonMail/go-crypto/openpgp/x448"
+)
+
+// EncryptedKey represents a public-key encrypted session key. See RFC 4880,
+// section 5.1.
+type EncryptedKey struct {
+	Version        int
+	KeyId          uint64
+	KeyVersion     int    // v6
+	KeyFingerprint []byte // v6
+	Algo           PublicKeyAlgorithm
+	CipherFunc     CipherFunction // only valid after a successful Decrypt for a v3 packet
+	Key            []byte         // only valid after a successful Decrypt
+
+	encryptedMPI1, encryptedMPI2 encoding.Field
+	ephemeralPublicX25519        *x25519.PublicKey // used for x25519
+	ephemeralPublicX448          *x448.PublicKey   // used for x448
+	encryptedSession             []byte            // used for x25519 and x448
+}
+
+func (e *EncryptedKey) parse(r io.Reader) (err error) {
+	var buf [8]byte
+	_, err = readFull(r, buf[:versionSize])
+	if err != nil {
+		return
+	}
+	e.Version = int(buf[0])
+	if e.Version != 3 && e.Version != 6 {
+		return errors.UnsupportedError("unknown EncryptedKey version " + strconv.Itoa(int(buf[0])))
+	}
+	if e.Version == 6 {
+		//Read a one-octet size of the following two fields.
+		if _, err = readFull(r, buf[:1]); err != nil {
+			return
+		}
+		// The size may also be zero, and the key version and
+		// fingerprint omitted for an "anonymous recipient"
+		if buf[0] != 0 {
+			// non-anonymous case
+			_, err = readFull(r, buf[:versionSize])
+			if err != nil {
+				return
+			}
+			e.KeyVersion = int(buf[0])
+			if e.KeyVersion != 4 && e.KeyVersion != 6 {
+				return errors.UnsupportedError("unknown public key version " + strconv.Itoa(e.KeyVersion))
+			}
+			var fingerprint []byte
+			if e.KeyVersion == 6 {
+				fingerprint = make([]byte, fingerprintSizeV6)
+			} else if e.KeyVersion == 4 {
+				fingerprint = make([]byte, fingerprintSize)
+			}
+			_, err = readFull(r, fingerprint)
+			if err != nil {
+				return
+			}
+			e.KeyFingerprint = fingerprint
+			if e.KeyVersion == 6 {
+				e.KeyId = binary.BigEndian.Uint64(e.KeyFingerprint[:keyIdSize])
+			} else if e.KeyVersion == 4 {
+				e.KeyId = binary.BigEndian.Uint64(e.KeyFingerprint[fingerprintSize-keyIdSize : fingerprintSize])
+			}
+		}
+	} else {
+		_, err = readFull(r, buf[:8])
+		if err != nil {
+			return
+		}
+		e.KeyId = binary.BigEndian.Uint64(buf[:keyIdSize])
+	}
+
+	_, err = readFull(r, buf[:1])
+	if err != nil {
+		return
+	}
+	e.Algo = PublicKeyAlgorithm(buf[0])
+	var cipherFunction byte
+	switch e.Algo {
+	case PubKeyAlgoRSA, PubKeyAlgoRSAEncryptOnly:
+		e.encryptedMPI1 = new(encoding.MPI)
+		if _, err = e.encryptedMPI1.ReadFrom(r); err != nil {
+			return
+		}
+	case PubKeyAlgoElGamal:
+		e.encryptedMPI1 = new(encoding.MPI)
+		if _, err = e.encryptedMPI1.ReadFrom(r); err != nil {
+			return
+		}
+
+		e.encryptedMPI2 = new(encoding.MPI)
+		if _, err = e.encryptedMPI2.ReadFrom(r); err != nil {
+			return
+		}
+	case PubKeyAlgoECDH:
+		e.encryptedMPI1 = new(encoding.MPI)
+		if _, err = e.encryptedMPI1.ReadFrom(r); err != nil {
+			return
+		}
+
+		e.encryptedMPI2 = new(encoding.OID)
+		if _, err = e.encryptedMPI2.ReadFrom(r); err != nil {
+			return
+		}
+	case PubKeyAlgoX25519:
+		e.ephemeralPublicX25519, e.encryptedSession, cipherFunction, err = x25519.DecodeFields(r, e.Version == 6)
+		if err != nil {
+			return
+		}
+	case PubKeyAlgoX448:
+		e.ephemeralPublicX448, e.encryptedSession, cipherFunction, err = x448.DecodeFields(r, e.Version == 6)
+		if err != nil {
+			return
+		}
+	}
+	if e.Version < 6 {
+		switch e.Algo {
+		case PubKeyAlgoX25519, PubKeyAlgoX448:
+			e.CipherFunc = CipherFunction(cipherFunction)
+			// Check for validiy is in the Decrypt method
+		}
+	}
+
+	_, err = consumeAll(r)
+	return
+}
+
+// Decrypt decrypts an encrypted session key with the given private key. The
+// private key must have been decrypted first.
+// If config is nil, sensible defaults will be used.
+func (e *EncryptedKey) Decrypt(priv *PrivateKey, config *Config) error {
+	if e.Version < 6 && e.KeyId != 0 && e.KeyId != priv.KeyId {
+		return errors.InvalidArgumentError("cannot decrypt encrypted session key for key id " + strconv.FormatUint(e.KeyId, 16) + " with private key id " + strconv.FormatUint(priv.KeyId, 16))
+	}
+	if e.Version == 6 && e.KeyVersion != 0 && !bytes.Equal(e.KeyFingerprint, priv.Fingerprint) {
+		return errors.InvalidArgumentError("cannot decrypt encrypted session key for key fingerprint " + hex.EncodeToString(e.KeyFingerprint) + " with private key fingerprint " + hex.EncodeToString(priv.Fingerprint))
+	}
+	if e.Algo != priv.PubKeyAlgo {
+		return errors.InvalidArgumentError("cannot decrypt encrypted session key of type " + strconv.Itoa(int(e.Algo)) + " with private key of type " + strconv.Itoa(int(priv.PubKeyAlgo)))
+	}
+	if priv.Dummy() {
+		return errors.ErrDummyPrivateKey("dummy key found")
+	}
+
+	var err error
+	var b []byte
+
+	// TODO(agl): use session key decryption routines here to avoid
+	// padding oracle attacks.
+	switch priv.PubKeyAlgo {
+	case PubKeyAlgoRSA, PubKeyAlgoRSAEncryptOnly:
+		// Supports both *rsa.PrivateKey and crypto.Decrypter
+		k := priv.PrivateKey.(crypto.Decrypter)
+		b, err = k.Decrypt(config.Random(), padToKeySize(k.Public().(*rsa.PublicKey), e.encryptedMPI1.Bytes()), nil)
+	case PubKeyAlgoElGamal:
+		c1 := new(big.Int).SetBytes(e.encryptedMPI1.Bytes())
+		c2 := new(big.Int).SetBytes(e.encryptedMPI2.Bytes())
+		b, err = elgamal.Decrypt(priv.PrivateKey.(*elgamal.PrivateKey), c1, c2)
+	case PubKeyAlgoECDH:
+		vsG := e.encryptedMPI1.Bytes()
+		m := e.encryptedMPI2.Bytes()
+		oid := priv.PublicKey.oid.EncodedBytes()
+		fp := priv.PublicKey.Fingerprint[:]
+		if priv.PublicKey.Version == 5 {
+			// For v5 the, the fingerprint must be restricted to 20 bytes
+			fp = fp[:20]
+		}
+		b, err = ecdh.Decrypt(priv.PrivateKey.(*ecdh.PrivateKey), vsG, m, oid, fp)
+	case PubKeyAlgoX25519:
+		b, err = x25519.Decrypt(priv.PrivateKey.(*x25519.PrivateKey), e.ephemeralPublicX25519, e.encryptedSession)
+	case PubKeyAlgoX448:
+		b, err = x448.Decrypt(priv.PrivateKey.(*x448.PrivateKey), e.ephemeralPublicX448, e.encryptedSession)
+	default:
+		err = errors.InvalidArgumentError("cannot decrypt encrypted session key with private key of type " + strconv.Itoa(int(priv.PubKeyAlgo)))
+	}
+	if err != nil {
+		return err
+	}
+
+	var key []byte
+	switch priv.PubKeyAlgo {
+	case PubKeyAlgoRSA, PubKeyAlgoRSAEncryptOnly, PubKeyAlgoElGamal, PubKeyAlgoECDH:
+		keyOffset := 0
+		if e.Version < 6 {
+			e.CipherFunc = CipherFunction(b[0])
+			keyOffset = 1
+			if !e.CipherFunc.IsSupported() {
+				return errors.UnsupportedError("unsupported encryption function")
+			}
+		}
+		key, err = decodeChecksumKey(b[keyOffset:])
+		if err != nil {
+			return err
+		}
+	case PubKeyAlgoX25519, PubKeyAlgoX448:
+		if e.Version < 6 {
+			switch e.CipherFunc {
+			case CipherAES128, CipherAES192, CipherAES256:
+				break
+			default:
+				return errors.StructuralError("v3 PKESK mandates AES as cipher function for x25519 and x448")
+			}
+		}
+		key = b[:]
+	default:
+		return errors.UnsupportedError("unsupported algorithm for decryption")
+	}
+	e.Key = key
+	return nil
+}
+
+// Serialize writes the encrypted key packet, e, to w.
+func (e *EncryptedKey) Serialize(w io.Writer) error {
+	var encodedLength int
+	switch e.Algo {
+	case PubKeyAlgoRSA, PubKeyAlgoRSAEncryptOnly:
+		encodedLength = int(e.encryptedMPI1.EncodedLength())
+	case PubKeyAlgoElGamal:
+		encodedLength = int(e.encryptedMPI1.EncodedLength()) + int(e.encryptedMPI2.EncodedLength())
+	case PubKeyAlgoECDH:
+		encodedLength = int(e.encryptedMPI1.EncodedLength()) + int(e.encryptedMPI2.EncodedLength())
+	case PubKeyAlgoX25519:
+		encodedLength = x25519.EncodedFieldsLength(e.encryptedSession, e.Version == 6)
+	case PubKeyAlgoX448:
+		encodedLength = x448.EncodedFieldsLength(e.encryptedSession, e.Version == 6)
+	default:
+		return errors.InvalidArgumentError("don't know how to serialize encrypted key type " + strconv.Itoa(int(e.Algo)))
+	}
+
+	packetLen := versionSize /* version */ + keyIdSize /* key id */ + algorithmSize /* algo */ + encodedLength
+	if e.Version == 6 {
+		packetLen = versionSize /* version */ + algorithmSize /* algo */ + encodedLength + keyVersionSize /* key version */
+		if e.KeyVersion == 6 {
+			packetLen += fingerprintSizeV6
+		} else if e.KeyVersion == 4 {
+			packetLen += fingerprintSize
+		}
+	}
+
+	err := serializeHeader(w, packetTypeEncryptedKey, packetLen)
+	if err != nil {
+		return err
+	}
+
+	_, err = w.Write([]byte{byte(e.Version)})
+	if err != nil {
+		return err
+	}
+	if e.Version == 6 {
+		_, err = w.Write([]byte{byte(e.KeyVersion)})
+		if err != nil {
+			return err
+		}
+		// The key version number may also be zero,
+		// and the fingerprint omitted
+		if e.KeyVersion != 0 {
+			_, err = w.Write(e.KeyFingerprint)
+			if err != nil {
+				return err
+			}
+		}
+	} else {
+		// Write KeyID
+		err = binary.Write(w, binary.BigEndian, e.KeyId)
+		if err != nil {
+			return err
+		}
+	}
+	_, err = w.Write([]byte{byte(e.Algo)})
+	if err != nil {
+		return err
+	}
+
+	switch e.Algo {
+	case PubKeyAlgoRSA, PubKeyAlgoRSAEncryptOnly:
+		_, err := w.Write(e.encryptedMPI1.EncodedBytes())
+		return err
+	case PubKeyAlgoElGamal:
+		if _, err := w.Write(e.encryptedMPI1.EncodedBytes()); err != nil {
+			return err
+		}
+		_, err := w.Write(e.encryptedMPI2.EncodedBytes())
+		return err
+	case PubKeyAlgoECDH:
+		if _, err := w.Write(e.encryptedMPI1.EncodedBytes()); err != nil {
+			return err
+		}
+		_, err := w.Write(e.encryptedMPI2.EncodedBytes())
+		return err
+	case PubKeyAlgoX25519:
+		err := x25519.EncodeFields(w, e.ephemeralPublicX25519, e.encryptedSession, byte(e.CipherFunc), e.Version == 6)
+		return err
+	case PubKeyAlgoX448:
+		err := x448.EncodeFields(w, e.ephemeralPublicX448, e.encryptedSession, byte(e.CipherFunc), e.Version == 6)
+		return err
+	default:
+		panic("internal error")
+	}
+}
+
+// SerializeEncryptedKeyAEAD serializes an encrypted key packet to w that contains
+// key, encrypted to pub.
+// If aeadSupported is set, PKESK v6 is used, otherwise v3.
+// Note: aeadSupported MUST match the value passed to SerializeSymmetricallyEncrypted.
+// If config is nil, sensible defaults will be used.
+func SerializeEncryptedKeyAEAD(w io.Writer, pub *PublicKey, cipherFunc CipherFunction, aeadSupported bool, key []byte, config *Config) error {
+	return SerializeEncryptedKeyAEADwithHiddenOption(w, pub, cipherFunc, aeadSupported, key, false, config)
+}
+
+// SerializeEncryptedKeyAEADwithHiddenOption serializes an encrypted key packet to w that contains
+// key, encrypted to pub.
+// Offers the hidden flag option to indicated if the PKESK packet should include a wildcard KeyID.
+// If aeadSupported is set, PKESK v6 is used, otherwise v3.
+// Note: aeadSupported MUST match the value passed to SerializeSymmetricallyEncrypted.
+// If config is nil, sensible defaults will be used.
+func SerializeEncryptedKeyAEADwithHiddenOption(w io.Writer, pub *PublicKey, cipherFunc CipherFunction, aeadSupported bool, key []byte, hidden bool, config *Config) error {
+	var buf [36]byte // max possible header size is v6
+	lenHeaderWritten := versionSize
+	version := 3
+
+	if aeadSupported {
+		version = 6
+	}
+	// An implementation MUST NOT generate ElGamal v6 PKESKs.
+	if version == 6 && pub.PubKeyAlgo == PubKeyAlgoElGamal {
+		return errors.InvalidArgumentError("ElGamal v6 PKESK are not allowed")
+	}
+	// In v3 PKESKs, for x25519 and x448, mandate using AES
+	if version == 3 && (pub.PubKeyAlgo == PubKeyAlgoX25519 || pub.PubKeyAlgo == PubKeyAlgoX448) {
+		switch cipherFunc {
+		case CipherAES128, CipherAES192, CipherAES256:
+			break
+		default:
+			return errors.InvalidArgumentError("v3 PKESK mandates AES for x25519 and x448")
+		}
+	}
+
+	buf[0] = byte(version)
+
+	// If hidden is set, the key should be hidden
+	// An implementation MAY accept or use a Key ID of all zeros,
+	// or a key version of zero and no key fingerprint, to hide the intended decryption key.
+	// See Section 5.1.8. in the open pgp crypto refresh
+	if version == 6 {
+		if !hidden {
+			// A one-octet size of the following two fields.
+			buf[1] = byte(keyVersionSize + len(pub.Fingerprint))
+			// A one octet key version number.
+			buf[2] = byte(pub.Version)
+			lenHeaderWritten += keyVersionSize + 1
+			// The fingerprint of the public key
+			copy(buf[lenHeaderWritten:lenHeaderWritten+len(pub.Fingerprint)], pub.Fingerprint)
+			lenHeaderWritten += len(pub.Fingerprint)
+		} else {
+			// The size may also be zero, and the key version
+			// and fingerprint omitted for an "anonymous recipient"
+			buf[1] = 0
+			lenHeaderWritten += 1
+		}
+	} else {
+		if !hidden {
+			binary.BigEndian.PutUint64(buf[versionSize:(versionSize+keyIdSize)], pub.KeyId)
+		}
+		lenHeaderWritten += keyIdSize
+	}
+	buf[lenHeaderWritten] = byte(pub.PubKeyAlgo)
+	lenHeaderWritten += algorithmSize
+
+	var keyBlock []byte
+	switch pub.PubKeyAlgo {
+	case PubKeyAlgoRSA, PubKeyAlgoRSAEncryptOnly, PubKeyAlgoElGamal, PubKeyAlgoECDH:
+		lenKeyBlock := len(key) + 2
+		if version < 6 {
+			lenKeyBlock += 1 // cipher type included
+		}
+		keyBlock = make([]byte, lenKeyBlock)
+		keyOffset := 0
+		if version < 6 {
+			keyBlock[0] = byte(cipherFunc)
+			keyOffset = 1
+		}
+		encodeChecksumKey(keyBlock[keyOffset:], key)
+	case PubKeyAlgoX25519, PubKeyAlgoX448:
+		// algorithm is added in plaintext below
+		keyBlock = key
+	}
+
+	switch pub.PubKeyAlgo {
+	case PubKeyAlgoRSA, PubKeyAlgoRSAEncryptOnly:
+		return serializeEncryptedKeyRSA(w, config.Random(), buf[:lenHeaderWritten], pub.PublicKey.(*rsa.PublicKey), keyBlock)
+	case PubKeyAlgoElGamal:
+		return serializeEncryptedKeyElGamal(w, config.Random(), buf[:lenHeaderWritten], pub.PublicKey.(*elgamal.PublicKey), keyBlock)
+	case PubKeyAlgoECDH:
+		return serializeEncryptedKeyECDH(w, config.Random(), buf[:lenHeaderWritten], pub.PublicKey.(*ecdh.PublicKey), keyBlock, pub.oid, pub.Fingerprint)
+	case PubKeyAlgoX25519:
+		return serializeEncryptedKeyX25519(w, config.Random(), buf[:lenHeaderWritten], pub.PublicKey.(*x25519.PublicKey), keyBlock, byte(cipherFunc), version)
+	case PubKeyAlgoX448:
+		return serializeEncryptedKeyX448(w, config.Random(), buf[:lenHeaderWritten], pub.PublicKey.(*x448.PublicKey), keyBlock, byte(cipherFunc), version)
+	case PubKeyAlgoDSA, PubKeyAlgoRSASignOnly:
+		return errors.InvalidArgumentError("cannot encrypt to public key of type " + strconv.Itoa(int(pub.PubKeyAlgo)))
+	}
+
+	return errors.UnsupportedError("encrypting a key to public key of type " + strconv.Itoa(int(pub.PubKeyAlgo)))
+}
+
+// SerializeEncryptedKey serializes an encrypted key packet to w that contains
+// key, encrypted to pub.
+// PKESKv6 is used if config.AEAD() is not nil.
+// If config is nil, sensible defaults will be used.
+// Deprecated: Use SerializeEncryptedKeyAEAD instead.
+func SerializeEncryptedKey(w io.Writer, pub *PublicKey, cipherFunc CipherFunction, key []byte, config *Config) error {
+	return SerializeEncryptedKeyAEAD(w, pub, cipherFunc, config.AEAD() != nil, key, config)
+}
+
+// SerializeEncryptedKeyWithHiddenOption serializes an encrypted key packet to w that contains
+// key, encrypted to pub. PKESKv6 is used if config.AEAD() is not nil.
+// The hidden option controls if the packet should be anonymous, i.e., omit key metadata.
+// If config is nil, sensible defaults will be used.
+// Deprecated: Use SerializeEncryptedKeyAEADwithHiddenOption instead.
+func SerializeEncryptedKeyWithHiddenOption(w io.Writer, pub *PublicKey, cipherFunc CipherFunction, key []byte, hidden bool, config *Config) error {
+	return SerializeEncryptedKeyAEADwithHiddenOption(w, pub, cipherFunc, config.AEAD() != nil, key, hidden, config)
+}
+
+func serializeEncryptedKeyRSA(w io.Writer, rand io.Reader, header []byte, pub *rsa.PublicKey, keyBlock []byte) error {
+	cipherText, err := rsa.EncryptPKCS1v15(rand, pub, keyBlock)
+	if err != nil {
+		return errors.InvalidArgumentError("RSA encryption failed: " + err.Error())
+	}
+
+	cipherMPI := encoding.NewMPI(cipherText)
+	packetLen := len(header) /* header length */ + int(cipherMPI.EncodedLength())
+
+	err = serializeHeader(w, packetTypeEncryptedKey, packetLen)
+	if err != nil {
+		return err
+	}
+	_, err = w.Write(header[:])
+	if err != nil {
+		return err
+	}
+	_, err = w.Write(cipherMPI.EncodedBytes())
+	return err
+}
+
+func serializeEncryptedKeyElGamal(w io.Writer, rand io.Reader, header []byte, pub *elgamal.PublicKey, keyBlock []byte) error {
+	c1, c2, err := elgamal.Encrypt(rand, pub, keyBlock)
+	if err != nil {
+		return errors.InvalidArgumentError("ElGamal encryption failed: " + err.Error())
+	}
+
+	packetLen := len(header) /* header length */
+	packetLen += 2 /* mpi size */ + (c1.BitLen()+7)/8
+	packetLen += 2 /* mpi size */ + (c2.BitLen()+7)/8
+
+	err = serializeHeader(w, packetTypeEncryptedKey, packetLen)
+	if err != nil {
+		return err
+	}
+	_, err = w.Write(header[:])
+	if err != nil {
+		return err
+	}
+	if _, err = w.Write(new(encoding.MPI).SetBig(c1).EncodedBytes()); err != nil {
+		return err
+	}
+	_, err = w.Write(new(encoding.MPI).SetBig(c2).EncodedBytes())
+	return err
+}
+
+func serializeEncryptedKeyECDH(w io.Writer, rand io.Reader, header []byte, pub *ecdh.PublicKey, keyBlock []byte, oid encoding.Field, fingerprint []byte) error {
+	vsG, c, err := ecdh.Encrypt(rand, pub, keyBlock, oid.EncodedBytes(), fingerprint)
+	if err != nil {
+		return errors.InvalidArgumentError("ECDH encryption failed: " + err.Error())
+	}
+
+	g := encoding.NewMPI(vsG)
+	m := encoding.NewOID(c)
+
+	packetLen := len(header) /* header length */
+	packetLen += int(g.EncodedLength()) + int(m.EncodedLength())
+
+	err = serializeHeader(w, packetTypeEncryptedKey, packetLen)
+	if err != nil {
+		return err
+	}
+
+	_, err = w.Write(header[:])
+	if err != nil {
+		return err
+	}
+	if _, err = w.Write(g.EncodedBytes()); err != nil {
+		return err
+	}
+	_, err = w.Write(m.EncodedBytes())
+	return err
+}
+
+func serializeEncryptedKeyX25519(w io.Writer, rand io.Reader, header []byte, pub *x25519.PublicKey, keyBlock []byte, cipherFunc byte, version int) error {
+	ephemeralPublicX25519, ciphertext, err := x25519.Encrypt(rand, pub, keyBlock)
+	if err != nil {
+		return errors.InvalidArgumentError("x25519 encryption failed: " + err.Error())
+	}
+
+	packetLen := len(header) /* header length */
+	packetLen += x25519.EncodedFieldsLength(ciphertext, version == 6)
+
+	err = serializeHeader(w, packetTypeEncryptedKey, packetLen)
+	if err != nil {
+		return err
+	}
+
+	_, err = w.Write(header[:])
+	if err != nil {
+		return err
+	}
+	return x25519.EncodeFields(w, ephemeralPublicX25519, ciphertext, cipherFunc, version == 6)
+}
+
+func serializeEncryptedKeyX448(w io.Writer, rand io.Reader, header []byte, pub *x448.PublicKey, keyBlock []byte, cipherFunc byte, version int) error {
+	ephemeralPublicX448, ciphertext, err := x448.Encrypt(rand, pub, keyBlock)
+	if err != nil {
+		return errors.InvalidArgumentError("x448 encryption failed: " + err.Error())
+	}
+
+	packetLen := len(header) /* header length */
+	packetLen += x448.EncodedFieldsLength(ciphertext, version == 6)
+
+	err = serializeHeader(w, packetTypeEncryptedKey, packetLen)
+	if err != nil {
+		return err
+	}
+
+	_, err = w.Write(header[:])
+	if err != nil {
+		return err
+	}
+	return x448.EncodeFields(w, ephemeralPublicX448, ciphertext, cipherFunc, version == 6)
+}
+
+func checksumKeyMaterial(key []byte) uint16 {
+	var checksum uint16
+	for _, v := range key {
+		checksum += uint16(v)
+	}
+	return checksum
+}
+
+func decodeChecksumKey(msg []byte) (key []byte, err error) {
+	key = msg[:len(msg)-2]
+	expectedChecksum := uint16(msg[len(msg)-2])<<8 | uint16(msg[len(msg)-1])
+	checksum := checksumKeyMaterial(key)
+	if checksum != expectedChecksum {
+		err = errors.StructuralError("session key checksum is incorrect")
+	}
+	return
+}
+
+func encodeChecksumKey(buffer []byte, key []byte) {
+	copy(buffer, key)
+	checksum := checksumKeyMaterial(key)
+	buffer[len(key)] = byte(checksum >> 8)
+	buffer[len(key)+1] = byte(checksum)
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/ProtonMail/go-crypto/openpgp/packet/literal.go","mode":420,"size":1962,"sha256":"6d4fed2e5f22779e9febce5b2b478b406efe1000ea6a7bcace2483b6d89d5712","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1962}
+// Copyright 2011 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package packet
+
+import (
+	"encoding/binary"
+	"io"
+)
+
+// LiteralData represents an encrypted file. See RFC 4880, section 5.9.
+type LiteralData struct {
+	Format   uint8
+	IsBinary bool
+	FileName string
+	Time     uint32 // Unix epoch time. Either creation time or modification time. 0 means undefined.
+	Body     io.Reader
+}
+
+// ForEyesOnly returns whether the contents of the LiteralData have been marked
+// as especially sensitive.
+func (l *LiteralData) ForEyesOnly() bool {
+	return l.FileName == "_CONSOLE"
+}
+
+func (l *LiteralData) parse(r io.Reader) (err error) {
+	var buf [256]byte
+
+	_, err = readFull(r, buf[:2])
+	if err != nil {
+		return
+	}
+
+	l.Format = buf[0]
+	l.IsBinary = l.Format == 'b'
+	fileNameLen := int(buf[1])
+
+	_, err = readFull(r, buf[:fileNameLen])
+	if err != nil {
+		return
+	}
+
+	l.FileName = string(buf[:fileNameLen])
+
+	_, err = readFull(r, buf[:4])
+	if err != nil {
+		return
+	}
+
+	l.Time = binary.BigEndian.Uint32(buf[:4])
+	l.Body = r
+	return
+}
+
+// SerializeLiteral serializes a literal data packet to w and returns a
+// WriteCloser to which the data itself can be written and which MUST be closed
+// on completion. The fileName is truncated to 255 bytes.
+func SerializeLiteral(w io.WriteCloser, isBinary bool, fileName string, time uint32) (plaintext io.WriteCloser, err error) {
+	var buf [4]byte
+	buf[0] = 'b'
+	if !isBinary {
+		buf[0] = 'u'
+	}
+	if len(fileName) > 255 {
+		fileName = fileName[:255]
+	}
+	buf[1] = byte(len(fileName))
+
+	inner, err := serializeStreamHeader(w, packetTypeLiteralData)
+	if err != nil {
+		return
+	}
+
+	_, err = inner.Write(buf[:2])
+	if err != nil {
+		return
+	}
+	_, err = inner.Write([]byte(fileName))
+	if err != nil {
+		return
+	}
+	binary.BigEndian.PutUint32(buf[:], time)
+	_, err = inner.Write(buf[:])
+	if err != nil {
+		return
+	}
+
+	plaintext = inner
+	return
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/ProtonMail/go-crypto/openpgp/packet/marker.go","mode":420,"size":706,"sha256":"531281d6c6d0f7a7ccd27d9d847300a9196483945ef317ab19257cd9946378a9","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":706}
+package packet
+
+import (
+	"io"
+
+	"github.com/ProtonMail/go-crypto/openpgp/errors"
+)
+
+type Marker struct{}
+
+const markerString = "PGP"
+
+// parse just checks if the packet contains "PGP".
+func (m *Marker) parse(reader io.Reader) error {
+	var buffer [3]byte
+	if _, err := io.ReadFull(reader, buffer[:]); err != nil {
+		return err
+	}
+	if string(buffer[:]) != markerString {
+		return errors.StructuralError("invalid marker packet")
+	}
+	return nil
+}
+
+// SerializeMarker writes a marker packet to writer.
+func SerializeMarker(writer io.Writer) error {
+	err := serializeHeader(writer, packetTypeMarker, len(markerString))
+	if err != nil {
+		return err
+	}
+	_, err = writer.Write([]byte(markerString))
+	return err
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/ProtonMail/go-crypto/openpgp/packet/notation.go","mode":420,"size":684,"sha256":"c60ba03a6dc99498cfe3d3366bbe46c643db646f0fe5beb894ae5cadc0fe4694","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":684}
+package packet
+
+// Notation type represents a Notation Data subpacket
+// see https://tools.ietf.org/html/rfc4880#section-5.2.3.16
+type Notation struct {
+	Name            string
+	Value           []byte
+	IsCritical      bool
+	IsHumanReadable bool
+}
+
+func (notation *Notation) getData() []byte {
+	nameData := []byte(notation.Name)
+	nameLen := len(nameData)
+	valueLen := len(notation.Value)
+
+	data := make([]byte, 8+nameLen+valueLen)
+	if notation.IsHumanReadable {
+		data[0] = 0x80
+	}
+
+	data[4] = byte(nameLen >> 8)
+	data[5] = byte(nameLen)
+	data[6] = byte(valueLen >> 8)
+	data[7] = byte(valueLen)
+	copy(data[8:8+nameLen], nameData)
+	copy(data[8+nameLen:], notation.Value)
+	return data
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/ProtonMail/go-crypto/openpgp/packet/ocfb.go","mode":420,"size":3522,"sha256":"7a22b09ed6e833e3ddb3130b9b8f23a4ff1a257c43541306965d75c46175d2cd","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3522}
+// Copyright 2010 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+// OpenPGP CFB Mode. http://tools.ietf.org/html/rfc4880#section-13.9
+
+package packet
+
+import (
+	"crypto/cipher"
+)
+
+type ocfbEncrypter struct {
+	b       cipher.Block
+	fre     []byte
+	outUsed int
+}
+
+// An OCFBResyncOption determines if the "resynchronization step" of OCFB is
+// performed.
+type OCFBResyncOption bool
+
+const (
+	OCFBResync   OCFBResyncOption = true
+	OCFBNoResync OCFBResyncOption = false
+)
+
+// NewOCFBEncrypter returns a cipher.Stream which encrypts data with OpenPGP's
+// cipher feedback mode using the given cipher.Block, and an initial amount of
+// ciphertext.  randData must be random bytes and be the same length as the
+// cipher.Block's block size. Resync determines if the "resynchronization step"
+// from RFC 4880, 13.9 step 7 is performed. Different parts of OpenPGP vary on
+// this point.
+func NewOCFBEncrypter(block cipher.Block, randData []byte, resync OCFBResyncOption) (cipher.Stream, []byte) {
+	blockSize := block.BlockSize()
+	if len(randData) != blockSize {
+		return nil, nil
+	}
+
+	x := &ocfbEncrypter{
+		b:       block,
+		fre:     make([]byte, blockSize),
+		outUsed: 0,
+	}
+	prefix := make([]byte, blockSize+2)
+
+	block.Encrypt(x.fre, x.fre)
+	for i := 0; i < blockSize; i++ {
+		prefix[i] = randData[i] ^ x.fre[i]
+	}
+
+	block.Encrypt(x.fre, prefix[:blockSize])
+	prefix[blockSize] = x.fre[0] ^ randData[blockSize-2]
+	prefix[blockSize+1] = x.fre[1] ^ randData[blockSize-1]
+
+	if resync {
+		block.Encrypt(x.fre, prefix[2:])
+	} else {
+		x.fre[0] = prefix[blockSize]
+		x.fre[1] = prefix[blockSize+1]
+		x.outUsed = 2
+	}
+	return x, prefix
+}
+
+func (x *ocfbEncrypter) XORKeyStream(dst, src []byte) {
+	for i := 0; i < len(src); i++ {
+		if x.outUsed == len(x.fre) {
+			x.b.Encrypt(x.fre, x.fre)
+			x.outUsed = 0
+		}
+
+		x.fre[x.outUsed] ^= src[i]
+		dst[i] = x.fre[x.outUsed]
+		x.outUsed++
+	}
+}
+
+type ocfbDecrypter struct {
+	b       cipher.Block
+	fre     []byte
+	outUsed int
+}
+
+// NewOCFBDecrypter returns a cipher.Stream which decrypts data with OpenPGP's
+// cipher feedback mode using the given cipher.Block. Prefix must be the first
+// blockSize + 2 bytes of the ciphertext, where blockSize is the cipher.Block's
+// block size. On successful exit, blockSize+2 bytes of decrypted data are written into
+// prefix. Resync determines if the "resynchronization step" from RFC 4880,
+// 13.9 step 7 is performed. Different parts of OpenPGP vary on this point.
+func NewOCFBDecrypter(block cipher.Block, prefix []byte, resync OCFBResyncOption) cipher.Stream {
+	blockSize := block.BlockSize()
+	if len(prefix) != blockSize+2 {
+		return nil
+	}
+
+	x := &ocfbDecrypter{
+		b:       block,
+		fre:     make([]byte, blockSize),
+		outUsed: 0,
+	}
+	prefixCopy := make([]byte, len(prefix))
+	copy(prefixCopy, prefix)
+
+	block.Encrypt(x.fre, x.fre)
+	for i := 0; i < blockSize; i++ {
+		prefixCopy[i] ^= x.fre[i]
+	}
+
+	block.Encrypt(x.fre, prefix[:blockSize])
+	prefixCopy[blockSize] ^= x.fre[0]
+	prefixCopy[blockSize+1] ^= x.fre[1]
+
+	if resync {
+		block.Encrypt(x.fre, prefix[2:])
+	} else {
+		x.fre[0] = prefix[blockSize]
+		x.fre[1] = prefix[blockSize+1]
+		x.outUsed = 2
+	}
+	copy(prefix, prefixCopy)
+	return x
+}
+
+func (x *ocfbDecrypter) XORKeyStream(dst, src []byte) {
+	for i := 0; i < len(src); i++ {
+		if x.outUsed == len(x.fre) {
+			x.b.Encrypt(x.fre, x.fre)
+			x.outUsed = 0
+		}
+
+		c := src[i]
+		dst[i] = x.fre[x.outUsed] ^ src[i]
+		x.fre[x.outUsed] = c
+		x.outUsed++
+	}
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/ProtonMail/go-crypto/openpgp/packet/one_pass_signature.go","mode":420,"size":3621,"sha256":"91afbf8377170f0aedbbed1efe5254045ec72dbcdf8d4802fbe21f4fc9472049","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3621}
+// Copyright 2011 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package packet
+
+import (
+	"crypto"
+	"encoding/binary"
+	"io"
+	"strconv"
+
+	"github.com/ProtonMail/go-crypto/openpgp/errors"
+	"github.com/ProtonMail/go-crypto/openpgp/internal/algorithm"
+)
+
+// OnePassSignature represents a one-pass signature packet. See RFC 4880,
+// section 5.4.
+type OnePassSignature struct {
+	Version        int
+	SigType        SignatureType
+	Hash           crypto.Hash
+	PubKeyAlgo     PublicKeyAlgorithm
+	KeyId          uint64
+	IsLast         bool
+	Salt           []byte // v6 only
+	KeyFingerprint []byte // v6 only
+}
+
+func (ops *OnePassSignature) parse(r io.Reader) (err error) {
+	var buf [8]byte
+	// Read: version | signature type | hash algorithm | public-key algorithm
+	_, err = readFull(r, buf[:4])
+	if err != nil {
+		return
+	}
+	if buf[0] != 3 && buf[0] != 6 {
+		return errors.UnsupportedError("one-pass-signature packet version " + strconv.Itoa(int(buf[0])))
+	}
+	ops.Version = int(buf[0])
+
+	var ok bool
+	ops.Hash, ok = algorithm.HashIdToHashWithSha1(buf[2])
+	if !ok {
+		return errors.UnsupportedError("hash function: " + strconv.Itoa(int(buf[2])))
+	}
+
+	ops.SigType = SignatureType(buf[1])
+	ops.PubKeyAlgo = PublicKeyAlgorithm(buf[3])
+
+	if ops.Version == 6 {
+		// Only for v6, a variable-length field containing the salt
+		_, err = readFull(r, buf[:1])
+		if err != nil {
+			return
+		}
+		saltLength := int(buf[0])
+		var expectedSaltLength int
+		expectedSaltLength, err = SaltLengthForHash(ops.Hash)
+		if err != nil {
+			return
+		}
+		if saltLength != expectedSaltLength {
+			err = errors.StructuralError("unexpected salt size for the given hash algorithm")
+			return
+		}
+		salt := make([]byte, expectedSaltLength)
+		_, err = readFull(r, salt)
+		if err != nil {
+			return
+		}
+		ops.Salt = salt
+
+		// Only for v6 packets, 32 octets of the fingerprint of the signing key.
+		fingerprint := make([]byte, 32)
+		_, err = readFull(r, fingerprint)
+		if err != nil {
+			return
+		}
+		ops.KeyFingerprint = fingerprint
+		ops.KeyId = binary.BigEndian.Uint64(ops.KeyFingerprint[:8])
+	} else {
+		_, err = readFull(r, buf[:8])
+		if err != nil {
+			return
+		}
+		ops.KeyId = binary.BigEndian.Uint64(buf[:8])
+	}
+
+	_, err = readFull(r, buf[:1])
+	if err != nil {
+		return
+	}
+	ops.IsLast = buf[0] != 0
+	return
+}
+
+// Serialize marshals the given OnePassSignature to w.
+func (ops *OnePassSignature) Serialize(w io.Writer) error {
+	//v3 length 1+1+1+1+8+1 =
+	packetLength := 13
+	if ops.Version == 6 {
+		// v6 length 1+1+1+1+1+len(salt)+32+1 =
+		packetLength = 38 + len(ops.Salt)
+	}
+
+	if err := serializeHeader(w, packetTypeOnePassSignature, packetLength); err != nil {
+		return err
+	}
+
+	var buf [8]byte
+	buf[0] = byte(ops.Version)
+	buf[1] = uint8(ops.SigType)
+	var ok bool
+	buf[2], ok = algorithm.HashToHashIdWithSha1(ops.Hash)
+	if !ok {
+		return errors.UnsupportedError("hash type: " + strconv.Itoa(int(ops.Hash)))
+	}
+	buf[3] = uint8(ops.PubKeyAlgo)
+
+	_, err := w.Write(buf[:4])
+	if err != nil {
+		return err
+	}
+
+	if ops.Version == 6 {
+		// write salt for v6 signatures
+		_, err := w.Write([]byte{uint8(len(ops.Salt))})
+		if err != nil {
+			return err
+		}
+		_, err = w.Write(ops.Salt)
+		if err != nil {
+			return err
+		}
+
+		// write fingerprint v6 signatures
+		_, err = w.Write(ops.KeyFingerprint)
+		if err != nil {
+			return err
+		}
+	} else {
+		binary.BigEndian.PutUint64(buf[:8], ops.KeyId)
+		_, err := w.Write(buf[:8])
+		if err != nil {
+			return err
+		}
+	}
+
+	isLast := []byte{byte(0)}
+	if ops.IsLast {
+		isLast[0] = 1
+	}
+
+	_, err = w.Write(isLast)
+	return err
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/ProtonMail/go-crypto/openpgp/packet/opaque.go","mode":420,"size":4370,"sha256":"a62cecc948cd69d7604c574be8acbe72317e24aedd24d561840e5b30297c58b6","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4370}
+// Copyright 2012 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package packet
+
+import (
+	"bytes"
+	"io"
+
+	"github.com/ProtonMail/go-crypto/openpgp/errors"
+)
+
+// OpaquePacket represents an OpenPGP packet as raw, unparsed data. This is
+// useful for splitting and storing the original packet contents separately,
+// handling unsupported packet types or accessing parts of the packet not yet
+// implemented by this package.
+type OpaquePacket struct {
+	// Packet type
+	Tag uint8
+	// Reason why the packet was parsed opaquely
+	Reason error
+	// Binary contents of the packet data
+	Contents []byte
+}
+
+func (op *OpaquePacket) parse(r io.Reader) (err error) {
+	op.Contents, err = io.ReadAll(r)
+	return
+}
+
+// Serialize marshals the packet to a writer in its original form, including
+// the packet header.
+func (op *OpaquePacket) Serialize(w io.Writer) (err error) {
+	err = serializeHeader(w, packetType(op.Tag), len(op.Contents))
+	if err == nil {
+		_, err = w.Write(op.Contents)
+	}
+	return
+}
+
+// Parse attempts to parse the opaque contents into a structure supported by
+// this package. If the packet is not known then the result will be another
+// OpaquePacket.
+func (op *OpaquePacket) Parse() (p Packet, err error) {
+	hdr := bytes.NewBuffer(nil)
+	err = serializeHeader(hdr, packetType(op.Tag), len(op.Contents))
+	if err != nil {
+		op.Reason = err
+		return op, err
+	}
+	p, err = Read(io.MultiReader(hdr, bytes.NewBuffer(op.Contents)))
+	if err != nil {
+		op.Reason = err
+		p = op
+	}
+	return
+}
+
+// OpaqueReader reads OpaquePackets from an io.Reader.
+type OpaqueReader struct {
+	r io.Reader
+}
+
+func NewOpaqueReader(r io.Reader) *OpaqueReader {
+	return &OpaqueReader{r: r}
+}
+
+// Read the next OpaquePacket.
+func (or *OpaqueReader) Next() (op *OpaquePacket, err error) {
+	tag, _, contents, err := readHeader(or.r)
+	if err != nil {
+		return
+	}
+	op = &OpaquePacket{Tag: uint8(tag), Reason: err}
+	err = op.parse(contents)
+	if err != nil {
+		consumeAll(contents)
+	}
+	return
+}
+
+// OpaqueSubpacket represents an unparsed OpenPGP subpacket,
+// as found in signature and user attribute packets.
+type OpaqueSubpacket struct {
+	SubType       uint8
+	EncodedLength []byte // Store the original encoded length for signature verifications.
+	Contents      []byte
+}
+
+// OpaqueSubpackets extracts opaque, unparsed OpenPGP subpackets from
+// their byte representation.
+func OpaqueSubpackets(contents []byte) (result []*OpaqueSubpacket, err error) {
+	var (
+		subHeaderLen int
+		subPacket    *OpaqueSubpacket
+	)
+	for len(contents) > 0 {
+		subHeaderLen, subPacket, err = nextSubpacket(contents)
+		if err != nil {
+			break
+		}
+		result = append(result, subPacket)
+		contents = contents[subHeaderLen+len(subPacket.Contents):]
+	}
+	return
+}
+
+func nextSubpacket(contents []byte) (subHeaderLen int, subPacket *OpaqueSubpacket, err error) {
+	// RFC 4880, section 5.2.3.1
+	var subLen uint32
+	var encodedLength []byte
+	if len(contents) < 1 {
+		goto Truncated
+	}
+	subPacket = &OpaqueSubpacket{}
+	switch {
+	case contents[0] < 192:
+		subHeaderLen = 2 // 1 length byte, 1 subtype byte
+		if len(contents) < subHeaderLen {
+			goto Truncated
+		}
+		encodedLength = contents[0:1]
+		subLen = uint32(contents[0])
+		contents = contents[1:]
+	case contents[0] < 255:
+		subHeaderLen = 3 // 2 length bytes, 1 subtype
+		if len(contents) < subHeaderLen {
+			goto Truncated
+		}
+		encodedLength = contents[0:2]
+		subLen = uint32(contents[0]-192)<<8 + uint32(contents[1]) + 192
+		contents = contents[2:]
+	default:
+		subHeaderLen = 6 // 5 length bytes, 1 subtype
+		if len(contents) < subHeaderLen {
+			goto Truncated
+		}
+		encodedLength = contents[0:5]
+		subLen = uint32(contents[1])<<24 |
+			uint32(contents[2])<<16 |
+			uint32(contents[3])<<8 |
+			uint32(contents[4])
+		contents = contents[5:]
+
+	}
+	if subLen > uint32(len(contents)) || subLen == 0 {
+		goto Truncated
+	}
+	subPacket.SubType = contents[0]
+	subPacket.EncodedLength = encodedLength
+	subPacket.Contents = contents[1:subLen]
+	return
+Truncated:
+	err = errors.StructuralError("subpacket truncated")
+	return
+}
+
+func (osp *OpaqueSubpacket) Serialize(w io.Writer) (err error) {
+	buf := make([]byte, 6)
+	copy(buf, osp.EncodedLength)
+	n := len(osp.EncodedLength)
+
+	buf[n] = osp.SubType
+	if _, err = w.Write(buf[:n+1]); err != nil {
+		return
+	}
+	_, err = w.Write(osp.Contents)
+	return
+}
+
+@@END
 @@PORTABLE {"path":"third_party/wails/vendor/github.com/ProtonMail/go-crypto/openpgp/packet/packet.go","mode":420,"size":19083,"sha256":"cdd3dd6508003f8dce810b44a71c1433bff2e8d54d4245567724b8a5068188f8","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":19083}
 // Copyright 2011 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
@@ -122901,2070 +124825,5 @@ compile_native_go_fuzzer $(pwd)/plumbing/object                         FuzzPars
 compile_native_go_fuzzer $(pwd)/plumbing/object                         FuzzDecode              fuzz_decode
 compile_native_go_fuzzer $(pwd)/plumbing/protocol/packp                 FuzzDecoder             fuzz_decoder_packp
 compile_native_go_fuzzer $(pwd)/plumbing/transport                      FuzzNewEndpoint         fuzz_new_endpoint
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/cache/buffer_lru.go","mode":420,"size":2242,"sha256":"e6d478e2a0bc49c1af61daac07ea30394a2ff829b8b62bd3e4cdbc13ea70378c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2242}
-package cache
-
-import (
-	"container/list"
-	"sync"
-)
-
-// BufferLRU implements an object cache with an LRU eviction policy and a
-// maximum size (measured in object size).
-type BufferLRU struct {
-	MaxSize FileSize
-
-	actualSize FileSize
-	ll         *list.List
-	cache      map[int64]*list.Element
-	mut        sync.Mutex
-}
-
-// NewBufferLRU creates a new BufferLRU with the given maximum size. The maximum
-// size will never be exceeded.
-func NewBufferLRU(maxSize FileSize) *BufferLRU {
-	return &BufferLRU{MaxSize: maxSize}
-}
-
-// NewBufferLRUDefault creates a new BufferLRU with the default cache size.
-func NewBufferLRUDefault() *BufferLRU {
-	return &BufferLRU{MaxSize: DefaultMaxSize}
-}
-
-type buffer struct {
-	Key   int64
-	Slice []byte
-}
-
-// Put puts a buffer into the cache. If the buffer is already in the cache, it
-// will be marked as used. Otherwise, it will be inserted. A buffers might
-// be evicted to make room for the new one.
-func (c *BufferLRU) Put(key int64, slice []byte) {
-	c.mut.Lock()
-	defer c.mut.Unlock()
-
-	if c.cache == nil {
-		c.actualSize = 0
-		c.cache = make(map[int64]*list.Element, 1000)
-		c.ll = list.New()
-	}
-
-	bufSize := FileSize(len(slice))
-	if ee, ok := c.cache[key]; ok {
-		oldBuf := ee.Value.(buffer)
-		// in this case bufSize is a delta: new size - old size
-		bufSize -= FileSize(len(oldBuf.Slice))
-		c.ll.MoveToFront(ee)
-		ee.Value = buffer{key, slice}
-	} else {
-		if bufSize > c.MaxSize {
-			return
-		}
-		ee := c.ll.PushFront(buffer{key, slice})
-		c.cache[key] = ee
-	}
-
-	c.actualSize += bufSize
-	for c.actualSize > c.MaxSize {
-		last := c.ll.Back()
-		lastObj := last.Value.(buffer)
-		lastSize := FileSize(len(lastObj.Slice))
-
-		c.ll.Remove(last)
-		delete(c.cache, lastObj.Key)
-		c.actualSize -= lastSize
-	}
-}
-
-// Get returns a buffer by its key. It marks the buffer as used. If the buffer
-// is not in the cache, (nil, false) will be returned.
-func (c *BufferLRU) Get(key int64) ([]byte, bool) {
-	c.mut.Lock()
-	defer c.mut.Unlock()
-
-	ee, ok := c.cache[key]
-	if !ok {
-		return nil, false
-	}
-
-	c.ll.MoveToFront(ee)
-	return ee.Value.(buffer).Slice, true
-}
-
-// Clear the content of this buffer cache.
-func (c *BufferLRU) Clear() {
-	c.mut.Lock()
-	defer c.mut.Unlock()
-
-	c.ll = nil
-	c.cache = nil
-	c.actualSize = 0
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/cache/common.go","mode":420,"size":1209,"sha256":"6dfd925f2ce55420dda8203b7bd2c3c07a4db73780c605417a1d56588cc9a3a4","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1209}
-package cache
-
-import "github.com/go-git/go-git/v5/plumbing"
-
-const (
-	Byte FileSize = 1 << (iota * 10)
-	KiByte
-	MiByte
-	GiByte
-)
-
-type FileSize int64
-
-const DefaultMaxSize FileSize = 96 * MiByte
-
-// Object is an interface to a object cache.
-type Object interface {
-	// Put puts the given object into the cache. Whether this object will
-	// actually be put into the cache or not is implementation specific.
-	Put(o plumbing.EncodedObject)
-	// Get gets an object from the cache given its hash. The second return value
-	// is true if the object was returned, and false otherwise.
-	Get(k plumbing.Hash) (plumbing.EncodedObject, bool)
-	// Clear clears every object from the cache.
-	Clear()
-}
-
-// Buffer is an interface to a buffer cache.
-type Buffer interface {
-	// Put puts a buffer into the cache. If the buffer is already in the cache,
-	// it will be marked as used. Otherwise, it will be inserted. Buffer might
-	// be evicted to make room for the new one.
-	Put(key int64, slice []byte)
-	// Get returns a buffer by its key. It marks the buffer as used. If the
-	// buffer is not in the cache, (nil, false) will be returned.
-	Get(key int64) ([]byte, bool)
-	// Clear clears every object from the cache.
-	Clear()
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/cache/object_lru.go","mode":420,"size":2358,"sha256":"9b2e44f73c28eead22316c45aff5329afc609ad26f13da46442ec63afbf0a80b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2358}
-package cache
-
-import (
-	"container/list"
-	"sync"
-
-	"github.com/go-git/go-git/v5/plumbing"
-)
-
-// ObjectLRU implements an object cache with an LRU eviction policy and a
-// maximum size (measured in object size).
-type ObjectLRU struct {
-	MaxSize FileSize
-
-	actualSize FileSize
-	ll         *list.List
-	cache      map[interface{}]*list.Element
-	mut        sync.Mutex
-}
-
-// NewObjectLRU creates a new ObjectLRU with the given maximum size. The maximum
-// size will never be exceeded.
-func NewObjectLRU(maxSize FileSize) *ObjectLRU {
-	return &ObjectLRU{MaxSize: maxSize}
-}
-
-// NewObjectLRUDefault creates a new ObjectLRU with the default cache size.
-func NewObjectLRUDefault() *ObjectLRU {
-	return &ObjectLRU{MaxSize: DefaultMaxSize}
-}
-
-// Put puts an object into the cache. If the object is already in the cache, it
-// will be marked as used. Otherwise, it will be inserted. A single object might
-// be evicted to make room for the new object.
-func (c *ObjectLRU) Put(obj plumbing.EncodedObject) {
-	c.mut.Lock()
-	defer c.mut.Unlock()
-
-	if c.cache == nil {
-		c.actualSize = 0
-		c.cache = make(map[interface{}]*list.Element, 1000)
-		c.ll = list.New()
-	}
-
-	objSize := FileSize(obj.Size())
-	key := obj.Hash()
-	if ee, ok := c.cache[key]; ok {
-		oldObj := ee.Value.(plumbing.EncodedObject)
-		// in this case objSize is a delta: new size - old size
-		objSize -= FileSize(oldObj.Size())
-		c.ll.MoveToFront(ee)
-		ee.Value = obj
-	} else {
-		if objSize > c.MaxSize {
-			return
-		}
-		ee := c.ll.PushFront(obj)
-		c.cache[key] = ee
-	}
-
-	c.actualSize += objSize
-	for c.actualSize > c.MaxSize {
-		last := c.ll.Back()
-		if last == nil {
-			c.actualSize = 0
-			break
-		}
-
-		lastObj := last.Value.(plumbing.EncodedObject)
-		lastSize := FileSize(lastObj.Size())
-
-		c.ll.Remove(last)
-		delete(c.cache, lastObj.Hash())
-		c.actualSize -= lastSize
-	}
-}
-
-// Get returns an object by its hash. It marks the object as used. If the object
-// is not in the cache, (nil, false) will be returned.
-func (c *ObjectLRU) Get(k plumbing.Hash) (plumbing.EncodedObject, bool) {
-	c.mut.Lock()
-	defer c.mut.Unlock()
-
-	ee, ok := c.cache[k]
-	if !ok {
-		return nil, false
-	}
-
-	c.ll.MoveToFront(ee)
-	return ee.Value.(plumbing.EncodedObject), true
-}
-
-// Clear the content of this object cache.
-func (c *ObjectLRU) Clear() {
-	c.mut.Lock()
-	defer c.mut.Unlock()
-
-	c.ll = nil
-	c.cache = nil
-	c.actualSize = 0
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/color/color.go","mode":420,"size":1094,"sha256":"ec8e583416805579d85479a9387064dbaaf3dcfc0d3e03b45bf6164258041334","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1094}
-package color
-
-// TODO read colors from a github.com/go-git/go-git/plumbing/format/config.Config struct
-// TODO implement color parsing, see https://github.com/git/git/blob/v2.26.2/color.c
-
-// Colors. See https://github.com/git/git/blob/v2.26.2/color.h#L24-L53.
-const (
-	Normal       = ""
-	Reset        = "\033[m"
-	Bold         = "\033[1m"
-	Red          = "\033[31m"
-	Green        = "\033[32m"
-	Yellow       = "\033[33m"
-	Blue         = "\033[34m"
-	Magenta      = "\033[35m"
-	Cyan         = "\033[36m"
-	BoldRed      = "\033[1;31m"
-	BoldGreen    = "\033[1;32m"
-	BoldYellow   = "\033[1;33m"
-	BoldBlue     = "\033[1;34m"
-	BoldMagenta  = "\033[1;35m"
-	BoldCyan     = "\033[1;36m"
-	FaintRed     = "\033[2;31m"
-	FaintGreen   = "\033[2;32m"
-	FaintYellow  = "\033[2;33m"
-	FaintBlue    = "\033[2;34m"
-	FaintMagenta = "\033[2;35m"
-	FaintCyan    = "\033[2;36m"
-	BgRed        = "\033[41m"
-	BgGreen      = "\033[42m"
-	BgYellow     = "\033[43m"
-	BgBlue       = "\033[44m"
-	BgMagenta    = "\033[45m"
-	BgCyan       = "\033[46m"
-	Faint        = "\033[2m"
-	FaintItalic  = "\033[2;3m"
-	Reverse      = "\033[7m"
-)
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/error.go","mode":420,"size":589,"sha256":"47064cd6c8dff6c1d039b54eb4516430eb6c81df7162074930832be8c49e6492","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":589}
-package plumbing
-
-import "fmt"
-
-type PermanentError struct {
-	Err error
-}
-
-func NewPermanentError(err error) *PermanentError {
-	if err == nil {
-		return nil
-	}
-
-	return &PermanentError{Err: err}
-}
-
-func (e *PermanentError) Error() string {
-	return fmt.Sprintf("permanent client error: %s", e.Err.Error())
-}
-
-type UnexpectedError struct {
-	Err error
-}
-
-func NewUnexpectedError(err error) *UnexpectedError {
-	if err == nil {
-		return nil
-	}
-
-	return &UnexpectedError{Err: err}
-}
-
-func (e *UnexpectedError) Error() string {
-	return fmt.Sprintf("unexpected client error: %s", e.Err.Error())
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/filemode/filemode.go","mode":420,"size":5872,"sha256":"cc688045123454f693894375f36081712d479534922619e4aac9eeab0151fd0a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5872}
-package filemode
-
-import (
-	"encoding/binary"
-	"fmt"
-	"os"
-	"strconv"
-)
-
-// A FileMode represents the kind of tree entries used by git. It
-// resembles regular file systems modes, although FileModes are
-// considerably simpler (there are not so many), and there are some,
-// like Submodule that has no file system equivalent.
-type FileMode uint32
-
-const (
-	// Empty is used as the FileMode of tree elements when comparing
-	// trees in the following situations:
-	//
-	// - the mode of tree elements before their creation.  - the mode of
-	// tree elements after their deletion.  - the mode of unmerged
-	// elements when checking the index.
-	//
-	// Empty has no file system equivalent.  As Empty is the zero value
-	// of FileMode, it is also returned by New and
-	// NewFromOsNewFromOSFileMode along with an error, when they fail.
-	Empty FileMode = 0
-	// Dir represent a Directory.
-	Dir FileMode = 0040000
-	// Regular represent non-executable files.  Please note this is not
-	// the same as golang regular files, which include executable files.
-	Regular FileMode = 0100644
-	// Deprecated represent non-executable files with the group writable
-	// bit set.  This mode was supported by the first versions of git,
-	// but it has been deprecated nowadays.  This library uses them
-	// internally, so you can read old packfiles, but will treat them as
-	// Regulars when interfacing with the outside world.  This is the
-	// standard git behaviour.
-	Deprecated FileMode = 0100664
-	// Executable represents executable files.
-	Executable FileMode = 0100755
-	// Symlink represents symbolic links to files.
-	Symlink FileMode = 0120000
-	// Submodule represents git submodules.  This mode has no file system
-	// equivalent.
-	Submodule FileMode = 0160000
-)
-
-// New takes the octal string representation of a FileMode and returns
-// the FileMode and a nil error.  If the string can not be parsed to a
-// 32 bit unsigned octal number, it returns Empty and the parsing error.
-//
-// Example: "40000" means Dir, "100644" means Regular.
-//
-// Please note this function does not check if the returned FileMode
-// is valid in git or if it is malformed.  For instance, "1" will
-// return the malformed FileMode(1) and a nil error.
-func New(s string) (FileMode, error) {
-	n, err := strconv.ParseUint(s, 8, 32)
-	if err != nil {
-		return Empty, err
-	}
-
-	return FileMode(n), nil
-}
-
-// NewFromOSFileMode returns the FileMode used by git to represent
-// the provided file system modes and a nil error on success.  If the
-// file system mode cannot be mapped to any valid git mode (as with
-// sockets or named pipes), it will return Empty and an error.
-//
-// Note that some git modes cannot be generated from os.FileModes, like
-// Deprecated and Submodule; while Empty will be returned, along with an
-// error, only when the method fails.
-func NewFromOSFileMode(m os.FileMode) (FileMode, error) {
-	if m.IsRegular() {
-		if isSetTemporary(m) {
-			return Empty, fmt.Errorf("no equivalent git mode for %s", m)
-		}
-		if isSetCharDevice(m) {
-			return Empty, fmt.Errorf("no equivalent git mode for %s", m)
-		}
-		if isSetUserExecutable(m) {
-			return Executable, nil
-		}
-		return Regular, nil
-	}
-
-	if m.IsDir() {
-		return Dir, nil
-	}
-
-	if isSetSymLink(m) {
-		return Symlink, nil
-	}
-
-	return Empty, fmt.Errorf("no equivalent git mode for %s", m)
-}
-
-func isSetCharDevice(m os.FileMode) bool {
-	return m&os.ModeCharDevice != 0
-}
-
-func isSetTemporary(m os.FileMode) bool {
-	return m&os.ModeTemporary != 0
-}
-
-func isSetUserExecutable(m os.FileMode) bool {
-	return m&0100 != 0
-}
-
-func isSetSymLink(m os.FileMode) bool {
-	return m&os.ModeSymlink != 0
-}
-
-// Bytes return a slice of 4 bytes with the mode in little endian
-// encoding.
-func (m FileMode) Bytes() []byte {
-	ret := make([]byte, 4)
-	binary.LittleEndian.PutUint32(ret, uint32(m))
-	return ret
-}
-
-// IsMalformed returns if the FileMode should not appear in a git packfile,
-// this is: Empty and any other mode not mentioned as a constant in this
-// package.
-func (m FileMode) IsMalformed() bool {
-	return m != Dir &&
-		m != Regular &&
-		m != Deprecated &&
-		m != Executable &&
-		m != Symlink &&
-		m != Submodule
-}
-
-// String returns the FileMode as a string in the standard git format,
-// this is, an octal number padded with ceros to 7 digits.  Malformed
-// modes are printed in that same format, for easier debugging.
-//
-// Example: Regular is "0100644", Empty is "0000000".
-func (m FileMode) String() string {
-	return fmt.Sprintf("%07o", uint32(m))
-}
-
-// IsRegular returns if the FileMode represents that of a regular file,
-// this is, either Regular or Deprecated.  Please note that Executable
-// are not regular even though in the UNIX tradition, they usually are:
-// See the IsFile method.
-func (m FileMode) IsRegular() bool {
-	return m == Regular ||
-		m == Deprecated
-}
-
-// IsFile returns if the FileMode represents that of a file, this is,
-// Regular, Deprecated, Executable or Link.
-func (m FileMode) IsFile() bool {
-	return m == Regular ||
-		m == Deprecated ||
-		m == Executable ||
-		m == Symlink
-}
-
-// ToOSFileMode returns the os.FileMode to be used when creating file
-// system elements with the given git mode and a nil error on success.
-//
-// When the provided mode cannot be mapped to a valid file system mode
-// (e.g.  Submodule) it returns os.FileMode(0) and an error.
-//
-// The returned file mode does not take into account the umask.
-func (m FileMode) ToOSFileMode() (os.FileMode, error) {
-	switch m {
-	case Dir:
-		return os.ModePerm | os.ModeDir, nil
-	case Submodule:
-		return os.ModePerm | os.ModeDir, nil
-	case Regular:
-		return os.FileMode(0644), nil
-	// Deprecated is no longer allowed: treated as a Regular instead
-	case Deprecated:
-		return os.FileMode(0644), nil
-	case Executable:
-		return os.FileMode(0755), nil
-	case Symlink:
-		return os.ModePerm | os.ModeSymlink, nil
-	}
-
-	return os.FileMode(0), fmt.Errorf("malformed mode (%s)", m)
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/config/common.go","mode":420,"size":2647,"sha256":"9b9280d5b8524e0314567af0234a37b3ddcd2654c1af629599ca0e756a829aa4","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2647}
-package config
-
-// New creates a new config instance.
-func New() *Config {
-	return &Config{}
-}
-
-// Config contains all the sections, comments and includes from a config file.
-type Config struct {
-	Comment  *Comment
-	Sections Sections
-	Includes Includes
-}
-
-// Includes is a list of Includes in a config file.
-type Includes []*Include
-
-// Include is a reference to an included config file.
-type Include struct {
-	Path   string
-	Config *Config
-}
-
-// Comment string without the prefix '#' or ';'.
-type Comment string
-
-const (
-	// NoSubsection token is passed to Config.Section and Config.SetSection to
-	// represent the absence of a section.
-	NoSubsection = ""
-)
-
-// Section returns a existing section with the given name or creates a new one.
-func (c *Config) Section(name string) *Section {
-	for i := len(c.Sections) - 1; i >= 0; i-- {
-		s := c.Sections[i]
-		if s.IsName(name) {
-			return s
-		}
-	}
-
-	s := &Section{Name: name}
-	c.Sections = append(c.Sections, s)
-	return s
-}
-
-// HasSection checks if the Config has a section with the specified name.
-func (c *Config) HasSection(name string) bool {
-	for _, s := range c.Sections {
-		if s.IsName(name) {
-			return true
-		}
-	}
-	return false
-}
-
-// RemoveSection removes a section from a config file.
-func (c *Config) RemoveSection(name string) *Config {
-	result := Sections{}
-	for _, s := range c.Sections {
-		if !s.IsName(name) {
-			result = append(result, s)
-		}
-	}
-
-	c.Sections = result
-	return c
-}
-
-// RemoveSubsection remove a subsection from a config file.
-func (c *Config) RemoveSubsection(section string, subsection string) *Config {
-	for _, s := range c.Sections {
-		if s.IsName(section) {
-			result := Subsections{}
-			for _, ss := range s.Subsections {
-				if !ss.IsName(subsection) {
-					result = append(result, ss)
-				}
-			}
-			s.Subsections = result
-		}
-	}
-
-	return c
-}
-
-// AddOption adds an option to a given section and subsection. Use the
-// NoSubsection constant for the subsection argument if no subsection is wanted.
-func (c *Config) AddOption(section string, subsection string, key string, value string) *Config {
-	if subsection == "" {
-		c.Section(section).AddOption(key, value)
-	} else {
-		c.Section(section).Subsection(subsection).AddOption(key, value)
-	}
-
-	return c
-}
-
-// SetOption sets an option to a given section and subsection. Use the
-// NoSubsection constant for the subsection argument if no subsection is wanted.
-func (c *Config) SetOption(section string, subsection string, key string, value string) *Config {
-	if subsection == "" {
-		c.Section(section).SetOption(key, value)
-	} else {
-		c.Section(section).Subsection(subsection).SetOption(key, value)
-	}
-
-	return c
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/config/decoder.go","mode":420,"size":736,"sha256":"e5878190c8e2c5f7c5a145ac68b925b2c751684f9b120a2c9f186a3b5ac9df81","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":736}
-package config
-
-import (
-	"io"
-
-	"github.com/go-git/gcfg"
-)
-
-// A Decoder reads and decodes config files from an input stream.
-type Decoder struct {
-	io.Reader
-}
-
-// NewDecoder returns a new decoder that reads from r.
-func NewDecoder(r io.Reader) *Decoder {
-	return &Decoder{r}
-}
-
-// Decode reads the whole config from its input and stores it in the
-// value pointed to by config.
-func (d *Decoder) Decode(config *Config) error {
-	cb := func(s string, ss string, k string, v string, bv bool) error {
-		if ss == "" && k == "" {
-			config.Section(s)
-			return nil
-		}
-
-		if ss != "" && k == "" {
-			config.Section(s).Subsection(ss)
-			return nil
-		}
-
-		config.AddOption(s, ss, k, v)
-		return nil
-	}
-	return gcfg.ReadWithCallback(d, cb)
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/config/doc.go","mode":420,"size":5084,"sha256":"e318f1a9de52ced2a93cebd276028f3fc06043a1ab957b74b61e9c316daff267","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5084}
-// Package config implements encoding and decoding of git config files.
-//
-// 	Configuration File
-// 	------------------
-//
-// 	The Git configuration file contains a number of variables that affect
-// 	the Git commands' behavior. The `.git/config` file in each repository
-// 	is used to store the configuration for that repository, and
-// 	`$HOME/.gitconfig` is used to store a per-user configuration as
-// 	fallback values for the `.git/config` file. The file `/etc/gitconfig`
-// 	can be used to store a system-wide default configuration.
-//
-// 	The configuration variables are used by both the Git plumbing
-// 	and the porcelains. The variables are divided into sections, wherein
-// 	the fully qualified variable name of the variable itself is the last
-// 	dot-separated segment and the section name is everything before the last
-// 	dot. The variable names are case-insensitive, allow only alphanumeric
-// 	characters and `-`, and must start with an alphabetic character.  Some
-// 	variables may appear multiple times; we say then that the variable is
-// 	multivalued.
-//
-// 	Syntax
-// 	~~~~~~
-//
-// 	The syntax is fairly flexible and permissive; whitespaces are mostly
-// 	ignored.  The '#' and ';' characters begin comments to the end of line,
-// 	blank lines are ignored.
-//
-// 	The file consists of sections and variables.  A section begins with
-// 	the name of the section in square brackets and continues until the next
-// 	section begins.  Section names are case-insensitive.  Only alphanumeric
-// 	characters, `-` and `.` are allowed in section names.  Each variable
-// 	must belong to some section, which means that there must be a section
-// 	header before the first setting of a variable.
-//
-// 	Sections can be further divided into subsections.  To begin a subsection
-// 	put its name in double quotes, separated by space from the section name,
-// 	in the section header, like in the example below:
-//
-// 	--------
-// 		[section "subsection"]
-//
-// 	--------
-//
-// 	Subsection names are case sensitive and can contain any characters except
-// 	newline (doublequote `"` and backslash can be included by escaping them
-// 	as `\"` and `\\`, respectively).  Section headers cannot span multiple
-// 	lines.  Variables may belong directly to a section or to a given subsection.
-// 	You can have `[section]` if you have `[section "subsection"]`, but you
-// 	don't need to.
-//
-// 	There is also a deprecated `[section.subsection]` syntax. With this
-// 	syntax, the subsection name is converted to lower-case and is also
-// 	compared case sensitively. These subsection names follow the same
-// 	restrictions as section names.
-//
-// 	All the other lines (and the remainder of the line after the section
-// 	header) are recognized as setting variables, in the form
-// 	'name = value' (or just 'name', which is a short-hand to say that
-// 	the variable is the boolean "true").
-// 	The variable names are case-insensitive, allow only alphanumeric characters
-// 	and `-`, and must start with an alphabetic character.
-//
-// 	A line that defines a value can be continued to the next line by
-// 	ending it with a `\`; the backquote and the end-of-line are
-// 	stripped.  Leading whitespaces after 'name =', the remainder of the
-// 	line after the first comment character '#' or ';', and trailing
-// 	whitespaces of the line are discarded unless they are enclosed in
-// 	double quotes.  Internal whitespaces within the value are retained
-// 	verbatim.
-//
-// 	Inside double quotes, double quote `"` and backslash `\` characters
-// 	must be escaped: use `\"` for `"` and `\\` for `\`.
-//
-// 	The following escape sequences (beside `\"` and `\\`) are recognized:
-// 	`\n` for newline character (NL), `\t` for horizontal tabulation (HT, TAB)
-// 	and `\b` for backspace (BS).  Other char escape sequences (including octal
-// 	escape sequences) are invalid.
-//
-// 	Includes
-// 	~~~~~~~~
-//
-// 	You can include one config file from another by setting the special
-// 	`include.path` variable to the name of the file to be included. The
-// 	variable takes a pathname as its value, and is subject to tilde
-// 	expansion.
-//
-// 	The included file is expanded immediately, as if its contents had been
-// 	found at the location of the include directive. If the value of the
-// 	`include.path` variable is a relative path, the path is considered to be
-// 	relative to the configuration file in which the include directive was
-// 	found.  See below for examples.
-//
-//
-// 	Example
-// 	~~~~~~~
-//
-// 		# Core variables
-// 		[core]
-// 			; Don't trust file modes
-// 			filemode = false
-//
-// 		# Our diff algorithm
-// 		[diff]
-// 			external = /usr/local/bin/diff-wrapper
-// 			renames = true
-//
-// 		[branch "devel"]
-// 			remote = origin
-// 			merge = refs/heads/devel
-//
-// 		# Proxy settings
-// 		[core]
-// 			gitProxy="ssh" for "kernel.org"
-// 			gitProxy=default-proxy ; for the rest
-//
-// 		[include]
-// 			path = /path/to/foo.inc ; include by absolute path
-// 			path = foo ; expand "foo" relative to the current file
-// 			path = ~/foo ; expand "foo" in your `$HOME` directory
-//
-package config
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/config/encoder.go","mode":420,"size":1784,"sha256":"a8249761bfdbe1270febd141f148e7ac78d8b234f4caa8afbfd3cbeabf357c52","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1784}
-package config
-
-import (
-	"fmt"
-	"io"
-	"strings"
-)
-
-// An Encoder writes config files to an output stream.
-type Encoder struct {
-	w io.Writer
-}
-
-var (
-	subsectionReplacer = strings.NewReplacer(`"`, `\"`, `\`, `\\`)
-	valueReplacer = strings.NewReplacer(`"`, `\"`, `\`, `\\`, "\n", `\n`, "\t", `\t`, "\b", `\b`)
-)
-// NewEncoder returns a new encoder that writes to w.
-func NewEncoder(w io.Writer) *Encoder {
-	return &Encoder{w}
-}
-
-// Encode writes the config in git config format to the stream of the encoder.
-func (e *Encoder) Encode(cfg *Config) error {
-	for _, s := range cfg.Sections {
-		if err := e.encodeSection(s); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (e *Encoder) encodeSection(s *Section) error {
-	if len(s.Options) > 0 {
-		if err := e.printf("[%s]\n", s.Name); err != nil {
-			return err
-		}
-
-		if err := e.encodeOptions(s.Options); err != nil {
-			return err
-		}
-	}
-
-	for _, ss := range s.Subsections {
-		if err := e.encodeSubsection(s.Name, ss); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (e *Encoder) encodeSubsection(sectionName string, s *Subsection) error {
-	if err := e.printf("[%s \"%s\"]\n", sectionName, subsectionReplacer.Replace(s.Name)); err != nil {
-		return err
-	}
-
-	return e.encodeOptions(s.Options)
-}
-
-func (e *Encoder) encodeOptions(opts Options) error {
-	for _, o := range opts {
-		var value string
-		if strings.ContainsAny(o.Value, "#;\"\t\n\\") || strings.HasPrefix(o.Value, " ") || strings.HasSuffix(o.Value, " ") {
-			value = `"`+valueReplacer.Replace(o.Value)+`"`
-		} else {
-			value = o.Value
-		}
-
-		if err := e.printf("\t%s = %s\n", o.Key, value); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (e *Encoder) printf(msg string, args ...interface{}) error {
-	_, err := fmt.Fprintf(e.w, msg, args...)
-	return err
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/config/format.go","mode":420,"size":1824,"sha256":"cf36c12615b490ec213818810c2f0728f4be7e75384ce72f218ab89745ef9ca5","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1824}
-package config
-
-// RepositoryFormatVersion represents the repository format version,
-// as per defined at:
-//
-//	https://git-scm.com/docs/repository-version
-type RepositoryFormatVersion string
-
-const (
-	// Version_0 is the format defined by the initial version of git,
-	// including but not limited to the format of the repository
-	// directory, the repository configuration file, and the object
-	// and ref storage.
-	//
-	// Specifying the complete behavior of git is beyond the scope
-	// of this document.
-	Version_0 = "0"
-
-	// Version_1 is identical to version 0, with the following exceptions:
-	//
-	//   1. When reading the core.repositoryformatversion variable, a git
-	//		implementation which supports version 1 MUST also read any
-	//		configuration keys found in the extensions section of the
-	//		configuration file.
-	//
-	//	 2. If a version-1 repository specifies any extensions.* keys that
-	//		the running git has not implemented, the operation MUST NOT proceed.
-	//		Similarly, if the value of any known key is not understood by the
-	//		implementation, the operation MUST NOT proceed.
-	//
-	// Note that if no extensions are specified in the config file, then
-	// core.repositoryformatversion SHOULD be set to 0 (setting it to 1 provides
-	// no benefit, and makes the repository incompatible with older
-	// implementations of git).
-	Version_1 = "1"
-
-	// DefaultRepositoryFormatVersion holds the default repository format version.
-	DefaultRepositoryFormatVersion = Version_0
-)
-
-// ObjectFormat defines the object format.
-type ObjectFormat string
-
-const (
-	// SHA1 represents the object format used for SHA1.
-	SHA1 ObjectFormat = "sha1"
-
-	// SHA256 represents the object format used for SHA256.
-	SHA256 ObjectFormat = "sha256"
-
-	// DefaultObjectFormat holds the default object format.
-	DefaultObjectFormat = SHA1
-)
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/config/option.go","mode":420,"size":2567,"sha256":"1b630072d26684df243fcf8197ab235ea527a33462f46f36045c0f5d2dfc97ab","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2567}
-package config
-
-import (
-	"fmt"
-	"strings"
-)
-
-// Option defines a key/value entity in a config file.
-type Option struct {
-	// Key preserving original caseness.
-	// Use IsKey instead to compare key regardless of caseness.
-	Key string
-	// Original value as string, could be not normalized.
-	Value string
-}
-
-type Options []*Option
-
-// IsKey returns true if the given key matches
-// this option's key in a case-insensitive comparison.
-func (o *Option) IsKey(key string) bool {
-	return strings.EqualFold(o.Key, key)
-}
-
-func (opts Options) GoString() string {
-	var strs []string
-	for _, opt := range opts {
-		strs = append(strs, fmt.Sprintf("%#v", opt))
-	}
-
-	return strings.Join(strs, ", ")
-}
-
-// Get gets the value for the given key if set,
-// otherwise it returns the empty string.
-//
-// Note that there is no difference
-//
-// This matches git behaviour since git v1.8.1-rc1,
-// if there are multiple definitions of a key, the
-// last one wins.
-//
-// See: http://article.gmane.org/gmane.linux.kernel/1407184
-//
-// In order to get all possible values for the same key,
-// use GetAll.
-func (opts Options) Get(key string) string {
-	for i := len(opts) - 1; i >= 0; i-- {
-		o := opts[i]
-		if o.IsKey(key) {
-			return o.Value
-		}
-	}
-	return ""
-}
-
-// Has checks if an Option exist with the given key.
-func (opts Options) Has(key string) bool {
-	for _, o := range opts {
-		if o.IsKey(key) {
-			return true
-		}
-	}
-	return false
-}
-
-// GetAll returns all possible values for the same key.
-func (opts Options) GetAll(key string) []string {
-	result := []string{}
-	for _, o := range opts {
-		if o.IsKey(key) {
-			result = append(result, o.Value)
-		}
-	}
-	return result
-}
-
-func (opts Options) withoutOption(key string) Options {
-	result := Options{}
-	for _, o := range opts {
-		if !o.IsKey(key) {
-			result = append(result, o)
-		}
-	}
-	return result
-}
-
-func (opts Options) withAddedOption(key string, value string) Options {
-	return append(opts, &Option{key, value})
-}
-
-func (opts Options) withSettedOption(key string, values ...string) Options {
-	var result Options
-	var added []string
-	for _, o := range opts {
-		if !o.IsKey(key) {
-			result = append(result, o)
-			continue
-		}
-
-		if contains(values, o.Value) {
-			added = append(added, o.Value)
-			result = append(result, o)
-			continue
-		}
-	}
-
-	for _, value := range values {
-		if contains(added, value) {
-			continue
-		}
-
-		result = result.withAddedOption(key, value)
-	}
-
-	return result
-}
-
-func contains(haystack []string, needle string) bool {
-	for _, s := range haystack {
-		if s == needle {
-			return true
-		}
-	}
-
-	return false
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/config/section.go","mode":420,"size":5245,"sha256":"deb99b5629ed7fed41ff8aabd75ccced923693816a0bff95ffbf042d889a505b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5245}
-package config
-
-import (
-	"fmt"
-	"strings"
-)
-
-// Section is the representation of a section inside git configuration files.
-// Each Section contains Options that are used by both the Git plumbing
-// and the porcelains.
-// Sections can be further divided into subsections. To begin a subsection
-// put its name in double quotes, separated by space from the section name,
-// in the section header, like in the example below:
-//
-//     [section "subsection"]
-//
-// All the other lines (and the remainder of the line after the section header)
-// are recognized as option variables, in the form "name = value" (or just name,
-// which is a short-hand to say that the variable is the boolean "true").
-// The variable names are case-insensitive, allow only alphanumeric characters
-// and -, and must start with an alphabetic character:
-//
-//     [section "subsection1"]
-//         option1 = value1
-//         option2
-//     [section "subsection2"]
-//         option3 = value2
-//
-type Section struct {
-	Name        string
-	Options     Options
-	Subsections Subsections
-}
-
-type Subsection struct {
-	Name    string
-	Options Options
-}
-
-type Sections []*Section
-
-func (s Sections) GoString() string {
-	var strs []string
-	for _, ss := range s {
-		strs = append(strs, fmt.Sprintf("%#v", ss))
-	}
-
-	return strings.Join(strs, ", ")
-}
-
-type Subsections []*Subsection
-
-func (s Subsections) GoString() string {
-	var strs []string
-	for _, ss := range s {
-		strs = append(strs, fmt.Sprintf("%#v", ss))
-	}
-
-	return strings.Join(strs, ", ")
-}
-
-// IsName checks if the name provided is equals to the Section name, case insensitive.
-func (s *Section) IsName(name string) bool {
-	return strings.EqualFold(s.Name, name)
-}
-
-// Subsection returns a Subsection from the specified Section. If the
-// Subsection does not exists, new one is created and added to Section.
-func (s *Section) Subsection(name string) *Subsection {
-	for i := len(s.Subsections) - 1; i >= 0; i-- {
-		ss := s.Subsections[i]
-		if ss.IsName(name) {
-			return ss
-		}
-	}
-
-	ss := &Subsection{Name: name}
-	s.Subsections = append(s.Subsections, ss)
-	return ss
-}
-
-// HasSubsection checks if the Section has a Subsection with the specified name.
-func (s *Section) HasSubsection(name string) bool {
-	for _, ss := range s.Subsections {
-		if ss.IsName(name) {
-			return true
-		}
-	}
-
-	return false
-}
-
-// RemoveSubsection removes a subsection from a Section.
-func (s *Section) RemoveSubsection(name string) *Section {
-	result := Subsections{}
-	for _, s := range s.Subsections {
-		if !s.IsName(name) {
-			result = append(result, s)
-		}
-	}
-
-	s.Subsections = result
-	return s
-}
-
-// Option returns the value for the specified key. Empty string is returned if
-// key does not exists.
-func (s *Section) Option(key string) string {
-	return s.Options.Get(key)
-}
-
-// OptionAll returns all possible values for an option with the specified key.
-// If the option does not exists, an empty slice will be returned.
-func (s *Section) OptionAll(key string) []string {
-	return s.Options.GetAll(key)
-}
-
-// HasOption checks if the Section has an Option with the given key.
-func (s *Section) HasOption(key string) bool {
-	return s.Options.Has(key)
-}
-
-// AddOption adds a new Option to the Section. The updated Section is returned.
-func (s *Section) AddOption(key string, value string) *Section {
-	s.Options = s.Options.withAddedOption(key, value)
-	return s
-}
-
-// SetOption adds a new Option to the Section. If the option already exists, is replaced.
-// The updated Section is returned.
-func (s *Section) SetOption(key string, value string) *Section {
-	s.Options = s.Options.withSettedOption(key, value)
-	return s
-}
-
-// Remove an option with the specified key. The updated Section is returned.
-func (s *Section) RemoveOption(key string) *Section {
-	s.Options = s.Options.withoutOption(key)
-	return s
-}
-
-// IsName checks if the name of the subsection is exactly the specified name.
-func (s *Subsection) IsName(name string) bool {
-	return s.Name == name
-}
-
-// Option returns an option with the specified key. If the option does not exists,
-// empty spring will be returned.
-func (s *Subsection) Option(key string) string {
-	return s.Options.Get(key)
-}
-
-// OptionAll returns all possible values for an option with the specified key.
-// If the option does not exists, an empty slice will be returned.
-func (s *Subsection) OptionAll(key string) []string {
-	return s.Options.GetAll(key)
-}
-
-// HasOption checks if the Subsection has an Option with the given key.
-func (s *Subsection) HasOption(key string) bool {
-	return s.Options.Has(key)
-}
-
-// AddOption adds a new Option to the Subsection. The updated Subsection is returned.
-func (s *Subsection) AddOption(key string, value string) *Subsection {
-	s.Options = s.Options.withAddedOption(key, value)
-	return s
-}
-
-// SetOption adds a new Option to the Subsection. If the option already exists, is replaced.
-// The updated Subsection is returned.
-func (s *Subsection) SetOption(key string, value ...string) *Subsection {
-	s.Options = s.Options.withSettedOption(key, value...)
-	return s
-}
-
-// RemoveOption removes the option with the specified key. The updated Subsection is returned.
-func (s *Subsection) RemoveOption(key string) *Subsection {
-	s.Options = s.Options.withoutOption(key)
-	return s
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/diff/colorconfig.go","mode":420,"size":3460,"sha256":"87cd4d241ac9eb3b3eadccab2f6f4115bd214f5cb0242b6d36f55b6053e62a82","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3460}
-package diff
-
-import "github.com/go-git/go-git/v5/plumbing/color"
-
-// A ColorKey is a key into a ColorConfig map and also equal to the key in the
-// diff.color subsection of the config. See
-// https://github.com/git/git/blob/v2.26.2/diff.c#L83-L106.
-type ColorKey string
-
-// ColorKeys.
-const (
-	Context                   ColorKey = "context"
-	Meta                      ColorKey = "meta"
-	Frag                      ColorKey = "frag"
-	Old                       ColorKey = "old"
-	New                       ColorKey = "new"
-	Commit                    ColorKey = "commit"
-	Whitespace                ColorKey = "whitespace"
-	Func                      ColorKey = "func"
-	OldMoved                  ColorKey = "oldMoved"
-	OldMovedAlternative       ColorKey = "oldMovedAlternative"
-	OldMovedDimmed            ColorKey = "oldMovedDimmed"
-	OldMovedAlternativeDimmed ColorKey = "oldMovedAlternativeDimmed"
-	NewMoved                  ColorKey = "newMoved"
-	NewMovedAlternative       ColorKey = "newMovedAlternative"
-	NewMovedDimmed            ColorKey = "newMovedDimmed"
-	NewMovedAlternativeDimmed ColorKey = "newMovedAlternativeDimmed"
-	ContextDimmed             ColorKey = "contextDimmed"
-	OldDimmed                 ColorKey = "oldDimmed"
-	NewDimmed                 ColorKey = "newDimmed"
-	ContextBold               ColorKey = "contextBold"
-	OldBold                   ColorKey = "oldBold"
-	NewBold                   ColorKey = "newBold"
-)
-
-// A ColorConfig is a color configuration. A nil or empty ColorConfig
-// corresponds to no color.
-type ColorConfig map[ColorKey]string
-
-// A ColorConfigOption sets an option on a ColorConfig.
-type ColorConfigOption func(ColorConfig)
-
-// WithColor sets the color for key.
-func WithColor(key ColorKey, color string) ColorConfigOption {
-	return func(cc ColorConfig) {
-		cc[key] = color
-	}
-}
-
-// defaultColorConfig is the default color configuration. See
-// https://github.com/git/git/blob/v2.26.2/diff.c#L57-L81.
-var defaultColorConfig = ColorConfig{
-	Context:                   color.Normal,
-	Meta:                      color.Bold,
-	Frag:                      color.Cyan,
-	Old:                       color.Red,
-	New:                       color.Green,
-	Commit:                    color.Yellow,
-	Whitespace:                color.BgRed,
-	Func:                      color.Normal,
-	OldMoved:                  color.BoldMagenta,
-	OldMovedAlternative:       color.BoldBlue,
-	OldMovedDimmed:            color.Faint,
-	OldMovedAlternativeDimmed: color.FaintItalic,
-	NewMoved:                  color.BoldCyan,
-	NewMovedAlternative:       color.BoldYellow,
-	NewMovedDimmed:            color.Faint,
-	NewMovedAlternativeDimmed: color.FaintItalic,
-	ContextDimmed:             color.Faint,
-	OldDimmed:                 color.FaintRed,
-	NewDimmed:                 color.FaintGreen,
-	ContextBold:               color.Bold,
-	OldBold:                   color.BoldRed,
-	NewBold:                   color.BoldGreen,
-}
-
-// NewColorConfig returns a new ColorConfig.
-func NewColorConfig(options ...ColorConfigOption) ColorConfig {
-	cc := make(ColorConfig)
-	for key, value := range defaultColorConfig {
-		cc[key] = value
-	}
-	for _, option := range options {
-		option(cc)
-	}
-	return cc
-}
-
-// Reset returns the ANSI escape sequence to reset the color with key set from
-// cc. If no color was set then no reset is needed so it returns the empty
-// string.
-func (cc ColorConfig) Reset(key ColorKey) string {
-	if cc[key] == "" {
-		return ""
-	}
-	return color.Reset
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/diff/patch.go","mode":420,"size":1756,"sha256":"ca624cc58c616f5d90996a3f647f46795629f54be527e55e6ac6223c5eef87de","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1756}
-package diff
-
-import (
-	"github.com/go-git/go-git/v5/plumbing"
-	"github.com/go-git/go-git/v5/plumbing/filemode"
-)
-
-// Operation defines the operation of a diff item.
-type Operation int
-
-const (
-	// Equal item represents an equals diff.
-	Equal Operation = iota
-	// Add item represents an insert diff.
-	Add
-	// Delete item represents a delete diff.
-	Delete
-)
-
-// Patch represents a collection of steps to transform several files.
-type Patch interface {
-	// FilePatches returns a slice of patches per file.
-	FilePatches() []FilePatch
-	// Message returns an optional message that can be at the top of the
-	// Patch representation.
-	Message() string
-}
-
-// FilePatch represents the necessary steps to transform one file into another.
-type FilePatch interface {
-	// IsBinary returns true if this patch is representing a binary file.
-	IsBinary() bool
-	// Files returns the from and to Files, with all the necessary metadata
-	// about them. If the patch creates a new file, "from" will be nil.
-	// If the patch deletes a file, "to" will be nil.
-	Files() (from, to File)
-	// Chunks returns a slice of ordered changes to transform "from" File into
-	// "to" File. If the file is a binary one, Chunks will be empty.
-	Chunks() []Chunk
-}
-
-// File contains all the file metadata necessary to print some patch formats.
-type File interface {
-	// Hash returns the File Hash.
-	Hash() plumbing.Hash
-	// Mode returns the FileMode.
-	Mode() filemode.FileMode
-	// Path returns the complete Path to the file, including the filename.
-	Path() string
-}
-
-// Chunk represents a portion of a file transformation into another.
-type Chunk interface {
-	// Content contains the portion of the file.
-	Content() string
-	// Type contains the Operation to do with this Chunk.
-	Type() Operation
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/diff/unified_encoder.go","mode":420,"size":9315,"sha256":"73dd42b669ae035d214bf611c558d38ce0f49a4e7d590d793acb10514ca0d922","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":9315}
-package diff
-
-import (
-	"fmt"
-	"io"
-	"regexp"
-	"strconv"
-	"strings"
-
-	"github.com/go-git/go-git/v5/plumbing"
-)
-
-// DefaultContextLines is the default number of context lines.
-const DefaultContextLines = 3
-
-var (
-	splitLinesRegexp = regexp.MustCompile(`[^\n]*(\n|$)`)
-
-	operationChar = map[Operation]byte{
-		Add:    '+',
-		Delete: '-',
-		Equal:  ' ',
-	}
-
-	operationColorKey = map[Operation]ColorKey{
-		Add:    New,
-		Delete: Old,
-		Equal:  Context,
-	}
-)
-
-// UnifiedEncoder encodes an unified diff into the provided Writer. It does not
-// support similarity index for renames or sorting hash representations.
-type UnifiedEncoder struct {
-	io.Writer
-
-	// contextLines is the count of unchanged lines that will appear surrounding
-	// a change.
-	contextLines int
-
-	// srcPrefix and dstPrefix are prepended to file paths when encoding a diff.
-	srcPrefix string
-	dstPrefix string
-
-	// colorConfig is the color configuration. The default is no color.
-	color ColorConfig
-}
-
-// NewUnifiedEncoder returns a new UnifiedEncoder that writes to w.
-func NewUnifiedEncoder(w io.Writer, contextLines int) *UnifiedEncoder {
-	return &UnifiedEncoder{
-		Writer:       w,
-		srcPrefix:    "a/",
-		dstPrefix:    "b/",
-		contextLines: contextLines,
-	}
-}
-
-// SetColor sets e's color configuration and returns e.
-func (e *UnifiedEncoder) SetColor(colorConfig ColorConfig) *UnifiedEncoder {
-	e.color = colorConfig
-	return e
-}
-
-// SetSrcPrefix sets e's srcPrefix and returns e.
-func (e *UnifiedEncoder) SetSrcPrefix(prefix string) *UnifiedEncoder {
-	e.srcPrefix = prefix
-	return e
-}
-
-// SetDstPrefix sets e's dstPrefix and returns e.
-func (e *UnifiedEncoder) SetDstPrefix(prefix string) *UnifiedEncoder {
-	e.dstPrefix = prefix
-	return e
-}
-
-// Encode encodes patch.
-func (e *UnifiedEncoder) Encode(patch Patch) error {
-	sb := &strings.Builder{}
-
-	if message := patch.Message(); message != "" {
-		sb.WriteString(message)
-		if !strings.HasSuffix(message, "\n") {
-			sb.WriteByte('\n')
-		}
-	}
-
-	for _, filePatch := range patch.FilePatches() {
-		e.writeFilePatchHeader(sb, filePatch)
-		g := newHunksGenerator(filePatch.Chunks(), e.contextLines)
-		for _, hunk := range g.Generate() {
-			hunk.writeTo(sb, e.color)
-		}
-	}
-
-	_, err := e.Write([]byte(sb.String()))
-	return err
-}
-
-func (e *UnifiedEncoder) writeFilePatchHeader(sb *strings.Builder, filePatch FilePatch) {
-	from, to := filePatch.Files()
-	if from == nil && to == nil {
-		return
-	}
-	isBinary := filePatch.IsBinary()
-
-	var lines []string
-	switch {
-	case from != nil && to != nil:
-		hashEquals := from.Hash() == to.Hash()
-		lines = append(lines,
-			fmt.Sprintf("diff --git %s%s %s%s",
-				e.srcPrefix, from.Path(), e.dstPrefix, to.Path()),
-		)
-		if from.Mode() != to.Mode() {
-			lines = append(lines,
-				fmt.Sprintf("old mode %o", from.Mode()),
-				fmt.Sprintf("new mode %o", to.Mode()),
-			)
-		}
-		if from.Path() != to.Path() {
-			lines = append(lines,
-				fmt.Sprintf("rename from %s", from.Path()),
-				fmt.Sprintf("rename to %s", to.Path()),
-			)
-		}
-		if from.Mode() != to.Mode() && !hashEquals {
-			lines = append(lines,
-				fmt.Sprintf("index %s..%s", from.Hash(), to.Hash()),
-			)
-		} else if !hashEquals {
-			lines = append(lines,
-				fmt.Sprintf("index %s..%s %o", from.Hash(), to.Hash(), from.Mode()),
-			)
-		}
-		if !hashEquals {
-			lines = e.appendPathLines(lines, e.srcPrefix+from.Path(), e.dstPrefix+to.Path(), isBinary)
-		}
-	case from == nil:
-		lines = append(lines,
-			fmt.Sprintf("diff --git %s %s", e.srcPrefix+to.Path(), e.dstPrefix+to.Path()),
-			fmt.Sprintf("new file mode %o", to.Mode()),
-			fmt.Sprintf("index %s..%s", plumbing.ZeroHash, to.Hash()),
-		)
-		lines = e.appendPathLines(lines, "/dev/null", e.dstPrefix+to.Path(), isBinary)
-	case to == nil:
-		lines = append(lines,
-			fmt.Sprintf("diff --git %s %s", e.srcPrefix+from.Path(), e.dstPrefix+from.Path()),
-			fmt.Sprintf("deleted file mode %o", from.Mode()),
-			fmt.Sprintf("index %s..%s", from.Hash(), plumbing.ZeroHash),
-		)
-		lines = e.appendPathLines(lines, e.srcPrefix+from.Path(), "/dev/null", isBinary)
-	}
-
-	sb.WriteString(e.color[Meta])
-	sb.WriteString(lines[0])
-	for _, line := range lines[1:] {
-		sb.WriteByte('\n')
-		sb.WriteString(line)
-	}
-	sb.WriteString(e.color.Reset(Meta))
-	sb.WriteByte('\n')
-}
-
-func (e *UnifiedEncoder) appendPathLines(lines []string, fromPath, toPath string, isBinary bool) []string {
-	if isBinary {
-		return append(lines,
-			fmt.Sprintf("Binary files %s and %s differ", fromPath, toPath),
-		)
-	}
-	return append(lines,
-		fmt.Sprintf("--- %s", fromPath),
-		fmt.Sprintf("+++ %s", toPath),
-	)
-}
-
-type hunksGenerator struct {
-	fromLine, toLine            int
-	ctxLines                    int
-	chunks                      []Chunk
-	current                     *hunk
-	hunks                       []*hunk
-	beforeContext, afterContext []string
-}
-
-func newHunksGenerator(chunks []Chunk, ctxLines int) *hunksGenerator {
-	return &hunksGenerator{
-		chunks:   chunks,
-		ctxLines: ctxLines,
-	}
-}
-
-func (g *hunksGenerator) Generate() []*hunk {
-	for i, chunk := range g.chunks {
-		lines := splitLines(chunk.Content())
-		nLines := len(lines)
-
-		switch chunk.Type() {
-		case Equal:
-			g.fromLine += nLines
-			g.toLine += nLines
-			g.processEqualsLines(lines, i)
-		case Delete:
-			if nLines != 0 {
-				g.fromLine++
-			}
-
-			g.processHunk(i, chunk.Type())
-			g.fromLine += nLines - 1
-			g.current.AddOp(chunk.Type(), lines...)
-		case Add:
-			if nLines != 0 {
-				g.toLine++
-			}
-			g.processHunk(i, chunk.Type())
-			g.toLine += nLines - 1
-			g.current.AddOp(chunk.Type(), lines...)
-		}
-
-		if i == len(g.chunks)-1 && g.current != nil {
-			g.hunks = append(g.hunks, g.current)
-		}
-	}
-
-	return g.hunks
-}
-
-func (g *hunksGenerator) processHunk(i int, op Operation) {
-	if g.current != nil {
-		return
-	}
-
-	var ctxPrefix string
-	linesBefore := len(g.beforeContext)
-	if linesBefore > g.ctxLines {
-		ctxPrefix = g.beforeContext[linesBefore-g.ctxLines-1]
-		g.beforeContext = g.beforeContext[linesBefore-g.ctxLines:]
-		linesBefore = g.ctxLines
-	}
-
-	g.current = &hunk{ctxPrefix: strings.TrimSuffix(ctxPrefix, "\n")}
-	g.current.AddOp(Equal, g.beforeContext...)
-
-	switch op {
-	case Delete:
-		g.current.fromLine, g.current.toLine =
-			g.addLineNumbers(g.fromLine, g.toLine, linesBefore, i, Add)
-	case Add:
-		g.current.toLine, g.current.fromLine =
-			g.addLineNumbers(g.toLine, g.fromLine, linesBefore, i, Delete)
-	}
-
-	g.beforeContext = nil
-}
-
-// addLineNumbers obtains the line numbers in a new chunk.
-func (g *hunksGenerator) addLineNumbers(la, lb int, linesBefore int, i int, op Operation) (cla, clb int) {
-	cla = la - linesBefore
-	// we need to search for a reference for the next diff
-	switch {
-	case linesBefore != 0 && g.ctxLines != 0:
-		if lb > g.ctxLines {
-			clb = lb - g.ctxLines + 1
-		} else {
-			clb = 1
-		}
-	case g.ctxLines == 0:
-		clb = lb
-	case i != len(g.chunks)-1:
-		next := g.chunks[i+1]
-		if next.Type() == op || next.Type() == Equal {
-			// this diff will be into this chunk
-			clb = lb + 1
-		}
-	}
-
-	return
-}
-
-func (g *hunksGenerator) processEqualsLines(ls []string, i int) {
-	if g.current == nil {
-		g.beforeContext = append(g.beforeContext, ls...)
-		return
-	}
-
-	g.afterContext = append(g.afterContext, ls...)
-	if len(g.afterContext) <= g.ctxLines*2 && i != len(g.chunks)-1 {
-		g.current.AddOp(Equal, g.afterContext...)
-		g.afterContext = nil
-	} else {
-		ctxLines := g.ctxLines
-		if ctxLines > len(g.afterContext) {
-			ctxLines = len(g.afterContext)
-		}
-		g.current.AddOp(Equal, g.afterContext[:ctxLines]...)
-		g.hunks = append(g.hunks, g.current)
-
-		g.current = nil
-		g.beforeContext = g.afterContext[ctxLines:]
-		g.afterContext = nil
-	}
-}
-
-func splitLines(s string) []string {
-	out := splitLinesRegexp.FindAllString(s, -1)
-	if out[len(out)-1] == "" {
-		out = out[:len(out)-1]
-	}
-	return out
-}
-
-type hunk struct {
-	fromLine int
-	toLine   int
-
-	fromCount int
-	toCount   int
-
-	ctxPrefix string
-	ops       []*op
-}
-
-func (h *hunk) writeTo(sb *strings.Builder, color ColorConfig) {
-	sb.WriteString(color[Frag])
-	sb.WriteString("@@ -")
-
-	if h.fromCount == 1 {
-		sb.WriteString(strconv.Itoa(h.fromLine))
-	} else {
-		sb.WriteString(strconv.Itoa(h.fromLine))
-		sb.WriteByte(',')
-		sb.WriteString(strconv.Itoa(h.fromCount))
-	}
-
-	sb.WriteString(" +")
-
-	if h.toCount == 1 {
-		sb.WriteString(strconv.Itoa(h.toLine))
-	} else {
-		sb.WriteString(strconv.Itoa(h.toLine))
-		sb.WriteByte(',')
-		sb.WriteString(strconv.Itoa(h.toCount))
-	}
-
-	sb.WriteString(" @@")
-	sb.WriteString(color.Reset(Frag))
-
-	if h.ctxPrefix != "" {
-		sb.WriteByte(' ')
-		sb.WriteString(color[Func])
-		sb.WriteString(h.ctxPrefix)
-		sb.WriteString(color.Reset(Func))
-	}
-
-	sb.WriteByte('\n')
-
-	for _, op := range h.ops {
-		op.writeTo(sb, color)
-	}
-}
-
-func (h *hunk) AddOp(t Operation, ss ...string) {
-	n := len(ss)
-	switch t {
-	case Add:
-		h.toCount += n
-	case Delete:
-		h.fromCount += n
-	case Equal:
-		h.toCount += n
-		h.fromCount += n
-	}
-
-	for _, s := range ss {
-		h.ops = append(h.ops, &op{s, t})
-	}
-}
-
-type op struct {
-	text string
-	t    Operation
-}
-
-func (o *op) writeTo(sb *strings.Builder, color ColorConfig) {
-	colorKey := operationColorKey[o.t]
-	sb.WriteString(color[colorKey])
-	sb.WriteByte(operationChar[o.t])
-	if strings.HasSuffix(o.text, "\n") {
-		sb.WriteString(strings.TrimSuffix(o.text, "\n"))
-	} else {
-		sb.WriteString(o.text + "\n\\ No newline at end of file")
-	}
-	sb.WriteString(color.Reset(colorKey))
-	sb.WriteByte('\n')
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/gitignore/dir.go","mode":420,"size":3764,"sha256":"287f49d5b8b99360efb382c06a971d42f7dcdafd5f882c176d3da1f88b3fcb16","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3764}
-package gitignore
-
-import (
-	"bufio"
-	"bytes"
-	"io"
-	"os"
-	"strings"
-
-	"github.com/go-git/go-billy/v5"
-	"github.com/go-git/go-git/v5/internal/path_util"
-	"github.com/go-git/go-git/v5/plumbing/format/config"
-	gioutil "github.com/go-git/go-git/v5/utils/ioutil"
-)
-
-const (
-	commentPrefix   = "#"
-	coreSection     = "core"
-	excludesfile    = "excludesfile"
-	gitDir          = ".git"
-	gitignoreFile   = ".gitignore"
-	gitconfigFile   = ".gitconfig"
-	systemFile      = "/etc/gitconfig"
-	infoExcludeFile = gitDir + "/info/exclude"
-)
-
-// readIgnoreFile reads a specific git ignore file.
-func readIgnoreFile(fs billy.Filesystem, path []string, ignoreFile string) (ps []Pattern, err error) {
-
-	ignoreFile, _ = path_util.ReplaceTildeWithHome(ignoreFile)
-
-	f, err := fs.Open(fs.Join(append(path, ignoreFile)...))
-	if err == nil {
-		defer f.Close()
-
-		scanner := bufio.NewScanner(f)
-		for scanner.Scan() {
-			s := scanner.Text()
-			if !strings.HasPrefix(s, commentPrefix) && len(strings.TrimSpace(s)) > 0 {
-				ps = append(ps, ParsePattern(s, path))
-			}
-		}
-	} else if !os.IsNotExist(err) {
-		return nil, err
-	}
-
-	return
-}
-
-// ReadPatterns reads the .git/info/exclude and then the gitignore patterns
-// recursively traversing through the directory structure. The result is in
-// the ascending order of priority (last higher).
-func ReadPatterns(fs billy.Filesystem, path []string) (ps []Pattern, err error) {
-	ps, _ = readIgnoreFile(fs, path, infoExcludeFile)
-
-	subps, _ := readIgnoreFile(fs, path, gitignoreFile)
-	ps = append(ps, subps...)
-
-	var fis []os.FileInfo
-	fis, err = fs.ReadDir(fs.Join(path...))
-	if err != nil {
-		return
-	}
-
-	for _, fi := range fis {
-		if fi.IsDir() && fi.Name() != gitDir {
-			if NewMatcher(ps).Match(append(path, fi.Name()), true) {
-				continue
-			}
-
-			var subps []Pattern
-			subps, err = ReadPatterns(fs, append(path, fi.Name()))
-			if err != nil {
-				return
-			}
-
-			if len(subps) > 0 {
-				ps = append(ps, subps...)
-			}
-		}
-	}
-
-	return
-}
-
-func loadPatterns(fs billy.Filesystem, path string) (ps []Pattern, err error) {
-	f, err := fs.Open(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, err
-	}
-
-	defer gioutil.CheckClose(f, &err)
-
-	b, err := io.ReadAll(f)
-	if err != nil {
-		return
-	}
-
-	d := config.NewDecoder(bytes.NewBuffer(b))
-
-	raw := config.New()
-	if err = d.Decode(raw); err != nil {
-		return
-	}
-
-	s := raw.Section(coreSection)
-	efo := s.Options.Get(excludesfile)
-	if efo == "" {
-		return nil, nil
-	}
-
-	ps, err = readIgnoreFile(fs, nil, efo)
-	if os.IsNotExist(err) {
-		return nil, nil
-	}
-
-	return
-}
-
-// LoadGlobalPatterns loads gitignore patterns from the gitignore file
-// declared in a user's ~/.gitconfig file.  If the ~/.gitconfig file does not
-// exist the function will return nil.  If the core.excludesfile property
-// is not declared, the function will return nil.  If the file pointed to by
-// the core.excludesfile property does not exist, the function will return nil.
-//
-// The function assumes fs is rooted at the root filesystem.
-func LoadGlobalPatterns(fs billy.Filesystem) (ps []Pattern, err error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return
-	}
-
-	return loadPatterns(fs, fs.Join(home, gitconfigFile))
-}
-
-// LoadSystemPatterns loads gitignore patterns from the gitignore file
-// declared in a system's /etc/gitconfig file.  If the /etc/gitconfig file does
-// not exist the function will return nil.  If the core.excludesfile property
-// is not declared, the function will return nil.  If the file pointed to by
-// the core.excludesfile property does not exist, the function will return nil.
-//
-// The function assumes fs is rooted at the root filesystem.
-func LoadSystemPatterns(fs billy.Filesystem) (ps []Pattern, err error) {
-	return loadPatterns(fs, systemFile)
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/gitignore/doc.go","mode":420,"size":3507,"sha256":"28d8cc28e3793361bfe9d069d346541060f60d369af6eb004f4e09336f08f65d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3507}
-// Package gitignore implements matching file system paths to gitignore patterns that
-// can be automatically read from a git repository tree in the order of definition
-// priorities. It support all pattern formats as specified in the original gitignore
-// documentation, copied below:
-//
-//   Pattern format
-//   ==============
-//
-//		- A blank line matches no files, so it can serve as a separator for readability.
-//
-//		- A line starting with # serves as a comment. Put a backslash ("\") in front of
-//		  the first hash for patterns that begin with a hash.
-//
-//		- Trailing spaces are ignored unless they are quoted with backslash ("\").
-//
-//		- An optional prefix "!" which negates the pattern; any matching file excluded
-//		  by a previous pattern will become included again. It is not possible to
-//		  re-include a file if a parent directory of that file is excluded.
-//		  Git doesn’t list excluded directories for performance reasons, so
-//		  any patterns on contained files have no effect, no matter where they are
-//		  defined. Put a backslash ("\") in front of the first "!" for patterns
-//		  that begin with a literal "!", for example, "\!important!.txt".
-//
-//		- If the pattern ends with a slash, it is removed for the purpose of the
-//		  following description, but it would only find a match with a directory.
-//		  In other words, foo/ will match a directory foo and paths underneath it,
-//		  but will not match a regular file or a symbolic link foo (this is consistent
-//		  with the way how pathspec works in general in Git).
-//
-//		- If the pattern does not contain a slash /, Git treats it as a shell glob
-//		  pattern and checks for a match against the pathname relative to the location
-//		  of the .gitignore file (relative to the toplevel of the work tree if not
-//		  from a .gitignore file).
-//
-//		- Otherwise, Git treats the pattern as a shell glob suitable for consumption
-//		  by fnmatch(3) with the FNM_PATHNAME flag: wildcards in the pattern will
-//		  not match a / in the pathname. For example, "Documentation/*.html" matches
-//		  "Documentation/git.html" but not "Documentation/ppc/ppc.html" or
-//		  "tools/perf/Documentation/perf.html".
-//
-//		- A leading slash matches the beginning of the pathname. For example,
-//		  "/*.c" matches "cat-file.c" but not "mozilla-sha1/sha1.c".
-//
-//		Two consecutive asterisks ("**") in patterns matched against full pathname
-//		may have special meaning:
-//
-//		- A leading "**" followed by a slash means match in all directories.
-//		  For example, "**/foo" matches file or directory "foo" anywhere, the same as
-//		  pattern "foo". "**/foo/bar" matches file or directory "bar"
-//		  anywhere that is directly under directory "foo".
-//
-//		- A trailing "/**" matches everything inside. For example, "abc/**" matches
-//		  all files inside directory "abc", relative to the location of the
-//		  .gitignore file, with infinite depth.
-//
-//		- A slash followed by two consecutive asterisks then a slash matches
-//		  zero or more directories. For example, "a/**/b" matches "a/b", "a/x/b",
-//		  "a/x/y/b" and so on.
-//
-//		- Other consecutive asterisks are considered invalid.
-//
-//   Copyright and license
-//   =====================
-//
-//		Copyright (c) Oleg Sklyar, Silvertern and source{d}
-//
-//		The package code was donated to source{d} to include, modify and develop
-//		further as a part of the `go-git` project, release it on the license of
-//		the whole project or delete it from the project.
-package gitignore
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/gitignore/matcher.go","mode":420,"size":934,"sha256":"e104fc611ae78c88a9202fce457ef6ced879982c1d6eb179fd828996e06e69f3","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":934}
-package gitignore
-
-// Matcher defines a global multi-pattern matcher for gitignore patterns
-type Matcher interface {
-	// Match matches patterns in the order of priorities. As soon as an inclusion or
-	// exclusion is found, not further matching is performed.
-	Match(path []string, isDir bool) bool
-}
-
-// NewMatcher constructs a new global matcher. Patterns must be given in the order of
-// increasing priority. That is most generic settings files first, then the content of
-// the repo .gitignore, then content of .gitignore down the path or the repo and then
-// the content command line arguments.
-func NewMatcher(ps []Pattern) Matcher {
-	return &matcher{ps}
-}
-
-type matcher struct {
-	patterns []Pattern
-}
-
-func (m *matcher) Match(path []string, isDir bool) bool {
-	n := len(m.patterns)
-	for i := n - 1; i >= 0; i-- {
-		if match := m.patterns[i].Match(path, isDir); match > NoMatch {
-			return match == Exclude
-		}
-	}
-	return false
-}
 
 @@END
