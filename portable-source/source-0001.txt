@@ -89728,7 +89728,7 @@ catalogLock:
 })();
 
 @@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":137632,"sha256":"32f773a8281d76b01318dab0bc546f6422cb5ebbea2f64c9871a204a5377ffd4","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49805}
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":138625,"sha256":"854e2a5574a42b75d4f19341bf61d34fcba730e37cd08489d7c0b72eab8fb568","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49805}
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   EditResult,
@@ -90880,7 +90880,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       )
     )
       return;
-    if (!api.approveInstallationPlan) return;
+    if (!api.approveAndStartInstallation && !api.approveInstallationPlan) return;
     setInstallationBusy(true);
     try {
       if (
@@ -90936,7 +90936,11 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
         planId = next.id;
         acknowledgements = next.acknowledgements.map((item) => item.code);
       }
-      const operation = await api.approveInstallationPlan(
+      if (api.approveAndStartInstallation) {
+        await startApprovedInstallation(planId, acknowledgements);
+        return;
+      }
+      const operation = await api.approveInstallationPlan!(
         planId,
         acknowledgements,
       );
@@ -90947,27 +90951,50 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       setInstallationBusy(false);
     }
   };
-  const startApprovedInstallation = async (planId: string) => {
+  const startApprovedInstallation = async (
+    planId: string,
+    acknowledgements?: string[],
+  ) => {
     if (
       ["STARTING", "RUNNING", "CANCELLING"].includes(
         installationRun?.run?.state || "",
       )
     )
       return;
-    if (!api.startApprovedInstallation) return;
+    if (
+      acknowledgements
+        ? !api.approveAndStartInstallation
+        : !api.startApprovedInstallation
+    ) return;
     setInstallationBusy(true);
     setInstallationStarting(true);
     try {
-      const operation = await api.startApprovedInstallation(planId);
+      const operation = acknowledgements
+        ? await api.approveAndStartInstallation!(planId, acknowledgements)
+        : await api.startApprovedInstallation!(planId);
+      const operationPlan = operation.plan as InstallationPlanOperation["plan"];
+      if (acknowledgements && !operation.run) {
+        const current = operationPlan
+          ? { status: "PLAN_REVIEW" as const, plan: operationPlan }
+          : await api.getInstallationPlan?.(planId);
+        setInstallationPlan({
+          ...current,
+          status: current?.status || "BLOCKED",
+          error: operation.error,
+        });
+        setApprovalErrorAttempt((attempt) => attempt + 1);
+        await refreshInstallationState();
+        return;
+      }
       if (operation.status === "BLOCKED" && api.getInstallationPlan) {
         setInstallationPlan(await api.getInstallationPlan(planId));
       }
       setInstallationRun(operation);
       setInstallationEvents([]);
-      setRunPlan(operation.run ? installationPlan?.plan : undefined);
+      setRunPlan(operation.run ? operationPlan || installationPlan?.plan : undefined);
       activeRunIdRef.current = operation.run?.runId || "";
       runProgressRef.current = operation.run
-        ? beginRunProgress(operation.run.runId, installationPlan?.plan)
+        ? beginRunProgress(operation.run.runId, operationPlan || installationPlan?.plan)
         : undefined;
       setRunProgress(runProgressRef.current);
       setInstallationTab("execution");
@@ -91016,7 +91043,10 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     confirm: string,
   ) => {
     if (!api.setSecretOutputEncryptionPassword)
-      throw new Error("SECRET_OUTPUT_UNAVAILABLE");
+      throw new Err
+@@END
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":138625,"sha256":"854e2a5574a42b75d4f19341bf61d34fcba730e37cd08489d7c0b72eab8fb568","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49601}
+or("SECRET_OUTPUT_UNAVAILABLE");
     await api.setSecretOutputEncryptionPassword(password, confirm);
     if (installationPlan?.plan?.id && api.getInstallationPlan) {
       setInstallationPlan(
@@ -91043,10 +91073,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
         return;
       }
       setSecretOutputPackages(pending);
-      const plan = 
-@@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":137632,"sha256":"32f773a8281d76b01318dab0bc546f6422cb5ebbea2f64c9871a204a5377ffd4","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":49780}
-installationPlan?.plan;
+      const plan = installationPlan?.plan;
       if (
         pending.status !== "READY" ||
         (!manual &&
@@ -92379,7 +92406,10 @@ installationPlan?.plan;
                         <button
                           className="outline"
                           disabled={bundleBusy}
-                          onClick={attachOrphanRun}
+                       
+@@END
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":138625,"sha256":"854e2a5574a42b75d4f19341bf61d34fcba730e37cd08489d7c0b72eab8fb568","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":39219}
+   onClick={attachOrphanRun}
                         >
                           {orphanRun.status === "CURRENT"
                             ? "Открыть выполнение"
@@ -92402,10 +92432,7 @@ installationPlan?.plan;
                       Запуск недоступен. Проверьте SSH-доступ и исходный узел
                       исполнения.
                     </p>
-                  
-@@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":137632,"sha256":"32f773a8281d76b01318dab0bc546f6422cb5ebbea2f64c9871a204a5377ffd4","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":38047}
-)}
+                  )}
                   {orphanRun?.status === "UNKNOWN" && (
                     <p role="status">
                       Состояние прежнего запуска не подтверждено.

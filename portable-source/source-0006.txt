@@ -1,3 +1,2256 @@
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/gitignore/pattern.go","mode":420,"size":3190,"sha256":"6c8442cc541e54bc05db87c228f959249b357ffbf2487e457615fc06cb8a73ee","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3190}
+package gitignore
+
+import (
+	"path/filepath"
+	"strings"
+)
+
+// MatchResult defines outcomes of a match, no match, exclusion or inclusion.
+type MatchResult int
+
+const (
+	// NoMatch defines the no match outcome of a match check
+	NoMatch MatchResult = iota
+	// Exclude defines an exclusion of a file as a result of a match check
+	Exclude
+	// Include defines an explicit inclusion of a file as a result of a match check
+	Include
+)
+
+const (
+	inclusionPrefix = "!"
+	zeroToManyDirs  = "**"
+	patternDirSep   = "/"
+)
+
+// Pattern defines a single gitignore pattern.
+type Pattern interface {
+	// Match matches the given path to the pattern.
+	Match(path []string, isDir bool) MatchResult
+}
+
+type pattern struct {
+	domain    []string
+	pattern   []string
+	inclusion bool
+	dirOnly   bool
+	isGlob    bool
+}
+
+// ParsePattern parses a gitignore pattern string into the Pattern structure.
+func ParsePattern(p string, domain []string) Pattern {
+	// storing domain, copy it to ensure it isn't changed externally
+	domain = append([]string(nil), domain...)
+	res := pattern{domain: domain}
+
+	if strings.HasPrefix(p, inclusionPrefix) {
+		res.inclusion = true
+		p = p[1:]
+	}
+
+	if !strings.HasSuffix(p, "\\ ") {
+		p = strings.TrimRight(p, " ")
+	}
+
+	if strings.HasSuffix(p, patternDirSep) {
+		res.dirOnly = true
+		p = p[:len(p)-1]
+	}
+
+	if strings.Contains(p, patternDirSep) {
+		res.isGlob = true
+	}
+
+	res.pattern = strings.Split(p, patternDirSep)
+	return &res
+}
+
+func (p *pattern) Match(path []string, isDir bool) MatchResult {
+	if len(path) <= len(p.domain) {
+		return NoMatch
+	}
+	for i, e := range p.domain {
+		if path[i] != e {
+			return NoMatch
+		}
+	}
+
+	path = path[len(p.domain):]
+	if p.isGlob && !p.globMatch(path, isDir) {
+		return NoMatch
+	} else if !p.isGlob && !p.simpleNameMatch(path, isDir) {
+		return NoMatch
+	}
+
+	if p.inclusion {
+		return Include
+	} else {
+		return Exclude
+	}
+}
+
+func (p *pattern) simpleNameMatch(path []string, isDir bool) bool {
+	for i, name := range path {
+		if match, err := filepath.Match(p.pattern[0], name); err != nil {
+			return false
+		} else if !match {
+			continue
+		}
+		if p.dirOnly && !isDir && i == len(path)-1 {
+			return false
+		}
+		return true
+	}
+	return false
+}
+
+func (p *pattern) globMatch(path []string, isDir bool) bool {
+	matched := false
+	canTraverse := false
+	for i, pattern := range p.pattern {
+		if pattern == "" {
+			canTraverse = false
+			continue
+		}
+		if pattern == zeroToManyDirs {
+			if i == len(p.pattern)-1 {
+				break
+			}
+			canTraverse = true
+			continue
+		}
+		if strings.Contains(pattern, zeroToManyDirs) {
+			return false
+		}
+		if len(path) == 0 {
+			return false
+		}
+		if canTraverse {
+			canTraverse = false
+			for len(path) > 0 {
+				e := path[0]
+				path = path[1:]
+				if match, err := filepath.Match(pattern, e); err != nil {
+					return false
+				} else if match {
+					matched = true
+					break
+				} else if len(path) == 0 {
+					// if nothing left then fail
+					matched = false
+				}
+			}
+		} else {
+			if match, err := filepath.Match(pattern, path[0]); err != nil || !match {
+				return false
+			}
+			matched = true
+			path = path[1:]
+		}
+	}
+	if matched && p.dirOnly && !isDir && len(path) == 0 {
+		matched = false
+	}
+	return matched
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/idxfile/decoder.go","mode":420,"size":8769,"sha256":"310465504ad45ce834563f597f4808cea182c929190e38d38c03b0cd08bb7997","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":8769}
+package idxfile
+
+import (
+	"bytes"
+	"crypto"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"io"
+	"io/fs"
+
+	"github.com/go-git/go-git/v5/plumbing/hash"
+	"github.com/go-git/go-git/v5/utils/binary"
+)
+
+var (
+	// ErrUnsupportedVersion is returned by Decode when the idx file version
+	// is not supported.
+	ErrUnsupportedVersion = errors.New("unsupported version")
+	// ErrMalformedIdxFile is returned by Decode when the idx file is corrupted.
+	ErrMalformedIdxFile = errors.New("malformed IDX file")
+)
+
+const (
+	fanout         = 256
+	objectIDLength = hash.Size
+)
+
+// Byte sizes of the idx v2 layout elements, used by the size formula
+// in [validateIdxV2Size]. See [gitformat-pack] for the canonical
+// layout.
+//
+// [gitformat-pack]: https://git-scm.com/docs/gitformat-pack
+const (
+	headerLen     = 8          // magic + version
+	fanoutLen     = fanout * 4 // uint32 per bucket
+	crc32Len      = 4          // CRC32 per object
+	offset32Len   = 4          // 32-bit offset per object
+	offset64Len   = 8          // 64-bit overflow offset
+	trailerHashes = 2          // pack checksum + idx checksum, each hashsz
+)
+
+// statInput is the optional shape the [Decoder] probes for at the
+// start of [Decoder.Decode] to learn the on-disk length of the idx
+// blob, which it uses to validate the canonical-Git size formula
+// before any allocations driven by the fanout table. Callers that
+// pass an [*os.File] or a `billy.File` backed by an `*os.File`
+// (the production call sites in `storage/filesystem`) satisfy it
+// directly; arbitrary [io.Reader]s do not, and decode for them
+// retains the pre-existing behaviour of erroring out at the
+// truncated-payload boundary instead.
+//
+// The interface is intentionally unexported so the public
+// [NewDecoder] signature stays compatible with v5.
+type statInput interface {
+	Stat() (fs.FileInfo, error)
+}
+
+// Decoder reads and decodes idx files from an input stream.
+type Decoder struct {
+	io.Reader
+	src io.Reader
+	h   hash.Hash
+}
+
+// NewDecoder builds a new idx stream decoder, that reads from r.
+func NewDecoder(r io.Reader) *Decoder {
+	h := hash.New(crypto.SHA1)
+	tr := io.TeeReader(r, h)
+	return &Decoder{tr, r, h}
+}
+
+// Decode reads from the stream and decode the content into the MemoryIndex struct.
+func (d *Decoder) Decode(idx *MemoryIndex) error {
+	idxSize := int64(-1)
+	if in, ok := d.src.(statInput); ok {
+		fi, err := in.Stat()
+		if err != nil {
+			return fmt.Errorf("%w: stat input: %w", ErrMalformedIdxFile, err)
+		}
+		idxSize = fi.Size()
+	}
+
+	if err := validateHeader(d); err != nil {
+		return err
+	}
+
+	headerFlow := []func(*MemoryIndex, io.Reader) error{
+		readVersion,
+		readFanout,
+	}
+	for _, f := range headerFlow {
+		if err := f(idx, d); err != nil {
+			return err
+		}
+	}
+
+	if idxSize >= 0 {
+		if err := validateIdxV2Size(idx, idxSize); err != nil {
+			return err
+		}
+	}
+
+	bodyFlow := []func(*MemoryIndex, io.Reader) error{
+		readObjectNames,
+		readCRC32,
+		readOffsets,
+		readPackChecksum,
+	}
+	for _, f := range bodyFlow {
+		if err := f(idx, d); err != nil {
+			return err
+		}
+	}
+
+	actual := d.h.Sum(nil)
+	if err := readIdxChecksum(idx, d); err != nil {
+		return err
+	}
+
+	if !bytes.Equal(actual, idx.IdxChecksum[:]) {
+		return fmt.Errorf("%w: checksum mismatch: %q instead of %q",
+			ErrMalformedIdxFile, hex.EncodeToString(idx.IdxChecksum[:]), hex.EncodeToString(actual))
+	}
+
+	return nil
+}
+
+func validateHeader(r io.Reader) error {
+	h := make([]byte, 4)
+	if _, err := io.ReadFull(r, h); err != nil {
+		return err
+	}
+
+	if !bytes.Equal(h, idxHeader) {
+		return ErrMalformedIdxFile
+	}
+
+	return nil
+}
+
+func readVersion(idx *MemoryIndex, r io.Reader) error {
+	v, err := binary.ReadUint32(r)
+	if err != nil {
+		return err
+	}
+
+	if v != VersionSupported {
+		return fmt.Errorf("%w: v%d", ErrUnsupportedVersion, v)
+	}
+
+	idx.Version = v
+	return nil
+}
+
+func readFanout(idx *MemoryIndex, r io.Reader) error {
+	for k := 0; k < fanout; k++ {
+		n, err := binary.ReadUint32(r)
+		if err != nil {
+			return err
+		}
+
+		if k > 0 && n < idx.Fanout[k-1] {
+			return fmt.Errorf("%w: fanout table is not monotonically non-decreasing at entry %d", ErrMalformedIdxFile, k)
+		}
+
+		idx.Fanout[k] = n
+		idx.FanoutMapping[k] = noMapping
+	}
+
+	return nil
+}
+
+func readObjectNames(idx *MemoryIndex, r io.Reader) error {
+	for k := 0; k < fanout; k++ {
+		var buckets uint32
+		if k == 0 {
+			buckets = idx.Fanout[k]
+		} else {
+			buckets = idx.Fanout[k] - idx.Fanout[k-1]
+		}
+
+		if buckets == 0 {
+			continue
+		}
+
+		idx.FanoutMapping[k] = len(idx.Names)
+
+		nameLen := int(buckets * objectIDLength)
+		bin := make([]byte, nameLen)
+		if _, err := io.ReadFull(r, bin); err != nil {
+			return err
+		}
+
+		idx.Names = append(idx.Names, bin)
+		idx.Offset32 = append(idx.Offset32, make([]byte, buckets*4))
+		idx.CRC32 = append(idx.CRC32, make([]byte, buckets*4))
+	}
+
+	return nil
+}
+
+func readCRC32(idx *MemoryIndex, r io.Reader) error {
+	for k := 0; k < fanout; k++ {
+		if pos := idx.FanoutMapping[k]; pos != noMapping {
+			if _, err := io.ReadFull(r, idx.CRC32[pos]); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func readOffsets(idx *MemoryIndex, r io.Reader) error {
+	var o64cnt int64
+	for k := 0; k < fanout; k++ {
+		if pos := idx.FanoutMapping[k]; pos != noMapping {
+			if _, err := io.ReadFull(r, idx.Offset32[pos]); err != nil {
+				return err
+			}
+
+			for p := 0; p < len(idx.Offset32[pos]); p += 4 {
+				if idx.Offset32[pos][p]&(byte(1)<<7) > 0 {
+					o64cnt++
+				}
+			}
+		}
+	}
+
+	if o64cnt > 0 {
+		idx.Offset64 = make([]byte, o64cnt*8)
+		if _, err := io.ReadFull(r, idx.Offset64); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func readPackChecksum(idx *MemoryIndex, r io.Reader) error {
+	if _, err := io.ReadFull(r, idx.PackfileChecksum[:]); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func readIdxChecksum(idx *MemoryIndex, r io.Reader) error {
+	if _, err := io.ReadFull(r, idx.IdxChecksum[:]); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// validateIdxV2Size enforces the size formula used by canonical Git
+// load_idx for idx v2 files: the on-disk length must lie within
+// [minSize, maxSize] where
+//
+//	perObject = hashsz + crc32Len + offset32Len
+//	minSize   = headerLen + fanoutLen + trailerHashes*hashsz + nr*perObject
+//	maxSize   = minSize + (nr-1)*offset64Len     when nr > 0
+//
+// with nr taken from the last fanout entry and hashsz fixed at
+// [objectIDLength] (SHA-1 in v5). Multiplications use a self-checking
+// overflow guard so inputs whose claimed object count overflows the
+// formula are rejected rather than wrapping into a smaller value.
+func validateIdxV2Size(idx *MemoryIndex, idxSize int64) error {
+	nr := int64(idx.Fanout[fanout-1])
+	hashsz := int64(objectIDLength)
+
+	minSize := minIdxV2Size(nr, hashsz)
+	maxSize := maxIdxV2Size(nr, hashsz)
+	if minSize < 0 || maxSize < 0 {
+		return fmt.Errorf("%w: object count %d is inconsistent with file size", ErrMalformedIdxFile, nr)
+	}
+
+	if idxSize < minSize || idxSize > maxSize {
+		return fmt.Errorf("%w: file size %d is inconsistent with object count %d", ErrMalformedIdxFile, idxSize, nr)
+	}
+	return nil
+}
+
+// minIdxV2Size returns the minimum on-disk size of an idx v2 file
+// holding nr objects with the given hash size, mirroring the
+// computation in canonical Git load_idx. Returns -1 when any
+// intermediate multiplication or addition would overflow int64.
+func minIdxV2Size(nr, hashsz int64) int64 {
+	perObject := hashsz + crc32Len + offset32Len
+	fixed := int64(headerLen+fanoutLen) + trailerHashes*hashsz
+
+	objects, ok := mulInt64(nr, perObject)
+	if !ok {
+		return -1
+	}
+	sum, ok := addInt64(fixed, objects)
+	if !ok {
+		return -1
+	}
+	return sum
+}
+
+// maxIdxV2Size returns the maximum on-disk size of an idx v2 file
+// holding nr objects with the given hash size, mirroring the
+// computation in canonical Git load_idx. Returns -1 on overflow.
+func maxIdxV2Size(nr, hashsz int64) int64 {
+	minSize := minIdxV2Size(nr, hashsz)
+	if minSize < 0 {
+		return -1
+	}
+	if nr == 0 {
+		return minSize
+	}
+	overflow, ok := mulInt64(nr-1, offset64Len)
+	if !ok {
+		return -1
+	}
+	sum, ok := addInt64(minSize, overflow)
+	if !ok {
+		return -1
+	}
+	return sum
+}
+
+// mulInt64 returns a*b and whether the result fits in an int64 without
+// overflow. Negative operands or overflow yield ok=false. The overflow
+// check uses the standard self-inverse identity: a*b/b == a only when
+// the multiplication did not wrap.
+func mulInt64(a, b int64) (int64, bool) {
+	if a < 0 || b < 0 {
+		return 0, false
+	}
+	if a == 0 || b == 0 {
+		return 0, true
+	}
+	c := a * b
+	if c/b != a {
+		return 0, false
+	}
+	return c, true
+}
+
+// addInt64 returns a+b and whether the result fits in an int64 without
+// overflow. Negative operands or overflow yield ok=false.
+func addInt64(a, b int64) (int64, bool) {
+	if a < 0 || b < 0 {
+		return 0, false
+	}
+	c := a + b
+	if c < a {
+		return 0, false
+	}
+	return c, true
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/idxfile/doc.go","mode":420,"size":5251,"sha256":"e3a60b1122f25e79f3785d94f095485df05675c40549ec992ad377127a06ecf4","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5251}
+// Package idxfile implements encoding and decoding of packfile idx files.
+//
+//  == Original (version 1) pack-*.idx files have the following format:
+//
+//    - The header consists of 256 4-byte network byte order
+//      integers.  N-th entry of this table records the number of
+//      objects in the corresponding pack, the first byte of whose
+//      object name is less than or equal to N.  This is called the
+//      'first-level fan-out' table.
+//
+//    - The header is followed by sorted 24-byte entries, one entry
+//      per object in the pack.  Each entry is:
+//
+//     4-byte network byte order integer, recording where the
+//     object is stored in the packfile as the offset from the
+//     beginning.
+//
+//     20-byte object name.
+//
+//   - The file is concluded with a trailer:
+//
+//     A copy of the 20-byte SHA1 checksum at the end of
+//     corresponding packfile.
+//
+//     20-byte SHA1-checksum of all of the above.
+//
+//   Pack Idx file:
+//
+//        --  +--------------------------------+
+//   fanout   | fanout[0] = 2 (for example)    |-.
+//   table    +--------------------------------+ |
+//            | fanout[1]                      | |
+//            +--------------------------------+ |
+//            | fanout[2]                      | |
+//            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ |
+//            | fanout[255] = total objects    |---.
+//        --  +--------------------------------+ | |
+//   main     | offset                         | | |
+//   index    | object name 00XXXXXXXXXXXXXXXX | | |
+//   tab      +--------------------------------+ | |
+//            | offset                         | | |
+//            | object name 00XXXXXXXXXXXXXXXX | | |
+//            +--------------------------------+<+ |
+//          .-| offset                         |   |
+//          | | object name 01XXXXXXXXXXXXXXXX |   |
+//          | +--------------------------------+   |
+//          | | offset                         |   |
+//          | | object name 01XXXXXXXXXXXXXXXX |   |
+//          | ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~   |
+//          | | offset                         |   |
+//          | | object name FFXXXXXXXXXXXXXXXX |   |
+//        --| +--------------------------------+<--+
+//  trailer | | packfile checksum              |
+//          | +--------------------------------+
+//          | | idxfile checksum               |
+//          | +--------------------------------+
+//          .---------.
+//                    |
+//  Pack file entry: <+
+//
+//     packed object header:
+//     1-byte size extension bit (MSB)
+//           type (next 3 bit)
+//           size0 (lower 4-bit)
+//         n-byte sizeN (as long as MSB is set, each 7-bit)
+//         size0..sizeN form 4+7+7+..+7 bit integer, size0
+//         is the least significant part, and sizeN is the
+//         most significant part.
+//     packed object data:
+//         If it is not DELTA, then deflated bytes (the size above
+//         is the size before compression).
+//     If it is REF_DELTA, then
+//       20-byte base object name SHA1 (the size above is the
+//         size of the delta data that follows).
+//           delta data, deflated.
+//     If it is OFS_DELTA, then
+//       n-byte offset (see below) interpreted as a negative
+//         offset from the type-byte of the header of the
+//         ofs-delta entry (the size above is the size of
+//         the delta data that follows).
+//       delta data, deflated.
+//
+//     offset encoding:
+//       n bytes with MSB set in all but the last one.
+//       The offset is then the number constructed by
+//       concatenating the lower 7 bit of each byte, and
+//       for n >= 2 adding 2^7 + 2^14 + ... + 2^(7*(n-1))
+//       to the result.
+//
+//   == Version 2 pack-*.idx files support packs larger than 4 GiB, and
+//      have some other reorganizations.  They have the format:
+//
+//     - A 4-byte magic number '\377tOc' which is an unreasonable
+//       fanout[0] value.
+//
+//     - A 4-byte version number (= 2)
+//
+//     - A 256-entry fan-out table just like v1.
+//
+//     - A table of sorted 20-byte SHA1 object names.  These are
+//       packed together without offset values to reduce the cache
+//       footprint of the binary search for a specific object name.
+//
+//     - A table of 4-byte CRC32 values of the packed object data.
+//       This is new in v2 so compressed data can be copied directly
+//       from pack to pack during repacking without undetected
+//       data corruption.
+//
+//     - A table of 4-byte offset values (in network byte order).
+//       These are usually 31-bit pack file offsets, but large
+//       offsets are encoded as an index into the next table with
+//       the msbit set.
+//
+//     - A table of 8-byte offset entries (empty for pack files less
+//       than 2 GiB).  Pack files are organized with heavily used
+//       objects toward the front, so most object references should
+//       not need to refer to this table.
+//
+//     - The same trailer as a v1 pack file:
+//
+//       A copy of the 20-byte SHA1 checksum at the end of
+//       corresponding packfile.
+//
+//       20-byte SHA1-checksum of all of the above.
+//
+// Source:
+// https://www.kernel.org/pub/software/scm/git/docs/v1.7.5/technical/pack-format.txt
+package idxfile
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/idxfile/encoder.go","mode":420,"size":2525,"sha256":"c348da82c4728c3e2cbbc709e503a0d9fba6603fbdc432b88227ab294a55fe7d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2525}
+package idxfile
+
+import (
+	"io"
+
+	"github.com/go-git/go-git/v5/plumbing/hash"
+	"github.com/go-git/go-git/v5/utils/binary"
+)
+
+// Encoder writes MemoryIndex structs to an output stream.
+type Encoder struct {
+	io.Writer
+	hash hash.Hash
+}
+
+// NewEncoder returns a new stream encoder that writes to w.
+func NewEncoder(w io.Writer) *Encoder {
+	h := hash.New(hash.CryptoType)
+	mw := io.MultiWriter(w, h)
+	return &Encoder{mw, h}
+}
+
+// Encode encodes an MemoryIndex to the encoder writer.
+func (e *Encoder) Encode(idx *MemoryIndex) (int, error) {
+	flow := []func(*MemoryIndex) (int, error){
+		e.encodeHeader,
+		e.encodeFanout,
+		e.encodeHashes,
+		e.encodeCRC32,
+		e.encodeOffsets,
+		e.encodeChecksums,
+	}
+
+	sz := 0
+	for _, f := range flow {
+		i, err := f(idx)
+		sz += i
+
+		if err != nil {
+			return sz, err
+		}
+	}
+
+	return sz, nil
+}
+
+func (e *Encoder) encodeHeader(idx *MemoryIndex) (int, error) {
+	c, err := e.Write(idxHeader)
+	if err != nil {
+		return c, err
+	}
+
+	return c + 4, binary.WriteUint32(e, idx.Version)
+}
+
+func (e *Encoder) encodeFanout(idx *MemoryIndex) (int, error) {
+	for _, c := range idx.Fanout {
+		if err := binary.WriteUint32(e, c); err != nil {
+			return 0, err
+		}
+	}
+
+	return fanout * 4, nil
+}
+
+func (e *Encoder) encodeHashes(idx *MemoryIndex) (int, error) {
+	var size int
+	for k := 0; k < fanout; k++ {
+		pos := idx.FanoutMapping[k]
+		if pos == noMapping {
+			continue
+		}
+
+		n, err := e.Write(idx.Names[pos])
+		if err != nil {
+			return size, err
+		}
+		size += n
+	}
+	return size, nil
+}
+
+func (e *Encoder) encodeCRC32(idx *MemoryIndex) (int, error) {
+	var size int
+	for k := 0; k < fanout; k++ {
+		pos := idx.FanoutMapping[k]
+		if pos == noMapping {
+			continue
+		}
+
+		n, err := e.Write(idx.CRC32[pos])
+		if err != nil {
+			return size, err
+		}
+
+		size += n
+	}
+
+	return size, nil
+}
+
+func (e *Encoder) encodeOffsets(idx *MemoryIndex) (int, error) {
+	var size int
+	for k := 0; k < fanout; k++ {
+		pos := idx.FanoutMapping[k]
+		if pos == noMapping {
+			continue
+		}
+
+		n, err := e.Write(idx.Offset32[pos])
+		if err != nil {
+			return size, err
+		}
+
+		size += n
+	}
+
+	if len(idx.Offset64) > 0 {
+		n, err := e.Write(idx.Offset64)
+		if err != nil {
+			return size, err
+		}
+
+		size += n
+	}
+
+	return size, nil
+}
+
+func (e *Encoder) encodeChecksums(idx *MemoryIndex) (int, error) {
+	if _, err := e.Write(idx.PackfileChecksum[:]); err != nil {
+		return 0, err
+	}
+
+	copy(idx.IdxChecksum[:], e.hash.Sum(nil)[:hash.Size])
+	if _, err := e.Write(idx.IdxChecksum[:]); err != nil {
+		return 0, err
+	}
+
+	return hash.HexSize, nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/idxfile/idxfile.go","mode":420,"size":8130,"sha256":"22eb18e6e67b7c9cc24af4a82ad41542e0ddb420faa6457b8c486a8cb64366f5","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":8130}
+package idxfile
+
+import (
+	"bytes"
+	"fmt"
+	"io"
+	"sort"
+	"sync"
+
+	encbin "encoding/binary"
+
+	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/hash"
+)
+
+const (
+	// VersionSupported is the only idx version supported.
+	VersionSupported = 2
+
+	noMapping = -1
+)
+
+var (
+	idxHeader = []byte{255, 't', 'O', 'c'}
+)
+
+// Index represents an index of a packfile.
+type Index interface {
+	// Contains checks whether the given hash is in the index.
+	Contains(h plumbing.Hash) (bool, error)
+	// FindOffset finds the offset in the packfile for the object with
+	// the given hash.
+	FindOffset(h plumbing.Hash) (int64, error)
+	// FindCRC32 finds the CRC32 of the object with the given hash.
+	FindCRC32(h plumbing.Hash) (uint32, error)
+	// FindHash finds the hash for the object with the given offset.
+	FindHash(o int64) (plumbing.Hash, error)
+	// Count returns the number of entries in the index.
+	Count() (int64, error)
+	// Entries returns an iterator to retrieve all index entries.
+	Entries() (EntryIter, error)
+	// EntriesByOffset returns an iterator to retrieve all index entries ordered
+	// by offset.
+	EntriesByOffset() (EntryIter, error)
+}
+
+// MemoryIndex is the in memory representation of an idx file.
+type MemoryIndex struct {
+	Version uint32
+	Fanout  [256]uint32
+	// FanoutMapping maps the position in the fanout table to the position
+	// in the Names, Offset32 and CRC32 slices. This improves the memory
+	// usage by not needing an array with unnecessary empty slots.
+	FanoutMapping    [256]int
+	Names            [][]byte
+	Offset32         [][]byte
+	CRC32            [][]byte
+	Offset64         []byte
+	PackfileChecksum [hash.Size]byte
+	IdxChecksum      [hash.Size]byte
+
+	offsetHash      map[int64]plumbing.Hash
+	offsetBuildOnce sync.Once
+	mu              sync.RWMutex
+}
+
+var _ Index = (*MemoryIndex)(nil)
+
+// NewMemoryIndex returns an instance of a new MemoryIndex.
+func NewMemoryIndex() *MemoryIndex {
+	return &MemoryIndex{}
+}
+
+func (idx *MemoryIndex) findHashIndex(h plumbing.Hash) (int, bool) {
+	k := idx.FanoutMapping[h[0]]
+	if k == noMapping {
+		return 0, false
+	}
+
+	if len(idx.Names) <= k {
+		return 0, false
+	}
+
+	data := idx.Names[k]
+	high := uint64(len(idx.Offset32[k])) >> 2
+	if high == 0 {
+		return 0, false
+	}
+
+	low := uint64(0)
+	for {
+		mid := (low + high) >> 1
+		offset := mid * objectIDLength
+
+		cmp := bytes.Compare(h[:], data[offset:offset+objectIDLength])
+		if cmp < 0 {
+			high = mid
+		} else if cmp == 0 {
+			return int(mid), true
+		} else {
+			low = mid + 1
+		}
+
+		if low >= high {
+			break
+		}
+	}
+
+	return 0, false
+}
+
+// Contains implements the Index interface.
+func (idx *MemoryIndex) Contains(h plumbing.Hash) (bool, error) {
+	_, ok := idx.findHashIndex(h)
+	return ok, nil
+}
+
+// FindOffset implements the Index interface.
+func (idx *MemoryIndex) FindOffset(h plumbing.Hash) (int64, error) {
+	if len(idx.FanoutMapping) <= int(h[0]) {
+		return 0, plumbing.ErrObjectNotFound
+	}
+
+	k := idx.FanoutMapping[h[0]]
+	i, ok := idx.findHashIndex(h)
+	if !ok {
+		return 0, plumbing.ErrObjectNotFound
+	}
+
+	offset, err := idx.getOffset(k, i)
+	if err != nil {
+		return 0, err
+	}
+
+	// Save the offset for reverse lookup
+	idx.mu.Lock()
+	if idx.offsetHash == nil {
+		idx.offsetHash = make(map[int64]plumbing.Hash)
+	}
+	idx.offsetHash[int64(offset)] = h
+	idx.mu.Unlock()
+
+	return int64(offset), nil
+}
+
+const isO64Mask = uint64(1) << 31
+
+func (idx *MemoryIndex) getOffset(firstLevel, secondLevel int) (uint64, error) {
+	offset := secondLevel << 2
+	ofs := encbin.BigEndian.Uint32(idx.Offset32[firstLevel][offset : offset+4])
+
+	if (uint64(ofs) & isO64Mask) != 0 {
+		offset := 8 * (uint64(ofs) & ^isO64Mask)
+		if l := uint64(len(idx.Offset64)); l < 8 || offset > l-8 {
+			return 0, fmt.Errorf("%w: offset64 index out of range", ErrMalformedIdxFile)
+		}
+		return encbin.BigEndian.Uint64(idx.Offset64[offset : offset+8]), nil
+	}
+
+	return uint64(ofs), nil
+}
+
+// FindCRC32 implements the Index interface.
+func (idx *MemoryIndex) FindCRC32(h plumbing.Hash) (uint32, error) {
+	k := idx.FanoutMapping[h[0]]
+	i, ok := idx.findHashIndex(h)
+	if !ok {
+		return 0, plumbing.ErrObjectNotFound
+	}
+
+	return idx.getCRC32(k, i), nil
+}
+
+func (idx *MemoryIndex) getCRC32(firstLevel, secondLevel int) uint32 {
+	offset := secondLevel << 2
+	return encbin.BigEndian.Uint32(idx.CRC32[firstLevel][offset : offset+4])
+}
+
+// FindHash implements the Index interface.
+func (idx *MemoryIndex) FindHash(o int64) (plumbing.Hash, error) {
+	var hash plumbing.Hash
+	var ok bool
+
+	var genErr error
+	idx.offsetBuildOnce.Do(func() {
+		genErr = idx.genOffsetHash()
+	})
+	if genErr != nil {
+		return plumbing.ZeroHash, genErr
+	}
+
+	idx.mu.RLock()
+	hash, ok = idx.offsetHash[o]
+	idx.mu.RUnlock()
+
+	if !ok {
+		return plumbing.ZeroHash, plumbing.ErrObjectNotFound
+	}
+
+	return hash, nil
+}
+
+// genOffsetHash generates the offset/hash mapping for reverse search.
+func (idx *MemoryIndex) genOffsetHash() error {
+	count, err := idx.Count()
+	if err != nil {
+		return err
+	}
+
+	offsetHash := make(map[int64]plumbing.Hash, count)
+
+	var hash plumbing.Hash
+	i := uint32(0)
+	for firstLevel, fanoutValue := range idx.Fanout {
+		mappedFirstLevel := idx.FanoutMapping[firstLevel]
+		for secondLevel := uint32(0); i < fanoutValue; i++ {
+			copy(hash[:], idx.Names[mappedFirstLevel][secondLevel*objectIDLength:])
+			off, err := idx.getOffset(mappedFirstLevel, int(secondLevel))
+			if err != nil {
+				return err
+			}
+			offsetHash[int64(off)] = hash
+			secondLevel++
+		}
+	}
+
+	idx.mu.Lock()
+	idx.offsetHash = offsetHash
+	idx.mu.Unlock()
+
+	return nil
+}
+
+// Count implements the Index interface.
+func (idx *MemoryIndex) Count() (int64, error) {
+	return int64(idx.Fanout[fanout-1]), nil
+}
+
+// Entries implements the Index interface.
+func (idx *MemoryIndex) Entries() (EntryIter, error) {
+	return &idxfileEntryIter{idx, 0, 0, 0}, nil
+}
+
+// EntriesByOffset implements the Index interface.
+func (idx *MemoryIndex) EntriesByOffset() (EntryIter, error) {
+	count, err := idx.Count()
+	if err != nil {
+		return nil, err
+	}
+
+	iter := &idxfileEntryOffsetIter{
+		entries: make(entriesByOffset, count),
+	}
+
+	entries, err := idx.Entries()
+	if err != nil {
+		return nil, err
+	}
+
+	for pos := 0; int64(pos) < count; pos++ {
+		entry, err := entries.Next()
+		if err != nil {
+			return nil, err
+		}
+
+		iter.entries[pos] = entry
+	}
+
+	sort.Sort(iter.entries)
+
+	return iter, nil
+}
+
+// EntryIter is an iterator that will return the entries in a packfile index.
+type EntryIter interface {
+	// Next returns the next entry in the packfile index.
+	Next() (*Entry, error)
+	// Close closes the iterator.
+	Close() error
+}
+
+type idxfileEntryIter struct {
+	idx                     *MemoryIndex
+	total                   int
+	firstLevel, secondLevel int
+}
+
+func (i *idxfileEntryIter) Next() (*Entry, error) {
+	for {
+		if i.firstLevel >= fanout {
+			return nil, io.EOF
+		}
+
+		if i.total >= int(i.idx.Fanout[i.firstLevel]) {
+			i.firstLevel++
+			i.secondLevel = 0
+			continue
+		}
+
+		mappedFirstLevel := i.idx.FanoutMapping[i.firstLevel]
+		entry := new(Entry)
+		copy(entry.Hash[:], i.idx.Names[mappedFirstLevel][i.secondLevel*objectIDLength:])
+		var err error
+		entry.Offset, err = i.idx.getOffset(mappedFirstLevel, i.secondLevel)
+		if err != nil {
+			return nil, err
+		}
+		entry.CRC32 = i.idx.getCRC32(mappedFirstLevel, i.secondLevel)
+
+		i.secondLevel++
+		i.total++
+
+		return entry, nil
+	}
+}
+
+func (i *idxfileEntryIter) Close() error {
+	i.firstLevel = fanout
+	return nil
+}
+
+// Entry is the in memory representation of an object entry in the idx file.
+type Entry struct {
+	Hash   plumbing.Hash
+	CRC32  uint32
+	Offset uint64
+}
+
+type idxfileEntryOffsetIter struct {
+	entries entriesByOffset
+	pos     int
+}
+
+func (i *idxfileEntryOffsetIter) Next() (*Entry, error) {
+	if i.pos >= len(i.entries) {
+		return nil, io.EOF
+	}
+
+	entry := i.entries[i.pos]
+	i.pos++
+
+	return entry, nil
+}
+
+func (i *idxfileEntryOffsetIter) Close() error {
+	i.pos = len(i.entries) + 1
+	return nil
+}
+
+type entriesByOffset []*Entry
+
+func (o entriesByOffset) Len() int {
+	return len(o)
+}
+
+func (o entriesByOffset) Less(i int, j int) bool {
+	return o[i].Offset < o[j].Offset
+}
+
+func (o entriesByOffset) Swap(i int, j int) {
+	o[i], o[j] = o[j], o[i]
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/idxfile/writer.go","mode":420,"size":4173,"sha256":"36d0c464d07febb2292e70f12e7a3364b4e736c687e017dabcbcae0069f9916f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4173}
+package idxfile
+
+import (
+	"bytes"
+	"fmt"
+	"math"
+	"sort"
+	"sync"
+
+	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/utils/binary"
+)
+
+// objects implements sort.Interface and uses hash as sorting key.
+type objects []Entry
+
+// Writer implements a packfile Observer interface and is used to generate
+// indexes.
+type Writer struct {
+	m sync.Mutex
+
+	count    uint32
+	checksum plumbing.Hash
+	objects  objects
+	offset64 uint32
+	finished bool
+	index    *MemoryIndex
+	added    map[plumbing.Hash]struct{}
+}
+
+// Index returns a previously created MemoryIndex or creates a new one if
+// needed.
+func (w *Writer) Index() (*MemoryIndex, error) {
+	w.m.Lock()
+	defer w.m.Unlock()
+
+	if w.index == nil {
+		return w.createIndex()
+	}
+
+	return w.index, nil
+}
+
+// Add appends new object data.
+func (w *Writer) Add(h plumbing.Hash, pos uint64, crc uint32) {
+	w.m.Lock()
+	defer w.m.Unlock()
+
+	if w.added == nil {
+		w.added = make(map[plumbing.Hash]struct{})
+	}
+
+	if _, ok := w.added[h]; !ok {
+		w.added[h] = struct{}{}
+		w.objects = append(w.objects, Entry{h, crc, pos})
+	}
+
+}
+
+func (w *Writer) Finished() bool {
+	return w.finished
+}
+
+// OnHeader implements packfile.Observer interface.
+func (w *Writer) OnHeader(count uint32) error {
+	w.count = count
+	w.objects = make(objects, 0, count)
+	return nil
+}
+
+// OnInflatedObjectHeader implements packfile.Observer interface.
+func (w *Writer) OnInflatedObjectHeader(t plumbing.ObjectType, objSize int64, pos int64) error {
+	return nil
+}
+
+// OnInflatedObjectContent implements packfile.Observer interface.
+func (w *Writer) OnInflatedObjectContent(h plumbing.Hash, pos int64, crc uint32, _ []byte) error {
+	w.Add(h, uint64(pos), crc)
+	return nil
+}
+
+// OnFooter implements packfile.Observer interface.
+func (w *Writer) OnFooter(h plumbing.Hash) error {
+	w.checksum = h
+	w.finished = true
+	_, err := w.createIndex()
+
+	return err
+}
+
+// creatIndex returns a filled MemoryIndex with the information filled by
+// the observer callbacks.
+func (w *Writer) createIndex() (*MemoryIndex, error) {
+	if !w.finished {
+		return nil, fmt.Errorf("the index still hasn't finished building")
+	}
+
+	idx := new(MemoryIndex)
+	w.index = idx
+
+	sort.Sort(w.objects)
+
+	// unmap all fans by default
+	for i := range idx.FanoutMapping {
+		idx.FanoutMapping[i] = noMapping
+	}
+
+	buf := new(bytes.Buffer)
+
+	last := -1
+	bucket := -1
+	for i, o := range w.objects {
+		fan := o.Hash[0]
+
+		// fill the gaps between fans
+		for j := last + 1; j < int(fan); j++ {
+			idx.Fanout[j] = uint32(i)
+		}
+
+		// update the number of objects for this position
+		idx.Fanout[fan] = uint32(i + 1)
+
+		// we move from one bucket to another, update counters and allocate
+		// memory
+		if last != int(fan) {
+			bucket++
+			idx.FanoutMapping[fan] = bucket
+			last = int(fan)
+
+			idx.Names = append(idx.Names, make([]byte, 0))
+			idx.Offset32 = append(idx.Offset32, make([]byte, 0))
+			idx.CRC32 = append(idx.CRC32, make([]byte, 0))
+		}
+
+		idx.Names[bucket] = append(idx.Names[bucket], o.Hash[:]...)
+
+		offset := o.Offset
+		if offset > math.MaxInt32 {
+			var err error
+			offset, err = w.addOffset64(offset)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		buf.Truncate(0)
+		if err := binary.WriteUint32(buf, uint32(offset)); err != nil {
+			return nil, err
+		}
+		idx.Offset32[bucket] = append(idx.Offset32[bucket], buf.Bytes()...)
+
+		buf.Truncate(0)
+		if err := binary.WriteUint32(buf, o.CRC32); err != nil {
+			return nil, err
+		}
+		idx.CRC32[bucket] = append(idx.CRC32[bucket], buf.Bytes()...)
+	}
+
+	for j := last + 1; j < 256; j++ {
+		idx.Fanout[j] = uint32(len(w.objects))
+	}
+
+	idx.Version = VersionSupported
+	idx.PackfileChecksum = w.checksum
+
+	return idx, nil
+}
+
+func (w *Writer) addOffset64(pos uint64) (uint64, error) {
+	buf := new(bytes.Buffer)
+	if err := binary.WriteUint64(buf, pos); err != nil {
+		return 0, err
+	}
+
+	w.index.Offset64 = append(w.index.Offset64, buf.Bytes()...)
+	index := uint64(w.offset64 | (1 << 31))
+	w.offset64++
+
+	return index, nil
+}
+
+func (o objects) Len() int {
+	return len(o)
+}
+
+func (o objects) Less(i int, j int) bool {
+	cmp := bytes.Compare(o[i].Hash[:], o[j].Hash[:])
+	return cmp < 0
+}
+
+func (o objects) Swap(i int, j int) {
+	o[i], o[j] = o[j], o[i]
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/index/decoder.go","mode":420,"size":11509,"sha256":"c2ebc6d625a17071ccc3f6e98ea424a29204167f0b324c8b670cb3fd4db74f2f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":11509}
+package index
+
+import (
+	"bufio"
+	"bytes"
+	"errors"
+	"fmt"
+	"io"
+	"strconv"
+	"time"
+
+	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/hash"
+	"github.com/go-git/go-git/v5/utils/binary"
+)
+
+var (
+	// DecodeVersionSupported is the range of supported index versions
+	DecodeVersionSupported = struct{ Min, Max uint32 }{Min: 2, Max: 4}
+
+	// ErrMalformedSignature is returned by Decode when the index header file is
+	// malformed
+	ErrMalformedSignature = errors.New("malformed index signature file")
+	// ErrInvalidChecksum is returned by Decode if the SHA1 hash mismatch with
+	// the read content
+	ErrInvalidChecksum = errors.New("invalid checksum")
+	// ErrUnknownExtension is returned when an index extension is encountered that is considered mandatory
+	ErrUnknownExtension = errors.New("unknown extension")
+	// ErrMalformedIndexFile is returned when the index file contents are
+	// structurally invalid.
+	ErrMalformedIndexFile = errors.New("index decoder: malformed index file")
+)
+
+const (
+	entryHeaderLength = 62
+	entryExtended     = 0x4000
+	nameMask          = 0xfff
+	intentToAddMask   = 1 << 13
+	skipWorkTreeMask  = 1 << 14
+)
+
+// A Decoder reads and decodes index files from an input stream.
+type Decoder struct {
+	buf       *bufio.Reader
+	r         io.Reader
+	hash      hash.Hash
+	lastEntry *Entry
+
+	extReader *bufio.Reader
+}
+
+// NewDecoder returns a new decoder that reads from r.
+func NewDecoder(r io.Reader) *Decoder {
+	h := hash.New(hash.CryptoType)
+	buf := bufio.NewReader(r)
+	return &Decoder{
+		buf:       buf,
+		r:         io.TeeReader(buf, h),
+		hash:      h,
+		extReader: bufio.NewReader(nil),
+	}
+}
+
+// Decode reads the whole index object from its input and stores it in the
+// value pointed to by idx.
+func (d *Decoder) Decode(idx *Index) error {
+	var err error
+	idx.Version, err = validateHeader(d.r)
+	if err != nil {
+		return err
+	}
+
+	entryCount, err := binary.ReadUint32(d.r)
+	if err != nil {
+		return err
+	}
+
+	if err := d.readEntries(idx, int(entryCount)); err != nil {
+		return err
+	}
+
+	return d.readExtensions(idx)
+}
+
+func (d *Decoder) readEntries(idx *Index, count int) error {
+	for i := 0; i < count; i++ {
+		e, err := d.readEntry(idx)
+		if err != nil {
+			return err
+		}
+
+		d.lastEntry = e
+		idx.Entries = append(idx.Entries, e)
+	}
+
+	return nil
+}
+
+func (d *Decoder) readEntry(idx *Index) (*Entry, error) {
+	e := &Entry{}
+
+	var msec, mnsec, sec, nsec uint32
+	var flags uint16
+
+	flow := []interface{}{
+		&sec, &nsec,
+		&msec, &mnsec,
+		&e.Dev,
+		&e.Inode,
+		&e.Mode,
+		&e.UID,
+		&e.GID,
+		&e.Size,
+		&e.Hash,
+		&flags,
+	}
+
+	if err := binary.Read(d.r, flow...); err != nil {
+		return nil, err
+	}
+
+	read := entryHeaderLength
+
+	if sec != 0 || nsec != 0 {
+		e.CreatedAt = time.Unix(int64(sec), int64(nsec))
+	}
+
+	if msec != 0 || mnsec != 0 {
+		e.ModifiedAt = time.Unix(int64(msec), int64(mnsec))
+	}
+
+	e.Stage = Stage(flags>>12) & 0x3
+
+	if flags&entryExtended != 0 {
+		extended, err := binary.ReadUint16(d.r)
+		if err != nil {
+			return nil, err
+		}
+
+		read += 2
+		e.IntentToAdd = extended&intentToAddMask != 0
+		e.SkipWorktree = extended&skipWorkTreeMask != 0
+	}
+
+	nameConsumed, err := d.readEntryName(idx, e, flags)
+	if err != nil {
+		return nil, err
+	}
+
+	return e, d.padEntry(idx, e, read, nameConsumed)
+}
+
+// readEntryName reads the entry path and sets e.Name. It returns the
+// number of bytes consumed from the stream for the name portion.
+func (d *Decoder) readEntryName(idx *Index, e *Entry, flags uint16) (int, error) {
+	switch idx.Version {
+	case 2, 3:
+		nameLen := flags & nameMask
+		name, consumed, err := d.doReadEntryName(nameLen)
+		if err != nil {
+			return 0, err
+		}
+		e.Name = name
+		return consumed, nil
+	case 4:
+		name, err := d.doReadEntryNameV4()
+		if err != nil {
+			return 0, err
+		}
+		e.Name = name
+		return 0, nil // V4 has no padding; consumed count unused
+	default:
+		return 0, ErrUnsupportedVersion
+	}
+}
+
+// doReadEntryName reads the entry path for V2/V3 indexes. It returns the
+// name, the number of bytes consumed from the stream, and any error.
+// When nameLen equals nameMask (0xFFF), the name was too long to fit in
+// the 12-bit field and the real length is found by scanning for the NUL
+// terminator — matching C Git's strlen(name) fallback in create_from_disk.
+func (d *Decoder) doReadEntryName(nameLen uint16) (string, int, error) {
+	if nameLen == nameMask {
+		name, err := binary.ReadUntil(d.r, '\x00')
+		if err != nil {
+			return "", 0, err
+		}
+		return string(name), len(name) + 1, nil // +1 for the consumed NUL delimiter
+	}
+
+	name := make([]byte, nameLen)
+	_, err := io.ReadFull(d.r, name)
+	return string(name), int(nameLen), err
+}
+
+func (d *Decoder) doReadEntryNameV4() (string, error) {
+	l, err := binary.ReadVariableWidthInt(d.r)
+	if err != nil {
+		return "", err
+	}
+
+	var base string
+	if d.lastEntry != nil {
+		if l < 0 || int(l) > len(d.lastEntry.Name) {
+			return "", fmt.Errorf("%w: invalid V4 entry name strip length %d (previous name length: %d)",
+				ErrMalformedIndexFile, l, len(d.lastEntry.Name))
+		}
+		base = d.lastEntry.Name[:len(d.lastEntry.Name)-int(l)]
+	} else if l > 0 {
+		return "", fmt.Errorf("%w: non-zero strip length %d on first V4 entry",
+			ErrMalformedIndexFile, l)
+	}
+
+	name, err := binary.ReadUntil(d.r, '\x00')
+	if err != nil {
+		return "", err
+	}
+
+	return base + string(name), nil
+}
+
+// padEntry discards NUL padding bytes that follow each V2/V3 entry on
+// disk. nameConsumed is the number of stream bytes consumed while reading
+// the entry name (which may exceed len(e.Name) when a NUL terminator was
+// consumed for long names where the 12-bit length field overflowed).
+func (d *Decoder) padEntry(idx *Index, e *Entry, read, nameConsumed int) error {
+	if idx.Version == 4 {
+		return nil
+	}
+
+	entrySize := read + len(e.Name)
+	padLen := 8 - entrySize%8
+	padLen -= nameConsumed - len(e.Name)
+	if padLen > 0 {
+		_, err := io.CopyN(io.Discard, d.r, int64(padLen))
+		return err
+	}
+	return nil
+}
+
+func (d *Decoder) readExtensions(idx *Index) error {
+	// TODO: support 'Split index' and 'Untracked cache' extensions, take in
+	// count that they are not supported by jgit or libgit
+
+	var expected []byte
+	var peeked []byte
+	var err error
+
+	// we should always be able to peek for 4 bytes (header) + 4 bytes (extlen) + final hash
+	// if this fails, we know that we're at the end of the index
+	peekLen := 4 + 4 + d.hash.Size()
+
+	for {
+		expected = d.hash.Sum(nil)
+		peeked, err = d.buf.Peek(peekLen)
+		if len(peeked) < peekLen {
+			// there can't be an extension at this point, so let's bail out
+			break
+		}
+		if err != nil {
+			return err
+		}
+
+		err = d.readExtension(idx)
+		if err != nil {
+			return err
+		}
+	}
+
+	return d.readChecksum(expected)
+}
+
+func (d *Decoder) readExtension(idx *Index) error {
+	var header [4]byte
+
+	if _, err := io.ReadFull(d.r, header[:]); err != nil {
+		return err
+	}
+
+	r, err := d.getExtensionReader()
+	if err != nil {
+		return err
+	}
+
+	switch {
+	case bytes.Equal(header[:], treeExtSignature):
+		idx.Cache = &Tree{}
+		d := &treeExtensionDecoder{r}
+		if err := d.Decode(idx.Cache); err != nil {
+			return err
+		}
+	case bytes.Equal(header[:], resolveUndoExtSignature):
+		idx.ResolveUndo = &ResolveUndo{}
+		d := &resolveUndoDecoder{r}
+		if err := d.Decode(idx.ResolveUndo); err != nil {
+			return err
+		}
+	case bytes.Equal(header[:], endOfIndexEntryExtSignature):
+		idx.EndOfIndexEntry = &EndOfIndexEntry{}
+		d := &endOfIndexEntryDecoder{r}
+		if err := d.Decode(idx.EndOfIndexEntry); err != nil {
+			return err
+		}
+	default:
+		// See https://git-scm.com/docs/index-format, which says:
+		// If the first byte is 'A'..'Z' the extension is optional and can be ignored.
+		if header[0] < 'A' || header[0] > 'Z' {
+			return ErrUnknownExtension
+		}
+
+		d := &unknownExtensionDecoder{r}
+		if err := d.Decode(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (d *Decoder) getExtensionReader() (*bufio.Reader, error) {
+	len, err := binary.ReadUint32(d.r)
+	if err != nil {
+		return nil, err
+	}
+
+	d.extReader.Reset(&io.LimitedReader{R: d.r, N: int64(len)})
+	return d.extReader, nil
+}
+
+func (d *Decoder) readChecksum(expected []byte) error {
+	var h plumbing.Hash
+
+	if _, err := io.ReadFull(d.r, h[:]); err != nil {
+		return err
+	}
+
+	if !bytes.Equal(h[:], expected) {
+		return ErrInvalidChecksum
+	}
+
+	return nil
+}
+
+func validateHeader(r io.Reader) (version uint32, err error) {
+	s := make([]byte, 4)
+	if _, err := io.ReadFull(r, s); err != nil {
+		return 0, err
+	}
+
+	if !bytes.Equal(s, indexSignature) {
+		return 0, ErrMalformedSignature
+	}
+
+	version, err = binary.ReadUint32(r)
+	if err != nil {
+		return 0, err
+	}
+
+	if version < DecodeVersionSupported.Min || version > DecodeVersionSupported.Max {
+		return 0, ErrUnsupportedVersion
+	}
+
+	return
+}
+
+type treeExtensionDecoder struct {
+	r *bufio.Reader
+}
+
+func (d *treeExtensionDecoder) Decode(t *Tree) error {
+	for {
+		e, err := d.readEntry()
+		if err != nil {
+			if err == io.EOF {
+				return nil
+			}
+
+			return err
+		}
+
+		if e == nil {
+			continue
+		}
+
+		t.Entries = append(t.Entries, *e)
+	}
+}
+
+func (d *treeExtensionDecoder) readEntry() (*TreeEntry, error) {
+	e := &TreeEntry{}
+
+	path, err := binary.ReadUntil(d.r, '\x00')
+	if err != nil {
+		return nil, err
+	}
+
+	e.Path = string(path)
+
+	count, err := binary.ReadUntil(d.r, ' ')
+	if err != nil {
+		return nil, err
+	}
+
+	i, err := strconv.Atoi(string(count))
+	if err != nil {
+		return nil, err
+	}
+
+	e.Entries = i
+	trees, err := binary.ReadUntil(d.r, '\n')
+	if err != nil {
+		return nil, err
+	}
+
+	subtrees, err := strconv.Atoi(string(trees))
+	if err != nil {
+		return nil, err
+	}
+
+	e.Trees = subtrees
+
+	// An entry can be in an invalidated state and is represented by having a
+	// negative number in the entry_count field. In this case, there is no
+	// object name and the next entry starts immediately after the newline.
+	if i < 0 {
+		return nil, nil
+	}
+
+	_, err = io.ReadFull(d.r, e.Hash[:])
+	if err != nil {
+		return nil, err
+	}
+	return e, nil
+}
+
+type resolveUndoDecoder struct {
+	r *bufio.Reader
+}
+
+func (d *resolveUndoDecoder) Decode(ru *ResolveUndo) error {
+	for {
+		e, err := d.readEntry()
+		if err != nil {
+			if err == io.EOF {
+				return nil
+			}
+
+			return err
+		}
+
+		ru.Entries = append(ru.Entries, *e)
+	}
+}
+
+func (d *resolveUndoDecoder) readEntry() (*ResolveUndoEntry, error) {
+	e := &ResolveUndoEntry{
+		Stages: make(map[Stage]plumbing.Hash),
+	}
+
+	path, err := binary.ReadUntil(d.r, '\x00')
+	if err != nil {
+		return nil, err
+	}
+
+	e.Path = string(path)
+
+	for i := 0; i < 3; i++ {
+		if err := d.readStage(e, Stage(i+1)); err != nil {
+			return nil, err
+		}
+	}
+
+	for s := range e.Stages {
+		var hash plumbing.Hash
+		if _, err := io.ReadFull(d.r, hash[:]); err != nil {
+			return nil, err
+		}
+
+		e.Stages[s] = hash
+	}
+
+	return e, nil
+}
+
+func (d *resolveUndoDecoder) readStage(e *ResolveUndoEntry, s Stage) error {
+	ascii, err := binary.ReadUntil(d.r, '\x00')
+	if err != nil {
+		return err
+	}
+
+	stage, err := strconv.ParseInt(string(ascii), 8, 64)
+	if err != nil {
+		return err
+	}
+
+	if stage != 0 {
+		e.Stages[s] = plumbing.ZeroHash
+	}
+
+	return nil
+}
+
+type endOfIndexEntryDecoder struct {
+	r *bufio.Reader
+}
+
+func (d *endOfIndexEntryDecoder) Decode(e *EndOfIndexEntry) error {
+	var err error
+	e.Offset, err = binary.ReadUint32(d.r)
+	if err != nil {
+		return err
+	}
+
+	_, err = io.ReadFull(d.r, e.Hash[:])
+	return err
+}
+
+type unknownExtensionDecoder struct {
+	r *bufio.Reader
+}
+
+func (d *unknownExtensionDecoder) Decode() error {
+	var buf [1024]byte
+
+	for {
+		_, err := d.r.Read(buf[:])
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/index/doc.go","mode":420,"size":13850,"sha256":"60cb8dff36e1fd29cb22136d081e54e0d56af2ccf7a0c51e31bcf82cb8a6fde7","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":13850}
+// Package index implements encoding and decoding of index format files.
+//
+//    Git index format
+//    ================
+//
+//    == The Git index file has the following format
+//
+//      All binary numbers are in network byte order. Version 2 is described
+//      here unless stated otherwise.
+//
+//      - A 12-byte header consisting of
+//
+//        4-byte signature:
+//          The signature is { 'D', 'I', 'R', 'C' } (stands for "dircache")
+//
+//        4-byte version number:
+//          The current supported versions are 2, 3 and 4.
+//
+//        32-bit number of index entries.
+//
+//      - A number of sorted index entries (see below).
+//
+//      - Extensions
+//
+//        Extensions are identified by signature. Optional extensions can
+//        be ignored if Git does not understand them.
+//
+//        Git currently supports cached tree and resolve undo extensions.
+//
+//        4-byte extension signature. If the first byte is 'A'..'Z' the
+//        extension is optional and can be ignored.
+//
+//        32-bit size of the extension
+//
+//        Extension data
+//
+//      - 160-bit SHA-1 over the content of the index file before this
+//        checksum.
+//
+//    == Index entry
+//
+//      Index entries are sorted in ascending order on the name field,
+//      interpreted as a string of unsigned bytes (i.e. memcmp() order, no
+//      localization, no special casing of directory separator '/'). Entries
+//      with the same name are sorted by their stage field.
+//
+//      32-bit ctime seconds, the last time a file's metadata changed
+//        this is stat(2) data
+//
+//      32-bit ctime nanosecond fractions
+//        this is stat(2) data
+//
+//      32-bit mtime seconds, the last time a file's data changed
+//        this is stat(2) data
+//
+//      32-bit mtime nanosecond fractions
+//        this is stat(2) data
+//
+//      32-bit dev
+//        this is stat(2) data
+//
+//      32-bit ino
+//        this is stat(2) data
+//
+//      32-bit mode, split into (high to low bits)
+//
+//        4-bit object type
+//          valid values in binary are 1000 (regular file), 1010 (symbolic link)
+//          and 1110 (gitlink)
+//
+//        3-bit unused
+//
+//        9-bit unix permission. Only 0755 and 0644 are valid for regular files.
+//        Symbolic links and gitlinks have value 0 in this field.
+//
+//      32-bit uid
+//        this is stat(2) data
+//
+//      32-bit gid
+//        this is stat(2) data
+//
+//      32-bit file size
+//        This is the on-disk size from stat(2), truncated to 32-bit.
+//
+//      160-bit SHA-1 for the represented object
+//
+//      A 16-bit 'flags' field split into (high to low bits)
+//
+//        1-bit assume-valid flag
+//
+//        1-bit extended flag (must be zero in version 2)
+//
+//        2-bit stage (during merge)
+//
+//        12-bit name length if the length is less than 0xFFF; otherwise 0xFFF
+//        is stored in this field.
+//
+//      (Version 3 or later) A 16-bit field, only applicable if the
+//      "extended flag" above is 1, split into (high to low bits).
+//
+//        1-bit reserved for future
+//
+//        1-bit skip-worktree flag (used by sparse checkout)
+//
+//        1-bit intent-to-add flag (used by "git add -N")
+//
+//        13-bit unused, must be zero
+//
+//      Entry path name (variable length) relative to top level directory
+//        (without leading slash). '/' is used as path separator. The special
+//        path components ".", ".." and ".git" (without quotes) are disallowed.
+//        Trailing slash is also disallowed.
+//
+//        The exact encoding is undefined, but the '.' and '/' characters
+//        are encoded in 7-bit ASCII and the encoding cannot contain a NUL
+//        byte (iow, this is a UNIX pathname).
+//
+//      (Version 4) In version 4, the entry path name is prefix-compressed
+//        relative to the path name for the previous entry (the very first
+//        entry is encoded as if the path name for the previous entry is an
+//        empty string).  At the beginning of an entry, an integer N in the
+//        variable width encoding (the same encoding as the offset is encoded
+//        for OFS_DELTA pack entries; see pack-format.txt) is stored, followed
+//        by a NUL-terminated string S.  Removing N bytes from the end of the
+//        path name for the previous entry, and replacing it with the string S
+//        yields the path name for this entry.
+//
+//      1-8 nul bytes as necessary to pad the entry to a multiple of eight bytes
+//      while keeping the name NUL-terminated.
+//
+//      (Version 4) In version 4, the padding after the pathname does not
+//      exist.
+//
+//      Interpretation of index entries in split index mode is completely
+//      different. See below for details.
+//
+//    == Extensions
+//
+//    === Cached tree
+//
+//      Cached tree extension contains pre-computed hashes for trees that can
+//      be derived from the index. It helps speed up tree object generation
+//      from index for a new commit.
+//
+//      When a path is updated in index, the path must be invalidated and
+//      removed from tree cache.
+//
+//      The signature for this extension is { 'T', 'R', 'E', 'E' }.
+//
+//      A series of entries fill the entire extension; each of which
+//      consists of:
+//
+//      - NUL-terminated path component (relative to its parent directory);
+//
+//      - ASCII decimal number of entries in the index that is covered by the
+//        tree this entry represents (entry_count);
+//
+//      - A space (ASCII 32);
+//
+//      - ASCII decimal number that represents the number of subtrees this
+//        tree has;
+//
+//      - A newline (ASCII 10); and
+//
+//      - 160-bit object name for the object that would result from writing
+//        this span of index as a tree.
+//
+//      An entry can be in an invalidated state and is represented by having
+//      a negative number in the entry_count field. In this case, there is no
+//      object name and the next entry starts immediately after the newline.
+//      When writing an invalid entry, -1 should always be used as entry_count.
+//
+//      The entries are written out in the top-down, depth-first order.  The
+//      first entry represents the root level of the repository, followed by the
+//      first subtree--let's call this A--of the root level (with its name
+//      relative to the root level), followed by the first subtree of A (with
+//      its name relative to A), ...
+//
+//    === Resolve undo
+//
+//      A conflict is represented in the index as a set of higher stage entries.
+//      When a conflict is resolved (e.g. with "git add path"), these higher
+//      stage entries will be removed and a stage-0 entry with proper resolution
+//      is added.
+//
+//      When these higher stage entries are removed, they are saved in the
+//      resolve undo extension, so that conflicts can be recreated (e.g. with
+//      "git checkout -m"), in case users want to redo a conflict resolution
+//      from scratch.
+//
+//      The signature for this extension is { 'R', 'E', 'U', 'C' }.
+//
+//      A series of entries fill the entire extension; each of which
+//      consists of:
+//
+//      - NUL-terminated pathname the entry describes (relative to the root of
+//        the repository, i.e. full pathname);
+//
+//      - Three NUL-terminated ASCII octal numbers, entry mode of entries in
+//        stage 1 to 3 (a missing stage is represented by "0" in this field);
+//        and
+//
+//      - At most three 160-bit object names of the entry in stages from 1 to 3
+//        (nothing is written for a missing stage).
+//
+//    === Split index
+//
+//      In split index mode, the majority of index entries could be stored
+//      in a separate file. This extension records the changes to be made on
+//      top of that to produce the final index.
+//
+//      The signature for this extension is { 'l', 'i', 'n', 'k' }.
+//
+//      The extension consists of:
+//
+//      - 160-bit SHA-1 of the shared index file. The shared index file path
+//        is $GIT_DIR/sharedindex.<SHA-1>. If all 160 bits are zero, the
+//        index does not require a shared index file.
+//
+//      - An ewah-encoded delete bitmap, each bit represents an entry in the
+//        shared index. If a bit is set, its corresponding entry in the
+//        shared index will be removed from the final index.  Note, because
+//        a delete operation changes index entry positions, but we do need
+//        original positions in replace phase, it's best to just mark
+//        entries for removal, then do a mass deletion after replacement.
+//
+//      - An ewah-encoded replace bitmap, each bit represents an entry in
+//        the shared index. If a bit is set, its corresponding entry in the
+//        shared index will be replaced with an entry in this index
+//        file. All replaced entries are stored in sorted order in this
+//        index. The first "1" bit in the replace bitmap corresponds to the
+//        first index entry, the second "1" bit to the second entry and so
+//        on. Replaced entries may have empty path names to save space.
+//
+//      The remaining index entries after replaced ones will be added to the
+//      final index. These added entries are also sorted by entry name then
+//      stage.
+//
+//    == Untracked cache
+//
+//      Untracked cache saves the untracked file list and necessary data to
+//      verify the cache. The signature for this extension is { 'U', 'N',
+//      'T', 'R' }.
+//
+//      The extension starts with
+//
+//      - A sequence of NUL-terminated strings, preceded by the size of the
+//        sequence in variable width encoding. Each string describes the
+//        environment where the cache can be used.
+//
+//      - Stat data of $GIT_DIR/info/exclude. See "Index entry" section from
+//        ctime field until "file size".
+//
+//      - Stat data of plumbing.excludesfile
+//
+//      - 32-bit dir_flags (see struct dir_struct)
+//
+//      - 160-bit SHA-1 of $GIT_DIR/info/exclude. Null SHA-1 means the file
+//        does not exist.
+//
+//      - 160-bit SHA-1 of plumbing.excludesfile. Null SHA-1 means the file does
+//        not exist.
+//
+//      - NUL-terminated string of per-dir exclude file name. This usually
+//        is ".gitignore".
+//
+//      - The number of following directory blocks, variable width
+//        encoding. If this number is zero, the extension ends here with a
+//        following NUL.
+//
+//      - A number of directory blocks in depth-first-search order, each
+//        consists of
+//
+//        - The number of untracked entries, variable width encoding.
+//
+//        - The number of sub-directory blocks, variable width encoding.
+//
+//        - The directory name terminated by NUL.
+//
+//        - A number of untracked file/dir names terminated by NUL.
+//
+//    The remaining data of each directory block is grouped by type:
+//
+//      - An ewah bitmap, the n-th bit marks whether the n-th directory has
+//        valid untracked cache entries.
+//
+//      - An ewah bitmap, the n-th bit records "check-only" bit of
+//        read_directory_recursive() for the n-th directory.
+//
+//      - An ewah bitmap, the n-th bit indicates whether SHA-1 and stat data
+//        is valid for the n-th directory and exists in the next data.
+//
+//      - An array of stat data. The n-th data corresponds with the n-th
+//        "one" bit in the previous ewah bitmap.
+//
+//      - An array of SHA-1. The n-th SHA-1 corresponds with the n-th "one" bit
+//        in the previous ewah bitmap.
+//
+//      - One NUL.
+//
+//   == File System Monitor cache
+//
+//     The file system monitor cache tracks files for which the core.fsmonitor
+//     hook has told us about changes.  The signature for this extension is
+//     { 'F', 'S', 'M', 'N' }.
+//
+//     The extension starts with
+//
+//     - 32-bit version number: the current supported version is 1.
+//
+//     - 64-bit time: the extension data reflects all changes through the given
+//       time which is stored as the nanoseconds elapsed since midnight,
+//       January 1, 1970.
+//
+//    - 32-bit bitmap size: the size of the CE_FSMONITOR_VALID bitmap.
+//
+//    - An ewah bitmap, the n-th bit indicates whether the n-th index entry
+//      is not CE_FSMONITOR_VALID.
+//
+//  == End of Index Entry
+//
+//    The End of Index Entry (EOIE) is used to locate the end of the variable
+//    length index entries and the beginning of the extensions. Code can take
+//    advantage of this to quickly locate the index extensions without having
+//    to parse through all of the index entries.
+//
+//    Because it must be able to be loaded before the variable length cache
+//    entries and other index extensions, this extension must be written last.
+//    The signature for this extension is { 'E', 'O', 'I', 'E' }.
+//
+//    The extension consists of:
+//
+//    - 32-bit offset to the end of the index entries
+//
+//    - 160-bit SHA-1 over the extension types and their sizes (but not
+//      their contents).  E.g. if we have "TREE" extension that is N-bytes
+//      long, "REUC" extension that is M-bytes long, followed by "EOIE",
+//      then the hash would be:
+//
+//      SHA-1("TREE" + <binary representation of N> +
+//        "REUC" + <binary representation of M>)
+//
+//  == Index Entry Offset Table
+//
+//    The Index Entry Offset Table (IEOT) is used to help address the CPU
+//    cost of loading the index by enabling multi-threading the process of
+//    converting cache entries from the on-disk format to the in-memory format.
+//    The signature for this extension is { 'I', 'E', 'O', 'T' }.
+//
+//    The extension consists of:
+//
+//    - 32-bit version (currently 1)
+//
+//    - A number of index offset entries each consisting of:
+//
+//    - 32-bit offset from the beginning of the file to the first cache entry
+//      in this block of entries.
+//
+//    - 32-bit count of cache entries in this blockpackage index
+package index
+
+@@END
 @@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/index/encoder.go","mode":420,"size":5131,"sha256":"2b06923bf7c85f1d23ee8a02d773c8086acb5cd8fbcc459268648fcc0af1ec21","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5131}
 package index
 
@@ -106023,2095 +108276,4 @@ hpluv":[166.259028854183981,127.658944712944631,79.6149850527770866],"hsluv":[16
 @@END
 @@PORTABLE {"path":"third_party/wails/vendor/github.com/lucasb-eyer/go-colorful/hsluv-snapshot-rev4.json","mode":420,"size":1664600,"sha256":"fa702c58663587d1d1080ad1271be94f6c7002fcf5ba1125ac7e758ed5b98966","index":34,"count":35,"newline":"lf","encoding":"utf-8","payloadBytes":32600}
 362708,133.935112153716517,127.338384986715198],"luv":[87.9192191859362708,-81.2344832365115792,106.487431187561],"rgb":[0.133333333333333331,1,0.0666666666666666657],"xyz":[0.36519272908980227,0.718974780886475928,0.124832106206545709],"hpluv":[127.338384986715198,491.550771148457443,87.9192191859362708],"hsluv":[127.338384986715198,99.9999999999918572,87.9192191859362708]},"#22ff22":{"lch":[87.9553480404818089,132.511927889398493,127.71501294924046],"luv":[87.9553480404818089,-81.0620967295481449,104.825319015849075],"rgb":[0.133333333333333331,1,0.133333333333333331],"xyz":[0.367068087228279327,0.719724924141866729,0.134708992402524902],"hpluv":[127.71501294924046,487.932270281505453,87.9553480404818089],"hsluv":[127.71501294924046,99.9999999999918,87.9553480404818089]},"#22ff33":{"lch":[88.0147790356886,130.202284180175667,128.347396099003475],"luv":[88.0147790356886,-80.7811428723405101,102.112887345201102],"rgb":[0.133333333333333331,1,0.2],"xyz":[0.370155837960737033,0.720960024434849855,0.150971146260136052],"hpluv":[128.347396099003475,482.0420586134328,88.0147790356886],"hsluv":[128.347396099003475,99.9999999999918572,88.0147790356886]},"#22ff44":{"lch":[88.1004639745127349,126.941230298117631,129.288082018787549],"luv":[88.1004639745127349,-80.3817123888383,98.2489504424236486],"rgb":[0.133333333333333331,1,0.266666666666666663],"xyz":[0.374613833204955948,0.722743222532537422,0.174449921213022691],"hpluv":[129.288082018787549,473.688351575452941,88.1004639745127349],"hsluv":[129.288082018787549,99.9999999999917719,88.1004639745127349]},"#22ff55":{"lch":[88.2148445849976497,122.715034192366474,130.599301535876663],"luv":[88.2148445849976497,-79.8586444797792865,93.1749779645044498],"rgb":[0.133333333333333331,1,0.333333333333333315],"xyz":[0.380576247244317933,0.725128188148282171,0.205851968486996606],"hpluv":[130.599301535876663,462.799362736769183,88.2148445849976497],"hsluv":[130.599301535876663,99.9999999999917,88.2148445849976497]},"#22ff66":{"lch":[88.3599902775167863,117.562049147645283,132.359544385640646],"luv":[88.3599902775167863,-79.2110524978463104,86.8702743288911279],"rgb":[0.133333333333333331,1,0.4],"xyz":[0.388161243017826119,0.72816218645768549,0.24579961289414054],"hpluv":[132.359544385640646,449.432018335727776,88.3599902775167863],"hsluv":[132.359544385640646,99.999999999991644,88.3599902775167863]},"#22ff77":{"lch":[88.5376718023346427,111.576626717172417,134.67079586388752],"luv":[88.5376718023346427,-78.441973739162,79.3486004003085839],"rgb":[0.133333333333333331,1,0.466666666666666674],"xyz":[0.397475256038028,0.731887791665766341,0.294853414800538449],"hpluv":[134.67079586388752,433.796433649144,88.5376718023346427],"hsluv":[134.67079586388752,99.9999999999914593,88.5376718023346427]},"#22ff88":{"lch":[88.7494051061703,104.915784817642518,137.666744209541747],"luv":[88.7494051061703,-77.5579802767934581,70.6546643845003786],"rgb":[0.133333333333333331,1,0.533333333333333326],"xyz":[0.408615673139971824,0.736343958506543883,0.353526278204110644],"hpluv":[137.666744209541747,416.300130961303353,88.7494051061703],"hsluv":[137.666744209541747,99.9999999999915161,88.7494051061703]},"#22ff99":{"lch":[88.996479539624346,97.8095196496336143,141.520869213027311],"luv":[88.996479539624346,-76.5687003963823827,60.8599725082183696],"rgb":[0.133333333333333331,1,0.6],"xyz":[0.42167263724904458,0.741566744150173096,0.422292955845228524],"hpluv":[141.520869213027311,397.621886071746928,88.996479539624346],"hsluv":[141.520869213027311,99.9999999999913882,88.996479539624346]},"#22ffaa":{"lch":[89.2799772586324281,90.5758041558366784,146.450029989774293],"luv":[89.2799772586324281,-75.4862499862398,50.057989986528554],"rgb":[0.133333333333333331,1,0.66666666666666663],"xyz":[0.43673033021429708,0.747589821336274163,0.50159680546222718],"hpluv":[146.450029989774293,378.829469872945424,89.2799772586324281],"hsluv":[146.450029989774293,99.9999999999911893,89.2799772586324281]},"#22ffbb":{"lch":[89.6007875020334552,83.6393655876379825,152.701818689515648],"luv":[89.6007875020334552,-74.3245992165371661,38.3587985630895787],"rgb":[0.133333333333333331,1,0.733333333333333282],"xyz":[0.453867922321633754,0.754444858179208921,0.591854790560868871],"hpluv":[152.701818689515648,361.553698033539774,89.6007875020334552],"hsluv":[152.701818689515648,99.9999999999909903,89.6007875020334552]},"#22ffcc":{"lch":[89.9596178804745,77.5461751086222,160.50148390925915],"luv":[89.9596178804745,-73.0989125181650223,25.8835519710636532],"rgb":[0.133333333333333331,1,0.8],"xyz":[0.473160297765355509,0.762161808356697779,0.693461301231139],"hpluv":[160.50148390925915,348.207300802542932,89.9596178804745],"hsluv":[160.50148390925915,99.999999999990834,89.9596178804745]},"#22ffdd":{"lch":[90.3570039795250466,72.9493687180361,169.926987012389134],"luv":[90.3570039795250466,-71.8249031216737421,12.7590629719491808],"rgb":[0.133333333333333331,1,0.866666666666666696],"xyz":[0.494678623315989,0.770769138576951285,0.806791149131145],"hpluv":[169.926987012389134,342.16275562632859,90.3570039795250466],"hsluv":[169.926987012389134,99.9999999999906,90.3570039795250466]},"#22ffee":{"lch":[90.793318095908873,70.5238201303846637,180.720785562676866],"luv":[90.793318095908873,-70.5182397089352,-0.887171987837557796],"rgb":[0.133333333333333331,1,0.933333333333333348],"xyz":[0.518490803582163817,0.780294010683421302,0.932201965199668248],"hpluv":[180.720785562676866,347.681124246536797,90.793318095908873],"hsluv":[180.720785562676866,99.9999999999901661,90.793318095908873]},"#22ffff":{"lch":[91.2687776254429082,70.7867026205843786,192.177050630061217],"luv":[91.2687776254429082,-69.1940343982234225,-14.9312715999851058],"rgb":[0.133333333333333331,1,1],"xyz":[0.544661851991995127,0.790762430047354,1.0700361534914502],"hpluv":[192.177050630061217,369.384676987995,91.2687776254429082],"hsluv":[192.177050630061217,99.9999999999901803,91.2687776254429082]},"#11aa00":{"lch":[60.6644104521350869,93.0873160838275,127.211890667698796],"luv":[60.6644104521350869,-56.2958954857129186,74.1351506854346241],"rgb":[0.0666666666666666657,0.66666666666666663,0],"xyz":[0.146052570780394131,0.288673842599075969,0.0480220097587461675],"hpluv":[127.211890667698796,194.713406103753528,60.6644104521350869],"hsluv":[127.211890667698796,100.000000000002444,60.6644104521350869]},"#11aa11":{"lch":[60.7002167335786424,91.7670835597914447,127.715012949240375],"luv":[60.7002167335786424,-56.1370762813229547,72.5935692169401],"rgb":[0.0666666666666666657,0.66666666666666663,0.0666666666666666657],"xyz":[0.147064236280031263,0.289078508798930822,0.0533501147235018],"hpluv":[127.715012949240375,191.838607973199288,60.7002167335786424],"hsluv":[127.715012949240375,97.6800439707354826,60.7002167335786424]},"#11aa22":{"lch":[60.7665037483511696,89.3702510768545153,128.6744569519864],"luv":[60.7665037483511696,-55.8469935821418844,69.7721655488506229],"rgb":[0.0666666666666666657,0.66666666666666663,0.133333333333333331],"xyz":[0.148939594418508264,0.289828652054321623,0.063227000919481],"hpluv":[128.6744569519864,186.624241227076766,60.7665037483511696],"hsluv":[128.6744569519864,97.7012125574833163,60.7665037483511696]},"#11aa33":{"lch":[60.8753956347493101,85.5662665428975799,130.333267948257316],"luv":[60.8753956347493101,-55.3812688292774595,65.2265362636212274],"rgb":[0.0666666666666666657,0.66666666666666663,0.2],"xyz":[0.152027345150966,0.291063752347304749,0.0794891547770921469],"hpluv":[130.333267948257316,178.361088002118152,60.8753956347493101],"hsluv":[130.333267948257316,97.7352371443594876,60.8753956347493101]},"#11aa44":{"lch":[61.0320681383245898,80.3855440613202603,132.913331110856149],"luv":[61.0320681383245898,-54.7338170014505394,58.8731260464924233],"rgb":[0.0666666666666666657,0.66666666666666663,0.266666666666666663],"xyz":[0.156485340395184885,0.292846950444992316,0.102967929729978785],"hpluv":[132.913331110856149,167.131840298358668,61.0320681383245898],"hsluv":[132.913331110856149,97.7826211010278428,61.0320681383245898]},"#11aa55":{"lch":[61.2406211479126199,74.0326893716562466,136.73626291081149],"luv":[61.2406211479126199,-53.9110982897111626,50.7388665304739064],"rgb":[0.0666666666666666657,0.66666666666666663,0.333333333333333315],"xyz":[0.162447754434546898,0.295231916060737176,0.134369977003952701],"hpluv":[136.73626291081149,153.399260409180499,61.2406211479126199],"hsluv":[136.73626291081149,97.8429805383323412,61.2406211479126199]},"#11aa66":{"lch":[61.5043118059827236,66.9183608277608926,142.276062400218507],"luv":[61.5043118059827236,-52.9302802927860938,40.944504442006675],"rgb":[0.0666666666666666657,0.66666666666666663,0.4],"xyz":[0.170032750208055056,0.298265914370140495,0.174317621411096635],"hpluv":[142.276062400218507,138.063556785316223,61.5043118059827236],"hsluv":[142.276062400218507,97.9151756761398246,61.5043118059827236]},"#11aa77":{"lch":[61.8256765996828648,59.7171413308715628,150.193024237310198],"luv":[61.8256765996828648,-51.8168585560505335,29.6841731923518672],"rgb":[0.0666666666666666657,0.66666666666666663,0.466666666666666674],"xyz":[0.179346763228257,0.30199151957822129,0.223371423317494544],"hpluv":[150.193024237310198,122.565843528602272,61.8256765996828648],"hsluv":[150.193024237310198,97.9974781059027578,61.8256765996828648]},"#11aa88":{"lch":[62.2066058842594,53.445591933814967,161.225226782668472],"luv":[62.2066058842594,-50.6018085779820197,17.201403018159084],"rgb":[0.0666666666666666657,0.66666666666666663,0.533333333333333326],"xyz":[0.190487180330200789,0.306447686418998888,0.282044286721066739],"hpluv":[161.225226782668472,109.022142353571084,62.2066058842594],"hsluv":[161.225226782668472,98.0877698343988698,62.2066058842594]},"#11aa99":{"lch":[62.6483970296267643,49.4620441969123803,175.635441576327452],"luv":[62.6483970296267643,-49.3186051456987613,3.76417356400704],"rgb":[0.0666666666666666657,0.66666666666666663,0.6],"xyz":[0.203544144439273517,0.311670472062628046,0.350810964362184619],"hpluv":[175.635441576327452,100.184705161952,62.6483970296267643],"hsluv":[175.635441576327452,98.1837511724305756,62.6483970296267643]},"#11aaaa":{"lch":[63.1517986220979424,49.10533458105958,192.177050630061103],"luv":[63.1517986220979424,-48.0004871585874326,-10.3579494522848794],"rgb":[0.0666666666666666657,0.66666666666666663,0.66666666666666663],"xyz":[0.218601837404526045,0.317693549248729168,0.430114813979183219],"hpluv":[192.177050630061103,98.6693521766944741,63.1517986220979424],"hsluv":[192.177050630061103,98.283131385506934,63.1517986220979424]},"#11aabb":{"lch":[63.7170519890822931,52.9100997091116483,208.088870357104184],"luv":[63.7170519890822931,-46.6782604891356812,-24.9122188681885817],"rgb":[0.0666666666666666657,0.66666666666666663,0.733333333333333282],"xyz":[0.235739429511862719,0.324548586091663926,0.520372799077825],"hpluv":[208.088870357104184,105.371274370578277,63.7170519890822931],"hsluv":[208.088870357104184,98.3837818799450474,63.7170519890822931]},"#11aacc":{"lch":[64.3439331362496603,60.2774830024396,221.163749704229559],"luv":[64.3439331362496603,-45.3787880982832661,-39.6754401089704345],"rgb":[0.0666666666666666657,0.66666666666666663,0.8],"xyz":[0.255031804955584418,0.332265536269152728,0.621979309748095122],"hpluv":[221.163749704229559,118.873987633214512,64.3439331362496603],"hsluv":[221.163749704229559,98.4838416101877385,64.3439331362496603]},"#11aadd":{"lch":[65.0317963778061738,70.0923801470555,230.985682804055784],"luv":[65.0317963778061738,-44.1241742926816372,-54.4609860144708762],"rgb":[0.0666666666666666657,0.66666666666666663,0.866666666666666696],"xyz":[0.276550130506218,0.340872866489406234,0.735309157648101119],"hpluv":[230.985682804055784,136.767964522831733,65.0317963778061738],"hsluv":[230.985682804055784,98.5817742563244,65.0317963778061738]},"#11aaee":{"lch":[65.7796198544585877,81.3683973110580325,238.155251398024461],"luv":[65.7796198544585877,-42.9315457639956293,-69.1208974137644248],"rgb":[0.0666666666666666657,0.66666666666666663,0.933333333333333348],"xyz":[0.300362310772392727,0.350397738595876251,0.860719973716624343],"hpluv":[238.155251398024461,156.965326989669,65.7796198544585877],"hsluv":[238.155251398024461,98.676383948407647,65.7796198544585877]},"#11aaff":{"lch":[66.5860524818013317,93.423779787985481,243.412392023658668],"luv":[66.5860524818013317,-41.8132782993845566,-83.5443139162218529],"rgb":[0.0666666666666666657,0.66666666666666663,1],"xyz":[0.326533359182224148,0.360866157959809,0.998554162008406188],"hpluv":[243.412392023658668,178.038321821181739,66.5860524818013317],"hsluv":[243.412392023658668,99.9999999999982805,66.5860524818013317]},"#11bb00":{"lch":[66.2579979425279788,101.837028338191359,127.308350947248712],"luv":[66.2579979425279788,-61.7238643700190792,80.9996599251199285],"rgb":[0.0666666666666666657,0.733333333333333282,0],"xyz":[0.180007068688992911,0.356582838416274528,0.0593401757282787864],"hpluv":[127.308350947248712,195.032386644097869,66.2579979425279788],"hsluv":[127.308350947248712,100.000000000002416,66.2579979425279788]},"#11bb11":{"lch":[66.2891028676776,100.667761827005108,127.715012949240403],"luv":[66.2891028676776,-61.5819268253258301,79.6345688739434507],"rgb":[0.0666666666666666657,0.733333333333333282,0.0666666666666666657],"xyz":[0.181018734188630043,0.356987504616129381,0.0646682806930344162],"hpluv":[127.715012949240403,192.702610495025482,66.2891028676776],"hsluv":[127.715012949240403,98.1199752505464318,66.2891028676776]},"#11bb22":{"lch":[66.3467009890152895,98.5365229927559199,128.48627008521666],"luv":[66.3467009890152895,-61.3219466901703356,77.130183570569983],"rgb":[0.0666666666666666657,0.733333333333333282,0.133333333333333331],"xyz":[0.182894092327107044,0.357737647871520181,0.0745451668890136088],"hpluv":[128.48627008521666,188.459149582366734,66.3467009890152895],"hsluv":[128.48627008521666,98.1339007760711155,66.3467009890152895]},"#11bb33":{"lch":[66.4413603116689586,95.1297105779412107,129.807139434656818],"luv":[66.4413603116689586,-60.9025570517959949,73.0790009455219121],"rgb":[0.0666666666666666657,0.733333333333333282,0.2],"xyz":[0.185981843059564778,0.358972748164503308,0.0908073207466247589],"hpluv":[129.807139434656818,181.684126992490178,66.4413603116689586],"hsluv":[129.807139434656818,98.1563849168539093,66.4413603116689586]},"#11bb44":{"lch":[66.5776441235544,90.4345556189602888,131.832147550242752],"luv":[66.5776441235544,-60.3153845158839061,67.3829595721343679],"rgb":[0.0666666666666666657,0.733333333333333282,0.266666666666666663],"xyz":[0.190439838303783665,0.360755946262190874,0.114286095699511397],"hpluv":[131.832147550242752,172.363503065423913,66.5776441235544],"hsluv":[131.832147550242752,98.1879073212924567,66.5776441235544]},"#11bb55":{"lch":[66.7592187944261,84.5672269635890501,134.774448398028227],"luv":[66.7592187944261,-59.5621947933412841,60.0329978237906374],"rgb":[0.0666666666666666657,0.733333333333333282,0.333333333333333315],"xyz":[0.196402252343145678,0.363140911877935735,0.145688142973485313],"hpluv":[134.774448398028227,160.742297130584,66.7592187944261],"hsluv":[134.774448398028227,98.2284201297941451,66.7592187944261]},"#11bb66":{"lch":[66.9890609579081513,77.7896938122995749,138.938350400658521],"luv":[66.9890609579081513,-58.6536805127572336,51.0977712402284752],"rgb":[0.0666666666666666657,0.733333333333333282,0.4],"xyz":[0.203987248116653835,0.366174910187339053,0.185635787380629275],"hpluv":[138.938350400658521,147.352496635070423,66.9890609579081513],"hsluv":[138.938350400658521,98.2774122804504486,66.9890609579081513]},"#11bb77":{"lch":[67.2695660469751573,70.5410036497719375,144.751753478195667],"luv":[67.2695660469751573,-57.6079608572489548,40.7106379437464625],"rgb":[0.0666666666666666657,0.733333333333333282,0.466666666666666674],"xyz":[0.213301261136855769,0.369900515395419849,0.234689589287027184],"hpluv":[144.751753478195667,133.064539371584743,67.2695660469751573],"hsluv":[144.751753478195667,98.33398740837616,67.2695660469751573]},"#11bb88":{"lch":[67.6026131767386289,63.4868829762913904,152.765342955174589],"luv":[67.6026131767386289,-56.44870944299889,29.0538725863731493],"rgb":[0.0666666666666666657,0.733333333333333282,0.533333333333333326],"xyz":[0.224441678238799569,0.374356682236197447,0.293362452690599351],"hpluv":[152.765342955174589,119.168054047142519,67.6026131767386289],"hsluv":[152.765342955174589,98.3969602233376293,67.6026131767386289]},"#11bb99":{"lch":[67.9896091217093357,57.5709210660889568,163.510238814203348],"luv":[67.9896091217093357,-55.2030563361408468,16.3411604100414145],"rgb":[0.0666666666666666657,0.733333333333333282,0.6],"xyz":[0.237498642347872296,0.379579467879826604,0.362129130331717231],"hpluv":[163.510238814203348,107.448401728013394,67.9896091217093357],"hsluv":[163.510238814203348,98.464964167861,67.9896091217093357]},"#11bbaa":{"lch":[68.431522322705149,53.97217733059707,177.026074660918823],"luv":[68.431522322705149,-53.8994902384006807,2.80015675382041573],"rgb":[0.0666666666666666657,0.733333333333333282,0.66666666666666663],"xyz":[0.252556335313124825,0.385602545065927726,0.441432979948715831],"hpluv":[177.026074660918823,100.081328983600983,68.431522322705149],"hsluv":[177.026074660918823,98.5365589333087684,68.431522322705149]},"#11bbbb":{"lch":[68.9289126417652511,53.7759127589290102,192.177050630061103],"luv":[68.9289126417652511,-52.5659794775517426,-11.3431298424003177],"rgb":[0.0666666666666666657,0.733333333333333282,0.733333333333333282],"xyz":[0.269693927420461499,0.392457581908862485,0.531690965047357578],"hpluv":[192.177050630061103,98.9978332941913095,68.9289126417652511],"hsluv":[192.177050630061103,98.6103267315429122,68.9289126417652511]},"#11bbcc":{"lch":[69.4819599404948463,57.3930965266865485,206.799543430538137],"luv":[69.4819599404948463,-51.2284702417124365,-25.8768499940688805],"rgb":[0.0666666666666666657,0.733333333333333282,0.8],"xyz":[0.288986302864183253,0.400174532086351287,0.633297475717627734],"hpluv":[206.799543430538137,104.81584090136549,69.4819599404948463],"hsluv":[206.799543430538137,98.6849492658553658,69.4819599404948463]},"#11bbdd":{"lch":[70.0904930703520535,64.3454332007566876,219.135570681285316],"luv":[70.0904930703520535,-49.9098388382008054,-40.6121011637893901],"rgb":[0.0666666666666666657,0.733333333333333282,0.866666666666666696],"xyz":[0.310504628414816741,0.408781862306604793,0.746627323617633731],"hpluv":[219.135570681285316,116.492493254234162,70.0904930703520535],"hsluv":[219.135570681285316,98.7592614999562244,70.0904930703520535]},"#11bbee":{"lch":[70.7540199625255184,73.7064384587933858,228.717665412779098],"luv":[70.7540199625255184,-48.6292974270947838,-55.3879996211006826],"rgb":[0.0666666666666666657,0.733333333333333282,0.933333333333333348],"xyz":[0.334316808680991506,0.41830673441307481,0.872038139686157],"hpluv":[228.717665412779098,132.188487390259695,70.7540199625255184],"hsluv":[228.717665412779098,98.8322822642660412,70.7540199625255184]},"#11bbff":{"lch":[71.471758937406932,84.600620314641418,235.923069973878228],"luv":[71.471758937406932,-47.4021956671632836,-70.0735099988154246],"rgb":[0.0666666666666666657,0.733333333333333282,1],"xyz":[0.360487857090822872,0.428775153777007534,1.00987232797793891],"hpluv":[235.923069973878228,150.202929688167188,71.471758937406932],"hsluv":[235.923069973878228,99.9999999999978115,71.471758937406932]},"#11cc00":{"lch":[71.760164015117,110.429324102022079,127.380540485202317],"luv":[71.760164015117,-67.042304751477019,87.7494444155603617],"rgb":[0.0666666666666666657,0.8,0],"xyz":[0.21823081199860983,0.433030325035509422,0.0720814234981507346],"hpluv":[127.380540485202317,195.272154443078705,71.760164015117],"hsluv":[127.380540485202317,100.000000000002245,71.760164015117]},"#11cc11":{"lch":[71.7874927519263366,109.385174124956521,127.715012949240432],"luv":[71.7874927519263366,-66.9146672826053219,86.5305935539869466],"rgb":[0.0666666666666666657,0.8,0.0666666666666666657],"xyz":[0.219242477498246963,0.433434991235364275,0.0774095284629063712],"hpluv":[127.715012949240432,193.352149077988855,71.7874927519263366],"hsluv":[127.715012949240432,98.4507061603193563,71.7874927519263366]},"#11cc22":{"lch":[71.8381079866900905,107.476295008714118,128.346772012349533],"luv":[71.8381079866900905,-66.680384726115463,84.2904519004221129],"rgb":[0.0666666666666666657,0.8,0.133333333333333331],"xyz":[0.221117835636723964,0.434185134490755076,0.0872864146588855638],"hpluv":[128.346772012349533,189.84411001864018,71.8381079866900905],"hsluv":[128.346772012349533,98.4601754700601361,71.8381079866900905]},"#11cc33":{"lch":[71.9213183931711626,104.40864440796355,129.421122123890029],"luv":[71.9213183931711626,-66.3010906987881441,80.6556284412913556],"rgb":[0.0666666666666666657,0.8,0.2],"xyz":[0.224205586369181697,0.435420234783738203,0.103548568516496714],"hpluv":[129.421122123890029,184.212095875088124,71.9213183931711626],"hsluv":[129.421122123890029,98.4755168761512749,71.9213183931711626]},"#11cc44":{"lch":[72.0411777660314669,100.144250866202455,131.050559631523186],"luv":[72.0411777660314669,-65.7672084530810395,75.5218198525557085],"rgb":[0.0666666666666666657,0.8,0.266666666666666663],"xyz":[0.228663581613400585,0.437203432881425769,0.127027343469383353],"hpluv":[131.050559631523186,176.394298837834185,72.0411777660314669],"hsluv":[131.050559631523186,98.4971346697200261,72.0411777660314669]},"#11cc55":{"lch":[72.2009771566369523,94.7439152050601621,133.383427271112737],"luv":[72.2009771566369523,-65.077446685205,68.8573554627095],"rgb":[0.0666666666666666657,0.8,0.333333333333333315],"xyz":[0.234625995652762598,0.439588398497170629,0.158429390743357268],"hpluv":[133.383427271112737,166.512782767528847,72.2009771566369523],"hsluv":[133.383427271112737,98.5251071985599225,72.2009771566369523]},"#11cc66":{"lch":[72.4034304155724,88.37638367841096,136.624435218533876],"luv":[72.4034304155724,-64.2379326004453333,60.6949191225620339],"rgb":[0.0666666666666666657,0.8,0.4],"xyz":[0.242210991426270755,0.442622396806573948,0.198377035150501202],"hpluv":[136.624435218533876,154.887514188688357,72.4034304155724],"hsluv":[136.624435218533876,98.5592219307307289,72.4034304155724]},"#11cc77":{"lch":[72.6507717937069657,81.3359578844494422,141.057484765247835],"luv":[72.6507717937069657,-63.261234579889333,51.1229326663597],"rgb":[0.0666666666666666657,0.8,0.466666666666666674],"xyz":[0.251525004446472689,0.446348002014654743,0.247430837056899111],"hpluv":[141.057484765247835,142.063228414279422,72.6507717937069657],"hsluv":[141.057484765247835,98.5990140248714795,72.6507717937069657]},"#11cc88":{"lch":[72.9448138267759703,74.0714793913140284,147.061910762632237],"luv":[72.9448138267759703,-62.1651250648783815,40.2750702654370087],"rgb":[0.0666666666666666657,0.8,0.533333333333333326],"xyz":[0.262665421548416489,0.450804168855432341,0.306103700460471306],"hpluv":[147.061910762632237,128.853412583983044,72.9448138267759703],"hsluv":[147.061910762632237,98.6438145792393755,72.9448138267759703]},"#11cc99":{"lch":[73.286985449663689,67.2264361640895203,155.087429558943455],"luv":[73.286985449663689,-60.9711251229010074,28.3181147072320734],"rgb":[0.0666666666666666657,0.8,0.6],"xyz":[0.275722385657489188,0.456026954499061499,0.374870378101589186],"hpluv":[155.087429558943455,116.399886643338576,73.286985449663689],"hsluv":[155.087429558943455,98.6928071276572609,73.286985449663689]},"#11ccaa":{"lch":[73.6783599756885224,61.6669147974486336,165.501022011161467],"luv":[73.6783599756885224,-59.7029534543248275,15.4390974304365383],"rgb":[0.0666666666666666657,0.8,0.66666666666666663],"xyz":[0.290780078622741744,0.462050031685162621,0.454174227718587786],"hpluv":[165.501022011161467,106.206622375239988,73.6783599756885224],"hsluv":[165.501022011161467,98.7450877264532494,73.6783599756885224]},"#11ccbb":{"lch":[74.1196780643846864,58.4137876130139801,178.201908682105085],"luv":[74.1196780643846864,-58.3850250256368426,1.83287644266177074],"rgb":[0.0666666666666666657,0.8,0.733333333333333282],"xyz":[0.307917670730078419,0.46890506852809738,0.544432212817229533],"hpluv":[178.201908682105085,100.004874571957387,74.1196780643846864],"hsluv":[178.201908682105085,98.7997230732590452,74.1196780643846864]},"#11cccc":{"lch":[74.6113685470067,58.3540675645504,192.177050630061103],"luv":[74.6113685470067,-57.0411279075965751,-12.3088150671508707],"rgb":[0.0666666666666666657,0.8,0.8],"xyz":[0.327210046173800118,0.476622018705586181,0.646038723487499689],"hpluv":[192.177050630061103,99.244272920381249,74.6113685470067],"hsluv":[192.177050630061103,98.8558017207376167,74.6113685470067]},"#11ccdd":{"lch":[75.1535687293590087,61.8087365466066316,205.702276410621693],"luv":[75.1535687293590087,-55.6933672323303881,-26.8061328768737823],"rgb":[0.0666666666666666657,0.8,0.866666666666666696],"xyz":[0.348728371724433717,0.485229348925839687,0.759368571387505686],"hpluv":[205.702276410621693,104.361325002032586,75.1535687293590087],"hsluv":[205.702276410621693,98.9124749687685352,75.1535687293590087]},"#11ccee":{"lch":[75.7461450403856418,68.3900229325434168,217.356690237772426],"luv":[75.7461450403856418,-54.3614174191380712,-41.4973677827407],"rgb":[0.0666666666666666657,0.8,0.933333333333333348],"xyz":[0.372540551990608426,0.494754221032309704,0.88477938745602891],"hpluv":[217.356690237772426,114.570165581500433,75.7461450403856418],"hsluv":[217.356690237772426,98.968985855810871,75.7461450403856418]},"#11ccff":{"lch":[76.3887144168947714,77.3228649101567811,226.666757851513921],"luv":[76.3887144168947714,-53.0620799518220849,-56.2426982736496726],"rgb":[0.0666666666666666657,0.8,1],"xyz":[0.398711600400439847,0.505222640396242428,1.02261357574781075],"hpluv":[226.666757851513921,131.304642630845649,76.3887144168947714],"hsluv":[226.666757851513921,99.9999999999969162,76.3887144168947714]},"#11dd00":{"lch":[77.1789729208637851,118.880191052714352,127.435820588671049],"luv":[77.1789729208637851,-72.2639845338074,94.3950017957916572],"rgb":[0.0666666666666666657,0.866666666666666696,0],"xyz":[0.260864802545785,0.518298306129860942,0.0862927536805420531],"hpluv":[127.435820588671049,210.367240137055802,77.1789729208637851],"hsluv":[127.435820588671049,100.000000000002302,77.1789729208637851]},"#11dd11":{"lch":[77.2032167276219,117.940964566200989,127.715012949240474],"luv":[77.2032167276219,-72.148538100067,93.2987651195291],"rgb":[0.0666666666666666657,0.866666666666666696,0.0666666666666666657],"xyz":[0.261876468045422084,0.51870297232971585,0.0916208586452976897],"hpluv":[127.715012949240474,208.973000844217893,77.2032167276219],"hsluv":[127.715012949240474,98.7048375113237739,77.2032167276219]},"#11dd22":{"lch":[77.2481249515021773,116.219968574506154,128.240715222563949],"luv":[77.2481249515021773,-71.936288170647174,91.2811674974022509],"rgb":[0.0666666666666666657,0.866666666666666696,0.133333333333333331],"xyz":[0.263751826183899141,0.519453115585106651,0.101497744841276882],"hpluv":[128.240715222563949,206.413967447437244,77.2481249515021773],"hsluv":[128.240715222563949,98.7114617332334348,77.2481249515021773]},"#11dd33":{"lch":[77.3219716074714114,113.443027450646795,129.129905575085218],"luv":[77.3219716074714114,-71.591714193384675,87.9996984996024],"rgb":[0.0666666666666666657,0.866666666666666696,0.2],"xyz":[0.266839576916356847,0.520688215878089777,0.117759898698888033],"hpluv":[129.129905575085218,202.273081507843187,77.3219716074714114],"hsluv":[129.129905575085218,98.7222220245650419,77.3219716074714114]},"#11dd44":{"lch":[77.4283833065767,109.557638087167803,130.467479357182611],"luv":[77.4283833065767,-71.1046976382296378,83.3486534805139],"rgb":[0.0666666666666666657,0.866666666666666696,0.266666666666666663],"xyz":[0.271297572160575762,0.522471413975777343,0.141238673651774671],"hpluv":[130.467479357182611,196.45511110559741,77.4283833065767],"hsluv":[130.467479357182611,98.737444128486942,77.4283833065767]},"#11dd55":{"lch":[77.5703274630482156,104.589066335953675,132.360930841179908],"luv":[77.5703274630482156,-70.4719757705036471,77.2824263854860192],"rgb":[0.0666666666666666657,0.866666666666666696,0.333333333333333315],"xyz":[0.277259986199937747,0.524856379591522093,0.172640720925748559],"hpluv":[132.360930841179908,188.974657198429043,77.5703274630482156],"hsluv":[132.360930841179908,98.7572451358875583,77.5703274630482156]},"#11dd66":{"lch":[77.7502795105496176,98.645271303892585,134.953797592355841],"luv":[77.7502795105496176,-69.6964700953403167,69.8089650895062732],"rgb":[0.0666666666666666657,0.866666666666666696,0.4],"xyz":[0.284844981973445932,0.527890377900925412,0.212588365332892548],"hpluv":[134.953797592355841,179.968822287066047,77.7502795105496176],"hsluv":[134.953797592355841,98.7815546318288114,77.7502795105496176]},"#11dd77":{"lch":[77.9703113413929714,91.9272626112809377,138.440937564009943],"luv":[77.9703113413929714,-68.7866216277350588,60.9837871589344616],"rgb":[0.0666666666666666657,0.866666666666666696,0.466666666666666674],"xyz":[0.294158994993647838,0.531615983109006263,0.261642167239290457],"hpluv":[138.440937564009943,169.723893920939275,77.9703113413929714],"hsluv":[138.440937564009943,98.8101351189296,77.9703113413929714]},"#11dd88":{"lch":[78.2321436880382919,84.7462074021241705,143.083472555296623],"luv":[78.2321436880382919,-67.7555613828794492,50.90288371727776],"rgb":[0.0666666666666666657,0.866666666666666696,0.533333333333333326],"xyz":[0.305299412095591638,0.536072149949783805,0.320315030642862597],"hpluv":[143.083472555296623,158.721324423216174,78.2321436880382919],"hsluv":[143.083472555296623,98.842607114853692,78.2321436880382919]},"#11dd99":{"lch":[78.5371801027425,77.5491781494168748,149.212222309724666],"luv":[78.5371801027425,-66.6201031545698,39.6942928810235145],"rgb":[0.0666666666666666657,0.866666666666666696,0.6],"xyz":[0.318356376204664393,0.541294935593413,0.389081708283980532],"hpluv":[149.212222309724666,147.710574340426348,78.5371801027425],"hsluv":[149.212222309724666,98.8784794246756746,78.5371801027425]},"#11ddaa":{"lch":[78.8865310768390771,70.9495750262721288,157.187121587348372],"luv":[78.8865310768390771,-65.3996173248364414,27.5087667875819264],"rgb":[0.0666666666666666657,0.866666666666666696,0.66666666666666663],"xyz":[0.333414069169916893,0.547318012779514085,0.468385557900979133],"hpluv":[157.187121587348372,137.807232739715857,78.8865310768390771],"hsluv":[157.187121587348372,98.9171828916172728,78.8865310768390771]},"#11ddbb":{"lch":[79.2810328759594398,65.7363215025974483,167.247861929956969],"luv":[79.2810328759594398,-64.1148749316804611,14.5102300873497096],"rgb":[0.0666666666666666657,0.866666666666666696,0.733333333333333282],"xyz":[0.350551661277253568,0.554173049622448843,0.558643542999620824],"hpluv":[167.247861929956969,130.572542181043048,79.2810328759594398],"hsluv":[167.247861929956969,98.9581049946704496,79.2810328759594398]},"#11ddcc":{"lch":[79.7212637056701396,62.7929370759791,179.209087927276954],"luv":[79.7212637056701396,-62.7869545437069903,0.866767416521026846],"rgb":[0.0666666666666666657,0.866666666666666696,0.8],"xyz":[0.369844036720975322,0.561889999799937701,0.660250053669891],"hpluv":[179.209087927276954,127.935201467087722,79.7212637056701396],"hsluv":[179.209087927276954,99.0006225499112,79.7212637056701396]},"#11dddd":{"lch":[80.2075587483664378,62.8503941808937796,192.177050630061132],"luv":[80.2075587483664378,-61.4362892449526,-13.2572400032679489],"rgb":[0.0666666666666666657,0.866666666666666696,0.866666666666666696],"xyz":[0.39136236227160881,0.570497330020191207,0.773579901569897],"hpluv":[192.177050630061132,131.767009082741112,80.2075587483664378],"hsluv":[192.177050630061132,99.0441302201931109,80.2075587483664378]},"#11ddee":{"lch":[80.7400249746916643,66.1629514334268691,204.757295278220823],"luv":[80.7400249746916643,-60.0819052998990202,-27.707414132610225],"rgb":[0.0666666666666666657,0.866666666666666696,0.933333333333333348],"xyz":[0.415174542537783575,0.580022202126661224,0.8989907176384202],"hpluv":[204.757295278220823,143.22067561241397,80.7400249746916643],"hsluv":[204.757295278220823,99.0880633014724594,80.7400249746916643]},"#11ddff":{"lch":[81.3185562290371848,72.4120095186264194,215.786316478612605],"luv":[81.3185562290371848,-58.7408753400219084,-42.3439332940817934],"rgb":[0.0666666666666666657,0.866666666666666696,1],"xyz":[0.441345590947614941,0.590490621490594,1.03682490593020216],"hpluv":[215.786316478612605,162.428807277722512,81.3185562290371848],"hsluv":[215.786316478612605,99.9999999999959925,81.3185562290371848]}}
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/lucasb-eyer/go-colorful/hsluv.go","mode":420,"size":6167,"sha256":"c4ebf971de76f56b1e1c1417d9c5cfe1633990b58ff1b5c05d66c4148a87fa0b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":6167}
-package colorful
-
-import "math"
-
-// Source: https://github.com/hsluv/hsluv-go
-// Under MIT License
-// Modified so that Saturation and Luminance are in [0..1] instead of [0..100].
-
-// HSLuv uses a rounded version of the D65. This has no impact on the final RGB
-// values, but to keep high levels of accuracy for internal operations and when
-// comparing to the test values, this modified white reference is used internally.
-//
-// See this GitHub thread for details on these values:
-//     https://github.com/hsluv/hsluv/issues/79
-var hSLuvD65 = [3]float64{0.95045592705167, 1.0, 1.089057750759878}
-
-func LuvLChToHSLuv(l, c, h float64) (float64, float64, float64) {
-	// [-1..1] but the code expects it to be [-100..100]
-	c *= 100.0
-	l *= 100.0
-
-	var s, max float64
-	if l > 99.9999999 || l < 0.00000001 {
-		s = 0.0
-	} else {
-		max = maxChromaForLH(l, h)
-		s = c / max * 100.0
-	}
-	return h, clamp01(s / 100.0), clamp01(l / 100.0)
-}
-
-func HSLuvToLuvLCh(h, s, l float64) (float64, float64, float64) {
-	l *= 100.0
-	s *= 100.0
-
-	var c, max float64
-	if l > 99.9999999 || l < 0.00000001 {
-		c = 0.0
-	} else {
-		max = maxChromaForLH(l, h)
-		c = max / 100.0 * s
-	}
-
-	// c is [-100..100], but for LCh it's supposed to be almost [-1..1]
-	return clamp01(l / 100.0), c / 100.0, h
-}
-
-func LuvLChToHPLuv(l, c, h float64) (float64, float64, float64) {
-	// [-1..1] but the code expects it to be [-100..100]
-	c *= 100.0
-	l *= 100.0
-
-	var s, max float64
-	if l > 99.9999999 || l < 0.00000001 {
-		s = 0.0
-	} else {
-		max = maxSafeChromaForL(l)
-		s = c / max * 100.0
-	}
-	return h, s / 100.0, l / 100.0
-}
-
-func HPLuvToLuvLCh(h, s, l float64) (float64, float64, float64) {
-	// [-1..1] but the code expects it to be [-100..100]
-	l *= 100.0
-	s *= 100.0
-
-	var c, max float64
-	if l > 99.9999999 || l < 0.00000001 {
-		c = 0.0
-	} else {
-		max = maxSafeChromaForL(l)
-		c = max / 100.0 * s
-	}
-	return l / 100.0, c / 100.0, h
-}
-
-// HSLuv creates a new Color from values in the HSLuv color space.
-// Hue in [0..360], a Saturation [0..1], and a Luminance (lightness) in [0..1].
-//
-// The returned color values are clamped (using .Clamped), so this will never output
-// an invalid color.
-func HSLuv(h, s, l float64) Color {
-	// HSLuv -> LuvLCh -> CIELUV -> CIEXYZ -> Linear RGB -> sRGB
-	l, u, v := LuvLChToLuv(HSLuvToLuvLCh(h, s, l))
-	return LinearRgb(XyzToLinearRgb(LuvToXyzWhiteRef(l, u, v, hSLuvD65))).Clamped()
-}
-
-// HPLuv creates a new Color from values in the HPLuv color space.
-// Hue in [0..360], a Saturation [0..1], and a Luminance (lightness) in [0..1].
-//
-// The returned color values are clamped (using .Clamped), so this will never output
-// an invalid color.
-func HPLuv(h, s, l float64) Color {
-	// HPLuv -> LuvLCh -> CIELUV -> CIEXYZ -> Linear RGB -> sRGB
-	l, u, v := LuvLChToLuv(HPLuvToLuvLCh(h, s, l))
-	return LinearRgb(XyzToLinearRgb(LuvToXyzWhiteRef(l, u, v, hSLuvD65))).Clamped()
-}
-
-// HSLuv returns the Hue, Saturation and Luminance of the color in the HSLuv
-// color space. Hue in [0..360], a Saturation [0..1], and a Luminance
-// (lightness) in [0..1].
-func (col Color) HSLuv() (h, s, l float64) {
-	// sRGB -> Linear RGB -> CIEXYZ -> CIELUV -> LuvLCh -> HSLuv
-	return LuvLChToHSLuv(col.LuvLChWhiteRef(hSLuvD65))
-}
-
-// HPLuv returns the Hue, Saturation and Luminance of the color in the HSLuv
-// color space. Hue in [0..360], a Saturation [0..1], and a Luminance
-// (lightness) in [0..1].
-//
-// Note that HPLuv can only represent pastel colors, and so the Saturation
-// value could be much larger than 1 for colors it can't represent.
-func (col Color) HPLuv() (h, s, l float64) {
-	return LuvLChToHPLuv(col.LuvLChWhiteRef(hSLuvD65))
-}
-
-// DistanceHSLuv calculates Euclidan distance in the HSLuv colorspace. No idea
-// how useful this is.
-//
-// The Hue value is divided by 100 before the calculation, so that H, S, and L
-// have the same relative ranges.
-func (c1 Color) DistanceHSLuv(c2 Color) float64 {
-	h1, s1, l1 := c1.HSLuv()
-	h2, s2, l2 := c2.HSLuv()
-	return math.Sqrt(sq((h1-h2)/100.0) + sq(s1-s2) + sq(l1-l2))
-}
-
-// DistanceHPLuv calculates Euclidean distance in the HPLuv colorspace. No idea
-// how useful this is.
-//
-// The Hue value is divided by 100 before the calculation, so that H, S, and L
-// have the same relative ranges.
-func (c1 Color) DistanceHPLuv(c2 Color) float64 {
-	h1, s1, l1 := c1.HPLuv()
-	h2, s2, l2 := c2.HPLuv()
-	return math.Sqrt(sq((h1-h2)/100.0) + sq(s1-s2) + sq(l1-l2))
-}
-
-var m = [3][3]float64{
-	{3.2409699419045214, -1.5373831775700935, -0.49861076029300328},
-	{-0.96924363628087983, 1.8759675015077207, 0.041555057407175613},
-	{0.055630079696993609, -0.20397695888897657, 1.0569715142428786},
-}
-
-const kappa = 903.2962962962963
-const epsilon = 0.0088564516790356308
-
-func maxChromaForLH(l, h float64) float64 {
-	hRad := h / 360.0 * math.Pi * 2.0
-	minLength := math.MaxFloat64
-	for _, line := range getBounds(l) {
-		length := lengthOfRayUntilIntersect(hRad, line[0], line[1])
-		if length > 0.0 && length < minLength {
-			minLength = length
-		}
-	}
-	return minLength
-}
-
-func getBounds(l float64) [6][2]float64 {
-	var sub2 float64
-	var ret [6][2]float64
-	sub1 := math.Pow(l+16.0, 3.0) / 1560896.0
-	if sub1 > epsilon {
-		sub2 = sub1
-	} else {
-		sub2 = l / kappa
-	}
-	for i := range m {
-		for k := 0; k < 2; k++ {
-			top1 := (284517.0*m[i][0] - 94839.0*m[i][2]) * sub2
-			top2 := (838422.0*m[i][2]+769860.0*m[i][1]+731718.0*m[i][0])*l*sub2 - 769860.0*float64(k)*l
-			bottom := (632260.0*m[i][2]-126452.0*m[i][1])*sub2 + 126452.0*float64(k)
-			ret[i*2+k][0] = top1 / bottom
-			ret[i*2+k][1] = top2 / bottom
-		}
-	}
-	return ret
-}
-
-func lengthOfRayUntilIntersect(theta, x, y float64) (length float64) {
-	length = y / (math.Sin(theta) - x*math.Cos(theta))
-	return
-}
-
-func maxSafeChromaForL(l float64) float64 {
-	minLength := math.MaxFloat64
-	for _, line := range getBounds(l) {
-		m1 := line[0]
-		b1 := line[1]
-		x := intersectLineLine(m1, b1, -1.0/m1, 0.0)
-		dist := distanceFromPole(x, b1+x*m1)
-		if dist < minLength {
-			minLength = dist
-		}
-	}
-	return minLength
-}
-
-func intersectLineLine(x1, y1, x2, y2 float64) float64 {
-	return (y1 - y2) / (x2 - x1)
-}
-
-func distanceFromPole(x, y float64) float64 {
-	return math.Sqrt(math.Pow(x, 2.0) + math.Pow(y, 2.0))
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/lucasb-eyer/go-colorful/soft_palettegen.go","mode":420,"size":5797,"sha256":"a78f8db63e6f9e97a1704c903ef2a196425dc69a7e6f469bf074ac32087deb5a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5797}
-// Largely inspired by the descriptions in http://lab.medialab.sciences-po.fr/iwanthue/
-// but written from scratch.
-
-package colorful
-
-import (
-	"fmt"
-	"math"
-	"math/rand"
-)
-
-// The algorithm works in L*a*b* color space and converts to RGB in the end.
-// L* in [0..1], a* and b* in [-1..1]
-type lab_t struct {
-	L, A, B float64
-}
-
-type SoftPaletteSettings struct {
-	// A function which can be used to restrict the allowed color-space.
-	CheckColor func(l, a, b float64) bool
-
-	// The higher, the better quality but the slower. Usually two figures.
-	Iterations int
-
-	// Use up to 160000 or 8000 samples of the L*a*b* space (and thus calls to CheckColor).
-	// Set this to true only if your CheckColor shapes the Lab space weirdly.
-	ManySamples bool
-}
-
-// Yeah, windows-stype Foo, FooEx, screw you golang...
-// Uses K-means to cluster the color-space and return the means of the clusters
-// as a new palette of distinctive colors. Falls back to K-medoid if the mean
-// happens to fall outside of the color-space, which can only happen if you
-// specify a CheckColor function.
-func SoftPaletteEx(colorsCount int, settings SoftPaletteSettings) ([]Color, error) {
-
-	// Checks whether it's a valid RGB and also fulfills the potentially provided constraint.
-	check := func(col lab_t) bool {
-		c := Lab(col.L, col.A, col.B)
-		return c.IsValid() && (settings.CheckColor == nil || settings.CheckColor(col.L, col.A, col.B))
-	}
-
-	// Sample the color space. These will be the points k-means is run on.
-	dl := 0.05
-	dab := 0.1
-	if settings.ManySamples {
-		dl = 0.01
-		dab = 0.05
-	}
-
-	samples := make([]lab_t, 0, int(1.0/dl*2.0/dab*2.0/dab))
-	for l := 0.0; l <= 1.0; l += dl {
-		for a := -1.0; a <= 1.0; a += dab {
-			for b := -1.0; b <= 1.0; b += dab {
-				if check(lab_t{l, a, b}) {
-					samples = append(samples, lab_t{l, a, b})
-				}
-			}
-		}
-	}
-
-	// That would cause some infinite loops down there...
-	if len(samples) < colorsCount {
-		return nil, fmt.Errorf("palettegen: more colors requested (%v) than samples available (%v). Your requested color count may be wrong, you might want to use many samples or your constraint function makes the valid color space too small", colorsCount, len(samples))
-	} else if len(samples) == colorsCount {
-		return labs2cols(samples), nil // Oops?
-	}
-
-	// We take the initial means out of the samples, so they are in fact medoids.
-	// This helps us avoid infinite loops or arbitrary cutoffs with too restrictive constraints.
-	means := make([]lab_t, colorsCount)
-	for i := 0; i < colorsCount; i++ {
-		for means[i] = samples[rand.Intn(len(samples))]; in(means, i, means[i]); means[i] = samples[rand.Intn(len(samples))] {
-		}
-	}
-
-	clusters := make([]int, len(samples))
-	samples_used := make([]bool, len(samples))
-
-	// The actual k-means/medoid iterations
-	for i := 0; i < settings.Iterations; i++ {
-		// Reassing the samples to clusters, i.e. to their closest mean.
-		// By the way, also check if any sample is used as a medoid and if so, mark that.
-		for isample, sample := range samples {
-			samples_used[isample] = false
-			mindist := math.Inf(+1)
-			for imean, mean := range means {
-				dist := lab_dist(sample, mean)
-				if dist < mindist {
-					mindist = dist
-					clusters[isample] = imean
-				}
-
-				// Mark samples which are used as a medoid.
-				if lab_eq(sample, mean) {
-					samples_used[isample] = true
-				}
-			}
-		}
-
-		// Compute new means according to the samples.
-		for imean := range means {
-			// The new mean is the average of all samples belonging to it..
-			nsamples := 0
-			newmean := lab_t{0.0, 0.0, 0.0}
-			for isample, sample := range samples {
-				if clusters[isample] == imean {
-					nsamples++
-					newmean.L += sample.L
-					newmean.A += sample.A
-					newmean.B += sample.B
-				}
-			}
-			if nsamples > 0 {
-				newmean.L /= float64(nsamples)
-				newmean.A /= float64(nsamples)
-				newmean.B /= float64(nsamples)
-			} else {
-				// That mean doesn't have any samples? Get a new mean from the sample list!
-				var inewmean int
-				for inewmean = rand.Intn(len(samples_used)); samples_used[inewmean]; inewmean = rand.Intn(len(samples_used)) {
-				}
-				newmean = samples[inewmean]
-				samples_used[inewmean] = true
-			}
-
-			// But now we still need to check whether the new mean is an allowed color.
-			if nsamples > 0 && check(newmean) {
-				// It does, life's good (TM)
-				means[imean] = newmean
-			} else {
-				// New mean isn't an allowed color or doesn't have any samples!
-				// Switch to medoid mode and pick the closest (unused) sample.
-				// This should always find something thanks to len(samples) >= colorsCount
-				mindist := math.Inf(+1)
-				for isample, sample := range samples {
-					if !samples_used[isample] {
-						dist := lab_dist(sample, newmean)
-						if dist < mindist {
-							mindist = dist
-							newmean = sample
-						}
-					}
-				}
-			}
-		}
-	}
-	return labs2cols(means), nil
-}
-
-// A wrapper which uses common parameters.
-func SoftPalette(colorsCount int) ([]Color, error) {
-	return SoftPaletteEx(colorsCount, SoftPaletteSettings{nil, 50, false})
-}
-
-func in(haystack []lab_t, upto int, needle lab_t) bool {
-	for i := 0; i < upto && i < len(haystack); i++ {
-		if haystack[i] == needle {
-			return true
-		}
-	}
-	return false
-}
-
-const LAB_DELTA = 1e-6
-
-func lab_eq(lab1, lab2 lab_t) bool {
-	return math.Abs(lab1.L-lab2.L) < LAB_DELTA &&
-		math.Abs(lab1.A-lab2.A) < LAB_DELTA &&
-		math.Abs(lab1.B-lab2.B) < LAB_DELTA
-}
-
-// That's faster than using colorful's DistanceLab since we would have to
-// convert back and forth for that. Here is no conversion.
-func lab_dist(lab1, lab2 lab_t) float64 {
-	return math.Sqrt(sq(lab1.L-lab2.L) + sq(lab1.A-lab2.A) + sq(lab1.B-lab2.B))
-}
-
-func labs2cols(labs []lab_t) (cols []Color) {
-	cols = make([]Color, len(labs))
-	for k, v := range labs {
-		cols[k] = Lab(v.L, v.A, v.B)
-	}
-	return cols
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/lucasb-eyer/go-colorful/warm_palettegen.go","mode":420,"size":757,"sha256":"c5f1008484fcab1f1ab97452df49b6f182582100d5bc436d29045e034dbb1c3f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":757}
-package colorful
-
-import (
-	"math/rand"
-)
-
-// Uses the HSV color space to generate colors with similar S,V but distributed
-// evenly along their Hue. This is fast but not always pretty.
-// If you've got time to spare, use Lab (the non-fast below).
-func FastWarmPalette(colorsCount int) (colors []Color) {
-	colors = make([]Color, colorsCount)
-
-	for i := 0; i < colorsCount; i++ {
-		colors[i] = Hsv(float64(i)*(360.0/float64(colorsCount)), 0.55+rand.Float64()*0.2, 0.35+rand.Float64()*0.2)
-	}
-	return
-}
-
-func WarmPalette(colorsCount int) ([]Color, error) {
-	warmy := func(l, a, b float64) bool {
-		_, c, _ := LabToHcl(l, a, b)
-		return 0.1 <= c && c <= 0.4 && 0.2 <= l && l <= 0.5
-	}
-	return SoftPaletteEx(colorsCount, SoftPaletteSettings{warmy, 50, true})
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/mattn/go-colorable/LICENSE","mode":420,"size":1085,"sha256":"88a2379b3ca34bf5c57127aff9dcb802bbb60ece0805cdbda65b3bd115f971d9","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1085}
-The MIT License (MIT)
-
-Copyright (c) 2016 Yasuhiro Matsumoto
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/mattn/go-colorable/README.md","mode":420,"size":1361,"sha256":"724c1c390e7a8c8ea30e9a143533c67626d0bc575a0cb31f4520c11a8804ae4b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1361}
-# go-colorable
-
-[![Build Status](https://github.com/mattn/go-colorable/workflows/test/badge.svg)](https://github.com/mattn/go-colorable/actions?query=workflow%3Atest)
-[![Codecov](https://codecov.io/gh/mattn/go-colorable/branch/master/graph/badge.svg)](https://codecov.io/gh/mattn/go-colorable)
-[![GoDoc](https://godoc.org/github.com/mattn/go-colorable?status.svg)](http://godoc.org/github.com/mattn/go-colorable)
-[![Go Report Card](https://goreportcard.com/badge/mattn/go-colorable)](https://goreportcard.com/report/mattn/go-colorable)
-
-Colorable writer for windows.
-
-For example, most of logger packages doesn't show colors on windows. (I know we can do it with ansicon. But I don't want.)
-This package is possible to handle escape sequence for ansi color on windows.
-
-## Too Bad!
-
-![](https://raw.githubusercontent.com/mattn/go-colorable/gh-pages/bad.png)
-
-
-## So Good!
-
-![](https://raw.githubusercontent.com/mattn/go-colorable/gh-pages/good.png)
-
-## Usage
-
-```go
-logrus.SetFormatter(&logrus.TextFormatter{ForceColors: true})
-logrus.SetOutput(colorable.NewColorableStdout())
-
-logrus.Info("succeeded")
-logrus.Warn("not correct")
-logrus.Error("something error")
-logrus.Fatal("panic")
-```
-
-You can compile above code on non-windows OSs.
-
-## Installation
-
-```
-$ go get github.com/mattn/go-colorable
-```
-
-# License
-
-MIT
-
-# Author
-
-Yasuhiro Matsumoto (a.k.a mattn)
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/mattn/go-colorable/colorable_appengine.go","mode":420,"size":806,"sha256":"f87e52b1d82c23883e7b45ed9fb041179bbf290ec71a360fa04576c0a8e06be5","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":806}
-//go:build appengine
-// +build appengine
-
-package colorable
-
-import (
-	"io"
-	"os"
-
-	_ "github.com/mattn/go-isatty"
-)
-
-// NewColorable returns new instance of Writer which handles escape sequence.
-func NewColorable(file *os.File) io.Writer {
-	if file == nil {
-		panic("nil passed instead of *os.File to NewColorable()")
-	}
-
-	return file
-}
-
-// NewColorableStdout returns new instance of Writer which handles escape sequence for stdout.
-func NewColorableStdout() io.Writer {
-	return os.Stdout
-}
-
-// NewColorableStderr returns new instance of Writer which handles escape sequence for stderr.
-func NewColorableStderr() io.Writer {
-	return os.Stderr
-}
-
-// EnableColorsStdout enable colors if possible.
-func EnableColorsStdout(enabled *bool) func() {
-	if enabled != nil {
-		*enabled = true
-	}
-	return func() {}
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/mattn/go-colorable/colorable_others.go","mode":420,"size":829,"sha256":"d182ac732fe610499587cc188ced44806745a11424da2326d3b11a7f2fa6b91d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":829}
-//go:build !windows && !appengine
-// +build !windows,!appengine
-
-package colorable
-
-import (
-	"io"
-	"os"
-
-	_ "github.com/mattn/go-isatty"
-)
-
-// NewColorable returns new instance of Writer which handles escape sequence.
-func NewColorable(file *os.File) io.Writer {
-	if file == nil {
-		panic("nil passed instead of *os.File to NewColorable()")
-	}
-
-	return file
-}
-
-// NewColorableStdout returns new instance of Writer which handles escape sequence for stdout.
-func NewColorableStdout() io.Writer {
-	return os.Stdout
-}
-
-// NewColorableStderr returns new instance of Writer which handles escape sequence for stderr.
-func NewColorableStderr() io.Writer {
-	return os.Stderr
-}
-
-// EnableColorsStdout enable colors if possible.
-func EnableColorsStdout(enabled *bool) func() {
-	if enabled != nil {
-		*enabled = true
-	}
-	return func() {}
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/mattn/go-colorable/colorable_windows.go","mode":420,"size":25222,"sha256":"48498f38e0950dc051744dfc6e75731b1188e92e7fd07aabae06ab8bf8d75409","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":25222}
-//go:build windows && !appengine
-// +build windows,!appengine
-
-package colorable
-
-import (
-	"bytes"
-	"io"
-	"math"
-	"os"
-	"strconv"
-	"strings"
-	"sync"
-	"syscall"
-	"unsafe"
-
-	"github.com/mattn/go-isatty"
-)
-
-const (
-	foregroundBlue      = 0x1
-	foregroundGreen     = 0x2
-	foregroundRed       = 0x4
-	foregroundIntensity = 0x8
-	foregroundMask      = (foregroundRed | foregroundBlue | foregroundGreen | foregroundIntensity)
-	backgroundBlue      = 0x10
-	backgroundGreen     = 0x20
-	backgroundRed       = 0x40
-	backgroundIntensity = 0x80
-	backgroundMask      = (backgroundRed | backgroundBlue | backgroundGreen | backgroundIntensity)
-	commonLvbUnderscore = 0x8000
-
-	cENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x4
-)
-
-const (
-	genericRead  = 0x80000000
-	genericWrite = 0x40000000
-)
-
-const (
-	consoleTextmodeBuffer = 0x1
-)
-
-type wchar uint16
-type short int16
-type dword uint32
-type word uint16
-
-type coord struct {
-	x short
-	y short
-}
-
-type smallRect struct {
-	left   short
-	top    short
-	right  short
-	bottom short
-}
-
-type consoleScreenBufferInfo struct {
-	size              coord
-	cursorPosition    coord
-	attributes        word
-	window            smallRect
-	maximumWindowSize coord
-}
-
-type consoleCursorInfo struct {
-	size    dword
-	visible int32
-}
-
-var (
-	kernel32                       = syscall.NewLazyDLL("kernel32.dll")
-	procGetConsoleScreenBufferInfo = kernel32.NewProc("GetConsoleScreenBufferInfo")
-	procSetConsoleTextAttribute    = kernel32.NewProc("SetConsoleTextAttribute")
-	procSetConsoleCursorPosition   = kernel32.NewProc("SetConsoleCursorPosition")
-	procFillConsoleOutputCharacter = kernel32.NewProc("FillConsoleOutputCharacterW")
-	procFillConsoleOutputAttribute = kernel32.NewProc("FillConsoleOutputAttribute")
-	procGetConsoleCursorInfo       = kernel32.NewProc("GetConsoleCursorInfo")
-	procSetConsoleCursorInfo       = kernel32.NewProc("SetConsoleCursorInfo")
-	procSetConsoleTitle            = kernel32.NewProc("SetConsoleTitleW")
-	procGetConsoleMode             = kernel32.NewProc("GetConsoleMode")
-	procSetConsoleMode             = kernel32.NewProc("SetConsoleMode")
-	procCreateConsoleScreenBuffer  = kernel32.NewProc("CreateConsoleScreenBuffer")
-)
-
-// Writer provides colorable Writer to the console
-type Writer struct {
-	out       io.Writer
-	handle    syscall.Handle
-	althandle syscall.Handle
-	oldattr   word
-	oldpos    coord
-	rest      bytes.Buffer
-	mutex     sync.Mutex
-}
-
-// NewColorable returns new instance of Writer which handles escape sequence from File.
-func NewColorable(file *os.File) io.Writer {
-	if file == nil {
-		panic("nil passed instead of *os.File to NewColorable()")
-	}
-
-	if isatty.IsTerminal(file.Fd()) {
-		var mode uint32
-		if r, _, _ := procGetConsoleMode.Call(file.Fd(), uintptr(unsafe.Pointer(&mode))); r != 0 && mode&cENABLE_VIRTUAL_TERMINAL_PROCESSING != 0 {
-			return file
-		}
-		var csbi consoleScreenBufferInfo
-		handle := syscall.Handle(file.Fd())
-		procGetConsoleScreenBufferInfo.Call(uintptr(handle), uintptr(unsafe.Pointer(&csbi)))
-		return &Writer{out: file, handle: handle, oldattr: csbi.attributes, oldpos: coord{0, 0}}
-	}
-	return file
-}
-
-// NewColorableStdout returns new instance of Writer which handles escape sequence for stdout.
-func NewColorableStdout() io.Writer {
-	return NewColorable(os.Stdout)
-}
-
-// NewColorableStderr returns new instance of Writer which handles escape sequence for stderr.
-func NewColorableStderr() io.Writer {
-	return NewColorable(os.Stderr)
-}
-
-var color256 = map[int]int{
-	0:   0x000000,
-	1:   0x800000,
-	2:   0x008000,
-	3:   0x808000,
-	4:   0x000080,
-	5:   0x800080,
-	6:   0x008080,
-	7:   0xc0c0c0,
-	8:   0x808080,
-	9:   0xff0000,
-	10:  0x00ff00,
-	11:  0xffff00,
-	12:  0x0000ff,
-	13:  0xff00ff,
-	14:  0x00ffff,
-	15:  0xffffff,
-	16:  0x000000,
-	17:  0x00005f,
-	18:  0x000087,
-	19:  0x0000af,
-	20:  0x0000d7,
-	21:  0x0000ff,
-	22:  0x005f00,
-	23:  0x005f5f,
-	24:  0x005f87,
-	25:  0x005faf,
-	26:  0x005fd7,
-	27:  0x005fff,
-	28:  0x008700,
-	29:  0x00875f,
-	30:  0x008787,
-	31:  0x0087af,
-	32:  0x0087d7,
-	33:  0x0087ff,
-	34:  0x00af00,
-	35:  0x00af5f,
-	36:  0x00af87,
-	37:  0x00afaf,
-	38:  0x00afd7,
-	39:  0x00afff,
-	40:  0x00d700,
-	41:  0x00d75f,
-	42:  0x00d787,
-	43:  0x00d7af,
-	44:  0x00d7d7,
-	45:  0x00d7ff,
-	46:  0x00ff00,
-	47:  0x00ff5f,
-	48:  0x00ff87,
-	49:  0x00ffaf,
-	50:  0x00ffd7,
-	51:  0x00ffff,
-	52:  0x5f0000,
-	53:  0x5f005f,
-	54:  0x5f0087,
-	55:  0x5f00af,
-	56:  0x5f00d7,
-	57:  0x5f00ff,
-	58:  0x5f5f00,
-	59:  0x5f5f5f,
-	60:  0x5f5f87,
-	61:  0x5f5faf,
-	62:  0x5f5fd7,
-	63:  0x5f5fff,
-	64:  0x5f8700,
-	65:  0x5f875f,
-	66:  0x5f8787,
-	67:  0x5f87af,
-	68:  0x5f87d7,
-	69:  0x5f87ff,
-	70:  0x5faf00,
-	71:  0x5faf5f,
-	72:  0x5faf87,
-	73:  0x5fafaf,
-	74:  0x5fafd7,
-	75:  0x5fafff,
-	76:  0x5fd700,
-	77:  0x5fd75f,
-	78:  0x5fd787,
-	79:  0x5fd7af,
-	80:  0x5fd7d7,
-	81:  0x5fd7ff,
-	82:  0x5fff00,
-	83:  0x5fff5f,
-	84:  0x5fff87,
-	85:  0x5fffaf,
-	86:  0x5fffd7,
-	87:  0x5fffff,
-	88:  0x870000,
-	89:  0x87005f,
-	90:  0x870087,
-	91:  0x8700af,
-	92:  0x8700d7,
-	93:  0x8700ff,
-	94:  0x875f00,
-	95:  0x875f5f,
-	96:  0x875f87,
-	97:  0x875faf,
-	98:  0x875fd7,
-	99:  0x875fff,
-	100: 0x878700,
-	101: 0x87875f,
-	102: 0x878787,
-	103: 0x8787af,
-	104: 0x8787d7,
-	105: 0x8787ff,
-	106: 0x87af00,
-	107: 0x87af5f,
-	108: 0x87af87,
-	109: 0x87afaf,
-	110: 0x87afd7,
-	111: 0x87afff,
-	112: 0x87d700,
-	113: 0x87d75f,
-	114: 0x87d787,
-	115: 0x87d7af,
-	116: 0x87d7d7,
-	117: 0x87d7ff,
-	118: 0x87ff00,
-	119: 0x87ff5f,
-	120: 0x87ff87,
-	121: 0x87ffaf,
-	122: 0x87ffd7,
-	123: 0x87ffff,
-	124: 0xaf0000,
-	125: 0xaf005f,
-	126: 0xaf0087,
-	127: 0xaf00af,
-	128: 0xaf00d7,
-	129: 0xaf00ff,
-	130: 0xaf5f00,
-	131: 0xaf5f5f,
-	132: 0xaf5f87,
-	133: 0xaf5faf,
-	134: 0xaf5fd7,
-	135: 0xaf5fff,
-	136: 0xaf8700,
-	137: 0xaf875f,
-	138: 0xaf8787,
-	139: 0xaf87af,
-	140: 0xaf87d7,
-	141: 0xaf87ff,
-	142: 0xafaf00,
-	143: 0xafaf5f,
-	144: 0xafaf87,
-	145: 0xafafaf,
-	146: 0xafafd7,
-	147: 0xafafff,
-	148: 0xafd700,
-	149: 0xafd75f,
-	150: 0xafd787,
-	151: 0xafd7af,
-	152: 0xafd7d7,
-	153: 0xafd7ff,
-	154: 0xafff00,
-	155: 0xafff5f,
-	156: 0xafff87,
-	157: 0xafffaf,
-	158: 0xafffd7,
-	159: 0xafffff,
-	160: 0xd70000,
-	161: 0xd7005f,
-	162: 0xd70087,
-	163: 0xd700af,
-	164: 0xd700d7,
-	165: 0xd700ff,
-	166: 0xd75f00,
-	167: 0xd75f5f,
-	168: 0xd75f87,
-	169: 0xd75faf,
-	170: 0xd75fd7,
-	171: 0xd75fff,
-	172: 0xd78700,
-	173: 0xd7875f,
-	174: 0xd78787,
-	175: 0xd787af,
-	176: 0xd787d7,
-	177: 0xd787ff,
-	178: 0xd7af00,
-	179: 0xd7af5f,
-	180: 0xd7af87,
-	181: 0xd7afaf,
-	182: 0xd7afd7,
-	183: 0xd7afff,
-	184: 0xd7d700,
-	185: 0xd7d75f,
-	186: 0xd7d787,
-	187: 0xd7d7af,
-	188: 0xd7d7d7,
-	189: 0xd7d7ff,
-	190: 0xd7ff00,
-	191: 0xd7ff5f,
-	192: 0xd7ff87,
-	193: 0xd7ffaf,
-	194: 0xd7ffd7,
-	195: 0xd7ffff,
-	196: 0xff0000,
-	197: 0xff005f,
-	198: 0xff0087,
-	199: 0xff00af,
-	200: 0xff00d7,
-	201: 0xff00ff,
-	202: 0xff5f00,
-	203: 0xff5f5f,
-	204: 0xff5f87,
-	205: 0xff5faf,
-	206: 0xff5fd7,
-	207: 0xff5fff,
-	208: 0xff8700,
-	209: 0xff875f,
-	210: 0xff8787,
-	211: 0xff87af,
-	212: 0xff87d7,
-	213: 0xff87ff,
-	214: 0xffaf00,
-	215: 0xffaf5f,
-	216: 0xffaf87,
-	217: 0xffafaf,
-	218: 0xffafd7,
-	219: 0xffafff,
-	220: 0xffd700,
-	221: 0xffd75f,
-	222: 0xffd787,
-	223: 0xffd7af,
-	224: 0xffd7d7,
-	225: 0xffd7ff,
-	226: 0xffff00,
-	227: 0xffff5f,
-	228: 0xffff87,
-	229: 0xffffaf,
-	230: 0xffffd7,
-	231: 0xffffff,
-	232: 0x080808,
-	233: 0x121212,
-	234: 0x1c1c1c,
-	235: 0x262626,
-	236: 0x303030,
-	237: 0x3a3a3a,
-	238: 0x444444,
-	239: 0x4e4e4e,
-	240: 0x585858,
-	241: 0x626262,
-	242: 0x6c6c6c,
-	243: 0x767676,
-	244: 0x808080,
-	245: 0x8a8a8a,
-	246: 0x949494,
-	247: 0x9e9e9e,
-	248: 0xa8a8a8,
-	249: 0xb2b2b2,
-	250: 0xbcbcbc,
-	251: 0xc6c6c6,
-	252: 0xd0d0d0,
-	253: 0xdadada,
-	254: 0xe4e4e4,
-	255: 0xeeeeee,
-}
-
-// `\033]0;TITLESTR\007`
-func doTitleSequence(er *bytes.Reader) error {
-	var c byte
-	var err error
-
-	c, err = er.ReadByte()
-	if err != nil {
-		return err
-	}
-	if c != '0' && c != '2' {
-		return nil
-	}
-	c, err = er.ReadByte()
-	if err != nil {
-		return err
-	}
-	if c != ';' {
-		return nil
-	}
-	title := make([]byte, 0, 80)
-	for {
-		c, err = er.ReadByte()
-		if err != nil {
-			return err
-		}
-		if c == 0x07 || c == '\n' {
-			break
-		}
-		title = append(title, c)
-	}
-	if len(title) > 0 {
-		title8, err := syscall.UTF16PtrFromString(string(title))
-		if err == nil {
-			procSetConsoleTitle.Call(uintptr(unsafe.Pointer(title8)))
-		}
-	}
-	return nil
-}
-
-// returns Atoi(s) unless s == "" in which case it returns def
-func atoiWithDefault(s string, def int) (int, error) {
-	if s == "" {
-		return def, nil
-	}
-	return strconv.Atoi(s)
-}
-
-// Write writes data on console
-func (w *Writer) Write(data []byte) (n int, err error) {
-	w.mutex.Lock()
-	defer w.mutex.Unlock()
-	var csbi consoleScreenBufferInfo
-	procGetConsoleScreenBufferInfo.Call(uintptr(w.handle), uintptr(unsafe.Pointer(&csbi)))
-
-	handle := w.handle
-
-	var er *bytes.Reader
-	if w.rest.Len() > 0 {
-		var rest bytes.Buffer
-		w.rest.WriteTo(&rest)
-		w.rest.Reset()
-		rest.Write(data)
-		er = bytes.NewReader(rest.Bytes())
-	} else {
-		er = bytes.NewReader(data)
-	}
-	var plaintext bytes.Buffer
-loop:
-	for {
-		c1, err := er.ReadByte()
-		if err != nil {
-			plaintext.WriteTo(w.out)
-			break loop
-		}
-		if c1 != 0x1b {
-			plaintext.WriteByte(c1)
-			continue
-		}
-		_, err = plaintext.WriteTo(w.out)
-		if err != nil {
-			break loop
-		}
-		c2, err := er.ReadByte()
-		if err != nil {
-			break loop
-		}
-
-		switch c2 {
-		case '>':
-			continue
-		case ']':
-			w.rest.WriteByte(c1)
-			w.rest.WriteByte(c2)
-			er.WriteTo(&w.rest)
-			if bytes.IndexByte(w.rest.Bytes(), 0x07) == -1 {
-				break loop
-			}
-			er = bytes.NewReader(w.rest.Bytes()[2:])
-			err := doTitleSequence(er)
-			if err != nil {
-				break loop
-			}
-			w.rest.Reset()
-			continue
-		// https://github.com/mattn/go-colorable/issues/27
-		case '7':
-			procGetConsoleScreenBufferInfo.Call(uintptr(handle), uintptr(unsafe.Pointer(&csbi)))
-			w.oldpos = csbi.cursorPosition
-			continue
-		case '8':
-			procSetConsoleCursorPosition.Call(uintptr(handle), *(*uintptr)(unsafe.Pointer(&w.oldpos)))
-			continue
-		case 0x5b:
-			// execute part after switch
-		default:
-			continue
-		}
-
-		w.rest.WriteByte(c1)
-		w.rest.WriteByte(c2)
-		er.WriteTo(&w.rest)
-
-		var buf bytes.Buffer
-		var m byte
-		for i, c := range w.rest.Bytes()[2:] {
-			if ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || c == '@' {
-				m = c
-				er = bytes.NewReader(w.rest.Bytes()[2+i+1:])
-				w.rest.Reset()
-				break
-			}
-			buf.Write([]byte(string(c)))
-		}
-		if m == 0 {
-			break loop
-		}
-
-		switch m {
-		case 'A':
-			n, err = atoiWithDefault(buf.String(), 1)
-			if err != nil {
-				continue
-			}
-			procGetConsoleScreenBufferInfo.Call(uintptr(handle), uintptr(unsafe.Pointer(&csbi)))
-			csbi.cursorPosition.y -= short(n)
-			procSetConsoleCursorPosition.Call(uintptr(handle), *(*uintptr)(unsafe.Pointer(&csbi.cursorPosition)))
-		case 'B':
-			n, err = atoiWithDefault(buf.String(), 1)
-			if err != nil {
-				continue
-			}
-			procGetConsoleScreenBufferInfo.Call(uintptr(handle), uintptr(unsafe.Pointer(&csbi)))
-			csbi.cursorPosition.y += short(n)
-			procSetConsoleCursorPosition.Call(uintptr(handle), *(*uintptr)(unsafe.Pointer(&csbi.cursorPosition)))
-		case 'C':
-			n, err = atoiWithDefault(buf.String(), 1)
-			if err != nil {
-				continue
-			}
-			procGetConsoleScreenBufferInfo.Call(uintptr(handle), uintptr(unsafe.Pointer(&csbi)))
-			csbi.cursorPosition.x += short(n)
-			procSetConsoleCursorPosition.Call(uintptr(handle), *(*uintptr)(unsafe.Pointer(&csbi.cursorPosition)))
-		case 'D':
-			n, err = atoiWithDefault(buf.String(), 1)
-			if err != nil {
-				continue
-			}
-			procGetConsoleScreenBufferInfo.Call(uintptr(handle), uintptr(unsafe.Pointer(&csbi)))
-			csbi.cursorPosition.x -= short(n)
-			if csbi.cursorPosition.x < 0 {
-				csbi.cursorPosition.x = 0
-			}
-			procSetConsoleCursorPosition.Call(uintptr(handle), *(*uintptr)(unsafe.Pointer(&csbi.cursorPosition)))
-		case 'E':
-			n, err = strconv.Atoi(buf.String())
-			if err != nil {
-				continue
-			}
-			procGetConsoleScreenBufferInfo.Call(uintptr(handle), uintptr(unsafe.Pointer(&csbi)))
-			csbi.cursorPosition.x = 0
-			csbi.cursorPosition.y += short(n)
-			procSetConsoleCursorPosition.Call(uintptr(handle), *(*uintptr)(unsafe.Pointer(&csbi.cursorPosition)))
-		case 'F':
-			n, err = strconv.Atoi(buf.String())
-			if err != nil {
-				continue
-			}
-			procGetConsoleScreenBufferInfo.Call(uintptr(handle), uintptr(unsafe.Pointer(&csbi)))
-			csbi.cursorPosition.x = 0
-			csbi.cursorPosition.y -= short(n)
-			procSetConsoleCursorPosition.Call(uintptr(handle), *(*uintptr)(unsafe.Pointer(&csbi.cursorPosition)))
-		case 'G':
-			n, err = strconv.Atoi(buf.String())
-			if err != nil {
-				continue
-			}
-			if n < 1 {
-				n = 1
-			}
-			procGetConsoleScreenBufferInfo.Call(uintptr(handle), uintptr(unsafe.Pointer(&csbi)))
-			csbi.cursorPosition.x = short(n - 1)
-			procSetConsoleCursorPosition.Call(uintptr(handle), *(*uintptr)(unsafe.Pointer(&csbi.cursorPosition)))
-		case 'H', 'f':
-			procGetConsoleScreenBufferInfo.Call(uintptr(handle), uintptr(unsafe.Pointer(&csbi)))
-			if buf.Len() > 0 {
-				token := strings.Split(buf.String(), ";")
-				switch len(token) {
-				case 1:
-					n1, err := strconv.Atoi(token[0])
-					if err != nil {
-						continue
-					}
-					csbi.cursorPosition.y = short(n1 - 1)
-				case 2:
-					n1, err := strconv.Atoi(token[0])
-					if err != nil {
-						continue
-					}
-					n2, err := strconv.Atoi(token[1])
-					if err != nil {
-						continue
-					}
-					csbi.cursorPosition.x = short(n2 - 1)
-					csbi.cursorPosition.y = short(n1 - 1)
-				}
-			} else {
-				csbi.cursorPosition.y = 0
-			}
-			procSetConsoleCursorPosition.Call(uintptr(handle), *(*uintptr)(unsafe.Pointer(&csbi.cursorPosition)))
-		case 'J':
-			n := 0
-			if buf.Len() > 0 {
-				n, err = strconv.Atoi(buf.String())
-				if err != nil {
-					continue
-				}
-			}
-			var count, written dword
-			var cursor coord
-			procGetConsoleScreenBufferInfo.Call(uintptr(handle), uintptr(unsafe.Pointer(&csbi)))
-			switch n {
-			case 0:
-				cursor = coord{x: csbi.cursorPosition.x, y: csbi.cursorPosition.y}
-				count = dword(csbi.size.x) - dword(csbi.cursorPosition.x) + dword(csbi.size.y-csbi.cursorPosition.y)*dword(csbi.size.x)
-			case 1:
-				cursor = coord{x: csbi.window.left, y: csbi.window.top}
-				count = dword(csbi.size.x) - dword(csbi.cursorPosition.x) + dword(csbi.window.top-csbi.cursorPosition.y)*dword(csbi.size.x)
-			case 2:
-				cursor = coord{x: csbi.window.left, y: csbi.window.top}
-				count = dword(csbi.size.x) - dword(csbi.cursorPosition.x) + dword(csbi.size.y-csbi.cursorPosition.y)*dword(csbi.size.x)
-			}
-			procFillConsoleOutputCharacter.Call(uintptr(handle), uintptr(' '), uintptr(count), *(*uintptr)(unsafe.Pointer(&cursor)), uintptr(unsafe.Pointer(&written)))
-			procFillConsoleOutputAttribute.Call(uintptr(handle), uintptr(csbi.attributes), uintptr(count), *(*uintptr)(unsafe.Pointer(&cursor)), uintptr(unsafe.Pointer(&written)))
-		case 'K':
-			n := 0
-			if buf.Len() > 0 {
-				n, err = strconv.Atoi(buf.String())
-				if err != nil {
-					continue
-				}
-			}
-			procGetConsoleScreenBufferInfo.Call(uintptr(handle), uintptr(unsafe.Pointer(&csbi)))
-			var cursor coord
-			var count, written dword
-			switch n {
-			case 0:
-				cursor = coord{x: csbi.cursorPosition.x, y: csbi.cursorPosition.y}
-				count = dword(csbi.size.x - csbi.cursorPosition.x)
-			case 1:
-				cursor = coord{x: csbi.window.left, y: csbi.cursorPosition.y}
-				count = dword(csbi.size.x - csbi.cursorPosition.x)
-			case 2:
-				cursor = coord{x: csbi.window.left, y: csbi.cursorPosition.y}
-				count = dword(csbi.size.x)
-			}
-			procFillConsoleOutputCharacter.Call(uintptr(handle), uintptr(' '), uintptr(count), *(*uintptr)(unsafe.Pointer(&cursor)), uintptr(unsafe.Pointer(&written)))
-			procFillConsoleOutputAttribute.Call(uintptr(handle), uintptr(csbi.attributes), uintptr(count), *(*uintptr)(unsafe.Pointer(&cursor)), uintptr(unsafe.Pointer(&written)))
-		case 'X':
-			n := 0
-			if buf.Len() > 0 {
-				n, err = strconv.Atoi(buf.String())
-				if err != nil {
-					continue
-				}
-			}
-			procGetConsoleScreenBufferInfo.Call(uintptr(handle), uintptr(unsafe.Pointer(&csbi)))
-			var cursor coord
-			var written dword
-			cursor = coord{x: csbi.cursorPosition.x, y: csbi.cursorPosition.y}
-			procFillConsoleOutputCharacter.Call(uintptr(handle), uintptr(' '), uintptr(n), *(*uintptr)(unsafe.Pointer(&cursor)), uintptr(unsafe.Pointer(&written)))
-			procFillConsoleOutputAttribute.Call(uintptr(handle), uintptr(csbi.attributes), uintptr(n), *(*uintptr)(unsafe.Pointer(&cursor)), uintptr(unsafe.Pointer(&written)))
-		case 'm':
-			procGetConsoleScreenBufferInfo.Call(uintptr(handle), uintptr(unsafe.Pointer(&csbi)))
-			attr := csbi.attributes
-			cs := buf.String()
-			if cs == "" {
-				procSetConsoleTextAttribute.Call(uintptr(handle), uintptr(w.oldattr))
-				continue
-			}
-			token := strings.Split(cs, ";")
-			for i := 0; i < len(token); i++ {
-				ns := token[i]
-				if n, err = strconv.Atoi(ns); err == nil {
-					switch {
-					case n == 0 || n == 100:
-						attr = w.oldattr
-					case n == 4:
-						attr |= commonLvbUnderscore
-					case (1 <= n && n <= 3) || n == 5:
-						attr |= foregroundIntensity
-					case n == 7 || n == 27:
-						attr =
-							(attr &^ (foregroundMask | backgroundMask)) |
-								((attr & foregroundMask) << 4) |
-								((attr & backgroundMask) >> 4)
-					case n == 22:
-						attr &^= foregroundIntensity
-					case n == 24:
-						attr &^= commonLvbUnderscore
-					case 30 <= n && n <= 37:
-						attr &= backgroundMask
-						if (n-30)&1 != 0 {
-							attr |= foregroundRed
-						}
-						if (n-30)&2 != 0 {
-							attr |= foregroundGreen
-						}
-						if (n-30)&4 != 0 {
-							attr |= foregroundBlue
-						}
-					case n == 38: // set foreground color.
-						if i < len(token)-2 && (token[i+1] == "5" || token[i+1] == "05") {
-							if n256, err := strconv.Atoi(token[i+2]); err == nil {
-								if n256foreAttr == nil {
-									n256setup()
-								}
-								attr &= backgroundMask
-								attr |= n256foreAttr[n256%len(n256foreAttr)]
-								i += 2
-							}
-						} else if len(token) == 5 && token[i+1] == "2" {
-							var r, g, b int
-							r, _ = strconv.Atoi(token[i+2])
-							g, _ = strconv.Atoi(token[i+3])
-							b, _ = strconv.Atoi(token[i+4])
-							i += 4
-							if r > 127 {
-								attr |= foregroundRed
-							}
-							if g > 127 {
-								attr |= foregroundGreen
-							}
-							if b > 127 {
-								attr |= foregroundBlue
-							}
-						} else {
-							attr = attr & (w.oldattr & backgroundMask)
-						}
-					case n == 39: // reset foreground color.
-						attr &= backgroundMask
-						attr |= w.oldattr & foregroundMask
-					case 40 <= n && n <= 47:
-						attr &= foregroundMask
-						if (n-40)&1 != 0 {
-							attr |= backgroundRed
-						}
-						if (n-40)&2 != 0 {
-							attr |= backgroundGreen
-						}
-						if (n-40)&4 != 0 {
-							attr |= backgroundBlue
-						}
-					case n == 48: // set background color.
-						if i < len(token)-2 && token[i+1] == "5" {
-							if n256, err := strconv.Atoi(token[i+2]); err == nil {
-								if n256backAttr == nil {
-									n256setup()
-								}
-								attr &= foregroundMask
-								attr |= n256backAttr[n256%len(n256backAttr)]
-								i += 2
-							}
-						} else if len(token) == 5 && token[i+1] == "2" {
-							var r, g, b int
-							r, _ = strconv.Atoi(token[i+2])
-							g, _ = strconv.Atoi(token[i+3])
-							b, _ = strconv.Atoi(token[i+4])
-							i += 4
-							if r > 127 {
-								attr |= backgroundRed
-							}
-							if g > 127 {
-								attr |= backgroundGreen
-							}
-							if b > 127 {
-								attr |= backgroundBlue
-							}
-						} else {
-							attr = attr & (w.oldattr & foregroundMask)
-						}
-					case n == 49: // reset foreground color.
-						attr &= foregroundMask
-						attr |= w.oldattr & backgroundMask
-					case 90 <= n && n <= 97:
-						attr = (attr & backgroundMask)
-						attr |= foregroundIntensity
-						if (n-90)&1 != 0 {
-							attr |= foregroundRed
-						}
-						if (n-90)&2 != 0 {
-							attr |= foregroundGreen
-						}
-						if (n-90)&4 != 0 {
-							attr |= foregroundBlue
-						}
-					case 100 <= n && n <= 107:
-						attr = (attr & foregroundMask)
-						attr |= backgroundIntensity
-						if (n-100)&1 != 0 {
-							attr |= backgroundRed
-						}
-						if (n-100)&2 != 0 {
-							attr |= backgroundGreen
-						}
-						if (n-100)&4 != 0 {
-							attr |= backgroundBlue
-						}
-					}
-					procSetConsoleTextAttribute.Call(uintptr(handle), uintptr(attr))
-				}
-			}
-		case 'h':
-			var ci consoleCursorInfo
-			cs := buf.String()
-			if cs == "5>" {
-				procGetConsoleCursorInfo.Call(uintptr(handle), uintptr(unsafe.Pointer(&ci)))
-				ci.visible = 0
-				procSetConsoleCursorInfo.Call(uintptr(handle), uintptr(unsafe.Pointer(&ci)))
-			} else if cs == "?25" {
-				procGetConsoleCursorInfo.Call(uintptr(handle), uintptr(unsafe.Pointer(&ci)))
-				ci.visible = 1
-				procSetConsoleCursorInfo.Call(uintptr(handle), uintptr(unsafe.Pointer(&ci)))
-			} else if cs == "?1049" {
-				if w.althandle == 0 {
-					h, _, _ := procCreateConsoleScreenBuffer.Call(uintptr(genericRead|genericWrite), 0, 0, uintptr(consoleTextmodeBuffer), 0, 0)
-					w.althandle = syscall.Handle(h)
-					if w.althandle != 0 {
-						handle = w.althandle
-					}
-				}
-			}
-		case 'l':
-			var ci consoleCursorInfo
-			cs := buf.String()
-			if cs == "5>" {
-				procGetConsoleCursorInfo.Call(uintptr(handle), uintptr(unsafe.Pointer(&ci)))
-				ci.visible = 1
-				procSetConsoleCursorInfo.Call(uintptr(handle), uintptr(unsafe.Pointer(&ci)))
-			} else if cs == "?25" {
-				procGetConsoleCursorInfo.Call(uintptr(handle), uintptr(unsafe.Pointer(&ci)))
-				ci.visible = 0
-				procSetConsoleCursorInfo.Call(uintptr(handle), uintptr(unsafe.Pointer(&ci)))
-			} else if cs == "?1049" {
-				if w.althandle != 0 {
-					syscall.CloseHandle(w.althandle)
-					w.althandle = 0
-					handle = w.handle
-				}
-			}
-		case 's':
-			procGetConsoleScreenBufferInfo.Call(uintptr(handle), uintptr(unsafe.Pointer(&csbi)))
-			w.oldpos = csbi.cursorPosition
-		case 'u':
-			procSetConsoleCursorPosition.Call(uintptr(handle), *(*uintptr)(unsafe.Pointer(&w.oldpos)))
-		}
-	}
-
-	return len(data), nil
-}
-
-type consoleColor struct {
-	rgb       int
-	red       bool
-	green     bool
-	blue      bool
-	intensity bool
-}
-
-func (c consoleColor) foregroundAttr() (attr word) {
-	if c.red {
-		attr |= foregroundRed
-	}
-	if c.green {
-		attr |= foregroundGreen
-	}
-	if c.blue {
-		attr |= foregroundBlue
-	}
-	if c.intensity {
-		attr |= foregroundIntensity
-	}
-	return
-}
-
-func (c consoleColor) backgroundAttr() (attr word) {
-	if c.red {
-		attr |= backgroundRed
-	}
-	if c.green {
-		attr |= backgroundGreen
-	}
-	if c.blue {
-		attr |= backgroundBlue
-	}
-	if c.intensity {
-		attr |= backgroundIntensity
-	}
-	return
-}
-
-var color16 = []consoleColor{
-	{0x000000, false, false, false, false},
-	{0x000080, false, false, true, false},
-	{0x008000, false, true, false, false},
-	{0x008080, false, true, true, false},
-	{0x800000, true, false, false, false},
-	{0x800080, true, false, true, false},
-	{0x808000, true, true, false, false},
-	{0xc0c0c0, true, true, true, false},
-	{0x808080, false, false, false, true},
-	{0x0000ff, false, false, true, true},
-	{0x00ff00, false, true, false, true},
-	{0x00ffff, false, true, true, true},
-	{0xff0000, true, false, false, true},
-	{0xff00ff, true, false, true, true},
-	{0xffff00, true, true, false, true},
-	{0xffffff, true, true, true, true},
-}
-
-type hsv struct {
-	h, s, v float32
-}
-
-func (a hsv) dist(b hsv) float32 {
-	dh := a.h - b.h
-	switch {
-	case dh > 0.5:
-		dh = 1 - dh
-	case dh < -0.5:
-		dh = -1 - dh
-	}
-	ds := a.s - b.s
-	dv := a.v - b.v
-	return float32(math.Sqrt(float64(dh*dh + ds*ds + dv*dv)))
-}
-
-func toHSV(rgb int) hsv {
-	r, g, b := float32((rgb&0xFF0000)>>16)/256.0,
-		float32((rgb&0x00FF00)>>8)/256.0,
-		float32(rgb&0x0000FF)/256.0
-	min, max := minmax3f(r, g, b)
-	h := max - min
-	if h > 0 {
-		if max == r {
-			h = (g - b) / h
-			if h < 0 {
-				h += 6
-			}
-		} else if max == g {
-			h = 2 + (b-r)/h
-		} else {
-			h = 4 + (r-g)/h
-		}
-	}
-	h /= 6.0
-	s := max - min
-	if max != 0 {
-		s /= max
-	}
-	v := max
-	return hsv{h: h, s: s, v: v}
-}
-
-type hsvTable []hsv
-
-func toHSVTable(rgbTable []consoleColor) hsvTable {
-	t := make(hsvTable, len(rgbTable))
-	for i, c := range rgbTable {
-		t[i] = toHSV(c.rgb)
-	}
-	return t
-}
-
-func (t hsvTable) find(rgb int) consoleColor {
-	hsv := toHSV(rgb)
-	n := 7
-	l := float32(5.0)
-	for i, p := range t {
-		d := hsv.dist(p)
-		if d < l {
-			l, n = d, i
-		}
-	}
-	return color16[n]
-}
-
-func minmax3f(a, b, c float32) (min, max float32) {
-	if a < b {
-		if b < c {
-			return a, c
-		} else if a < c {
-			return a, b
-		} else {
-			return c, b
-		}
-	} else {
-		if a < c {
-			return b, c
-		} else if b < c {
-			return b, a
-		} else {
-			return c, a
-		}
-	}
-}
-
-var n256foreAttr []word
-var n256backAttr []word
-
-func n256setup() {
-	n256foreAttr = make([]word, 256)
-	n256backAttr = make([]word, 256)
-	t := toHSVTable(color16)
-	for i, rgb := range color256 {
-		c := t.find(rgb)
-		n256foreAttr[i] = c.foregroundAttr()
-		n256backAttr[i] = c.backgroundAttr()
-	}
-}
-
-// EnableColorsStdout enable colors if possible.
-func EnableColorsStdout(enabled *bool) func() {
-	var mode uint32
-	h := os.Stdout.Fd()
-	if r, _, _ := procGetConsoleMode.Call(h, uintptr(unsafe.Pointer(&mode))); r != 0 {
-		if r, _, _ = procSetConsoleMode.Call(h, uintptr(mode|cENABLE_VIRTUAL_TERMINAL_PROCESSING)); r != 0 {
-			if enabled != nil {
-				*enabled = true
-			}
-			return func() {
-				procSetConsoleMode.Call(h, uintptr(mode))
-			}
-		}
-	}
-	if enabled != nil {
-		*enabled = true
-	}
-	return func() {}
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/mattn/go-colorable/go.test.sh","mode":493,"size":273,"sha256":"827af55d528924cbeb7f0702b91148bcd9d1707160718ba6d13efa8ad863b821","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":273}
-#!/usr/bin/env bash
-
-set -e
-echo "" > coverage.txt
-
-for d in $(go list ./... | grep -v vendor); do
-    go test -race -coverprofile=profile.out -covermode=atomic "$d"
-    if [ -f profile.out ]; then
-        cat profile.out >> coverage.txt
-        rm profile.out
-    fi
-done
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/mattn/go-colorable/noncolorable.go","mode":420,"size":999,"sha256":"23b80cf82c8156ea4c6f46f4fcdf50d5ccf7feb80ceaea93ffc97e1da27a5a9d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":999}
-package colorable
-
-import (
-	"bytes"
-	"io"
-)
-
-// NonColorable holds writer but removes escape sequence.
-type NonColorable struct {
-	out io.Writer
-}
-
-// NewNonColorable returns new instance of Writer which removes escape sequence from Writer.
-func NewNonColorable(w io.Writer) io.Writer {
-	return &NonColorable{out: w}
-}
-
-// Write writes data on console
-func (w *NonColorable) Write(data []byte) (n int, err error) {
-	er := bytes.NewReader(data)
-	var plaintext bytes.Buffer
-loop:
-	for {
-		c1, err := er.ReadByte()
-		if err != nil {
-			plaintext.WriteTo(w.out)
-			break loop
-		}
-		if c1 != 0x1b {
-			plaintext.WriteByte(c1)
-			continue
-		}
-		_, err = plaintext.WriteTo(w.out)
-		if err != nil {
-			break loop
-		}
-		c2, err := er.ReadByte()
-		if err != nil {
-			break loop
-		}
-		if c2 != 0x5b {
-			continue
-		}
-
-		for {
-			c, err := er.ReadByte()
-			if err != nil {
-				break loop
-			}
-			if ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || c == '@' {
-				break
-			}
-		}
-	}
-
-	return len(data), nil
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/mattn/go-isatty/LICENSE","mode":420,"size":1099,"sha256":"08eab1118c80885fa1fa6a6dd7303f65a379fcb3733e063d20d1bbc2c76e6fa1","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1099}
-Copyright (c) Yasuhiro MATSUMOTO <mattn.jp@gmail.com>
-
-MIT License (Expat)
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/mattn/go-isatty/README.md","mode":420,"size":1088,"sha256":"e4637bdbfc367bce541dc4131d2fb1a6e036f839b502b0e12a5c72e2f24f5d1e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1088}
-# go-isatty
-
-[![Godoc Reference](https://godoc.org/github.com/mattn/go-isatty?status.svg)](http://godoc.org/github.com/mattn/go-isatty)
-[![Codecov](https://codecov.io/gh/mattn/go-isatty/branch/master/graph/badge.svg)](https://codecov.io/gh/mattn/go-isatty)
-[![Coverage Status](https://coveralls.io/repos/github/mattn/go-isatty/badge.svg?branch=master)](https://coveralls.io/github/mattn/go-isatty?branch=master)
-[![Go Report Card](https://goreportcard.com/badge/mattn/go-isatty)](https://goreportcard.com/report/mattn/go-isatty)
-
-isatty for golang
-
-## Usage
-
-```go
-package main
-
-import (
-	"fmt"
-	"github.com/mattn/go-isatty"
-	"os"
-)
-
-func main() {
-	if isatty.IsTerminal(os.Stdout.Fd()) {
-		fmt.Println("Is Terminal")
-	} else if isatty.IsCygwinTerminal(os.Stdout.Fd()) {
-		fmt.Println("Is Cygwin/MSYS2 Terminal")
-	} else {
-		fmt.Println("Is Not Terminal")
-	}
-}
-```
-
-## Installation
-
-```
-$ go get github.com/mattn/go-isatty
-```
-
-## License
-
-MIT
-
-## Author
-
-Yasuhiro Matsumoto (a.k.a mattn)
-
-## Thanks
-
-* k-takata: base idea for IsCygwinTerminal
-
-    https://github.com/k-takata/go-iscygpty
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/mattn/go-isatty/doc.go","mode":420,"size":64,"sha256":"06182cb1a7113cae6fdef9be492893298610bfc63cf565a23f86203c3074a861","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":64}
-// Package isatty implements interface to isatty
-package isatty
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/mattn/go-isatty/go.test.sh","mode":493,"size":273,"sha256":"827af55d528924cbeb7f0702b91148bcd9d1707160718ba6d13efa8ad863b821","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":273}
-#!/usr/bin/env bash
-
-set -e
-echo "" > coverage.txt
-
-for d in $(go list ./... | grep -v vendor); do
-    go test -race -coverprofile=profile.out -covermode=atomic "$d"
-    if [ -f profile.out ]; then
-        cat profile.out >> coverage.txt
-        rm profile.out
-    fi
-done
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/mattn/go-isatty/isatty_bsd.go","mode":420,"size":609,"sha256":"b3df65aaddc2e985cc4b41be48e7a714eea17414cb8d09a04abcd2d35bf3f9e8","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":609}
-//go:build (darwin || freebsd || openbsd || netbsd || dragonfly || hurd) && !appengine && !tinygo
-// +build darwin freebsd openbsd netbsd dragonfly hurd
-// +build !appengine
-// +build !tinygo
-
-package isatty
-
-import "golang.org/x/sys/unix"
-
-// IsTerminal return true if the file descriptor is terminal.
-func IsTerminal(fd uintptr) bool {
-	_, err := unix.IoctlGetTermios(int(fd), unix.TIOCGETA)
-	return err == nil
-}
-
-// IsCygwinTerminal return true if the file descriptor is a cygwin or msys2
-// terminal. This is also always false on this environment.
-func IsCygwinTerminal(fd uintptr) bool {
-	return false
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/mattn/go-isatty/isatty_others.go","mode":420,"size":532,"sha256":"ad3cec73607a7861f625c80e38734d14dd89fcd0f88159a6af746f0d235c6eb3","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":532}
-//go:build (appengine || js || nacl || tinygo || wasm) && !windows
-// +build appengine js nacl tinygo wasm
-// +build !windows
-
-package isatty
-
-// IsTerminal returns true if the file descriptor is terminal which
-// is always false on js and appengine classic which is a sandboxed PaaS.
-func IsTerminal(fd uintptr) bool {
-	return false
-}
-
-// IsCygwinTerminal() return true if the file descriptor is a cygwin or msys2
-// terminal. This is also always false on this environment.
-func IsCygwinTerminal(fd uintptr) bool {
-	return false
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/mattn/go-isatty/isatty_plan9.go","mode":420,"size":509,"sha256":"ebcf735e5c006a614e1c032b25723876e767df694acfd879fa19d276acfa9fc8","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":509}
-//go:build plan9
-// +build plan9
-
-package isatty
-
-import (
-	"syscall"
-)
-
-// IsTerminal returns true if the given file descriptor is a terminal.
-func IsTerminal(fd uintptr) bool {
-	path, err := syscall.Fd2path(int(fd))
-	if err != nil {
-		return false
-	}
-	return path == "/dev/cons" || path == "/mnt/term/dev/cons"
-}
-
-// IsCygwinTerminal return true if the file descriptor is a cygwin or msys2
-// terminal. This is also always false on this environment.
-func IsCygwinTerminal(fd uintptr) bool {
-	return false
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/mattn/go-isatty/isatty_solaris.go","mode":420,"size":582,"sha256":"657fa131ff29592a34f05cbdaee7e7a5dda967ecb8aa7f626590dd4df1674f93","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":582}
-//go:build solaris && !appengine
-// +build solaris,!appengine
-
-package isatty
-
-import (
-	"golang.org/x/sys/unix"
-)
-
-// IsTerminal returns true if the given file descriptor is a terminal.
-// see: https://src.illumos.org/source/xref/illumos-gate/usr/src/lib/libc/port/gen/isatty.c
-func IsTerminal(fd uintptr) bool {
-	_, err := unix.IoctlGetTermio(int(fd), unix.TCGETA)
-	return err == nil
-}
-
-// IsCygwinTerminal return true if the file descriptor is a cygwin or msys2
-// terminal. This is also always false on this environment.
-func IsCygwinTerminal(fd uintptr) bool {
-	return false
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/mattn/go-isatty/isatty_tcgets.go","mode":420,"size":536,"sha256":"7175e851e6fa993e24c2c2ace329e57df2856c5a37c060a7d91793f17feb9e5e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":536}
-//go:build (linux || aix || zos) && !appengine && !tinygo
-// +build linux aix zos
-// +build !appengine
-// +build !tinygo
-
-package isatty
-
-import "golang.org/x/sys/unix"
-
-// IsTerminal return true if the file descriptor is terminal.
-func IsTerminal(fd uintptr) bool {
-	_, err := unix.IoctlGetTermios(int(fd), unix.TCGETS)
-	return err == nil
-}
-
-// IsCygwinTerminal return true if the file descriptor is a cygwin or msys2
-// terminal. This is also always false on this environment.
-func IsCygwinTerminal(fd uintptr) bool {
-	return false
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/mattn/go-isatty/isatty_windows.go","mode":420,"size":3370,"sha256":"a8d1abddcc587bb02b34288fb5b70e5bfc36f826e3a11acd206883ed900832aa","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3370}
-//go:build windows && !appengine
-// +build windows,!appengine
-
-package isatty
-
-import (
-	"errors"
-	"strings"
-	"syscall"
-	"unicode/utf16"
-	"unsafe"
-)
-
-const (
-	objectNameInfo uintptr = 1
-	fileNameInfo           = 2
-	fileTypePipe           = 3
-)
-
-var (
-	kernel32                         = syscall.NewLazyDLL("kernel32.dll")
-	ntdll                            = syscall.NewLazyDLL("ntdll.dll")
-	procGetConsoleMode               = kernel32.NewProc("GetConsoleMode")
-	procGetFileInformationByHandleEx = kernel32.NewProc("GetFileInformationByHandleEx")
-	procGetFileType                  = kernel32.NewProc("GetFileType")
-	procNtQueryObject                = ntdll.NewProc("NtQueryObject")
-)
-
-func init() {
-	// Check if GetFileInformationByHandleEx is available.
-	if procGetFileInformationByHandleEx.Find() != nil {
-		procGetFileInformationByHandleEx = nil
-	}
-}
-
-// IsTerminal return true if the file descriptor is terminal.
-func IsTerminal(fd uintptr) bool {
-	var st uint32
-	r, _, e := syscall.Syscall(procGetConsoleMode.Addr(), 2, fd, uintptr(unsafe.Pointer(&st)), 0)
-	return r != 0 && e == 0
-}
-
-// Check pipe name is used for cygwin/msys2 pty.
-// Cygwin/MSYS2 PTY has a name like:
-//   \{cygwin,msys}-XXXXXXXXXXXXXXXX-ptyN-{from,to}-master
-func isCygwinPipeName(name string) bool {
-	token := strings.Split(name, "-")
-	if len(token) < 5 {
-		return false
-	}
-
-	if token[0] != `\msys` &&
-		token[0] != `\cygwin` &&
-		token[0] != `\Device\NamedPipe\msys` &&
-		token[0] != `\Device\NamedPipe\cygwin` {
-		return false
-	}
-
-	if token[1] == "" {
-		return false
-	}
-
-	if !strings.HasPrefix(token[2], "pty") {
-		return false
-	}
-
-	if token[3] != `from` && token[3] != `to` {
-		return false
-	}
-
-	if token[4] != "master" {
-		return false
-	}
-
-	return true
-}
-
-// getFileNameByHandle use the undocomented ntdll NtQueryObject to get file full name from file handler
-// since GetFileInformationByHandleEx is not available under windows Vista and still some old fashion
-// guys are using Windows XP, this is a workaround for those guys, it will also work on system from
-// Windows vista to 10
-// see https://stackoverflow.com/a/18792477 for details
-func getFileNameByHandle(fd uintptr) (string, error) {
-	if procNtQueryObject == nil {
-		return "", errors.New("ntdll.dll: NtQueryObject not supported")
-	}
-
-	var buf [4 + syscall.MAX_PATH]uint16
-	var result int
-	r, _, e := syscall.Syscall6(procNtQueryObject.Addr(), 5,
-		fd, objectNameInfo, uintptr(unsafe.Pointer(&buf)), uintptr(2*len(buf)), uintptr(unsafe.Pointer(&result)), 0)
-	if r != 0 {
-		return "", e
-	}
-	return string(utf16.Decode(buf[4 : 4+buf[0]/2])), nil
-}
-
-// IsCygwinTerminal() return true if the file descriptor is a cygwin or msys2
-// terminal.
-func IsCygwinTerminal(fd uintptr) bool {
-	if procGetFileInformationByHandleEx == nil {
-		name, err := getFileNameByHandle(fd)
-		if err != nil {
-			return false
-		}
-		return isCygwinPipeName(name)
-	}
-
-	// Cygwin/msys's pty is a pipe.
-	ft, _, e := syscall.Syscall(procGetFileType.Addr(), 1, fd, 0, 0)
-	if ft != fileTypePipe || e != 0 {
-		return false
-	}
-
-	var buf [2 + syscall.MAX_PATH]uint16
-	r, _, e := syscall.Syscall6(procGetFileInformationByHandleEx.Addr(),
-		4, fd, fileNameInfo, uintptr(unsafe.Pointer(&buf)),
-		uintptr(len(buf)*2), 0, 0)
-	if r == 0 || e != 0 {
-		return false
-	}
-
-	l := *(*uint32)(unsafe.Pointer(&buf))
-	return isCygwinPipeName(string(utf16.Decode(buf[2 : 2+l/2])))
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/mattn/go-runewidth/LICENSE","mode":420,"size":1085,"sha256":"88a2379b3ca34bf5c57127aff9dcb802bbb60ece0805cdbda65b3bd115f971d9","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1085}
-The MIT License (MIT)
-
-Copyright (c) 2016 Yasuhiro Matsumoto
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/mattn/go-runewidth/README.md","mode":420,"size":833,"sha256":"5dca19df34ebc3bc5563957e546ab3e60575042712d41eeffeed3f2e5473f823","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":833}
-go-runewidth
-============
-
-[![Build Status](https://github.com/mattn/go-runewidth/workflows/test/badge.svg?branch=master)](https://github.com/mattn/go-runewidth/actions?query=workflow%3Atest)
-[![Codecov](https://codecov.io/gh/mattn/go-runewidth/branch/master/graph/badge.svg)](https://codecov.io/gh/mattn/go-runewidth)
-[![GoDoc](https://godoc.org/github.com/mattn/go-runewidth?status.svg)](http://godoc.org/github.com/mattn/go-runewidth)
-[![Go Report Card](https://goreportcard.com/badge/github.com/mattn/go-runewidth)](https://goreportcard.com/report/github.com/mattn/go-runewidth)
-
-Provides functions to get fixed width of the character or string.
-
-Usage
------
-
-```go
-runewidth.StringWidth("つのだ☆HIRO") == 12
-```
-
-
-Author
-------
-
-Yasuhiro Matsumoto
-
-License
--------
-
-under the MIT License: http://mattn.mit-license.org/2013
-
 @@END

@@ -1,3 +1,2340 @@
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/net/internal/httpsfv/httpsfv.go","mode":420,"size":18056,"sha256":"bb64129bf25faa9065a029ec0f0b7ffd61abbb49e561100ff66614ab5705001a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":18056}
+// Copyright 2025 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+// Package httpsfv provides functionality for dealing with HTTP Structured
+// Field Values.
+package httpsfv
+
+import (
+	"slices"
+	"strconv"
+	"strings"
+	"time"
+	"unicode/utf8"
+)
+
+func isLCAlpha(b byte) bool {
+	return (b >= 'a' && b <= 'z')
+}
+
+func isAlpha(b byte) bool {
+	return isLCAlpha(b) || (b >= 'A' && b <= 'Z')
+}
+
+func isDigit(b byte) bool {
+	return b >= '0' && b <= '9'
+}
+
+func isVChar(b byte) bool {
+	return b >= 0x21 && b <= 0x7e
+}
+
+func isSP(b byte) bool {
+	return b == 0x20
+}
+
+func isTChar(b byte) bool {
+	if isAlpha(b) || isDigit(b) {
+		return true
+	}
+	return slices.Contains([]byte{'!', '#', '$', '%', '&', '\'', '*', '+', '-', '.', '^', '_', '`', '|', '~'}, b)
+}
+
+func countLeftWhitespace(s string) int {
+	i := 0
+	for _, ch := range []byte(s) {
+		if ch != ' ' && ch != '\t' {
+			break
+		}
+		i++
+	}
+	return i
+}
+
+// https://www.rfc-editor.org/rfc/rfc4648#section-8.
+func decOctetHex(ch1, ch2 byte) (ch byte, ok bool) {
+	decBase16 := func(in byte) (out byte, ok bool) {
+		if !isDigit(in) && !(in >= 'a' && in <= 'f') {
+			return 0, false
+		}
+		if isDigit(in) {
+			return in - '0', true
+		}
+		return in - 'a' + 10, true
+	}
+
+	if ch1, ok = decBase16(ch1); !ok {
+		return 0, ok
+	}
+	if ch2, ok = decBase16(ch2); !ok {
+		return 0, ok
+	}
+	return ch1<<4 | ch2, true
+}
+
+// ParseList parses a list from a given HTTP Structured Field Values.
+//
+// Given an HTTP SFV string that represents a list, it will call the given
+// function using each of the members and parameters contained in the list.
+// This allows the caller to extract information out of the list.
+//
+// This function will return once it encounters the end of the string, or
+// something that is not a list. If it cannot consume the entire given
+// string, the ok value returned will be false.
+//
+// https://www.rfc-editor.org/rfc/rfc9651.html#name-parsing-a-list.
+func ParseList(s string, f func(member, param string)) (ok bool) {
+	for len(s) != 0 {
+		var member, param string
+		if len(s) != 0 && s[0] == '(' {
+			if member, s, ok = consumeBareInnerList(s, nil); !ok {
+				return ok
+			}
+		} else {
+			if member, s, ok = consumeBareItem(s); !ok {
+				return ok
+			}
+		}
+		if param, s, ok = consumeParameter(s, nil); !ok {
+			return ok
+		}
+		if f != nil {
+			f(member, param)
+		}
+
+		s = s[countLeftWhitespace(s):]
+		if len(s) == 0 {
+			break
+		}
+		if s[0] != ',' {
+			return false
+		}
+		s = s[1:]
+		s = s[countLeftWhitespace(s):]
+		if len(s) == 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// consumeBareInnerList consumes an inner list
+// (https://www.rfc-editor.org/rfc/rfc9651.html#name-parsing-an-inner-list),
+// except for the inner list's top-most parameter.
+// For example, given `(a;b c;d);e`, it will consume only `(a;b c;d)`.
+func consumeBareInnerList(s string, f func(bareItem, param string)) (consumed, rest string, ok bool) {
+	if len(s) == 0 || s[0] != '(' {
+		return "", s, false
+	}
+	rest = s[1:]
+	for len(rest) != 0 {
+		var bareItem, param string
+		rest = rest[countLeftWhitespace(rest):]
+		if len(rest) != 0 && rest[0] == ')' {
+			rest = rest[1:]
+			break
+		}
+		if bareItem, rest, ok = consumeBareItem(rest); !ok {
+			return "", s, ok
+		}
+		if param, rest, ok = consumeParameter(rest, nil); !ok {
+			return "", s, ok
+		}
+		if len(rest) == 0 || (rest[0] != ')' && !isSP(rest[0])) {
+			return "", s, false
+		}
+		if f != nil {
+			f(bareItem, param)
+		}
+	}
+	return s[:len(s)-len(rest)], rest, true
+}
+
+// ParseBareInnerList parses a bare inner list from a given HTTP Structured
+// Field Values.
+//
+// We define a bare inner list as an inner list
+// (https://www.rfc-editor.org/rfc/rfc9651.html#name-parsing-an-inner-list),
+// without the top-most parameter of the inner list. For example, given the
+// inner list `(a;b c;d);e`, the bare inner list would be `(a;b c;d)`.
+//
+// Given an HTTP SFV string that represents a bare inner list, it will call the
+// given function using each of the bare item and parameter within the bare
+// inner list. This allows the caller to extract information out of the bare
+// inner list.
+//
+// This function will return once it encounters the end of the bare inner list,
+// or something that is not a bare inner list. If it cannot consume the entire
+// given string, the ok value returned will be false.
+func ParseBareInnerList(s string, f func(bareItem, param string)) (ok bool) {
+	_, rest, ok := consumeBareInnerList(s, f)
+	return rest == "" && ok
+}
+
+// https://www.rfc-editor.org/rfc/rfc9651.html#name-parsing-an-item.
+func consumeItem(s string, f func(bareItem, param string)) (consumed, rest string, ok bool) {
+	var bareItem, param string
+	if bareItem, rest, ok = consumeBareItem(s); !ok {
+		return "", s, ok
+	}
+	if param, rest, ok = consumeParameter(rest, nil); !ok {
+		return "", s, ok
+	}
+	if f != nil {
+		f(bareItem, param)
+	}
+	return s[:len(s)-len(rest)], rest, true
+}
+
+// ParseItem parses an item from a given HTTP Structured Field Values.
+//
+// Given an HTTP SFV string that represents an item, it will call the given
+// function once, with the bare item and the parameter of the item. This allows
+// the caller to extract information out of the item.
+//
+// This function will return once it encounters the end of the string, or
+// something that is not an item. If it cannot consume the entire given
+// string, the ok value returned will be false.
+//
+// https://www.rfc-editor.org/rfc/rfc9651.html#name-parsing-an-item.
+func ParseItem(s string, f func(bareItem, param string)) (ok bool) {
+	_, rest, ok := consumeItem(s, f)
+	return rest == "" && ok
+}
+
+// ParseDictionary parses a dictionary from a given HTTP Structured Field
+// Values.
+//
+// Given an HTTP SFV string that represents a dictionary, it will call the
+// given function using each of the keys, values, and parameters contained in
+// the dictionary. This allows the caller to extract information out of the
+// dictionary.
+//
+// This function will return once it encounters the end of the string, or
+// something that is not a dictionary. If it cannot consume the entire given
+// string, the ok value returned will be false.
+//
+// https://www.rfc-editor.org/rfc/rfc9651.html#name-parsing-a-dictionary.
+func ParseDictionary(s string, f func(key, val, param string)) (ok bool) {
+	for len(s) != 0 {
+		var key, val, param string
+		val = "?1" // Default value for empty val is boolean true.
+		if key, s, ok = consumeKey(s); !ok {
+			return ok
+		}
+		if len(s) != 0 && s[0] == '=' {
+			s = s[1:]
+			if len(s) != 0 && s[0] == '(' {
+				if val, s, ok = consumeBareInnerList(s, nil); !ok {
+					return ok
+				}
+			} else {
+				if val, s, ok = consumeBareItem(s); !ok {
+					return ok
+				}
+			}
+		}
+		if param, s, ok = consumeParameter(s, nil); !ok {
+			return ok
+		}
+		if f != nil {
+			f(key, val, param)
+		}
+		s = s[countLeftWhitespace(s):]
+		if len(s) == 0 {
+			break
+		}
+		if s[0] == ',' {
+			s = s[1:]
+		}
+		s = s[countLeftWhitespace(s):]
+		if len(s) == 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// https://www.rfc-editor.org/rfc/rfc9651.html#parse-param.
+func consumeParameter(s string, f func(key, val string)) (consumed, rest string, ok bool) {
+	rest = s
+	for len(rest) != 0 {
+		var key, val string
+		val = "?1" // Default value for empty val is boolean true.
+		if rest[0] != ';' {
+			break
+		}
+		rest = rest[1:]
+		rest = rest[countLeftWhitespace(rest):]
+		key, rest, ok = consumeKey(rest)
+		if !ok {
+			return "", s, ok
+		}
+		if len(rest) != 0 && rest[0] == '=' {
+			rest = rest[1:]
+			val, rest, ok = consumeBareItem(rest)
+			if !ok {
+				return "", s, ok
+			}
+		}
+		if f != nil {
+			f(key, val)
+		}
+	}
+	return s[:len(s)-len(rest)], rest, true
+}
+
+// ParseParameter parses a parameter from a given HTTP Structured Field Values.
+//
+// Given an HTTP SFV string that represents a parameter, it will call the given
+// function using each of the keys and values contained in the parameter. This
+// allows the caller to extract information out of the parameter.
+//
+// This function will return once it encounters the end of the string, or
+// something that is not a parameter. If it cannot consume the entire given
+// string, the ok value returned will be false.
+//
+// https://www.rfc-editor.org/rfc/rfc9651.html#parse-param.
+func ParseParameter(s string, f func(key, val string)) (ok bool) {
+	_, rest, ok := consumeParameter(s, f)
+	return rest == "" && ok
+}
+
+// https://www.rfc-editor.org/rfc/rfc9651.html#name-parsing-a-key.
+func consumeKey(s string) (consumed, rest string, ok bool) {
+	if len(s) == 0 || (!isLCAlpha(s[0]) && s[0] != '*') {
+		return "", s, false
+	}
+	i := 0
+	for _, ch := range []byte(s) {
+		if !isLCAlpha(ch) && !isDigit(ch) && !slices.Contains([]byte("_-.*"), ch) {
+			break
+		}
+		i++
+	}
+	return s[:i], s[i:], true
+}
+
+// https://www.rfc-editor.org/rfc/rfc9651.html#name-parsing-an-integer-or-decim.
+func consumeIntegerOrDecimal(s string) (consumed, rest string, ok bool) {
+	var i, signOffset, periodIndex int
+	var isDecimal bool
+	if i < len(s) && s[i] == '-' {
+		i++
+		signOffset++
+	}
+	if i >= len(s) {
+		return "", s, false
+	}
+	if !isDigit(s[i]) {
+		return "", s, false
+	}
+	for i < len(s) {
+		ch := s[i]
+		if isDigit(ch) {
+			i++
+			continue
+		}
+		if !isDecimal && ch == '.' {
+			if i-signOffset > 12 {
+				return "", s, false
+			}
+			periodIndex = i
+			isDecimal = true
+			i++
+			continue
+		}
+		break
+	}
+	if !isDecimal && i-signOffset > 15 {
+		return "", s, false
+	}
+	if isDecimal {
+		if i-signOffset > 16 {
+			return "", s, false
+		}
+		if s[i-1] == '.' {
+			return "", s, false
+		}
+		if i-periodIndex-1 > 3 {
+			return "", s, false
+		}
+	}
+	return s[:i], s[i:], true
+}
+
+// ParseInteger parses an integer from a given HTTP Structured Field Values.
+//
+// The entire HTTP SFV string must consist of a valid integer. It returns the
+// parsed integer and an ok boolean value, indicating success or not.
+//
+// https://www.rfc-editor.org/rfc/rfc9651.html#name-parsing-an-integer-or-decim.
+func ParseInteger(s string) (parsed int64, ok bool) {
+	if _, rest, ok := consumeIntegerOrDecimal(s); !ok || rest != "" {
+		return 0, false
+	}
+	if n, err := strconv.ParseInt(s, 10, 64); err == nil {
+		return n, true
+	}
+	return 0, false
+}
+
+// ParseDecimal parses a decimal from a given HTTP Structured Field Values.
+//
+// The entire HTTP SFV string must consist of a valid decimal. It returns the
+// parsed decimal and an ok boolean value, indicating success or not.
+//
+// https://www.rfc-editor.org/rfc/rfc9651.html#name-parsing-an-integer-or-decim.
+func ParseDecimal(s string) (parsed float64, ok bool) {
+	if _, rest, ok := consumeIntegerOrDecimal(s); !ok || rest != "" {
+		return 0, false
+	}
+	if !strings.Contains(s, ".") {
+		return 0, false
+	}
+	if n, err := strconv.ParseFloat(s, 64); err == nil {
+		return n, true
+	}
+	return 0, false
+}
+
+// https://www.rfc-editor.org/rfc/rfc9651.html#name-parsing-a-string.
+func consumeString(s string) (consumed, rest string, ok bool) {
+	if len(s) == 0 || s[0] != '"' {
+		return "", s, false
+	}
+	for i := 1; i < len(s); i++ {
+		switch ch := s[i]; ch {
+		case '\\':
+			if i+1 >= len(s) {
+				return "", s, false
+			}
+			i++
+			if ch = s[i]; ch != '"' && ch != '\\' {
+				return "", s, false
+			}
+		case '"':
+			return s[:i+1], s[i+1:], true
+		default:
+			if !isVChar(ch) && !isSP(ch) {
+				return "", s, false
+			}
+		}
+	}
+	return "", s, false
+}
+
+// ParseString parses a Go string from a given HTTP Structured Field Values.
+//
+// The entire HTTP SFV string must consist of a valid string. It returns the
+// parsed string and an ok boolean value, indicating success or not.
+//
+// https://www.rfc-editor.org/rfc/rfc9651.html#name-parsing-a-string.
+func ParseString(s string) (parsed string, ok bool) {
+	if _, rest, ok := consumeString(s); !ok || rest != "" {
+		return "", false
+	}
+	return s[1 : len(s)-1], true
+}
+
+// https://www.rfc-editor.org/rfc/rfc9651.html#name-parsing-a-token
+func consumeToken(s string) (consumed, rest string, ok bool) {
+	if len(s) == 0 || (!isAlpha(s[0]) && s[0] != '*') {
+		return "", s, false
+	}
+	i := 0
+	for _, ch := range []byte(s) {
+		if !isTChar(ch) && !slices.Contains([]byte(":/"), ch) {
+			break
+		}
+		i++
+	}
+	return s[:i], s[i:], true
+}
+
+// ParseToken parses a token from a given HTTP Structured Field Values.
+//
+// The entire HTTP SFV string must consist of a valid token. It returns the
+// parsed token and an ok boolean value, indicating success or not.
+//
+// https://www.rfc-editor.org/rfc/rfc9651.html#name-parsing-a-token
+func ParseToken(s string) (parsed string, ok bool) {
+	if _, rest, ok := consumeToken(s); !ok || rest != "" {
+		return "", false
+	}
+	return s, true
+}
+
+// https://www.rfc-editor.org/rfc/rfc9651.html#name-parsing-a-byte-sequence.
+func consumeByteSequence(s string) (consumed, rest string, ok bool) {
+	if len(s) == 0 || s[0] != ':' {
+		return "", s, false
+	}
+	for i := 1; i < len(s); i++ {
+		if ch := s[i]; ch == ':' {
+			return s[:i+1], s[i+1:], true
+		}
+		if ch := s[i]; !isAlpha(ch) && !isDigit(ch) && !slices.Contains([]byte("+/="), ch) {
+			return "", s, false
+		}
+	}
+	return "", s, false
+}
+
+// ParseByteSequence parses a byte sequence from a given HTTP Structured Field
+// Values.
+//
+// The entire HTTP SFV string must consist of a valid byte sequence. It returns
+// the parsed byte sequence and an ok boolean value, indicating success or not.
+//
+// https://www.rfc-editor.org/rfc/rfc9651.html#name-parsing-a-byte-sequence.
+func ParseByteSequence(s string) (parsed []byte, ok bool) {
+	if _, rest, ok := consumeByteSequence(s); !ok || rest != "" {
+		return nil, false
+	}
+	return []byte(s[1 : len(s)-1]), true
+}
+
+// https://www.rfc-editor.org/rfc/rfc9651.html#name-parsing-a-boolean.
+func consumeBoolean(s string) (consumed, rest string, ok bool) {
+	if len(s) >= 2 && (s[:2] == "?0" || s[:2] == "?1") {
+		return s[:2], s[2:], true
+	}
+	return "", s, false
+}
+
+// ParseBoolean parses a boolean from a given HTTP Structured Field Values.
+//
+// The entire HTTP SFV string must consist of a valid boolean. It returns the
+// parsed boolean and an ok boolean value, indicating success or not.
+//
+// https://www.rfc-editor.org/rfc/rfc9651.html#name-parsing-a-boolean.
+func ParseBoolean(s string) (parsed bool, ok bool) {
+	if _, rest, ok := consumeBoolean(s); !ok || rest != "" {
+		return false, false
+	}
+	return s == "?1", true
+}
+
+// https://www.rfc-editor.org/rfc/rfc9651.html#name-parsing-a-date.
+func consumeDate(s string) (consumed, rest string, ok bool) {
+	if len(s) == 0 || s[0] != '@' {
+		return "", s, false
+	}
+	if _, rest, ok = consumeIntegerOrDecimal(s[1:]); !ok {
+		return "", s, ok
+	}
+	consumed = s[:len(s)-len(rest)]
+	if slices.Contains([]byte(consumed), '.') {
+		return "", s, false
+	}
+	return consumed, rest, ok
+}
+
+// ParseDate parses a date from a given HTTP Structured Field Values.
+//
+// The entire HTTP SFV string must consist of a valid date. It returns the
+// parsed date and an ok boolean value, indicating success or not.
+//
+// https://www.rfc-editor.org/rfc/rfc9651.html#name-parsing-a-date.
+func ParseDate(s string) (parsed time.Time, ok bool) {
+	if _, rest, ok := consumeDate(s); !ok || rest != "" {
+		return time.Time{}, false
+	}
+	if n, ok := ParseInteger(s[1:]); !ok {
+		return time.Time{}, false
+	} else {
+		return time.Unix(n, 0), true
+	}
+}
+
+// https://www.rfc-editor.org/rfc/rfc9651.html#name-parsing-a-display-string.
+func consumeDisplayString(s string) (consumed, rest string, ok bool) {
+	// To prevent excessive allocation, especially when input is large, we
+	// maintain a buffer of 4 bytes to keep track of the last rune we
+	// encounter. This way, we can validate that the display string conforms to
+	// UTF-8 without actually building the whole string.
+	var lastRune [4]byte
+	var runeLen int
+	isPartOfValidRune := func(ch byte) bool {
+		lastRune[runeLen] = ch
+		runeLen++
+		if utf8.FullRune(lastRune[:runeLen]) {
+			r, s := utf8.DecodeRune(lastRune[:runeLen])
+			if r == utf8.RuneError {
+				return false
+			}
+			copy(lastRune[:], lastRune[s:runeLen])
+			runeLen -= s
+			return true
+		}
+		return runeLen <= 4
+	}
+
+	if len(s) <= 1 || s[:2] != `%"` {
+		return "", s, false
+	}
+	i := 2
+	for i < len(s) {
+		ch := s[i]
+		if !isVChar(ch) && !isSP(ch) {
+			return "", s, false
+		}
+		switch ch {
+		case '"':
+			if runeLen > 0 {
+				return "", s, false
+			}
+			return s[:i+1], s[i+1:], true
+		case '%':
+			if i+2 >= len(s) {
+				return "", s, false
+			}
+			if ch, ok = decOctetHex(s[i+1], s[i+2]); !ok {
+				return "", s, ok
+			}
+			if ok = isPartOfValidRune(ch); !ok {
+				return "", s, ok
+			}
+			i += 3
+		default:
+			if ok = isPartOfValidRune(ch); !ok {
+				return "", s, ok
+			}
+			i++
+		}
+	}
+	return "", s, false
+}
+
+// ParseDisplayString parses a display string from a given HTTP Structured
+// Field Values.
+//
+// The entire HTTP SFV string must consist of a valid display string. It
+// returns the parsed display string and an ok boolean value, indicating
+// success or not.
+//
+// https://www.rfc-editor.org/rfc/rfc9651.html#name-parsing-a-display-string.
+func ParseDisplayString(s string) (parsed string, ok bool) {
+	if _, rest, ok := consumeDisplayString(s); !ok || rest != "" {
+		return "", false
+	}
+	// consumeDisplayString() already validates that we have a valid display
+	// string. Therefore, we can just construct the display string, without
+	// validating it again.
+	s = s[2 : len(s)-1]
+	var b strings.Builder
+	for i := 0; i < len(s); {
+		if s[i] == '%' {
+			decoded, _ := decOctetHex(s[i+1], s[i+2])
+			b.WriteByte(decoded)
+			i += 3
+			continue
+		}
+		b.WriteByte(s[i])
+		i++
+	}
+	return b.String(), true
+}
+
+// https://www.rfc-editor.org/rfc/rfc9651.html#parse-bare-item.
+func consumeBareItem(s string) (consumed, rest string, ok bool) {
+	if len(s) == 0 {
+		return "", s, false
+	}
+	ch := s[0]
+	switch {
+	case ch == '-' || isDigit(ch):
+		return consumeIntegerOrDecimal(s)
+	case ch == '"':
+		return consumeString(s)
+	case ch == '*' || isAlpha(ch):
+		return consumeToken(s)
+	case ch == ':':
+		return consumeByteSequence(s)
+	case ch == '?':
+		return consumeBoolean(s)
+	case ch == '@':
+		return consumeDate(s)
+	case ch == '%':
+		return consumeDisplayString(s)
+	default:
+		return "", s, false
+	}
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/net/internal/socks/client.go","mode":420,"size":3830,"sha256":"5fa528d71ce4baad24458b91f4052a90ab17d4dc7f788b01d2abd3309adc6575","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3830}
+// Copyright 2018 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package socks
+
+import (
+	"context"
+	"errors"
+	"io"
+	"net"
+	"strconv"
+	"time"
+)
+
+var (
+	noDeadline   = time.Time{}
+	aLongTimeAgo = time.Unix(1, 0)
+)
+
+func (d *Dialer) connect(ctx context.Context, c net.Conn, address string) (_ net.Addr, ctxErr error) {
+	host, port, err := splitHostPort(address)
+	if err != nil {
+		return nil, err
+	}
+	if deadline, ok := ctx.Deadline(); ok && !deadline.IsZero() {
+		c.SetDeadline(deadline)
+		defer c.SetDeadline(noDeadline)
+	}
+	if ctx != context.Background() {
+		errCh := make(chan error, 1)
+		done := make(chan struct{})
+		defer func() {
+			close(done)
+			if ctxErr == nil {
+				ctxErr = <-errCh
+			}
+		}()
+		go func() {
+			select {
+			case <-ctx.Done():
+				c.SetDeadline(aLongTimeAgo)
+				errCh <- ctx.Err()
+			case <-done:
+				errCh <- nil
+			}
+		}()
+	}
+
+	b := make([]byte, 0, 6+len(host)) // the size here is just an estimate
+	b = append(b, Version5)
+	if len(d.AuthMethods) == 0 || d.Authenticate == nil {
+		b = append(b, 1, byte(AuthMethodNotRequired))
+	} else {
+		ams := d.AuthMethods
+		if len(ams) > 255 {
+			return nil, errors.New("too many authentication methods")
+		}
+		b = append(b, byte(len(ams)))
+		for _, am := range ams {
+			b = append(b, byte(am))
+		}
+	}
+	if _, ctxErr = c.Write(b); ctxErr != nil {
+		return
+	}
+
+	if _, ctxErr = io.ReadFull(c, b[:2]); ctxErr != nil {
+		return
+	}
+	if b[0] != Version5 {
+		return nil, errors.New("unexpected protocol version " + strconv.Itoa(int(b[0])))
+	}
+	am := AuthMethod(b[1])
+	if am == AuthMethodNoAcceptableMethods {
+		return nil, errors.New("no acceptable authentication methods")
+	}
+	if d.Authenticate != nil {
+		if ctxErr = d.Authenticate(ctx, c, am); ctxErr != nil {
+			return
+		}
+	}
+
+	b = b[:0]
+	b = append(b, Version5, byte(d.cmd), 0)
+	if ip := net.ParseIP(host); ip != nil {
+		if ip4 := ip.To4(); ip4 != nil {
+			b = append(b, AddrTypeIPv4)
+			b = append(b, ip4...)
+		} else if ip6 := ip.To16(); ip6 != nil {
+			b = append(b, AddrTypeIPv6)
+			b = append(b, ip6...)
+		} else {
+			return nil, errors.New("unknown address type")
+		}
+	} else {
+		if len(host) > 255 {
+			return nil, errors.New("FQDN too long")
+		}
+		b = append(b, AddrTypeFQDN)
+		b = append(b, byte(len(host)))
+		b = append(b, host...)
+	}
+	b = append(b, byte(port>>8), byte(port))
+	if _, ctxErr = c.Write(b); ctxErr != nil {
+		return
+	}
+
+	if _, ctxErr = io.ReadFull(c, b[:4]); ctxErr != nil {
+		return
+	}
+	if b[0] != Version5 {
+		return nil, errors.New("unexpected protocol version " + strconv.Itoa(int(b[0])))
+	}
+	if cmdErr := Reply(b[1]); cmdErr != StatusSucceeded {
+		return nil, errors.New("unknown error " + cmdErr.String())
+	}
+	if b[2] != 0 {
+		return nil, errors.New("non-zero reserved field")
+	}
+	l := 2
+	var a Addr
+	switch b[3] {
+	case AddrTypeIPv4:
+		l += net.IPv4len
+		a.IP = make(net.IP, net.IPv4len)
+	case AddrTypeIPv6:
+		l += net.IPv6len
+		a.IP = make(net.IP, net.IPv6len)
+	case AddrTypeFQDN:
+		if _, err := io.ReadFull(c, b[:1]); err != nil {
+			return nil, err
+		}
+		l += int(b[0])
+	default:
+		return nil, errors.New("unknown address type " + strconv.Itoa(int(b[3])))
+	}
+	if cap(b) < l {
+		b = make([]byte, l)
+	} else {
+		b = b[:l]
+	}
+	if _, ctxErr = io.ReadFull(c, b); ctxErr != nil {
+		return
+	}
+	if a.IP != nil {
+		copy(a.IP, b)
+	} else {
+		a.Name = string(b[:len(b)-2])
+	}
+	a.Port = int(b[len(b)-2])<<8 | int(b[len(b)-1])
+	return &a, nil
+}
+
+func splitHostPort(address string) (string, int, error) {
+	host, port, err := net.SplitHostPort(address)
+	if err != nil {
+		return "", 0, err
+	}
+	portnum, err := strconv.Atoi(port)
+	if err != nil {
+		return "", 0, err
+	}
+	if 1 > portnum || portnum > 0xffff {
+		return "", 0, errors.New("port number out of range " + port)
+	}
+	return host, portnum, nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/net/internal/socks/socks.go","mode":420,"size":9209,"sha256":"42dba3f177de4f767c590e3f197130b7b0ad8a063f132554c9e0518c162475d7","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":9209}
+// Copyright 2018 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+// Package socks provides a SOCKS version 5 client implementation.
+//
+// SOCKS protocol version 5 is defined in RFC 1928.
+// Username/Password authentication for SOCKS version 5 is defined in
+// RFC 1929.
+package socks
+
+import (
+	"context"
+	"errors"
+	"io"
+	"net"
+	"strconv"
+)
+
+// A Command represents a SOCKS command.
+type Command int
+
+func (cmd Command) String() string {
+	switch cmd {
+	case CmdConnect:
+		return "socks connect"
+	case cmdBind:
+		return "socks bind"
+	default:
+		return "socks " + strconv.Itoa(int(cmd))
+	}
+}
+
+// An AuthMethod represents a SOCKS authentication method.
+type AuthMethod int
+
+// A Reply represents a SOCKS command reply code.
+type Reply int
+
+func (code Reply) String() string {
+	switch code {
+	case StatusSucceeded:
+		return "succeeded"
+	case 0x01:
+		return "general SOCKS server failure"
+	case 0x02:
+		return "connection not allowed by ruleset"
+	case 0x03:
+		return "network unreachable"
+	case 0x04:
+		return "host unreachable"
+	case 0x05:
+		return "connection refused"
+	case 0x06:
+		return "TTL expired"
+	case 0x07:
+		return "command not supported"
+	case 0x08:
+		return "address type not supported"
+	default:
+		return "unknown code: " + strconv.Itoa(int(code))
+	}
+}
+
+// Wire protocol constants.
+const (
+	Version5 = 0x05
+
+	AddrTypeIPv4 = 0x01
+	AddrTypeFQDN = 0x03
+	AddrTypeIPv6 = 0x04
+
+	CmdConnect Command = 0x01 // establishes an active-open forward proxy connection
+	cmdBind    Command = 0x02 // establishes a passive-open forward proxy connection
+
+	AuthMethodNotRequired         AuthMethod = 0x00 // no authentication required
+	AuthMethodUsernamePassword    AuthMethod = 0x02 // use username/password
+	AuthMethodNoAcceptableMethods AuthMethod = 0xff // no acceptable authentication methods
+
+	StatusSucceeded Reply = 0x00
+)
+
+// An Addr represents a SOCKS-specific address.
+// Either Name or IP is used exclusively.
+type Addr struct {
+	Name string // fully-qualified domain name
+	IP   net.IP
+	Port int
+}
+
+func (a *Addr) Network() string { return "socks" }
+
+func (a *Addr) String() string {
+	if a == nil {
+		return "<nil>"
+	}
+	port := strconv.Itoa(a.Port)
+	if a.IP == nil {
+		return net.JoinHostPort(a.Name, port)
+	}
+	return net.JoinHostPort(a.IP.String(), port)
+}
+
+// A Conn represents a forward proxy connection.
+type Conn struct {
+	net.Conn
+
+	boundAddr net.Addr
+}
+
+// BoundAddr returns the address assigned by the proxy server for
+// connecting to the command target address from the proxy server.
+func (c *Conn) BoundAddr() net.Addr {
+	if c == nil {
+		return nil
+	}
+	return c.boundAddr
+}
+
+// A Dialer holds SOCKS-specific options.
+type Dialer struct {
+	cmd          Command // either CmdConnect or cmdBind
+	proxyNetwork string  // network between a proxy server and a client
+	proxyAddress string  // proxy server address
+
+	// ProxyDial specifies the optional dial function for
+	// establishing the transport connection.
+	ProxyDial func(context.Context, string, string) (net.Conn, error)
+
+	// AuthMethods specifies the list of request authentication
+	// methods.
+	// If empty, SOCKS client requests only AuthMethodNotRequired.
+	AuthMethods []AuthMethod
+
+	// Authenticate specifies the optional authentication
+	// function. It must be non-nil when AuthMethods is not empty.
+	// It must return an error when the authentication is failed.
+	Authenticate func(context.Context, io.ReadWriter, AuthMethod) error
+}
+
+// DialContext connects to the provided address on the provided
+// network.
+//
+// The returned error value may be a net.OpError. When the Op field of
+// net.OpError contains "socks", the Source field contains a proxy
+// server address and the Addr field contains a command target
+// address.
+//
+// See func Dial of the net package of standard library for a
+// description of the network and address parameters.
+func (d *Dialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	if err := d.validateTarget(network, address); err != nil {
+		proxy, dst, _ := d.pathAddrs(address)
+		return nil, &net.OpError{Op: d.cmd.String(), Net: network, Source: proxy, Addr: dst, Err: err}
+	}
+	if ctx == nil {
+		proxy, dst, _ := d.pathAddrs(address)
+		return nil, &net.OpError{Op: d.cmd.String(), Net: network, Source: proxy, Addr: dst, Err: errors.New("nil context")}
+	}
+	var err error
+	var c net.Conn
+	if d.ProxyDial != nil {
+		c, err = d.ProxyDial(ctx, d.proxyNetwork, d.proxyAddress)
+	} else {
+		var dd net.Dialer
+		c, err = dd.DialContext(ctx, d.proxyNetwork, d.proxyAddress)
+	}
+	if err != nil {
+		proxy, dst, _ := d.pathAddrs(address)
+		return nil, &net.OpError{Op: d.cmd.String(), Net: network, Source: proxy, Addr: dst, Err: err}
+	}
+	a, err := d.connect(ctx, c, address)
+	if err != nil {
+		c.Close()
+		proxy, dst, _ := d.pathAddrs(address)
+		return nil, &net.OpError{Op: d.cmd.String(), Net: network, Source: proxy, Addr: dst, Err: err}
+	}
+	return &Conn{Conn: c, boundAddr: a}, nil
+}
+
+// DialWithConn initiates a connection from SOCKS server to the target
+// network and address using the connection c that is already
+// connected to the SOCKS server.
+//
+// It returns the connection's local address assigned by the SOCKS
+// server.
+func (d *Dialer) DialWithConn(ctx context.Context, c net.Conn, network, address string) (net.Addr, error) {
+	if err := d.validateTarget(network, address); err != nil {
+		proxy, dst, _ := d.pathAddrs(address)
+		return nil, &net.OpError{Op: d.cmd.String(), Net: network, Source: proxy, Addr: dst, Err: err}
+	}
+	if ctx == nil {
+		proxy, dst, _ := d.pathAddrs(address)
+		return nil, &net.OpError{Op: d.cmd.String(), Net: network, Source: proxy, Addr: dst, Err: errors.New("nil context")}
+	}
+	a, err := d.connect(ctx, c, address)
+	if err != nil {
+		proxy, dst, _ := d.pathAddrs(address)
+		return nil, &net.OpError{Op: d.cmd.String(), Net: network, Source: proxy, Addr: dst, Err: err}
+	}
+	return a, nil
+}
+
+// Dial connects to the provided address on the provided network.
+//
+// Unlike DialContext, it returns a raw transport connection instead
+// of a forward proxy connection.
+//
+// Deprecated: Use DialContext or DialWithConn instead.
+func (d *Dialer) Dial(network, address string) (net.Conn, error) {
+	if err := d.validateTarget(network, address); err != nil {
+		proxy, dst, _ := d.pathAddrs(address)
+		return nil, &net.OpError{Op: d.cmd.String(), Net: network, Source: proxy, Addr: dst, Err: err}
+	}
+	var err error
+	var c net.Conn
+	if d.ProxyDial != nil {
+		c, err = d.ProxyDial(context.Background(), d.proxyNetwork, d.proxyAddress)
+	} else {
+		c, err = net.Dial(d.proxyNetwork, d.proxyAddress)
+	}
+	if err != nil {
+		proxy, dst, _ := d.pathAddrs(address)
+		return nil, &net.OpError{Op: d.cmd.String(), Net: network, Source: proxy, Addr: dst, Err: err}
+	}
+	if _, err := d.DialWithConn(context.Background(), c, network, address); err != nil {
+		c.Close()
+		return nil, err
+	}
+	return c, nil
+}
+
+func (d *Dialer) validateTarget(network, address string) error {
+	switch network {
+	case "tcp", "tcp6", "tcp4":
+	default:
+		return errors.New("network not implemented")
+	}
+	switch d.cmd {
+	case CmdConnect, cmdBind:
+	default:
+		return errors.New("command not implemented")
+	}
+	return nil
+}
+
+func (d *Dialer) pathAddrs(address string) (proxy, dst net.Addr, err error) {
+	for i, s := range []string{d.proxyAddress, address} {
+		host, port, err := splitHostPort(s)
+		if err != nil {
+			return nil, nil, err
+		}
+		a := &Addr{Port: port}
+		a.IP = net.ParseIP(host)
+		if a.IP == nil {
+			a.Name = host
+		}
+		if i == 0 {
+			proxy = a
+		} else {
+			dst = a
+		}
+	}
+	return
+}
+
+// NewDialer returns a new Dialer that dials through the provided
+// proxy server's network and address.
+func NewDialer(network, address string) *Dialer {
+	return &Dialer{proxyNetwork: network, proxyAddress: address, cmd: CmdConnect}
+}
+
+const (
+	authUsernamePasswordVersion = 0x01
+	authStatusSucceeded         = 0x00
+)
+
+// UsernamePassword are the credentials for the username/password
+// authentication method.
+type UsernamePassword struct {
+	Username string
+	Password string
+}
+
+// Authenticate authenticates a pair of username and password with the
+// proxy server.
+func (up *UsernamePassword) Authenticate(ctx context.Context, rw io.ReadWriter, auth AuthMethod) error {
+	switch auth {
+	case AuthMethodNotRequired:
+		return nil
+	case AuthMethodUsernamePassword:
+		if len(up.Username) == 0 || len(up.Username) > 255 || len(up.Password) > 255 {
+			return errors.New("invalid username/password")
+		}
+		b := []byte{authUsernamePasswordVersion}
+		b = append(b, byte(len(up.Username)))
+		b = append(b, up.Username...)
+		b = append(b, byte(len(up.Password)))
+		b = append(b, up.Password...)
+		// TODO(mikio): handle IO deadlines and cancellation if
+		// necessary
+		if _, err := rw.Write(b); err != nil {
+			return err
+		}
+		if _, err := io.ReadFull(rw, b[:2]); err != nil {
+			return err
+		}
+		if b[0] != authUsernamePasswordVersion {
+			return errors.New("invalid username/password version")
+		}
+		if b[1] != authStatusSucceeded {
+			return errors.New("username/password authentication failed")
+		}
+		return nil
+	}
+	return errors.New("unsupported authentication method " + strconv.Itoa(int(auth)))
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/net/proxy/dial.go","mode":420,"size":1669,"sha256":"368f80447d4f14041feb1bfa5494bfbaf99bc6892f20c3d3b3ac048809be759d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1669}
+// Copyright 2019 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package proxy
+
+import (
+	"context"
+	"net"
+)
+
+// A ContextDialer dials using a context.
+type ContextDialer interface {
+	DialContext(ctx context.Context, network, address string) (net.Conn, error)
+}
+
+// Dial works like DialContext on net.Dialer but using a dialer returned by FromEnvironment.
+//
+// The passed ctx is only used for returning the Conn, not the lifetime of the Conn.
+//
+// Custom dialers (registered via RegisterDialerType) that do not implement ContextDialer
+// can leak a goroutine for as long as it takes the underlying Dialer implementation to timeout.
+//
+// A Conn returned from a successful Dial after the context has been cancelled will be immediately closed.
+func Dial(ctx context.Context, network, address string) (net.Conn, error) {
+	d := FromEnvironment()
+	if xd, ok := d.(ContextDialer); ok {
+		return xd.DialContext(ctx, network, address)
+	}
+	return dialContext(ctx, d, network, address)
+}
+
+// WARNING: this can leak a goroutine for as long as the underlying Dialer implementation takes to timeout
+// A Conn returned from a successful Dial after the context has been cancelled will be immediately closed.
+func dialContext(ctx context.Context, d Dialer, network, address string) (net.Conn, error) {
+	var (
+		conn net.Conn
+		done = make(chan struct{}, 1)
+		err  error
+	)
+	go func() {
+		conn, err = d.Dial(network, address)
+		close(done)
+		if conn != nil && ctx.Err() != nil {
+			conn.Close()
+		}
+	}()
+	select {
+	case <-ctx.Done():
+		err = ctx.Err()
+	case <-done:
+	}
+	return conn, err
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/net/proxy/direct.go","mode":420,"size":832,"sha256":"8113dae4885fca6c6c1780bfbe4adb21657db8832873bfb4decee809a5176654","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":832}
+// Copyright 2011 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package proxy
+
+import (
+	"context"
+	"net"
+)
+
+type direct struct{}
+
+// Direct implements Dialer by making network connections directly using net.Dial or net.DialContext.
+var Direct = direct{}
+
+var (
+	_ Dialer        = Direct
+	_ ContextDialer = Direct
+)
+
+// Dial directly invokes net.Dial with the supplied parameters.
+func (direct) Dial(network, addr string) (net.Conn, error) {
+	return net.Dial(network, addr)
+}
+
+// DialContext instantiates a net.Dialer and invokes its DialContext receiver with the supplied parameters.
+func (direct) DialContext(ctx context.Context, network, addr string) (net.Conn, error) {
+	var d net.Dialer
+	return d.DialContext(ctx, network, addr)
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/net/proxy/per_host.go","mode":420,"size":4197,"sha256":"56d9b660bb6b63581dae2233cd33180d829f844908fbc97bb562d3adf6629ebb","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4197}
+// Copyright 2011 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package proxy
+
+import (
+	"context"
+	"net"
+	"net/netip"
+	"strings"
+)
+
+// A PerHost directs connections to a default Dialer unless the host name
+// requested matches one of a number of exceptions.
+type PerHost struct {
+	def, bypass Dialer
+
+	bypassNetworks []*net.IPNet
+	bypassIPs      []net.IP
+	bypassZones    []string
+	bypassHosts    []string
+}
+
+// NewPerHost returns a PerHost Dialer that directs connections to either
+// defaultDialer or bypass, depending on whether the connection matches one of
+// the configured rules.
+func NewPerHost(defaultDialer, bypass Dialer) *PerHost {
+	return &PerHost{
+		def:    defaultDialer,
+		bypass: bypass,
+	}
+}
+
+// Dial connects to the address addr on the given network through either
+// defaultDialer or bypass.
+func (p *PerHost) Dial(network, addr string) (c net.Conn, err error) {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil, err
+	}
+
+	return p.dialerForRequest(host).Dial(network, addr)
+}
+
+// DialContext connects to the address addr on the given network through either
+// defaultDialer or bypass.
+func (p *PerHost) DialContext(ctx context.Context, network, addr string) (c net.Conn, err error) {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil, err
+	}
+	d := p.dialerForRequest(host)
+	if x, ok := d.(ContextDialer); ok {
+		return x.DialContext(ctx, network, addr)
+	}
+	return dialContext(ctx, d, network, addr)
+}
+
+func (p *PerHost) dialerForRequest(host string) Dialer {
+	if nip, err := netip.ParseAddr(host); err == nil {
+		ip := net.IP(nip.AsSlice())
+		for _, net := range p.bypassNetworks {
+			if net.Contains(ip) {
+				return p.bypass
+			}
+		}
+		for _, bypassIP := range p.bypassIPs {
+			if bypassIP.Equal(ip) {
+				return p.bypass
+			}
+		}
+		return p.def
+	}
+
+	for _, zone := range p.bypassZones {
+		if strings.HasSuffix(host, zone) {
+			return p.bypass
+		}
+		if host == zone[1:] {
+			// For a zone ".example.com", we match "example.com"
+			// too.
+			return p.bypass
+		}
+	}
+	for _, bypassHost := range p.bypassHosts {
+		if bypassHost == host {
+			return p.bypass
+		}
+	}
+	return p.def
+}
+
+// AddFromString parses a string that contains comma-separated values
+// specifying hosts that should use the bypass proxy. Each value is either an
+// IP address, a CIDR range, a zone (*.example.com) or a host name
+// (localhost). A best effort is made to parse the string and errors are
+// ignored.
+func (p *PerHost) AddFromString(s string) {
+	hosts := strings.Split(s, ",")
+	for _, host := range hosts {
+		host = strings.TrimSpace(host)
+		if len(host) == 0 {
+			continue
+		}
+		if strings.Contains(host, "/") {
+			// We assume that it's a CIDR address like 127.0.0.0/8
+			if _, net, err := net.ParseCIDR(host); err == nil {
+				p.AddNetwork(net)
+			}
+			continue
+		}
+		if nip, err := netip.ParseAddr(host); err == nil {
+			p.AddIP(net.IP(nip.AsSlice()))
+			continue
+		}
+		if strings.HasPrefix(host, "*.") {
+			p.AddZone(host[1:])
+			continue
+		}
+		p.AddHost(host)
+	}
+}
+
+// AddIP specifies an IP address that will use the bypass proxy. Note that
+// this will only take effect if a literal IP address is dialed. A connection
+// to a named host will never match an IP.
+func (p *PerHost) AddIP(ip net.IP) {
+	p.bypassIPs = append(p.bypassIPs, ip)
+}
+
+// AddNetwork specifies an IP range that will use the bypass proxy. Note that
+// this will only take effect if a literal IP address is dialed. A connection
+// to a named host will never match.
+func (p *PerHost) AddNetwork(net *net.IPNet) {
+	p.bypassNetworks = append(p.bypassNetworks, net)
+}
+
+// AddZone specifies a DNS suffix that will use the bypass proxy. A zone of
+// "example.com" matches "example.com" and all of its subdomains.
+func (p *PerHost) AddZone(zone string) {
+	zone = strings.TrimSuffix(zone, ".")
+	if !strings.HasPrefix(zone, ".") {
+		zone = "." + zone
+	}
+	p.bypassZones = append(p.bypassZones, zone)
+}
+
+// AddHost specifies a host name that will use the bypass proxy.
+func (p *PerHost) AddHost(host string) {
+	host = strings.TrimSuffix(host, ".")
+	p.bypassHosts = append(p.bypassHosts, host)
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/net/proxy/proxy.go","mode":420,"size":3680,"sha256":"4d99c5fbc645f4cbcd70e414e66499f9287c82539d4202fc3177675a0ad9a5e5","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3680}
+// Copyright 2011 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+// Package proxy provides support for a variety of protocols to proxy network
+// data.
+package proxy // import "golang.org/x/net/proxy"
+
+import (
+	"errors"
+	"net"
+	"net/url"
+	"os"
+	"sync"
+)
+
+// A Dialer is a means to establish a connection.
+// Custom dialers should also implement ContextDialer.
+type Dialer interface {
+	// Dial connects to the given address via the proxy.
+	Dial(network, addr string) (c net.Conn, err error)
+}
+
+// Auth contains authentication parameters that specific Dialers may require.
+type Auth struct {
+	User, Password string
+}
+
+// FromEnvironment returns the dialer specified by the proxy-related
+// variables in the environment and makes underlying connections
+// directly.
+func FromEnvironment() Dialer {
+	return FromEnvironmentUsing(Direct)
+}
+
+// FromEnvironmentUsing returns the dialer specify by the proxy-related
+// variables in the environment and makes underlying connections
+// using the provided forwarding Dialer (for instance, a *net.Dialer
+// with desired configuration).
+func FromEnvironmentUsing(forward Dialer) Dialer {
+	allProxy := allProxyEnv.Get()
+	if len(allProxy) == 0 {
+		return forward
+	}
+
+	proxyURL, err := url.Parse(allProxy)
+	if err != nil {
+		return forward
+	}
+	proxy, err := FromURL(proxyURL, forward)
+	if err != nil {
+		return forward
+	}
+
+	noProxy := noProxyEnv.Get()
+	if len(noProxy) == 0 {
+		return proxy
+	}
+
+	perHost := NewPerHost(proxy, forward)
+	perHost.AddFromString(noProxy)
+	return perHost
+}
+
+// proxySchemes is a map from URL schemes to a function that creates a Dialer
+// from a URL with such a scheme.
+var proxySchemes map[string]func(*url.URL, Dialer) (Dialer, error)
+
+// RegisterDialerType takes a URL scheme and a function to generate Dialers from
+// a URL with that scheme and a forwarding Dialer. Registered schemes are used
+// by FromURL.
+func RegisterDialerType(scheme string, f func(*url.URL, Dialer) (Dialer, error)) {
+	if proxySchemes == nil {
+		proxySchemes = make(map[string]func(*url.URL, Dialer) (Dialer, error))
+	}
+	proxySchemes[scheme] = f
+}
+
+// FromURL returns a Dialer given a URL specification and an underlying
+// Dialer for it to make network requests.
+func FromURL(u *url.URL, forward Dialer) (Dialer, error) {
+	var auth *Auth
+	if u.User != nil {
+		auth = new(Auth)
+		auth.User = u.User.Username()
+		if p, ok := u.User.Password(); ok {
+			auth.Password = p
+		}
+	}
+
+	switch u.Scheme {
+	case "socks5", "socks5h":
+		addr := u.Hostname()
+		port := u.Port()
+		if port == "" {
+			port = "1080"
+		}
+		return SOCKS5("tcp", net.JoinHostPort(addr, port), auth, forward)
+	}
+
+	// If the scheme doesn't match any of the built-in schemes, see if it
+	// was registered by another package.
+	if proxySchemes != nil {
+		if f, ok := proxySchemes[u.Scheme]; ok {
+			return f(u, forward)
+		}
+	}
+
+	return nil, errors.New("proxy: unknown scheme: " + u.Scheme)
+}
+
+var (
+	allProxyEnv = &envOnce{
+		names: []string{"ALL_PROXY", "all_proxy"},
+	}
+	noProxyEnv = &envOnce{
+		names: []string{"NO_PROXY", "no_proxy"},
+	}
+)
+
+// envOnce looks up an environment variable (optionally by multiple
+// names) once. It mitigates expensive lookups on some platforms
+// (e.g. Windows).
+// (Borrowed from net/http/transport.go)
+type envOnce struct {
+	names []string
+	once  sync.Once
+	val   string
+}
+
+func (e *envOnce) Get() string {
+	e.once.Do(e.init)
+	return e.val
+}
+
+func (e *envOnce) init() {
+	for _, n := range e.names {
+		e.val = os.Getenv(n)
+		if e.val != "" {
+			return
+		}
+	}
+}
+
+// reset is used by tests
+func (e *envOnce) reset() {
+	e.once = sync.Once{}
+	e.val = ""
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/net/proxy/socks5.go","mode":420,"size":1174,"sha256":"0f7d58c78ba63a7e43470fa31a2779f56a98fcbf0a432b1b66ab17e5486b20b0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1174}
+// Copyright 2011 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package proxy
+
+import (
+	"context"
+	"net"
+
+	"golang.org/x/net/internal/socks"
+)
+
+// SOCKS5 returns a Dialer that makes SOCKSv5 connections to the given
+// address with an optional username and password.
+// See RFC 1928 and RFC 1929.
+func SOCKS5(network, address string, auth *Auth, forward Dialer) (Dialer, error) {
+	d := socks.NewDialer(network, address)
+	if forward != nil {
+		if f, ok := forward.(ContextDialer); ok {
+			d.ProxyDial = func(ctx context.Context, network string, address string) (net.Conn, error) {
+				return f.DialContext(ctx, network, address)
+			}
+		} else {
+			d.ProxyDial = func(ctx context.Context, network string, address string) (net.Conn, error) {
+				return dialContext(ctx, forward, network, address)
+			}
+		}
+	}
+	if auth != nil {
+		up := socks.UsernamePassword{
+			Username: auth.User,
+			Password: auth.Password,
+		}
+		d.AuthMethods = []socks.AuthMethod{
+			socks.AuthMethodNotRequired,
+			socks.AuthMethodUsernamePassword,
+		}
+		d.Authenticate = up.Authenticate
+	}
+	return d, nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/sync/LICENSE","mode":420,"size":1453,"sha256":"911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1453}
+Copyright 2009 The Go Authors.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+   * Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+   * Redistributions in binary form must reproduce the above
+copyright notice, this list of conditions and the following disclaimer
+in the documentation and/or other materials provided with the
+distribution.
+   * Neither the name of Google LLC nor the names of its
+contributors may be used to endorse or promote products derived from
+this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/sync/PATENTS","mode":420,"size":1303,"sha256":"96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1303}
+Additional IP Rights Grant (Patents)
+
+"This implementation" means the copyrightable works distributed by
+Google as part of the Go project.
+
+Google hereby grants to You a perpetual, worldwide, non-exclusive,
+no-charge, royalty-free, irrevocable (except as stated in this section)
+patent license to make, have made, use, offer to sell, sell, import,
+transfer and otherwise run, modify and propagate the contents of this
+implementation of Go, where such license applies only to those patent
+claims, both currently owned or controlled by Google and acquired in
+the future, licensable by Google that are necessarily infringed by this
+implementation of Go.  This grant does not include claims that would be
+infringed only as a consequence of further modification of this
+implementation.  If you or your agent or exclusive licensee institute or
+order or agree to the institution of patent litigation against any
+entity (including a cross-claim or counterclaim in a lawsuit) alleging
+that this implementation of Go or any code incorporated within this
+implementation of Go constitutes direct or contributory patent
+infringement, or inducement of patent infringement, then any patent
+rights granted to you under this License for this implementation of Go
+shall terminate as of the date such litigation is filed.
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/sync/errgroup/errgroup.go","mode":420,"size":4033,"sha256":"fd91297cc3313c8d965137301beb80f51707d5bc863510dcd8270570cc510b87","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4033}
+// Copyright 2016 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+// Package errgroup provides synchronization, error propagation, and Context
+// cancellation for groups of goroutines working on subtasks of a common task.
+//
+// [errgroup.Group] is related to [sync.WaitGroup] but adds handling of tasks
+// returning errors.
+package errgroup
+
+import (
+	"context"
+	"fmt"
+	"sync"
+)
+
+type token struct{}
+
+// A Group is a collection of goroutines working on subtasks that are part of
+// the same overall task. A Group should not be reused for different tasks.
+//
+// A zero Group is valid, has no limit on the number of active goroutines,
+// and does not cancel on error.
+type Group struct {
+	cancel func(error)
+
+	wg sync.WaitGroup
+
+	sem chan token
+
+	errOnce sync.Once
+	err     error
+}
+
+func (g *Group) done() {
+	if g.sem != nil {
+		<-g.sem
+	}
+	g.wg.Done()
+}
+
+// WithContext returns a new Group and an associated Context derived from ctx.
+//
+// The derived Context is canceled the first time a function passed to Go
+// returns a non-nil error or the first time Wait returns, whichever occurs
+// first.
+func WithContext(ctx context.Context) (*Group, context.Context) {
+	ctx, cancel := context.WithCancelCause(ctx)
+	return &Group{cancel: cancel}, ctx
+}
+
+// Wait blocks until all function calls from the Go method have returned, then
+// returns the first non-nil error (if any) from them.
+func (g *Group) Wait() error {
+	g.wg.Wait()
+	if g.cancel != nil {
+		g.cancel(g.err)
+	}
+	return g.err
+}
+
+// Go calls the given function in a new goroutine.
+//
+// The first call to Go must happen before a Wait.
+// It blocks until the new goroutine can be added without the number of
+// goroutines in the group exceeding the configured limit.
+//
+// The first goroutine in the group that returns a non-nil error will
+// cancel the associated Context, if any. The error will be returned
+// by Wait.
+func (g *Group) Go(f func() error) {
+	if g.sem != nil {
+		g.sem <- token{}
+	}
+
+	g.wg.Add(1)
+	go func() {
+		defer g.done()
+
+		// It is tempting to propagate panics from f()
+		// up to the goroutine that calls Wait, but
+		// it creates more problems than it solves:
+		// - it delays panics arbitrarily,
+		//   making bugs harder to detect;
+		// - it turns f's panic stack into a mere value,
+		//   hiding it from crash-monitoring tools;
+		// - it risks deadlocks that hide the panic entirely,
+		//   if f's panic leaves the program in a state
+		//   that prevents the Wait call from being reached.
+		// See #53757, #74275, #74304, #74306.
+
+		if err := f(); err != nil {
+			g.errOnce.Do(func() {
+				g.err = err
+				if g.cancel != nil {
+					g.cancel(g.err)
+				}
+			})
+		}
+	}()
+}
+
+// TryGo calls the given function in a new goroutine only if the number of
+// active goroutines in the group is currently below the configured limit.
+//
+// The return value reports whether the goroutine was started.
+func (g *Group) TryGo(f func() error) bool {
+	if g.sem != nil {
+		select {
+		case g.sem <- token{}:
+			// Note: this allows barging if and only if channels in general allow barging.
+		default:
+			return false
+		}
+	}
+
+	g.wg.Add(1)
+	go func() {
+		defer g.done()
+
+		if err := f(); err != nil {
+			g.errOnce.Do(func() {
+				g.err = err
+				if g.cancel != nil {
+					g.cancel(g.err)
+				}
+			})
+		}
+	}()
+	return true
+}
+
+// SetLimit limits the number of active goroutines in this group to at most n.
+// A negative value indicates no limit.
+// A limit of zero will prevent any new goroutines from being added.
+//
+// Any subsequent call to the Go method will block until it can add an active
+// goroutine without exceeding the configured limit.
+//
+// The limit must not be modified while any goroutines in the group are active.
+func (g *Group) SetLimit(n int) {
+	if n < 0 {
+		g.sem = nil
+		return
+	}
+	if active := len(g.sem); active != 0 {
+		panic(fmt.Errorf("errgroup: modify limit while %v goroutines in the group are still active", active))
+	}
+	g.sem = make(chan token, n)
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/sys/LICENSE","mode":420,"size":1453,"sha256":"911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1453}
+Copyright 2009 The Go Authors.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+   * Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+   * Redistributions in binary form must reproduce the above
+copyright notice, this list of conditions and the following disclaimer
+in the documentation and/or other materials provided with the
+distribution.
+   * Neither the name of Google LLC nor the names of its
+contributors may be used to endorse or promote products derived from
+this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/sys/PATENTS","mode":420,"size":1303,"sha256":"96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1303}
+Additional IP Rights Grant (Patents)
+
+"This implementation" means the copyrightable works distributed by
+Google as part of the Go project.
+
+Google hereby grants to You a perpetual, worldwide, non-exclusive,
+no-charge, royalty-free, irrevocable (except as stated in this section)
+patent license to make, have made, use, offer to sell, sell, import,
+transfer and otherwise run, modify and propagate the contents of this
+implementation of Go, where such license applies only to those patent
+claims, both currently owned or controlled by Google and acquired in
+the future, licensable by Google that are necessarily infringed by this
+implementation of Go.  This grant does not include claims that would be
+infringed only as a consequence of further modification of this
+implementation.  If you or your agent or exclusive licensee institute or
+order or agree to the institution of patent litigation against any
+entity (including a cross-claim or counterclaim in a lawsuit) alleging
+that this implementation of Go or any code incorporated within this
+implementation of Go constitutes direct or contributory patent
+infringement, or inducement of patent infringement, then any patent
+rights granted to you under this License for this implementation of Go
+shall terminate as of the date such litigation is filed.
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/sys/cpu/asm_aix_ppc64.s","mode":420,"size":407,"sha256":"5a50f8f52ea89a7c638bdd6798f576523ecfc1e4ec2cb657d445f1a7dc0dfab2","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":407}
+// Copyright 2018 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+//go:build gc
+
+#include "textflag.h"
+
+//
+// System calls for ppc64, AIX are implemented in runtime/syscall_aix.go
+//
+
+TEXT ·syscall6(SB),NOSPLIT,$0-88
+	JMP	syscall·syscall6(SB)
+
+TEXT ·rawSyscall6(SB),NOSPLIT,$0-88
+	JMP	syscall·rawSyscall6(SB)
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/sys/cpu/asm_darwin_arm64_gc.s","mode":420,"size":439,"sha256":"6f6f35fbf284f205f49db2410b6554bd72aa1fc8ccf35f30a619482277e31ccd","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":439}
+// Copyright 2024 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+//go:build darwin && arm64 && gc
+
+#include "textflag.h"
+
+TEXT libc_sysctlbyname_trampoline<>(SB),NOSPLIT,$0-0
+	JMP	libc_sysctlbyname(SB)
+GLOBL	·libc_sysctlbyname_trampoline_addr(SB), RODATA, $8
+DATA	·libc_sysctlbyname_trampoline_addr(SB)/8, $libc_sysctlbyname_trampoline<>(SB)
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/sys/cpu/asm_darwin_x86_gc.s","mode":420,"size":632,"sha256":"21022bf7461861b3744775075f4a4ef960c036cc469914684f87a4da9fc8b3a8","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":632}
+// Copyright 2024 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+//go:build darwin && amd64 && gc
+
+#include "textflag.h"
+
+TEXT libc_sysctl_trampoline<>(SB),NOSPLIT,$0-0
+	JMP	libc_sysctl(SB)
+GLOBL	·libc_sysctl_trampoline_addr(SB), RODATA, $8
+DATA	·libc_sysctl_trampoline_addr(SB)/8, $libc_sysctl_trampoline<>(SB)
+
+TEXT libc_sysctlbyname_trampoline<>(SB),NOSPLIT,$0-0
+	JMP	libc_sysctlbyname(SB)
+GLOBL	·libc_sysctlbyname_trampoline_addr(SB), RODATA, $8
+DATA	·libc_sysctlbyname_trampoline_addr(SB)/8, $libc_sysctlbyname_trampoline<>(SB)
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/sys/cpu/byteorder.go","mode":420,"size":1868,"sha256":"825146fd4557b1cbd8161fa28bb4be8820089848d695316edeecb7fd5a551f8a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1868}
+// Copyright 2019 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package cpu
+
+import (
+	"runtime"
+)
+
+// byteOrder is a subset of encoding/binary.ByteOrder.
+type byteOrder interface {
+	Uint32([]byte) uint32
+	Uint64([]byte) uint64
+}
+
+type littleEndian struct{}
+type bigEndian struct{}
+
+func (littleEndian) Uint32(b []byte) uint32 {
+	_ = b[3] // bounds check hint to compiler; see golang.org/issue/14808
+	return uint32(b[0]) | uint32(b[1])<<8 | uint32(b[2])<<16 | uint32(b[3])<<24
+}
+
+func (littleEndian) Uint64(b []byte) uint64 {
+	_ = b[7] // bounds check hint to compiler; see golang.org/issue/14808
+	return uint64(b[0]) | uint64(b[1])<<8 | uint64(b[2])<<16 | uint64(b[3])<<24 |
+		uint64(b[4])<<32 | uint64(b[5])<<40 | uint64(b[6])<<48 | uint64(b[7])<<56
+}
+
+func (bigEndian) Uint32(b []byte) uint32 {
+	_ = b[3] // bounds check hint to compiler; see golang.org/issue/14808
+	return uint32(b[3]) | uint32(b[2])<<8 | uint32(b[1])<<16 | uint32(b[0])<<24
+}
+
+func (bigEndian) Uint64(b []byte) uint64 {
+	_ = b[7] // bounds check hint to compiler; see golang.org/issue/14808
+	return uint64(b[7]) | uint64(b[6])<<8 | uint64(b[5])<<16 | uint64(b[4])<<24 |
+		uint64(b[3])<<32 | uint64(b[2])<<40 | uint64(b[1])<<48 | uint64(b[0])<<56
+}
+
+// hostByteOrder returns littleEndian on little-endian machines and
+// bigEndian on big-endian machines.
+func hostByteOrder() byteOrder {
+	switch runtime.GOARCH {
+	case "386", "amd64", "amd64p32",
+		"alpha",
+		"arm", "arm64",
+		"loong64",
+		"mipsle", "mips64le", "mips64p32le",
+		"nios2",
+		"ppc64le",
+		"riscv", "riscv64",
+		"sh":
+		return littleEndian{}
+	case "armbe", "arm64be",
+		"m68k",
+		"mips", "mips64", "mips64p32",
+		"ppc", "ppc64",
+		"s390", "s390x",
+		"shbe",
+		"sparc", "sparc64":
+		return bigEndian{}
+	}
+	panic("unknown architecture")
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/sys/cpu/cpu.go","mode":420,"size":15212,"sha256":"b56854737e8d803d582232f9790f7dda2d8ff69e5982f6cdbdd2a150be540922","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":15212}
+// Copyright 2018 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+// Package cpu implements processor feature detection for
+// various CPU architectures.
+package cpu
+
+import (
+	"os"
+	"strings"
+)
+
+// Initialized reports whether the CPU features were initialized.
+//
+// For some GOOS/GOARCH combinations initialization of the CPU features depends
+// on reading an operating specific file, e.g. /proc/self/auxv on linux/arm
+// Initialized will report false if reading the file fails.
+var Initialized bool
+
+// CacheLinePad is used to pad structs to avoid false sharing.
+type CacheLinePad struct{ _ [cacheLineSize]byte }
+
+// X86 contains the supported CPU features of the
+// current X86/AMD64 platform. If the current platform
+// is not X86/AMD64 then all feature flags are false.
+//
+// X86 is padded to avoid false sharing. Further the HasAVX
+// and HasAVX2 are only set if the OS supports XMM and YMM
+// registers in addition to the CPUID feature bit being set.
+var X86 struct {
+	_                   CacheLinePad
+	HasAES              bool // AES hardware implementation (AES NI)
+	HasADX              bool // Multi-precision add-carry instruction extensions
+	HasAVX              bool // Advanced vector extension
+	HasAVX2             bool // Advanced vector extension 2
+	HasAVX512           bool // Advanced vector extension 512
+	HasAVX512F          bool // Advanced vector extension 512 Foundation Instructions
+	HasAVX512CD         bool // Advanced vector extension 512 Conflict Detection Instructions
+	HasAVX512ER         bool // Advanced vector extension 512 Exponential and Reciprocal Instructions
+	HasAVX512PF         bool // Advanced vector extension 512 Prefetch Instructions
+	HasAVX512VL         bool // Advanced vector extension 512 Vector Length Extensions
+	HasAVX512BW         bool // Advanced vector extension 512 Byte and Word Instructions
+	HasAVX512DQ         bool // Advanced vector extension 512 Doubleword and Quadword Instructions
+	HasAVX512IFMA       bool // Advanced vector extension 512 Integer Fused Multiply Add
+	HasAVX512VBMI       bool // Advanced vector extension 512 Vector Byte Manipulation Instructions
+	HasAVX5124VNNIW     bool // Advanced vector extension 512 Vector Neural Network Instructions Word variable precision
+	HasAVX5124FMAPS     bool // Advanced vector extension 512 Fused Multiply Accumulation Packed Single precision
+	HasAVX512VPOPCNTDQ  bool // Advanced vector extension 512 Double and quad word population count instructions
+	HasAVX512VPCLMULQDQ bool // Advanced vector extension 512 Vector carry-less multiply operations
+	HasAVX512VNNI       bool // Advanced vector extension 512 Vector Neural Network Instructions
+	HasAVX512GFNI       bool // Advanced vector extension 512 Galois field New Instructions
+	HasAVX512VAES       bool // Advanced vector extension 512 Vector AES instructions
+	HasAVX512VBMI2      bool // Advanced vector extension 512 Vector Byte Manipulation Instructions 2
+	HasAVX512BITALG     bool // Advanced vector extension 512 Bit Algorithms
+	HasAVX512BF16       bool // Advanced vector extension 512 BFloat16 Instructions
+	HasAMXTile          bool // Advanced Matrix Extension Tile instructions
+	HasAMXInt8          bool // Advanced Matrix Extension Int8 instructions
+	HasAMXBF16          bool // Advanced Matrix Extension BFloat16 instructions
+	HasBMI1             bool // Bit manipulation instruction set 1
+	HasBMI2             bool // Bit manipulation instruction set 2
+	HasCX16             bool // Compare and exchange 16 Bytes
+	HasERMS             bool // Enhanced REP for MOVSB and STOSB
+	HasFMA              bool // Fused-multiply-add instructions
+	HasOSXSAVE          bool // OS supports XSAVE/XRESTOR for saving/restoring XMM registers.
+	HasPCLMULQDQ        bool // PCLMULQDQ instruction - most often used for AES-GCM
+	HasPOPCNT           bool // Hamming weight instruction POPCNT.
+	HasRDRAND           bool // RDRAND instruction (on-chip random number generator)
+	HasRDSEED           bool // RDSEED instruction (on-chip random number generator)
+	HasSSE2             bool // Streaming SIMD extension 2 (always available on amd64)
+	HasSSE3             bool // Streaming SIMD extension 3
+	HasSSSE3            bool // Supplemental streaming SIMD extension 3
+	HasSSE41            bool // Streaming SIMD extension 4 and 4.1
+	HasSSE42            bool // Streaming SIMD extension 4 and 4.2
+	HasAVXIFMA          bool // Advanced vector extension Integer Fused Multiply Add
+	HasAVXVNNI          bool // Advanced vector extension Vector Neural Network Instructions
+	HasAVXVNNIInt8      bool // Advanced vector extension Vector Neural Network Int8 instructions
+	_                   CacheLinePad
+}
+
+// ARM64 contains the supported CPU features of the
+// current ARMv8(aarch64) platform. If the current platform
+// is not arm64 then all feature flags are false.
+var ARM64 struct {
+	_           CacheLinePad
+	HasFP       bool // Floating-point instruction set (always available)
+	HasASIMD    bool // Advanced SIMD (always available)
+	HasEVTSTRM  bool // Event stream support
+	HasAES      bool // AES hardware implementation
+	HasPMULL    bool // Polynomial multiplication instruction set
+	HasSHA1     bool // SHA1 hardware implementation
+	HasSHA2     bool // SHA2 hardware implementation
+	HasCRC32    bool // CRC32 hardware implementation
+	HasATOMICS  bool // Atomic memory operation instruction set
+	HasFPHP     bool // Half precision floating-point instruction set
+	HasASIMDHP  bool // Advanced SIMD half precision instruction set
+	HasCPUID    bool // CPUID identification scheme registers
+	HasASIMDRDM bool // Rounding double multiply add/subtract instruction set
+	HasJSCVT    bool // Javascript conversion from floating-point to integer
+	HasFCMA     bool // Floating-point multiplication and addition of complex numbers
+	HasLRCPC    bool // Release Consistent processor consistent support
+	HasDCPOP    bool // Persistent memory support
+	HasSHA3     bool // SHA3 hardware implementation
+	HasSM3      bool // SM3 hardware implementation
+	HasSM4      bool // SM4 hardware implementation
+	HasASIMDDP  bool // Advanced SIMD double precision instruction set
+	HasSHA512   bool // SHA512 hardware implementation
+	HasSVE      bool // Scalable Vector Extensions
+	HasSVE2     bool // Scalable Vector Extensions 2
+	HasASIMDFHM bool // Advanced SIMD multiplication FP16 to FP32
+	HasDIT      bool // Data Independent Timing support
+	HasI8MM     bool // Advanced SIMD Int8 matrix multiplication instructions
+	_           CacheLinePad
+}
+
+// ARM contains the supported CPU features of the current ARM (32-bit) platform.
+// All feature flags are false if:
+//  1. the current platform is not arm, or
+//  2. the current operating system is not Linux.
+var ARM struct {
+	_           CacheLinePad
+	HasSWP      bool // SWP instruction support
+	HasHALF     bool // Half-word load and store support
+	HasTHUMB    bool // ARM Thumb instruction set
+	Has26BIT    bool // Address space limited to 26-bits
+	HasFASTMUL  bool // 32-bit operand, 64-bit result multiplication support
+	HasFPA      bool // Floating point arithmetic support
+	HasVFP      bool // Vector floating point support
+	HasEDSP     bool // DSP Extensions support
+	HasJAVA     bool // Java instruction set
+	HasIWMMXT   bool // Intel Wireless MMX technology support
+	HasCRUNCH   bool // MaverickCrunch context switching and handling
+	HasTHUMBEE  bool // Thumb EE instruction set
+	HasNEON     bool // NEON instruction set
+	HasVFPv3    bool // Vector floating point version 3 support
+	HasVFPv3D16 bool // Vector floating point version 3 D8-D15
+	HasTLS      bool // Thread local storage support
+	HasVFPv4    bool // Vector floating point version 4 support
+	HasIDIVA    bool // Integer divide instruction support in ARM mode
+	HasIDIVT    bool // Integer divide instruction support in Thumb mode
+	HasVFPD32   bool // Vector floating point version 3 D15-D31
+	HasLPAE     bool // Large Physical Address Extensions
+	HasEVTSTRM  bool // Event stream support
+	HasAES      bool // AES hardware implementation
+	HasPMULL    bool // Polynomial multiplication instruction set
+	HasSHA1     bool // SHA1 hardware implementation
+	HasSHA2     bool // SHA2 hardware implementation
+	HasCRC32    bool // CRC32 hardware implementation
+	_           CacheLinePad
+}
+
+// The booleans in Loong64 contain the correspondingly named cpu feature bit.
+// The struct is padded to avoid false sharing.
+var Loong64 struct {
+	_              CacheLinePad
+	HasLSX         bool // support 128-bit vector extension
+	HasLASX        bool // support 256-bit vector extension
+	HasCRC32       bool // support CRC instruction
+	HasLAMCAS      bool // support AMCAS[_DB].{B/H/W/D}
+	HasLAM_BH      bool // support AM{SWAP/ADD}[_DB].{B/H} instruction
+	HasLLACQ_SCREL bool // support LLACQ.{W/D}, SCREL.{W/D} instruction
+	HasSCQ         bool // support SC.Q instruction
+	HasDBAR_HINTS  bool // supports finer-grained DBAR hints
+
+	_ CacheLinePad
+}
+
+// MIPS64X contains the supported CPU features of the current mips64/mips64le
+// platforms. If the current platform is not mips64/mips64le or the current
+// operating system is not Linux then all feature flags are false.
+var MIPS64X struct {
+	_      CacheLinePad
+	HasMSA bool // MIPS SIMD architecture
+	_      CacheLinePad
+}
+
+// PPC64 contains the supported CPU features of the current ppc64/ppc64le platforms.
+// If the current platform is not ppc64/ppc64le then all feature flags are false.
+//
+// For ppc64/ppc64le, it is safe to check only for ISA level starting on ISA v3.00,
+// since there are no optional categories. There are some exceptions that also
+// require kernel support to work (DARN, SCV), so there are feature bits for
+// those as well. The struct is padded to avoid false sharing.
+var PPC64 struct {
+	_        CacheLinePad
+	HasDARN  bool // Hardware random number generator (requires kernel enablement)
+	HasSCV   bool // Syscall vectored (requires kernel enablement)
+	IsPOWER8 bool // ISA v2.07 (POWER8)
+	IsPOWER9 bool // ISA v3.00 (POWER9), implies IsPOWER8
+	_        CacheLinePad
+}
+
+// S390X contains the supported CPU features of the current IBM Z
+// (s390x) platform. If the current platform is not IBM Z then all
+// feature flags are false.
+//
+// S390X is padded to avoid false sharing. Further HasVX is only set
+// if the OS supports vector registers in addition to the STFLE
+// feature bit being set.
+var S390X struct {
+	_         CacheLinePad
+	HasZARCH  bool // z/Architecture mode is active [mandatory]
+	HasSTFLE  bool // store facility list extended
+	HasLDISP  bool // long (20-bit) displacements
+	HasEIMM   bool // 32-bit immediates
+	HasDFP    bool // decimal floating point
+	HasETF3EH bool // ETF-3 enhanced
+	HasMSA    bool // message security assist (CPACF)
+	HasAES    bool // KM-AES{128,192,256} functions
+	HasAESCBC bool // KMC-AES{128,192,256} functions
+	HasAESCTR bool // KMCTR-AES{128,192,256} functions
+	HasAESGCM bool // KMA-GCM-AES{128,192,256} functions
+	HasGHASH  bool // KIMD-GHASH function
+	HasSHA1   bool // K{I,L}MD-SHA-1 functions
+	HasSHA256 bool // K{I,L}MD-SHA-256 functions
+	HasSHA512 bool // K{I,L}MD-SHA-512 functions
+	HasSHA3   bool // K{I,L}MD-SHA3-{224,256,384,512} and K{I,L}MD-SHAKE-{128,256} functions
+	HasVX     bool // vector facility
+	HasVXE    bool // vector-enhancements facility 1
+	_         CacheLinePad
+}
+
+// RISCV64 contains the supported CPU features and performance characteristics for riscv64
+// platforms. The booleans in RISCV64, with the exception of HasFastMisaligned, indicate
+// the presence of RISC-V extensions.
+//
+// It is safe to assume that all the RV64G extensions are supported and so they are omitted from
+// this structure. As riscv64 Go programs require at least RV64G, the code that populates
+// this structure cannot run successfully if some of the RV64G extensions are missing.
+// The struct is padded to avoid false sharing.
+var RISCV64 struct {
+	_                 CacheLinePad
+	HasFastMisaligned bool // Fast misaligned accesses
+	HasC              bool // Compressed instruction-set extension
+	HasV              bool // Vector extension compatible with RVV 1.0
+	HasZba            bool // Address generation instructions extension
+	HasZbb            bool // Basic bit-manipulation extension
+	HasZbs            bool // Single-bit instructions extension
+	HasZbc            bool // Carryless multiplication extension
+	HasZvbb           bool // Vector Basic Bit-manipulation
+	HasZvbc           bool // Vector Carryless Multiplication
+	HasZvkb           bool // Vector Cryptography Bit-manipulation
+	HasZvkt           bool // Vector Data-Independent Execution Latency
+	HasZvkg           bool // Vector GCM/GMAC
+	HasZvkn           bool // NIST Algorithm Suite (AES/SHA256/SHA512)
+	HasZvknc          bool // NIST Algorithm Suite with carryless multiply
+	HasZvkng          bool // NIST Algorithm Suite with GCM
+	HasZvks           bool // ShangMi Algorithm Suite
+	HasZvksc          bool // ShangMi Algorithm Suite with carryless multiplication
+	HasZvksg          bool // ShangMi Algorithm Suite with GCM
+	_                 CacheLinePad
+}
+
+func init() {
+	archInit()
+	initOptions()
+	processOptions()
+}
+
+// options contains the cpu debug options that can be used in GODEBUG.
+// Options are arch dependent and are added by the arch specific initOptions functions.
+// Features that are mandatory for the specific GOARCH should have the Required field set
+// (e.g. SSE2 on amd64).
+var options []option
+
+// Option names should be lower case. e.g. avx instead of AVX.
+type option struct {
+	Name      string
+	Feature   *bool
+	Specified bool // whether feature value was specified in GODEBUG
+	Enable    bool // whether feature should be enabled
+	Required  bool // whether feature is mandatory and can not be disabled
+}
+
+func processOptions() {
+	env := os.Getenv("GODEBUG")
+field:
+	for env != "" {
+		field := ""
+		i := strings.IndexByte(env, ',')
+		if i < 0 {
+			field, env = env, ""
+		} else {
+			field, env = env[:i], env[i+1:]
+		}
+		if len(field) < 4 || field[:4] != "cpu." {
+			continue
+		}
+		i = strings.IndexByte(field, '=')
+		if i < 0 {
+			print("GODEBUG sys/cpu: no value specified for \"", field, "\"\n")
+			continue
+		}
+		key, value := field[4:i], field[i+1:] // e.g. "SSE2", "on"
+
+		var enable bool
+		switch value {
+		case "on":
+			enable = true
+		case "off":
+			enable = false
+		default:
+			print("GODEBUG sys/cpu: value \"", value, "\" not supported for cpu option \"", key, "\"\n")
+			continue field
+		}
+
+		if key == "all" {
+			for i := range options {
+				options[i].Specified = true
+				options[i].Enable = enable || options[i].Required
+			}
+			continue field
+		}
+
+		for i := range options {
+			if options[i].Name == key {
+				options[i].Specified = true
+				options[i].Enable = enable
+				continue field
+			}
+		}
+
+		print("GODEBUG sys/cpu: unknown cpu feature \"", key, "\"\n")
+	}
+
+	for _, o := range options {
+		if !o.Specified {
+			continue
+		}
+
+		if o.Enable && !*o.Feature {
+			print("GODEBUG sys/cpu: can not enable \"", o.Name, "\", missing CPU support\n")
+			continue
+		}
+
+		if !o.Enable && o.Required {
+			print("GODEBUG sys/cpu: can not disable \"", o.Name, "\", required CPU feature\n")
+			continue
+		}
+
+		*o.Feature = o.Enable
+	}
+}
+
+@@END
 @@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/sys/cpu/cpu_aix.go","mode":420,"size":605,"sha256":"1e9265c7703fe4b8b2bd6813e05f2fc15a83eb60e237dcafa0911b5b19a7e25f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":605}
 // Copyright 2019 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
@@ -138968,2418 +141305,5 @@ TEXT libc_unveil_trampoline<>(SB),NOSPLIT,$0-0
 	JMP	libc_unveil(SB)
 GLOBL	·libc_unveil_trampoline_addr(SB), RODATA, $4
 DATA	·libc_unveil_trampoline_addr(SB)/4, $libc_unveil_trampoline<>(SB)
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/sys/unix/zsyscall_openbsd_arm64.go","mode":420,"size":61635,"sha256":"0a528ad67bdcea83f4d412411978bf6978972c79114cc6447b63bb1a5b304049","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
-// go run mksyscall.go -openbsd -libc -tags openbsd,arm64 syscall_bsd.go syscall_openbsd.go syscall_openbsd_arm64.go
-// Code generated by the command above; see README.md. DO NOT EDIT.
-
-//go:build openbsd && arm64
-
-package unix
-
-import (
-	"syscall"
-	"unsafe"
-)
-
-var _ syscall.Errno
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func getgroups(ngid int, gid *_Gid_t) (n int, err error) {
-	r0, _, e1 := syscall_rawSyscall(libc_getgroups_trampoline_addr, uintptr(ngid), uintptr(unsafe.Pointer(gid)), 0)
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_getgroups_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_getgroups getgroups "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func setgroups(ngid int, gid *_Gid_t) (err error) {
-	_, _, e1 := syscall_rawSyscall(libc_setgroups_trampoline_addr, uintptr(ngid), uintptr(unsafe.Pointer(gid)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_setgroups_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_setgroups setgroups "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func wait4(pid int, wstatus *_C_int, options int, rusage *Rusage) (wpid int, err error) {
-	r0, _, e1 := syscall_syscall6(libc_wait4_trampoline_addr, uintptr(pid), uintptr(unsafe.Pointer(wstatus)), uintptr(options), uintptr(unsafe.Pointer(rusage)), 0, 0)
-	wpid = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_wait4_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_wait4 wait4 "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func accept(s int, rsa *RawSockaddrAny, addrlen *_Socklen) (fd int, err error) {
-	r0, _, e1 := syscall_syscall(libc_accept_trampoline_addr, uintptr(s), uintptr(unsafe.Pointer(rsa)), uintptr(unsafe.Pointer(addrlen)))
-	fd = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_accept_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_accept accept "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func bind(s int, addr unsafe.Pointer, addrlen _Socklen) (err error) {
-	_, _, e1 := syscall_syscall(libc_bind_trampoline_addr, uintptr(s), uintptr(addr), uintptr(addrlen))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_bind_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_bind bind "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func connect(s int, addr unsafe.Pointer, addrlen _Socklen) (err error) {
-	_, _, e1 := syscall_syscall(libc_connect_trampoline_addr, uintptr(s), uintptr(addr), uintptr(addrlen))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_connect_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_connect connect "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func socket(domain int, typ int, proto int) (fd int, err error) {
-	r0, _, e1 := syscall_rawSyscall(libc_socket_trampoline_addr, uintptr(domain), uintptr(typ), uintptr(proto))
-	fd = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_socket_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_socket socket "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func getsockopt(s int, level int, name int, val unsafe.Pointer, vallen *_Socklen) (err error) {
-	_, _, e1 := syscall_syscall6(libc_getsockopt_trampoline_addr, uintptr(s), uintptr(level), uintptr(name), uintptr(val), uintptr(unsafe.Pointer(vallen)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_getsockopt_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_getsockopt getsockopt "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func setsockopt(s int, level int, name int, val unsafe.Pointer, vallen uintptr) (err error) {
-	_, _, e1 := syscall_syscall6(libc_setsockopt_trampoline_addr, uintptr(s), uintptr(level), uintptr(name), uintptr(val), uintptr(vallen), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_setsockopt_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_setsockopt setsockopt "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func getpeername(fd int, rsa *RawSockaddrAny, addrlen *_Socklen) (err error) {
-	_, _, e1 := syscall_rawSyscall(libc_getpeername_trampoline_addr, uintptr(fd), uintptr(unsafe.Pointer(rsa)), uintptr(unsafe.Pointer(addrlen)))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_getpeername_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_getpeername getpeername "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func getsockname(fd int, rsa *RawSockaddrAny, addrlen *_Socklen) (err error) {
-	_, _, e1 := syscall_rawSyscall(libc_getsockname_trampoline_addr, uintptr(fd), uintptr(unsafe.Pointer(rsa)), uintptr(unsafe.Pointer(addrlen)))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_getsockname_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_getsockname getsockname "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Shutdown(s int, how int) (err error) {
-	_, _, e1 := syscall_syscall(libc_shutdown_trampoline_addr, uintptr(s), uintptr(how), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_shutdown_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_shutdown shutdown "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func socketpair(domain int, typ int, proto int, fd *[2]int32) (err error) {
-	_, _, e1 := syscall_rawSyscall6(libc_socketpair_trampoline_addr, uintptr(domain), uintptr(typ), uintptr(proto), uintptr(unsafe.Pointer(fd)), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_socketpair_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_socketpair socketpair "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func recvfrom(fd int, p []byte, flags int, from *RawSockaddrAny, fromlen *_Socklen) (n int, err error) {
-	var _p0 unsafe.Pointer
-	if len(p) > 0 {
-		_p0 = unsafe.Pointer(&p[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	r0, _, e1 := syscall_syscall6(libc_recvfrom_trampoline_addr, uintptr(fd), uintptr(_p0), uintptr(len(p)), uintptr(flags), uintptr(unsafe.Pointer(from)), uintptr(unsafe.Pointer(fromlen)))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_recvfrom_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_recvfrom recvfrom "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func sendto(s int, buf []byte, flags int, to unsafe.Pointer, addrlen _Socklen) (err error) {
-	var _p0 unsafe.Pointer
-	if len(buf) > 0 {
-		_p0 = unsafe.Pointer(&buf[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	_, _, e1 := syscall_syscall6(libc_sendto_trampoline_addr, uintptr(s), uintptr(_p0), uintptr(len(buf)), uintptr(flags), uintptr(to), uintptr(addrlen))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_sendto_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_sendto sendto "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func recvmsg(s int, msg *Msghdr, flags int) (n int, err error) {
-	r0, _, e1 := syscall_syscall(libc_recvmsg_trampoline_addr, uintptr(s), uintptr(unsafe.Pointer(msg)), uintptr(flags))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_recvmsg_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_recvmsg recvmsg "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func sendmsg(s int, msg *Msghdr, flags int) (n int, err error) {
-	r0, _, e1 := syscall_syscall(libc_sendmsg_trampoline_addr, uintptr(s), uintptr(unsafe.Pointer(msg)), uintptr(flags))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_sendmsg_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_sendmsg sendmsg "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func kevent(kq int, change unsafe.Pointer, nchange int, event unsafe.Pointer, nevent int, timeout *Timespec) (n int, err error) {
-	r0, _, e1 := syscall_syscall6(libc_kevent_trampoline_addr, uintptr(kq), uintptr(change), uintptr(nchange), uintptr(event), uintptr(nevent), uintptr(unsafe.Pointer(timeout)))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_kevent_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_kevent kevent "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func utimes(path string, timeval *[2]Timeval) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_utimes_trampoline_addr, uintptr(unsafe.Pointer(_p0)), uintptr(unsafe.Pointer(timeval)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_utimes_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_utimes utimes "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func futimes(fd int, timeval *[2]Timeval) (err error) {
-	_, _, e1 := syscall_syscall(libc_futimes_trampoline_addr, uintptr(fd), uintptr(unsafe.Pointer(timeval)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_futimes_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_futimes futimes "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func poll(fds *PollFd, nfds int, timeout int) (n int, err error) {
-	r0, _, e1 := syscall_syscall(libc_poll_trampoline_addr, uintptr(unsafe.Pointer(fds)), uintptr(nfds), uintptr(timeout))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_poll_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_poll poll "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Madvise(b []byte, behav int) (err error) {
-	var _p0 unsafe.Pointer
-	if len(b) > 0 {
-		_p0 = unsafe.Pointer(&b[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	_, _, e1 := syscall_syscall(libc_madvise_trampoline_addr, uintptr(_p0), uintptr(len(b)), uintptr(behav))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_madvise_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_madvise madvise "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mlock(b []byte) (err error) {
-	var _p0 unsafe.Pointer
-	if len(b) > 0 {
-		_p0 = unsafe.Pointer(&b[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	_, _, e1 := syscall_syscall(libc_mlock_trampoline_addr, uintptr(_p0), uintptr(len(b)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_mlock_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_mlock mlock "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mlockall(flags int) (err error) {
-	_, _, e1 := syscall_syscall(libc_mlockall_trampoline_addr, uintptr(flags), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_mlockall_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_mlockall mlockall "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mprotect(b []byte, prot int) (err error) {
-	var _p0 unsafe.Pointer
-	if len(b) > 0 {
-		_p0 = unsafe.Pointer(&b[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	_, _, e1 := syscall_syscall(libc_mprotect_trampoline_addr, uintptr(_p0), uintptr(len(b)), uintptr(prot))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_mprotect_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_mprotect mprotect "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Msync(b []byte, flags int) (err error) {
-	var _p0 unsafe.Pointer
-	if len(b) > 0 {
-		_p0 = unsafe.Pointer(&b[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	_, _, e1 := syscall_syscall(libc_msync_trampoline_addr, uintptr(_p0), uintptr(len(b)), uintptr(flags))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_msync_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_msync msync "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Munlock(b []byte) (err error) {
-	var _p0 unsafe.Pointer
-	if len(b) > 0 {
-		_p0 = unsafe.Pointer(&b[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	_, _, e1 := syscall_syscall(libc_munlock_trampoline_addr, uintptr(_p0), uintptr(len(b)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_munlock_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_munlock munlock "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Munlockall() (err error) {
-	_, _, e1 := syscall_syscall(libc_munlockall_trampoline_addr, 0, 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_munlockall_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_munlockall munlockall "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func pipe2(p *[2]_C_int, flags int) (err error) {
-	_, _, e1 := syscall_rawSyscall(libc_pipe2_trampoline_addr, uintptr(unsafe.Pointer(p)), uintptr(flags), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_pipe2_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_pipe2 pipe2 "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getdents(fd int, buf []byte) (n int, err error) {
-	var _p0 unsafe.Pointer
-	if len(buf) > 0 {
-		_p0 = unsafe.Pointer(&buf[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	r0, _, e1 := syscall_syscall(libc_getdents_trampoline_addr, uintptr(fd), uintptr(_p0), uintptr(len(buf)))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_getdents_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_getdents getdents "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getcwd(buf []byte) (n int, err error) {
-	var _p0 unsafe.Pointer
-	if len(buf) > 0 {
-		_p0 = unsafe.Pointer(&buf[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	r0, _, e1 := syscall_syscall(libc_getcwd_trampoline_addr, uintptr(_p0), uintptr(len(buf)), 0)
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_getcwd_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_getcwd getcwd "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func getresuid(ruid *_C_int, euid *_C_int, suid *_C_int) {
-	syscall_rawSyscall(libc_getresuid_trampoline_addr, uintptr(unsafe.Pointer(ruid)), uintptr(unsafe.Pointer(euid)), uintptr(unsafe.Pointer(suid)))
-	return
-}
-
-var libc_getresuid_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_getresuid getresuid "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func getresgid(rgid *_C_int, egid *_C_int, sgid *_C_int) {
-	syscall_rawSyscall(libc_getresgid_trampoline_addr, uintptr(unsafe.Pointer(rgid)), uintptr(unsafe.Pointer(egid)), uintptr(unsafe.Pointer(sgid)))
-	return
-}
-
-var libc_getresgid_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_getresgid getresgid "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func ioctl(fd int, req uint, arg uintptr) (err error) {
-	_, _, e1 := syscall_syscall(libc_ioctl_trampoline_addr, uintptr(fd), uintptr(req), uintptr(arg))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_ioctl_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_ioctl ioctl "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func ioctlPtr(fd int, req uint, arg unsafe.Pointer) (err error) {
-	_, _, e1 := syscall_syscall(libc_ioctl_trampoline_addr, uintptr(fd), uintptr(req), uintptr(arg))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func sysctl(mib []_C_int, old *byte, oldlen *uintptr, new *byte, newlen uintptr) (err error) {
-	var _p0 unsafe.Pointer
-	if len(mib) > 0 {
-		_p0 = unsafe.Pointer(&mib[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	_, _, e1 := syscall_syscall6(libc_sysctl_trampoline_addr, uintptr(_p0), uintptr(len(mib)), uintptr(unsafe.Pointer(old)), uintptr(unsafe.Pointer(oldlen)), uintptr(unsafe.Pointer(new)), uintptr(newlen))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_sysctl_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_sysctl sysctl "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func fcntl(fd int, cmd int, arg int) (n int, err error) {
-	r0, _, e1 := syscall_syscall(libc_fcntl_trampoline_addr, uintptr(fd), uintptr(cmd), uintptr(arg))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_fcntl_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_fcntl fcntl "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func fcntlPtr(fd int, cmd int, arg unsafe.Pointer) (n int, err error) {
-	r0, _, e1 := syscall_syscall(libc_fcntl_trampoline_addr, uintptr(fd), uintptr(cmd), uintptr(arg))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func ppoll(fds *PollFd, nfds int, timeout *Timespec, sigmask *Sigset_t) (n int, err error) {
-	r0, _, e1 := syscall_syscall6(libc_ppoll_trampoline_addr, uintptr(unsafe.Pointer(fds)), uintptr(nfds), uintptr(unsafe.Pointer(timeout)), uintptr(unsafe.Pointer(sigmask)), 0, 0)
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_ppoll_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_ppoll ppoll "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Access(path string, mode uint32) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_access_trampoline_addr, uintptr(unsafe.Pointer(_p0)), uintptr(mode), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_access_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_access access "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Adjtime(delta *Timeval, olddelta *Timeval) (err error) {
-	_, _, e1 := syscall_syscall(libc_adjtime_trampoline_addr, uintptr(unsafe.Pointer(delta)), uintptr(unsafe.Pointer(olddelta)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_adjtime_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_adjtime adjtime "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Chdir(path string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_chdir_trampoline_addr, uintptr(unsafe.Pointer(_p0)), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_chdir_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_chdir chdir "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Chflags(path string, flags int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_chflags_trampoline_addr, uintptr(unsafe.Pointer(_p0)), uintptr(flags), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_chflags_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_chflags chflags "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Chmod(path string, mode uint32) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_chmod_trampoline_addr, uintptr(unsafe.Pointer(_p0)), uintptr(mode), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_chmod_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_chmod chmod "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Chown(path string, uid int, gid int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_chown_trampoline_addr, uintptr(unsafe.Pointer(_p0)), uintptr(uid), uintptr(gid))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_chown_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_chown chown "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Chroot(path string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_chroot_trampoline_addr, uintptr(unsafe.Pointer(_p0)), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_chroot_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_chroot chroot "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func ClockGettime(clockid int32, time *Timespec) (err error) {
-	_, _, e1 := syscall_syscall(libc_clock_gettime_trampoline_addr, uintptr(clockid), uintptr(unsafe.Pointer(time)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_clock_gettime_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_clock_gettime clock_gettime "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Close(fd int) (err error) {
-	_, _, e1 := syscall_syscall(libc_close_trampoline_addr, uintptr(fd), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_close_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_close close "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Dup(fd int) (nfd int, err error) {
-	r0, _, e1 := syscall_syscall(libc_dup_trampoline_addr, uintptr(fd), 0, 0)
-	nfd = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_dup_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_dup dup "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Dup2(from int, to int) (err error) {
-	_, _, e1 := syscall_syscall(libc_dup2_trampoline_addr, uintptr(from), uintptr(to), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_dup2_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_dup2 dup2 "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Dup3(from int, to int, flags int) (err error) {
-	_, _, e1 := syscall_syscall(libc_dup3_trampoline_addr, uintptr(from), uintptr(to), uintptr(flags))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_dup3_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_dup3 dup3 "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Exit(code int) {
-	syscall_syscall(libc_exit_trampoline_addr, uintptr(code), 0, 0)
-	return
-}
-
-var libc_exit_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_exit exit "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Faccessat(dirfd int, path string, mode uint32, flags int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall6(libc_faccessat_trampoline_addr, uintptr(dirfd), uintptr(unsafe.Pointer(_p0)), uintptr(mode), uintptr(flags), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_faccessat_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_faccessat faccessat "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fchdir(fd int) (err error) {
-	_, _, e1 := syscall_syscall(libc_fchdir_trampoline_addr, uintptr(fd), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_fchdir_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_fchdir fchdir "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fchflags(fd int, flags int) (err error) {
-	_, _, e1 := syscall_syscall(libc_fchflags_trampoline_addr, uintptr(fd), uintptr(flags), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_fchflags_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_fchflags fchflags "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fchmod(fd int, mode uint32) (err error) {
-	_, _, e1 := syscall_syscall(libc_fchmod_trampoline_addr, uintptr(fd), uintptr(mode), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_fchmod_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_fchmod fchmod "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fchmodat(dirfd int, path string, mode uint32, flags int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall6(libc_fchmodat_trampoline_addr, uintptr(dirfd), uintptr(unsafe.Pointer(_p0)), uintptr(mode), uintptr(flags), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_fchmodat_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_fchmodat fchmodat "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fchown(fd int, uid int, gid int) (err error) {
-	_, _, e1 := syscall_syscall(libc_fchown_trampoline_addr, uintptr(fd), uintptr(uid), uintptr(gid))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_fchown_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_fchown fchown "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fchownat(dirfd int, path string, uid int, gid int, flags int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall6(libc_fchownat_trampoline_addr, uintptr(dirfd), uintptr(unsafe.Pointer(_p0)), uintptr(uid), uintptr(gid), uintptr(flags), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_fchownat_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_fchownat fchownat "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Flock(fd int, how int) (err error) {
-	_, _, e1 := syscall_syscall(libc_flock_trampoline_addr, uintptr(fd), uintptr(how), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_flock_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_flock flock "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fpathconf(fd int, name int) (val int, err error) {
-	r0, _, e1 := syscall_syscall(libc_fpathconf_trampoline_addr, uintptr(fd), uintptr(name), 0)
-	val = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_fpathconf_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_fpathconf fpathconf "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fstat(fd int, stat *Stat_t) (err error) {
-	_, _, e1 := syscall_syscall(libc_fstat_trampoline_addr, uintptr(fd), uintptr(unsafe.Pointer(stat)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_fstat_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_fstat fstat "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fstatat(fd int, path string, stat *Stat_t, flags int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall6(libc_fstatat_trampoline_addr, uintptr(fd), uintptr(unsafe.Pointer(_p0)), uintptr(unsafe.Pointer(stat)), uintptr(flags), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_fstatat_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_fstatat fstatat "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fstatfs(fd int, stat *Statfs_t) (err error) {
-	_, _, e1 := syscall_syscall(libc_fstatfs_trampoline_addr, uintptr(fd), uintptr(unsafe.Pointer(stat)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_fstatfs_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_fstatfs fstatfs "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Fsync(fd int) (err error) {
-	_, _, e1 := syscall_syscall(libc_fsync_trampoline_addr, uintptr(fd), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_fsync_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_fsync fsync "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Ftruncate(fd int, length int64) (err error) {
-	_, _, e1 := syscall_syscall(libc_ftruncate_trampoline_addr, uintptr(fd), uintptr(length), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_ftruncate_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_ftruncate ftruncate "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getegid() (egid int) {
-	r0, _, _ := syscall_rawSyscall(libc_getegid_trampoline_addr, 0, 0, 0)
-	egid = int(r0)
-	return
-}
-
-var libc_getegid_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_getegid getegid "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Geteuid() (uid int) {
-	r0, _, _ := syscall_rawSyscall(libc_geteuid_trampoline_addr, 0, 0, 0)
-	uid = int(r0)
-	return
-}
-
-var libc_geteuid_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_geteuid geteuid "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getgid() (gid int) {
-	r0, _, _ := syscall_rawSyscall(libc_getgid_trampoline_addr, 0, 0, 0)
-	gid = int(r0)
-	return
-}
-
-var libc_getgid_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_getgid getgid "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getpgid(pid int) (pgid int, err error) {
-	r0, _, e1 := syscall_rawSyscall(libc_getpgid_trampoline_addr, uintptr(pid), 0, 0)
-	pgid = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_getpgid_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_getpgid getpgid "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getpgrp() (pgrp int) {
-	r0, _, _ := syscall_rawSyscall(libc_getpgrp_trampoline_addr, 0, 0, 0)
-	pgrp = int(r0)
-	return
-}
-
-var libc_getpgrp_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_getpgrp getpgrp "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getpid() (pid int) {
-	r0, _, _ := syscall_rawSyscall(libc_getpid_trampoline_addr, 0, 0, 0)
-	pid = int(r0)
-	return
-}
-
-var libc_getpid_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_getpid getpid "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getppid() (ppid int) {
-	r0, _, _ := syscall_rawSyscall(libc_getppid_trampoline_addr, 0, 0, 0)
-	ppid = int(r0)
-	return
-}
-
-var libc_getppid_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_getppid getppid "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getpriority(which int, who int) (prio int, err error) {
-	r0, _, e1 := syscall_syscall(libc_getpriority_trampoline_addr, uintptr(which), uintptr(who), 0)
-	prio = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_getpriority_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_getpriority getpriority "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getrlimit(which int, lim *Rlimit) (err error) {
-	_, _, e1 := syscall_rawSyscall(libc_getrlimit_trampoline_addr, uintptr(which), uintptr(unsafe.Pointer(lim)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_getrlimit_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_getrlimit getrlimit "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getrtable() (rtable int, err error) {
-	r0, _, e1 := syscall_rawSyscall(libc_getrtable_trampoline_addr, 0, 0, 0)
-	rtable = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_getrtable_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_getrtable getrtable "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getrusage(who int, rusage *Rusage) (err error) {
-	_, _, e1 := syscall_rawSyscall(libc_getrusage_trampoline_addr, uintptr(who), uintptr(unsafe.Pointer(rusage)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_getrusage_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_getrusage getrusage "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getsid(pid int) (sid int, err error) {
-	r0, _, e1 := syscall_rawSyscall(libc_getsid_trampoline_addr, uintptr(pid), 0, 0)
-	sid = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_getsid_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_getsid getsid "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Gettimeofday(tv *Timeval) (err error) {
-	_, _, e1 := syscall_rawSyscall(libc_gettimeofday_trampoline_addr, uintptr(unsafe.Pointer(tv)), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_gettimeofday_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_gettimeofday gettimeofday "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Getuid() (uid int) {
-	r0, _, _ := syscall_rawSyscall(libc_getuid_trampoline_addr, 0, 0, 0)
-	uid = int(r0)
-	return
-}
-
-var libc_getuid_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_getuid getuid "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Issetugid() (tainted bool) {
-	r0, _, _ := syscall_syscall(libc_issetugid_trampoline_addr, 0, 0, 0)
-	tainted = bool(r0 != 0)
-	return
-}
-
-var libc_issetugid_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_issetugid issetugid "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Kill(pid int, signum syscall.Signal) (err error) {
-	_, _, e1 := syscall_syscall(libc_kill_trampoline_addr, uintptr(pid), uintptr(signum), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_kill_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_kill kill "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Kqueue() (fd int, err error) {
-	r0, _, e1 := syscall_syscall(libc_kqueue_trampoline_addr, 0, 0, 0)
-	fd = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_kqueue_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_kqueue kqueue "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Lchown(path string, uid int, gid int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_lchown_trampoline_addr, uintptr(unsafe.Pointer(_p0)), uintptr(uid), uintptr(gid))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_lchown_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_lchown lchown "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Link(path string, link string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	var _p1 *byte
-	_p1, err = BytePtrFromString(link)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_link_trampoline_addr, uintptr(unsafe.Pointer(_p0)), uintptr(unsafe.Pointer(_p1)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_link_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_link link "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Linkat(pathfd int, path string, linkfd int, link string, flags int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	var _p1 *byte
-	_p1, err = BytePtrFromString(link)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall6(libc_linkat_trampoline_addr, uintptr(pathfd), uintptr(unsafe.Pointer(_p0)), uintptr(linkfd), uintptr(unsafe.Pointer(_p1)), uintptr(flags), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_linkat_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_linkat linkat "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Listen(s int, backlog int) (err error) {
-	_, _, e1 := syscall_syscall(libc_listen_trampoline_addr, uintptr(s), uintptr(backlog), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_listen_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_listen listen "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Lstat(path string, stat *Stat_t) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_lstat_trampoline_addr, uintptr(unsafe.Pointer(_p0)), uintptr(unsafe.Pointer(stat)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_lstat_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_lstat lstat "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mkdir(path string, mode uint32) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_mkdir_trampoline_addr, uintptr(unsafe.Pointer(_p0)), uintptr(mode), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_mkdir_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_mkdir mkdir "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mkdirat(dirfd int, path string, mode uint32) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_mkdirat_trampoline_addr, uintptr(dirfd), uintptr(unsafe.Pointer(_p0)), uintptr(mode))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_mkdirat_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_mkdirat mkdirat "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mkfifo(path string, mode uint32) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_mkfifo_trampoline_addr, uintptr(unsafe.Pointer(_p0)), uintptr(mode), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_mkfifo_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_mkfifo mkfifo "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mkfifoat(dirfd int, path string, mode uint32) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_mkfifoat_trampoline_addr, uintptr(dirfd), uintptr(unsafe.Pointer(_p0)), uintptr(mode))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_mkfifoat_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_mkfifoat mkfifoat "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mknod(path string, mode uint32, dev int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_mknod_trampoline_addr, uintptr(unsafe.Pointer(_p0)), uintptr(mode), uintptr(dev))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_mknod_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_mknod mknod "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mknodat(dirfd int, path string, mode uint32, dev int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall6(libc_mknodat_trampoline_addr, uintptr(dirfd), uintptr(unsafe.Pointer(_p0)), uintptr(mode), uintptr(dev), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_mknodat_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_mknodat mknodat "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Mount(fsType string, dir string, flags int, data unsafe.Pointer) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(fsType)
-	if err != nil {
-		return
-	}
-	var _p1 *byte
-	_p1, err = BytePtrFromString(dir)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall6(libc_mount_trampoline_addr, uintptr(unsafe.Pointer(_p0)), uintptr(unsafe.Pointer(_p1)), uintptr(flags), uintptr(data), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_mount_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_mount mount "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Nanosleep(time *Timespec, leftover *Timespec) (err error) {
-	_, _, e1 := syscall_syscall(libc_nanosleep_trampoline_addr, uintptr(unsafe.Pointer(time)), uintptr(unsafe.Pointer(leftover)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_nanosleep_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_nanosleep nanosleep "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Open(path string, mode int, perm uint32) (fd int, err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	r0, _, e1 := syscall_syscall(libc_open_trampoline_addr, uintptr(unsafe.Pointer(_p0)), uintptr(mode), uintptr(perm))
-	fd = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_open_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_open open "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Openat(dirfd int, path string, mode int, perm uint32) (fd int, err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	r0, _, e1 := syscall_syscall6(libc_openat_trampoline_addr, uintptr(dirfd), uintptr(unsafe.Pointer(_p0)), uintptr(mode), uintptr(perm), 0, 0)
-	fd = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_openat_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_openat openat "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Pathconf(path string, name int) (val int, err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	r0, _, e1 := syscall_syscall(libc_pathconf_trampoline_addr, uintptr(unsafe.Pointer(_p0)), uintptr(name), 0)
-	val = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_pathconf_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_pathconf pathconf "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func pread(fd int, p []byte, offset int64) (n int, err error) {
-	var _p0 unsafe.Pointer
-	if len(p) > 0 {
-		_p0 = unsafe.Pointer(&p[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	r0, _, e1 := syscall_syscall6(libc_pread_trampoline_addr, uintptr(fd), uintptr(_p0), uintptr(len(p)), uintptr(offset), 0, 0)
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_pread_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_pread pread "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func pwrite(fd int, p []byte, offset int64) (n int, err error) {
-	var _p0 unsafe.Pointer
-	if len(p) > 0 {
-		_p0 = unsafe.Pointer(&p[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	r0, _, e1 := syscall_syscall6(libc_pwrite_trampoline_addr, uintptr(fd), uintptr(_p0), uintptr(len(p)), uintptr(offset), 0, 0)
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_pwrite_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_pwrite pwrite "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func readv(fd int, iovecs []Iovec) (n int, err error) {
-	var _p0 unsafe.Pointer
-	if len(iovecs) > 0 {
-		_p0 = unsafe.Pointer(&iovecs[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	r0, _, e1 := syscall_syscall(libc_readv_trampoline_addr, uintptr(fd), uintptr(_p0), uintptr(len(iovecs)))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_readv_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_readv readv "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func writev(fd int, iovecs []Iovec) (n int, err error) {
-	var _p0 unsafe.Pointer
-	if len(iovecs) > 0 {
-		_p0 = unsafe.Pointer(&iovecs[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	r0, _, e1 := syscall_syscall(libc_writev_trampoline_addr, uintptr(fd), uintptr(_p0), uintptr(len(iovecs)))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_writev_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_writev writev "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func preadv(fd int, iovecs []Iovec, offset int64) (n int, err error) {
-	var _p0 unsafe.Pointer
-	if len(iovecs) > 0 {
-		_p0 = unsafe.Pointer(&iovecs[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	r0, _, e1 := syscall_syscall6(libc_preadv_trampoline_addr, uintptr(fd), uintptr(_p0), uintptr(len(iovecs)), uintptr(offset), 0, 0)
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_preadv_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_preadv preadv "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func pwritev(fd int, iovecs []Iovec, offset int64) (n int, err error) {
-	var _p0 unsafe.Pointer
-	if len(iovecs) > 0 {
-		_p0 = unsafe.Pointer(&iovecs[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	r0, _, e1 := syscall_syscall6(libc_pwritev_trampoline_addr, uintptr(fd), uintptr(_p0), uintptr(len(iovecs)), uintptr(offset), 0, 0)
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_pwritev_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_pwritev pwritev "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func read(fd int, p []byte) (n int, err error) {
-	var _p0 unsafe.Pointer
-	if len(p) > 0 {
-		_p0 = unsafe.Pointer(&p[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	r0, _, e1 := syscall_syscall(libc_read_trampoline_addr, uintptr(fd), uintptr(_p0), uintptr(len(p)))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_read_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_read read "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Readlink(path string, buf []byte) (n int, err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	var _p1 unsafe.Pointer
-	if len(buf) > 0 {
-		_p1 = unsafe.Pointer(&buf[0])
-	} else {
-		_p1 = unsafe.Pointer(&_zero)
-	}
-	r0, _, e1 := syscall_syscall(libc_readlink_trampoline_addr, uintptr(unsafe.Pointer(_p0)), uintptr(_p1), uintptr(len(buf)))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_readlink_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_readlink readlink "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Readlinkat(dirfd int, path string, buf []byte) (n int, err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	var _p1 unsafe.Pointer
-	if len(buf) > 0 {
-		_p1 = unsafe.Pointer(&buf[0])
-	} else {
-		_p1 = unsafe.Pointer(&_zero)
-	}
-	r0, _, e1 := syscall_syscall6(libc_readlinkat_trampoline_addr, uintptr(dirfd), uintptr(unsafe.Pointer(_p0)), uintptr(_p1), uintptr(len(buf)), 0, 0)
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_readlinkat_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_readlinkat readlinkat "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Rename(from string, to string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(from)
-	if err != nil {
-		return
-	}
-	var _p1 *byte
-	_p1, err = BytePtrFromString(to)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_rename_trampoline_addr, uintptr(unsafe.Pointer(_p0)), uintptr(unsafe.Pointer(_p1)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_rename_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_rename rename "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Renameat(fromfd int, from string, tofd int, to string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(from)
-	if err != nil {
-		return
-	}
-	var _p1 *byte
-	_p1, err = BytePtrFromString(to)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall6(libc_renameat_trampoline_addr, uintptr(fromfd), uintptr(unsafe.Pointer(_p0)), uintptr(tofd), uintptr(unsafe.Pointer(_p1)), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_renameat_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_renameat renameat "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Revoke(path string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_revoke_trampoline_addr, uintptr(unsafe.Pointer(_p0)), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_revoke_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_revoke revoke "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Rmdir(path string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_rmdir_trampoline_addr, uintptr(unsafe.Pointer(_p0)), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_r
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/sys/unix/zsyscall_openbsd_arm64.go","mode":420,"size":61635,"sha256":"0a528ad67bdcea83f4d412411978bf6978972c79114cc6447b63bb1a5b304049","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":13635}
-mdir_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_rmdir rmdir "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Seek(fd int, offset int64, whence int) (newoffset int64, err error) {
-	r0, _, e1 := syscall_syscall(libc_lseek_trampoline_addr, uintptr(fd), uintptr(offset), uintptr(whence))
-	newoffset = int64(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_lseek_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_lseek lseek "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Select(nfd int, r *FdSet, w *FdSet, e *FdSet, timeout *Timeval) (n int, err error) {
-	r0, _, e1 := syscall_syscall6(libc_select_trampoline_addr, uintptr(nfd), uintptr(unsafe.Pointer(r)), uintptr(unsafe.Pointer(w)), uintptr(unsafe.Pointer(e)), uintptr(unsafe.Pointer(timeout)), 0)
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_select_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_select select "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setegid(egid int) (err error) {
-	_, _, e1 := syscall_rawSyscall(libc_setegid_trampoline_addr, uintptr(egid), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_setegid_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_setegid setegid "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Seteuid(euid int) (err error) {
-	_, _, e1 := syscall_rawSyscall(libc_seteuid_trampoline_addr, uintptr(euid), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_seteuid_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_seteuid seteuid "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setgid(gid int) (err error) {
-	_, _, e1 := syscall_rawSyscall(libc_setgid_trampoline_addr, uintptr(gid), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_setgid_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_setgid setgid "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setlogin(name string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(name)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_setlogin_trampoline_addr, uintptr(unsafe.Pointer(_p0)), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_setlogin_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_setlogin setlogin "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setpgid(pid int, pgid int) (err error) {
-	_, _, e1 := syscall_rawSyscall(libc_setpgid_trampoline_addr, uintptr(pid), uintptr(pgid), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_setpgid_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_setpgid setpgid "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setpriority(which int, who int, prio int) (err error) {
-	_, _, e1 := syscall_syscall(libc_setpriority_trampoline_addr, uintptr(which), uintptr(who), uintptr(prio))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_setpriority_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_setpriority setpriority "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setregid(rgid int, egid int) (err error) {
-	_, _, e1 := syscall_rawSyscall(libc_setregid_trampoline_addr, uintptr(rgid), uintptr(egid), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_setregid_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_setregid setregid "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setreuid(ruid int, euid int) (err error) {
-	_, _, e1 := syscall_rawSyscall(libc_setreuid_trampoline_addr, uintptr(ruid), uintptr(euid), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_setreuid_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_setreuid setreuid "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setresgid(rgid int, egid int, sgid int) (err error) {
-	_, _, e1 := syscall_rawSyscall(libc_setresgid_trampoline_addr, uintptr(rgid), uintptr(egid), uintptr(sgid))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_setresgid_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_setresgid setresgid "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setresuid(ruid int, euid int, suid int) (err error) {
-	_, _, e1 := syscall_rawSyscall(libc_setresuid_trampoline_addr, uintptr(ruid), uintptr(euid), uintptr(suid))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_setresuid_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_setresuid setresuid "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setrtable(rtable int) (err error) {
-	_, _, e1 := syscall_rawSyscall(libc_setrtable_trampoline_addr, uintptr(rtable), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_setrtable_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_setrtable setrtable "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setsid() (pid int, err error) {
-	r0, _, e1 := syscall_rawSyscall(libc_setsid_trampoline_addr, 0, 0, 0)
-	pid = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_setsid_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_setsid setsid "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Settimeofday(tp *Timeval) (err error) {
-	_, _, e1 := syscall_rawSyscall(libc_settimeofday_trampoline_addr, uintptr(unsafe.Pointer(tp)), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_settimeofday_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_settimeofday settimeofday "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Setuid(uid int) (err error) {
-	_, _, e1 := syscall_rawSyscall(libc_setuid_trampoline_addr, uintptr(uid), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_setuid_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_setuid setuid "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Stat(path string, stat *Stat_t) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_stat_trampoline_addr, uintptr(unsafe.Pointer(_p0)), uintptr(unsafe.Pointer(stat)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_stat_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_stat stat "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Statfs(path string, stat *Statfs_t) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_statfs_trampoline_addr, uintptr(unsafe.Pointer(_p0)), uintptr(unsafe.Pointer(stat)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_statfs_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_statfs statfs "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Symlink(path string, link string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	var _p1 *byte
-	_p1, err = BytePtrFromString(link)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_symlink_trampoline_addr, uintptr(unsafe.Pointer(_p0)), uintptr(unsafe.Pointer(_p1)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_symlink_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_symlink symlink "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Symlinkat(oldpath string, newdirfd int, newpath string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(oldpath)
-	if err != nil {
-		return
-	}
-	var _p1 *byte
-	_p1, err = BytePtrFromString(newpath)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_symlinkat_trampoline_addr, uintptr(unsafe.Pointer(_p0)), uintptr(newdirfd), uintptr(unsafe.Pointer(_p1)))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_symlinkat_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_symlinkat symlinkat "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Sync() (err error) {
-	_, _, e1 := syscall_syscall(libc_sync_trampoline_addr, 0, 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_sync_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_sync sync "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Truncate(path string, length int64) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_truncate_trampoline_addr, uintptr(unsafe.Pointer(_p0)), uintptr(length), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_truncate_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_truncate truncate "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Umask(newmask int) (oldmask int) {
-	r0, _, _ := syscall_syscall(libc_umask_trampoline_addr, uintptr(newmask), 0, 0)
-	oldmask = int(r0)
-	return
-}
-
-var libc_umask_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_umask umask "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Unlink(path string) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_unlink_trampoline_addr, uintptr(unsafe.Pointer(_p0)), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_unlink_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_unlink unlink "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Unlinkat(dirfd int, path string, flags int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_unlinkat_trampoline_addr, uintptr(dirfd), uintptr(unsafe.Pointer(_p0)), uintptr(flags))
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_unlinkat_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_unlinkat unlinkat "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func Unmount(path string, flags int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall(libc_unmount_trampoline_addr, uintptr(unsafe.Pointer(_p0)), uintptr(flags), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_unmount_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_unmount unmount "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func write(fd int, p []byte) (n int, err error) {
-	var _p0 unsafe.Pointer
-	if len(p) > 0 {
-		_p0 = unsafe.Pointer(&p[0])
-	} else {
-		_p0 = unsafe.Pointer(&_zero)
-	}
-	r0, _, e1 := syscall_syscall(libc_write_trampoline_addr, uintptr(fd), uintptr(_p0), uintptr(len(p)))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_write_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_write write "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func mmap(addr uintptr, length uintptr, prot int, flag int, fd int, pos int64) (ret uintptr, err error) {
-	r0, _, e1 := syscall_syscall6(libc_mmap_trampoline_addr, uintptr(addr), uintptr(length), uintptr(prot), uintptr(flag), uintptr(fd), uintptr(pos))
-	ret = uintptr(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_mmap_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_mmap mmap "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func munmap(addr uintptr, length uintptr) (err error) {
-	_, _, e1 := syscall_syscall(libc_munmap_trampoline_addr, uintptr(addr), uintptr(length), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_munmap_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_munmap munmap "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func getfsstat(stat *Statfs_t, bufsize uintptr, flags int) (n int, err error) {
-	r0, _, e1 := syscall_syscall(libc_getfsstat_trampoline_addr, uintptr(unsafe.Pointer(stat)), uintptr(bufsize), uintptr(flags))
-	n = int(r0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_getfsstat_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_getfsstat getfsstat "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func utimensat(dirfd int, path string, times *[2]Timespec, flags int) (err error) {
-	var _p0 *byte
-	_p0, err = BytePtrFromString(path)
-	if err != nil {
-		return
-	}
-	_, _, e1 := syscall_syscall6(libc_utimensat_trampoline_addr, uintptr(dirfd), uintptr(unsafe.Pointer(_p0)), uintptr(unsafe.Pointer(times)), uintptr(flags), 0, 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_utimensat_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_utimensat utimensat "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func pledge(promises *byte, execpromises *byte) (err error) {
-	_, _, e1 := syscall_syscall(libc_pledge_trampoline_addr, uintptr(unsafe.Pointer(promises)), uintptr(unsafe.Pointer(execpromises)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_pledge_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_pledge pledge "libc.so"
-
-// THIS FILE IS GENERATED BY THE COMMAND AT THE TOP; DO NOT EDIT
-
-func unveil(path *byte, flags *byte) (err error) {
-	_, _, e1 := syscall_syscall(libc_unveil_trampoline_addr, uintptr(unsafe.Pointer(path)), uintptr(unsafe.Pointer(flags)), 0)
-	if e1 != 0 {
-		err = errnoErr(e1)
-	}
-	return
-}
-
-var libc_unveil_trampoline_addr uintptr
-
-//go:cgo_import_dynamic libc_unveil unveil "libc.so"
 
 @@END

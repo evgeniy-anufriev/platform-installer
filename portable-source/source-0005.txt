@@ -1,3 +1,2171 @@
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/ProtonMail/go-crypto/openpgp/packet/packet.go","mode":420,"size":19083,"sha256":"cdd3dd6508003f8dce810b44a71c1433bff2e8d54d4245567724b8a5068188f8","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":19083}
+// Copyright 2011 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+// Package packet implements parsing and serialization of OpenPGP packets, as
+// specified in RFC 4880.
+package packet // import "github.com/ProtonMail/go-crypto/openpgp/packet"
+
+import (
+	"bytes"
+	"crypto/cipher"
+	"crypto/rsa"
+	"io"
+
+	"github.com/ProtonMail/go-crypto/openpgp/errors"
+	"github.com/ProtonMail/go-crypto/openpgp/internal/algorithm"
+)
+
+// readFull is the same as io.ReadFull except that reading zero bytes returns
+// ErrUnexpectedEOF rather than EOF.
+func readFull(r io.Reader, buf []byte) (n int, err error) {
+	n, err = io.ReadFull(r, buf)
+	if err == io.EOF {
+		err = io.ErrUnexpectedEOF
+	}
+	return
+}
+
+// readLength reads an OpenPGP length from r. See RFC 4880, section 4.2.2.
+func readLength(r io.Reader) (length int64, isPartial bool, err error) {
+	var buf [4]byte
+	_, err = readFull(r, buf[:1])
+	if err != nil {
+		return
+	}
+	switch {
+	case buf[0] < 192:
+		length = int64(buf[0])
+	case buf[0] < 224:
+		length = int64(buf[0]-192) << 8
+		_, err = readFull(r, buf[0:1])
+		if err != nil {
+			return
+		}
+		length += int64(buf[0]) + 192
+	case buf[0] < 255:
+		length = int64(1) << (buf[0] & 0x1f)
+		isPartial = true
+	default:
+		_, err = readFull(r, buf[0:4])
+		if err != nil {
+			return
+		}
+		length = int64(buf[0])<<24 |
+			int64(buf[1])<<16 |
+			int64(buf[2])<<8 |
+			int64(buf[3])
+	}
+	return
+}
+
+// partialLengthReader wraps an io.Reader and handles OpenPGP partial lengths.
+// The continuation lengths are parsed and removed from the stream and EOF is
+// returned at the end of the packet. See RFC 4880, section 4.2.2.4.
+type partialLengthReader struct {
+	r         io.Reader
+	remaining int64
+	isPartial bool
+}
+
+func (r *partialLengthReader) Read(p []byte) (n int, err error) {
+	for r.remaining == 0 {
+		if !r.isPartial {
+			return 0, io.EOF
+		}
+		r.remaining, r.isPartial, err = readLength(r.r)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	toRead := int64(len(p))
+	if toRead > r.remaining {
+		toRead = r.remaining
+	}
+
+	n, err = r.r.Read(p[:int(toRead)])
+	r.remaining -= int64(n)
+	if n < int(toRead) && err == io.EOF {
+		err = io.ErrUnexpectedEOF
+	}
+	return
+}
+
+// partialLengthWriter writes a stream of data using OpenPGP partial lengths.
+// See RFC 4880, section 4.2.2.4.
+type partialLengthWriter struct {
+	w          io.WriteCloser
+	buf        bytes.Buffer
+	lengthByte [1]byte
+}
+
+func (w *partialLengthWriter) Write(p []byte) (n int, err error) {
+	bufLen := w.buf.Len()
+	if bufLen > 512 {
+		for power := uint(30); ; power-- {
+			l := 1 << power
+			if bufLen >= l {
+				w.lengthByte[0] = 224 + uint8(power)
+				_, err = w.w.Write(w.lengthByte[:])
+				if err != nil {
+					return
+				}
+				var m int
+				m, err = w.w.Write(w.buf.Next(l))
+				if err != nil {
+					return
+				}
+				if m != l {
+					return 0, io.ErrShortWrite
+				}
+				break
+			}
+		}
+	}
+	return w.buf.Write(p)
+}
+
+func (w *partialLengthWriter) Close() (err error) {
+	len := w.buf.Len()
+	err = serializeLength(w.w, len)
+	if err != nil {
+		return err
+	}
+	_, err = w.buf.WriteTo(w.w)
+	if err != nil {
+		return err
+	}
+	return w.w.Close()
+}
+
+// A spanReader is an io.LimitReader, but it returns ErrUnexpectedEOF if the
+// underlying Reader returns EOF before the limit has been reached.
+type spanReader struct {
+	r io.Reader
+	n int64
+}
+
+func (l *spanReader) Read(p []byte) (n int, err error) {
+	if l.n <= 0 {
+		return 0, io.EOF
+	}
+	if int64(len(p)) > l.n {
+		p = p[0:l.n]
+	}
+	n, err = l.r.Read(p)
+	l.n -= int64(n)
+	if l.n > 0 && err == io.EOF {
+		err = io.ErrUnexpectedEOF
+	}
+	return
+}
+
+// readHeader parses a packet header and returns an io.Reader which will return
+// the contents of the packet. See RFC 4880, section 4.2.
+func readHeader(r io.Reader) (tag packetType, length int64, contents io.Reader, err error) {
+	var buf [4]byte
+	_, err = io.ReadFull(r, buf[:1])
+	if err != nil {
+		return
+	}
+	if buf[0]&0x80 == 0 {
+		err = errors.StructuralError("tag byte does not have MSB set")
+		return
+	}
+	if buf[0]&0x40 == 0 {
+		// Old format packet
+		tag = packetType((buf[0] & 0x3f) >> 2)
+		lengthType := buf[0] & 3
+		if lengthType == 3 {
+			length = -1
+			contents = r
+			return
+		}
+		lengthBytes := 1 << lengthType
+		_, err = readFull(r, buf[0:lengthBytes])
+		if err != nil {
+			return
+		}
+		for i := 0; i < lengthBytes; i++ {
+			length <<= 8
+			length |= int64(buf[i])
+		}
+		contents = &spanReader{r, length}
+		return
+	}
+
+	// New format packet
+	tag = packetType(buf[0] & 0x3f)
+	length, isPartial, err := readLength(r)
+	if err != nil {
+		return
+	}
+	if isPartial {
+		contents = &partialLengthReader{
+			remaining: length,
+			isPartial: true,
+			r:         r,
+		}
+		length = -1
+	} else {
+		contents = &spanReader{r, length}
+	}
+	return
+}
+
+// serializeHeader writes an OpenPGP packet header to w. See RFC 4880, section
+// 4.2.
+func serializeHeader(w io.Writer, ptype packetType, length int) (err error) {
+	err = serializeType(w, ptype)
+	if err != nil {
+		return
+	}
+	return serializeLength(w, length)
+}
+
+// serializeType writes an OpenPGP packet type to w. See RFC 4880, section
+// 4.2.
+func serializeType(w io.Writer, ptype packetType) (err error) {
+	var buf [1]byte
+	buf[0] = 0x80 | 0x40 | byte(ptype)
+	_, err = w.Write(buf[:])
+	return
+}
+
+// serializeLength writes an OpenPGP packet length to w. See RFC 4880, section
+// 4.2.2.
+func serializeLength(w io.Writer, length int) (err error) {
+	var buf [5]byte
+	var n int
+
+	if length < 192 {
+		buf[0] = byte(length)
+		n = 1
+	} else if length < 8384 {
+		length -= 192
+		buf[0] = 192 + byte(length>>8)
+		buf[1] = byte(length)
+		n = 2
+	} else {
+		buf[0] = 255
+		buf[1] = byte(length >> 24)
+		buf[2] = byte(length >> 16)
+		buf[3] = byte(length >> 8)
+		buf[4] = byte(length)
+		n = 5
+	}
+
+	_, err = w.Write(buf[:n])
+	return
+}
+
+// serializeStreamHeader writes an OpenPGP packet header to w where the
+// length of the packet is unknown. It returns a io.WriteCloser which can be
+// used to write the contents of the packet. See RFC 4880, section 4.2.
+func serializeStreamHeader(w io.WriteCloser, ptype packetType) (out io.WriteCloser, err error) {
+	err = serializeType(w, ptype)
+	if err != nil {
+		return
+	}
+	out = &partialLengthWriter{w: w}
+	return
+}
+
+// Packet represents an OpenPGP packet. Users are expected to try casting
+// instances of this interface to specific packet types.
+type Packet interface {
+	parse(io.Reader) error
+}
+
+// consumeAll reads from the given Reader until error, returning the number of
+// bytes read.
+func consumeAll(r io.Reader) (n int64, err error) {
+	var m int
+	var buf [1024]byte
+
+	for {
+		m, err = r.Read(buf[:])
+		n += int64(m)
+		if err == io.EOF {
+			err = nil
+			return
+		}
+		if err != nil {
+			return
+		}
+	}
+}
+
+// packetType represents the numeric ids of the different OpenPGP packet types. See
+// http://www.iana.org/assignments/pgp-parameters/pgp-parameters.xhtml#pgp-parameters-2
+type packetType uint8
+
+const (
+	packetTypeEncryptedKey                             packetType = 1
+	packetTypeSignature                                packetType = 2
+	packetTypeSymmetricKeyEncrypted                    packetType = 3
+	packetTypeOnePassSignature                         packetType = 4
+	packetTypePrivateKey                               packetType = 5
+	packetTypePublicKey                                packetType = 6
+	packetTypePrivateSubkey                            packetType = 7
+	packetTypeCompressed                               packetType = 8
+	packetTypeSymmetricallyEncrypted                   packetType = 9
+	packetTypeMarker                                   packetType = 10
+	packetTypeLiteralData                              packetType = 11
+	packetTypeTrust                                    packetType = 12
+	packetTypeUserId                                   packetType = 13
+	packetTypePublicSubkey                             packetType = 14
+	packetTypeUserAttribute                            packetType = 17
+	packetTypeSymmetricallyEncryptedIntegrityProtected packetType = 18
+	packetTypeAEADEncrypted                            packetType = 20
+	packetPadding                                      packetType = 21
+)
+
+// EncryptedDataPacket holds encrypted data. It is currently implemented by
+// SymmetricallyEncrypted and AEADEncrypted.
+type EncryptedDataPacket interface {
+	Decrypt(CipherFunction, []byte) (io.ReadCloser, error)
+}
+
+// Read reads a single OpenPGP packet from the given io.Reader. If there is an
+// error parsing a packet, the whole packet is consumed from the input.
+func Read(r io.Reader) (p Packet, err error) {
+	tag, len, contents, err := readHeader(r)
+	if err != nil {
+		return
+	}
+
+	switch tag {
+	case packetTypeEncryptedKey:
+		p = new(EncryptedKey)
+	case packetTypeSignature:
+		p = new(Signature)
+	case packetTypeSymmetricKeyEncrypted:
+		p = new(SymmetricKeyEncrypted)
+	case packetTypeOnePassSignature:
+		p = new(OnePassSignature)
+	case packetTypePrivateKey, packetTypePrivateSubkey:
+		pk := new(PrivateKey)
+		if tag == packetTypePrivateSubkey {
+			pk.IsSubkey = true
+		}
+		p = pk
+	case packetTypePublicKey, packetTypePublicSubkey:
+		isSubkey := tag == packetTypePublicSubkey
+		p = &PublicKey{IsSubkey: isSubkey}
+	case packetTypeCompressed:
+		p = new(Compressed)
+	case packetTypeSymmetricallyEncrypted:
+		p = new(SymmetricallyEncrypted)
+	case packetTypeLiteralData:
+		p = new(LiteralData)
+	case packetTypeUserId:
+		p = new(UserId)
+	case packetTypeUserAttribute:
+		p = new(UserAttribute)
+	case packetTypeSymmetricallyEncryptedIntegrityProtected:
+		se := new(SymmetricallyEncrypted)
+		se.IntegrityProtected = true
+		p = se
+	case packetTypeAEADEncrypted:
+		p = new(AEADEncrypted)
+	case packetPadding:
+		p = Padding(len)
+	case packetTypeMarker:
+		p = new(Marker)
+	case packetTypeTrust:
+		// Not implemented, just consume
+		err = errors.UnknownPacketTypeError(tag)
+	default:
+		// Packet Tags from 0 to 39 are critical.
+		// Packet Tags from 40 to 63 are non-critical.
+		if tag < 40 {
+			err = errors.CriticalUnknownPacketTypeError(tag)
+		} else {
+			err = errors.UnknownPacketTypeError(tag)
+		}
+	}
+	if p != nil {
+		err = p.parse(contents)
+	}
+	if err != nil {
+		consumeAll(contents)
+	}
+	return
+}
+
+// ReadWithCheck reads a single OpenPGP message packet from the given io.Reader. If there is an
+// error parsing a packet, the whole packet is consumed from the input.
+// ReadWithCheck additionally checks if the OpenPGP message packet sequence adheres
+// to the packet composition rules in rfc4880, if not throws an error.
+func ReadWithCheck(r io.Reader, sequence *SequenceVerifier) (p Packet, msgErr error, err error) {
+	tag, len, contents, err := readHeader(r)
+	if err != nil {
+		return
+	}
+	switch tag {
+	case packetTypeEncryptedKey:
+		msgErr = sequence.Next(ESKSymbol)
+		p = new(EncryptedKey)
+	case packetTypeSignature:
+		msgErr = sequence.Next(SigSymbol)
+		p = new(Signature)
+	case packetTypeSymmetricKeyEncrypted:
+		msgErr = sequence.Next(ESKSymbol)
+		p = new(SymmetricKeyEncrypted)
+	case packetTypeOnePassSignature:
+		msgErr = sequence.Next(OPSSymbol)
+		p = new(OnePassSignature)
+	case packetTypeCompressed:
+		msgErr = sequence.Next(CompSymbol)
+		p = new(Compressed)
+	case packetTypeSymmetricallyEncrypted:
+		msgErr = sequence.Next(EncSymbol)
+		p = new(SymmetricallyEncrypted)
+	case packetTypeLiteralData:
+		msgErr = sequence.Next(LDSymbol)
+		p = new(LiteralData)
+	case packetTypeSymmetricallyEncryptedIntegrityProtected:
+		msgErr = sequence.Next(EncSymbol)
+		se := new(SymmetricallyEncrypted)
+		se.IntegrityProtected = true
+		p = se
+	case packetTypeAEADEncrypted:
+		msgErr = sequence.Next(EncSymbol)
+		p = new(AEADEncrypted)
+	case packetPadding:
+		p = Padding(len)
+	case packetTypeMarker:
+		p = new(Marker)
+	case packetTypeTrust:
+		// Not implemented, just consume
+		err = errors.UnknownPacketTypeError(tag)
+	case packetTypePrivateKey,
+		packetTypePrivateSubkey,
+		packetTypePublicKey,
+		packetTypePublicSubkey,
+		packetTypeUserId,
+		packetTypeUserAttribute:
+		msgErr = sequence.Next(UnknownSymbol)
+		consumeAll(contents)
+	default:
+		// Packet Tags from 0 to 39 are critical.
+		// Packet Tags from 40 to 63 are non-critical.
+		if tag < 40 {
+			err = errors.CriticalUnknownPacketTypeError(tag)
+		} else {
+			err = errors.UnknownPacketTypeError(tag)
+		}
+	}
+	if p != nil {
+		err = p.parse(contents)
+	}
+	if err != nil {
+		consumeAll(contents)
+	}
+	return
+}
+
+// SignatureType represents the different semantic meanings of an OpenPGP
+// signature. See RFC 4880, section 5.2.1.
+type SignatureType uint8
+
+const (
+	SigTypeBinary                  SignatureType = 0x00
+	SigTypeText                    SignatureType = 0x01
+	SigTypeGenericCert             SignatureType = 0x10
+	SigTypePersonaCert             SignatureType = 0x11
+	SigTypeCasualCert              SignatureType = 0x12
+	SigTypePositiveCert            SignatureType = 0x13
+	SigTypeSubkeyBinding           SignatureType = 0x18
+	SigTypePrimaryKeyBinding       SignatureType = 0x19
+	SigTypeDirectSignature         SignatureType = 0x1F
+	SigTypeKeyRevocation           SignatureType = 0x20
+	SigTypeSubkeyRevocation        SignatureType = 0x28
+	SigTypeCertificationRevocation SignatureType = 0x30
+)
+
+// PublicKeyAlgorithm represents the different public key system specified for
+// OpenPGP. See
+// http://www.iana.org/assignments/pgp-parameters/pgp-parameters.xhtml#pgp-parameters-12
+type PublicKeyAlgorithm uint8
+
+const (
+	PubKeyAlgoRSA     PublicKeyAlgorithm = 1
+	PubKeyAlgoElGamal PublicKeyAlgorithm = 16
+	PubKeyAlgoDSA     PublicKeyAlgorithm = 17
+	// RFC 6637, Section 5.
+	PubKeyAlgoECDH  PublicKeyAlgorithm = 18
+	PubKeyAlgoECDSA PublicKeyAlgorithm = 19
+	// https://www.ietf.org/archive/id/draft-koch-eddsa-for-openpgp-04.txt
+	PubKeyAlgoEdDSA PublicKeyAlgorithm = 22
+	// https://datatracker.ietf.org/doc/html/draft-ietf-openpgp-crypto-refresh
+	PubKeyAlgoX25519  PublicKeyAlgorithm = 25
+	PubKeyAlgoX448    PublicKeyAlgorithm = 26
+	PubKeyAlgoEd25519 PublicKeyAlgorithm = 27
+	PubKeyAlgoEd448   PublicKeyAlgorithm = 28
+
+	// Deprecated in RFC 4880, Section 13.5. Use key flags instead.
+	PubKeyAlgoRSAEncryptOnly PublicKeyAlgorithm = 2
+	PubKeyAlgoRSASignOnly    PublicKeyAlgorithm = 3
+)
+
+// CanEncrypt returns true if it's possible to encrypt a message to a public
+// key of the given type.
+func (pka PublicKeyAlgorithm) CanEncrypt() bool {
+	switch pka {
+	case PubKeyAlgoRSA, PubKeyAlgoRSAEncryptOnly, PubKeyAlgoElGamal, PubKeyAlgoECDH, PubKeyAlgoX25519, PubKeyAlgoX448:
+		return true
+	}
+	return false
+}
+
+// CanSign returns true if it's possible for a public key of the given type to
+// sign a message.
+func (pka PublicKeyAlgorithm) CanSign() bool {
+	switch pka {
+	case PubKeyAlgoRSA, PubKeyAlgoRSASignOnly, PubKeyAlgoDSA, PubKeyAlgoECDSA, PubKeyAlgoEdDSA, PubKeyAlgoEd25519, PubKeyAlgoEd448:
+		return true
+	}
+	return false
+}
+
+// CipherFunction represents the different block ciphers specified for OpenPGP. See
+// http://www.iana.org/assignments/pgp-parameters/pgp-parameters.xhtml#pgp-parameters-13
+type CipherFunction algorithm.CipherFunction
+
+const (
+	Cipher3DES   CipherFunction = 2
+	CipherCAST5  CipherFunction = 3
+	CipherAES128 CipherFunction = 7
+	CipherAES192 CipherFunction = 8
+	CipherAES256 CipherFunction = 9
+)
+
+// KeySize returns the key size, in bytes, of cipher.
+func (cipher CipherFunction) KeySize() int {
+	return algorithm.CipherFunction(cipher).KeySize()
+}
+
+// IsSupported returns true if the cipher is supported from the library
+func (cipher CipherFunction) IsSupported() bool {
+	return algorithm.CipherFunction(cipher).KeySize() > 0
+}
+
+// blockSize returns the block size, in bytes, of cipher.
+func (cipher CipherFunction) blockSize() int {
+	return algorithm.CipherFunction(cipher).BlockSize()
+}
+
+// new returns a fresh instance of the given cipher.
+func (cipher CipherFunction) new(key []byte) (block cipher.Block) {
+	return algorithm.CipherFunction(cipher).New(key)
+}
+
+// padToKeySize left-pads a MPI with zeroes to match the length of the
+// specified RSA public.
+func padToKeySize(pub *rsa.PublicKey, b []byte) []byte {
+	k := (pub.N.BitLen() + 7) / 8
+	if len(b) >= k {
+		return b
+	}
+	bb := make([]byte, k)
+	copy(bb[len(bb)-len(b):], b)
+	return bb
+}
+
+// CompressionAlgo Represents the different compression algorithms
+// supported by OpenPGP (except for BZIP2, which is not currently
+// supported). See Section 9.3 of RFC 4880.
+type CompressionAlgo uint8
+
+const (
+	CompressionNone CompressionAlgo = 0
+	CompressionZIP  CompressionAlgo = 1
+	CompressionZLIB CompressionAlgo = 2
+)
+
+// AEADMode represents the different Authenticated Encryption with Associated
+// Data specified for OpenPGP.
+// See https://www.ietf.org/archive/id/draft-ietf-openpgp-crypto-refresh-07.html#section-9.6
+type AEADMode algorithm.AEADMode
+
+const (
+	AEADModeEAX AEADMode = 1
+	AEADModeOCB AEADMode = 2
+	AEADModeGCM AEADMode = 3
+)
+
+func (mode AEADMode) IvLength() int {
+	return algorithm.AEADMode(mode).NonceLength()
+}
+
+func (mode AEADMode) TagLength() int {
+	return algorithm.AEADMode(mode).TagLength()
+}
+
+// IsSupported returns true if the aead mode is supported from the library
+func (mode AEADMode) IsSupported() bool {
+	return algorithm.AEADMode(mode).TagLength() > 0
+}
+
+// new returns a fresh instance of the given mode.
+func (mode AEADMode) new(block cipher.Block) cipher.AEAD {
+	return algorithm.AEADMode(mode).New(block)
+}
+
+// ReasonForRevocation represents a revocation reason code as per RFC4880
+// section 5.2.3.23.
+type ReasonForRevocation uint8
+
+const (
+	NoReason       ReasonForRevocation = 0
+	KeySuperseded  ReasonForRevocation = 1
+	KeyCompromised ReasonForRevocation = 2
+	KeyRetired     ReasonForRevocation = 3
+	UserIDNotValid ReasonForRevocation = 32
+	Unknown        ReasonForRevocation = 200
+)
+
+func NewReasonForRevocation(value byte) ReasonForRevocation {
+	if value < 4 || value == 32 {
+		return ReasonForRevocation(value)
+	}
+	return Unknown
+}
+
+// Curve is a mapping to supported ECC curves for key generation.
+// See https://www.ietf.org/archive/id/draft-ietf-openpgp-crypto-refresh-06.html#name-curve-specific-wire-formats
+type Curve string
+
+const (
+	Curve25519         Curve = "Curve25519"
+	Curve448           Curve = "Curve448"
+	CurveNistP256      Curve = "P256"
+	CurveNistP384      Curve = "P384"
+	CurveNistP521      Curve = "P521"
+	CurveSecP256k1     Curve = "SecP256k1"
+	CurveBrainpoolP256 Curve = "BrainpoolP256"
+	CurveBrainpoolP384 Curve = "BrainpoolP384"
+	CurveBrainpoolP512 Curve = "BrainpoolP512"
+)
+
+// TrustLevel represents a trust level per RFC4880 5.2.3.13
+type TrustLevel uint8
+
+// TrustAmount represents a trust amount per RFC4880 5.2.3.13
+type TrustAmount uint8
+
+const (
+	// versionSize is the length in bytes of the version value.
+	versionSize = 1
+	// algorithmSize is the length in bytes of the key algorithm value.
+	algorithmSize = 1
+	// keyVersionSize is the length in bytes of the key version value
+	keyVersionSize = 1
+	// keyIdSize is the length in bytes of the key identifier value.
+	keyIdSize = 8
+	// timestampSize is the length in bytes of encoded timestamps.
+	timestampSize = 4
+	// fingerprintSizeV6 is the length in bytes of the key fingerprint in v6.
+	fingerprintSizeV6 = 32
+	// fingerprintSize is the length in bytes of the key fingerprint.
+	fingerprintSize = 20
+)
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/ProtonMail/go-crypto/openpgp/packet/packet_sequence.go","mode":420,"size":6266,"sha256":"b5c68617cc04dd81056663723001be3e08238c64ed89a13fb8a2ff19f93edb70","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":6266}
+package packet
+
+// This file implements the pushdown automata (PDA) from PGPainless (Paul Schaub)
+// to verify pgp packet sequences. See Paul's blogpost for more details:
+// https://blog.jabberhead.tk/2022/10/26/implementing-packet-sequence-validation-using-pushdown-automata/
+import (
+	"fmt"
+
+	"github.com/ProtonMail/go-crypto/openpgp/errors"
+)
+
+func NewErrMalformedMessage(from State, input InputSymbol, stackSymbol StackSymbol) errors.ErrMalformedMessage {
+	return errors.ErrMalformedMessage(fmt.Sprintf("state %d, input symbol %d, stack symbol %d ", from, input, stackSymbol))
+}
+
+// InputSymbol defines the input alphabet of the PDA
+type InputSymbol uint8
+
+const (
+	LDSymbol InputSymbol = iota
+	SigSymbol
+	OPSSymbol
+	CompSymbol
+	ESKSymbol
+	EncSymbol
+	EOSSymbol
+	UnknownSymbol
+)
+
+// StackSymbol defines the stack alphabet of the PDA
+type StackSymbol int8
+
+const (
+	MsgStackSymbol StackSymbol = iota
+	OpsStackSymbol
+	KeyStackSymbol
+	EndStackSymbol
+	EmptyStackSymbol
+)
+
+// State defines the states of the PDA
+type State int8
+
+const (
+	OpenPGPMessage State = iota
+	ESKMessage
+	LiteralMessage
+	CompressedMessage
+	EncryptedMessage
+	ValidMessage
+)
+
+// transition represents a state transition in the PDA
+type transition func(input InputSymbol, stackSymbol StackSymbol) (State, []StackSymbol, bool, error)
+
+// SequenceVerifier is a pushdown automata to verify
+// PGP messages packet sequences according to rfc4880.
+type SequenceVerifier struct {
+	stack []StackSymbol
+	state State
+}
+
+// Next performs a state transition with the given input symbol.
+// If the transition fails a ErrMalformedMessage is returned.
+func (sv *SequenceVerifier) Next(input InputSymbol) error {
+	for {
+		stackSymbol := sv.popStack()
+		transitionFunc := getTransition(sv.state)
+		nextState, newStackSymbols, redo, err := transitionFunc(input, stackSymbol)
+		if err != nil {
+			return err
+		}
+		if redo {
+			sv.pushStack(stackSymbol)
+		}
+		for _, newStackSymbol := range newStackSymbols {
+			sv.pushStack(newStackSymbol)
+		}
+		sv.state = nextState
+		if !redo {
+			break
+		}
+	}
+	return nil
+}
+
+// Valid returns true if RDA is in a valid state.
+func (sv *SequenceVerifier) Valid() bool {
+	return sv.state == ValidMessage && len(sv.stack) == 0
+}
+
+func (sv *SequenceVerifier) AssertValid() error {
+	if !sv.Valid() {
+		return errors.ErrMalformedMessage("invalid message")
+	}
+	return nil
+}
+
+func NewSequenceVerifier() *SequenceVerifier {
+	return &SequenceVerifier{
+		stack: []StackSymbol{EndStackSymbol, MsgStackSymbol},
+		state: OpenPGPMessage,
+	}
+}
+
+func (sv *SequenceVerifier) popStack() StackSymbol {
+	if len(sv.stack) == 0 {
+		return EmptyStackSymbol
+	}
+	elemIndex := len(sv.stack) - 1
+	stackSymbol := sv.stack[elemIndex]
+	sv.stack = sv.stack[:elemIndex]
+	return stackSymbol
+}
+
+func (sv *SequenceVerifier) pushStack(stackSymbol StackSymbol) {
+	sv.stack = append(sv.stack, stackSymbol)
+}
+
+func getTransition(from State) transition {
+	switch from {
+	case OpenPGPMessage:
+		return fromOpenPGPMessage
+	case LiteralMessage:
+		return fromLiteralMessage
+	case CompressedMessage:
+		return fromCompressedMessage
+	case EncryptedMessage:
+		return fromEncryptedMessage
+	case ESKMessage:
+		return fromESKMessage
+	case ValidMessage:
+		return fromValidMessage
+	}
+	return nil
+}
+
+// fromOpenPGPMessage is the transition for the state OpenPGPMessage.
+func fromOpenPGPMessage(input InputSymbol, stackSymbol StackSymbol) (State, []StackSymbol, bool, error) {
+	if stackSymbol != MsgStackSymbol {
+		return 0, nil, false, NewErrMalformedMessage(OpenPGPMessage, input, stackSymbol)
+	}
+	switch input {
+	case LDSymbol:
+		return LiteralMessage, nil, false, nil
+	case SigSymbol:
+		return OpenPGPMessage, []StackSymbol{MsgStackSymbol}, false, nil
+	case OPSSymbol:
+		return OpenPGPMessage, []StackSymbol{OpsStackSymbol, MsgStackSymbol}, false, nil
+	case CompSymbol:
+		return CompressedMessage, nil, false, nil
+	case ESKSymbol:
+		return ESKMessage, []StackSymbol{KeyStackSymbol}, false, nil
+	case EncSymbol:
+		return EncryptedMessage, nil, false, nil
+	}
+	return 0, nil, false, NewErrMalformedMessage(OpenPGPMessage, input, stackSymbol)
+}
+
+// fromESKMessage is the transition for the state ESKMessage.
+func fromESKMessage(input InputSymbol, stackSymbol StackSymbol) (State, []StackSymbol, bool, error) {
+	if stackSymbol != KeyStackSymbol {
+		return 0, nil, false, NewErrMalformedMessage(ESKMessage, input, stackSymbol)
+	}
+	switch input {
+	case ESKSymbol:
+		return ESKMessage, []StackSymbol{KeyStackSymbol}, false, nil
+	case EncSymbol:
+		return EncryptedMessage, nil, false, nil
+	}
+	return 0, nil, false, NewErrMalformedMessage(ESKMessage, input, stackSymbol)
+}
+
+// fromLiteralMessage is the transition for the state LiteralMessage.
+func fromLiteralMessage(input InputSymbol, stackSymbol StackSymbol) (State, []StackSymbol, bool, error) {
+	switch input {
+	case SigSymbol:
+		if stackSymbol == OpsStackSymbol {
+			return LiteralMessage, nil, false, nil
+		}
+	case EOSSymbol:
+		if stackSymbol == EndStackSymbol {
+			return ValidMessage, nil, false, nil
+		}
+	}
+	return 0, nil, false, NewErrMalformedMessage(LiteralMessage, input, stackSymbol)
+}
+
+// fromLiteralMessage is the transition for the state CompressedMessage.
+func fromCompressedMessage(input InputSymbol, stackSymbol StackSymbol) (State, []StackSymbol, bool, error) {
+	switch input {
+	case SigSymbol:
+		if stackSymbol == OpsStackSymbol {
+			return CompressedMessage, nil, false, nil
+		}
+	case EOSSymbol:
+		if stackSymbol == EndStackSymbol {
+			return ValidMessage, nil, false, nil
+		}
+	}
+	return OpenPGPMessage, []StackSymbol{MsgStackSymbol}, true, nil
+}
+
+// fromEncryptedMessage is the transition for the state EncryptedMessage.
+func fromEncryptedMessage(input InputSymbol, stackSymbol StackSymbol) (State, []StackSymbol, bool, error) {
+	switch input {
+	case SigSymbol:
+		if stackSymbol == OpsStackSymbol {
+			return EncryptedMessage, nil, false, nil
+		}
+	case EOSSymbol:
+		if stackSymbol == EndStackSymbol {
+			return ValidMessage, nil, false, nil
+		}
+	}
+	return OpenPGPMessage, []StackSymbol{MsgStackSymbol}, true, nil
+}
+
+// fromValidMessage is the transition for the state ValidMessage.
+func fromValidMessage(input InputSymbol, stackSymbol StackSymbol) (State, []StackSymbol, bool, error) {
+	return 0, nil, false, NewErrMalformedMessage(ValidMessage, input, stackSymbol)
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/ProtonMail/go-crypto/openpgp/packet/packet_unsupported.go","mode":420,"size":539,"sha256":"f4d57f88d2021d5512df47a0b669451d71fcd02e5736c837cf4739d35bf874eb","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":539}
+package packet
+
+import (
+	"io"
+
+	"github.com/ProtonMail/go-crypto/openpgp/errors"
+)
+
+// UnsupportedPackage represents a OpenPGP packet with a known packet type
+// but with unsupported content.
+type UnsupportedPacket struct {
+	IncompletePacket Packet
+	Error            errors.UnsupportedError
+}
+
+// Implements the Packet interface
+func (up *UnsupportedPacket) parse(read io.Reader) error {
+	err := up.IncompletePacket.parse(read)
+	if castedErr, ok := err.(errors.UnsupportedError); ok {
+		up.Error = castedErr
+		return nil
+	}
+	return err
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/ProtonMail/go-crypto/openpgp/packet/padding.go","mode":420,"size":715,"sha256":"6a63869128d4ff647e3767cad9a7d4a706b2c3278de113d28d685a874a0feb67","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":715}
+package packet
+
+import (
+	"io"
+)
+
+// Padding type represents a Padding Packet (Tag 21).
+// The padding type is represented by the length of its padding.
+// see https://datatracker.ietf.org/doc/html/draft-ietf-openpgp-crypto-refresh#name-padding-packet-tag-21
+type Padding int
+
+// parse just ignores the padding content.
+func (pad Padding) parse(reader io.Reader) error {
+	_, err := io.CopyN(io.Discard, reader, int64(pad))
+	return err
+}
+
+// SerializePadding writes the padding to writer.
+func (pad Padding) SerializePadding(writer io.Writer, rand io.Reader) error {
+	err := serializeHeader(writer, packetPadding, int(pad))
+	if err != nil {
+		return err
+	}
+	_, err = io.CopyN(writer, rand, int64(pad))
+	return err
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/ProtonMail/go-crypto/openpgp/packet/private_key.go","mode":420,"size":33126,"sha256":"6c9122e451726a2bc99eac58c9fca00bead70d375ce4a23d15e1c88946ddb79d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":33126}
+// Copyright 2011 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package packet
+
+import (
+	"bytes"
+	"crypto"
+	"crypto/cipher"
+	"crypto/dsa"
+	"crypto/rsa"
+	"crypto/sha1"
+	"crypto/sha256"
+	"crypto/subtle"
+	"fmt"
+	"io"
+	"math/big"
+	"strconv"
+	"time"
+
+	"github.com/ProtonMail/go-crypto/openpgp/ecdh"
+	"github.com/ProtonMail/go-crypto/openpgp/ecdsa"
+	"github.com/ProtonMail/go-crypto/openpgp/ed25519"
+	"github.com/ProtonMail/go-crypto/openpgp/ed448"
+	"github.com/ProtonMail/go-crypto/openpgp/eddsa"
+	"github.com/ProtonMail/go-crypto/openpgp/elgamal"
+	"github.com/ProtonMail/go-crypto/openpgp/errors"
+	"github.com/ProtonMail/go-crypto/openpgp/internal/encoding"
+	"github.com/ProtonMail/go-crypto/openpgp/s2k"
+	"github.com/ProtonMail/go-crypto/openpgp/x25519"
+	"github.com/ProtonMail/go-crypto/openpgp/x448"
+	"golang.org/x/crypto/hkdf"
+)
+
+// PrivateKey represents a possibly encrypted private key. See RFC 4880,
+// section 5.5.3.
+type PrivateKey struct {
+	PublicKey
+	Encrypted     bool // if true then the private key is unavailable until Decrypt has been called.
+	encryptedData []byte
+	cipher        CipherFunction
+	s2k           func(out, in []byte)
+	aead          AEADMode // only relevant if S2KAEAD is enabled
+	// An *{rsa|dsa|elgamal|ecdh|ecdsa|ed25519|ed448}.PrivateKey or
+	// crypto.Signer/crypto.Decrypter (Decryptor RSA only).
+	PrivateKey interface{}
+	iv         []byte
+
+	// Type of encryption of the S2K packet
+	// Allowed values are 0 (Not encrypted), 253 (AEAD), 254 (SHA1), or
+	// 255 (2-byte checksum)
+	s2kType S2KType
+	// Full parameters of the S2K packet
+	s2kParams *s2k.Params
+}
+
+// S2KType s2k packet type
+type S2KType uint8
+
+const (
+	// S2KNON unencrypt
+	S2KNON S2KType = 0
+	// S2KAEAD use authenticated encryption
+	S2KAEAD S2KType = 253
+	// S2KSHA1 sha1 sum check
+	S2KSHA1 S2KType = 254
+	// S2KCHECKSUM sum check
+	S2KCHECKSUM S2KType = 255
+)
+
+func NewRSAPrivateKey(creationTime time.Time, priv *rsa.PrivateKey) *PrivateKey {
+	pk := new(PrivateKey)
+	pk.PublicKey = *NewRSAPublicKey(creationTime, &priv.PublicKey)
+	pk.PrivateKey = priv
+	return pk
+}
+
+func NewDSAPrivateKey(creationTime time.Time, priv *dsa.PrivateKey) *PrivateKey {
+	pk := new(PrivateKey)
+	pk.PublicKey = *NewDSAPublicKey(creationTime, &priv.PublicKey)
+	pk.PrivateKey = priv
+	return pk
+}
+
+func NewElGamalPrivateKey(creationTime time.Time, priv *elgamal.PrivateKey) *PrivateKey {
+	pk := new(PrivateKey)
+	pk.PublicKey = *NewElGamalPublicKey(creationTime, &priv.PublicKey)
+	pk.PrivateKey = priv
+	return pk
+}
+
+func NewECDSAPrivateKey(creationTime time.Time, priv *ecdsa.PrivateKey) *PrivateKey {
+	pk := new(PrivateKey)
+	pk.PublicKey = *NewECDSAPublicKey(creationTime, &priv.PublicKey)
+	pk.PrivateKey = priv
+	return pk
+}
+
+func NewEdDSAPrivateKey(creationTime time.Time, priv *eddsa.PrivateKey) *PrivateKey {
+	pk := new(PrivateKey)
+	pk.PublicKey = *NewEdDSAPublicKey(creationTime, &priv.PublicKey)
+	pk.PrivateKey = priv
+	return pk
+}
+
+func NewECDHPrivateKey(creationTime time.Time, priv *ecdh.PrivateKey) *PrivateKey {
+	pk := new(PrivateKey)
+	pk.PublicKey = *NewECDHPublicKey(creationTime, &priv.PublicKey)
+	pk.PrivateKey = priv
+	return pk
+}
+
+func NewX25519PrivateKey(creationTime time.Time, priv *x25519.PrivateKey) *PrivateKey {
+	pk := new(PrivateKey)
+	pk.PublicKey = *NewX25519PublicKey(creationTime, &priv.PublicKey)
+	pk.PrivateKey = priv
+	return pk
+}
+
+func NewX448PrivateKey(creationTime time.Time, priv *x448.PrivateKey) *PrivateKey {
+	pk := new(PrivateKey)
+	pk.PublicKey = *NewX448PublicKey(creationTime, &priv.PublicKey)
+	pk.PrivateKey = priv
+	return pk
+}
+
+func NewEd25519PrivateKey(creationTime time.Time, priv *ed25519.PrivateKey) *PrivateKey {
+	pk := new(PrivateKey)
+	pk.PublicKey = *NewEd25519PublicKey(creationTime, &priv.PublicKey)
+	pk.PrivateKey = priv
+	return pk
+}
+
+func NewEd448PrivateKey(creationTime time.Time, priv *ed448.PrivateKey) *PrivateKey {
+	pk := new(PrivateKey)
+	pk.PublicKey = *NewEd448PublicKey(creationTime, &priv.PublicKey)
+	pk.PrivateKey = priv
+	return pk
+}
+
+// NewSignerPrivateKey creates a PrivateKey from a crypto.Signer that
+// implements RSA, ECDSA or EdDSA.
+func NewSignerPrivateKey(creationTime time.Time, signer interface{}) *PrivateKey {
+	pk := new(PrivateKey)
+	// In general, the public Keys should be used as pointers. We still
+	// type-switch on the values, for backwards-compatibility.
+	switch pubkey := signer.(type) {
+	case *rsa.PrivateKey:
+		pk.PublicKey = *NewRSAPublicKey(creationTime, &pubkey.PublicKey)
+	case rsa.PrivateKey:
+		pk.PublicKey = *NewRSAPublicKey(creationTime, &pubkey.PublicKey)
+	case *ecdsa.PrivateKey:
+		pk.PublicKey = *NewECDSAPublicKey(creationTime, &pubkey.PublicKey)
+	case ecdsa.PrivateKey:
+		pk.PublicKey = *NewECDSAPublicKey(creationTime, &pubkey.PublicKey)
+	case *eddsa.PrivateKey:
+		pk.PublicKey = *NewEdDSAPublicKey(creationTime, &pubkey.PublicKey)
+	case eddsa.PrivateKey:
+		pk.PublicKey = *NewEdDSAPublicKey(creationTime, &pubkey.PublicKey)
+	case *ed25519.PrivateKey:
+		pk.PublicKey = *NewEd25519PublicKey(creationTime, &pubkey.PublicKey)
+	case ed25519.PrivateKey:
+		pk.PublicKey = *NewEd25519PublicKey(creationTime, &pubkey.PublicKey)
+	case *ed448.PrivateKey:
+		pk.PublicKey = *NewEd448PublicKey(creationTime, &pubkey.PublicKey)
+	case ed448.PrivateKey:
+		pk.PublicKey = *NewEd448PublicKey(creationTime, &pubkey.PublicKey)
+	default:
+		panic("openpgp: unknown signer type in NewSignerPrivateKey")
+	}
+	pk.PrivateKey = signer
+	return pk
+}
+
+// NewDecrypterPrivateKey creates a PrivateKey from a *{rsa|elgamal|ecdh|x25519|x448}.PrivateKey.
+func NewDecrypterPrivateKey(creationTime time.Time, decrypter interface{}) *PrivateKey {
+	pk := new(PrivateKey)
+	switch priv := decrypter.(type) {
+	case *rsa.PrivateKey:
+		pk.PublicKey = *NewRSAPublicKey(creationTime, &priv.PublicKey)
+	case *elgamal.PrivateKey:
+		pk.PublicKey = *NewElGamalPublicKey(creationTime, &priv.PublicKey)
+	case *ecdh.PrivateKey:
+		pk.PublicKey = *NewECDHPublicKey(creationTime, &priv.PublicKey)
+	case *x25519.PrivateKey:
+		pk.PublicKey = *NewX25519PublicKey(creationTime, &priv.PublicKey)
+	case *x448.PrivateKey:
+		pk.PublicKey = *NewX448PublicKey(creationTime, &priv.PublicKey)
+	default:
+		panic("openpgp: unknown decrypter type in NewDecrypterPrivateKey")
+	}
+	pk.PrivateKey = decrypter
+	return pk
+}
+
+func (pk *PrivateKey) parse(r io.Reader) (err error) {
+	err = (&pk.PublicKey).parse(r)
+	if err != nil {
+		return
+	}
+	v5 := pk.PublicKey.Version == 5
+	v6 := pk.PublicKey.Version == 6
+
+	if V5Disabled && v5 {
+		return errors.UnsupportedError("support for parsing v5 entities is disabled; build with `-tags v5` if needed")
+	}
+
+	var buf [1]byte
+	_, err = readFull(r, buf[:])
+	if err != nil {
+		return
+	}
+	pk.s2kType = S2KType(buf[0])
+	var optCount [1]byte
+	if v5 || (v6 && pk.s2kType != S2KNON) {
+		if _, err = readFull(r, optCount[:]); err != nil {
+			return
+		}
+	}
+
+	switch pk.s2kType {
+	case S2KNON:
+		pk.s2k = nil
+		pk.Encrypted = false
+	case S2KSHA1, S2KCHECKSUM, S2KAEAD:
+		if (v5 || v6) && pk.s2kType == S2KCHECKSUM {
+			return errors.StructuralError(fmt.Sprintf("wrong s2k identifier for version %d", pk.Version))
+		}
+		_, err = readFull(r, buf[:])
+		if err != nil {
+			return
+		}
+		pk.cipher = CipherFunction(buf[0])
+		if pk.cipher != 0 && !pk.cipher.IsSupported() {
+			return errors.UnsupportedError("unsupported cipher function in private key")
+		}
+		// [Optional] If string-to-key usage octet was 253,
+		// a one-octet AEAD algorithm.
+		if pk.s2kType == S2KAEAD {
+			_, err = readFull(r, buf[:])
+			if err != nil {
+				return
+			}
+			pk.aead = AEADMode(buf[0])
+			if !pk.aead.IsSupported() {
+				return errors.UnsupportedError("unsupported aead mode in private key")
+			}
+		}
+
+		// [Optional] Only for a version 6 packet,
+		// and if string-to-key usage octet was 255, 254, or 253,
+		// an one-octet count of the following field.
+		if v6 {
+			_, err = readFull(r, buf[:])
+			if err != nil {
+				return
+			}
+		}
+
+		pk.s2kParams, err = s2k.ParseIntoParams(r)
+		if err != nil {
+			return
+		}
+		if pk.s2kParams.Dummy() {
+			return
+		}
+		if pk.s2kParams.Mode() == s2k.Argon2S2K && pk.s2kType != S2KAEAD {
+			return errors.StructuralError("using Argon2 S2K without AEAD is not allowed")
+		}
+		if pk.s2kParams.Mode() == s2k.SimpleS2K && pk.Version == 6 {
+			return errors.StructuralError("using Simple S2K with version 6 keys is not allowed")
+		}
+		pk.s2k, err = pk.s2kParams.Function()
+		if err != nil {
+			return
+		}
+		pk.Encrypted = true
+	default:
+		return errors.UnsupportedError("deprecated s2k function in private key")
+	}
+
+	if pk.Encrypted {
+		var ivSize int
+		// If the S2K usage octet was 253, the IV is of the size expected by the AEAD mode,
+		// unless it's a version 5 key, in which case it's the size of the symmetric cipher's block size.
+		// For all other S2K modes, it's always the block size.
+		if !v5 && pk.s2kType == S2KAEAD {
+			ivSize = pk.aead.IvLength()
+		} else {
+			ivSize = pk.cipher.blockSize()
+		}
+
+		if ivSize == 0 {
+			return errors.UnsupportedError("unsupported cipher in private key: " + strconv.Itoa(int(pk.cipher)))
+		}
+		pk.iv = make([]byte, ivSize)
+		_, err = readFull(r, pk.iv)
+		if err != nil {
+			return
+		}
+		if v5 && pk.s2kType == S2KAEAD {
+			pk.iv = pk.iv[:pk.aead.IvLength()]
+		}
+	}
+
+	var privateKeyData []byte
+	if v5 {
+		var n [4]byte /* secret material four octet count */
+		_, err = readFull(r, n[:])
+		if err != nil {
+			return
+		}
+		count := uint32(uint32(n[0])<<24 | uint32(n[1])<<16 | uint32(n[2])<<8 | uint32(n[3]))
+		if !pk.Encrypted {
+			count = count + 2 /* two octet checksum */
+		}
+		privateKeyData = make([]byte, count)
+		_, err = readFull(r, privateKeyData)
+		if err != nil {
+			return
+		}
+	} else {
+		privateKeyData, err = io.ReadAll(r)
+		if err != nil {
+			return
+		}
+	}
+	if !pk.Encrypted {
+		if len(privateKeyData) < 2 {
+			return errors.StructuralError("truncated private key data")
+		}
+		if pk.Version != 6 {
+			// checksum
+			var sum uint16
+			for i := 0; i < len(privateKeyData)-2; i++ {
+				sum += uint16(privateKeyData[i])
+			}
+			if privateKeyData[len(privateKeyData)-2] != uint8(sum>>8) ||
+				privateKeyData[len(privateKeyData)-1] != uint8(sum) {
+				return errors.StructuralError("private key checksum failure")
+			}
+			privateKeyData = privateKeyData[:len(privateKeyData)-2]
+			return pk.parsePrivateKey(privateKeyData)
+		} else {
+			// No checksum
+			return pk.parsePrivateKey(privateKeyData)
+		}
+	}
+
+	pk.encryptedData = privateKeyData
+	return
+}
+
+// Dummy returns true if the private key is a dummy key. This is a GNU extension.
+func (pk *PrivateKey) Dummy() bool {
+	return pk.s2kParams.Dummy()
+}
+
+func mod64kHash(d []byte) uint16 {
+	var h uint16
+	for _, b := range d {
+		h += uint16(b)
+	}
+	return h
+}
+
+func (pk *PrivateKey) Serialize(w io.Writer) (err error) {
+	contents := bytes.NewBuffer(nil)
+	err = pk.PublicKey.serializeWithoutHeaders(contents)
+	if err != nil {
+		return
+	}
+	if _, err = contents.Write([]byte{uint8(pk.s2kType)}); err != nil {
+		return
+	}
+
+	optional := bytes.NewBuffer(nil)
+	if pk.Encrypted || pk.Dummy() {
+		// [Optional] If string-to-key usage octet was 255, 254, or 253,
+		// a one-octet symmetric encryption algorithm.
+		if _, err = optional.Write([]byte{uint8(pk.cipher)}); err != nil {
+			return
+		}
+		// [Optional] If string-to-key usage octet was 253,
+		// a one-octet AEAD algorithm.
+		if pk.s2kType == S2KAEAD {
+			if _, err = optional.Write([]byte{uint8(pk.aead)}); err != nil {
+				return
+			}
+		}
+
+		s2kBuffer := bytes.NewBuffer(nil)
+		if err := pk.s2kParams.Serialize(s2kBuffer); err != nil {
+			return err
+		}
+		// [Optional] Only for a version 6 packet, and if string-to-key
+		// usage octet was 255, 254, or 253, an one-octet
+		// count of the following field.
+		if pk.Version == 6 {
+			if _, err = optional.Write([]byte{uint8(s2kBuffer.Len())}); err != nil {
+				return
+			}
+		}
+		// [Optional] If string-to-key usage octet was 255, 254, or 253,
+		// a string-to-key (S2K) specifier. The length of the string-to-key specifier
+		// depends on its type
+		if _, err = io.Copy(optional, s2kBuffer); err != nil {
+			return
+		}
+
+		// IV
+		if pk.Encrypted {
+			if _, err = optional.Write(pk.iv); err != nil {
+				return
+			}
+			if pk.Version == 5 && pk.s2kType == S2KAEAD {
+				// Add padding for version 5
+				padding := make([]byte, pk.cipher.blockSize()-len(pk.iv))
+				if _, err = optional.Write(padding); err != nil {
+					return
+				}
+			}
+		}
+	}
+	if pk.Version == 5 || (pk.Version == 6 && pk.s2kType != S2KNON) {
+		contents.Write([]byte{uint8(optional.Len())})
+	}
+
+	if _, err := io.Copy(contents, optional); err != nil {
+		return err
+	}
+
+	if !pk.Dummy() {
+		l := 0
+		var priv []byte
+		if !pk.Encrypted {
+			buf := bytes.NewBuffer(nil)
+			err = pk.serializePrivateKey(buf)
+			if err != nil {
+				return err
+			}
+			l = buf.Len()
+			if pk.Version != 6 {
+				checksum := mod64kHash(buf.Bytes())
+				buf.Write([]byte{byte(checksum >> 8), byte(checksum)})
+			}
+			priv = buf.Bytes()
+		} else {
+			priv, l = pk.encryptedData, len(pk.encryptedData)
+		}
+
+		if pk.Version == 5 {
+			contents.Write([]byte{byte(l >> 24), byte(l >> 16), byte(l >> 8), byte(l)})
+		}
+		contents.Write(priv)
+	}
+
+	ptype := packetTypePrivateKey
+	if pk.IsSubkey {
+		ptype = packetTypePrivateSubkey
+	}
+	err = serializeHeader(w, ptype, contents.Len())
+	if err != nil {
+		return
+	}
+	_, err = io.Copy(w, contents)
+	if err != nil {
+		return
+	}
+	return
+}
+
+func serializeRSAPrivateKey(w io.Writer, priv *rsa.PrivateKey) error {
+	if _, err := w.Write(new(encoding.MPI).SetBig(priv.D).EncodedBytes()); err != nil {
+		return err
+	}
+	if _, err := w.Write(new(encoding.MPI).SetBig(priv.Primes[1]).EncodedBytes()); err != nil {
+		return err
+	}
+	if _, err := w.Write(new(encoding.MPI).SetBig(priv.Primes[0]).EncodedBytes()); err != nil {
+		return err
+	}
+	_, err := w.Write(new(encoding.MPI).SetBig(priv.Precomputed.Qinv).EncodedBytes())
+	return err
+}
+
+func serializeDSAPrivateKey(w io.Writer, priv *dsa.PrivateKey) error {
+	_, err := w.Write(new(encoding.MPI).SetBig(priv.X).EncodedBytes())
+	return err
+}
+
+func serializeElGamalPrivateKey(w io.Writer, priv *elgamal.PrivateKey) error {
+	_, err := w.Write(new(encoding.MPI).SetBig(priv.X).EncodedBytes())
+	return err
+}
+
+func serializeECDSAPrivateKey(w io.Writer, priv *ecdsa.PrivateKey) error {
+	_, err := w.Write(encoding.NewMPI(priv.MarshalIntegerSecret()).EncodedBytes())
+	return err
+}
+
+func serializeEdDSAPrivateKey(w io.Writer, priv *eddsa.PrivateKey) error {
+	_, err := w.Write(encoding.NewMPI(priv.MarshalByteSecret()).EncodedBytes())
+	return err
+}
+
+func serializeECDHPrivateKey(w io.Writer, priv *ecdh.PrivateKey) error {
+	_, err := w.Write(encoding.NewMPI(priv.MarshalByteSecret()).EncodedBytes())
+	return err
+}
+
+func serializeX25519PrivateKey(w io.Writer, priv *x25519.PrivateKey) error {
+	_, err := w.Write(priv.Secret)
+	return err
+}
+
+func serializeX448PrivateKey(w io.Writer, priv *x448.PrivateKey) error {
+	_, err := w.Write(priv.Secret)
+	return err
+}
+
+func serializeEd25519PrivateKey(w io.Writer, priv *ed25519.PrivateKey) error {
+	_, err := w.Write(priv.MarshalByteSecret())
+	return err
+}
+
+func serializeEd448PrivateKey(w io.Writer, priv *ed448.PrivateKey) error {
+	_, err := w.Write(priv.MarshalByteSecret())
+	return err
+}
+
+// decrypt decrypts an encrypted private key using a decryption key.
+func (pk *PrivateKey) decrypt(decryptionKey []byte) error {
+	if pk.Dummy() {
+		return errors.ErrDummyPrivateKey("dummy key found")
+	}
+	if !pk.Encrypted {
+		return nil
+	}
+	block := pk.cipher.new(decryptionKey)
+	var data []byte
+	switch pk.s2kType {
+	case S2KAEAD:
+		aead := pk.aead.new(block)
+		additionalData, err := pk.additionalData()
+		if err != nil {
+			return err
+		}
+		// Decrypt the encrypted key material with aead
+		data, err = aead.Open(nil, pk.iv, pk.encryptedData, additionalData)
+		if err != nil {
+			return err
+		}
+	case S2KSHA1, S2KCHECKSUM:
+		cfb := cipher.NewCFBDecrypter(block, pk.iv)
+		data = make([]byte, len(pk.encryptedData))
+		cfb.XORKeyStream(data, pk.encryptedData)
+		if pk.s2kType == S2KSHA1 {
+			if len(data) < sha1.Size {
+				return errors.StructuralError("truncated private key data")
+			}
+			h := sha1.New()
+			h.Write(data[:len(data)-sha1.Size])
+			sum := h.Sum(nil)
+			if !bytes.Equal(sum, data[len(data)-sha1.Size:]) {
+				return errors.StructuralError("private key checksum failure")
+			}
+			data = data[:len(data)-sha1.Size]
+		} else {
+			if len(data) < 2 {
+				return errors.StructuralError("truncated private key data")
+			}
+			var sum uint16
+			for i := 0; i < len(data)-2; i++ {
+				sum += uint16(data[i])
+			}
+			if data[len(data)-2] != uint8(sum>>8) ||
+				data[len(data)-1] != uint8(sum) {
+				return errors.StructuralError("private key checksum failure")
+			}
+			data = data[:len(data)-2]
+		}
+	default:
+		return errors.InvalidArgumentError("invalid s2k type")
+	}
+
+	err := pk.parsePrivateKey(data)
+	if _, ok := err.(errors.KeyInvalidError); ok {
+		return errors.KeyInvalidError("invalid key parameters")
+	}
+	if err != nil {
+		return err
+	}
+
+	// Mark key as unencrypted
+	pk.s2kType = S2KNON
+	pk.s2k = nil
+	pk.Encrypted = false
+	pk.encryptedData = nil
+	return nil
+}
+
+func (pk *PrivateKey) decryptWithCache(passphrase []byte, keyCache *s2k.Cache) error {
+	if pk.Dummy() {
+		return errors.ErrDummyPrivateKey("dummy key found")
+	}
+	if !pk.Encrypted {
+		return nil
+	}
+
+	key, err := keyCache.GetOrComputeDerivedKey(passphrase, pk.s2kParams, pk.cipher.KeySize())
+	if err != nil {
+		return err
+	}
+	if pk.s2kType == S2KAEAD {
+		key = pk.applyHKDF(key)
+	}
+	return pk.decrypt(key)
+}
+
+// Decrypt decrypts an encrypted private key using a passphrase.
+func (pk *PrivateKey) Decrypt(passphrase []byte) error {
+	if pk.Dummy() {
+		return errors.ErrDummyPrivateKey("dummy key found")
+	}
+	if !pk.Encrypted {
+		return nil
+	}
+
+	key := make([]byte, pk.cipher.KeySize())
+	pk.s2k(key, passphrase)
+	if pk.s2kType == S2KAEAD {
+		key = pk.applyHKDF(key)
+	}
+	return pk.decrypt(key)
+}
+
+// DecryptPrivateKeys decrypts all encrypted keys with the given config and passphrase.
+// Avoids recomputation of similar s2k key derivations.
+func DecryptPrivateKeys(keys []*PrivateKey, passphrase []byte) error {
+	// Create a cache to avoid recomputation of key derviations for the same passphrase.
+	s2kCache := &s2k.Cache{}
+	for _, key := range keys {
+		if key != nil && !key.Dummy() && key.Encrypted {
+			err := key.decryptWithCache(passphrase, s2kCache)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// encrypt encrypts an unencrypted private key.
+func (pk *PrivateKey) encrypt(key []byte, params *s2k.Params, s2kType S2KType, cipherFunction CipherFunction, rand io.Reader) error {
+	if pk.Dummy() {
+		return errors.ErrDummyPrivateKey("dummy key found")
+	}
+	if pk.Encrypted {
+		return nil
+	}
+	// check if encryptionKey has the correct size
+	if len(key) != cipherFunction.KeySize() {
+		return errors.InvalidArgumentError("supplied encryption key has the wrong size")
+	}
+
+	if params.Mode() == s2k.Argon2S2K && s2kType != S2KAEAD {
+		return errors.InvalidArgumentError("using Argon2 S2K without AEAD is not allowed")
+	}
+	if params.Mode() != s2k.Argon2S2K && params.Mode() != s2k.IteratedSaltedS2K &&
+		params.Mode() != s2k.SaltedS2K { // only allowed for high-entropy passphrases
+		return errors.InvalidArgumentError("insecure S2K mode")
+	}
+
+	priv := bytes.NewBuffer(nil)
+	err := pk.serializePrivateKey(priv)
+	if err != nil {
+		return err
+	}
+
+	pk.cipher = cipherFunction
+	pk.s2kParams = params
+	pk.s2k, err = pk.s2kParams.Function()
+	if err != nil {
+		return err
+	}
+
+	privateKeyBytes := priv.Bytes()
+	pk.s2kType = s2kType
+	block := pk.cipher.new(key)
+	switch s2kType {
+	case S2KAEAD:
+		if pk.aead == 0 {
+			return errors.StructuralError("aead mode is not set on key")
+		}
+		aead := pk.aead.new(block)
+		additionalData, err := pk.additionalData()
+		if err != nil {
+			return err
+		}
+		pk.iv = make([]byte, aead.NonceSize())
+		_, err = io.ReadFull(rand, pk.iv)
+		if err != nil {
+			return err
+		}
+		// Decrypt the encrypted key material with aead
+		pk.encryptedData = aead.Seal(nil, pk.iv, privateKeyBytes, additionalData)
+	case S2KSHA1, S2KCHECKSUM:
+		pk.iv = make([]byte, pk.cipher.blockSize())
+		_, err = io.ReadFull(rand, pk.iv)
+		if err != nil {
+			return err
+		}
+		cfb := cipher.NewCFBEncrypter(block, pk.iv)
+		if s2kType == S2KSHA1 {
+			h := sha1.New()
+			h.Write(privateKeyBytes)
+			sum := h.Sum(nil)
+			privateKeyBytes = append(privateKeyBytes, sum...)
+		} else {
+			var sum uint16
+			for _, b := range privateKeyBytes {
+				sum += uint16(b)
+			}
+			privateKeyBytes = append(privateKeyBytes, []byte{uint8(sum >> 8), uint8(sum)}...)
+		}
+		pk.encryptedData = make([]byte, len(privateKeyBytes))
+		cfb.XORKeyStream(pk.encryptedData, privateKeyBytes)
+	default:
+		return errors.InvalidArgumentError("invalid s2k type for encryption")
+	}
+
+	pk.Encrypted = true
+	pk.PrivateKey = nil
+	return err
+}
+
+// EncryptWithConfig encrypts an unencrypted private key using the passphrase and the config.
+func (pk *PrivateKey) EncryptWithConfig(passphrase []byte, config *Config) error {
+	params, err := s2k.Generate(config.Random(), config.S2K())
+	if err != nil {
+		return err
+	}
+	// Derive an encryption key with the configured s2k function.
+	key := make([]byte, config.Cipher().KeySize())
+	s2k, err := params.Function()
+	if err != nil {
+		return err
+	}
+	s2k(key, passphrase)
+	s2kType := S2KSHA1
+	if config.AEAD() != nil {
+		s2kType = S2KAEAD
+		pk.aead = config.AEAD().Mode()
+		pk.cipher = config.Cipher()
+		key = pk.applyHKDF(key)
+	}
+	// Encrypt the private key with the derived encryption key.
+	return pk.encrypt(key, params, s2kType, config.Cipher(), config.Random())
+}
+
+// EncryptPrivateKeys encrypts all unencrypted keys with the given config and passphrase.
+// Only derives one key from the passphrase, which is then used to encrypt each key.
+func EncryptPrivateKeys(keys []*PrivateKey, passphrase []byte, config *Config) error {
+	params, err := s2k.Generate(config.Random(), config.S2K())
+	if err != nil {
+		return err
+	}
+	// Derive an encryption key with the configured s2k function.
+	encryptionKey := make([]byte, config.Cipher().KeySize())
+	s2k, err := params.Function()
+	if err != nil {
+		return err
+	}
+	s2k(encryptionKey, passphrase)
+	for _, key := range keys {
+		if key != nil && !key.Dummy() && !key.Encrypted {
+			s2kType := S2KSHA1
+			if config.AEAD() != nil {
+				s2kType = S2KAEAD
+				key.aead = config.AEAD().Mode()
+				key.cipher = config.Cipher()
+				derivedKey := key.applyHKDF(encryptionKey)
+				err = key.encrypt(derivedKey, params, s2kType, config.Cipher(), config.Random())
+			} else {
+				err = key.encrypt(encryptionKey, params, s2kType, config.Cipher(), config.Random())
+			}
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// Encrypt encrypts an unencrypted private key using a passphrase.
+func (pk *PrivateKey) Encrypt(passphrase []byte) error {
+	// Default config of private key encryption
+	config := &Config{
+		S2KConfig: &s2k.Config{
+			S2KMode:  s2k.IteratedSaltedS2K,
+			S2KCount: 65536,
+			Hash:     crypto.SHA256,
+		},
+		DefaultCipher: CipherAES256,
+	}
+	return pk.EncryptWithConfig(passphrase, config)
+}
+
+func (pk *PrivateKey) serializePrivateKey(w io.Writer) (err error) {
+	switch priv := pk.PrivateKey.(type) {
+	case *rsa.PrivateKey:
+		err = serializeRSAPrivateKey(w, priv)
+	case *dsa.PrivateKey:
+		err = serializeDSAPrivateKey(w, priv)
+	case *elgamal.PrivateKey:
+		err = serializeElGamalPrivateKey(w, priv)
+	case *ecdsa.PrivateKey:
+		err = serializeECDSAPrivateKey(w, priv)
+	case *eddsa.PrivateKey:
+		err = serializeEdDSAPrivateKey(w, priv)
+	case *ecdh.PrivateKey:
+		err = serializeECDHPrivateKey(w, priv)
+	case *x25519.PrivateKey:
+		err = serializeX25519PrivateKey(w, priv)
+	case *x448.PrivateKey:
+		err = serializeX448PrivateKey(w, priv)
+	case *ed25519.PrivateKey:
+		err = serializeEd25519PrivateKey(w, priv)
+	case *ed448.PrivateKey:
+		err = serializeEd448PrivateKey(w, priv)
+	default:
+		err = errors.InvalidArgumentError("unknown private key type")
+	}
+	return
+}
+
+func (pk *PrivateKey) parsePrivateKey(data []byte) (err error) {
+	switch pk.PublicKey.PubKeyAlgo {
+	case PubKeyAlgoRSA, PubKeyAlgoRSASignOnly, PubKeyAlgoRSAEncryptOnly:
+		return pk.parseRSAPrivateKey(data)
+	case PubKeyAlgoDSA:
+		return pk.parseDSAPrivateKey(data)
+	case PubKeyAlgoElGamal:
+		return pk.parseElGamalPrivateKey(data)
+	case PubKeyAlgoECDSA:
+		return pk.parseECDSAPrivateKey(data)
+	case PubKeyAlgoECDH:
+		return pk.parseECDHPrivateKey(data)
+	case PubKeyAlgoEdDSA:
+		return pk.parseEdDSAPrivateKey(data)
+	case PubKeyAlgoX25519:
+		return pk.parseX25519PrivateKey(data)
+	case PubKeyAlgoX448:
+		return pk.parseX448PrivateKey(data)
+	case PubKeyAlgoEd25519:
+		return pk.parseEd25519PrivateKey(data)
+	case PubKeyAlgoEd448:
+		return pk.parseEd448PrivateKey(data)
+	default:
+		err = errors.StructuralError("unknown private key type")
+		return
+	}
+}
+
+func (pk *PrivateKey) parseRSAPrivateKey(data []byte) (err error) {
+	rsaPub := pk.PublicKey.PublicKey.(*rsa.PublicKey)
+	rsaPriv := new(rsa.PrivateKey)
+	rsaPriv.PublicKey = *rsaPub
+
+	buf := bytes.NewBuffer(data)
+	d := new(encoding.MPI)
+	if _, err := d.ReadFrom(buf); err != nil {
+		return err
+	}
+
+	p := new(encoding.MPI)
+	if _, err := p.ReadFrom(buf); err != nil {
+		return err
+	}
+
+	q := new(encoding.MPI)
+	if _, err := q.ReadFrom(buf); err != nil {
+		return err
+	}
+
+	rsaPriv.D = new(big.Int).SetBytes(d.Bytes())
+	rsaPriv.Primes = make([]*big.Int, 2)
+	rsaPriv.Primes[0] = new(big.Int).SetBytes(p.Bytes())
+	rsaPriv.Primes[1] = new(big.Int).SetBytes(q.Bytes())
+	if err := rsaPriv.Validate(); err != nil {
+		return errors.KeyInvalidError(err.Error())
+	}
+	rsaPriv.Precompute()
+	pk.PrivateKey = rsaPriv
+
+	return nil
+}
+
+func (pk *PrivateKey) parseDSAPrivateKey(data []byte) (err error) {
+	dsaPub := pk.PublicKey.PublicKey.(*dsa.PublicKey)
+	dsaPriv := new(dsa.PrivateKey)
+	dsaPriv.PublicKey = *dsaPub
+
+	buf := bytes.NewBuffer(data)
+	x := new(encoding.MPI)
+	if _, err := x.ReadFrom(buf); err != nil {
+		return err
+	}
+
+	dsaPriv.X = new(big.Int).SetBytes(x.Bytes())
+	if err := validateDSAParameters(dsaPriv); err != nil {
+		return err
+	}
+	pk.PrivateKey = dsaPriv
+
+	return nil
+}
+
+func (pk *PrivateKey) parseElGamalPrivateKey(data []byte) (err error) {
+	pub := pk.PublicKey.PublicKey.(*elgamal.PublicKey)
+	priv := new(elgamal.PrivateKey)
+	priv.PublicKey = *pub
+
+	buf := bytes.NewBuffer(data)
+	x := new(encoding.MPI)
+	if _, err := x.ReadFrom(buf); err != nil {
+		return err
+	}
+
+	priv.X = new(big.Int).SetBytes(x.Bytes())
+	if err := validateElGamalParameters(priv); err != nil {
+		return err
+	}
+	pk.PrivateKey = priv
+
+	return nil
+}
+
+func (pk *PrivateKey) parseECDSAPrivateKey(data []byte) (err error) {
+	ecdsaPub := pk.PublicKey.PublicKey.(*ecdsa.PublicKey)
+	ecdsaPriv := ecdsa.NewPrivateKey(*ecdsaPub)
+
+	buf := bytes.NewBuffer(data)
+	d := new(encoding.MPI)
+	if _, err := d.ReadFrom(buf); err != nil {
+		return err
+	}
+
+	if err := ecdsaPriv.UnmarshalIntegerSecret(d.Bytes()); err != nil {
+		return err
+	}
+	if err := ecdsa.Validate(ecdsaPriv); err != nil {
+		return err
+	}
+	pk.PrivateKey = ecdsaPriv
+
+	return nil
+}
+
+func (pk *PrivateKey) parseECDHPrivateKey(data []byte) (err error) {
+	ecdhPub := pk.PublicKey.PublicKey.(*ecdh.PublicKey)
+	ecdhPriv := ecdh.NewPrivateKey(*ecdhPub)
+
+	buf := bytes.NewBuffer(data)
+	d := new(encoding.MPI)
+	if _, err := d.ReadFrom(buf); err != nil {
+		return err
+	}
+
+	if err := ecdhPriv.UnmarshalByteSecret(d.Bytes()); err != nil {
+		return err
+	}
+
+	if err := ecdh.Validate(ecdhPriv); err != nil {
+		return err
+	}
+
+	pk.PrivateKey = ecdhPriv
+
+	return nil
+}
+
+func (pk *PrivateKey) parseX25519PrivateKey(data []byte) (err error) {
+	publicKey := pk.PublicKey.PublicKey.(*x25519.PublicKey)
+	privateKey := x25519.NewPrivateKey(*publicKey)
+	privateKey.PublicKey = *publicKey
+
+	privateKey.Secret = make([]byte, x25519.KeySize)
+
+	if len(data) != x25519.KeySize {
+		err = errors.StructuralError("wrong x25519 key size")
+		return err
+	}
+	subtle.ConstantTimeCopy(1, privateKey.Secret, data)
+	if err = x25519.Validate(privateKey); err != nil {
+		return err
+	}
+	pk.PrivateKey = privateKey
+	return nil
+}
+
+func (pk *PrivateKey) parseX448PrivateKey(data []byte) (err error) {
+	publicKey := pk.PublicKey.PublicKey.(*x448.PublicKey)
+	privateKey := x448.NewPrivateKey(*publicKey)
+	privateKey.PublicKey = *publicKey
+
+	privateKey.Secret = make([]byte, x448.KeySize)
+
+	if len(data) != x448.KeySize {
+		err = errors.StructuralError("wrong x448 key size")
+		return err
+	}
+	subtle.ConstantTimeCopy(1, privateKey.Secret, data)
+	if err = x448.Validate(privateKey); err != nil {
+		return err
+	}
+	pk.PrivateKey = privateKey
+	return nil
+}
+
+func (pk *PrivateKey) parseEd25519PrivateKey(data []byte) (err error) {
+	publicKey := pk.PublicKey.PublicKey.(*ed25519.PublicKey)
+	privateKey := ed25519.NewPrivateKey(*publicKey)
+	privateKey.PublicKey = *publicKey
+
+	if len(data) != ed25519.SeedSize {
+		err = errors.StructuralError("wrong ed25519 key size")
+		return err
+	}
+	err = privateKey.UnmarshalByteSecret(data)
+	if err != nil {
+		return err
+	}
+	err = ed25519.Validate(privateKey)
+	if err != nil {
+		return err
+	}
+	pk.PrivateKey = privateKey
+	return nil
+}
+
+func (pk *PrivateKey) parseEd448PrivateKey(data []byte) (err error) {
+	publicKey := pk.PublicKey.PublicKey.(*ed448.PublicKey)
+	privateKey := ed448.NewPrivateKey(*publicKey)
+	privateKey.PublicKey = *publicKey
+
+	if len(data) != ed448.SeedSize {
+		err = errors.StructuralError("wrong ed448 key size")
+		return err
+	}
+	err = privateKey.UnmarshalByteSecret(data)
+	if err != nil {
+		return err
+	}
+	err = ed448.Validate(privateKey)
+	if err != nil {
+		return err
+	}
+	pk.PrivateKey = privateKey
+	return nil
+}
+
+func (pk *PrivateKey) parseEdDSAPrivateKey(data []byte) (err error) {
+	eddsaPub := pk.PublicKey.PublicKey.(*eddsa.PublicKey)
+	eddsaPriv := eddsa.NewPrivateKey(*eddsaPub)
+	eddsaPriv.PublicKey = *eddsaPub
+
+	buf := bytes.NewBuffer(data)
+	d := new(encoding.MPI)
+	if _, err := d.ReadFrom(buf); err != nil {
+		return err
+	}
+
+	if err = eddsaPriv.UnmarshalByteSecret(d.Bytes()); err != nil {
+		return err
+	}
+
+	if err := eddsa.Validate(eddsaPriv); err != nil {
+		return err
+	}
+
+	pk.PrivateKey = eddsaPriv
+
+	return nil
+}
+
+func (pk *PrivateKey) additionalData() ([]byte, error) {
+	additionalData := bytes.NewBuffer(nil)
+	// Write additional data prefix based on packet type
+	var packetByte byte
+	if pk.PublicKey.IsSubkey {
+		packetByte = 0xc7
+	} else {
+		packetByte = 0xc5
+	}
+	// Write public key to additional data
+	_, err := additionalData.Write([]byte{packetByte})
+	if err != nil {
+		return nil, err
+	}
+	err = pk.PublicKey.serializeWithoutHeaders(additionalData)
+	if err != nil {
+		return nil, err
+	}
+	return additionalData.Bytes(), nil
+}
+
+func (pk *PrivateKey) applyHKDF(inputKey []byte) []byte {
+	var packetByte byte
+	if pk.PublicKey.IsSubkey {
+		packetByte = 0xc7
+	} else {
+		packetByte = 0xc5
+	}
+	associatedData := []byte{packetByte, byte(pk.Version), byte(pk.cipher), byte(pk.aead)}
+	hkdfReader := hkdf.New(sha256.New, inputKey, []byte{}, associatedData)
+	encryptionKey := make([]byte, pk.cipher.KeySize())
+	_, _ = readFull(hkdfReader, encryptionKey)
+	return encryptionKey
+}
+
+func validateDSAParameters(priv *dsa.PrivateKey) error {
+	p := priv.P // group prime
+	q := priv.Q // subgroup order
+	g := priv.G // g has order q mod p
+	x := priv.X // secret
+	y := priv.Y // y == g**x mod p
+	one := big.NewInt(1)
+	// expect g, y >= 2 and g < p
+	if g.Cmp(one) <= 0 || y.Cmp(one) <= 0 || g.Cmp(p) > 0 {
+		return errors.KeyInvalidError("dsa: invalid group")
+	}
+	// expect p > q
+	if p.Cmp(q) <= 0 {
+		return errors.KeyInvalidError("dsa: invalid group prime")
+	}
+	// q should be large enough and divide p-1
+	pSub1 := new(big.Int).Sub(p, one)
+	if q.BitLen() < 150 || new(big.Int).Mod(pSub1, q).Cmp(big.NewInt(0)) != 0 {
+		return errors.KeyInvalidError("dsa: invalid order")
+	}
+	// confirm that g has order q mod p
+	if !q.ProbablyPrime(32) || new(big.Int).Exp(g, q, p).Cmp(one) != 0 {
+		return errors.KeyInvalidError("dsa: invalid order")
+	}
+	// check y
+	if new(big.Int).Exp(g, x, p).Cmp(y) != 0 {
+		return errors.KeyInvalidError("dsa: mismatching values")
+	}
+
+	return nil
+}
+
+func validateElGamalParameters(priv *elgamal.PrivateKey) error {
+	p := priv.P // group prime
+	g := priv.G // g has order p-1 mod p
+	x := priv.X // secret
+	y := priv.Y // y == g**x mod p
+	one := big.NewInt(1)
+	// Expect g, y >= 2 and g < p
+	if g.Cmp(one) <= 0 || y.Cmp(one) <= 0 || g.Cmp(p) > 0 {
+		return errors.KeyInvalidError("elgamal: invalid group")
+	}
+	if p.BitLen() < 1024 {
+		return errors.KeyInvalidError("elgamal: group order too small")
+	}
+	pSub1 := new(big.Int).Sub(p, one)
+	if new(big.Int).Exp(g, pSub1, p).Cmp(one) != 0 {
+		return errors.KeyInvalidError("elgamal: invalid group")
+	}
+	// Since p-1 is not prime, g might have a smaller order that divides p-1.
+	// We cannot confirm the exact order of g, but we make sure it is not too small.
+	gExpI := new(big.Int).Set(g)
+	i := 1
+	threshold := 2 << 17 // we want order > threshold
+	for i < threshold {
+		i++ // we check every order to make sure key validation is not easily bypassed by guessing y'
+		gExpI.Mod(new(big.Int).Mul(gExpI, g), p)
+		if gExpI.Cmp(one) == 0 {
+			return errors.KeyInvalidError("elgamal: order too small")
+		}
+	}
+	// Check y
+	if new(big.Int).Exp(g, x, p).Cmp(y) != 0 {
+		return errors.KeyInvalidError("elgamal: mismatching values")
+	}
+
+	return nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/ProtonMail/go-crypto/openpgp/packet/private_key_test_data.go","mode":420,"size":3335,"sha256":"ab3dae8e4528be7a6f401d5206735847547d78509b4e1bad4f13d13f6b839039","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3335}
+package packet
+
+// Generated with `gpg --export-secret-keys "Test Key 2"`
+const privKeyRSAHex = "9501fe044cc349a8010400b70ca0010e98c090008d45d1ee8f9113bd5861fd57b88bacb7c68658747663f1e1a3b5a98f32fda6472373c024b97359cd2efc88ff60f77751adfbf6af5e615e6a1408cfad8bf0cea30b0d5f53aa27ad59089ba9b15b7ebc2777a25d7b436144027e3bcd203909f147d0e332b240cf63d3395f5dfe0df0a6c04e8655af7eacdf0011010001fe0303024a252e7d475fd445607de39a265472aa74a9320ba2dac395faa687e9e0336aeb7e9a7397e511b5afd9dc84557c80ac0f3d4d7bfec5ae16f20d41c8c84a04552a33870b930420e230e179564f6d19bb153145e76c33ae993886c388832b0fa042ddda7f133924f3854481533e0ede31d51278c0519b29abc3bf53da673e13e3e1214b52413d179d7f66deee35cac8eacb060f78379d70ef4af8607e68131ff529439668fc39c9ce6dfef8a5ac234d234802cbfb749a26107db26406213ae5c06d4673253a3cbee1fcbae58d6ab77e38d6e2c0e7c6317c48e054edadb5a40d0d48acb44643d998139a8a66bb820be1f3f80185bc777d14b5954b60effe2448a036d565c6bc0b915fcea518acdd20ab07bc1529f561c58cd044f723109b93f6fd99f876ff891d64306b5d08f48bab59f38695e9109c4dec34013ba3153488ce070268381ba923ee1eb77125b36afcb4347ec3478c8f2735b06ef17351d872e577fa95d0c397c88c71b59629a36aec"
+
+// Generated by `gpg --export-secret-keys` followed by a manual extraction of
+// the ElGamal subkey from the packets.
+const privKeyElGamalHex = "9d0157044df9ee1a100400eb8e136a58ec39b582629cdadf830bc64e0a94ed8103ca8bb247b27b11b46d1d25297ef4bcc3071785ba0c0bedfe89eabc5287fcc0edf81ab5896c1c8e4b20d27d79813c7aede75320b33eaeeaa586edc00fd1036c10133e6ba0ff277245d0d59d04b2b3421b7244aca5f4a8d870c6f1c1fbff9e1c26699a860b9504f35ca1d700030503fd1ededd3b840795be6d9ccbe3c51ee42e2f39233c432b831ddd9c4e72b7025a819317e47bf94f9ee316d7273b05d5fcf2999c3a681f519b1234bbfa6d359b4752bd9c3f77d6b6456cde152464763414ca130f4e91d91041432f90620fec0e6d6b5116076c2985d5aeaae13be492b9b329efcaf7ee25120159a0a30cd976b42d7afe030302dae7eb80db744d4960c4df930d57e87fe81412eaace9f900e6c839817a614ddb75ba6603b9417c33ea7b6c93967dfa2bcff3fa3c74a5ce2c962db65b03aece14c96cbd0038fc"
+
+// pkcs1PrivKeyHex is a PKCS#1, RSA private key.
+// Generated by `openssl genrsa 1024 | openssl rsa -outform DER  | xxd -p`
+const pkcs1PrivKeyHex = "3082025d02010002818100e98edfa1c3b35884a54d0b36a6a603b0290fa85e49e30fa23fc94fef9c6790bc4849928607aa48d809da326fb42a969d06ad756b98b9c1a90f5d4a2b6d0ac05953c97f4da3120164a21a679793ce181c906dc01d235cc085ddcdf6ea06c389b6ab8885dfd685959e693138856a68a7e5db263337ff82a088d583a897cf2d59e9020301000102818100b6d5c9eb70b02d5369b3ee5b520a14490b5bde8a317d36f7e4c74b7460141311d1e5067735f8f01d6f5908b2b96fbd881f7a1ab9a84d82753e39e19e2d36856be960d05ac9ef8e8782ea1b6d65aee28fdfe1d61451e8cff0adfe84322f12cf455028b581cf60eb9e0e140ba5d21aeba6c2634d7c65318b9a665fc01c3191ca21024100fa5e818da3705b0fa33278bb28d4b6f6050388af2d4b75ec9375dd91ccf2e7d7068086a8b82a8f6282e4fbbdb8a7f2622eb97295249d87acea7f5f816f54d347024100eecf9406d7dc49cdfb95ab1eff4064de84c7a30f64b2798936a0d2018ba9eb52e4b636f82e96c49cc63b80b675e91e40d1b2e4017d4b9adaf33ab3d9cf1c214f024100c173704ace742c082323066226a4655226819a85304c542b9dacbeacbf5d1881ee863485fcf6f59f3a604f9b42289282067447f2b13dfeed3eab7851fc81e0550240741fc41f3fc002b382eed8730e33c5d8de40256e4accee846667f536832f711ab1d4590e7db91a8a116ac5bff3be13d3f9243ff2e976662aa9b395d907f8e9c9024046a5696c9ef882363e06c9fa4e2f5b580906452befba03f4a99d0f873697ef1f851d2226ca7934b30b7c3e80cb634a67172bbbf4781735fe3e09263e2dd723e7"
+
+@@END
 @@PORTABLE {"path":"third_party/wails/vendor/github.com/ProtonMail/go-crypto/openpgp/packet/public_key.go","mode":420,"size":32515,"sha256":"da3c885b946c792055a36bbfbeccabc65d51278f73854b788a954dda265af0e6","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":32515}
 // Copyright 2011 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
@@ -122798,2258 +124966,5 @@ func (m *matcher) Match(path []string, isDir bool) bool {
 	}
 	return false
 }
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/gitignore/pattern.go","mode":420,"size":3190,"sha256":"6c8442cc541e54bc05db87c228f959249b357ffbf2487e457615fc06cb8a73ee","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3190}
-package gitignore
-
-import (
-	"path/filepath"
-	"strings"
-)
-
-// MatchResult defines outcomes of a match, no match, exclusion or inclusion.
-type MatchResult int
-
-const (
-	// NoMatch defines the no match outcome of a match check
-	NoMatch MatchResult = iota
-	// Exclude defines an exclusion of a file as a result of a match check
-	Exclude
-	// Include defines an explicit inclusion of a file as a result of a match check
-	Include
-)
-
-const (
-	inclusionPrefix = "!"
-	zeroToManyDirs  = "**"
-	patternDirSep   = "/"
-)
-
-// Pattern defines a single gitignore pattern.
-type Pattern interface {
-	// Match matches the given path to the pattern.
-	Match(path []string, isDir bool) MatchResult
-}
-
-type pattern struct {
-	domain    []string
-	pattern   []string
-	inclusion bool
-	dirOnly   bool
-	isGlob    bool
-}
-
-// ParsePattern parses a gitignore pattern string into the Pattern structure.
-func ParsePattern(p string, domain []string) Pattern {
-	// storing domain, copy it to ensure it isn't changed externally
-	domain = append([]string(nil), domain...)
-	res := pattern{domain: domain}
-
-	if strings.HasPrefix(p, inclusionPrefix) {
-		res.inclusion = true
-		p = p[1:]
-	}
-
-	if !strings.HasSuffix(p, "\\ ") {
-		p = strings.TrimRight(p, " ")
-	}
-
-	if strings.HasSuffix(p, patternDirSep) {
-		res.dirOnly = true
-		p = p[:len(p)-1]
-	}
-
-	if strings.Contains(p, patternDirSep) {
-		res.isGlob = true
-	}
-
-	res.pattern = strings.Split(p, patternDirSep)
-	return &res
-}
-
-func (p *pattern) Match(path []string, isDir bool) MatchResult {
-	if len(path) <= len(p.domain) {
-		return NoMatch
-	}
-	for i, e := range p.domain {
-		if path[i] != e {
-			return NoMatch
-		}
-	}
-
-	path = path[len(p.domain):]
-	if p.isGlob && !p.globMatch(path, isDir) {
-		return NoMatch
-	} else if !p.isGlob && !p.simpleNameMatch(path, isDir) {
-		return NoMatch
-	}
-
-	if p.inclusion {
-		return Include
-	} else {
-		return Exclude
-	}
-}
-
-func (p *pattern) simpleNameMatch(path []string, isDir bool) bool {
-	for i, name := range path {
-		if match, err := filepath.Match(p.pattern[0], name); err != nil {
-			return false
-		} else if !match {
-			continue
-		}
-		if p.dirOnly && !isDir && i == len(path)-1 {
-			return false
-		}
-		return true
-	}
-	return false
-}
-
-func (p *pattern) globMatch(path []string, isDir bool) bool {
-	matched := false
-	canTraverse := false
-	for i, pattern := range p.pattern {
-		if pattern == "" {
-			canTraverse = false
-			continue
-		}
-		if pattern == zeroToManyDirs {
-			if i == len(p.pattern)-1 {
-				break
-			}
-			canTraverse = true
-			continue
-		}
-		if strings.Contains(pattern, zeroToManyDirs) {
-			return false
-		}
-		if len(path) == 0 {
-			return false
-		}
-		if canTraverse {
-			canTraverse = false
-			for len(path) > 0 {
-				e := path[0]
-				path = path[1:]
-				if match, err := filepath.Match(pattern, e); err != nil {
-					return false
-				} else if match {
-					matched = true
-					break
-				} else if len(path) == 0 {
-					// if nothing left then fail
-					matched = false
-				}
-			}
-		} else {
-			if match, err := filepath.Match(pattern, path[0]); err != nil || !match {
-				return false
-			}
-			matched = true
-			path = path[1:]
-		}
-	}
-	if matched && p.dirOnly && !isDir && len(path) == 0 {
-		matched = false
-	}
-	return matched
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/idxfile/decoder.go","mode":420,"size":8769,"sha256":"310465504ad45ce834563f597f4808cea182c929190e38d38c03b0cd08bb7997","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":8769}
-package idxfile
-
-import (
-	"bytes"
-	"crypto"
-	"encoding/hex"
-	"errors"
-	"fmt"
-	"io"
-	"io/fs"
-
-	"github.com/go-git/go-git/v5/plumbing/hash"
-	"github.com/go-git/go-git/v5/utils/binary"
-)
-
-var (
-	// ErrUnsupportedVersion is returned by Decode when the idx file version
-	// is not supported.
-	ErrUnsupportedVersion = errors.New("unsupported version")
-	// ErrMalformedIdxFile is returned by Decode when the idx file is corrupted.
-	ErrMalformedIdxFile = errors.New("malformed IDX file")
-)
-
-const (
-	fanout         = 256
-	objectIDLength = hash.Size
-)
-
-// Byte sizes of the idx v2 layout elements, used by the size formula
-// in [validateIdxV2Size]. See [gitformat-pack] for the canonical
-// layout.
-//
-// [gitformat-pack]: https://git-scm.com/docs/gitformat-pack
-const (
-	headerLen     = 8          // magic + version
-	fanoutLen     = fanout * 4 // uint32 per bucket
-	crc32Len      = 4          // CRC32 per object
-	offset32Len   = 4          // 32-bit offset per object
-	offset64Len   = 8          // 64-bit overflow offset
-	trailerHashes = 2          // pack checksum + idx checksum, each hashsz
-)
-
-// statInput is the optional shape the [Decoder] probes for at the
-// start of [Decoder.Decode] to learn the on-disk length of the idx
-// blob, which it uses to validate the canonical-Git size formula
-// before any allocations driven by the fanout table. Callers that
-// pass an [*os.File] or a `billy.File` backed by an `*os.File`
-// (the production call sites in `storage/filesystem`) satisfy it
-// directly; arbitrary [io.Reader]s do not, and decode for them
-// retains the pre-existing behaviour of erroring out at the
-// truncated-payload boundary instead.
-//
-// The interface is intentionally unexported so the public
-// [NewDecoder] signature stays compatible with v5.
-type statInput interface {
-	Stat() (fs.FileInfo, error)
-}
-
-// Decoder reads and decodes idx files from an input stream.
-type Decoder struct {
-	io.Reader
-	src io.Reader
-	h   hash.Hash
-}
-
-// NewDecoder builds a new idx stream decoder, that reads from r.
-func NewDecoder(r io.Reader) *Decoder {
-	h := hash.New(crypto.SHA1)
-	tr := io.TeeReader(r, h)
-	return &Decoder{tr, r, h}
-}
-
-// Decode reads from the stream and decode the content into the MemoryIndex struct.
-func (d *Decoder) Decode(idx *MemoryIndex) error {
-	idxSize := int64(-1)
-	if in, ok := d.src.(statInput); ok {
-		fi, err := in.Stat()
-		if err != nil {
-			return fmt.Errorf("%w: stat input: %w", ErrMalformedIdxFile, err)
-		}
-		idxSize = fi.Size()
-	}
-
-	if err := validateHeader(d); err != nil {
-		return err
-	}
-
-	headerFlow := []func(*MemoryIndex, io.Reader) error{
-		readVersion,
-		readFanout,
-	}
-	for _, f := range headerFlow {
-		if err := f(idx, d); err != nil {
-			return err
-		}
-	}
-
-	if idxSize >= 0 {
-		if err := validateIdxV2Size(idx, idxSize); err != nil {
-			return err
-		}
-	}
-
-	bodyFlow := []func(*MemoryIndex, io.Reader) error{
-		readObjectNames,
-		readCRC32,
-		readOffsets,
-		readPackChecksum,
-	}
-	for _, f := range bodyFlow {
-		if err := f(idx, d); err != nil {
-			return err
-		}
-	}
-
-	actual := d.h.Sum(nil)
-	if err := readIdxChecksum(idx, d); err != nil {
-		return err
-	}
-
-	if !bytes.Equal(actual, idx.IdxChecksum[:]) {
-		return fmt.Errorf("%w: checksum mismatch: %q instead of %q",
-			ErrMalformedIdxFile, hex.EncodeToString(idx.IdxChecksum[:]), hex.EncodeToString(actual))
-	}
-
-	return nil
-}
-
-func validateHeader(r io.Reader) error {
-	h := make([]byte, 4)
-	if _, err := io.ReadFull(r, h); err != nil {
-		return err
-	}
-
-	if !bytes.Equal(h, idxHeader) {
-		return ErrMalformedIdxFile
-	}
-
-	return nil
-}
-
-func readVersion(idx *MemoryIndex, r io.Reader) error {
-	v, err := binary.ReadUint32(r)
-	if err != nil {
-		return err
-	}
-
-	if v != VersionSupported {
-		return fmt.Errorf("%w: v%d", ErrUnsupportedVersion, v)
-	}
-
-	idx.Version = v
-	return nil
-}
-
-func readFanout(idx *MemoryIndex, r io.Reader) error {
-	for k := 0; k < fanout; k++ {
-		n, err := binary.ReadUint32(r)
-		if err != nil {
-			return err
-		}
-
-		if k > 0 && n < idx.Fanout[k-1] {
-			return fmt.Errorf("%w: fanout table is not monotonically non-decreasing at entry %d", ErrMalformedIdxFile, k)
-		}
-
-		idx.Fanout[k] = n
-		idx.FanoutMapping[k] = noMapping
-	}
-
-	return nil
-}
-
-func readObjectNames(idx *MemoryIndex, r io.Reader) error {
-	for k := 0; k < fanout; k++ {
-		var buckets uint32
-		if k == 0 {
-			buckets = idx.Fanout[k]
-		} else {
-			buckets = idx.Fanout[k] - idx.Fanout[k-1]
-		}
-
-		if buckets == 0 {
-			continue
-		}
-
-		idx.FanoutMapping[k] = len(idx.Names)
-
-		nameLen := int(buckets * objectIDLength)
-		bin := make([]byte, nameLen)
-		if _, err := io.ReadFull(r, bin); err != nil {
-			return err
-		}
-
-		idx.Names = append(idx.Names, bin)
-		idx.Offset32 = append(idx.Offset32, make([]byte, buckets*4))
-		idx.CRC32 = append(idx.CRC32, make([]byte, buckets*4))
-	}
-
-	return nil
-}
-
-func readCRC32(idx *MemoryIndex, r io.Reader) error {
-	for k := 0; k < fanout; k++ {
-		if pos := idx.FanoutMapping[k]; pos != noMapping {
-			if _, err := io.ReadFull(r, idx.CRC32[pos]); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
-}
-
-func readOffsets(idx *MemoryIndex, r io.Reader) error {
-	var o64cnt int64
-	for k := 0; k < fanout; k++ {
-		if pos := idx.FanoutMapping[k]; pos != noMapping {
-			if _, err := io.ReadFull(r, idx.Offset32[pos]); err != nil {
-				return err
-			}
-
-			for p := 0; p < len(idx.Offset32[pos]); p += 4 {
-				if idx.Offset32[pos][p]&(byte(1)<<7) > 0 {
-					o64cnt++
-				}
-			}
-		}
-	}
-
-	if o64cnt > 0 {
-		idx.Offset64 = make([]byte, o64cnt*8)
-		if _, err := io.ReadFull(r, idx.Offset64); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func readPackChecksum(idx *MemoryIndex, r io.Reader) error {
-	if _, err := io.ReadFull(r, idx.PackfileChecksum[:]); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func readIdxChecksum(idx *MemoryIndex, r io.Reader) error {
-	if _, err := io.ReadFull(r, idx.IdxChecksum[:]); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// validateIdxV2Size enforces the size formula used by canonical Git
-// load_idx for idx v2 files: the on-disk length must lie within
-// [minSize, maxSize] where
-//
-//	perObject = hashsz + crc32Len + offset32Len
-//	minSize   = headerLen + fanoutLen + trailerHashes*hashsz + nr*perObject
-//	maxSize   = minSize + (nr-1)*offset64Len     when nr > 0
-//
-// with nr taken from the last fanout entry and hashsz fixed at
-// [objectIDLength] (SHA-1 in v5). Multiplications use a self-checking
-// overflow guard so inputs whose claimed object count overflows the
-// formula are rejected rather than wrapping into a smaller value.
-func validateIdxV2Size(idx *MemoryIndex, idxSize int64) error {
-	nr := int64(idx.Fanout[fanout-1])
-	hashsz := int64(objectIDLength)
-
-	minSize := minIdxV2Size(nr, hashsz)
-	maxSize := maxIdxV2Size(nr, hashsz)
-	if minSize < 0 || maxSize < 0 {
-		return fmt.Errorf("%w: object count %d is inconsistent with file size", ErrMalformedIdxFile, nr)
-	}
-
-	if idxSize < minSize || idxSize > maxSize {
-		return fmt.Errorf("%w: file size %d is inconsistent with object count %d", ErrMalformedIdxFile, idxSize, nr)
-	}
-	return nil
-}
-
-// minIdxV2Size returns the minimum on-disk size of an idx v2 file
-// holding nr objects with the given hash size, mirroring the
-// computation in canonical Git load_idx. Returns -1 when any
-// intermediate multiplication or addition would overflow int64.
-func minIdxV2Size(nr, hashsz int64) int64 {
-	perObject := hashsz + crc32Len + offset32Len
-	fixed := int64(headerLen+fanoutLen) + trailerHashes*hashsz
-
-	objects, ok := mulInt64(nr, perObject)
-	if !ok {
-		return -1
-	}
-	sum, ok := addInt64(fixed, objects)
-	if !ok {
-		return -1
-	}
-	return sum
-}
-
-// maxIdxV2Size returns the maximum on-disk size of an idx v2 file
-// holding nr objects with the given hash size, mirroring the
-// computation in canonical Git load_idx. Returns -1 on overflow.
-func maxIdxV2Size(nr, hashsz int64) int64 {
-	minSize := minIdxV2Size(nr, hashsz)
-	if minSize < 0 {
-		return -1
-	}
-	if nr == 0 {
-		return minSize
-	}
-	overflow, ok := mulInt64(nr-1, offset64Len)
-	if !ok {
-		return -1
-	}
-	sum, ok := addInt64(minSize, overflow)
-	if !ok {
-		return -1
-	}
-	return sum
-}
-
-// mulInt64 returns a*b and whether the result fits in an int64 without
-// overflow. Negative operands or overflow yield ok=false. The overflow
-// check uses the standard self-inverse identity: a*b/b == a only when
-// the multiplication did not wrap.
-func mulInt64(a, b int64) (int64, bool) {
-	if a < 0 || b < 0 {
-		return 0, false
-	}
-	if a == 0 || b == 0 {
-		return 0, true
-	}
-	c := a * b
-	if c/b != a {
-		return 0, false
-	}
-	return c, true
-}
-
-// addInt64 returns a+b and whether the result fits in an int64 without
-// overflow. Negative operands or overflow yield ok=false.
-func addInt64(a, b int64) (int64, bool) {
-	if a < 0 || b < 0 {
-		return 0, false
-	}
-	c := a + b
-	if c < a {
-		return 0, false
-	}
-	return c, true
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/idxfile/doc.go","mode":420,"size":5251,"sha256":"e3a60b1122f25e79f3785d94f095485df05675c40549ec992ad377127a06ecf4","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5251}
-// Package idxfile implements encoding and decoding of packfile idx files.
-//
-//  == Original (version 1) pack-*.idx files have the following format:
-//
-//    - The header consists of 256 4-byte network byte order
-//      integers.  N-th entry of this table records the number of
-//      objects in the corresponding pack, the first byte of whose
-//      object name is less than or equal to N.  This is called the
-//      'first-level fan-out' table.
-//
-//    - The header is followed by sorted 24-byte entries, one entry
-//      per object in the pack.  Each entry is:
-//
-//     4-byte network byte order integer, recording where the
-//     object is stored in the packfile as the offset from the
-//     beginning.
-//
-//     20-byte object name.
-//
-//   - The file is concluded with a trailer:
-//
-//     A copy of the 20-byte SHA1 checksum at the end of
-//     corresponding packfile.
-//
-//     20-byte SHA1-checksum of all of the above.
-//
-//   Pack Idx file:
-//
-//        --  +--------------------------------+
-//   fanout   | fanout[0] = 2 (for example)    |-.
-//   table    +--------------------------------+ |
-//            | fanout[1]                      | |
-//            +--------------------------------+ |
-//            | fanout[2]                      | |
-//            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ |
-//            | fanout[255] = total objects    |---.
-//        --  +--------------------------------+ | |
-//   main     | offset                         | | |
-//   index    | object name 00XXXXXXXXXXXXXXXX | | |
-//   tab      +--------------------------------+ | |
-//            | offset                         | | |
-//            | object name 00XXXXXXXXXXXXXXXX | | |
-//            +--------------------------------+<+ |
-//          .-| offset                         |   |
-//          | | object name 01XXXXXXXXXXXXXXXX |   |
-//          | +--------------------------------+   |
-//          | | offset                         |   |
-//          | | object name 01XXXXXXXXXXXXXXXX |   |
-//          | ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~   |
-//          | | offset                         |   |
-//          | | object name FFXXXXXXXXXXXXXXXX |   |
-//        --| +--------------------------------+<--+
-//  trailer | | packfile checksum              |
-//          | +--------------------------------+
-//          | | idxfile checksum               |
-//          | +--------------------------------+
-//          .---------.
-//                    |
-//  Pack file entry: <+
-//
-//     packed object header:
-//     1-byte size extension bit (MSB)
-//           type (next 3 bit)
-//           size0 (lower 4-bit)
-//         n-byte sizeN (as long as MSB is set, each 7-bit)
-//         size0..sizeN form 4+7+7+..+7 bit integer, size0
-//         is the least significant part, and sizeN is the
-//         most significant part.
-//     packed object data:
-//         If it is not DELTA, then deflated bytes (the size above
-//         is the size before compression).
-//     If it is REF_DELTA, then
-//       20-byte base object name SHA1 (the size above is the
-//         size of the delta data that follows).
-//           delta data, deflated.
-//     If it is OFS_DELTA, then
-//       n-byte offset (see below) interpreted as a negative
-//         offset from the type-byte of the header of the
-//         ofs-delta entry (the size above is the size of
-//         the delta data that follows).
-//       delta data, deflated.
-//
-//     offset encoding:
-//       n bytes with MSB set in all but the last one.
-//       The offset is then the number constructed by
-//       concatenating the lower 7 bit of each byte, and
-//       for n >= 2 adding 2^7 + 2^14 + ... + 2^(7*(n-1))
-//       to the result.
-//
-//   == Version 2 pack-*.idx files support packs larger than 4 GiB, and
-//      have some other reorganizations.  They have the format:
-//
-//     - A 4-byte magic number '\377tOc' which is an unreasonable
-//       fanout[0] value.
-//
-//     - A 4-byte version number (= 2)
-//
-//     - A 256-entry fan-out table just like v1.
-//
-//     - A table of sorted 20-byte SHA1 object names.  These are
-//       packed together without offset values to reduce the cache
-//       footprint of the binary search for a specific object name.
-//
-//     - A table of 4-byte CRC32 values of the packed object data.
-//       This is new in v2 so compressed data can be copied directly
-//       from pack to pack during repacking without undetected
-//       data corruption.
-//
-//     - A table of 4-byte offset values (in network byte order).
-//       These are usually 31-bit pack file offsets, but large
-//       offsets are encoded as an index into the next table with
-//       the msbit set.
-//
-//     - A table of 8-byte offset entries (empty for pack files less
-//       than 2 GiB).  Pack files are organized with heavily used
-//       objects toward the front, so most object references should
-//       not need to refer to this table.
-//
-//     - The same trailer as a v1 pack file:
-//
-//       A copy of the 20-byte SHA1 checksum at the end of
-//       corresponding packfile.
-//
-//       20-byte SHA1-checksum of all of the above.
-//
-// Source:
-// https://www.kernel.org/pub/software/scm/git/docs/v1.7.5/technical/pack-format.txt
-package idxfile
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/idxfile/encoder.go","mode":420,"size":2525,"sha256":"c348da82c4728c3e2cbbc709e503a0d9fba6603fbdc432b88227ab294a55fe7d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2525}
-package idxfile
-
-import (
-	"io"
-
-	"github.com/go-git/go-git/v5/plumbing/hash"
-	"github.com/go-git/go-git/v5/utils/binary"
-)
-
-// Encoder writes MemoryIndex structs to an output stream.
-type Encoder struct {
-	io.Writer
-	hash hash.Hash
-}
-
-// NewEncoder returns a new stream encoder that writes to w.
-func NewEncoder(w io.Writer) *Encoder {
-	h := hash.New(hash.CryptoType)
-	mw := io.MultiWriter(w, h)
-	return &Encoder{mw, h}
-}
-
-// Encode encodes an MemoryIndex to the encoder writer.
-func (e *Encoder) Encode(idx *MemoryIndex) (int, error) {
-	flow := []func(*MemoryIndex) (int, error){
-		e.encodeHeader,
-		e.encodeFanout,
-		e.encodeHashes,
-		e.encodeCRC32,
-		e.encodeOffsets,
-		e.encodeChecksums,
-	}
-
-	sz := 0
-	for _, f := range flow {
-		i, err := f(idx)
-		sz += i
-
-		if err != nil {
-			return sz, err
-		}
-	}
-
-	return sz, nil
-}
-
-func (e *Encoder) encodeHeader(idx *MemoryIndex) (int, error) {
-	c, err := e.Write(idxHeader)
-	if err != nil {
-		return c, err
-	}
-
-	return c + 4, binary.WriteUint32(e, idx.Version)
-}
-
-func (e *Encoder) encodeFanout(idx *MemoryIndex) (int, error) {
-	for _, c := range idx.Fanout {
-		if err := binary.WriteUint32(e, c); err != nil {
-			return 0, err
-		}
-	}
-
-	return fanout * 4, nil
-}
-
-func (e *Encoder) encodeHashes(idx *MemoryIndex) (int, error) {
-	var size int
-	for k := 0; k < fanout; k++ {
-		pos := idx.FanoutMapping[k]
-		if pos == noMapping {
-			continue
-		}
-
-		n, err := e.Write(idx.Names[pos])
-		if err != nil {
-			return size, err
-		}
-		size += n
-	}
-	return size, nil
-}
-
-func (e *Encoder) encodeCRC32(idx *MemoryIndex) (int, error) {
-	var size int
-	for k := 0; k < fanout; k++ {
-		pos := idx.FanoutMapping[k]
-		if pos == noMapping {
-			continue
-		}
-
-		n, err := e.Write(idx.CRC32[pos])
-		if err != nil {
-			return size, err
-		}
-
-		size += n
-	}
-
-	return size, nil
-}
-
-func (e *Encoder) encodeOffsets(idx *MemoryIndex) (int, error) {
-	var size int
-	for k := 0; k < fanout; k++ {
-		pos := idx.FanoutMapping[k]
-		if pos == noMapping {
-			continue
-		}
-
-		n, err := e.Write(idx.Offset32[pos])
-		if err != nil {
-			return size, err
-		}
-
-		size += n
-	}
-
-	if len(idx.Offset64) > 0 {
-		n, err := e.Write(idx.Offset64)
-		if err != nil {
-			return size, err
-		}
-
-		size += n
-	}
-
-	return size, nil
-}
-
-func (e *Encoder) encodeChecksums(idx *MemoryIndex) (int, error) {
-	if _, err := e.Write(idx.PackfileChecksum[:]); err != nil {
-		return 0, err
-	}
-
-	copy(idx.IdxChecksum[:], e.hash.Sum(nil)[:hash.Size])
-	if _, err := e.Write(idx.IdxChecksum[:]); err != nil {
-		return 0, err
-	}
-
-	return hash.HexSize, nil
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/idxfile/idxfile.go","mode":420,"size":8130,"sha256":"22eb18e6e67b7c9cc24af4a82ad41542e0ddb420faa6457b8c486a8cb64366f5","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":8130}
-package idxfile
-
-import (
-	"bytes"
-	"fmt"
-	"io"
-	"sort"
-	"sync"
-
-	encbin "encoding/binary"
-
-	"github.com/go-git/go-git/v5/plumbing"
-	"github.com/go-git/go-git/v5/plumbing/hash"
-)
-
-const (
-	// VersionSupported is the only idx version supported.
-	VersionSupported = 2
-
-	noMapping = -1
-)
-
-var (
-	idxHeader = []byte{255, 't', 'O', 'c'}
-)
-
-// Index represents an index of a packfile.
-type Index interface {
-	// Contains checks whether the given hash is in the index.
-	Contains(h plumbing.Hash) (bool, error)
-	// FindOffset finds the offset in the packfile for the object with
-	// the given hash.
-	FindOffset(h plumbing.Hash) (int64, error)
-	// FindCRC32 finds the CRC32 of the object with the given hash.
-	FindCRC32(h plumbing.Hash) (uint32, error)
-	// FindHash finds the hash for the object with the given offset.
-	FindHash(o int64) (plumbing.Hash, error)
-	// Count returns the number of entries in the index.
-	Count() (int64, error)
-	// Entries returns an iterator to retrieve all index entries.
-	Entries() (EntryIter, error)
-	// EntriesByOffset returns an iterator to retrieve all index entries ordered
-	// by offset.
-	EntriesByOffset() (EntryIter, error)
-}
-
-// MemoryIndex is the in memory representation of an idx file.
-type MemoryIndex struct {
-	Version uint32
-	Fanout  [256]uint32
-	// FanoutMapping maps the position in the fanout table to the position
-	// in the Names, Offset32 and CRC32 slices. This improves the memory
-	// usage by not needing an array with unnecessary empty slots.
-	FanoutMapping    [256]int
-	Names            [][]byte
-	Offset32         [][]byte
-	CRC32            [][]byte
-	Offset64         []byte
-	PackfileChecksum [hash.Size]byte
-	IdxChecksum      [hash.Size]byte
-
-	offsetHash      map[int64]plumbing.Hash
-	offsetBuildOnce sync.Once
-	mu              sync.RWMutex
-}
-
-var _ Index = (*MemoryIndex)(nil)
-
-// NewMemoryIndex returns an instance of a new MemoryIndex.
-func NewMemoryIndex() *MemoryIndex {
-	return &MemoryIndex{}
-}
-
-func (idx *MemoryIndex) findHashIndex(h plumbing.Hash) (int, bool) {
-	k := idx.FanoutMapping[h[0]]
-	if k == noMapping {
-		return 0, false
-	}
-
-	if len(idx.Names) <= k {
-		return 0, false
-	}
-
-	data := idx.Names[k]
-	high := uint64(len(idx.Offset32[k])) >> 2
-	if high == 0 {
-		return 0, false
-	}
-
-	low := uint64(0)
-	for {
-		mid := (low + high) >> 1
-		offset := mid * objectIDLength
-
-		cmp := bytes.Compare(h[:], data[offset:offset+objectIDLength])
-		if cmp < 0 {
-			high = mid
-		} else if cmp == 0 {
-			return int(mid), true
-		} else {
-			low = mid + 1
-		}
-
-		if low >= high {
-			break
-		}
-	}
-
-	return 0, false
-}
-
-// Contains implements the Index interface.
-func (idx *MemoryIndex) Contains(h plumbing.Hash) (bool, error) {
-	_, ok := idx.findHashIndex(h)
-	return ok, nil
-}
-
-// FindOffset implements the Index interface.
-func (idx *MemoryIndex) FindOffset(h plumbing.Hash) (int64, error) {
-	if len(idx.FanoutMapping) <= int(h[0]) {
-		return 0, plumbing.ErrObjectNotFound
-	}
-
-	k := idx.FanoutMapping[h[0]]
-	i, ok := idx.findHashIndex(h)
-	if !ok {
-		return 0, plumbing.ErrObjectNotFound
-	}
-
-	offset, err := idx.getOffset(k, i)
-	if err != nil {
-		return 0, err
-	}
-
-	// Save the offset for reverse lookup
-	idx.mu.Lock()
-	if idx.offsetHash == nil {
-		idx.offsetHash = make(map[int64]plumbing.Hash)
-	}
-	idx.offsetHash[int64(offset)] = h
-	idx.mu.Unlock()
-
-	return int64(offset), nil
-}
-
-const isO64Mask = uint64(1) << 31
-
-func (idx *MemoryIndex) getOffset(firstLevel, secondLevel int) (uint64, error) {
-	offset := secondLevel << 2
-	ofs := encbin.BigEndian.Uint32(idx.Offset32[firstLevel][offset : offset+4])
-
-	if (uint64(ofs) & isO64Mask) != 0 {
-		offset := 8 * (uint64(ofs) & ^isO64Mask)
-		if l := uint64(len(idx.Offset64)); l < 8 || offset > l-8 {
-			return 0, fmt.Errorf("%w: offset64 index out of range", ErrMalformedIdxFile)
-		}
-		return encbin.BigEndian.Uint64(idx.Offset64[offset : offset+8]), nil
-	}
-
-	return uint64(ofs), nil
-}
-
-// FindCRC32 implements the Index interface.
-func (idx *MemoryIndex) FindCRC32(h plumbing.Hash) (uint32, error) {
-	k := idx.FanoutMapping[h[0]]
-	i, ok := idx.findHashIndex(h)
-	if !ok {
-		return 0, plumbing.ErrObjectNotFound
-	}
-
-	return idx.getCRC32(k, i), nil
-}
-
-func (idx *MemoryIndex) getCRC32(firstLevel, secondLevel int) uint32 {
-	offset := secondLevel << 2
-	return encbin.BigEndian.Uint32(idx.CRC32[firstLevel][offset : offset+4])
-}
-
-// FindHash implements the Index interface.
-func (idx *MemoryIndex) FindHash(o int64) (plumbing.Hash, error) {
-	var hash plumbing.Hash
-	var ok bool
-
-	var genErr error
-	idx.offsetBuildOnce.Do(func() {
-		genErr = idx.genOffsetHash()
-	})
-	if genErr != nil {
-		return plumbing.ZeroHash, genErr
-	}
-
-	idx.mu.RLock()
-	hash, ok = idx.offsetHash[o]
-	idx.mu.RUnlock()
-
-	if !ok {
-		return plumbing.ZeroHash, plumbing.ErrObjectNotFound
-	}
-
-	return hash, nil
-}
-
-// genOffsetHash generates the offset/hash mapping for reverse search.
-func (idx *MemoryIndex) genOffsetHash() error {
-	count, err := idx.Count()
-	if err != nil {
-		return err
-	}
-
-	offsetHash := make(map[int64]plumbing.Hash, count)
-
-	var hash plumbing.Hash
-	i := uint32(0)
-	for firstLevel, fanoutValue := range idx.Fanout {
-		mappedFirstLevel := idx.FanoutMapping[firstLevel]
-		for secondLevel := uint32(0); i < fanoutValue; i++ {
-			copy(hash[:], idx.Names[mappedFirstLevel][secondLevel*objectIDLength:])
-			off, err := idx.getOffset(mappedFirstLevel, int(secondLevel))
-			if err != nil {
-				return err
-			}
-			offsetHash[int64(off)] = hash
-			secondLevel++
-		}
-	}
-
-	idx.mu.Lock()
-	idx.offsetHash = offsetHash
-	idx.mu.Unlock()
-
-	return nil
-}
-
-// Count implements the Index interface.
-func (idx *MemoryIndex) Count() (int64, error) {
-	return int64(idx.Fanout[fanout-1]), nil
-}
-
-// Entries implements the Index interface.
-func (idx *MemoryIndex) Entries() (EntryIter, error) {
-	return &idxfileEntryIter{idx, 0, 0, 0}, nil
-}
-
-// EntriesByOffset implements the Index interface.
-func (idx *MemoryIndex) EntriesByOffset() (EntryIter, error) {
-	count, err := idx.Count()
-	if err != nil {
-		return nil, err
-	}
-
-	iter := &idxfileEntryOffsetIter{
-		entries: make(entriesByOffset, count),
-	}
-
-	entries, err := idx.Entries()
-	if err != nil {
-		return nil, err
-	}
-
-	for pos := 0; int64(pos) < count; pos++ {
-		entry, err := entries.Next()
-		if err != nil {
-			return nil, err
-		}
-
-		iter.entries[pos] = entry
-	}
-
-	sort.Sort(iter.entries)
-
-	return iter, nil
-}
-
-// EntryIter is an iterator that will return the entries in a packfile index.
-type EntryIter interface {
-	// Next returns the next entry in the packfile index.
-	Next() (*Entry, error)
-	// Close closes the iterator.
-	Close() error
-}
-
-type idxfileEntryIter struct {
-	idx                     *MemoryIndex
-	total                   int
-	firstLevel, secondLevel int
-}
-
-func (i *idxfileEntryIter) Next() (*Entry, error) {
-	for {
-		if i.firstLevel >= fanout {
-			return nil, io.EOF
-		}
-
-		if i.total >= int(i.idx.Fanout[i.firstLevel]) {
-			i.firstLevel++
-			i.secondLevel = 0
-			continue
-		}
-
-		mappedFirstLevel := i.idx.FanoutMapping[i.firstLevel]
-		entry := new(Entry)
-		copy(entry.Hash[:], i.idx.Names[mappedFirstLevel][i.secondLevel*objectIDLength:])
-		var err error
-		entry.Offset, err = i.idx.getOffset(mappedFirstLevel, i.secondLevel)
-		if err != nil {
-			return nil, err
-		}
-		entry.CRC32 = i.idx.getCRC32(mappedFirstLevel, i.secondLevel)
-
-		i.secondLevel++
-		i.total++
-
-		return entry, nil
-	}
-}
-
-func (i *idxfileEntryIter) Close() error {
-	i.firstLevel = fanout
-	return nil
-}
-
-// Entry is the in memory representation of an object entry in the idx file.
-type Entry struct {
-	Hash   plumbing.Hash
-	CRC32  uint32
-	Offset uint64
-}
-
-type idxfileEntryOffsetIter struct {
-	entries entriesByOffset
-	pos     int
-}
-
-func (i *idxfileEntryOffsetIter) Next() (*Entry, error) {
-	if i.pos >= len(i.entries) {
-		return nil, io.EOF
-	}
-
-	entry := i.entries[i.pos]
-	i.pos++
-
-	return entry, nil
-}
-
-func (i *idxfileEntryOffsetIter) Close() error {
-	i.pos = len(i.entries) + 1
-	return nil
-}
-
-type entriesByOffset []*Entry
-
-func (o entriesByOffset) Len() int {
-	return len(o)
-}
-
-func (o entriesByOffset) Less(i int, j int) bool {
-	return o[i].Offset < o[j].Offset
-}
-
-func (o entriesByOffset) Swap(i int, j int) {
-	o[i], o[j] = o[j], o[i]
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/idxfile/writer.go","mode":420,"size":4173,"sha256":"36d0c464d07febb2292e70f12e7a3364b4e736c687e017dabcbcae0069f9916f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4173}
-package idxfile
-
-import (
-	"bytes"
-	"fmt"
-	"math"
-	"sort"
-	"sync"
-
-	"github.com/go-git/go-git/v5/plumbing"
-	"github.com/go-git/go-git/v5/utils/binary"
-)
-
-// objects implements sort.Interface and uses hash as sorting key.
-type objects []Entry
-
-// Writer implements a packfile Observer interface and is used to generate
-// indexes.
-type Writer struct {
-	m sync.Mutex
-
-	count    uint32
-	checksum plumbing.Hash
-	objects  objects
-	offset64 uint32
-	finished bool
-	index    *MemoryIndex
-	added    map[plumbing.Hash]struct{}
-}
-
-// Index returns a previously created MemoryIndex or creates a new one if
-// needed.
-func (w *Writer) Index() (*MemoryIndex, error) {
-	w.m.Lock()
-	defer w.m.Unlock()
-
-	if w.index == nil {
-		return w.createIndex()
-	}
-
-	return w.index, nil
-}
-
-// Add appends new object data.
-func (w *Writer) Add(h plumbing.Hash, pos uint64, crc uint32) {
-	w.m.Lock()
-	defer w.m.Unlock()
-
-	if w.added == nil {
-		w.added = make(map[plumbing.Hash]struct{})
-	}
-
-	if _, ok := w.added[h]; !ok {
-		w.added[h] = struct{}{}
-		w.objects = append(w.objects, Entry{h, crc, pos})
-	}
-
-}
-
-func (w *Writer) Finished() bool {
-	return w.finished
-}
-
-// OnHeader implements packfile.Observer interface.
-func (w *Writer) OnHeader(count uint32) error {
-	w.count = count
-	w.objects = make(objects, 0, count)
-	return nil
-}
-
-// OnInflatedObjectHeader implements packfile.Observer interface.
-func (w *Writer) OnInflatedObjectHeader(t plumbing.ObjectType, objSize int64, pos int64) error {
-	return nil
-}
-
-// OnInflatedObjectContent implements packfile.Observer interface.
-func (w *Writer) OnInflatedObjectContent(h plumbing.Hash, pos int64, crc uint32, _ []byte) error {
-	w.Add(h, uint64(pos), crc)
-	return nil
-}
-
-// OnFooter implements packfile.Observer interface.
-func (w *Writer) OnFooter(h plumbing.Hash) error {
-	w.checksum = h
-	w.finished = true
-	_, err := w.createIndex()
-
-	return err
-}
-
-// creatIndex returns a filled MemoryIndex with the information filled by
-// the observer callbacks.
-func (w *Writer) createIndex() (*MemoryIndex, error) {
-	if !w.finished {
-		return nil, fmt.Errorf("the index still hasn't finished building")
-	}
-
-	idx := new(MemoryIndex)
-	w.index = idx
-
-	sort.Sort(w.objects)
-
-	// unmap all fans by default
-	for i := range idx.FanoutMapping {
-		idx.FanoutMapping[i] = noMapping
-	}
-
-	buf := new(bytes.Buffer)
-
-	last := -1
-	bucket := -1
-	for i, o := range w.objects {
-		fan := o.Hash[0]
-
-		// fill the gaps between fans
-		for j := last + 1; j < int(fan); j++ {
-			idx.Fanout[j] = uint32(i)
-		}
-
-		// update the number of objects for this position
-		idx.Fanout[fan] = uint32(i + 1)
-
-		// we move from one bucket to another, update counters and allocate
-		// memory
-		if last != int(fan) {
-			bucket++
-			idx.FanoutMapping[fan] = bucket
-			last = int(fan)
-
-			idx.Names = append(idx.Names, make([]byte, 0))
-			idx.Offset32 = append(idx.Offset32, make([]byte, 0))
-			idx.CRC32 = append(idx.CRC32, make([]byte, 0))
-		}
-
-		idx.Names[bucket] = append(idx.Names[bucket], o.Hash[:]...)
-
-		offset := o.Offset
-		if offset > math.MaxInt32 {
-			var err error
-			offset, err = w.addOffset64(offset)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		buf.Truncate(0)
-		if err := binary.WriteUint32(buf, uint32(offset)); err != nil {
-			return nil, err
-		}
-		idx.Offset32[bucket] = append(idx.Offset32[bucket], buf.Bytes()...)
-
-		buf.Truncate(0)
-		if err := binary.WriteUint32(buf, o.CRC32); err != nil {
-			return nil, err
-		}
-		idx.CRC32[bucket] = append(idx.CRC32[bucket], buf.Bytes()...)
-	}
-
-	for j := last + 1; j < 256; j++ {
-		idx.Fanout[j] = uint32(len(w.objects))
-	}
-
-	idx.Version = VersionSupported
-	idx.PackfileChecksum = w.checksum
-
-	return idx, nil
-}
-
-func (w *Writer) addOffset64(pos uint64) (uint64, error) {
-	buf := new(bytes.Buffer)
-	if err := binary.WriteUint64(buf, pos); err != nil {
-		return 0, err
-	}
-
-	w.index.Offset64 = append(w.index.Offset64, buf.Bytes()...)
-	index := uint64(w.offset64 | (1 << 31))
-	w.offset64++
-
-	return index, nil
-}
-
-func (o objects) Len() int {
-	return len(o)
-}
-
-func (o objects) Less(i int, j int) bool {
-	cmp := bytes.Compare(o[i].Hash[:], o[j].Hash[:])
-	return cmp < 0
-}
-
-func (o objects) Swap(i int, j int) {
-	o[i], o[j] = o[j], o[i]
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/index/decoder.go","mode":420,"size":11509,"sha256":"c2ebc6d625a17071ccc3f6e98ea424a29204167f0b324c8b670cb3fd4db74f2f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":11509}
-package index
-
-import (
-	"bufio"
-	"bytes"
-	"errors"
-	"fmt"
-	"io"
-	"strconv"
-	"time"
-
-	"github.com/go-git/go-git/v5/plumbing"
-	"github.com/go-git/go-git/v5/plumbing/hash"
-	"github.com/go-git/go-git/v5/utils/binary"
-)
-
-var (
-	// DecodeVersionSupported is the range of supported index versions
-	DecodeVersionSupported = struct{ Min, Max uint32 }{Min: 2, Max: 4}
-
-	// ErrMalformedSignature is returned by Decode when the index header file is
-	// malformed
-	ErrMalformedSignature = errors.New("malformed index signature file")
-	// ErrInvalidChecksum is returned by Decode if the SHA1 hash mismatch with
-	// the read content
-	ErrInvalidChecksum = errors.New("invalid checksum")
-	// ErrUnknownExtension is returned when an index extension is encountered that is considered mandatory
-	ErrUnknownExtension = errors.New("unknown extension")
-	// ErrMalformedIndexFile is returned when the index file contents are
-	// structurally invalid.
-	ErrMalformedIndexFile = errors.New("index decoder: malformed index file")
-)
-
-const (
-	entryHeaderLength = 62
-	entryExtended     = 0x4000
-	nameMask          = 0xfff
-	intentToAddMask   = 1 << 13
-	skipWorkTreeMask  = 1 << 14
-)
-
-// A Decoder reads and decodes index files from an input stream.
-type Decoder struct {
-	buf       *bufio.Reader
-	r         io.Reader
-	hash      hash.Hash
-	lastEntry *Entry
-
-	extReader *bufio.Reader
-}
-
-// NewDecoder returns a new decoder that reads from r.
-func NewDecoder(r io.Reader) *Decoder {
-	h := hash.New(hash.CryptoType)
-	buf := bufio.NewReader(r)
-	return &Decoder{
-		buf:       buf,
-		r:         io.TeeReader(buf, h),
-		hash:      h,
-		extReader: bufio.NewReader(nil),
-	}
-}
-
-// Decode reads the whole index object from its input and stores it in the
-// value pointed to by idx.
-func (d *Decoder) Decode(idx *Index) error {
-	var err error
-	idx.Version, err = validateHeader(d.r)
-	if err != nil {
-		return err
-	}
-
-	entryCount, err := binary.ReadUint32(d.r)
-	if err != nil {
-		return err
-	}
-
-	if err := d.readEntries(idx, int(entryCount)); err != nil {
-		return err
-	}
-
-	return d.readExtensions(idx)
-}
-
-func (d *Decoder) readEntries(idx *Index, count int) error {
-	for i := 0; i < count; i++ {
-		e, err := d.readEntry(idx)
-		if err != nil {
-			return err
-		}
-
-		d.lastEntry = e
-		idx.Entries = append(idx.Entries, e)
-	}
-
-	return nil
-}
-
-func (d *Decoder) readEntry(idx *Index) (*Entry, error) {
-	e := &Entry{}
-
-	var msec, mnsec, sec, nsec uint32
-	var flags uint16
-
-	flow := []interface{}{
-		&sec, &nsec,
-		&msec, &mnsec,
-		&e.Dev,
-		&e.Inode,
-		&e.Mode,
-		&e.UID,
-		&e.GID,
-		&e.Size,
-		&e.Hash,
-		&flags,
-	}
-
-	if err := binary.Read(d.r, flow...); err != nil {
-		return nil, err
-	}
-
-	read := entryHeaderLength
-
-	if sec != 0 || nsec != 0 {
-		e.CreatedAt = time.Unix(int64(sec), int64(nsec))
-	}
-
-	if msec != 0 || mnsec != 0 {
-		e.ModifiedAt = time.Unix(int64(msec), int64(mnsec))
-	}
-
-	e.Stage = Stage(flags>>12) & 0x3
-
-	if flags&entryExtended != 0 {
-		extended, err := binary.ReadUint16(d.r)
-		if err != nil {
-			return nil, err
-		}
-
-		read += 2
-		e.IntentToAdd = extended&intentToAddMask != 0
-		e.SkipWorktree = extended&skipWorkTreeMask != 0
-	}
-
-	nameConsumed, err := d.readEntryName(idx, e, flags)
-	if err != nil {
-		return nil, err
-	}
-
-	return e, d.padEntry(idx, e, read, nameConsumed)
-}
-
-// readEntryName reads the entry path and sets e.Name. It returns the
-// number of bytes consumed from the stream for the name portion.
-func (d *Decoder) readEntryName(idx *Index, e *Entry, flags uint16) (int, error) {
-	switch idx.Version {
-	case 2, 3:
-		nameLen := flags & nameMask
-		name, consumed, err := d.doReadEntryName(nameLen)
-		if err != nil {
-			return 0, err
-		}
-		e.Name = name
-		return consumed, nil
-	case 4:
-		name, err := d.doReadEntryNameV4()
-		if err != nil {
-			return 0, err
-		}
-		e.Name = name
-		return 0, nil // V4 has no padding; consumed count unused
-	default:
-		return 0, ErrUnsupportedVersion
-	}
-}
-
-// doReadEntryName reads the entry path for V2/V3 indexes. It returns the
-// name, the number of bytes consumed from the stream, and any error.
-// When nameLen equals nameMask (0xFFF), the name was too long to fit in
-// the 12-bit field and the real length is found by scanning for the NUL
-// terminator — matching C Git's strlen(name) fallback in create_from_disk.
-func (d *Decoder) doReadEntryName(nameLen uint16) (string, int, error) {
-	if nameLen == nameMask {
-		name, err := binary.ReadUntil(d.r, '\x00')
-		if err != nil {
-			return "", 0, err
-		}
-		return string(name), len(name) + 1, nil // +1 for the consumed NUL delimiter
-	}
-
-	name := make([]byte, nameLen)
-	_, err := io.ReadFull(d.r, name)
-	return string(name), int(nameLen), err
-}
-
-func (d *Decoder) doReadEntryNameV4() (string, error) {
-	l, err := binary.ReadVariableWidthInt(d.r)
-	if err != nil {
-		return "", err
-	}
-
-	var base string
-	if d.lastEntry != nil {
-		if l < 0 || int(l) > len(d.lastEntry.Name) {
-			return "", fmt.Errorf("%w: invalid V4 entry name strip length %d (previous name length: %d)",
-				ErrMalformedIndexFile, l, len(d.lastEntry.Name))
-		}
-		base = d.lastEntry.Name[:len(d.lastEntry.Name)-int(l)]
-	} else if l > 0 {
-		return "", fmt.Errorf("%w: non-zero strip length %d on first V4 entry",
-			ErrMalformedIndexFile, l)
-	}
-
-	name, err := binary.ReadUntil(d.r, '\x00')
-	if err != nil {
-		return "", err
-	}
-
-	return base + string(name), nil
-}
-
-// padEntry discards NUL padding bytes that follow each V2/V3 entry on
-// disk. nameConsumed is the number of stream bytes consumed while reading
-// the entry name (which may exceed len(e.Name) when a NUL terminator was
-// consumed for long names where the 12-bit length field overflowed).
-func (d *Decoder) padEntry(idx *Index, e *Entry, read, nameConsumed int) error {
-	if idx.Version == 4 {
-		return nil
-	}
-
-	entrySize := read + len(e.Name)
-	padLen := 8 - entrySize%8
-	padLen -= nameConsumed - len(e.Name)
-	if padLen > 0 {
-		_, err := io.CopyN(io.Discard, d.r, int64(padLen))
-		return err
-	}
-	return nil
-}
-
-func (d *Decoder) readExtensions(idx *Index) error {
-	// TODO: support 'Split index' and 'Untracked cache' extensions, take in
-	// count that they are not supported by jgit or libgit
-
-	var expected []byte
-	var peeked []byte
-	var err error
-
-	// we should always be able to peek for 4 bytes (header) + 4 bytes (extlen) + final hash
-	// if this fails, we know that we're at the end of the index
-	peekLen := 4 + 4 + d.hash.Size()
-
-	for {
-		expected = d.hash.Sum(nil)
-		peeked, err = d.buf.Peek(peekLen)
-		if len(peeked) < peekLen {
-			// there can't be an extension at this point, so let's bail out
-			break
-		}
-		if err != nil {
-			return err
-		}
-
-		err = d.readExtension(idx)
-		if err != nil {
-			return err
-		}
-	}
-
-	return d.readChecksum(expected)
-}
-
-func (d *Decoder) readExtension(idx *Index) error {
-	var header [4]byte
-
-	if _, err := io.ReadFull(d.r, header[:]); err != nil {
-		return err
-	}
-
-	r, err := d.getExtensionReader()
-	if err != nil {
-		return err
-	}
-
-	switch {
-	case bytes.Equal(header[:], treeExtSignature):
-		idx.Cache = &Tree{}
-		d := &treeExtensionDecoder{r}
-		if err := d.Decode(idx.Cache); err != nil {
-			return err
-		}
-	case bytes.Equal(header[:], resolveUndoExtSignature):
-		idx.ResolveUndo = &ResolveUndo{}
-		d := &resolveUndoDecoder{r}
-		if err := d.Decode(idx.ResolveUndo); err != nil {
-			return err
-		}
-	case bytes.Equal(header[:], endOfIndexEntryExtSignature):
-		idx.EndOfIndexEntry = &EndOfIndexEntry{}
-		d := &endOfIndexEntryDecoder{r}
-		if err := d.Decode(idx.EndOfIndexEntry); err != nil {
-			return err
-		}
-	default:
-		// See https://git-scm.com/docs/index-format, which says:
-		// If the first byte is 'A'..'Z' the extension is optional and can be ignored.
-		if header[0] < 'A' || header[0] > 'Z' {
-			return ErrUnknownExtension
-		}
-
-		d := &unknownExtensionDecoder{r}
-		if err := d.Decode(); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (d *Decoder) getExtensionReader() (*bufio.Reader, error) {
-	len, err := binary.ReadUint32(d.r)
-	if err != nil {
-		return nil, err
-	}
-
-	d.extReader.Reset(&io.LimitedReader{R: d.r, N: int64(len)})
-	return d.extReader, nil
-}
-
-func (d *Decoder) readChecksum(expected []byte) error {
-	var h plumbing.Hash
-
-	if _, err := io.ReadFull(d.r, h[:]); err != nil {
-		return err
-	}
-
-	if !bytes.Equal(h[:], expected) {
-		return ErrInvalidChecksum
-	}
-
-	return nil
-}
-
-func validateHeader(r io.Reader) (version uint32, err error) {
-	s := make([]byte, 4)
-	if _, err := io.ReadFull(r, s); err != nil {
-		return 0, err
-	}
-
-	if !bytes.Equal(s, indexSignature) {
-		return 0, ErrMalformedSignature
-	}
-
-	version, err = binary.ReadUint32(r)
-	if err != nil {
-		return 0, err
-	}
-
-	if version < DecodeVersionSupported.Min || version > DecodeVersionSupported.Max {
-		return 0, ErrUnsupportedVersion
-	}
-
-	return
-}
-
-type treeExtensionDecoder struct {
-	r *bufio.Reader
-}
-
-func (d *treeExtensionDecoder) Decode(t *Tree) error {
-	for {
-		e, err := d.readEntry()
-		if err != nil {
-			if err == io.EOF {
-				return nil
-			}
-
-			return err
-		}
-
-		if e == nil {
-			continue
-		}
-
-		t.Entries = append(t.Entries, *e)
-	}
-}
-
-func (d *treeExtensionDecoder) readEntry() (*TreeEntry, error) {
-	e := &TreeEntry{}
-
-	path, err := binary.ReadUntil(d.r, '\x00')
-	if err != nil {
-		return nil, err
-	}
-
-	e.Path = string(path)
-
-	count, err := binary.ReadUntil(d.r, ' ')
-	if err != nil {
-		return nil, err
-	}
-
-	i, err := strconv.Atoi(string(count))
-	if err != nil {
-		return nil, err
-	}
-
-	e.Entries = i
-	trees, err := binary.ReadUntil(d.r, '\n')
-	if err != nil {
-		return nil, err
-	}
-
-	subtrees, err := strconv.Atoi(string(trees))
-	if err != nil {
-		return nil, err
-	}
-
-	e.Trees = subtrees
-
-	// An entry can be in an invalidated state and is represented by having a
-	// negative number in the entry_count field. In this case, there is no
-	// object name and the next entry starts immediately after the newline.
-	if i < 0 {
-		return nil, nil
-	}
-
-	_, err = io.ReadFull(d.r, e.Hash[:])
-	if err != nil {
-		return nil, err
-	}
-	return e, nil
-}
-
-type resolveUndoDecoder struct {
-	r *bufio.Reader
-}
-
-func (d *resolveUndoDecoder) Decode(ru *ResolveUndo) error {
-	for {
-		e, err := d.readEntry()
-		if err != nil {
-			if err == io.EOF {
-				return nil
-			}
-
-			return err
-		}
-
-		ru.Entries = append(ru.Entries, *e)
-	}
-}
-
-func (d *resolveUndoDecoder) readEntry() (*ResolveUndoEntry, error) {
-	e := &ResolveUndoEntry{
-		Stages: make(map[Stage]plumbing.Hash),
-	}
-
-	path, err := binary.ReadUntil(d.r, '\x00')
-	if err != nil {
-		return nil, err
-	}
-
-	e.Path = string(path)
-
-	for i := 0; i < 3; i++ {
-		if err := d.readStage(e, Stage(i+1)); err != nil {
-			return nil, err
-		}
-	}
-
-	for s := range e.Stages {
-		var hash plumbing.Hash
-		if _, err := io.ReadFull(d.r, hash[:]); err != nil {
-			return nil, err
-		}
-
-		e.Stages[s] = hash
-	}
-
-	return e, nil
-}
-
-func (d *resolveUndoDecoder) readStage(e *ResolveUndoEntry, s Stage) error {
-	ascii, err := binary.ReadUntil(d.r, '\x00')
-	if err != nil {
-		return err
-	}
-
-	stage, err := strconv.ParseInt(string(ascii), 8, 64)
-	if err != nil {
-		return err
-	}
-
-	if stage != 0 {
-		e.Stages[s] = plumbing.ZeroHash
-	}
-
-	return nil
-}
-
-type endOfIndexEntryDecoder struct {
-	r *bufio.Reader
-}
-
-func (d *endOfIndexEntryDecoder) Decode(e *EndOfIndexEntry) error {
-	var err error
-	e.Offset, err = binary.ReadUint32(d.r)
-	if err != nil {
-		return err
-	}
-
-	_, err = io.ReadFull(d.r, e.Hash[:])
-	return err
-}
-
-type unknownExtensionDecoder struct {
-	r *bufio.Reader
-}
-
-func (d *unknownExtensionDecoder) Decode() error {
-	var buf [1024]byte
-
-	for {
-		_, err := d.r.Read(buf[:])
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/format/index/doc.go","mode":420,"size":13850,"sha256":"60cb8dff36e1fd29cb22136d081e54e0d56af2ccf7a0c51e31bcf82cb8a6fde7","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":13850}
-// Package index implements encoding and decoding of index format files.
-//
-//    Git index format
-//    ================
-//
-//    == The Git index file has the following format
-//
-//      All binary numbers are in network byte order. Version 2 is described
-//      here unless stated otherwise.
-//
-//      - A 12-byte header consisting of
-//
-//        4-byte signature:
-//          The signature is { 'D', 'I', 'R', 'C' } (stands for "dircache")
-//
-//        4-byte version number:
-//          The current supported versions are 2, 3 and 4.
-//
-//        32-bit number of index entries.
-//
-//      - A number of sorted index entries (see below).
-//
-//      - Extensions
-//
-//        Extensions are identified by signature. Optional extensions can
-//        be ignored if Git does not understand them.
-//
-//        Git currently supports cached tree and resolve undo extensions.
-//
-//        4-byte extension signature. If the first byte is 'A'..'Z' the
-//        extension is optional and can be ignored.
-//
-//        32-bit size of the extension
-//
-//        Extension data
-//
-//      - 160-bit SHA-1 over the content of the index file before this
-//        checksum.
-//
-//    == Index entry
-//
-//      Index entries are sorted in ascending order on the name field,
-//      interpreted as a string of unsigned bytes (i.e. memcmp() order, no
-//      localization, no special casing of directory separator '/'). Entries
-//      with the same name are sorted by their stage field.
-//
-//      32-bit ctime seconds, the last time a file's metadata changed
-//        this is stat(2) data
-//
-//      32-bit ctime nanosecond fractions
-//        this is stat(2) data
-//
-//      32-bit mtime seconds, the last time a file's data changed
-//        this is stat(2) data
-//
-//      32-bit mtime nanosecond fractions
-//        this is stat(2) data
-//
-//      32-bit dev
-//        this is stat(2) data
-//
-//      32-bit ino
-//        this is stat(2) data
-//
-//      32-bit mode, split into (high to low bits)
-//
-//        4-bit object type
-//          valid values in binary are 1000 (regular file), 1010 (symbolic link)
-//          and 1110 (gitlink)
-//
-//        3-bit unused
-//
-//        9-bit unix permission. Only 0755 and 0644 are valid for regular files.
-//        Symbolic links and gitlinks have value 0 in this field.
-//
-//      32-bit uid
-//        this is stat(2) data
-//
-//      32-bit gid
-//        this is stat(2) data
-//
-//      32-bit file size
-//        This is the on-disk size from stat(2), truncated to 32-bit.
-//
-//      160-bit SHA-1 for the represented object
-//
-//      A 16-bit 'flags' field split into (high to low bits)
-//
-//        1-bit assume-valid flag
-//
-//        1-bit extended flag (must be zero in version 2)
-//
-//        2-bit stage (during merge)
-//
-//        12-bit name length if the length is less than 0xFFF; otherwise 0xFFF
-//        is stored in this field.
-//
-//      (Version 3 or later) A 16-bit field, only applicable if the
-//      "extended flag" above is 1, split into (high to low bits).
-//
-//        1-bit reserved for future
-//
-//        1-bit skip-worktree flag (used by sparse checkout)
-//
-//        1-bit intent-to-add flag (used by "git add -N")
-//
-//        13-bit unused, must be zero
-//
-//      Entry path name (variable length) relative to top level directory
-//        (without leading slash). '/' is used as path separator. The special
-//        path components ".", ".." and ".git" (without quotes) are disallowed.
-//        Trailing slash is also disallowed.
-//
-//        The exact encoding is undefined, but the '.' and '/' characters
-//        are encoded in 7-bit ASCII and the encoding cannot contain a NUL
-//        byte (iow, this is a UNIX pathname).
-//
-//      (Version 4) In version 4, the entry path name is prefix-compressed
-//        relative to the path name for the previous entry (the very first
-//        entry is encoded as if the path name for the previous entry is an
-//        empty string).  At the beginning of an entry, an integer N in the
-//        variable width encoding (the same encoding as the offset is encoded
-//        for OFS_DELTA pack entries; see pack-format.txt) is stored, followed
-//        by a NUL-terminated string S.  Removing N bytes from the end of the
-//        path name for the previous entry, and replacing it with the string S
-//        yields the path name for this entry.
-//
-//      1-8 nul bytes as necessary to pad the entry to a multiple of eight bytes
-//      while keeping the name NUL-terminated.
-//
-//      (Version 4) In version 4, the padding after the pathname does not
-//      exist.
-//
-//      Interpretation of index entries in split index mode is completely
-//      different. See below for details.
-//
-//    == Extensions
-//
-//    === Cached tree
-//
-//      Cached tree extension contains pre-computed hashes for trees that can
-//      be derived from the index. It helps speed up tree object generation
-//      from index for a new commit.
-//
-//      When a path is updated in index, the path must be invalidated and
-//      removed from tree cache.
-//
-//      The signature for this extension is { 'T', 'R', 'E', 'E' }.
-//
-//      A series of entries fill the entire extension; each of which
-//      consists of:
-//
-//      - NUL-terminated path component (relative to its parent directory);
-//
-//      - ASCII decimal number of entries in the index that is covered by the
-//        tree this entry represents (entry_count);
-//
-//      - A space (ASCII 32);
-//
-//      - ASCII decimal number that represents the number of subtrees this
-//        tree has;
-//
-//      - A newline (ASCII 10); and
-//
-//      - 160-bit object name for the object that would result from writing
-//        this span of index as a tree.
-//
-//      An entry can be in an invalidated state and is represented by having
-//      a negative number in the entry_count field. In this case, there is no
-//      object name and the next entry starts immediately after the newline.
-//      When writing an invalid entry, -1 should always be used as entry_count.
-//
-//      The entries are written out in the top-down, depth-first order.  The
-//      first entry represents the root level of the repository, followed by the
-//      first subtree--let's call this A--of the root level (with its name
-//      relative to the root level), followed by the first subtree of A (with
-//      its name relative to A), ...
-//
-//    === Resolve undo
-//
-//      A conflict is represented in the index as a set of higher stage entries.
-//      When a conflict is resolved (e.g. with "git add path"), these higher
-//      stage entries will be removed and a stage-0 entry with proper resolution
-//      is added.
-//
-//      When these higher stage entries are removed, they are saved in the
-//      resolve undo extension, so that conflicts can be recreated (e.g. with
-//      "git checkout -m"), in case users want to redo a conflict resolution
-//      from scratch.
-//
-//      The signature for this extension is { 'R', 'E', 'U', 'C' }.
-//
-//      A series of entries fill the entire extension; each of which
-//      consists of:
-//
-//      - NUL-terminated pathname the entry describes (relative to the root of
-//        the repository, i.e. full pathname);
-//
-//      - Three NUL-terminated ASCII octal numbers, entry mode of entries in
-//        stage 1 to 3 (a missing stage is represented by "0" in this field);
-//        and
-//
-//      - At most three 160-bit object names of the entry in stages from 1 to 3
-//        (nothing is written for a missing stage).
-//
-//    === Split index
-//
-//      In split index mode, the majority of index entries could be stored
-//      in a separate file. This extension records the changes to be made on
-//      top of that to produce the final index.
-//
-//      The signature for this extension is { 'l', 'i', 'n', 'k' }.
-//
-//      The extension consists of:
-//
-//      - 160-bit SHA-1 of the shared index file. The shared index file path
-//        is $GIT_DIR/sharedindex.<SHA-1>. If all 160 bits are zero, the
-//        index does not require a shared index file.
-//
-//      - An ewah-encoded delete bitmap, each bit represents an entry in the
-//        shared index. If a bit is set, its corresponding entry in the
-//        shared index will be removed from the final index.  Note, because
-//        a delete operation changes index entry positions, but we do need
-//        original positions in replace phase, it's best to just mark
-//        entries for removal, then do a mass deletion after replacement.
-//
-//      - An ewah-encoded replace bitmap, each bit represents an entry in
-//        the shared index. If a bit is set, its corresponding entry in the
-//        shared index will be replaced with an entry in this index
-//        file. All replaced entries are stored in sorted order in this
-//        index. The first "1" bit in the replace bitmap corresponds to the
-//        first index entry, the second "1" bit to the second entry and so
-//        on. Replaced entries may have empty path names to save space.
-//
-//      The remaining index entries after replaced ones will be added to the
-//      final index. These added entries are also sorted by entry name then
-//      stage.
-//
-//    == Untracked cache
-//
-//      Untracked cache saves the untracked file list and necessary data to
-//      verify the cache. The signature for this extension is { 'U', 'N',
-//      'T', 'R' }.
-//
-//      The extension starts with
-//
-//      - A sequence of NUL-terminated strings, preceded by the size of the
-//        sequence in variable width encoding. Each string describes the
-//        environment where the cache can be used.
-//
-//      - Stat data of $GIT_DIR/info/exclude. See "Index entry" section from
-//        ctime field until "file size".
-//
-//      - Stat data of plumbing.excludesfile
-//
-//      - 32-bit dir_flags (see struct dir_struct)
-//
-//      - 160-bit SHA-1 of $GIT_DIR/info/exclude. Null SHA-1 means the file
-//        does not exist.
-//
-//      - 160-bit SHA-1 of plumbing.excludesfile. Null SHA-1 means the file does
-//        not exist.
-//
-//      - NUL-terminated string of per-dir exclude file name. This usually
-//        is ".gitignore".
-//
-//      - The number of following directory blocks, variable width
-//        encoding. If this number is zero, the extension ends here with a
-//        following NUL.
-//
-//      - A number of directory blocks in depth-first-search order, each
-//        consists of
-//
-//        - The number of untracked entries, variable width encoding.
-//
-//        - The number of sub-directory blocks, variable width encoding.
-//
-//        - The directory name terminated by NUL.
-//
-//        - A number of untracked file/dir names terminated by NUL.
-//
-//    The remaining data of each directory block is grouped by type:
-//
-//      - An ewah bitmap, the n-th bit marks whether the n-th directory has
-//        valid untracked cache entries.
-//
-//      - An ewah bitmap, the n-th bit records "check-only" bit of
-//        read_directory_recursive() for the n-th directory.
-//
-//      - An ewah bitmap, the n-th bit indicates whether SHA-1 and stat data
-//        is valid for the n-th directory and exists in the next data.
-//
-//      - An array of stat data. The n-th data corresponds with the n-th
-//        "one" bit in the previous ewah bitmap.
-//
-//      - An array of SHA-1. The n-th SHA-1 corresponds with the n-th "one" bit
-//        in the previous ewah bitmap.
-//
-//      - One NUL.
-//
-//   == File System Monitor cache
-//
-//     The file system monitor cache tracks files for which the core.fsmonitor
-//     hook has told us about changes.  The signature for this extension is
-//     { 'F', 'S', 'M', 'N' }.
-//
-//     The extension starts with
-//
-//     - 32-bit version number: the current supported version is 1.
-//
-//     - 64-bit time: the extension data reflects all changes through the given
-//       time which is stored as the nanoseconds elapsed since midnight,
-//       January 1, 1970.
-//
-//    - 32-bit bitmap size: the size of the CE_FSMONITOR_VALID bitmap.
-//
-//    - An ewah bitmap, the n-th bit indicates whether the n-th index entry
-//      is not CE_FSMONITOR_VALID.
-//
-//  == End of Index Entry
-//
-//    The End of Index Entry (EOIE) is used to locate the end of the variable
-//    length index entries and the beginning of the extensions. Code can take
-//    advantage of this to quickly locate the index extensions without having
-//    to parse through all of the index entries.
-//
-//    Because it must be able to be loaded before the variable length cache
-//    entries and other index extensions, this extension must be written last.
-//    The signature for this extension is { 'E', 'O', 'I', 'E' }.
-//
-//    The extension consists of:
-//
-//    - 32-bit offset to the end of the index entries
-//
-//    - 160-bit SHA-1 over the extension types and their sizes (but not
-//      their contents).  E.g. if we have "TREE" extension that is N-bytes
-//      long, "REUC" extension that is M-bytes long, followed by "EOIE",
-//      then the hash would be:
-//
-//      SHA-1("TREE" + <binary representation of N> +
-//        "REUC" + <binary representation of M>)
-//
-//  == Index Entry Offset Table
-//
-//    The Index Entry Offset Table (IEOT) is used to help address the CPU
-//    cost of loading the index by enabling multi-threading the process of
-//    converting cache entries from the on-disk format to the in-memory format.
-//    The signature for this extension is { 'I', 'E', 'O', 'T' }.
-//
-//    The extension consists of:
-//
-//    - 32-bit version (currently 1)
-//
-//    - A number of index offset entries each consisting of:
-//
-//    - 32-bit offset from the beginning of the file to the first cache entry
-//      in this block of entries.
-//
-//    - 32-bit count of cache entries in this blockpackage index
-package index
 
 @@END
