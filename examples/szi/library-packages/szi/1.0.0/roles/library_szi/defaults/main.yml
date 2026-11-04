@@ -39,6 +39,10 @@ platform_library_definition:
       databases:
         keycloak-db:
           name: keycloak
+          restore_on_create:
+            source: assets/keycloak-clean.dump
+            sha256: a67c04b6de3fe0015a454cbabc0f69f9f4cf1db1667107696912d2129ed946f2
+            format: pg_custom
         audit-db:
           name: szi_audit
   shared_secrets:
