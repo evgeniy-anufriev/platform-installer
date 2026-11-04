@@ -266,7 +266,7 @@ it("B4 excluding infrastructure selects Verify skip and requires a fresh librari
       .closest(".plan-phase-card")
       ?.classList.contains("installation-phase-excluded"),
   ).toBe(true);
-  const approval = screen.getByRole("button", { name: "Одобрить план" });
+  const approval = screen.getByRole("button", { name: "Одобрить и начать установку" });
   expect(approval).toHaveProperty("disabled", true);
   await userEvent.click(approval);
   expect(create).not.toHaveBeenCalled();
@@ -301,7 +301,7 @@ it("requires a fresh plan when Infra Verify skip changes in either direction", a
       name: "Пропустить проверку инфраструктуры — принимаю риски",
     }),
   );
-  expect(screen.getByRole("button", { name: "Одобрить план" })).toHaveProperty(
+  expect(screen.getByRole("button", { name: "Одобрить и начать установку" })).toHaveProperty(
     "disabled",
     true,
   );
@@ -324,7 +324,7 @@ it("requires a fresh plan when Infra Verify skip changes in either direction", a
       name: "Пропустить проверку инфраструктуры — принимаю риски",
     }),
   );
-  expect(screen.getByRole("button", { name: "Одобрить план" })).toHaveProperty(
+  expect(screen.getByRole("button", { name: "Одобрить и начать установку" })).toHaveProperty(
     "disabled",
     true,
   );
@@ -395,7 +395,7 @@ it("B4 hides Start and blocks approval when the selected scope changes an approv
       /Параметры пропуска изменены.*Сформируйте свежий план перед одобрением/,
     ),
   ).toBeTruthy();
-  const approval = screen.getByRole("button", { name: "Одобрить план" });
+  const approval = screen.getByRole("button", { name: "Одобрить и начать установку" });
   expect(approval).toHaveProperty("disabled", true);
   await userEvent.click(approval);
   expect(approve).not.toHaveBeenCalled();
@@ -537,7 +537,7 @@ it("Stage3 binds skipped library IDs to a fresh plan and blocks the old Start", 
     }),
   );
   expect(screen.queryByRole("button", { name: "Начать установку" })).toBeNull();
-  expect(screen.getByRole("button", { name: "Одобрить план" })).toHaveProperty(
+  expect(screen.getByRole("button", { name: "Одобрить и начать установку" })).toHaveProperty(
     "disabled",
     true,
   );

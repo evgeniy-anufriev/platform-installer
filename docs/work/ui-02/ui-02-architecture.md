@@ -87,6 +87,7 @@ UI-02 adds an application facade; React does not bind ExecutionService, RunObser
 GetInstallationState()
 CreateInstallationPlan()
 GetInstallationPlan(planId)
+ApproveAndStartInstallation(planId, acknowledgements[])
 ApproveInstallationPlan(planId, acknowledgements[])
 StartApprovedInstallation(planId)
 GetInstallationRun(runId)
@@ -157,15 +158,20 @@ React -> Go: CreateInstallationPlan
       -> READY node: BuildDeploymentPlan
       <- revision/runtime-bound PlanRecord (EXECUTABLE or BLOCKED)
 
-React -> Go: ApproveInstallationPlan(exact acknowledgements)
+React -> Go: ApproveAndStartInstallation(exact acknowledgements)
+      -> ApproveInstallationPlan
       -> ExecutionService.ApprovePlan
-
-React -> Go: StartApprovedInstallation
+      -> StartApprovedInstallation (only after successful approval)
       -> capability gate + fresh-plan/run attempt
       -> PutRuntimeSecretLease (only when target credential is required)
       -> idempotent StartExecution with startAttemptId/private leaseId
       <- authoritative runId + state
 ~~~
+
+The combined action reuses the same guards and current secret evidence; it
+does not add a second execution lifecycle. A separately approved plan can still
+retry through StartApprovedInstallation. Context and fresh-plan checks remain
+immediately before dispatch.
 
 Plan shows only Core-provided actions, dependencies, target hosts, findings and acknowledgements. Blocked plans remain readable but never receive approval. Project Verify never skips, replaces or freshens planning. PLAN_STALE returns the user to Plan without starting work.
 

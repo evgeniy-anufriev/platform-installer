@@ -564,7 +564,7 @@ describe("InstallationPage", () => {
     expect(screen.queryByText("PLAN_REVIEW")).toBeNull();
     expect(screen.getByText("Установить сервис kafka-main")).toBeTruthy();
     expect(screen.getByText("Развёртывание: kafka-main")).toBeTruthy();
-    const approve = screen.getByRole("button", { name: "Одобрить план" });
+    const approve = screen.getByRole("button", { name: "Одобрить и начать установку" });
     expect(approve).toHaveProperty("disabled", true);
     await user.click(screen.getByRole("checkbox", { name: /ACK_RISK/ }));
     await user.click(approve);
@@ -1279,7 +1279,7 @@ describe("InstallationPage", () => {
     expect(document.activeElement).not.toBe(alert);
     view.rerender(<InstallationPage {...common} approvalErrorAttempt={1} />);
     expect(document.activeElement).toBe(alert);
-    screen.getByRole("button", { name: "Одобрить план" }).focus();
+    screen.getByRole("button", { name: "Одобрить и начать установку" }).focus();
     view.rerender(<InstallationPage {...common} approvalErrorAttempt={2} />);
     expect(document.activeElement).toBe(alert);
   });
@@ -1323,7 +1323,7 @@ describe("InstallationPage", () => {
         onSetOutputEncryptionPassword={setOutputPassword}
       />,
     );
-    const approve = screen.getByRole("button", { name: "Одобрить план" });
+    const approve = screen.getByRole("button", { name: "Одобрить и начать установку" });
     expect(approve).toHaveProperty("disabled", true);
     await user.type(screen.getByLabelText("Пароль шифрования"), "session-only");
     await user.type(screen.getByLabelText("Повторите пароль"), "session-only");
@@ -1357,7 +1357,7 @@ describe("InstallationPage", () => {
     );
     expect(screen.getByLabelText("Пароль шифрования")).toBeTruthy();
     expect(
-      screen.getByRole("button", { name: "Одобрить план" }),
+      screen.getByRole("button", { name: "Одобрить и начать установку" }),
     ).toHaveProperty("disabled", true);
     view.rerender(
       <InstallationPage
@@ -1683,7 +1683,7 @@ describe("Service selection", () => {
       screen.getByRole("checkbox", { name: "Устанавливать инфраструктуру" }),
     ).toHaveProperty("indeterminate", true);
     expect(
-      screen.getByRole("button", { name: "Одобрить план" }),
+      screen.getByRole("button", { name: "Одобрить и начать установку" }),
     ).toHaveProperty("disabled", true);
     await user.click(
       screen.getByRole("button", { name: "Сформировать свежий план" }),

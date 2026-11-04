@@ -275,6 +275,58 @@ func TestApplicationInputReattestationAndStaleBinding(t *testing.T) {
 	}
 }
 
+func TestStartSecretProofReattestsChangedScope(t *testing.T) {
+	for _, field := range []string{"project", "revision", "node", "runtime"} {
+		t.Run(field, func(t *testing.T) {
+			app, _, _ := installationPlanApp(t, false)
+			defer app.secrets.Close()
+			transport := &countingSecretDescriptorTransport{}
+			app.binding.reader.transport = transport
+			first := app.getRuntimeSecretDescriptorsLocked(false)
+			if first.Status != "READY" {
+				t.Fatal("proof unavailable")
+			}
+			switch field {
+			case "project":
+				app.runtimeSecretEvidence.projectID = "other"
+			case "revision":
+				app.runtimeSecretEvidence.projectRevision = "other"
+			case "node":
+				app.runtimeSecretEvidence.nodeID = "other"
+			case "runtime":
+				app.runtimeSecretEvidence.runtime.BundleDigest = "other"
+			}
+			if got := app.runtimeSecretDescriptorsForStartLocked(first.ProjectRevision); got.Status != "READY" || transport.calls != 2 {
+				t.Fatal("Start reused a foreign proof")
+			}
+		})
+	}
+}
+
+func TestStartSecretProofDoesNotRenewExpiredSession(t *testing.T) {
+	app, _, _ := installationPlanApp(t, false)
+	now := time.Now()
+	app.secrets.Close()
+	app.secrets = runtimesecret.NewBroker(runtimesecret.WithClock(func() time.Time { return now }), runtimesecret.WithTTL(time.Hour))
+	defer app.secrets.Close()
+	app.binding.reader.transport = applicationDescriptorTransport{}
+	binding, _ := app.credentialBindingLocked()
+	if _, err := app.secrets.Set(binding, runtimesecret.Input{Username: "operator", SSHMode: runtimesecret.SSHPassword, SSHPassword: "synthetic"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.secrets.SetPendingApplicationSecretValues(binding, map[string]string{"db-password": "synthetic-value"}); err != nil {
+		t.Fatal(err)
+	}
+	first := app.getRuntimeSecretDescriptorsLocked(false)
+	if first.Status != "READY" {
+		t.Fatal("proof unavailable")
+	}
+	now = now.Add(2 * time.Hour)
+	if got := app.runtimeSecretDescriptorsForStartLocked(first.ProjectRevision); got.Status == "READY" {
+		t.Fatal("cached proof renewed expired session")
+	}
+}
+
 func TestApplicationSecretDescriptorScope(t *testing.T) {
 	valid := executionnode.ApplicationSecretDescriptor{RequirementRef: "application-secret-" + strings.Repeat("a", 32), Purpose: "APPLICATION_SECRET", SourceRef: "db-password", DisplayLabel: "Database password", ApplicationLibraries: []string{"sdku"}, Hosts: []string{"node1"}, Operations: []string{"APPLICATION_LIBRARIES_APPLY", "APPLICATION_LIBRARIES_VERIFY"}}
 	if !validApplicationSecretDescriptor(valid) {

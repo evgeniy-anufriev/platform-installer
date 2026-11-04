@@ -11,7 +11,8 @@ import (
 
 type availabilityRunner struct {
 	serviceSelectionRunner
-	wrongMarker bool
+	wrongMarker       bool
+	capabilityRuntime map[string]any
 }
 
 func (r *availabilityRunner) RunBounded(ctx context.Context, name string, args []string, input []byte, limit int) ([]byte, error) {
@@ -27,6 +28,11 @@ func (r *availabilityRunner) RunBounded(ctx context.Context, name string, args [
 	_ = json.Unmarshal(data, &response)
 	switch request["operation"] {
 	case "GetCapabilities":
+		if r.capabilityRuntime != nil {
+			response["runtime"] = map[string]any{"bundleDigest": r.capabilityRuntime["bundleDigest"]}
+			response["coreVersion"] = r.capabilityRuntime["coreVersion"]
+			response["catalogDigest"] = r.capabilityRuntime["catalogDigest"]
+		}
 		response["apiVersion"] = "platform.installer/execution-capabilities/v1alpha15"
 		response["deploymentPlanRequestVersions"] = append(response["deploymentPlanRequestVersions"].([]any), availabilityPlanRequestVersion)
 		response["applicationImagePlanning"] = map[string]any{"protocol": "RegistryAvailabilityPlanning/v1alpha1", "planContract": "platform.installer/plan/v1alpha12", "manifestContract": "platform.installer/execution-manifest/v1alpha9"}
@@ -39,6 +45,48 @@ func (r *availabilityRunner) RunBounded(ctx context.Context, name string, args [
 		}
 	}
 	return json.Marshal(response)
+}
+
+func TestPlanReusesCapabilitiesOnlyWithinMatchingRuntimeOperation(t *testing.T) {
+	for _, changed := range []string{"", "bundleDigest", "coreVersion", "catalogDigest", "missing-identity"} {
+		t.Run(changed, func(t *testing.T) {
+			root := t.TempDir()
+			if err := os.Mkdir(filepath.Join(root, "inventory"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			release := map[string]any{"bundleDigest": "sha256:" + strings.Repeat("e", 64), "coreVersion": "test-core", "catalogDigest": "sha256:" + strings.Repeat("c", 64)}
+			identity := map[string]any{}
+			for key, value := range release {
+				identity[key] = value
+			}
+			if changed == "missing-identity" {
+				identity = nil
+			} else if changed != "" {
+				identity[changed] = "different"
+			}
+			runner := &availabilityRunner{capabilityRuntime: identity, serviceSelectionRunner: serviceSelectionRunner{imagePreparationRunner: imagePreparationRunner{selection: true, b1PlanRunner: b1PlanRunner{summary: testInfrastructureSummary(t)}}}}
+			transport := OpenSSHTransport{Identity: fixedIdentity{}, Runner: runner}
+			for i := 0; i < 2; i++ {
+				before := len(runner.requests)
+				if _, err := transport.BuildDeploymentPlanForModeWithLibraryOrder(context.Background(), testNode(), root, release, []string{"docker"}, []string{"sdku"}, ApplicationLibrariesOnly, nil); err != nil {
+					t.Fatal(err)
+				}
+				calls := 0
+				for _, request := range runner.requests[before:] {
+					if request["operation"] == "GetCapabilities" {
+						calls++
+					}
+				}
+				want := 2
+				if changed == "" {
+					want = 1
+				}
+				if calls != want {
+					t.Fatalf("capability calls=%d want=%d", calls, want)
+				}
+			}
+		})
+	}
 }
 
 func TestAvailabilityPlanningNegotiatesAndBindsEveryMode(t *testing.T) {

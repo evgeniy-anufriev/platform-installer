@@ -601,8 +601,10 @@ The page has six compact regions in this order:
 6. A plan preview grouped by Servers, Services and Certificates, with one
    page-level **Generate plan** action on Summary.
 
-The Plan tab shows the approved plan and its ordered actions. Once approved, a
-sticky bottom action bar exposes **Start execution**; it remains disabled while
+The Plan tab shows the reviewed plan and its ordered actions. After the exact
+acknowledgements, **Одобрить и начать установку** invokes one Go composition of
+approval and Start. Approval failure never enters Start. A previously approved
+plan retains **Start execution** for retry; it remains disabled while
 the run is active or any existing plan/runtime prerequisite is unmet. When
 blocked, the action area lists every known plan finding and unmet prerequisite,
 including any missing session-only credential, with a safe explanation and

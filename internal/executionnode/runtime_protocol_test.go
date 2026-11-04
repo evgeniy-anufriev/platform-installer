@@ -49,6 +49,36 @@ func (r *protocolRunner) RunBounded(ctx context.Context, name string, args []str
 	return r.Run(ctx, name, args, input)
 }
 
+func TestRuntimeProtocolUsesOneSSHAndKeepsPayloadOffCommandLine(t *testing.T) {
+	for _, flag := range []string{"", "--stage-target-host-trust"} {
+		runner := &protocolRunner{}
+		transport := OpenSSHTransport{Identity: fixedIdentity{}, Runner: runner}
+		_, err := transport.runtimeProtocolWithPrivateFlag(context.Background(), testNode(), map[string]any{"operation": "GetCapabilities", "value": "synthetic-private-canary"}, flag)
+		if err != nil || len(runner.calls) != 1 || runner.calls[0].name != "ssh" {
+			t.Fatalf("expected one bounded SSH invocation, calls=%d err=%v", len(runner.calls), err)
+		}
+		call := runner.calls[0]
+		command := strings.Join(call.args, " ")
+		quoted := "'" + strings.ReplaceAll(runtimeProtocolLauncher, "'", "'\\''") + "'"
+		if !strings.Contains(command, "sudo -n python3 -c "+quoted) || strings.Contains(command, "synthetic-private-canary") || !strings.Contains(call.input, "synthetic-private-canary") || !strings.Contains(command, "StrictHostKeyChecking=yes") {
+			t.Fatal("launcher lost quoting, private stdin or host trust")
+		}
+		if flag != "" && call.args[len(call.args)-1] != flag {
+			t.Fatal("private flag not forwarded")
+		}
+	}
+}
+
+func TestRuntimeProtocolRejectsPrivateFlagBeforeDispatch(t *testing.T) {
+	for _, tc := range []struct{ flag, value string }{{"--untrusted", ""}, {"--stage-target-host-trust", strings.Repeat("x", 65536)}} {
+		runner := &protocolRunner{}
+		transport := OpenSSHTransport{Identity: fixedIdentity{}, Runner: runner}
+		if _, err := transport.runtimeProtocolWithPrivateFlag(context.Background(), testNode(), map[string]any{"value": tc.value}, tc.flag); err == nil || len(runner.calls) != 0 {
+			t.Fatal("invalid private operation reached SSH")
+		}
+	}
+}
+
 func TestDecodeBlockedDeploymentPlanPreservesSafeFindings(t *testing.T) {
 	var value map[string]any
 	if err := json.Unmarshal([]byte(`{
@@ -598,7 +628,7 @@ func TestGetEventsSendsBoundedPaginationRequest(t *testing.T) {
 	if page.NextSequence != 7 || page.HasMore || len(page.Events) != 0 {
 		t.Fatalf("page=%+v", page)
 	}
-	wantLimits := []int{maxExecutionReleaseProbeBytes, maxExecutionStateProbeBytes, maxExecutionEventPageResponseBytes}
+	wantLimits := []int{maxExecutionEventPageResponseBytes}
 	if !reflect.DeepEqual(runner.limits, wantLimits) {
 		t.Fatalf("bounded limits=%v want=%v", runner.limits, wantLimits)
 	}

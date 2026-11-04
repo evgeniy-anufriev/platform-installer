@@ -33,7 +33,7 @@ func (r *startImageRunner) RunBounded(_ context.Context, _ string, args []string
 	if strings.Contains(command, "readlink") {
 		return []byte("/var/lib/platform-installer/runtime/releases/synthetic"), nil
 	}
-	if strings.Contains(command, "/state/active") {
+	if len(input) == 0 && strings.Contains(command, "/state/active") {
 		return []byte("BUNDLE_DIGEST=sha256:" + strings.Repeat("b", 64)), nil
 	}
 	var request map[string]any

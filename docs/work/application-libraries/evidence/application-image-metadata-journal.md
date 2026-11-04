@@ -463,3 +463,164 @@ verified SZI runtime and actual run results retained. Terminal run has zero
 policy review rejected deletion of the two local copied Vault input files
 (`blocked by policy`); those copies remain only under the established
 `.runtime/secrets/szi-plan-install-20261103` directory, with no value disclosure.
+
+### Approval / Start profiling and proposed optimization (2026-11-03)
+
+Analysis only; no production implementation or new installation. Same saved SZI
+revision70c2e9b3 and active/published runtime597e79fc as the successful run above.
+QA uses the established PEM identity. Actual React/Wails handlers performed
+Verify, Plan and Approve, then stopped before Start. Fresh UI Plan41.6435s,
+Approve41.0634s. The prior complete, successful Start remains92.9332s; a new
+full Start was deliberately not invoked for this analysis.
+
+An ignored Go profiler delegates to the unchanged OpenSSHTransport and real
+Execution Node Core. Its runner records only operation/phase/process names,
+durations, counts and failure flags; no argv, stdin, stdout, stderr or secret
+values. These are isolated transport/component measurements, not a new
+end-to-end Start acceptance run.
+
+| Measured component | Wall seconds | SSH | SCP |
+| --- | ---: | ---: | ---: |
+| Local ProjectRevision | 0.0396 | 0 | 0 |
+| Core secret descriptors including candidate staging | 23.6411 | 9 | 1 |
+| Additional snapshot for pending application-secret bindings | 16.7212 | 4 | 0 |
+| Fresh executable plan, same service/library order as UI | 41.1404 | 16 | 0 |
+
+The latter three isolated operations total81.5027s,29 SSH and one SCP. They
+must not be added again to UI Plan/Approve timings: those are enclosing flows.
+Descriptor plus binding snapshot40.3623s closely explains actual Approve41.0634s.
+Start currently repeats that preparation unconditionally despite a valid recent
+approval, before its mandatory fresh plan rebuild.
+
+Within fresh planning, protocol child wall times: inputs DESCRIBE17.4816s,
+PREPARE0.7854s, BuildDeploymentPlan16.3872s, two capability responses1.7377s,
+ten runtime path/state SSH probes4.1959s and archive-cache lookup0.4927s.
+Thus DESCRIBE's name must not be mistaken for expensive image downloads: it
+resolves the project again. No offline pull/load took place here. The single
+SCP in descriptor staging is0.9130s. Across all three components, sixteen
+runtime path/state probes cost7.2843s. Standalone capability repeats cost
+1.5348/2.0163/1.7331s, each three SSH connections.
+
+Corresponding Core timings: descriptors15.1062s (resolve12.1107s), snapshot
+14.2615s (resolve12.1094s), image inputs16.1259s (resolve12.4452s), plan
+15.2391s (resolve12.4311s). All four report cacheHit=false/reusable=false;
+lock wait is3-4 microseconds. This sample is repeated computation, not observed
+Core lock contention. The conservative existing cache/path/template guards must
+not simply be disabled. Production's reported >5 minutes is not reproduced on
+this QA scene; project scale, SSH/PAM/password costs and contention need the
+same breakdown on that environment before assigning its exact cause.
+
+One initial isolated plan used an empty service order and failed with
+CORE_OPERATION_FAILED. It is excluded. Repeating with the actual UI order
+produced an EXECUTABLE plan and the successful measurement above. Safe raw
+profiles remain under ignored `.runtime/qa/start-profile-20261103`.
+
+Proposed order, retaining the existing authority/lifecycle:
+
+1. Reuse current Core-attested secret descriptors and binding evidence after
+   approval, with exact project/revision/node/runtime checks and current Broker
+   input bindings. Re-attest only when evidence or bindings are absent/stale.
+   Preserve latest-value replacement, expiration/missing-input checks and the
+   mandatory fresh Core plan/fingerprint comparison. Reuse existing functions
+   and private state; no second persistence or infrastructure rules in Go.
+   This removes the measured ~40s duplicate branch from the unchanged case.
+2. Execute runtime path resolution, active digest read and the fixed protocol
+   entrypoint through one SSH invocation per RPC. Retain strict host-key and
+   command guards, bounded/private streams and runtime identity validation.
+   Reuse capability negotiation within one operation for the same runtime;
+   avoid a new persistent SSH/session daemon or global stale-capability cache.
+3. Share one authoritative Core resolution between image-input description and
+   fresh plan construction, scoped to that exact preparation. Likewise derive
+   pending-secret source bindings from the same Core evidence as descriptors.
+   Evolve the closed protocol if needed; do not weaken cross-request cache
+   eligibility or recreate template/source rules in Go.
+4. Instrument queue wait, descriptors/bindings, staging, image inputs, plan,
+   trust/lease, remote Start and subscription separately. UI "starting" also
+   currently awaits subscription and state refresh after run acceptance; fixing
+   that presentation is separate from reducing actual Start work.
+
+Estimate for phases1-2 on this QA scene: ~40-55s instead of92.9s. This is a
+target, not a measured improvement. Validate on the same project/runtime with
+at least three samples and one real fresh-plan -> Approve -> Start -> terminal
+run. Required regressions: current proof avoids duplicate queries; changed
+revision/runtime/node, changed or expired input, pending file/password
+replacement, template-bound sources and stale plan retain correct failure or
+reattestation. Fresh authoritative plan, trust and idempotent lease/retry guards
+must remain. No review invoked per owner's continuing instruction.
+
+Profiler cleanup: UI browser/Wails/Vite stopped; production generated runtime
+files restored. Two owned, unstarted plan-stage directories removed only after
+exact run-id, containment, project identity and absence of execution status/
+metadata checks; candidate/snapshot cleanup had already removed the others.
+Existing successful installation results and installed services remain intact.
+
+### Start optimization implementation and owner stop, 2026-11-03
+
+Owner authorized items1-2 above, then explicitly prohibited commit/push and
+requested stopping the SZI installation. Changes remain uncommitted:
+
+- Start reuses exact project/revision/node/runtime descriptor evidence and
+  Core-attested editor-source mappings, rebinding current Broker values/files.
+  Missing/stale evidence and unmapped pending locations retain fresh discovery.
+- Each ordinary runtime RPC resolves the immutable release and active digest
+  in a fixed, quoted node-side launcher and execs the existing protocol through
+  one SSH call. Private stdin, strict trust, bounded streams and command guards
+  remain. Plan capability negotiation is reused only inside that operation for
+  the exact bundle/Core/catalog identity; missing/mismatched identity re-probes.
+- Existing functions/files were amended; no Core rules, protocol version,
+  persistent credential/capability cache or production testing bypass added.
+
+Full Go tests and vet PASS; frontend typecheck/production build PASS. Focused
+regressions cover fresh authoritative plan rebuild, descriptor/mapping reuse,
+project/revision/node/runtime changes, pending password/token replacement,
+expired inputs, unmapped locations, one SSH/private stdin, private-flag bounds,
+and operation-local capability reuse/fallback. RED OS node2 exercised the exact
+launcher source in an isolated temporary root: valid/private flag, oversized or
+missing state, invalid digest/UTF-8, outside-root and whitespace release cases
+PASS; temporary root removed. Live node1 capability smoke PASS with one SSH.
+
+Before sample used unchanged Wails backend at bff08196, real React handlers,
+same project `project-b46aa3f5f57a495f`, saved revision
+`sha256:70c2e9b396ed271c6d27e890e6450293f2cb3ff893fd6b0d1aa83038c4480e92`,
+runtime `sha256:597e79fc14bd722d3c28a841e33265c8fd5175b1f41ed32c2843df2309961264`:
+Plan41.414s, Approve42.2302s, Start92.168s, plan
+`plan-17e413277e46c5b948033631`, run
+`installer-f5460522867a2ca89d9be8241e3293da`.
+Owner-requested cancellation used real Wails `CancelInstallationRun`; observer
+confirmed terminal CANCELLED, last observed event2241. This is not successful
+installation acceptance. New-code Wails Approve/Start timings and full changed
+flow acceptance remain NOT RUN; no speedup claimed. No new installation will
+start without the owner's renewed instruction. Evidence is under ignored
+`.runtime/qa/start-optimization-20261103/`. Owned browser/Wails/Vite stopped;
+generated frontend/runtime changes restored. Existing runtime, results and
+installed services preserved; no commit/push or review performed.
+
+### One approval and Start action, 2026-11-04
+
+After the owner renewed authorization to start SZI, the Plan action
+«Одобрить и начать установку» used one real React/Wails call to Go
+`ApproveAndStartInstallation`. It uses the existing approval and Start,
+stops on failed approval, reuses current secret evidence with current values,
+and preserves the fresh authoritative plan and start/lease guards. An already
+approved plan retains the existing Start retry. No Core bundle change.
+
+Same saved revision, runtime, plan ID and APPLICATION_LIBRARIES_ONLY scope as
+the before sample above. First combined Wails attempt timed out without a
+recorded new run; the node confirmed the previous run remained CANCELLED.
+Fresh Wails session with verified host keys and current secret inputs:
+
+| Measured Wails operation | Before | Combined implementation |
+| --- | ---: | ---: |
+| Create Plan | 41.414 s | 34.414 s |
+| Approval + Start | 42.2302 + 92.168 = 134.3982 s | 73.3523 s |
+
+One paired timing sample; separate post-change stage durations not measured.
+Combined call saved 61.0459 s (45.4%, 1.83x). Actual single bound method
+returned STARTED; separate approval and Start bindings were not invoked by
+React. Run `installer-9033c2323e5158d2d02c4546a37a82ba` reached SUCCEEDED at 09:52:10 MSK. The complete node journal contains 3071 events. Preparation, SZI library installation and application Apply each completed with SUCCESS. No FAILED, ERROR or UNREACHABLE events. Safe evidence:
+`.runtime/qa/start-optimization-20261103/after-combined-retry.json`.
+
+Full Go tests/vet, frontend build/lint and affected React tests169 PASS.
+Combined approval regression covers missing acknowledgement, blocked/unknown
+plans and the mandatory fresh plan. Wails dev build and real dispatch PASS.
+No commit/push/review.

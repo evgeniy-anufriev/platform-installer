@@ -232,6 +232,17 @@ func (a *App) pendingApplicationSourceBindingsLocked(binding runtimesecret.Bindi
 	if !slices.ContainsFunc(locations, func(item located) bool { return presence[item.key] }) {
 		return result, nil
 	}
+	// Reuse only mappings already attested by Core for the current scope. A
+	// newly entered, unmapped editor input still needs the normal snapshot.
+	if a.runtimeSecretEvidenceDescriptorsLocked(revision) != nil && a.runtimeSecretEvidence.applicationSources != nil {
+		cached := a.runtimeSecretEvidence.applicationSources
+		if !slices.ContainsFunc(locations, func(item located) bool { return presence[item.key] && cached[item.key] == "" }) {
+			for source, requirement := range cached {
+				result[source] = requirement
+			}
+			return result, nil
+		}
+	}
 	ctx, cancel := a.operationContext(2 * time.Minute)
 	defer cancel()
 	proof, err := a.binding.reader.BuildVerificationSnapshot(ctx, a.current.Root)

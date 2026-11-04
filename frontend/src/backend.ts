@@ -39,6 +39,7 @@ import {
   GetInfrastructureVerification,
   GetInstallationPlan,
   ApproveInstallationPlan,
+  ApproveAndStartInstallation,
   StartApprovedInstallation,
   GetInstallationRun,
   SubscribeInstallationRun,
@@ -665,6 +666,10 @@ export interface ProjectBackend {
     acknowledgements: string[],
   ): Promise<InstallationPlanOperation>;
   startApprovedInstallation?(planId: string): Promise<InstallationRunOperation>;
+  approveAndStartInstallation?(
+    planId: string,
+    acknowledgements: string[],
+  ): Promise<InstallationRunOperation>;
   getInstallationRun?(runId: string): Promise<InstallationRunOperation>;
   subscribeInstallationRun?(
     runId: string,
@@ -820,6 +825,11 @@ export const backend: ProjectBackend = {
   startApprovedInstallation: (planId) =>
     StartApprovedInstallation(
       planId,
+    ) as unknown as Promise<InstallationRunOperation>,
+  approveAndStartInstallation: (planId, acknowledgements) =>
+    ApproveAndStartInstallation(
+      planId,
+      acknowledgements,
     ) as unknown as Promise<InstallationRunOperation>,
   getInstallationRun: (runId) =>
     GetInstallationRun(runId) as unknown as Promise<InstallationRunOperation>,

@@ -1620,15 +1620,17 @@ function PlanStage({
         >
           <span className="muted" role="status">
             {canApprove
-              ? "План проверен и готов к одобрению."
-              : "Отметьте обязательные подтверждения, чтобы одобрить план."}
+              ? "План проверен и готов к одобрению и запуску."
+              : "Отметьте обязательные подтверждения, чтобы одобрить и запустить план."}
           </span>
           <button
             type="button"
             onClick={() => onApprovePlan(plan.id, requiredCodes)}
             disabled={busy || !canApprove}
           >
-            Одобрить план
+            {starting
+              ? "Запускается выполнение…"
+              : "Одобрить и начать установку"}
           </button>
         </footer>
       )}

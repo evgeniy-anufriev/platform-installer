@@ -59,6 +59,11 @@ executionMode, deploymentOrder and applicationVaultSources (source policy only,
 never values). FULL_PROJECT, APPLICATION_LIBRARIES_ONLY and the existing
 INFRASTRUCTURE_VERIFY_ONLY capability reuse the same plan store, approval,
 StartApprovedInstallation, trust staging, typed lease, Cancel and reconnect.
+The primary UI action calls Go ApproveAndStartInstallation(planId, exact
+acknowledgements): existing approval followed by existing Start only on success.
+Current secret evidence is reused, current values/files are rebound, and Start
+still rebuilds the authoritative plan before dispatch. Separate Start remains
+available for a previously approved plan; no execution protocol is bypassed.
 Unsupported mode runtimes fail without a full-install fallback. No frontend
 command/playbook or parallel execution lifecycle is introduced.
 

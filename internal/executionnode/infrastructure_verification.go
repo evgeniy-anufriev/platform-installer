@@ -244,7 +244,7 @@ func (t OpenSSHTransport) buildDeploymentPlanForMode(ctx context.Context, node N
 		request["skipApplicationLibraries"] = skipped
 		request["skipServiceDeployments"] = selectedServices
 	}
-	return t.buildDeploymentPlanRequest(ctx, node, projectRoot, request)
+	return t.buildDeploymentPlanRequest(ctx, node, projectRoot, request, c)
 }
 
 func validExecutionModes(raw any) bool {

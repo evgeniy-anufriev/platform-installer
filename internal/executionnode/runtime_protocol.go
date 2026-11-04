@@ -261,15 +261,15 @@ func (t OpenSSHTransport) BuildDeploymentPlan(ctx context.Context, node Node, pr
 	capabilities, err := t.imagePlanningCapabilities(ctx, node, "platform.installer/execution-runtime/v1alpha1")
 	if err == nil && imagePlanCapabilitySupported(capabilities) {
 		return t.buildDeploymentPlanRequest(ctx, node, projectRoot, map[string]any{"apiVersion": imagePlanRequestVersion, "runtimeRelease": runtimeRelease, "deploymentOrder": deploymentOrder,
-			"executionMode": string(FullProject), "applicationVaultSources": map[string]string{}, "skipInfrastructureVerify": false})
+			"executionMode": string(FullProject), "applicationVaultSources": map[string]string{}, "skipInfrastructureVerify": false}, capabilities)
 	}
 	if err != nil || !orderedDeploymentPlanRequestSupported(capabilities) {
 		return DeploymentPlan{}, errors.New("DEPLOYMENT_ORDER_RUNTIME_UNSUPPORTED")
 	}
-	return t.buildDeploymentPlanRequest(ctx, node, projectRoot, map[string]any{"apiVersion": "platform.installer/execution-runtime/v1alpha2", "runtimeRelease": runtimeRelease, "deploymentOrder": deploymentOrder})
+	return t.buildDeploymentPlanRequest(ctx, node, projectRoot, map[string]any{"apiVersion": "platform.installer/execution-runtime/v1alpha2", "runtimeRelease": runtimeRelease, "deploymentOrder": deploymentOrder}, capabilities)
 }
 
-func (t OpenSSHTransport) buildDeploymentPlanRequest(ctx context.Context, node Node, projectRoot string, request map[string]any) (DeploymentPlan, error) {
+func (t OpenSSHTransport) buildDeploymentPlanRequest(ctx context.Context, node Node, projectRoot string, request, capability map[string]any) (DeploymentPlan, error) {
 	runID, err := newRunID()
 	if err != nil {
 		return DeploymentPlan{}, err
@@ -297,7 +297,12 @@ func (t OpenSSHTransport) buildDeploymentPlanRequest(ctx context.Context, node N
 	}
 	postInstallSupported := false
 	if value["apiVersion"] == "platform.installer/plan/v1alpha9" || (value["apiVersion"] == "platform.installer/plan/v1alpha10" || (value["apiVersion"] == "platform.installer/plan/v1alpha11" || value["apiVersion"] == "platform.installer/plan/v1alpha12")) {
-		capability, probeErr := t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": request["apiVersion"], "operation": "GetCapabilities"})
+		var probeErr error
+		// Reuse this operation's negotiation only for the exact requested
+		// immutable runtime. Older responses without identity retain the probe.
+		if !planCapabilityMatchesRuntime(capability, request["runtimeRelease"]) {
+			capability, probeErr = t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": request["apiVersion"], "operation": "GetCapabilities"})
+		}
 		postInstallSupported = probeErr == nil && postInstallCapabilitySupported(capability)
 		if (value["apiVersion"] == "platform.installer/plan/v1alpha10" || (value["apiVersion"] == "platform.installer/plan/v1alpha11" || value["apiVersion"] == "platform.installer/plan/v1alpha12")) && !applicationProgressCapabilitySupported(capability) {
 			return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
@@ -344,6 +349,17 @@ func (t OpenSSHTransport) buildDeploymentPlanRequest(ctx context.Context, node N
 		return DeploymentPlan{}, err
 	}
 	return plan, nil
+}
+
+func planCapabilityMatchesRuntime(capability map[string]any, expected any) bool {
+	release, ok := expected.(map[string]any)
+	runtime, runtimeOK := capability["runtime"].(map[string]any)
+	digest, _ := runtime["bundleDigest"].(string)
+	core, _ := capability["coreVersion"].(string)
+	catalog, _ := capability["catalogDigest"].(string)
+	return ok && runtimeOK && validSHA256(digest) && core != "" && validSHA256(catalog) &&
+		digest == release["bundleDigest"] &&
+		core == release["coreVersion"] && catalog == release["catalogDigest"]
 }
 
 func orderedDeploymentPlanRequestSupported(response map[string]any) bool {
@@ -1462,31 +1478,35 @@ func (t OpenSSHTransport) StageTargetHostTrust(ctx context.Context, node Node, p
 	return nil
 }
 
+// Fixed node-side launcher: resolve/validate the active immutable runtime and
+// exec the protocol in the same SSH process. Request bytes stay on private stdin.
+const runtimeProtocolLauncher = `import os, sys
+try:
+    root = "/var/lib/platform-installer/runtime"
+    release = os.path.realpath(root + "/current")
+    if len(release.encode()) > 4096 or not release.startswith(root + "/releases/") or any(c in release for c in " \t\r\n"):
+        sys.exit(70)
+    with open(root + "/state/active", "rb") as stream:
+        active = stream.read(65537)
+    if len(active) > 65536:
+        sys.exit(70)
+    facts = dict(line.split("=", 1) for line in active.decode().split("\n") if "=" in line)
+    digest = facts.get("BUNDLE_DIGEST", "")
+    if not digest.startswith("sha256:") or len(digest) != 71:
+        sys.exit(70)
+    tools = release + "/ansible-core/tools"
+    os.environ["PYTHONPATH"] = tools
+    os.execv(sys.executable, [sys.executable, tools + "/execution_protocol.py", "--runtime-release", release, "--bundle-digest", digest, "--controller", tools + "/execution_controller.py"] + sys.argv[1:])
+except (OSError, UnicodeError):
+    sys.exit(70)
+`
+
 func (t OpenSSHTransport) runtimeProtocolWithPrivateFlag(ctx context.Context, node Node, request map[string]any, flag string) (map[string]any, error) {
 	payload, err := json.Marshal(request)
 	if err != nil {
 		return nil, err
 	}
-	// Resolve the active immutable release on the node, then invoke the fixed
-	// protocol directly. No shell command is assembled from dynamic values.
-	root := "/var/lib/platform-installer/runtime"
-	releaseOutput, err := t.sshBounded(ctx, node, "sudo", []string{"-n", "readlink", "-f", root + "/current"}, nil, maxExecutionReleaseProbeBytes)
-	if err != nil {
-		return nil, &ExecutionError{Code: ExecutionNodeUnavailable}
-	}
-	release := strings.TrimSpace(string(releaseOutput))
-	if !strings.HasPrefix(release, root+"/releases/") || strings.ContainsAny(release, " \t\r\n") {
-		return nil, &ExecutionError{Code: ExecutionNodeUnavailable}
-	}
-	active, err := t.sshBounded(ctx, node, "sudo", []string{"-n", "cat", root + "/state/active"}, nil, maxExecutionStateProbeBytes)
-	if err != nil {
-		return nil, &ExecutionError{Code: ExecutionNodeUnavailable}
-	}
-	digest := parseFacts(string(active))["BUNDLE_DIGEST"]
-	if !strings.HasPrefix(digest, "sha256:") || len(digest) != len("sha256:")+64 {
-		return nil, &ExecutionError{Code: ExecutionNodeUnavailable}
-	}
-	args := []string{"-n", "env", "PYTHONPATH=" + release + "/ansible-core/tools", "python3", release + "/ansible-core/tools/execution_protocol.py", "--runtime-release", release, "--bundle-digest", digest, "--controller", release + "/ansible-core/tools/execution_controller.py"}
+	args := []string{"-n", "python3", "-c", "'" + strings.ReplaceAll(runtimeProtocolLauncher, "'", "'\\''") + "'"}
 	if flag != "" {
 		if flag != "--stage-target-host-trust" || len(payload) > 65536 {
 			return nil, errors.New("TARGET_HOST_TRUST_INVALID")

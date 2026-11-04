@@ -987,6 +987,49 @@ it("refreshes a running installation without navigation or a SUCCEEDED event", a
   view.unmount();
 });
 
+it.each([false, true])("approves and starts through one Go operation (blocked=%s)", async (blocked) => {
+  const plan = {
+    id: "combined-plan", status: "EXECUTABLE", approved: false,
+    projectRevision: "sha256:old", phases: [],
+    acknowledgements: [{ code: "ACK_RISK", summary: "Review change" }],
+    runtime: {}, expiresAt: "2099-01-01T00:00:00Z",
+  };
+  const combined = vi.fn().mockResolvedValue(blocked
+    ? { status: "BLOCKED", plan, error: { code: "INSTALLATION_SECRETS_MISSING", message: "Введите пароль" } }
+    : { status: "STARTED", plan: { ...plan, approved: true }, run: { runId: "combined-run", state: "RUNNING", sequence: 0 } });
+  const approve = vi.fn(), start = vi.fn(), subscribe = vi.fn().mockResolvedValue({ status: "SUBSCRIBED", subscriptionId: "combined-subscription" });
+  const value = api({
+    getInstallationState: vi.fn().mockResolvedValue({
+      status: "PLAN_REVIEW", project: { revision: "sha256:old", hasUnsavedChanges: false },
+      executionNode: { status: "READY" }, plan: { status: "PLAN_REVIEW", planId: plan.id }, prerequisites: [],
+    }),
+    getInstallationPlan: vi.fn().mockResolvedValue({ status: "PLAN_REVIEW", plan }),
+    approveAndStartInstallation: combined, approveInstallationPlan: approve,
+    startApprovedInstallation: start, subscribeInstallationRun: subscribe,
+    getInstallationRun: vi.fn().mockResolvedValue({ status: "READY", run: { runId: "combined-run", state: "RUNNING", sequence: 0 } }),
+  });
+  value.chooseProject.mockResolvedValue({ ...project, managed: { ...project.managed, deployments: {} } });
+  const view = render(<App api={value} />);
+  await userEvent.click(screen.getByRole("button", { name: "Открыть папку проекта" }));
+  await userEvent.click(await screen.findByRole("button", { name: "Установка" }));
+  await userEvent.click(screen.getByRole("tab", { name: "План" }));
+  const action = await screen.findByRole("button", { name: "Одобрить и начать установку" });
+  expect(action).toHaveProperty("disabled", true);
+  await userEvent.click(screen.getByRole("checkbox", { name: /ACK_RISK/ }));
+  await userEvent.click(action);
+  await waitFor(() => expect(combined).toHaveBeenCalledExactlyOnceWith(plan.id, ["ACK_RISK"]));
+  expect(approve).not.toHaveBeenCalled();
+  expect(start).not.toHaveBeenCalled();
+  if (blocked) {
+    expect(await screen.findByText("INSTALLATION_SECRETS_MISSING")).toBeTruthy();
+    expect(subscribe).not.toHaveBeenCalled();
+    expect(screen.getByRole("tab", { name: "План" }).getAttribute("aria-selected")).toBe("true");
+  } else {
+    await waitFor(() => expect(subscribe).toHaveBeenCalledWith("combined-run", 0));
+  }
+  view.unmount();
+});
+
 it.each([false, true])("clears a previous run-less error only after a successful fresh plan (blocked=%s)", async (blocked) => {
   let attempted = false;
   const plan = {
@@ -4825,7 +4868,7 @@ it.each(["blocked", "new-risk", "ready"])(
     expect(legacy).not.toHaveBeenCalled();
     if (scenario === "ready") {
       await userEvent.click(
-        await screen.findByRole("button", { name: "Одобрить план" }),
+        await screen.findByRole("button", { name: "Одобрить и начать установку" }),
       );
       expect(value.approveInstallationPlan).toHaveBeenCalledWith(
         "b4-library",

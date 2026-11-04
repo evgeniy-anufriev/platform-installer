@@ -380,6 +380,91 @@ func TestStartPromotesPendingPasswordsForPasswordOnlyPlan(t *testing.T) {
 	}
 }
 
+func TestStartReusesCurrentSecretProofAndRebuildsAuthoritativePlan(t *testing.T) {
+	app, builder, client := installationPlanApp(t, false)
+	defer app.secrets.Close()
+	transport := &countingSecretDescriptorTransport{descriptors: []executionnode.RuntimeSecretDescriptor{{RequirementRef: "admin-password", Purpose: "SERVICE_PASSWORD", ServiceDeployment: "database-main", DisplayLabel: "Password", RequiredWhen: "ALWAYS", Operations: []string{"SERVICE_APPLY", "SERVICE_VERIFY"}, Hosts: []string{"node-1"}}}}
+	app.binding.reader.transport = transport
+	builder.requiredCredentials = []executionnode.RequiredCredential{{RequirementRef: "admin-password", Purpose: "SERVICE_PASSWORD"}}
+	binding, _ := app.credentialBindingLocked()
+	if _, err := app.secrets.Set(binding, runtimesecret.Input{Username: "installer", SSHMode: runtimesecret.SSHPassword, SSHPassword: "synthetic-transport"}); err != nil {
+		t.Fatal(err)
+	}
+	set := func(value string) {
+		t.Helper()
+		if err := app.secrets.SetPendingRuntimeSecretValuesForRequirements(binding, []string{"admin-password"}, map[string]string{"admin-password": value}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	set("synthetic-first")
+	created := app.CreateInstallationPlan(nil)
+	if created.Plan == nil {
+		t.Fatal("plan unavailable")
+	}
+	if proof := app.getRuntimeSecretDescriptorsLocked(false); proof.Status != "READY" {
+		t.Fatal("secret proof unavailable")
+	}
+	if got := app.ApproveInstallationPlan(created.Plan.ID, []string{"ACK_RISK"}); got.Error != nil {
+		t.Fatal(got.Error)
+	}
+	// Pending replacements must still be rebound after approval at Start.
+	if transport.calls != 1 {
+		t.Fatal("approval did not attest secret requirements")
+	}
+	set("synthetic-replacement")
+	builds := builder.calls
+	got := app.StartApprovedInstallation(created.Plan.ID)
+	// This fixture intentionally stops at dispatch binding after the real rebuild.
+	if got.Error == nil || got.Error.Code != "EXECUTION_START_BINDING_MISSING" || client.starts != 0 || builder.calls != builds+1 || transport.calls != 1 {
+		t.Fatalf("Start bypassed rebuild or repeated descriptors: status=%s error=%v builds=%d calls=%d starts=%d", got.Status, got.Error, builder.calls, transport.calls, client.starts)
+	}
+	if err := app.secrets.WithTargetCredential(binding, func(value runtimesecret.TargetCredential) error {
+		if string(value.RuntimeSecretValues["admin-password"]) != "synthetic-replacement" {
+			t.Fatal("Start did not bind replacement")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestApproveAndStartUsesExistingApprovalAndFreshPlanGuards(t *testing.T) {
+	for _, scenario := range []string{"current", "missing-ack", "blocked-plan", "unknown-plan"} {
+		t.Run(scenario, func(t *testing.T) {
+			app, builder, client := installationPlanApp(t, scenario == "blocked-plan")
+			defer app.secrets.Close()
+			created := app.CreateInstallationPlan(nil)
+			if created.Plan == nil {
+				t.Fatal("plan unavailable")
+			}
+			id, acknowledgements := created.Plan.ID, []string{"ACK_RISK"}
+			if scenario == "missing-ack" {
+				acknowledgements = nil
+			}
+			if scenario == "unknown-plan" {
+				id = "unknown"
+			}
+			result := app.ApproveAndStartInstallation(id, acknowledgements)
+			if result.Error == nil || client.starts != 0 {
+				t.Fatal("fixture must stop before dispatch")
+			}
+			if scenario == "current" {
+				if builder.calls != 2 || result.Error.Code != "EXECUTION_START_BINDING_MISSING" {
+					t.Fatal("combined operation skipped fresh plan")
+				}
+			} else if builder.calls != 1 {
+				t.Fatal("failed approval entered Start")
+			}
+			if scenario == "missing-ack" && result.Error.Code != executionnode.AcknowledgementRequired {
+				t.Fatal("acknowledgement failure lost")
+			}
+			if scenario == "blocked-plan" && result.Error.Code != executionnode.PlanBlocked {
+				t.Fatal("blocked plan approved")
+			}
+		})
+	}
+}
+
 func TestTypedDescriptorFailureKeepsItsActualStartError(t *testing.T) {
 	app, builder, client := installationPlanApp(t, false)
 	builder.requiredCredentials = []executionnode.RequiredCredential{{RequirementRef: "si-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Purpose: "SERVICE_ADMIN_TOKEN"}}

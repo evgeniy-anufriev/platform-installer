@@ -22,6 +22,10 @@ export function ApproveInstallationPlan(arg1, arg2) {
   return window['go']['main']['App']['ApproveInstallationPlan'](arg1, arg2);
 }
 
+export function ApproveAndStartInstallation(arg1, arg2) {
+  return window['go']['main']['App']['ApproveAndStartInstallation'](arg1, arg2);
+}
+
 export function ApproveTargetHostKey(arg1) {
   return window['go']['main']['App']['ApproveTargetHostKey'](arg1);
 }

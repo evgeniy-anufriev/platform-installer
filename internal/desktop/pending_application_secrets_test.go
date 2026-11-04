@@ -83,8 +83,14 @@ func TestApplicationPendingSecretsDoNotRequireVerificationCoreOrSSH(t *testing.T
 
 type pendingApplicationProofTransport struct {
 	applicationDescriptorTransport
-	snapshot   *coreadapter.Snapshot
-	proofCalls int
+	snapshot        *coreadapter.Snapshot
+	proofCalls      int
+	descriptorCalls int
+}
+
+func (transport *pendingApplicationProofTransport) BuildRuntimeSecretDescriptors(ctx context.Context, node executionnode.Node, root string, release map[string]any, request executionnode.RuntimeSecretDescriptorRequest) (executionnode.RuntimeSecretDescriptorResult, error) {
+	transport.descriptorCalls++
+	return transport.applicationDescriptorTransport.BuildRuntimeSecretDescriptors(ctx, node, root, release, request)
 }
 
 func (transport *pendingApplicationProofTransport) BuildProjectVerificationSnapshot(_ context.Context, _ executionnode.Node, _ string, release map[string]any) (executionnode.ProjectVerificationSnapshot, error) {
@@ -121,6 +127,32 @@ func TestPendingApplicationInputsAreAttachedOnlyThroughCurrentCoreProjection(t *
 			if scenario == "current" {
 				if operation.Status != "READY" || len(missing) != 0 || transport.proofCalls != 1 {
 					t.Fatal("current Core mapping did not authorize pending input")
+				}
+				// A replacement after approval must replace the attached value,
+				// without another descriptor or template-resolution round trip.
+				if err := app.SetDeploymentRuntimeSecretValues(RuntimeSecretValuesInput{PendingApplicationInput: true, ApplicationLibrary: scope.ApplicationLibrary, ApplicationSlot: scope.ApplicationSlot, ProjectRevision: local.ProjectRevision, ApplicationRequirementRef: ref, Values: map[string]string{ref: "synthetic-replacement"}}); err != nil {
+					t.Fatal(err)
+				}
+				if got := app.runtimeSecretDescriptorsForStartLocked(local.ProjectRevision); got.Status != "READY" || transport.descriptorCalls != 1 || transport.proofCalls != 1 {
+					t.Fatal("Start recalculated current Core proof")
+				}
+				if err := app.secrets.WithTargetCredential(binding, func(value runtimesecret.TargetCredential) error {
+					if string(value.RuntimeSecretValues[coreRef]) != "synthetic-replacement" {
+						t.Fatal("Start used old attached value")
+					}
+					return nil
+				}); err != nil {
+					t.Fatal(err)
+				}
+				// Fresh discovery still resolves through Core, never its prior map.
+				if got := app.getRuntimeSecretDescriptorsLocked(false); got.Status != "READY" || transport.descriptorCalls != 2 || transport.proofCalls != 2 {
+					t.Fatal("fresh discovery reused old projection")
+				}
+				// Missing location evidence (as for a newly entered optional
+				// field) must resolve the mapping again, never guess its source.
+				app.runtimeSecretEvidence.applicationSources = applicationSecretSourceRequirements(operation.ApplicationInputs)
+				if got := app.runtimeSecretDescriptorsForStartLocked(local.ProjectRevision); got.Status != "READY" || transport.descriptorCalls != 2 || transport.proofCalls != 3 {
+					t.Fatal("unmapped pending location bypassed Core")
 				}
 			} else if len(missing) != 1 {
 				t.Fatal("unattested pending input attached")

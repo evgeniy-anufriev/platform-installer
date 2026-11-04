@@ -229,6 +229,7 @@ type runtimeSecretDescriptorEvidence struct {
 	runtime                                         executionnode.RuntimeEvidence
 	descriptors                                     []RuntimeSecretDescriptorView
 	applicationInputs                               []executionnode.ApplicationSecretDescriptor
+	applicationSources                              map[string]string
 }
 
 var runtimeSecretDescriptorRequirement = regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`)
@@ -1354,6 +1355,24 @@ func (a *App) getRuntimeSecretDescriptorsLocked(clearAttached bool) RuntimeSecre
 	}
 	a.runtimeSecretEvidence = &runtimeSecretDescriptorEvidence{projectID: a.current.Project.ID, projectRevision: revision, nodeID: binding.node.ID, runtime: result.Runtime, fingerprint: result.DescriptorSetFingerprint, descriptors: append([]RuntimeSecretDescriptorView(nil), view.Descriptors...)}
 	a.runtimeSecretEvidence.applicationInputs = append([]executionnode.ApplicationSecretDescriptor(nil), view.ApplicationInputs...)
+	return a.bindRuntimeSecretDescriptorsLocked(view)
+}
+
+// Start may reuse Core's exact-scope descriptor proof, but always binds the
+// latest pending values/files. A proof never extends the secret session TTL.
+func (a *App) runtimeSecretDescriptorsForStartLocked(revision string) RuntimeSecretDescriptorOperation {
+	if a.runtimeSecretEvidenceDescriptorsLocked(revision) == nil {
+		return a.getRuntimeSecretDescriptorsLocked(false)
+	}
+	evidence := a.runtimeSecretEvidence
+	return a.bindRuntimeSecretDescriptorsLocked(RuntimeSecretDescriptorOperation{
+		Status: "READY", ProjectRevision: revision, DescriptorSetFingerprint: evidence.fingerprint,
+		Descriptors:       append([]RuntimeSecretDescriptorView(nil), evidence.descriptors...),
+		ApplicationInputs: append([]executionnode.ApplicationSecretDescriptor(nil), evidence.applicationInputs...),
+	})
+}
+
+func (a *App) bindRuntimeSecretDescriptorsLocked(view RuntimeSecretDescriptorOperation) RuntimeSecretDescriptorOperation {
 	requirements := make([]string, 0, len(view.Descriptors))
 	typedRequirements := make([]runtimesecret.RuntimeSecretInput, 0, len(view.Descriptors))
 	for _, descriptor := range view.Descriptors {
@@ -1376,11 +1395,12 @@ func (a *App) getRuntimeSecretDescriptorsLocked(clearAttached bool) RuntimeSecre
 		}
 	}
 	if credentialBinding, bindingErr := a.credentialBindingLocked(); bindingErr == nil {
-		applicationSources, sourceErr := a.pendingApplicationSourceBindingsLocked(credentialBinding, revision, view.ApplicationInputs)
+		applicationSources, sourceErr := a.pendingApplicationSourceBindingsLocked(credentialBinding, view.ProjectRevision, view.ApplicationInputs)
 		if sourceErr != nil {
 			a.runtimeSecretEvidence = nil
 			return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: "RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE", Message: projectErrorMessage("RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE")}}
 		}
+		a.runtimeSecretEvidence.applicationSources = applicationSources
 		if err := a.secrets.PromotePendingRuntimeSecretValues(credentialBinding, requirements, applicationSources); err != nil {
 			a.runtimeSecretEvidence = nil
 			return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: projectErrorCode(err), Message: projectErrorMessage(projectErrorCode(err))}}

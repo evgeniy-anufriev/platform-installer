@@ -53,4 +53,18 @@ func TestAppDescriptorRefreshAndStartPreparationPreserveTypedInputs(t *testing.T
 			t.Fatal(err)
 		}
 	}
+	if err := app.secrets.SetPendingServiceSecretInput(binding, "vault-main", "SERVICE_ADMIN_TOKEN", []byte("synthetic-replacement"), nil); err != nil {
+		t.Fatal(err)
+	}
+	if result := app.runtimeSecretDescriptorsForStartLocked(app.runtimeSecretEvidence.projectRevision); result.Status != "READY" {
+		t.Fatal("cached Start binding failed")
+	}
+	if err := app.secrets.WithTargetCredential(binding, func(value runtimesecret.TargetCredential) error {
+		if len(value.RuntimeSecretInputs) != 2 || string(value.RuntimeSecretInputs[0].Value) != "synthetic-replacement" {
+			t.Fatal("cached Start retained the previous token")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
 }

@@ -1149,7 +1149,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       )
     )
       return;
-    if (!api.approveInstallationPlan) return;
+    if (!api.approveAndStartInstallation && !api.approveInstallationPlan) return;
     setInstallationBusy(true);
     try {
       if (
@@ -1205,7 +1205,11 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
         planId = next.id;
         acknowledgements = next.acknowledgements.map((item) => item.code);
       }
-      const operation = await api.approveInstallationPlan(
+      if (api.approveAndStartInstallation) {
+        await startApprovedInstallation(planId, acknowledgements);
+        return;
+      }
+      const operation = await api.approveInstallationPlan!(
         planId,
         acknowledgements,
       );
@@ -1216,27 +1220,50 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       setInstallationBusy(false);
     }
   };
-  const startApprovedInstallation = async (planId: string) => {
+  const startApprovedInstallation = async (
+    planId: string,
+    acknowledgements?: string[],
+  ) => {
     if (
       ["STARTING", "RUNNING", "CANCELLING"].includes(
         installationRun?.run?.state || "",
       )
     )
       return;
-    if (!api.startApprovedInstallation) return;
+    if (
+      acknowledgements
+        ? !api.approveAndStartInstallation
+        : !api.startApprovedInstallation
+    ) return;
     setInstallationBusy(true);
     setInstallationStarting(true);
     try {
-      const operation = await api.startApprovedInstallation(planId);
+      const operation = acknowledgements
+        ? await api.approveAndStartInstallation!(planId, acknowledgements)
+        : await api.startApprovedInstallation!(planId);
+      const operationPlan = operation.plan as InstallationPlanOperation["plan"];
+      if (acknowledgements && !operation.run) {
+        const current = operationPlan
+          ? { status: "PLAN_REVIEW" as const, plan: operationPlan }
+          : await api.getInstallationPlan?.(planId);
+        setInstallationPlan({
+          ...current,
+          status: current?.status || "BLOCKED",
+          error: operation.error,
+        });
+        setApprovalErrorAttempt((attempt) => attempt + 1);
+        await refreshInstallationState();
+        return;
+      }
       if (operation.status === "BLOCKED" && api.getInstallationPlan) {
         setInstallationPlan(await api.getInstallationPlan(planId));
       }
       setInstallationRun(operation);
       setInstallationEvents([]);
-      setRunPlan(operation.run ? installationPlan?.plan : undefined);
+      setRunPlan(operation.run ? operationPlan || installationPlan?.plan : undefined);
       activeRunIdRef.current = operation.run?.runId || "";
       runProgressRef.current = operation.run
-        ? beginRunProgress(operation.run.runId, installationPlan?.plan)
+        ? beginRunProgress(operation.run.runId, operationPlan || installationPlan?.plan)
         : undefined;
       setRunProgress(runProgressRef.current);
       setInstallationTab("execution");

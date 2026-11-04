@@ -383,6 +383,21 @@ func installationObserverDiagnostic(err error) string {
 	}
 }
 
+// ApproveAndStartInstallation composes the existing lifecycle in one Wails
+// operation. Start retains its current-context and fresh Core plan guards;
+// exact-scope descriptor evidence from approval is reused by that path.
+func (a *App) ApproveAndStartInstallation(planID string, acknowledgements []string) InstallationRunOperation {
+	approval := a.ApproveInstallationPlan(planID, acknowledgements)
+	if approval.Error != nil {
+		return InstallationRunOperation{Status: "BLOCKED", Plan: approval.Plan, Error: approval.Error}
+	}
+	result := a.StartApprovedInstallation(planID)
+	if result.Run != nil {
+		result.Plan = approval.Plan
+	}
+	return result
+}
+
 func (a *App) StartApprovedInstallation(planID string) InstallationRunOperation {
 	a.editMu.Lock()
 	if a.recoveredRunActiveLocked() {
@@ -453,7 +468,7 @@ func (a *App) StartApprovedInstallation(planID string) InstallationRunOperation 
 			}
 		}
 		if len(typedInputs) > 0 || len(passwordRequirements) > 0 {
-			descriptors := a.getRuntimeSecretDescriptorsLocked(false)
+			descriptors := a.runtimeSecretDescriptorsForStartLocked(revision)
 			if descriptors.Status != "READY" {
 				a.editMu.Unlock()
 				if descriptors.Error != nil {
