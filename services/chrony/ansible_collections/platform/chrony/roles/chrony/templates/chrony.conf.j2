@@ -8,5 +8,8 @@ allow {{ network }}
 {% endfor %}
 {% else %}
 server {{ platform_chrony_ntp_server }} iburst
+{% if platform_chrony_step_on_start | bool %}
+makestep 1.0 3
+{% endif %}
 port 0
 {% endif %}

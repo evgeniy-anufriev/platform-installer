@@ -1,4 +1,5 @@
 ---
 platform_chrony_instances: []
 platform_chrony_ntp_server: ""
+platform_chrony_step_on_start: true
 platform_chrony_allowed_client_networks: ""
