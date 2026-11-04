@@ -77973,7 +77973,7 @@ platform_redis_install_from_system_repo: true
     - _platform_redis_local_instances | length > 0
 
 @@END
-@@PORTABLE {"path":"services/redis/ansible_collections/platform/redis/roles/redis_tls/tasks/member.yml","mode":420,"size":10242,"sha256":"e6ceb59096d8083ec91037a578ba34fd27e167cad128da5aba95537025fd733b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":10242}
+@@PORTABLE {"path":"services/redis/ansible_collections/platform/redis/roles/redis_tls/tasks/member.yml","mode":420,"size":11217,"sha256":"e5772685fc0b901be5007b6d16517e7aa8becdb75cb005b61eb8f6b9118e0a82","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":11217}
 ---
 - name: Создание путей к экземпляру службы Redis
   ansible.builtin.file:
@@ -78048,6 +78048,23 @@ platform_redis_install_from_system_repo: true
     regexp: '^\s*requirepass\s+'
     state: absent
   register: _platform_redis_acl_legacy_password
+  no_log: true
+
+- name: Добавление аутентификации репликации существующему экземпляру Redis Sentinel HA
+  vars:
+    _platform_redis_saved_config: >-
+      {{ ((_platform_redis_acl_configs | default({})).get('results', [])
+          | selectattr('item', 'equalto', 'redis') | map(attribute='content', default='')
+          | first | default('')) | b64decode }}
+  ansible.builtin.lineinfile:
+    path: "{{ redis_member.config_directory }}/redis.conf"
+    regexp: '^\s*masterauth\s+'
+    line: "masterauth {{ lookup('ansible.builtin.file', platform_redis_secret_files[platform_redis_credential.passwordSecretRef]) | to_json }}"
+  register: _platform_redis_masterauth
+  when:
+    - platform_redis_mode == 'sentinel-ha'
+    - _platform_redis_has_persistent_state
+    - not (_platform_redis_saved_config is search('(?m)^[ \t]*masterauth[ \t]+\S'))
   no_log: true
 
 - name: "Формирование службы systemd для экземпляра Redis"
@@ -78159,14 +78176,14 @@ platform_redis_install_from_system_repo: true
     name: "{{ platform_redis_name }}@{{ redis_member.instance_name }}.service"
     enabled: true
     state: restarted
-  when: _platform_redis_config.changed or _platform_redis_acl_config.changed or _platform_redis_acl_file.changed or _platform_redis_acl_legacy_password.changed or _platform_redis_tls_copy.changed or _platform_redis_unit.changed
+  when: _platform_redis_config.changed or _platform_redis_masterauth.changed or _platform_redis_acl_config.changed or _platform_redis_acl_file.changed or _platform_redis_acl_legacy_password.changed or _platform_redis_tls_copy.changed or _platform_redis_unit.changed
 
 - name: Запуск неизмененного экземпляра службы Redis
   ansible.builtin.systemd:
     name: "{{ platform_redis_name }}@{{ redis_member.instance_name }}.service"
     enabled: true
     state: started
-  when: not (_platform_redis_config.changed or _platform_redis_acl_config.changed or _platform_redis_acl_legacy_password.changed or _platform_redis_tls_copy.changed or _platform_redis_unit.changed)
+  when: not (_platform_redis_config.changed or _platform_redis_masterauth.changed or _platform_redis_acl_config.changed or _platform_redis_acl_legacy_password.changed or _platform_redis_tls_copy.changed or _platform_redis_unit.changed)
 
 - name: Включение и запуск экземпляра службы Sentinel
   ansible.builtin.systemd:
@@ -79081,7 +79098,7 @@ platform_redis_install_from_system_repo: true
   run_once: true
 
 @@END
-@@PORTABLE {"path":"services/redis/ansible_collections/platform/redis/roles/redis_tls/templates/redis.conf.j2","mode":420,"size":1030,"sha256":"0703db4fda31ba109789cae81ee4040fafda23f2bd40fe359833e1d5dd92b86f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1030}
+@@PORTABLE {"path":"services/redis/ansible_collections/platform/redis/roles/redis_tls/templates/redis.conf.j2","mode":420,"size":1047,"sha256":"247dcb2ced4e1cf30e847b89c3d7b455e92aef7ca90452d44a64ae345f0e850a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1047}
 bind 0.0.0.0
 port 0
 tls-port {{ redis_member.redis_port }}
@@ -79098,8 +79115,10 @@ appendfilename appendonly.aof
 pidfile {{ redis_member.data_directory }}/redis.pid
 logfile {{ redis_member.log_directory }}/redis.log
 aclfile {{ redis_member.config_directory }}/redis.users.acl
-{% if platform_redis_mode == 'sentinel-ha' and redis_member.slot | int > 0 %}
+{% if platform_redis_mode == 'sentinel-ha' %}
+{% if redis_member.slot | int > 0 %}
 replicaof {{ (_platform_redis_instances | first).address }} {{ (_platform_redis_instances | first).redis_port }}
+{% endif %}
 masterauth {{ lookup('ansible.builtin.file', platform_redis_secret_files[platform_redis_credential.passwordSecretRef]) | to_json }}
 {% endif %}
 {% for key, value in platform_redis_advanced_config | dictsort %}
