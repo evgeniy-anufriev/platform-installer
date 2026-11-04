@@ -48522,7 +48522,7 @@ libraryExecutionPriorities:
 }
 
 @@END
-@@PORTABLE {"path":"contracts/application-libraries/v1alpha1/library.schema.json","mode":420,"size":11399,"sha256":"3e5f25a5c5e0f793d6725186c44e48cd18c9f78f7450306e14334210f4a90ddb","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":11399}
+@@PORTABLE {"path":"contracts/application-libraries/v1alpha1/library.schema.json","mode":420,"size":11538,"sha256":"ea30b659aa87bff777eb5f304427b9599aae8bd8224d7a852f94b9342ad7ebbf","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":11538}
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Library definition defaults v1alpha1",
@@ -48876,6 +48876,9 @@ libraryExecutionPriorities:
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 63
+                  },
+                  "restore_on_create": {
+                    "$ref": "deployments.schema.json#/$defs/restoreOnCreate"
                   }
                 }
               }
@@ -83690,7 +83693,7 @@ exec /bin/sh ./application-packages/keycloak/1.0.0/assets/scripts/integration.sh
 }
 
 @@END
-@@PORTABLE {"path":"examples/szi/library-packages/szi/1.0.0/roles/library_szi/defaults/main.yml","mode":420,"size":3632,"sha256":"2702597585194f3e7bbd4e3bece06a481afd9231d8cec75daa6f708e041266e3","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3632}
+@@PORTABLE {"path":"examples/szi/library-packages/szi/1.0.0/roles/library_szi/defaults/main.yml","mode":420,"size":3823,"sha256":"f333b8651e52fb78ab26379abbca43298f340e611cfa4172282894cf66595b53","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3823}
 platform_library_definition:
   name: szi
   version: 1.0.0
@@ -83732,6 +83735,10 @@ platform_library_definition:
       databases:
         keycloak-db:
           name: keycloak
+          restore_on_create:
+            source: assets/keycloak-clean.dump
+            sha256: a67c04b6de3fe0015a454cbabc0f69f9f4cf1db1667107696912d2129ed946f2
+            format: pg_custom
         audit-db:
           name: szi_audit
   shared_secrets:
