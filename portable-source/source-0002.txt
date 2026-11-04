@@ -62752,7 +62752,7 @@ platform_clickhouse_expected_rpm_digests:
     - platform_resolved_artifact_sources[clickhouse_package_id].source == 'REPOSITORY'
 
 @@END
-@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/tasks/main.yml","mode":420,"size":2453,"sha256":"d0e71ee590d9fb5c10791cb43c845093f49d7dc05e49baf4bed448b836c27843","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2453}
+@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/tasks/main.yml","mode":420,"size":2745,"sha256":"f87fa72ca02e26ff39ef48d3a3b9c73d073cad43a74ce5d148254260e905b690","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2745}
 ---
 - name: Проверка настроек ресурсов переносимой службы
   ansible.builtin.include_role:
@@ -62782,6 +62782,7 @@ platform_clickhouse_expected_rpm_digests:
 
 - name: "Выбор TLS-файлов ClickHouse по плану PKI"
   ansible.builtin.include_tasks: resolve_tls.yml
+  when: not (platform_clickhouse_verify_only | bool)
 
 - name: Проверка владения пакетом ClickHouse и экземпляром службы перед применением
   ansible.builtin.include_tasks: preflight.yml
@@ -62807,6 +62808,13 @@ platform_clickhouse_expected_rpm_digests:
   loop_control:
     loop_var: clickhouse_member
     label: "{{ clickhouse_member.id }}"
+
+- name: Проверка кворума Keeper в режиме HA
+  ansible.builtin.include_tasks: verify_keeper_quorum.yml
+  run_once: true
+  when:
+    - platform_clickhouse_verify_only | bool
+    - platform_clickhouse_mode == 'raft-ha'
 
 @@END
 @@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/tasks/normalize.yml","mode":420,"size":5267,"sha256":"eb69328ef30d639c173289e23d845f4720ee1a716b39c67beede6900b4f310ed","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5267}
@@ -63642,35 +63650,38 @@ platform_clickhouse_expected_rpm_digests:
   when: item.0.id < item.1.id
 
 @@END
-@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/tasks/verify.yml","mode":420,"size":3081,"sha256":"3d7d22e73aab2d5cc0dd999efcf86a919bbede820b89d17cd721026afb9e3906","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3081}
+@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/tasks/verify.yml","mode":420,"size":3370,"sha256":"5b5ad4199d2b94707c3c7b6b589ef1716439d6d12d9edaa7042bc75b82b83f23","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3370}
 ---
-- name: Проверка состояния службы сервера ClickHouse
-  ansible.builtin.command:
-    argv: [systemctl, is-active, "{{ clickhouse_member.server_unit_name }}"]
-  register: _platform_clickhouse_server_status
-  changed_when: false
-  failed_when: false
+- name: Проверка служб ClickHouse и Keeper после Apply
+  when: not (platform_clickhouse_verify_only | bool)
+  block:
+    - name: Проверка состояния службы сервера ClickHouse
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ clickhouse_member.server_unit_name }}"]
+      register: _platform_clickhouse_server_status
+      changed_when: false
+      failed_when: false
 
-- name: Проверка активности управляемого экземпляра ClickHouse
-  ansible.builtin.assert:
-    that:
-      - _platform_clickhouse_server_status.rc == 0
-      - _platform_clickhouse_server_status.stdout == 'active'
-    fail_msg: CLICKHOUSE_SERVER_NOT_ACTIVE
+    - name: Проверка активности управляемого экземпляра ClickHouse
+      ansible.builtin.assert:
+        that:
+          - _platform_clickhouse_server_status.rc == 0
+          - _platform_clickhouse_server_status.stdout == 'active'
+        fail_msg: CLICKHOUSE_SERVER_NOT_ACTIVE
 
-- name: Наблюдение за точной службой Keeper systemd только для HA
-  ansible.builtin.command:
-    argv: [systemctl, is-active, "{{ clickhouse_member.keeper_unit_name }}"]
-  register: _platform_clickhouse_keeper_status
-  changed_when: false
-  failed_when: false
+    - name: Наблюдение за точной службой Keeper systemd только для HA
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ clickhouse_member.keeper_unit_name }}"]
+      register: _platform_clickhouse_keeper_status
+      changed_when: false
+      failed_when: false
 
-- name: "Проверка состояния Keeper в соответствии с режимом ClickHouse"
-  ansible.builtin.assert:
-    that: >-
-      (platform_clickhouse_mode == 'raft-ha' and _platform_clickhouse_keeper_status.stdout == 'active') or
-      (platform_clickhouse_mode == 'standalone' and _platform_clickhouse_keeper_status.stdout != 'active')
-    fail_msg: CLICKHOUSE_KEEPER_MODE_MISMATCH
+    - name: "Проверка состояния Keeper в соответствии с режимом ClickHouse"
+      ansible.builtin.assert:
+        that: >-
+          (platform_clickhouse_mode == 'raft-ha' and _platform_clickhouse_keeper_status.stdout == 'active') or
+          (platform_clickhouse_mode == 'standalone' and _platform_clickhouse_keeper_status.stdout != 'active')
+        fail_msg: CLICKHOUSE_KEEPER_MODE_MISMATCH
 
 - name: HTTPS-запрос ClickHouse с runtime-паролем пользователя по умолчанию и доверенным CA
   ansible.builtin.uri:
@@ -63710,8 +63721,63 @@ platform_clickhouse_expected_rpm_digests:
     port: "{{ clickhouse_member.keeper_client_port }}"
     state: started
     timeout: 30
-  when: platform_clickhouse_mode == 'raft-ha'
+  when:
+    - not (platform_clickhouse_verify_only | bool)
+    - platform_clickhouse_mode == 'raft-ha'
   changed_when: false
+
+@@END
+@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/tasks/verify_keeper_quorum.yml","mode":420,"size":2194,"sha256":"9f244508b826492f139094669162664a7692ab817e266fc0a667093a4977d586","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2194}
+---
+- name: Чтение состояния Raft у настроенных участников Keeper по mTLS
+  ansible.builtin.command:
+    argv:
+      - timeout
+      - '10'
+      - openssl
+      - s_client
+      - -quiet
+      - -ignore_unexpected_eof
+      - -verify_return_error
+      - "{{ '-verify_ip' if ':' in item.address or item.address is match('^[0-9.]+$') else '-verify_hostname' }}"
+      - "{{ item.address }}"
+      - -connect
+      - "{{ ('[' ~ item.address ~ ']' if ':' in item.address else item.address) ~ ':' ~ item.keeper_client_port }}"
+      - -no-CApath
+      - -no-CAstore
+      - -CAfile
+      - "{{ _clickhouse_keeper_client_pki }}/ca-chain.pem"
+      - -cert
+      - "{{ _clickhouse_keeper_client_pki }}/certificate.pem"
+      - -key
+      - "{{ _clickhouse_keeper_client_pki }}/private-key.pem"
+    stdin: mntr
+    stdin_add_newline: false
+  vars:
+    _clickhouse_keeper_client_pki: "{{ (_platform_clickhouse_local_instances | first).config_directory }}/pki"
+  loop: "{{ _platform_clickhouse_instances }}"
+  loop_control:
+    label: "{{ item.id }}"
+  register: _clickhouse_keeper_status
+  changed_when: false
+  failed_when: false
+
+- name: Подтверждение лидера и большинства синхронизированных участников Keeper
+  ansible.builtin.assert:
+    that:
+      - _clickhouse_keeper_leaders | length == 1
+      - _clickhouse_keeper_voters | length > (_platform_clickhouse_instances | length // 2)
+      - _clickhouse_keeper_synced_followers | int >= (_platform_clickhouse_instances | length // 2)
+    fail_msg: CLICKHOUSE_KEEPER_QUORUM_NOT_READY
+  vars:
+    _clickhouse_keeper_voters: >-
+      {{ _clickhouse_keeper_status.results | selectattr('rc', 'equalto', 0) | map(attribute='stdout')
+         | select('search', '(?m)^zk_server_state[ \t]+(?:leader|follower)$') | list }}
+    _clickhouse_keeper_leaders: >-
+      {{ _clickhouse_keeper_voters | select('search', '(?m)^zk_server_state[ \t]+leader$') | list }}
+    _clickhouse_keeper_synced_followers: >-
+      {{ (_clickhouse_keeper_leaders | first | default('')
+          | regex_findall('(?m)^zk_synced_followers[ \t]+([0-9]+)$') | first | default(0)) }}
 
 @@END
 @@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/templates/keeper.service.j2","mode":420,"size":571,"sha256":"d89694fccde54b08d306815363b10d20ca094d80b21a0bcbdfc4642309c3b2b7","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":571}
@@ -64003,10 +64069,8 @@ status: requires-service-install-09-runtime-evidence
 - import_playbook: ../../integrations/playbooks/apply-endpoint.yml
 
 @@END
-@@PORTABLE {"path":"services/clickhouse/playbooks/verify.yml","mode":420,"size":581,"sha256":"f1774ff7db8fee77331775406f76b475e0eb4e864f910c82d9075d377e47adb2","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":581}
+@@PORTABLE {"path":"services/clickhouse/playbooks/verify.yml","mode":420,"size":513,"sha256":"c76bce5afa550438e255a37b2e8e7a74a9b715bab36db1fbdaf2903263324e3b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":513}
 ---
-- import_playbook: ../../../ansible-core/playbooks/pki-resolve.yml
-
 - name: Проверка развертывания ClickHouse TLS
   hosts: platform_targets
   become: true
@@ -64989,7 +65053,7 @@ platform_docker_packages:
     fail_msg: DOCKER_SHARED_DESTINATION_NOT_OWNED
 
 @@END
-@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/tasks/main.yml","mode":420,"size":1538,"sha256":"f7e1e63b9599a0b21b2b7a6a39656614396c861b2929a9618a1d8fbd5ed20327","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1538}
+@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/tasks/main.yml","mode":420,"size":1538,"sha256":"43f482b0e9bf715b7f77d3abfa49ca3bd7b5694456b572fb7e824faf790e284b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1538}
 ---
 - name: Проверка настроек ресурсов переносимой службы
   ansible.builtin.include_role:
@@ -65021,7 +65085,7 @@ platform_docker_packages:
   ansible.builtin.include_tasks: provision.yml
   when: not (platform_docker_verify_only | bool)
 
-- name: Проверка работы Docker без прав root и Compose без изменений
+- name: Проверка пользовательской службы Docker и доступа к API
   ansible.builtin.include_tasks: verify.yml
 
 @@END
@@ -65582,7 +65646,7 @@ platform_docker_packages:
   loop: [.bashrc, .bash_profile]
 
 @@END
-@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/tasks/validate.yml","mode":420,"size":4381,"sha256":"8ae3cead4f806d674abf2f0b8e81f216d2b1b55e5c888431fcd9d5070629e90d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4381}
+@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/tasks/validate.yml","mode":420,"size":4729,"sha256":"c475f820c53fabbaddc13e5b6055b474e9a2e97dfda56d55c0b47a984bb3a4fe","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4729}
 ---
 - name: Проверка желаемых настроек Docker
   ansible.builtin.assert:
@@ -65612,70 +65676,73 @@ platform_docker_packages:
       - platform_docker_lxc_veth_limit | int <= 64
     fail_msg: DOCKER_ROOTLESS_INPUT_INVALID
 
-- name: Проверка целевого идентификатора RED OS
-  ansible.builtin.slurp:
-    src: /etc/os-release
-  register: _platform_docker_os_release
+- name: Проверка предпосылок установки Docker
+  when: not (platform_docker_verify_only | bool)
+  block:
+    - name: Проверка целевого идентификатора RED OS
+      ansible.builtin.slurp:
+        src: /etc/os-release
+      register: _platform_docker_os_release
 
-- name: Проверка архитектуры целевой машины
-  ansible.builtin.command:
-    argv: [uname, -m]
-  register: _platform_docker_architecture
-  changed_when: false
+    - name: Проверка архитектуры целевой машины
+      ansible.builtin.command:
+        argv: [uname, -m]
+      register: _platform_docker_architecture
+      changed_when: false
 
-- name: Проверка поддерживаемой архитектуры RED OS
-  ansible.builtin.assert:
-    that:
-      - ( _platform_docker_os_release.content | b64decode ) is search('(?m)^ID=\"?redos\"?$')
-      - _platform_docker_architecture.stdout == 'x86_64'
-    fail_msg: DOCKER_ROOTLESS_UNSUPPORTED_TARGET
+    - name: Проверка поддерживаемой архитектуры RED OS
+      ansible.builtin.assert:
+        that:
+          - ( _platform_docker_os_release.content | b64decode ) is search('(?m)^ID=\"?redos\"?$')
+          - _platform_docker_architecture.stdout == 'x86_64'
+        fail_msg: DOCKER_ROOTLESS_UNSUPPORTED_TARGET
 
-- name: Проверка корневого демона и сокета Docker
-  ansible.builtin.command:
-    argv: [systemctl, is-active, docker.service, docker.socket]
-  register: _platform_docker_rootful_units
-  changed_when: false
-  failed_when: false
+    - name: Проверка корневого демона и сокета Docker
+      ansible.builtin.command:
+        argv: [systemctl, is-active, docker.service, docker.socket]
+      register: _platform_docker_rootful_units
+      changed_when: false
+      failed_when: false
 
-- name: Отклонение конфликта с активным Docker с правами root
-  ansible.builtin.assert:
-    that: "'active' not in _platform_docker_rootful_units.stdout_lines"
-    fail_msg: DOCKER_ROOTFUL_CONFLICT
+    - name: Отклонение конфликта с активным Docker с правами root
+      ansible.builtin.assert:
+        that: "'active' not in _platform_docker_rootful_units.stdout_lines"
+        fail_msg: DOCKER_ROOTFUL_CONFLICT
 
-- name: Проверка SecretRef среды выполнения создания пользователя
-  ansible.builtin.assert:
-    that:
-      - platform_docker_account_credential is mapping
-      - platform_docker_account_credential.passwordSecretRef | default('') is match('^runtime:[a-z][a-z0-9-]{0,127}$')
-      - platform_docker_secret_files is mapping
-      - platform_docker_account_credential.passwordSecretRef in platform_docker_secret_files
-    fail_msg: DOCKER_ACCOUNT_PASSWORD_REQUIRED
-  no_log: true
+    - name: Проверка SecretRef среды выполнения создания пользователя
+      ansible.builtin.assert:
+        that:
+          - platform_docker_account_credential is mapping
+          - platform_docker_account_credential.passwordSecretRef | default('') is match('^runtime:[a-z][a-z0-9-]{0,127}$')
+          - platform_docker_secret_files is mapping
+          - platform_docker_account_credential.passwordSecretRef in platform_docker_secret_files
+        fail_msg: DOCKER_ACCOUNT_PASSWORD_REQUIRED
+      no_log: true
 
-- name: Проверка файла паролей среды выполнения создания пользователя на контроллере
-  ansible.builtin.stat:
-    path: "{{ platform_docker_secret_files[platform_docker_account_credential.passwordSecretRef] }}"
-    follow: false
-    get_mime: false
-    get_attributes: false
-    get_checksum: false
-  delegate_to: localhost
-  become: false
-  register: _platform_docker_password_file
-  no_log: true
+    - name: Проверка файла паролей среды выполнения создания пользователя на контроллере
+      ansible.builtin.stat:
+        path: "{{ platform_docker_secret_files[platform_docker_account_credential.passwordSecretRef] }}"
+        follow: false
+        get_mime: false
+        get_attributes: false
+        get_checksum: false
+      delegate_to: localhost
+      become: false
+      register: _platform_docker_password_file
+      no_log: true
 
-- name: Проверка типа, размера и защиты runtime-файла пароля
-  ansible.builtin.assert:
-    that:
-      - _platform_docker_password_file.stat.isreg
-      - not _platform_docker_password_file.stat.islnk
-      - _platform_docker_password_file.stat.size >= 1
-      - _platform_docker_password_file.stat.size <= 4096
-    fail_msg: DOCKER_ACCOUNT_PASSWORD_INVALID
-  no_log: true
+    - name: Проверка типа, размера и защиты runtime-файла пароля
+      ansible.builtin.assert:
+        that:
+          - _platform_docker_password_file.stat.isreg
+          - not _platform_docker_password_file.stat.islnk
+          - _platform_docker_password_file.stat.size >= 1
+          - _platform_docker_password_file.stat.size <= 4096
+        fail_msg: DOCKER_ACCOUNT_PASSWORD_INVALID
+      no_log: true
 
 @@END
-@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/tasks/verify.yml","mode":420,"size":4242,"sha256":"02d3551fccbc241664a0a36a1290ba2f9957054d00ed553b2916d4a0aa888bfc","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4242}
+@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/tasks/verify.yml","mode":420,"size":4422,"sha256":"b19441c85fe039543eafd085351ff35842d303277d354903b000cec8aa183ad2","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4422}
 ---
 - name: Определение выбранной учетной записи Docker для проверки только для чтения
   ansible.builtin.getent:
@@ -65727,26 +65794,29 @@ platform_docker_packages:
     that: _platform_docker_info.rc == 0
     fail_msg: DOCKER_ROOTLESS_DAEMON_UNAVAILABLE
 
-- name: Проверка работы Docker без прав root и без Swarm
-  ansible.builtin.assert:
-    that:
-      - "'rootless' in ((_platform_docker_info.stdout | from_json).SecurityOptions | join(' '))"
-    fail_msg: DOCKER_ROOTLESS_RUNTIME_INVALID
+- name: Проверка rootless и Compose после Apply
+  when: not (platform_docker_verify_only | bool)
+  block:
+    - name: Проверка работы Docker в режиме rootless
+      ansible.builtin.assert:
+        that:
+          - "'rootless' in ((_platform_docker_info.stdout | from_json).SecurityOptions | join(' '))"
+        fail_msg: DOCKER_ROOTLESS_RUNTIME_INVALID
 
-- name: Проверка плагина Docker Compose CLI
-  ansible.builtin.command:
-    argv: [docker, compose, version, --short]
-  become: true
-  become_user: "{{ platform_docker_account_name }}"
-  environment:
-    XDG_RUNTIME_DIR: "/run/user/{{ _platform_docker_uid }}"
-  register: _platform_docker_compose_version
-  changed_when: false
+    - name: Проверка плагина Docker Compose CLI
+      ansible.builtin.command:
+        argv: [docker, compose, version, --short]
+      become: true
+      become_user: "{{ platform_docker_account_name }}"
+      environment:
+        XDG_RUNTIME_DIR: "/run/user/{{ _platform_docker_uid }}"
+      register: _platform_docker_compose_version
+      changed_when: false
 
-- name: Проверка наличия плагина Docker Compose
-  ansible.builtin.assert:
-    that: _platform_docker_compose_version.stdout is match('^v?[0-9]+\.[0-9]+\.[0-9]+')
-    fail_msg: DOCKER_COMPOSE_NOT_AVAILABLE
+    - name: Проверка наличия плагина Docker Compose
+      ansible.builtin.assert:
+        that: _platform_docker_compose_version.stdout is match('^v?[0-9]+\.[0-9]+\.[0-9]+')
+        fail_msg: DOCKER_COMPOSE_NOT_AVAILABLE
 
 - name: Проверка взаимного TLS на внешне опубликованном Docker API
   ansible.builtin.command:
@@ -65949,11 +66019,9 @@ status: requires-service-install-10-runtime-evidence
         tasks_from: clear_entry
 
 @@END
-@@PORTABLE {"path":"services/docker/playbooks/verify.yml","mode":420,"size":593,"sha256":"bb4623db307484f1868ff7bae1bcec60d56f182443ffc77fee8b9830f13c9d58","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":593}
+@@PORTABLE {"path":"services/docker/playbooks/verify.yml","mode":420,"size":538,"sha256":"6670dcd95eb373f6b84a26718657d99dd27cb15359c83bf18b6dc5938f659233","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":538}
 ---
-- import_playbook: ../../../ansible-core/playbooks/pki-resolve.yml
-
-- name: Проверка Docker без прав root и Compose без изменений
+- name: Проверка пользовательской службы Docker и доступа к API
   hosts: platform_targets
   become: true
   gather_facts: false
@@ -66744,7 +66812,7 @@ platform_haproxy_full_reconcile: false
   no_log: true
 
 @@END
-@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/endpoint_verify.yml","mode":420,"size":1029,"sha256":"1be71363b543d342b3482450a1ed86aa3b42379eddf4775cdcbb51d53fa24c14","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1029}
+@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/endpoint_verify.yml","mode":420,"size":1304,"sha256":"eb3cab4a2f59038427bb9694c95e8febba70ba9cae7afdf97f22fb985038eeb5","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1304}
 ---
 - name: "Расчёт той же модели backend-сервисов для проверки конечной точки без изменений"
   ansible.builtin.include_tasks: resolve.yml
@@ -66760,7 +66828,12 @@ platform_haproxy_full_reconcile: false
 - name: Проверка выбранных серверных целей только для чтения
   ansible.builtin.include_tasks: check_targets.yml
 
-- name: Проверка существующей службы и конфигурации HAProxy
+- name: Проверка синтаксиса активной конфигурации HAProxy
+  ansible.builtin.command:
+    argv: ["{{ platform_haproxy_binary }}", '-c', '-f', "{{ platform_haproxy_main_config }}", '-f', "{{ platform_haproxy_conf_directory }}"]
+  changed_when: false
+
+- name: Проверка существующей службы и портов HAProxy
   ansible.builtin.include_tasks: verify.yml
 
 @@END
@@ -67512,30 +67585,20 @@ platform_haproxy_full_reconcile: false
     - platform_haproxy_active_artifacts_changed | default(false) | bool
 
 @@END
-@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/verify.yml","mode":420,"size":1241,"sha256":"0061dbc4676e5816c85163ee9784755db393ebf721733f3b92ae65963314beb8","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1241}
+@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/verify.yml","mode":420,"size":711,"sha256":"469a3dc6f77764d14b9f05781c1f1b4dcb3bb0973320063a81700a7308ae2e96","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":711}
 ---
-- name: Проверка пакета HAProxy и активной конфигурации, доступной только для чтения
-  ansible.builtin.command:
-    argv: ["{{ platform_haproxy_binary }}", '-c', '-f', "{{ platform_haproxy_main_config }}", '-f', "{{ platform_haproxy_conf_directory }}"]
-  changed_when: false
-
 - name: "Проверка активности службы HAProxy без внесения изменений"
   ansible.builtin.command:
     argv: [systemctl, is-active, --quiet, "{{ platform_haproxy_service_name }}"]
   changed_when: false
 
-- name: Проверка публичного и локального портов статистики HAProxy без изменений
+- name: Проверка прослушивания публичного порта и порта статистики HAProxy
   ansible.builtin.command:
-    argv: [ss, -ltn]
+    argv: [ss, -H, -ltn, "sport = :{{ item }}"]
+  loop: "{{ [platform_haproxy_public_port, platform_haproxy_internal_stats_port] | unique | list }}"
   changed_when: false
-  register: _platform_haproxy_listeners
-
-- name: Проверка наличия публичного и локального портов статистики HAProxy
-  ansible.builtin.assert:
-    that:
-      - "':' ~ (platform_haproxy_public_port | string) in _platform_haproxy_listeners.stdout"
-      - "':' ~ (platform_haproxy_internal_stats_port | string) in _platform_haproxy_listeners.stdout"
-    fail_msg: HAPROXY_LISTENER_VERIFICATION_FAILED
+  register: _platform_haproxy_listener
+  failed_when: _platform_haproxy_listener.rc != 0 or not (_platform_haproxy_listener.stdout | trim)
 
 @@END
 @@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/templates/10-public.cfg.j2","mode":420,"size":1018,"sha256":"74c72980f638c2ba1a81d8a36948d942d8c53fd20c180c1dc51a937502d97ece","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1018}
@@ -67769,9 +67832,8 @@ platforms:
     platform_haproxy_full_reconcile: true
 
 @@END
-@@PORTABLE {"path":"services/haproxy/playbooks/verify.yml","mode":420,"size":275,"sha256":"956ced778c8673e74507d90659a7320223dbf831e3943f6e7956ced0d4ed6d9c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":275}
+@@PORTABLE {"path":"services/haproxy/playbooks/verify.yml","mode":420,"size":209,"sha256":"3d250d84227031cab8ea68c16ff5cb03f362c1dc1f20762b2ad59cec928e247d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":209}
 ---
-- import_playbook: ../../../ansible-core/playbooks/pki-verify.yml
 - name: Проверка HAProxy без изменений
   hosts: platform_targets
   become: true
@@ -70936,7 +70998,7 @@ dependencies: []
     - platform_execution_service_deployment is not defined or _platform_kafka_project_deployment.key == platform_execution_service_deployment
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/resolve_cli_connection.yml","mode":420,"size":3669,"sha256":"c374e361d12d05319f2700c8de4dc131137e85afa3cfd3938b8c821bf89c7cae","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3669}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/resolve_cli_connection.yml","mode":420,"size":3091,"sha256":"2b90902cc6bfe387ea50622972892096f721aa3aca69b584f27781b73b81f769","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3091}
 ---
 - name: Выбор listener Kafka CLI по назначению
   ansible.builtin.set_fact:
@@ -70976,17 +71038,7 @@ dependencies: []
   ansible.builtin.include_tasks: resolve_tls_runtime.yml
   vars:
     kafka_tls_member: "{{ kafka_cli_member }}"
-  when:
-    - _platform_kafka_cli_connection.securityProtocol in ['SSL', 'SASL_SSL']
-    - not (platform_kafka_verify_only | bool) or kafka_cli_member.id not in (_platform_kafka_verify_tls_by_member | default({}))
-
-- name: Выбор готовой TLS-проекции экземпляра текущей проверки
-  ansible.builtin.set_fact:
-    _platform_kafka_tls_runtime: "{{ _platform_kafka_verify_tls_by_member[kafka_cli_member.id] }}"
-  when:
-    - platform_kafka_verify_only | bool
-    - _platform_kafka_cli_connection.securityProtocol in ['SSL', 'SASL_SSL']
-    - kafka_cli_member.id in (_platform_kafka_verify_tls_by_member | default({}))
+  when: _platform_kafka_cli_connection.securityProtocol in ['SSL', 'SASL_SSL']
 
 - name: Добавление проекции TLS к соединению Kafka CLI без секретных значений
   ansible.builtin.set_fact:
@@ -72050,11 +72102,12 @@ dependencies: []
   ansible.builtin.include_tasks: listener_tls_settings.yml
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/verify.yml","mode":420,"size":1200,"sha256":"0fcefc307de9d901c9e30a2bbf338ed1a8667a742f4f110862f9b75b2c508210","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1200}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/verify.yml","mode":420,"size":1248,"sha256":"10b940c4fb1bb5d144f416890e0338dcd1e4deb156951428c6b48eec176066b0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1248}
 ---
 - name: Проверка каждого экземпляра службы Kafka в детерминированном порядке
   ansible.builtin.include_tasks: verify_member.yml
   loop: "{{ range(_platform_kafka_local_instances | length) | list }}"
+  when: not (platform_kafka_verify_only | bool)
   vars:
     kafka_member: "{{ (_platform_kafka_local_instances | sort(attribute='node_id'))[kafka_verify_member_index] }}"
   # Ansible groups includes by both loop item and label; keep them host-independent.
@@ -72180,7 +72233,7 @@ dependencies: []
       when: _platform_kafka_cli_command_config.path is defined
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/verify_entry.yml","mode":420,"size":4646,"sha256":"edc5a70a80ebbe74901fc0b3419d4ce8bc95cb9b040590e9066e208121e042b0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4646}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/verify_entry.yml","mode":420,"size":4541,"sha256":"8ddb645f5a8d8d026e5d6b50554909f260ee480f61fd2f70f2a64eed6028e8b9","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4541}
 ---
 - name: "Получение экземпляров Kafka из проекта, если список не задан явно"
   ansible.builtin.include_tasks: project_runtime.yml
@@ -72223,10 +72276,9 @@ dependencies: []
     _platform_kafka_broker_instances: "{{ _platform_kafka_instances | selectattr('roles', 'contains', 'broker') | list }}"
     _platform_kafka_local_instances: "{{ _platform_kafka_instances | selectattr('host', 'equalto', inventory_hostname) | list }}"
 
-- name: Выбор способа аутентификации и начало локального расчёта TLS для Verify
+- name: Выбор способа аутентификации Kafka CLI
   ansible.builtin.set_fact:
     _platform_kafka_scram_enabled: "{{ _platform_kafka_instances | map(attribute='listeners') | map('dict2items') | flatten | selectattr('value.securityProtocol', 'equalto', 'SASL_SSL') | list | length > 0 }}"
-    _platform_kafka_verify_tls_by_member: {}
 
 - name: Проверка работоспособности узлов и кластера Kafka
   ansible.builtin.include_tasks: verify.yml
@@ -72263,7 +72315,7 @@ dependencies: []
     - _platform_kafka_registry_local | length > 0
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/verify_member.yml","mode":420,"size":3044,"sha256":"19b6744ffb2af5a1feb555ab5232c47c590b034531d0a78c18174b23e7b83728","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3044}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/verify_member.yml","mode":420,"size":2620,"sha256":"a41b34305f9f4b613f42879a2305c9fc24db4d157e4b210e41083501c4b3bee7","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2620}
 ---
 - name: Проверка состояния экземпляра службы Kafka systemd и основного процесса
   ansible.builtin.command:
@@ -72295,11 +72347,6 @@ dependencies: []
   ansible.builtin.include_tasks: resolve_tls_runtime.yml
   vars:
     kafka_tls_member: "{{ kafka_member }}"
-  when: kafka_member.listener_endpoints | selectattr('security_protocol', 'in', ['SSL', 'SASL_SSL']) | list | length > 0
-
-- name: Сохранение TLS-проекции экземпляра только для текущего Verify
-  ansible.builtin.set_fact:
-    _platform_kafka_verify_tls_by_member: "{{ _platform_kafka_verify_tls_by_member | default({}) | combine({kafka_member.id: _platform_kafka_tls_runtime}) }}"
   when: kafka_member.listener_endpoints | selectattr('security_protocol', 'in', ['SSL', 'SASL_SSL']) | list | length > 0
 
 - name: Проверка SSL listeners Kafka через реальное TLS-соединение
@@ -72975,40 +73022,6 @@ status: requires-integration-evidence
     label: "{{ inventory_hostname }}:{{ item.key }}"
 
 @@END
-@@PORTABLE {"path":"services/kafka/playbooks/load_generated_state.yml","mode":420,"size":1595,"sha256":"a94407b5dee3e0b8293b193ec31a37719dca832dde479518df4dbf6648959927","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1595}
----
-- name: Загрузка служебного состояния Kafka для проверки без внесения изменений
-  hosts: localhost
-  connection: local
-  gather_facts: false
-  tasks:
-    - name: Проверка созданного состояния Kafka, принадлежащего контроллеру
-      ansible.builtin.stat:
-        path: "{{ platform_generated_state_path }}"
-      register: _platform_kafka_generated_state_stat
-      when: platform_generated_state_path is defined
-
-    - name: Проверка наличия сохранённого служебного состояния Kafka для Verify
-      ansible.builtin.assert:
-        that:
-          - _platform_kafka_generated_state_stat.stat.exists
-          - _platform_kafka_generated_state_stat.stat.isreg
-        fail_msg: KAFKA_GENERATED_STATE_REQUIRED
-      when: platform_generated_state_path is defined
-
-    - name: Чтение созданного состояния Kafka, принадлежащего контроллеру
-      ansible.builtin.include_vars:
-        file: "{{ platform_generated_state_path }}"
-        name: _platform_kafka_generated_state_document
-      when: platform_generated_state_path is defined
-
-    - name: Публикация созданного состояния Kafka, принадлежащего контроллеру
-      ansible.builtin.set_fact:
-        platform_generated_state: >-
-          {{ _platform_kafka_generated_state_document.platform_generated_state | default({}) }}
-      when: platform_generated_state_path is defined
-
-@@END
 @@PORTABLE {"path":"services/kafka/playbooks/reset_kafka_host.yml","mode":420,"size":5690,"sha256":"023a64561921b72f189dd3ae446e6617333eec43c90d9853e25a8dbbb3f4d0b5","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5690}
 ---
 - name: Удаление данных и служб Kafka на явно выбранных QA-узлах
@@ -73150,9 +73163,7 @@ status: requires-integration-evidence
         label: "{{ item.item }}"
 
 @@END
-@@PORTABLE {"path":"services/kafka/playbooks/verify.yml","mode":420,"size":962,"sha256":"d73c79c0ab94e1c81359a64958c411b0ed820ba2c30464e626c73f00f5f6b012","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":962}
-- import_playbook: load_generated_state.yml
-
+@@PORTABLE {"path":"services/kafka/playbooks/verify.yml","mode":420,"size":602,"sha256":"d5e285b0052ea73fed3d96868c79c7ed584300a257c2b57312d520c658c7b5f2","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":602}
 - import_playbook: ../../../ansible-core/playbooks/pki-resolve.yml
 
 - name: Проверка экземпляров службы Kafka KRaft
@@ -73164,10 +73175,6 @@ status: requires-integration-evidence
       ansible.builtin.include_role:
         name: platform.core.runtime_role_variables
       when: platform_execution_role_variables_by_host is defined
-    - name: Передача подготовленного контроллером состояния Kafka на узлы проверки
-      ansible.builtin.set_fact:
-        platform_generated_state: "{{ hostvars['localhost'].platform_generated_state }}"
-      when: platform_generated_state_path is defined
   roles:
     - role: platform.kafka.kafka_kraft
       platform_kafka_verify_only: true
@@ -75526,7 +75533,7 @@ platform_postgresql_pgpass_file: "/var/lib/pgsql/.pgpass"
     fail_msg: POSTGRES_TLS_FILES_NOT_DEPLOYED
 
 @@END
-@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/postgresql/tasks/main.yml","mode":420,"size":7071,"sha256":"b51533ef862d560d1ffe68f1f84d4a50293704529210929760b41d7ff13747b4","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7071}
+@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/postgresql/tasks/main.yml","mode":420,"size":7375,"sha256":"3473f1df562c99f230124dd27b660fe1dc102a30b5ace9a5c86550530e2b0564","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7375}
 ---
 - name: Проверка настроек ресурсов переносимой службы
   ansible.builtin.include_role:
@@ -75545,7 +75552,9 @@ platform_postgresql_pgpass_file: "/var/lib/pgsql/.pgpass"
 
 - name: "Выбор плана PKI для PostgreSQL до внесения изменений"
   ansible.builtin.include_tasks: resolve_tls.yml
-  when: platform_postgresql_tls_profile | length > 0
+  when:
+    - not (platform_postgresql_verify_only | bool)
+    - platform_postgresql_tls_profile | length > 0
 
 - name: Проверка разрешенных источников артефактов PostgreSQL перед изменением
   ansible.builtin.include_role:
@@ -75585,6 +75594,7 @@ platform_postgresql_pgpass_file: "/var/lib/pgsql/.pgpass"
 
 - name: "Определение каталога исполняемых файлов PostgreSQL"
   ansible.builtin.include_tasks: resolve_binary_directory.yml
+  when: not (platform_postgresql_verify_only | bool)
 
 - name: Определение экземпляра PostgreSQL на узле inventory
   ansible.builtin.set_fact:
@@ -75600,6 +75610,7 @@ platform_postgresql_pgpass_file: "/var/lib/pgsql/.pgpass"
   when: not (platform_postgresql_verify_only | bool)
 
 - name: "Определение имени службы PostgreSQL в systemd"
+  when: not (platform_postgresql_verify_only | bool)
   ansible.builtin.set_fact:
     _platform_postgresql_unit_name: >-
       {{ platform_postgresql_name ~ '@' ~ platform_postgresql_deployment_id ~ '-'
@@ -75663,12 +75674,14 @@ platform_postgresql_pgpass_file: "/var/lib/pgsql/.pgpass"
     - not (platform_postgresql_verify_only | bool)
     - platform_postgresql_clean_install | bool
 
-- name: Согласование PostgreSQL за исключением операции очистки
+- name: Проверка или согласование PostgreSQL за исключением операции очистки
   ansible.builtin.include_tasks:
     file: "{{ 'verify.yml' if platform_postgresql_verify_only | bool else 'reconcile.yml' }}"
     apply:
       environment:
-        PATH: "{{ platform_postgresql_binary_directory }}:{{ ansible_env.PATH | default('/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin') }}"
+        PATH: >-
+          {{ platform_postgresql_binary_directory |
+             default('/usr/bin:/usr/pgsql-' ~ platform_postgresql_version.split('.')[0] ~ '/bin', true) }}:{{ ansible_env.PATH | default('/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin') }}
   when: >-
     platform_postgresql_verify_only | bool or
     not (platform_postgresql_clean_install | bool and platform_postgresql_clear_only | bool)
@@ -76682,7 +76695,7 @@ platform_postgresql_pgpass_file: "/var/lib/pgsql/.pgpass"
   when: platform_postgresql_mode == 'pg_auto_failover'
 
 @@END
-@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/postgresql/tasks/verify.yml","mode":420,"size":1057,"sha256":"b206b5d90c11559690864018503a3b3cfaeab52744add9a47e925e1b10e354e3","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1057}
+@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/postgresql/tasks/verify.yml","mode":420,"size":3277,"sha256":"082e9328d1357053a1d42286499261d3ebfbca5f26f1c59bb224d0a09f44895e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3277}
 ---
 - name: Проверка PostgreSQL аутентифицированным SQL-запросом
   ansible.builtin.command:
@@ -76709,6 +76722,45 @@ platform_postgresql_pgpass_file: "/var/lib/pgsql/.pgpass"
   delay: 2
   until: _platform_postgresql_health.rc == 0 and _platform_postgresql_health.stdout | trim == '1'
   no_log: true
+
+- name: Проверка кворума pg_auto_failover на мониторе
+  when:
+    - platform_postgresql_mode == 'pg_auto_failover'
+    - "'monitor' in (_platform_postgresql_local_members | first).roles"
+  block:
+    - name: Получение состояния узлов pg_auto_failover
+      ansible.builtin.command:
+        argv: [pg_autoctl, show, state, --pgdata, "{{ platform_postgresql_data_directory }}", --json]
+      become: true
+      become_user: "{{ platform_postgresql_user }}"
+      environment:
+        PGCONNECT_TIMEOUT: '5'
+      register: _platform_postgresql_ha_state
+      changed_when: false
+
+    - name: Подтверждение готовности primary и реплики с правом участия в кворуме
+      ansible.builtin.assert:
+        that:
+          - _postgresql_ha_nodes | length == _postgresql_database_members | length
+          - _postgresql_ha_nodes | selectattr('health', 'equalto', 1) | list | length == _postgresql_ha_nodes | length
+          - _postgresql_ha_nodes | selectattr('current_group_state', 'equalto', 'primary') | selectattr('assigned_group_state', 'equalto', 'primary') | list | length == 1
+          - _postgresql_ha_nodes | selectattr('current_group_state', 'equalto', 'secondary') | selectattr('assigned_group_state', 'equalto', 'secondary') | selectattr('replication_quorum', 'equalto', true) | list | length == 1
+        fail_msg: POSTGRES_AUTO_FAILOVER_QUORUM_NOT_READY
+
+    - name: Подтверждение состава узлов данных по адресам и портам
+      ansible.builtin.assert:
+        that: >-
+          _postgresql_ha_nodes
+          | selectattr('nodehost', 'equalto', item.address)
+          | selectattr('nodeport', 'equalto', item.port | default(platform_postgresql_port) | int)
+          | list | length == 1
+        fail_msg: POSTGRES_AUTO_FAILOVER_MEMBER_MISMATCH
+      loop: "{{ _postgresql_database_members }}"
+      loop_control:
+        label: "{{ item.id }}"
+  vars:
+    _postgresql_ha_nodes: "{{ _platform_postgresql_ha_state.stdout | from_json }}"
+    _postgresql_database_members: "{{ platform_postgresql_instances | selectattr('roles', 'contains', 'database') | list }}"
 
 @@END
 @@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/postgresql/templates/pg_hba.conf.j2","mode":420,"size":1704,"sha256":"41a5b8cb35ecaaa33521cb0cda659fa190f6554f77edc044e272fa3776444ad0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1704}
@@ -76971,10 +77023,8 @@ status: requires-postgres-01-runtime-evidence
       platform_postgresql_verify_only: false
 
 @@END
-@@PORTABLE {"path":"services/postgresql/playbooks/verify.yml","mode":420,"size":580,"sha256":"63b9493ed18420aab2d674d5204940be9f10ca6fbf08827f19a8426248bd7207","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":580}
+@@PORTABLE {"path":"services/postgresql/playbooks/verify.yml","mode":420,"size":512,"sha256":"362ea254bf25dd4c7876e6dd1374cc5a699a88897e488f19412db4ee96533bad","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":512}
 ---
-- import_playbook: ../../../ansible-core/playbooks/pki-resolve.yml
-
 - name: Проверка PostgreSQL без изменений
   hosts: platform_targets
   become: true
@@ -78858,7 +78908,7 @@ platform_redis_install_from_system_repo: true
   when: item.0.id < item.1.id
 
 @@END
-@@PORTABLE {"path":"services/redis/ansible_collections/platform/redis/roles/redis_tls/tasks/verify.yml","mode":420,"size":7797,"sha256":"7b465b42e51cb125bc254ca7b2b8c2679be58e47852906b70098936188b1a151","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7797}
+@@PORTABLE {"path":"services/redis/ansible_collections/platform/redis/roles/redis_tls/tasks/verify.yml","mode":420,"size":7845,"sha256":"a148b08a793bb7367143f841515a27e0e5f41f5916dc028a971d7dcafff6f0df","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7845}
 ---
 - name: Проверка состояния экземпляра службы Redis systemd
   ansible.builtin.command:
@@ -79057,6 +79107,7 @@ platform_redis_install_from_system_repo: true
 
 - name: Проверка и сохранение пользователя по умолчанию ACL после проверки работоспособности экземпляра службы
   ansible.builtin.include_tasks: acl_runtime.yml
+  when: not (platform_redis_verify_only | bool)
 
 @@END
 @@PORTABLE {"path":"services/redis/ansible_collections/platform/redis/roles/redis_tls/tasks/verify_deployment.yml","mode":420,"size":2183,"sha256":"84470f5ef853e33de15c6ea14743c867a392ba94d724a5ccc17f92748a9e65f1","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2183}
