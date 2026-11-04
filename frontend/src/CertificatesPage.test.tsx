@@ -170,7 +170,7 @@ describe("UI-01G2 CertificatesPage", () => {
     expect(onAppend).not.toHaveBeenCalled();
   });
 
-  it("adds a TLS profile draft when its settings change along with the password", async () => {
+  it.each(["HOST", "PROJECT"])("adds a TLS profile draft with scope %s along with the password", async (scope) => {
     const user = userEvent.setup();
     const onAppend = vi.fn().mockResolvedValue(true);
     const onSetPKIStorePassword = vi.fn().mockResolvedValue({
@@ -181,7 +181,7 @@ describe("UI-01G2 CertificatesPage", () => {
     render(<CertificatesPage {...props({ onAppend, onSetPKIStorePassword })} />);
     await user.click(screen.getByRole("button", { name: "Профили TLS" }));
     await user.click(screen.getByRole("button", { name: "Изменить" }));
-    await user.selectOptions(screen.getByLabelText("Область применения"), "HOST");
+    await user.selectOptions(screen.getByLabelText("Область применения"), scope);
     await user.type(screen.getByLabelText("Пароль хранилищ PKCS#12"), "test-password");
     await user.click(screen.getByRole("button", { name: "Добавить в черновик" }));
     expect(onSetPKIStorePassword).toHaveBeenCalledWith("test-password");
@@ -191,7 +191,7 @@ describe("UI-01G2 CertificatesPage", () => {
       entity: {
         certificateProfileRef: "server.profile",
         storePasswordSecretRef: "runtime:pki-store-password",
-        scope: "HOST",
+        scope,
       },
     });
   });

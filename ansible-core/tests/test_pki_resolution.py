@@ -100,6 +100,57 @@ class PkiResolutionTests(unittest.TestCase):
                                                    application_rows=rows)
         self.assertEqual(baseline["requests"], unbound["requests"])
 
+    def test_project_scope_shares_one_request_and_respects_san_policy(self):
+        topology = self.topology("PROJECT")
+        topology["serviceDeployments"]["service-b"] = topology["serviceDeployments"]["service-a"]
+        topology["endpointGroups"] = {"asutp": {"address": {"domain": "asutp.scada.local"}}}
+        policy = topology["certificateProfiles"]["infrastructure"]["sanPolicy"]
+        policy.update(includeEndpointWildcard=True, includeEndpointVip=True)
+        hosts = {f"node{i}": {"ansible_host": f"192.0.2.{i}"} for i in range(1, 5)}
+        endpoints = {"endpoints": {name: {"sanDnsNames": [name + ".asutp.scada.local"]}
+                                   for name in ("service-a", "service-b")}}
+        apps = [{
+            "instanceId": "web", "hostId": "node3",
+            "bindings": {"tls": {"profileRef": "platform-tls"}},
+            "settings": {"endpoint": {"enabled": True, "protocol": "https", "endpoint_group": "asutp"}},
+        }]
+        result = pki.resolve_certificate_requests("p", topology, hosts, self.defaults, endpoints, application_rows=apps)
+        self.assertEqual("PASS", result["status"])
+        request, = result["requests"]
+        self.assertEqual("PROJECT", request["scope"])
+        self.assertEqual(["*.asutp.scada.local", "node1", "node2", "node3", "service-a.asutp.scada.local",
+                          "service-b.asutp.scada.local", "web.asutp.scada.local"], request["dnsNames"])
+        self.assertEqual(["192.0.2.1", "192.0.2.2", "192.0.2.3", "192.0.2.70", "192.0.2.71"], request["ipAddresses"])
+        self.assertEqual({("node1", request["id"]), ("node2", request["id"]), ("node3", request["id"])},
+                         {(plan["hostId"], plan["requestId"]) for plan in result["materializationPlans"]})
+        policy.update(dict.fromkeys(self.defaults["sanPolicy"], False))
+        request, = pki.resolve_certificate_requests("p", topology, hosts, self.defaults, endpoints,
+                                                    application_rows=apps)["requests"]
+        self.assertEqual([], request["dnsNames"])
+        self.assertEqual([], request["ipAddresses"])
+
+    def test_project_scope_can_materialize_on_an_application_only_host(self):
+        topology = self.topology("PROJECT")
+        topology["serviceDeployments"] = {}
+        apps = [{"hostId": "node3", "bindings": {"tls": {"profileRef": "platform-tls"}},
+                 "settings": {"endpoint": {"enabled": False}}}]
+        result = pki.resolve_certificate_requests("p", topology, {"node3": {}}, self.defaults,
+                                                  application_rows=apps)
+        self.assertEqual("PASS", result["status"])
+        request, = result["requests"]
+        plan, = result["materializationPlans"]
+        self.assertEqual("platform-tls", request["tlsProfileId"])
+        self.assertEqual(["node3"], request["dnsNames"])
+        self.assertEqual(request["id"], plan["requestId"])
+        self.assertEqual("node3", plan["hostId"])
+
+    def test_project_scope_rejects_a_second_project_profile(self):
+        topology = self.topology("PROJECT")
+        topology["tlsProfiles"]["another"] = topology["tlsProfiles"]["platform-tls"]
+        result = pki.resolve_certificate_requests("p", topology, {}, self.defaults)
+        self.assertEqual("BLOCKED", result["status"])
+        self.assertEqual("PROJECT_TLS_PROFILE_CONFLICT", result["findings"][0]["code"])
+
     def test_unknown_tls_profile_blocks_without_partial_plan(self):
         topology = self.topology()
         topology["serviceDeployments"]["service-a"]["configuration"]["tlsProfile"] = "unknown"

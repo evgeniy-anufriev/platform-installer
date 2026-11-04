@@ -117,6 +117,14 @@
   when: platform_pki_resolve_managed | bool
   no_log: true
 
+- name: Расчёт параметров приложений для SAN
+  ansible.builtin.include_role:
+    name: platform.core.resolve_application_libraries
+  when:
+    - platform_pki_resolve_managed | bool
+    - (platform_desired_state | default({})).applicationLibraryDeployments is defined
+    - platform_application_rows is not defined
+
 - name: Расчёт управляемых запросов PKI по топологии
   platform.core.resolve_pki_requests:
     deployment_selection: "{{ platform_execution_service_scope.installServices | default(omit) }}"
@@ -127,8 +135,10 @@
     project_id: "{{ _platform_pki_project_id }}"
     pki_defaults: "{{ platform_pki_policy_defaults | combine({'targetRoot': platform_pki_target_root}) }}"
     resolved_service_endpoints: "{{ platform_pki_resolved_service_endpoints | default({}) }}"
+    application_rows: "{{ platform_application_rows | default([]) }}"
   register: platform_pki_managed_resolution
   when: platform_pki_resolve_managed | bool
+  no_log: "{{ platform_application_rows | default([]) | length > 0 }}"
 
 - name: Публикация управляемого запроса PKI и планирование проекции
   ansible.builtin.set_fact:

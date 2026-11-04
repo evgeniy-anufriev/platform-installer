@@ -234,7 +234,7 @@
       "required": ["certificateProfileRef", "storePasswordSecretRef"],
       "properties": {
         "certificateProfileRef": { "$ref": "#/$defs/identifier" },
-        "scope": { "enum": ["HOST", "MEMBER", "DEPLOYMENT"] },
+        "scope": { "enum": ["HOST", "MEMBER", "DEPLOYMENT", "PROJECT"] },
         "storePasswordSecretRef": {
           "type": "string",
           "minLength": 3,

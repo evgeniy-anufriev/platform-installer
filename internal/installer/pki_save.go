@@ -150,7 +150,7 @@ func validPKIEntity(operation string, value map[string]any) error {
 		if ref, ok := value["storePasswordSecretRef"].(string); !ok || !runtimeRefPattern.MatchString(ref) {
 			return blocked("SECRET_REFERENCE_INVALID", "TLS profile requires an opaque runtime secret reference", "command.entity.storePasswordSecretRef")
 		}
-		if err := validOptionalScope(value, "scope", "command.entity.scope"); err != nil {
+		if err := validOptionalScope(value, "scope", "command.entity.scope", true); err != nil {
 			return err
 		}
 		return nil
@@ -167,7 +167,7 @@ func validPKIEntity(operation string, value map[string]any) error {
 	if err := validOptionalString(value, "displayName", 1, 0); err != nil {
 		return err
 	}
-	if err := validOptionalScope(value, "scope", "command.entity.scope"); err != nil {
+	if err := validOptionalScope(value, "scope", "command.entity.scope", false); err != nil {
 		return err
 	}
 	return validScopeSources(asMap(value["sources"]))
@@ -243,12 +243,12 @@ func validDesiredStateIdentifier(value string) bool {
 	return len(value) >= 1 && len(value) <= 128 && desiredStateIdentifierPattern.MatchString(value)
 }
 
-func validOptionalScope(value map[string]any, key, field string) error {
+func validOptionalScope(value map[string]any, key, field string, allowProject bool) error {
 	raw, present := value[key]
 	if !present {
 		return nil
 	}
-	if raw != "HOST" && raw != "MEMBER" && raw != "DEPLOYMENT" {
+	if raw != "HOST" && raw != "MEMBER" && raw != "DEPLOYMENT" && !(allowProject && raw == "PROJECT") {
 		return blocked("INVALID_VALUE", "PKI scope is invalid", field)
 	}
 	return nil

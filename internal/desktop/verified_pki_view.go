@@ -136,7 +136,7 @@ func verifiedPKIIdentity(raw any) (VerifiedCertificateIdentity, error) {
 	ipAddresses, ipOK := verifiedPKIIPAddresses(value["ipAddresses"])
 	consumers, consumersOK := verifiedPKIConsumers(value["consumers"])
 	if !validID || !verifiedPKIIdentityID.MatchString(id) || !validProfile || !validPreviewIdentifier(tlsProfileID) || !validScope ||
-		(scope != "HOST" && scope != "MEMBER" && scope != "DEPLOYMENT") || !dnsOK || !ipOK || !consumersOK {
+		(scope != "HOST" && scope != "MEMBER" && scope != "DEPLOYMENT" && scope != "PROJECT") || !dnsOK || !ipOK || !consumersOK {
 		return VerifiedCertificateIdentity{}, errVerifiedPKIView
 	}
 	return VerifiedCertificateIdentity{ID: id, Scope: scope, TLSProfileID: tlsProfileID, DNSNames: dnsNames, IPAddresses: ipAddresses, Consumers: consumers}, nil

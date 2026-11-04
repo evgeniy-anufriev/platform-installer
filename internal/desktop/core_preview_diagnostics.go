@@ -41,6 +41,8 @@ var projectFindingMessagesRU = map[string]string{
 	"CERTIFICATE_PROFILES_INVALID":                            "Некорректно описание профилей сертификатов.",
 	"CERTIFICATE_PROFILE_NOT_FOUND":                           "Указанный профиль сертификата не найден.",
 	"CERTIFICATE_SCOPE_INVALID":                               "Недопустима область действия сертификата.",
+	"PROJECT_TLS_PROFILE_CONFLICT":                            "Область «Весь проект» можно выбрать только для одного TLS-профиля.",
+	"CERTIFICATE_SCOPE_ID_CONFLICT":                           "Измените ID TLS-профиля: имя общего сертификата совпало с другим запросом.",
 	"CONTROLLER_LISTENER_REQUIRED":                            "Для контроллера Kafka необходимо настроить слушатель соединений.",
 	"DNS_CLIENT_SERVER_NOT_FOUND":                             "DNS-клиент должен ссылаться на существующее развёртывание авторитетного DNS-сервера.",
 	"DNS_CLIENT_SERVER_RESOLUTION_BLOCKED":                    "Параметры DNS-сервера, выбранного для клиента, не удалось разрешить из-за ошибок конфигурации.",

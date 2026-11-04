@@ -363,7 +363,7 @@ function CertificateIdentities({
             <section key={identity.id} className="verified-identity">
               <b>{identity.id}</b>
               <small>
-                {identity.scope} · Профиль TLS: {identity.tlsProfileId}
+                {identity.scope === "PROJECT" ? "Весь проект" : identity.scope} · Профиль TLS: {identity.tlsProfileId}
               </small>
               <div>
                 <span>DNS: </span>
@@ -704,6 +704,7 @@ function CertificateDialog({
                 <option value="HOST">Сервер</option>
                 <option value="MEMBER">Экземпляр</option>
                 <option value="DEPLOYMENT">Развёртывание</option>
+                <option value="PROJECT">Весь проект</option>
               </select>
             </label>
             <label>

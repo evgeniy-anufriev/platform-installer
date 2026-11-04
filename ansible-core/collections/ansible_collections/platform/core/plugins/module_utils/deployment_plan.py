@@ -761,6 +761,7 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
     request_ids = [item.get("requestId") for item in reissue if isinstance(item, dict)]
     requests = pki_materialization.get("requests", []) if isinstance(pki_materialization, dict) else []
     request_by_id = {item.get("id"): item for item in requests if isinstance(item, dict)}
+    project_pki = any(item.get("scope") == "PROJECT" for item in request_by_id.values())
     desired_by_id = {key: item.get("certificateRequestFingerprint") for key, item in request_by_id.items()}
     if len(request_ids) != len(reissue) or any(not isinstance(item, str) or item not in request_by_id for item in request_ids) or request_ids != sorted(set(request_ids)) or any(
             set(item) != {"requestId", "expectedOldFingerprint", "desiredFingerprint", "recoveryFingerprint", "authorityId", "authorityFingerprint"} or
@@ -779,13 +780,14 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
                      and item.get("requestId") in request_ids}
     covered_requests = {item.get("requestId") for item in materialization_plans if isinstance(item, dict)
                         and item.get("requestId") in request_ids}
-    if reissue and (not pki_consumers or not target_values or covered_requests != set(request_ids) or
+    if reissue and (not (pki_consumers or project_pki) or not target_values or covered_requests != set(request_ids) or
                     any(not isinstance(host, str) or host not in targets for host in target_values)):
         raise ValueError("PKI_REISSUE_SCOPE_INVALID")
     scope_labels = []
     for request_id in request_ids:
         consumers = request_by_id[request_id].get("consumers")
-        if not isinstance(consumers, list) or not consumers or len(consumers) > 4096:
+        project_request = request_by_id[request_id].get("scope") == "PROJECT"
+        if not isinstance(consumers, list) or (not consumers and not project_request) or len(consumers) > 4096:
             raise ValueError("PKI_REISSUE_SCOPE_INVALID")
         deployments_for_request, hosts_for_request = set(), set()
         for consumer in consumers:
@@ -794,7 +796,11 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
             deployments_for_request.add(consumer["deploymentId"])
             hosts_for_request.add(consumer["hostId"])
         plan_hosts = {item.get("hostId") for item in materialization_plans if isinstance(item, dict) and item.get("requestId") == request_id}
-        if hosts_for_request != plan_hosts:
+        if project_request:
+            if not hosts_for_request <= plan_hosts:
+                raise ValueError("PKI_REISSUE_SCOPE_INVALID")
+            hosts_for_request = plan_hosts
+        elif hosts_for_request != plan_hosts:
             raise ValueError("PKI_REISSUE_SCOPE_INVALID")
         scope_labels.append("%s (сервисы: %s; серверы: %s)" %
                             (request_id, ", ".join(sorted(deployments_for_request)), ", ".join(sorted(hosts_for_request))))
@@ -813,7 +819,7 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
             raise ValueError("PKI_REISSUE_SCOPE_TOO_LARGE")
     reissue_targets = sorted(target_values)
     actions = []
-    if pki_consumers:
+    if pki_consumers or project_pki:
         if reissue:
             actions.append({"id": "pki:reissue", "type": "PKI_REISSUE", "targets": reissue_targets, "dependsOn": [], "mutating": True, "reboot": "NONE", "summary": reissue_summary})
         actions.append({"id": "pki:apply", "type": "PKI_APPLY", "targets": targets, "dependsOn": ["pki:reissue"] if reissue else [], "mutating": True, "reboot": "NONE", "summary": "Materialize approved PKI inputs"})
@@ -846,6 +852,8 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
     if application_model and application_model['actions']:
         application_model['actions'][0]['dependsOn'] = sorted(action['id'] for action in service_actions
                                                              if action['type'] == 'SERVICE_VERIFY')
+        if project_pki:
+            application_model['actions'][0]['dependsOn'].append("pki:apply")
         if not service_actions:
             findings.append(_finding('APPLICATION_INFRASTRUCTURE_BARRIER_REQUIRED', 'applicationLibraries',
                                      'A mixed plan requires infrastructure Apply and Verify'))

@@ -30,6 +30,7 @@ def main():
         "project_id": {"type": "str", "required": False, "default": "ansible-project"},
         "pki_defaults": {"type": "dict", "required": True},
         "resolved_service_endpoints": {"type": "dict", "required": False, "default": {}},
+        "application_rows": {"type": "list", "elements": "dict", "default": []},
     }, supports_check_mode=True)
     try:
         if module.params["desired_state"]:
@@ -49,7 +50,10 @@ def main():
         if findings:
             result = {"status": "BLOCKED", "findings": findings}
         else:
-            result = resolve_certificate_requests(project_id, topology_with_inventory_members(desired, members), hosts, module.params["pki_defaults"], module.params["resolved_service_endpoints"], by_host)
+            result = resolve_certificate_requests(
+                project_id, topology_with_inventory_members(desired, members), hosts,
+                module.params["pki_defaults"], module.params["resolved_service_endpoints"], by_host,
+                application_rows=module.params["application_rows"])
     except Exception as error:
         module.fail_json(msg="PKI request resolution failed", error_code="PKI_RESOLUTION_FAILED", safe_details=str(error))
     if result.get("status") != "PASS":

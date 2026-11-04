@@ -9,7 +9,11 @@ listener runtime model.
 `project.yml.desiredState` may declare managed `certificateAuthorities`,
 `certificateProfiles`, and `tlsProfiles`. A deployment or inventory member
 opts in through the ordinary `configuration.tlsProfile` reference. The default
-scope is `HOST`; `MEMBER` and `DEPLOYMENT` are explicit alternatives.
+scope is `HOST`; `MEMBER`, `DEPLOYMENT` and `PROJECT` are explicit alternatives.
+A single TLS profile can use `PROJECT`. Its bound services and applications
+share one leaf certificate and private key across their placements. The
+certificate profile's SAN switches govern the combined host DNS and IP,
+service and HTTPS application endpoint DNS, wildcard DNS and endpoint VIPs.
 
 Normal managed users do not provide key algorithm, key size, validity, usages,
 or SAN lists. `platform.core.pki_materialize` role defaults are the sole

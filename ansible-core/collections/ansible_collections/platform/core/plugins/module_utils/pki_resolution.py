@@ -115,6 +115,8 @@ def _consumer_records(topology, inventory_deployments=None):
 
 
 def _scope_key(scope, consumer):
+    if scope == "PROJECT":
+        return consumer["tlsProfileRef"] + "--project"
     if scope == "MEMBER":
         return "%s--%s--%s" % (consumer["tlsProfileRef"], consumer["deploymentId"], consumer["memberId"])
     if scope == "DEPLOYMENT":
@@ -122,7 +124,7 @@ def _scope_key(scope, consumer):
     return "%s--%s" % (consumer["tlsProfileRef"], consumer["hostId"])
 
 
-def _endpoint_values(topology, resolved_service_endpoints, deployment_ids, policy, host_id=None, application_endpoints=()):
+def _endpoint_values(topology, resolved_service_endpoints, deployment_ids, policy, host_id=None, application_endpoints=(), include_application_vips=False):
     projection = resolved_service_endpoints if isinstance(resolved_service_endpoints, dict) else {}
     endpoints = projection.get("endpoints", {}) if isinstance(projection.get("endpoints"), dict) else {}
     selected = [endpoints[key] for key in sorted(endpoints) if key in deployment_ids and isinstance(endpoints[key], dict)]
@@ -130,9 +132,10 @@ def _endpoint_values(topology, resolved_service_endpoints, deployment_ids, polic
     selected_host = [value for value in host_endpoints.values() if isinstance(value, dict)
                      and value.get("serviceDeploymentId") in deployment_ids
                      and (host_id is None or value.get("hostId") == host_id)]
+    application_endpoints = list(application_endpoints)
     endpoint_groups = set(
         endpoint.get("endpointGroupId")
-        for endpoint in selected
+        for endpoint in selected + (application_endpoints if include_application_vips else [])
         if isinstance(endpoint.get("endpointGroupId"), str)
     )
     deployments = topology.get("serviceDeployments", {}) if isinstance(topology, dict) else {}
@@ -148,7 +151,7 @@ def _endpoint_values(topology, resolved_service_endpoints, deployment_ids, polic
                     address.get("address") for address in virtual_addresses
                     if isinstance(address, dict) and _looks_like_ip(address.get("address"))
                 )
-    dns_endpoints = selected + selected_host + list(application_endpoints)
+    dns_endpoints = selected + selected_host + application_endpoints
     return {
         "dnsNames": _string_list(name for endpoint in dns_endpoints for name in endpoint.get("sanDnsNames", [])) if policy["includeEndpointFqdns"] else [],
         "wildcardDnsNames": _string_list(name for endpoint in dns_endpoints for name in endpoint.get("wildcardDnsNames", [])) if policy["includeEndpointWildcard"] else [],
@@ -169,7 +172,8 @@ def _application_endpoints_by_tls_binding(rows, desired):
         instance_id = row["instanceId"]
         if not isinstance(instance_id, str) or not DNS_LABEL.fullmatch(instance_id):
             continue
-        names = {"sanDnsNames": [instance_id + "." + domain], "wildcardDnsNames": ["*." + domain]}
+        names = {"sanDnsNames": [instance_id + "." + domain], "wildcardDnsNames": ["*." + domain],
+                 "endpointGroupId": endpoint["endpoint_group"]}
         for binding in row.get("bindings", {}).values():
             profile = binding.get("profileRef")
             if profile:
@@ -194,9 +198,27 @@ def resolve_certificate_requests(project_id, topology, host_vars, defaults=None,
     tls_profiles = desired.get("tlsProfiles", {}) if isinstance(desired.get("tlsProfiles"), dict) else {}
     findings = []
     grouped = {}
-    for consumer in _consumer_records(desired, inventory_deployments):
+    project_profiles = sorted(key for key, value in tls_profiles.items()
+                              if isinstance(value, dict) and value.get("scope", defaults["scope"]) == "PROJECT")
+    if len(project_profiles) > 1:
+        return {"status": "BLOCKED", "findings": [_finding(
+            "PROJECT_TLS_PROFILE_CONFLICT", "tlsProfiles", "Only one TLS profile may have PROJECT scope")],
+            "requests": [], "materializationPlans": []}
+    application_hosts = set()
+    if project_profiles:
+        project_profile = project_profiles[0]
+        application_hosts = {
+            row["hostId"] for row in application_rows
+            if any(binding.get("profileRef") == project_profile for binding in row.get("bindings", {}).values())
+        }
+    consumers = _consumer_records(desired, inventory_deployments)
+    if application_hosts:
+        consumers.append({"tlsProfileRef": project_profile, "hostId": min(application_hosts)})
+    for consumer in consumers:
         tls_profile = tls_profiles.get(consumer["tlsProfileRef"])
-        field = "serviceDeployments.%s.members.%s.configuration.tlsProfile" % (consumer["deploymentId"], consumer["memberId"])
+        service_consumer = "deploymentId" in consumer
+        field = ("serviceDeployments.%s.members.%s.configuration.tlsProfile" % (consumer["deploymentId"], consumer["memberId"])
+                 if service_consumer else "tlsProfiles.%s" % consumer["tlsProfileRef"])
         if not isinstance(tls_profile, dict):
             findings.append(_finding("TLS_PROFILE_NOT_FOUND", field, "TLS profile reference is not defined"))
             continue
@@ -214,10 +236,16 @@ def resolve_certificate_requests(project_id, topology, host_vars, defaults=None,
             findings.append(_finding("CERTIFICATE_CONSUMER_HOST_REQUIRED", field, "TLS certificate consumer has no physical host placement"))
             continue
         scope = tls_profile.get("scope", defaults["scope"])
-        if scope not in ("HOST", "MEMBER", "DEPLOYMENT"):
-            findings.append(_finding("CERTIFICATE_SCOPE_INVALID", field, "TLS profile scope must be HOST, MEMBER or DEPLOYMENT"))
+        if scope not in ("HOST", "MEMBER", "DEPLOYMENT", "PROJECT"):
+            findings.append(_finding("CERTIFICATE_SCOPE_INVALID", field, "TLS profile scope must be HOST, MEMBER, DEPLOYMENT or PROJECT"))
             continue
-        grouped.setdefault(_scope_key(scope, consumer), {"scope": scope, "tlsProfile": tls_profile, "tlsProfileId": consumer["tlsProfileRef"], "profileRef": profile_ref, "authorityRef": authority_ref, "consumers": []})["consumers"].append(consumer)
+        scope_id = _scope_key(scope, consumer)
+        group = grouped.setdefault(scope_id, {"scope": scope, "tlsProfile": tls_profile, "tlsProfileId": consumer["tlsProfileRef"], "profileRef": profile_ref, "authorityRef": authority_ref, "consumers": []})
+        if group["tlsProfileId"] != consumer["tlsProfileRef"] and "PROJECT" in (scope, group["scope"]):
+            findings.append(_finding("CERTIFICATE_SCOPE_ID_CONFLICT", field, "PROJECT certificate identity conflicts with another TLS profile"))
+            continue
+        if service_consumer:
+            group["consumers"].append(consumer)
     if findings:
         return {"status": "BLOCKED", "findings": findings, "requests": [], "materializationPlans": []}
 
@@ -228,6 +256,8 @@ def resolve_certificate_requests(project_id, topology, host_vars, defaults=None,
         authority = authorities[group["authorityRef"]]
         consumers = sorted(group["consumers"], key=lambda value: (value["hostId"], value["deploymentId"], value["memberId"]))
         hosts = _string_list(value["hostId"] for value in consumers)
+        if group["scope"] == "PROJECT":
+            hosts = _string_list(hosts + list(application_hosts))
         identities = [_host_identity(host_id, host_vars) for host_id in hosts]
         dns_names = _string_list(name for identity in identities for name in identity["dnsNames"]) if profile["sanPolicy"]["includeHostDns"] else []
         ip_addresses = _string_list(address for identity in identities for address in identity["ipAddresses"]) if profile["sanPolicy"]["includeHostIp"] else []
@@ -238,6 +268,7 @@ def resolve_certificate_requests(project_id, topology, host_vars, defaults=None,
                 endpoint for host_id in hosts
                 for endpoint in application_endpoints.get((host_id, group["tlsProfileId"]), ())
             ),
+            include_application_vips=group["scope"] == "PROJECT",
         )
         dns_names = _string_list(dns_names + endpoint_values["dnsNames"] + endpoint_values["wildcardDnsNames"])
         ip_addresses = _string_list(ip_addresses + endpoint_values["ipAddresses"])
@@ -259,6 +290,8 @@ def resolve_certificate_requests(project_id, topology, host_vars, defaults=None,
             "subject": profile["subject"],
             "consumers": consumers,
         }
+        if group["scope"] == "PROJECT":
+            request["tlsProfileId"] = group["tlsProfileId"]
         unsafe_values = [request["commonName"]] + request["dnsNames"] + request["ipAddresses"] + [request["authorityCommonName"]] + [value for value in request["subject"].values() if value]
         if not all(_safe_identity_value(value) for value in unsafe_values):
             findings.append(_finding("CERTIFICATE_IDENTITY_VALUE_INVALID", "certificateProfiles.%s" % group["profileRef"], "Certificate identity values must not contain control characters"))

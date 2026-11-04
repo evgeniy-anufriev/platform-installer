@@ -24,14 +24,19 @@ def select_pki(materialization, selected):
         return materialization
     result = copy.deepcopy(materialization)
     requests = []
+    project_requests = set()
     for request in result.get('requests', []):
+        if request.get('scope') == 'PROJECT':
+            requests.append(request)
+            project_requests.add(request['id'])
+            continue
         request['consumers'] = [c for c in request.get('consumers', []) if c.get('deploymentId') in selected]
         if request['consumers']:
             requests.append(request)
     result['requests'] = requests
     allowed = {(r['id'], c['hostId']) for r in requests for c in r['consumers']}
     result['materializationPlans'] = [p for p in result.get('materializationPlans', [])
-                                    if (p.get('requestId'), p.get('hostId')) in allowed]
+                                    if p.get('requestId') in project_requests or (p.get('requestId'), p.get('hostId')) in allowed]
     return result
 
 

@@ -346,7 +346,7 @@ export type VerifiedPKIView = {
   status: "CURRENT" | "INVALID" | "STALE" | "NOT_VERIFIED" | "UNAVAILABLE";
   identities?: Array<{
     id: string;
-    scope: "HOST" | "MEMBER" | "DEPLOYMENT";
+    scope: "HOST" | "MEMBER" | "DEPLOYMENT" | "PROJECT";
     tlsProfileId: string;
     dnsNames: string[];
     ipAddresses: string[];
