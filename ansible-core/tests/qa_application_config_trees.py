@@ -38,7 +38,7 @@ class ConfigTreeQATest(unittest.TestCase):
                                       "subdirectories": [], "directory_mode": "0755"}],
                 "archiveConfigs": [{"destination": "themes", "path": str(archive)}],
             }
-            placement_tasks = yaml.safe_load((TASKS / "apply_instance.yml").read_text(encoding="utf-8"))[:4]
+            placement_tasks = yaml.safe_load((TASKS / "apply_instance.yml").read_text(encoding="utf-8"))[:5]
             placement_tasks[-1]["ansible.builtin.include_tasks"] = str(TASKS / "apply_directory.yml")
             play = [{"hosts": "localhost", "connection": "local", "gather_facts": False,
                      "vars": {"application_runtime_job": job,

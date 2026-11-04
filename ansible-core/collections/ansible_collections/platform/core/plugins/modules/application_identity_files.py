@@ -106,18 +106,21 @@ def main():
                             raise ValueError()
         if args['preflight'] or module.check_mode:
             module.exit_json(changed=False, host_uid=uid, host_gid=gid)
-        changed = False
+        changed_volumes = []
         for name, contents in payloads.items():
+            volume_changed = False
             directory = root+'/'+name
             if not os.path.exists(directory):
                 os.mkdir(directory, 0o700)
                 os.chown(directory, uid, gid)
-                changed = True
+                volume_changed = True
             for filename, content in contents.items():
                 if not content:
                     raise ValueError()
-                changed = write(directory+'/'+filename, content, uid, gid) or changed
-        module.exit_json(changed=changed, host_uid=uid, host_gid=gid)
+                volume_changed = write(directory+'/'+filename, content, uid, gid) or volume_changed
+            if volume_changed:
+                changed_volumes.append(directory)
+        module.exit_json(changed=bool(changed_volumes), changed_volumes=changed_volumes, host_uid=uid, host_gid=gid)
     except (ValueError, KeyError, OSError):
         module.fail_json(msg='APPLICATION_PRIVATE_IDENTITY_MATERIALIZATION_INVALID')
 

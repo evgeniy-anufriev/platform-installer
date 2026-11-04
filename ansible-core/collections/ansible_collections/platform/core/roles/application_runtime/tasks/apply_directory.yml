@@ -17,6 +17,14 @@
     application_directory_allowed: >-
       {{ (application_directory.members | map(attribute='destination') | map('regex_replace', '^', application_runtime_job.instancePath ~ '/config/') | list) +
          (application_directory.subdirectories | map('regex_replace', '^', application_runtime_job.instancePath ~ '/config/') | list) }}
+  register: application_removed_config_entries
   loop: "{{ application_directory_existing.files | sort(attribute='path', reverse=true) }}"
   when: item.path not in application_directory_allowed
+  no_log: true
+
+- name: Учёт удалённых путей в каталоге конфигурации
+  ansible.builtin.set_fact:
+    application_changed_config_paths: >-
+      {{ application_changed_config_paths +
+         (application_removed_config_entries.results | selectattr('changed') | map(attribute='item.path') | list) }}
   no_log: true

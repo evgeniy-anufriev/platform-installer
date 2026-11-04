@@ -105,3 +105,9 @@
   ansible.builtin.file:
     path: "{{ application_runtime_job.instancePath }}/config/.archive-previous-{{ application_archive.destination | hash('sha256') }}"
     state: absent
+
+- name: Учёт заменённого каталога архива
+  ansible.builtin.set_fact:
+    application_changed_config_paths: >-
+      {{ application_changed_config_paths +
+         [application_runtime_job.instancePath ~ '/config/' ~ application_archive.destination] }}

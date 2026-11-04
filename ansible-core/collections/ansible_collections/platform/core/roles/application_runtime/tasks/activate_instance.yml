@@ -17,6 +17,7 @@
         argv: "{{ application_runtime_job.composeArgv + ['up', '-d', '--no-build', '--pull', 'never', '--no-deps', application_runtime_job.instanceId] }}"
       become_user: "{{ application_runtime_job.account }}"
       environment: "{{ application_runtime_job.dockerEnvironment }}"
+      register: application_compose_up
       changed_when: false
       no_log: true
   rescue:
@@ -26,6 +27,35 @@
       become_user: "{{ application_runtime_job.account }}"
       environment: "{{ application_runtime_job.dockerEnvironment }}"
       changed_when: false
+      no_log: true
+
+- name: Обновление работающего экземпляра после изменения файлов в томах
+  when:
+    - (application_runtime_job.libraryId ~ '/' ~ application_runtime_job.instanceId) in (application_changed_volume_instances | default([]))
+    - application_compose_up.rc == 0
+    - application_container_before.rc == 0
+    - (application_container_before.stdout | from_json)[0].State.Running
+  block:
+    - name: Проверка, запускал ли Compose контейнер заново
+      ansible.builtin.command:
+        argv: [docker, container, inspect, "{{ application_runtime_job.placement.containerName }}"]
+      become_user: "{{ application_runtime_job.account }}"
+      environment: "{{ application_runtime_job.dockerEnvironment }}"
+      register: application_container_after_up
+      changed_when: false
+      no_log: true
+
+    - name: Перезапуск экземпляра для перечитывания файлов в томах
+      ansible.builtin.command:
+        argv: "{{ application_runtime_job.composeArgv + ['restart', '--no-deps', application_runtime_job.instanceId] }}"
+      become_user: "{{ application_runtime_job.account }}"
+      environment: "{{ application_runtime_job.dockerEnvironment }}"
+      vars:
+        application_before_up: "{{ (application_container_before.stdout | from_json)[0] }}"
+        application_after_up: "{{ (application_container_after_up.stdout | from_json)[0] }}"
+      when:
+        - application_before_up.Id == application_after_up.Id
+        - application_before_up.State.StartedAt == application_after_up.State.StartedAt
       no_log: true
 
 - name: Проверка наблюдаемого экземпляра после сверки

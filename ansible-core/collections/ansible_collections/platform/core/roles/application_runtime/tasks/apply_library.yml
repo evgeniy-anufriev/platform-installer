@@ -37,9 +37,14 @@
         dest: "{{ application_library_jobs[0].libraryPath }}/{{ item.name }}"
         owner: "{{ application_library_jobs[0].account }}"
         mode: '0600'
+      register: application_shared_compose_files
       loop:
         - { name: .env, content: "{{ application_library_jobs[0].envContent }}" }
         - { name: "{{ application_library_jobs[0].baseFilename }}", content: "{{ application_library_jobs[0].baseContent }}" }
+      no_log: true
+    - name: Учёт изменённых общих файлов библиотеки
+      ansible.builtin.set_fact:
+        application_library_changed_paths: "{{ application_shared_compose_files.results | selectattr('changed') | map(attribute='dest') | list }}"
       no_log: true
     - name: Подготовка и проверка каждого приложения в отдельном проекте Compose
       ansible.builtin.include_tasks: apply_instance.yml

@@ -48,7 +48,7 @@ else:sys.exit(3)
                 if legacy:
                     tasks = yaml.safe_load(TASKS.read_text())
                     tasks[1]['block'][0].pop('any_errors_fatal', None)
-                    tasks[2]['ansible.builtin.include_tasks'] = str(TASKS.parent / 'verify.yml')
+                    tasks[3]['ansible.builtin.include_tasks'] = str(TASKS.parent / 'verify.yml')
                     tasks_path = work / 'legacy.yml'
                     tasks_path.write_text(yaml.safe_dump(tasks))
                 job = dict(account=pwd.getpwuid(os.getuid()).pw_name,
@@ -96,7 +96,7 @@ else:sys.exit(3)
                                          sum('--force-recreate' in a for a in ups))
 
     def test_start_recreate_and_unrecoverable_failure(self):
-        for mode in ('success', 'recover', 'fail'):
+        for mode in ('success', 'volume', 'replaced', 'recover', 'fail'):
             with self.subTest(mode=mode), tempfile.TemporaryDirectory() as folder:
                 work = Path(folder)
                 cli = work / 'docker'
@@ -106,12 +106,14 @@ p=pathlib.Path(os.environ['PROBE_DIR']); a=sys.argv[1:]
 with (p/'calls').open('a') as f:f.write(json.dumps(a)+'\\n')
 recreated=(p/'recreated').exists()
 if a[:2]==['container','inspect']:
- print(json.dumps([{'Id':'new' if recreated else 'old','Image':'sha256:probe','Config':{'Labels':{'platform.installer.project':'p','platform.installer.library':'l','platform.installer.instance':'app','platform.installer.host':'h'}},'State':{'Running':True}}]))
+ print(json.dumps([{'Id':'new' if recreated else 'old','Image':'sha256:probe','Config':{'Labels':{'platform.installer.project':'p','platform.installer.library':'l','platform.installer.instance':'app','platform.installer.host':'h'}},'State':{'Running':True,'StartedAt':'start'}}]))
 elif a[:2]==['compose','up']:
  if '--force-recreate' in a:
   if os.environ['PROBE_MODE']=='fail':sys.exit(2)
   (p/'recreated').touch()
- elif os.environ['PROBE_MODE']!='success':sys.exit(1)
+ elif os.environ['PROBE_MODE'] in ('recover', 'fail'):sys.exit(1)
+ elif os.environ['PROBE_MODE']=='replaced':(p/'recreated').touch()
+elif a==['compose','restart','--no-deps','app']:pass
 else:sys.exit(3)
 ''', encoding='utf-8')
                 cli.chmod(0o755)
@@ -124,7 +126,8 @@ else:sys.exit(3)
                            authority=dict(requirement=dict(imageId='sha256:probe')),
                            settings=dict(readiness=dict(mode='container', retries=1, delay=0)))
                 play = [dict(hosts='localhost', connection='local', gather_facts=False,
-                             vars=dict(application_runtime_job=job),
+                             vars=dict(application_runtime_job=job,
+                                       application_changed_volume_instances=['l/app'] if mode in ('volume', 'replaced') else []),
                              tasks=[{'ansible.builtin.include_tasks': str(TASKS)}])]
                 probe = work / 'play.yml'
                 probe.write_text(yaml.safe_dump(play), encoding='utf-8')
@@ -134,17 +137,19 @@ else:sys.exit(3)
                                         capture_output=True, text=True, timeout=90)
                 calls = [json.loads(line) for line in (work/'calls').read_text().splitlines()]
                 ups = [args for args in calls if args[:2] == ['compose', 'up']]
-                self.assertEqual(1 if mode == 'success' else 2, len(ups), result.stdout+result.stderr)
+                self.assertEqual(2 if mode in ('recover', 'fail') else 1, len(ups), result.stdout+result.stderr)
                 self.assertNotIn('--force-recreate', ups[0])
                 for args in ups:
                     self.assertEqual('app', args[-1])
                     self.assertIn('--no-deps', args)
                     self.assertEqual('never', args[args.index('--pull')+1])
-                if mode != 'success':
+                if mode in ('recover', 'fail'):
                     self.assertIn('--force-recreate', ups[1])
                 self.assertEqual(mode == 'fail', result.returncode != 0, result.stdout+result.stderr)
+                self.assertEqual(1 if mode == 'volume' else 0,
+                                 calls.count(['compose', 'restart', '--no-deps', 'app']))
                 inspections = [args for args in calls if args[:2] == ['container', 'inspect']]
-                self.assertEqual(1 if mode == 'fail' else 2, len(inspections))
+                self.assertEqual(1 if mode == 'fail' else 3 if mode in ('volume', 'replaced') else 2, len(inspections))
                 if mode == 'success':
                     self.assertIn('changed=0', result.stdout)
                 elif mode == 'recover':

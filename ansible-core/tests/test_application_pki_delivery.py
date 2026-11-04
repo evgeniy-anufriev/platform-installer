@@ -121,7 +121,7 @@ class NativeApplicationPkiDeliveryTests(unittest.TestCase):
                     {}]
             body[1]['platform.core.application_identity_files']['preflight'] = True
             body[-1] = {'name': 'Require complete private idempotent delivery', 'ansible.builtin.assert': {'that': [
-                'first.changed', 'not second.changed',
+                'first.changed', "first.changed_volumes == [instance.path ~ '/pki']", 'not second.changed', 'not second.changed_volumes',
                 "files.results | map(attribute='stat.mode') | unique | list == ['0600']",
                 "files.results | map(attribute='stat.uid') | unique | list == [first.host_uid]",
                 "files.results | map(attribute='stat.gid') | unique | list == [first.host_gid]"]}}
@@ -137,7 +137,7 @@ class NativeApplicationPkiDeliveryTests(unittest.TestCase):
             body.extend([dict(name='Agent delivery preserves existing PKI and adds private Vault files',
                               **copy.deepcopy(agent_delivery), register='agent_first'),
                          dict(name='Agent repeat', **copy.deepcopy(agent_delivery), register='agent_second'),
-                         {'ansible.builtin.assert': {'that': ['agent_first.changed', 'not agent_second.changed']}}])
+                         {'ansible.builtin.assert': {'that': ['agent_first.changed', "agent_first.changed_volumes == [instance.path ~ '/vault']", 'not agent_second.changed']}}])
             tasks.append(dict(block=body, always=[dict(file=dict(path='{{ source.path }}', state='absent')),
                           dict(file=dict(path='{{ instance.path }}', state='absent'))]))
             play = Path(directory) / 'play.yml'

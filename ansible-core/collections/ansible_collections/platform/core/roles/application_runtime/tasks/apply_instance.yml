@@ -1,10 +1,15 @@
 ---
+- name: Инициализация списка изменённых путей конфигурации экземпляра
+  ansible.builtin.set_fact:
+    application_changed_config_paths: []
+
 - name: Создание точных каталогов конфигурации экземпляра
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
     owner: "{{ application_runtime_job.account }}"
     mode: '0700'
+  register: application_created_config_dirs
   loop: "{{ ([application_runtime_job.instancePath ~ '/config'] + (application_runtime_job.configs | map(attribute='destination') | map('dirname') | map('regex_replace', '^', application_runtime_job.instancePath ~ '/config/') | list) + (application_runtime_job.directoryConfigs | map(attribute='destination') | map('dirname') | map('regex_replace', '^', application_runtime_job.instancePath ~ '/config/') | list) + (application_runtime_job.archiveConfigs | map(attribute='destination') | map('dirname') | map('regex_replace', '^', application_runtime_job.instancePath ~ '/config/') | list)) | map('regex_replace', '/+$', '') | unique | list }}"
 
 - name: Применение объявленных режимов каталогов к смонтированным каталогам конфигурации
@@ -13,6 +18,7 @@
     state: directory
     owner: "{{ application_runtime_job.account }}"
     mode: "{{ item.directory_mode | default('0755') }}"
+  register: application_config_dirs
   loop: "{{ application_runtime_job.directoryConfigs }}"
   no_log: true
 
@@ -22,6 +28,7 @@
     state: directory
     owner: "{{ application_runtime_job.account }}"
     mode: "{{ item.0.directory_mode | default('0755') }}"
+  register: application_config_subdirs
   loop: "{{ application_runtime_job.directoryConfigs | subelements('subdirectories') }}"
   no_log: true
 
@@ -46,6 +53,7 @@
     dest: "{{ application_runtime_job.instancePath }}/config/{{ item.destination }}"
     owner: "{{ application_runtime_job.account }}"
     mode: "{{ item.mode }}"
+  register: application_config_files
   loop: "{{ application_runtime_job.configContents }}"
   no_log: true
 
@@ -74,6 +82,7 @@
     ca: "{{ hostvars['localhost'].platform_application_vault_runtime[application_runtime_job.vault.providerId].ca if application_runtime_job.agentTemplate else omit }}"
     agent: "{{ application_runtime_job.agentContent if application_runtime_job.agentTemplate else omit }}"
     pki_plans: "{{ application_runtime_job.pkiPlans | default([]) }}"
+  register: application_identity_delivery
   when: application_runtime_job.agentTemplate or (application_runtime_job.pkiPlans | default([]) | length > 0)
   no_log: true
 
@@ -90,4 +99,23 @@
   ansible.builtin.assert:
     that: "{{ (application_compose_config.stdout | from_json) | platform.core.application_validate_compose(application_runtime_job, application_runtime_job.instancePath, application_runtime_job.configDigest) }}"
     fail_msg: APPLICATION_CORE_COMPOSE_PROJECTION_INVALID
+  no_log: true
+
+- name: Фиксация изменения файлов в томах экземпляра приложения
+  ansible.builtin.set_fact:
+    application_changed_volume_instances: >-
+      {{ (application_changed_volume_instances | default([])) +
+         [application_runtime_job.libraryId ~ '/' ~ application_runtime_job.instanceId] }}
+  vars:
+    application_changed_mount_paths: >-
+      {{ application_changed_config_paths + (application_library_changed_paths | default([])) +
+         (application_identity_delivery.changed_volumes | default([])) +
+         (application_created_config_dirs.results | selectattr('changed') | map(attribute='path') | list) +
+         (application_config_dirs.results | selectattr('changed') | map(attribute='path') | list) +
+         (application_config_subdirs.results | selectattr('changed') | map(attribute='path') | list) +
+         (application_config_files.results | selectattr('changed') | map(attribute='dest') | list) }}
+    application_bind_sources: >-
+      {{ (application_compose_config.stdout | from_json).services[application_runtime_job.instanceId].volumes |
+         default([]) | selectattr('type', 'equalto', 'bind') | map(attribute='source') | list }}
+  when: application_bind_sources | platform.core.application_bind_sources_changed(application_changed_mount_paths)
   no_log: true
