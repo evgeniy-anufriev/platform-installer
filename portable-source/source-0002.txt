@@ -29339,7 +29339,7 @@ func writeBrowserError(w http.ResponseWriter, status int, err error) {
 }
 
 @@END
-@@PORTABLE {"path":"internal/desktop/core_preview_diagnostics.go","mode":420,"size":36800,"sha256":"ec1476a53eb2f9e143105ac9ac4fdcd2f3efe5de0955ed8a43f14a687b491cb5","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":36800}
+@@PORTABLE {"path":"internal/desktop/core_preview_diagnostics.go","mode":420,"size":36940,"sha256":"9a038bc39373b49d811e16a4e1d82b3ed64fd09420d444c9f2e377b6cd64da8c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":36940}
 package desktop
 
 import (
@@ -29352,6 +29352,7 @@ import (
 
 // Presentation only: Core codes and validation severity remain authoritative.
 var projectFindingMessagesRU = map[string]string{
+	"APPLICATION_IMAGE_REFERENCE_INVALID":                     "Укажите имя образа с тегом, без SHA или @sha256.",
 	"APPLICATION_GENERATED_PROFILE_INVALID":                   "Неизвестный профиль генерации секрета. Допустимы password и client_secret.",
 	"APPLICATION_LIBRARY_ENDPOINT_INVALID":                    "Некорректная группа точек входа библиотеки: выберите существующую группу в подключениях библиотеки.",
 	"ROLE_DEFAULT_TYPE_INVALID":                               "Тип значения роли по умолчанию не соответствует описанию настройки.",

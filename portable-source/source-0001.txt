@@ -450,7 +450,7 @@ class ActionModule(ActionBase):
             return {'changed': False, 'status': 'BLOCKED', 'sources': {}, 'findings': [{'code': code}]}
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/prepare_application_images.py","mode":420,"size":10226,"sha256":"d7011a9def165badfc38246495b60905c97b8cb1fb8a6fd6edc1fb6ee76321f8","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":10226}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/prepare_application_images.py","mode":420,"size":10253,"sha256":"36d45f7931d740c79e229276664ce667c9c73ebad4cf23dcf7a346a6ad17ca98","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":10253}
 """Controller-only preparation inputs from native Ansible rows and bundle metadata."""
 import json
 import os
@@ -560,7 +560,7 @@ class ActionModule(ActionBase):
                 'APPLICATION_IMAGE_NOT_LOCKED': ('Registry образа не разрешён для этого размещения; в наборе установки образ отсутствует.'
                     if stage == 'source-policy' else 'Запись фиксации размещения не соответствует выбранному образу.'),
                 'APPLICATION_ARTIFACT_LOCK_CONFLICT': 'Обнаружены противоречащие друг другу фиксации образа.',
-                'APPLICATION_IMAGE_REFERENCE_INVALID': 'Некорректный адрес образа.',
+                'APPLICATION_IMAGE_REFERENCE_INVALID': 'Укажите имя образа с тегом, без SHA или @sha256.',
                 'APPLICATION_IMAGE_PROJECT_INVALID': 'Снимок проекта содержит блокирующие замечания.',
                 'APPLICATION_IMAGE_ARCHIVE_AMBIGUOUS': 'Найдено несколько подходящих архивов образа.',
                 'APPLICATION_IMAGE_ARCHIVE_NOT_LOCKED': 'Архив образа не подтверждён компонентами набора установки.',
@@ -897,7 +897,7 @@ class ActionModule(ActionBase):
             return dict(failed=True, changed=False, msg=code, error_code=code)
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/project_snapshot.py","mode":420,"size":47283,"sha256":"48101ed61f5bd875ab3ee8afb47d24cb2c374fb978e18df3435162c5eca40daa","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":47283}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/project_snapshot.py","mode":420,"size":47364,"sha256":"36b9d056ddff989c626068c0da0b29c1f7185b618b2aa65ca7885102d5becd5f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":47364}
 from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
@@ -1544,6 +1544,7 @@ class ActionModule(ActionBase):
             pki = resolve_certificate_requests(
                 manifest.get("metadata", {}).get("id", os.path.basename(project_root)),
                 materialized, host_addresses, pki_defaults, endpoints, inventory_deployments,
+                application_rows=task_vars.get("platform_application_rows", ()),
             )
             haproxy = resolve_haproxy_backends(
                 materialized, catalog, host_addresses, inventory_deployments, endpoints, {}, configuration,
@@ -22016,7 +22017,7 @@ def project_endpoint_sources(rows, desired, hosts):
     return sources
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_images.py","mode":420,"size":11691,"sha256":"506acca35087b9faa21ed5d43c0ca3784ccbb74bb7bc49f8223e3c72b4562cea","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":11691}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_images.py","mode":420,"size":12060,"sha256":"259d9eb361527b0422742b84b194b947501f411507253d477c2636093ab42cab","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":12060}
 """Image format parsing; source policy and orchestration remain in Ansible."""
 import hashlib
 import json
@@ -22114,7 +22115,15 @@ def offline_image(manifest, reference, platform, expected=None):
                 archive=dict(ref=component['path'], sha256=component['sha256'], size=component['size']))
 
 
+def validate_application_image_reference(reference):
+    if (not isinstance(reference, str) or not REFERENCE.fullmatch(reference)
+            or '@' in reference or DIGEST.fullmatch(reference)
+            or re.fullmatch(r'[0-9a-f]{64}', reference)):
+        raise ValueError('APPLICATION_IMAGE_REFERENCE_INVALID')
+
+
 def registry_request(reference, legacy=None):
+    validate_application_image_reference(reference)
     pinned = (legacy or {}).get('registry', {})
     normalized = normalize_image(pinned.get('reference', reference))
     registry, repository = normalized.split('/', 1)
@@ -22373,7 +22382,7 @@ def shared_vault_jobs(jobs, inputs, completed, delivered=()):
     return result
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_libraries.py","mode":420,"size":58090,"sha256":"f3c513364c6a1fe8bbc9ab7a9f16d00b95a6fb840c98c1d428ebdf04b5d3588b","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_libraries.py","mode":420,"size":58270,"sha256":"2c9f33bc8691b48e9bb98e04110f2a963a681910f63eeed69631452a84e6edb6","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
 """Read-only application contract checks. Ansible owns composition and templating."""
 import hashlib
 import copy
@@ -23047,10 +23056,14 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
             findings.append(finding('APPLICATION_HOST_RESOURCE_CONFLICT', field))
         registries = library.setdefault('registries', [])
         if row['settings'].get('image'):
-            registry = registry_request(row['settings']['image'])['registry']
-            if registry not in registries:
-                registries.append(registry)
-                registries.sort()
+            try:
+                registry = registry_request(row['settings']['image'])['registry']
+            except ValueError:
+                findings.append(finding('APPLICATION_IMAGE_REFERENCE_INVALID', field + '.image'))
+            else:
+                if registry not in registries:
+                    registries.append(registry)
+                    registries.sort()
         if (library['connections'] != shared_connections or library['runtimeDirectory'] != row.get('runtimeDirectory', '~/' + library_id)
                 or library['scripts'] != row.get('libraryScripts', [])):
             findings.append(finding('APPLICATION_HOST_RESOURCE_CONFLICT', field))
@@ -23089,12 +23102,12 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
         instance["runtimeSecretRequirements"] = sorted({source["ref"] for account in accounts.values()
                                                         for credential in account["credentials"].values()
                                                         for source in [credential["source"]] if source["kind"] == "runtime_secret_ref"})
-        instance["approle"] = {"bind_secret_id": False, "token_bound_cidrs": "RUNTIME_HOST_SUBNET_AND_LOOPBACK"} if agent_required else None
-        # Settings safe projection is explicit: do not send raw defaults/hostvars to callers.
-   
+        instance["approle"] = {"bind_secret_id": False, "t
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_libraries.py","mode":420,"size":58090,"sha256":"f3c513364c6a1fe8bbc9ab7a9f16d00b95a6fb840c98c1d428ebdf04b5d3588b","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":10090}
-     instance["placements"][host] = {"SERVER_ID": host, "runtimeRef": runtime_ref, "command": settings.get("command", []),
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_libraries.py","mode":420,"size":58270,"sha256":"2c9f33bc8691b48e9bb98e04110f2a963a681910f63eeed69631452a84e6edb6","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":10270}
+oken_bound_cidrs": "RUNTIME_HOST_SUBNET_AND_LOOPBACK"} if agent_required else None
+        # Settings safe projection is explicit: do not send raw defaults/hostvars to callers.
+        instance["placements"][host] = {"SERVER_ID": host, "runtimeRef": runtime_ref, "command": settings.get("command", []),
                                           "commonDefaults": row.get('commonDefaults', {}), "inherited": row.get('inherited', {}),
                                           "imageRequirement": {"image": settings.get("image"), "artifactType": "container-image"},
                                           "origin": {"resolution": "ANSIBLE", "precision": "RESOLUTION_SCOPE",
@@ -23222,14 +23235,14 @@ def validate_public_projection(projection):
     return findings
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_plan.py","mode":420,"size":19173,"sha256":"847d352f3e768ae43ba083d2c4d779d59cd921f59bc140316f9fcf62e86c28d6","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":19173}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_plan.py","mode":420,"size":19648,"sha256":"8b7371d3fe91dfffd03bdde10b2d90db355087b632a516e672864b249243244f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":19648}
 """Target-free application descriptors; image source selection stays in execution."""
 import os
 try:
     from .project_validation import canonical_digest
     from .application_libraries import finding, ID
     from .application_runtime import image_requirement
-    from .application_images import selected_image, registry_request
+    from .application_images import selected_image, registry_request, validate_application_image_reference
     from .schema_validation import SchemaValidator
     from .application_connections import active_script, script_secret_source, connection_order_findings, connection_callback, used_script_sources
     from .application_selection import execution_scope
@@ -23237,7 +23250,7 @@ except ImportError:
     from project_validation import canonical_digest
     from application_libraries import finding, ID
     from application_runtime import image_requirement
-    from application_images import selected_image, registry_request
+    from application_images import selected_image, registry_request, validate_application_image_reference
     from schema_validation import SchemaValidator
     from application_connections import active_script, script_secret_source, connection_order_findings, connection_callback, used_script_sources
     from application_selection import execution_scope
@@ -23322,12 +23335,16 @@ def application_execution_model(snapshot, image_lock=None, library_order=None, s
 
     def registry_for(reference, library_id, instance_id, host):
         try:
+            default_registry = registry_request(reference)['registry']
+        except ValueError:
+            return None
+        try:
             image = selected_image(image_lock or {}, reference, library_id, instance_id, host)
             if image is not None and not image.get('registry'):
                 return None
-            return registry_request(image['registry']['reference'] if image else reference)['registry']
+            return registry_request(image['registry']['reference'])['registry'] if image else default_registry
         except ValueError:
-            return registry_request(reference)['registry']  # The image finding still blocks execution.
+            return default_registry  # The image finding still blocks execution.
 
     for library_id, library in sorted(active_libraries.items()):
         library_hosts = set()
@@ -23358,6 +23375,11 @@ def application_execution_model(snapshot, image_lock=None, library_order=None, s
                                operations=['APPLICATION_LIBRARIES_APPLY'])
             for host in placements:
                 image_name = instance['placements'][host].get('imageRequirement', instance.get('imageRequirement', {})).get('image')
+                try:
+                    validate_application_image_reference(image_name)
+                except ValueError:
+                    findings.append(finding('APPLICATION_IMAGE_REFERENCE_INVALID', field + '.placements.' + host + '.image'))
+                    continue
                 try:
                     image = selected_image(image_lock or {}, image_name, library_id, instance_id, host)
                     requirement = (dict(id=instance_id + ':' + host + ':image', name=image_name,
@@ -24017,7 +24039,7 @@ def split_provider_jobs(providers):
     return library_jobs, instance_jobs
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_runtime.py","mode":420,"size":21489,"sha256":"0cb7e9a3abb79bc98fd467ca62f2da34658ee635a6f31b081250374226946e11","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":21489}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_runtime.py","mode":420,"size":21390,"sha256":"2051a2d91221de2619b5bc00a2864f9e5e3074dca06adbde4029e8bb37f5af02","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":21390}
 """Typed A2 preflight. Ansible owns precedence, templates and target execution."""
 import base64
 import hashlib
@@ -24028,12 +24050,12 @@ try:
     from .application_libraries import checked_file, invocation_package_loader, nonsecret_values
     from .application_scripts import prepare_script_jobs
     from .artifact_authority import assemble_authority
-    from .application_images import selected_image, registry_request
+    from .application_images import selected_image, registry_request, validate_application_image_reference
 except ImportError:
     from application_libraries import checked_file, invocation_package_loader, nonsecret_values
     from application_scripts import prepare_script_jobs
     from artifact_authority import assemble_authority
-    from application_images import selected_image, registry_request
+    from application_images import selected_image, registry_request, validate_application_image_reference
 
 DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 REFERENCE = re.compile(r"^[a-z0-9][a-z0-9._:/-]*(?::[A-Za-z0-9_][A-Za-z0-9_.-]*)?(?:@sha256:[0-9a-f]{64})?$")
@@ -24061,7 +24083,8 @@ def safe_relative(value):
 
 def image_requirement(instance_id, image_name, image):
     """One locked image identity for standalone execution and target-free planning."""
-    if not isinstance(image_name, str) or not REFERENCE.fullmatch(image_name) or not isinstance(image, dict):
+    validate_application_image_reference(image_name)
+    if not isinstance(image, dict):
         raise ValueError('APPLICATION_IMAGE_NOT_LOCKED')
     reference = runtime_reference(image['imageId'])
     platform = image.get('platform')
@@ -24140,8 +24163,6 @@ def validate_compose(config, job, instance_path, digest):
         raise ValueError("APPLICATION_COMPOSE_IDENTITY_INVALID")
     service = services[job["instanceId"]]
     reference = job['settings']['image']
-    if '@' in reference:
-        reference = job['authority']['requirement']['localReference']
     if (service.get("image") != reference or
             service.get("container_name") != job["placement"]["containerName"]):
         raise ValueError("APPLICATION_COMPOSE_IDENTITY_INVALID")
@@ -24256,8 +24277,7 @@ def prepare_runtime(root, snapshot, rows, desired, lock, validator, loader, scri
         if not image:
             raise ValueError("APPLICATION_IMAGE_NOT_LOCKED")
         reference = runtime_reference(image["imageId"])
-        if not REFERENCE.fullmatch(settings["image"]):
-            raise ValueError("APPLICATION_IMAGE_REFERENCE_INVALID")
+        validate_application_image_reference(settings["image"])
         if image.get("localReference", reference) != reference:
             raise ValueError("APPLICATION_IMAGE_REFERENCE_NOT_BOUND")
         registry = image.get("registry")
@@ -27664,15 +27684,17 @@ def assert_reissue_unchanged(state_root, project_identity, expected):
         raise ValueError("PKI_REISSUE_PLAN_STALE")
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/pki_resolution.py","mode":420,"size":15449,"sha256":"e1305c4c44bc0fa53e31eb7e8acd197af62647c19dd763a1534342f280c15728","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":15449}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/pki_resolution.py","mode":420,"size":16978,"sha256":"5fc0cefa1f0569bfa8bde1ac69fde34b2d10acefe7667467f732e62a5fd83068","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":16978}
 from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
 
 try:
     from .project_validation import canonical_digest
+    from .service_endpoint_resolution import DNS_DOMAIN, DNS_LABEL
 except ImportError:
     from project_validation import canonical_digest
+    from service_endpoint_resolution import DNS_DOMAIN, DNS_LABEL
 
 
 REQUIRED_DEFAULT_KEYS = (
@@ -27787,7 +27809,7 @@ def _scope_key(scope, consumer):
     return "%s--%s" % (consumer["tlsProfileRef"], consumer["hostId"])
 
 
-def _endpoint_values(topology, resolved_service_endpoints, deployment_ids, policy, host_id=None):
+def _endpoint_values(topology, resolved_service_endpoints, deployment_ids, policy, host_id=None, application_endpoints=()):
     projection = resolved_service_endpoints if isinstance(resolved_service_endpoints, dict) else {}
     endpoints = projection.get("endpoints", {}) if isinstance(projection.get("endpoints"), dict) else {}
     selected = [endpoints[key] for key in sorted(endpoints) if key in deployment_ids and isinstance(endpoints[key], dict)]
@@ -27813,14 +27835,36 @@ def _endpoint_values(topology, resolved_service_endpoints, deployment_ids, polic
                     address.get("address") for address in virtual_addresses
                     if isinstance(address, dict) and _looks_like_ip(address.get("address"))
                 )
+    dns_endpoints = selected + selected_host + list(application_endpoints)
     return {
-        "dnsNames": _string_list(name for endpoint in selected + selected_host for name in endpoint.get("sanDnsNames", [])) if policy["includeEndpointFqdns"] else [],
-        "wildcardDnsNames": _string_list(name for endpoint in selected + selected_host for name in endpoint.get("wildcardDnsNames", [])) if policy["includeEndpointWildcard"] else [],
+        "dnsNames": _string_list(name for endpoint in dns_endpoints for name in endpoint.get("sanDnsNames", [])) if policy["includeEndpointFqdns"] else [],
+        "wildcardDnsNames": _string_list(name for endpoint in dns_endpoints for name in endpoint.get("wildcardDnsNames", [])) if policy["includeEndpointWildcard"] else [],
         "ipAddresses": _string_list(provider_addresses),
     }
 
 
-def resolve_certificate_requests(project_id, topology, host_vars, defaults=None, resolved_service_endpoints=None, inventory_deployments=None):
+def _application_endpoints_by_tls_binding(rows, desired):
+    endpoints = {}
+    for row in rows:
+        endpoint = row["settings"].get("endpoint", {})
+        if not endpoint.get("enabled") or endpoint.get("protocol") != "https":
+            continue
+        group = desired.get("endpointGroups", {}).get(endpoint.get("endpoint_group"), {})
+        domain = (group.get("address") or {}).get("domain")
+        if not isinstance(domain, str) or not DNS_DOMAIN.fullmatch(domain):
+            continue
+        instance_id = row["instanceId"]
+        if not isinstance(instance_id, str) or not DNS_LABEL.fullmatch(instance_id):
+            continue
+        names = {"sanDnsNames": [instance_id + "." + domain], "wildcardDnsNames": ["*." + domain]}
+        for binding in row.get("bindings", {}).values():
+            profile = binding.get("profileRef")
+            if profile:
+                endpoints.setdefault((row["hostId"], profile), []).append(names)
+    return endpoints
+
+
+def resolve_certificate_requests(project_id, topology, host_vars, defaults=None, resolved_service_endpoints=None, inventory_deployments=None, application_rows=()):
     """Purely derive certificate identity and target plans from topology bindings.
 
     It returns no key material or resolved secrets.  The generic `tlsProfile`
@@ -27865,6 +27909,7 @@ def resolve_certificate_requests(project_id, topology, host_vars, defaults=None,
         return {"status": "BLOCKED", "findings": findings, "requests": [], "materializationPlans": []}
 
     requests, plans = [], []
+    application_endpoints = _application_endpoints_by_tls_binding(application_rows, desired)
     for scope_id, group in sorted(grouped.items()):
         profile = _profile_defaults(profiles[group["profileRef"]], defaults)
         authority = authorities[group["authorityRef"]]
@@ -27873,7 +27918,14 @@ def resolve_certificate_requests(project_id, topology, host_vars, defaults=None,
         identities = [_host_identity(host_id, host_vars) for host_id in hosts]
         dns_names = _string_list(name for identity in identities for name in identity["dnsNames"]) if profile["sanPolicy"]["includeHostDns"] else []
         ip_addresses = _string_list(address for identity in identities for address in identity["ipAddresses"]) if profile["sanPolicy"]["includeHostIp"] else []
-        endpoint_values = _endpoint_values(desired, resolved_service_endpoints, set(value["deploymentId"] for value in consumers), profile["sanPolicy"], hosts[0] if len(hosts) == 1 else None)
+        endpoint_values = _endpoint_values(
+            desired, resolved_service_endpoints, {value["deploymentId"] for value in consumers},
+            profile["sanPolicy"], hosts[0] if len(hosts) == 1 else None,
+            application_endpoints=(
+                endpoint for host_id in hosts
+                for endpoint in application_endpoints.get((host_id, group["tlsProfileId"]), ())
+            ),
+        )
         dns_names = _string_list(dns_names + endpoint_values["dnsNames"] + endpoint_values["wildcardDnsNames"])
         ip_addresses = _string_list(ip_addresses + endpoint_values["ipAddresses"])
         request = {
@@ -32644,11 +32696,11 @@ application_runtime_verify_vault: true
   no_log: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/image_delivery.yml","mode":420,"size":7182,"sha256":"f210e6aa2700c72bd3a5c936a66ad2cec711a1f0d8b14409c60e9ea5503dbd48","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7182}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/image_delivery.yml","mode":420,"size":6100,"sha256":"f67e0ab34eefd9b9bbd636d3e310236e0f8c3ff8b91c8ba9a562ac757275bf0e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":6100}
 ---
 - name: Проверка локального образа с зафиксированным digest перед доставкой
   ansible.builtin.command:
-    argv: [docker, image, inspect, "{{ application_runtime_job.authority.requirement.localReference }}"]
+    argv: [docker, image, inspect, "{{ application_runtime_job.authority.requirement.imageId }}"]
   become_user: "{{ application_runtime_job.account }}"
   environment: "{{ application_runtime_job.dockerEnvironment }}"
   register: application_local_image
@@ -32707,23 +32759,9 @@ application_runtime_verify_vault: true
             path: "{{ application_image_stage.path }}"
             state: absent
           when: application_image_stage.path is defined
-    - name: Проверка идентификатора образа после загрузки из архива или реестра
-      ansible.builtin.command:
-        argv: [docker, image, inspect, "{{ application_runtime_job.authority.requirement.imageId }}"]
-      become_user: "{{ application_runtime_job.account }}"
-      environment: "{{ application_runtime_job.dockerEnvironment }}"
-      changed_when: false
-      no_log: true
-    - name: "Назначение разрешённого локального тега образу"
-      ansible.builtin.command:
-        argv: [docker, tag, "{{ application_runtime_job.authority.requirement.imageId }}", "{{ application_runtime_job.authority.requirement.localReference }}"]
-      become_user: "{{ application_runtime_job.account }}"
-      environment: "{{ application_runtime_job.dockerEnvironment }}"
-      no_log: true
-
 - name: Проверка подлинности локального образа и платформы перед запуском
   ansible.builtin.command:
-    argv: [docker, image, inspect, "{{ application_runtime_job.authority.requirement.localReference }}"]
+    argv: [docker, image, inspect, "{{ application_runtime_job.authority.requirement.imageId }}"]
   become_user: "{{ application_runtime_job.account }}"
   environment: "{{ application_runtime_job.dockerEnvironment }}"
   register: application_delivered_image
@@ -32746,7 +32784,6 @@ application_runtime_verify_vault: true
   environment: "{{ application_runtime_job.dockerEnvironment }}"
   changed_when: false
   no_log: true
-  when: "'@' not in application_runtime_job.settings.image"
 
 - name: Проверка исходной ссылки перед запуском Compose
   ansible.builtin.command:
@@ -32756,17 +32793,15 @@ application_runtime_verify_vault: true
   register: application_original_image
   changed_when: false
   no_log: true
-  when: "'@' not in application_runtime_job.settings.image"
 
 - name: Проверка соответствия исходной ссылки образу с зафиксированным digest
   ansible.builtin.assert:
     that: (application_original_image.stdout | from_json)[0].Id == application_runtime_job.authority.requirement.imageId
     fail_msg: APPLICATION_IMAGE_IDENTITY_INVALID
   no_log: true
-  when: "'@' not in application_runtime_job.settings.image"
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/preflight.yml","mode":420,"size":25177,"sha256":"b121015f8b52fdcd130f92af2e2a21de9c50c193501ea320181f204700ad1b0d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":25177}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/preflight.yml","mode":420,"size":24179,"sha256":"43d9acd21e0f5b08d2ac86babbb9a9ef0d4a970f065ecec23158b464ea4483aa","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":24179}
 ---
 - name: Привязка учётной записи операции приложения и ключа обнаружения конфигурации Docker
   ansible.builtin.set_fact:
@@ -32886,22 +32921,6 @@ application_runtime_verify_vault: true
   when: application_runtime_defer_archive_verification | default(false) | bool
   no_log: true
 
-- name: Проверка управляемой ссылки, связанной с дайджестом, без изменений
-  ansible.builtin.command:
-    argv: [docker, image, inspect, "{{ application_runtime_job.authority.requirement.localReference }}"]
-  become_user: "{{ application_runtime_job.account }}"
-  environment: "{{ application_docker_environment }}"
-  register: application_bound_image
-  changed_when: false
-  failed_when: false
-  no_log: true
-
-- name: Отклонение неуправляемого образа с зарезервированным именем, привязанным к digest
-  ansible.builtin.assert:
-    that: application_bound_image.rc != 0 or (application_bound_image.stdout | from_json)[0].Id == application_runtime_job.authority.requirement.imageId
-    fail_msg: APPLICATION_IMAGE_REFERENCE_OWNERSHIP_INVALID
-  no_log: true
-
 - name: "Формирование конфигурационных файлов по шаблонам в защищённой памяти"
   ansible.builtin.set_fact:
     application_config_contents: "{{ application_config_contents + [{'destination': application_config.destination, 'content': _application_config_content, 'sha256': (_application_config_content | hash('sha256')), 'mode': application_config.mode | default('0644')}] }}"
@@ -32954,7 +32973,7 @@ application_runtime_verify_vault: true
     application_effective: "{{ application_runtime_job.settings }}"
     application_environment: "{{ application_runtime_job.settings.environment | default({}) | combine(hostvars['localhost'].application_snapshot.snapshot.applicationLibraries.libraries[application_runtime_job.libraryId].instances[application_runtime_job.instanceId].identityEnvironment) }}"
     application_runtime:
-      image: "{{ application_runtime_job.settings.image if '@' not in application_runtime_job.settings.image else application_runtime_job.authority.requirement.localReference }}"
+      image: "{{ application_runtime_job.settings.image }}"
       connections: "{{ hostvars['localhost'].application_snapshot.snapshot.applicationLibraries.libraries[application_runtime_job.libraryId].instances[application_runtime_job.instanceId].connections }}"
       topics: "{{ hostvars['localhost'].application_snapshot.snapshot.applicationLibraries.libraries[application_runtime_job.libraryId].instances[application_runtime_job.instanceId].topics | default({}) }}"
       container_name: "{{ application_runtime_job.placement.containerName }}"
