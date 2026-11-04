@@ -8,12 +8,12 @@ try:
     from .application_libraries import checked_file, invocation_package_loader, nonsecret_values
     from .application_scripts import prepare_script_jobs
     from .artifact_authority import assemble_authority
-    from .application_images import selected_image, registry_request
+    from .application_images import selected_image, registry_request, validate_application_image_reference
 except ImportError:
     from application_libraries import checked_file, invocation_package_loader, nonsecret_values
     from application_scripts import prepare_script_jobs
     from artifact_authority import assemble_authority
-    from application_images import selected_image, registry_request
+    from application_images import selected_image, registry_request, validate_application_image_reference
 
 DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 REFERENCE = re.compile(r"^[a-z0-9][a-z0-9._:/-]*(?::[A-Za-z0-9_][A-Za-z0-9_.-]*)?(?:@sha256:[0-9a-f]{64})?$")
@@ -41,7 +41,8 @@ def safe_relative(value):
 
 def image_requirement(instance_id, image_name, image):
     """One locked image identity for standalone execution and target-free planning."""
-    if not isinstance(image_name, str) or not REFERENCE.fullmatch(image_name) or not isinstance(image, dict):
+    validate_application_image_reference(image_name)
+    if not isinstance(image, dict):
         raise ValueError('APPLICATION_IMAGE_NOT_LOCKED')
     reference = runtime_reference(image['imageId'])
     platform = image.get('platform')
@@ -120,8 +121,6 @@ def validate_compose(config, job, instance_path, digest):
         raise ValueError("APPLICATION_COMPOSE_IDENTITY_INVALID")
     service = services[job["instanceId"]]
     reference = job['settings']['image']
-    if '@' in reference:
-        reference = job['authority']['requirement']['localReference']
     if (service.get("image") != reference or
             service.get("container_name") != job["placement"]["containerName"]):
         raise ValueError("APPLICATION_COMPOSE_IDENTITY_INVALID")
@@ -236,8 +235,7 @@ def prepare_runtime(root, snapshot, rows, desired, lock, validator, loader, scri
         if not image:
             raise ValueError("APPLICATION_IMAGE_NOT_LOCKED")
         reference = runtime_reference(image["imageId"])
-        if not REFERENCE.fullmatch(settings["image"]):
-            raise ValueError("APPLICATION_IMAGE_REFERENCE_INVALID")
+        validate_application_image_reference(settings["image"])
         if image.get("localReference", reference) != reference:
             raise ValueError("APPLICATION_IMAGE_REFERENCE_NOT_BOUND")
         registry = image.get("registry")

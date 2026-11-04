@@ -1,7 +1,7 @@
 ---
 - name: Проверка локального образа с зафиксированным digest перед доставкой
   ansible.builtin.command:
-    argv: [docker, image, inspect, "{{ application_runtime_job.authority.requirement.localReference }}"]
+    argv: [docker, image, inspect, "{{ application_runtime_job.authority.requirement.imageId }}"]
   become_user: "{{ application_runtime_job.account }}"
   environment: "{{ application_runtime_job.dockerEnvironment }}"
   register: application_local_image
@@ -60,23 +60,9 @@
             path: "{{ application_image_stage.path }}"
             state: absent
           when: application_image_stage.path is defined
-    - name: Проверка идентификатора образа после загрузки из архива или реестра
-      ansible.builtin.command:
-        argv: [docker, image, inspect, "{{ application_runtime_job.authority.requirement.imageId }}"]
-      become_user: "{{ application_runtime_job.account }}"
-      environment: "{{ application_runtime_job.dockerEnvironment }}"
-      changed_when: false
-      no_log: true
-    - name: "Назначение разрешённого локального тега образу"
-      ansible.builtin.command:
-        argv: [docker, tag, "{{ application_runtime_job.authority.requirement.imageId }}", "{{ application_runtime_job.authority.requirement.localReference }}"]
-      become_user: "{{ application_runtime_job.account }}"
-      environment: "{{ application_runtime_job.dockerEnvironment }}"
-      no_log: true
-
 - name: Проверка подлинности локального образа и платформы перед запуском
   ansible.builtin.command:
-    argv: [docker, image, inspect, "{{ application_runtime_job.authority.requirement.localReference }}"]
+    argv: [docker, image, inspect, "{{ application_runtime_job.authority.requirement.imageId }}"]
   become_user: "{{ application_runtime_job.account }}"
   environment: "{{ application_runtime_job.dockerEnvironment }}"
   register: application_delivered_image
@@ -99,7 +85,6 @@
   environment: "{{ application_runtime_job.dockerEnvironment }}"
   changed_when: false
   no_log: true
-  when: "'@' not in application_runtime_job.settings.image"
 
 - name: Проверка исходной ссылки перед запуском Compose
   ansible.builtin.command:
@@ -109,11 +94,9 @@
   register: application_original_image
   changed_when: false
   no_log: true
-  when: "'@' not in application_runtime_job.settings.image"
 
 - name: Проверка соответствия исходной ссылки образу с зафиксированным digest
   ansible.builtin.assert:
     that: (application_original_image.stdout | from_json)[0].Id == application_runtime_job.authority.requirement.imageId
     fail_msg: APPLICATION_IMAGE_IDENTITY_INVALID
   no_log: true
-  when: "'@' not in application_runtime_job.settings.image"

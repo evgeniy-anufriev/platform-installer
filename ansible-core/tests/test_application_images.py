@@ -41,7 +41,9 @@ class ApplicationImagesTests(unittest.TestCase):
         request = registry_request('app:latest', pinned)
         self.assertEqual((request['registry'], request['repository'], request['version']),
                          ('mirror.example:5000', 'team/app', pinned['registry']['manifestDigest']))
-        self.assertEqual(registry_request('example.test/app:tag@sha256:' + 'b' * 64)['repository'], 'app')
+        for reference in ('example.test/app:tag@sha256:' + 'b' * 64, 'sha256:' + 'b' * 64, 'b' * 64):
+            with self.subTest(reference=reference), self.assertRaisesRegex(ValueError, 'APPLICATION_IMAGE_REFERENCE_INVALID'):
+                registry_request(reference)
 
     def test_bundle_index_uses_config_identity_and_component_reference(self):
         with tempfile.TemporaryDirectory() as tmp:

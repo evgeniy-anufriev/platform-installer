@@ -107,7 +107,7 @@ class ActionModule(ActionBase):
                 'APPLICATION_IMAGE_NOT_LOCKED': ('Registry образа не разрешён для этого размещения; в наборе установки образ отсутствует.'
                     if stage == 'source-policy' else 'Запись фиксации размещения не соответствует выбранному образу.'),
                 'APPLICATION_ARTIFACT_LOCK_CONFLICT': 'Обнаружены противоречащие друг другу фиксации образа.',
-                'APPLICATION_IMAGE_REFERENCE_INVALID': 'Некорректный адрес образа.',
+                'APPLICATION_IMAGE_REFERENCE_INVALID': 'Укажите имя образа с тегом, без SHA или @sha256.',
                 'APPLICATION_IMAGE_PROJECT_INVALID': 'Снимок проекта содержит блокирующие замечания.',
                 'APPLICATION_IMAGE_ARCHIVE_AMBIGUOUS': 'Найдено несколько подходящих архивов образа.',
                 'APPLICATION_IMAGE_ARCHIVE_NOT_LOCKED': 'Архив образа не подтверждён компонентами набора установки.',

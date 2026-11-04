@@ -95,7 +95,15 @@ def offline_image(manifest, reference, platform, expected=None):
                 archive=dict(ref=component['path'], sha256=component['sha256'], size=component['size']))
 
 
+def validate_application_image_reference(reference):
+    if (not isinstance(reference, str) or not REFERENCE.fullmatch(reference)
+            or '@' in reference or DIGEST.fullmatch(reference)
+            or re.fullmatch(r'[0-9a-f]{64}', reference)):
+        raise ValueError('APPLICATION_IMAGE_REFERENCE_INVALID')
+
+
 def registry_request(reference, legacy=None):
+    validate_application_image_reference(reference)
     pinned = (legacy or {}).get('registry', {})
     normalized = normalize_image(pinned.get('reference', reference))
     registry, repository = normalized.split('/', 1)

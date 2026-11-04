@@ -117,22 +117,6 @@
   when: application_runtime_defer_archive_verification | default(false) | bool
   no_log: true
 
-- name: Проверка управляемой ссылки, связанной с дайджестом, без изменений
-  ansible.builtin.command:
-    argv: [docker, image, inspect, "{{ application_runtime_job.authority.requirement.localReference }}"]
-  become_user: "{{ application_runtime_job.account }}"
-  environment: "{{ application_docker_environment }}"
-  register: application_bound_image
-  changed_when: false
-  failed_when: false
-  no_log: true
-
-- name: Отклонение неуправляемого образа с зарезервированным именем, привязанным к digest
-  ansible.builtin.assert:
-    that: application_bound_image.rc != 0 or (application_bound_image.stdout | from_json)[0].Id == application_runtime_job.authority.requirement.imageId
-    fail_msg: APPLICATION_IMAGE_REFERENCE_OWNERSHIP_INVALID
-  no_log: true
-
 - name: "Формирование конфигурационных файлов по шаблонам в защищённой памяти"
   ansible.builtin.set_fact:
     application_config_contents: "{{ application_config_contents + [{'destination': application_config.destination, 'content': _application_config_content, 'sha256': (_application_config_content | hash('sha256')), 'mode': application_config.mode | default('0644')}] }}"
@@ -185,7 +169,7 @@
     application_effective: "{{ application_runtime_job.settings }}"
     application_environment: "{{ application_runtime_job.settings.environment | default({}) | combine(hostvars['localhost'].application_snapshot.snapshot.applicationLibraries.libraries[application_runtime_job.libraryId].instances[application_runtime_job.instanceId].identityEnvironment) }}"
     application_runtime:
-      image: "{{ application_runtime_job.settings.image if '@' not in application_runtime_job.settings.image else application_runtime_job.authority.requirement.localReference }}"
+      image: "{{ application_runtime_job.settings.image }}"
       connections: "{{ hostvars['localhost'].application_snapshot.snapshot.applicationLibraries.libraries[application_runtime_job.libraryId].instances[application_runtime_job.instanceId].connections }}"
       topics: "{{ hostvars['localhost'].application_snapshot.snapshot.applicationLibraries.libraries[application_runtime_job.libraryId].instances[application_runtime_job.instanceId].topics | default({}) }}"
       container_name: "{{ application_runtime_job.placement.containerName }}"

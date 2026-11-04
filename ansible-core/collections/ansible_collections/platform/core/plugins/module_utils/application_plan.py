@@ -4,7 +4,7 @@ try:
     from .project_validation import canonical_digest
     from .application_libraries import finding, ID
     from .application_runtime import image_requirement
-    from .application_images import selected_image, registry_request
+    from .application_images import selected_image, registry_request, validate_application_image_reference
     from .schema_validation import SchemaValidator
     from .application_connections import active_script, script_secret_source, connection_order_findings, connection_callback, used_script_sources
     from .application_selection import execution_scope
@@ -12,7 +12,7 @@ except ImportError:
     from project_validation import canonical_digest
     from application_libraries import finding, ID
     from application_runtime import image_requirement
-    from application_images import selected_image, registry_request
+    from application_images import selected_image, registry_request, validate_application_image_reference
     from schema_validation import SchemaValidator
     from application_connections import active_script, script_secret_source, connection_order_findings, connection_callback, used_script_sources
     from application_selection import execution_scope
@@ -97,12 +97,16 @@ def application_execution_model(snapshot, image_lock=None, library_order=None, s
 
     def registry_for(reference, library_id, instance_id, host):
         try:
+            default_registry = registry_request(reference)['registry']
+        except ValueError:
+            return None
+        try:
             image = selected_image(image_lock or {}, reference, library_id, instance_id, host)
             if image is not None and not image.get('registry'):
                 return None
-            return registry_request(image['registry']['reference'] if image else reference)['registry']
+            return registry_request(image['registry']['reference'])['registry'] if image else default_registry
         except ValueError:
-            return registry_request(reference)['registry']  # The image finding still blocks execution.
+            return default_registry  # The image finding still blocks execution.
 
     for library_id, library in sorted(active_libraries.items()):
         library_hosts = set()
@@ -133,6 +137,11 @@ def application_execution_model(snapshot, image_lock=None, library_order=None, s
                                operations=['APPLICATION_LIBRARIES_APPLY'])
             for host in placements:
                 image_name = instance['placements'][host].get('imageRequirement', instance.get('imageRequirement', {})).get('image')
+                try:
+                    validate_application_image_reference(image_name)
+                except ValueError:
+                    findings.append(finding('APPLICATION_IMAGE_REFERENCE_INVALID', field + '.placements.' + host + '.image'))
+                    continue
                 try:
                     image = selected_image(image_lock or {}, image_name, library_id, instance_id, host)
                     requirement = (dict(id=instance_id + ':' + host + ':image', name=image_name,

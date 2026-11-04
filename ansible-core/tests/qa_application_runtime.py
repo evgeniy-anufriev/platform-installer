@@ -44,7 +44,6 @@ class ApplicationRuntimeQA(unittest.TestCase):
         cls.account = pwd.getpwnam(ACCOUNT)
         cls.failed = False
         cls.owned_extra_references = set()
-        cls.local_image = "platform-application:sha256-" + IMAGE_ID.split(":", 1)[1]
         cls.docker = ["sudo", "-n", "-u", ACCOUNT, "env", "HOME=" + cls.account.pw_dir,
                       "XDG_RUNTIME_DIR=/run/user/" + str(cls.account.pw_uid),
                       "DOCKER_HOST=unix:///run/user/" + str(cls.account.pw_uid) + "/docker.sock", "docker"]
@@ -70,7 +69,6 @@ class ApplicationRuntimeQA(unittest.TestCase):
                 "ansible_host": "192.168.56.102", "ansible_user": "platform-automation", "ansible_ssh_private_key_file": key,
                 "ansible_ssh_common_args": "-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"}
         (cls.root / "inventory/hosts.yml").write_text(json.dumps(inventory))
-        cls.owned_alias_hosts = {host for host in cls.dockers if cls.docker_run(host, ["image", "inspect", cls.local_image], capture_output=True).returncode != 0}
         cls.vars_path = cls.root / "inventory/group_vars/all/platform-installer.yml"
         cls.target_root = Path(cls.account.pw_dir) / ".local/share/platform-installer/applications" / cls.root.name
         cls.bundle = Path(cls.temporary.name) / "image-fixture-bundle"
@@ -112,9 +110,6 @@ class ApplicationRuntimeQA(unittest.TestCase):
             listed = cls.docker_run(host, ["ps", "-aq", "--filter", "label=platform.installer.project=" + cls.root.name], capture_output=True)
             for identifier in listed.stdout.decode().split():
                 cls.docker_run(host, ["rm", "-f", identifier], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            remaining = cls.docker_run(host, ["ps", "-aq", "--filter", "ancestor=" + IMAGE_ID], capture_output=True)
-            if host in cls.owned_alias_hosts and not remaining.stdout.strip():
-                cls.docker_run(host, ["image", "rm", cls.local_image], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             for owned_host, reference, image_id in cls.owned_extra_references:
                 if host == owned_host:
                     remaining = cls.docker_run(host, ["ps", "-aq", "--filter", "ancestor=" + image_id], capture_output=True)
@@ -229,25 +224,18 @@ class ApplicationRuntimeQA(unittest.TestCase):
         self.play("verify")
         self.assertRegex(self.play("apply"), r"node1\s+:\s+ok=\d+\s+changed=0")
 
-    def test_03_public_registry_delivery(self):
+    def test_03_local_image_reuse_with_registry_source(self):
         if type(self).failed:
             self.skipTest("Initial Apply failed; registry prerequisite not established")
         variables = json.loads(self.vars_path.read_text())
         record = variables["platform_artifact_lock"]["x-container-images"]["images"][IMAGE]
         record["registry"] = self.registry
         self.vars_path.write_text(json.dumps(variables))
-        for host in self.dockers:
-            if host not in self.owned_alias_hosts:
-                self.skipTest("Digest-bound tag preexists; preserve its external ownership")
-            owned = self.docker_run(host, ["ps", "-aq", "--filter", "label=platform.installer.project=" + self.root.name], capture_output=True, check=True)
-            for identifier in owned.stdout.decode().split():
-                self.docker_run(host, ["rm", "-f", identifier], stdout=subprocess.DEVNULL, check=True)
-            self.docker_run(host, ["image", "rm", self.local_image], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
         hidden = self.bundle.with_name(self.bundle.name + "-hidden")
         self.bundle.rename(hidden)
         try:
             output = self.play("apply")
-            self.assertIn("Получение точного манифеста авторизованной платформы", output)
+            self.assertRegex(output, r"node1\s+:\s+ok=\d+\s+changed=0")
         finally:
             hidden.rename(self.bundle)
         archive = self.bundle / "runtime/artifacts/applications/nginx.tar"
@@ -276,7 +264,7 @@ class ApplicationRuntimeQA(unittest.TestCase):
             "registry": {"reference": SECOND_IMAGE, "manifestDigest": SECOND_MANIFEST}}
         variables["platform_desired_state"]["applicationLibraryDeployments"]["cspa"]["applications"]["gateway"]["overrides"]["image"] = SECOND_IMAGE
         self.vars_path.write_text(json.dumps(variables))
-        reference = "platform-application:sha256-" + SECOND_IMAGE_ID.split(":", 1)[1]
+        reference = SECOND_IMAGE
         if self.docker_run("node1", ["image", "inspect", reference], capture_output=True).returncode != 0:
             self.owned_extra_references.add(("node1", reference, SECOND_IMAGE_ID))
         projects = []
@@ -314,11 +302,11 @@ class ApplicationRuntimeQA(unittest.TestCase):
         if failures:
             type(self).failed = True
         self.assertEqual([], failures, "Parallel Apply failed; protected logs")
-        for library, expected in (("sdku", IMAGE_ID), ("cspa", SECOND_IMAGE_ID)):
+        for library, expected, reference in (("sdku", IMAGE_ID, IMAGE), ("cspa", SECOND_IMAGE_ID, SECOND_IMAGE)):
             name = self.root.name + "-apigateway-" + library + "-node1"
             obj = json.loads(self.docker_run("node1", ["inspect", name], capture_output=True, check=True).stdout)[0]
             self.assertEqual(expected, obj["Image"])
-            self.assertEqual("platform-application:sha256-" + expected.split(":", 1)[1], obj["Config"]["Image"])
+            self.assertEqual(reference, obj["Config"]["Image"])
         self.play("verify")
         before = {host: self.containers(host) for host in self.dockers}
         self.assertRegex(self.play("apply"), r"node1\s+:\s+ok=\d+\s+changed=0")

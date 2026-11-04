@@ -10,6 +10,7 @@ import (
 
 // Presentation only: Core codes and validation severity remain authoritative.
 var projectFindingMessagesRU = map[string]string{
+	"APPLICATION_IMAGE_REFERENCE_INVALID":                     "Укажите имя образа с тегом, без SHA или @sha256.",
 	"APPLICATION_GENERATED_PROFILE_INVALID":                   "Неизвестный профиль генерации секрета. Допустимы password и client_secret.",
 	"APPLICATION_LIBRARY_ENDPOINT_INVALID":                    "Некорректная группа точек входа библиотеки: выберите существующую группу в подключениях библиотеки.",
 	"ROLE_DEFAULT_TYPE_INVALID":                               "Тип значения роли по умолчанию не соответствует описанию настройки.",

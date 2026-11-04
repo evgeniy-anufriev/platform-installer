@@ -671,10 +671,14 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
             findings.append(finding('APPLICATION_HOST_RESOURCE_CONFLICT', field))
         registries = library.setdefault('registries', [])
         if row['settings'].get('image'):
-            registry = registry_request(row['settings']['image'])['registry']
-            if registry not in registries:
-                registries.append(registry)
-                registries.sort()
+            try:
+                registry = registry_request(row['settings']['image'])['registry']
+            except ValueError:
+                findings.append(finding('APPLICATION_IMAGE_REFERENCE_INVALID', field + '.image'))
+            else:
+                if registry not in registries:
+                    registries.append(registry)
+                    registries.sort()
         if (library['connections'] != shared_connections or library['runtimeDirectory'] != row.get('runtimeDirectory', '~/' + library_id)
                 or library['scripts'] != row.get('libraryScripts', [])):
             findings.append(finding('APPLICATION_HOST_RESOURCE_CONFLICT', field))

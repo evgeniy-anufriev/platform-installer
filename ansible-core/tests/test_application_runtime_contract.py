@@ -293,8 +293,8 @@ class ApplicationRuntimeTests(unittest.TestCase):
                 self.assertEqual(reference, image_requirement("dm", reference, image)["name"])
                 self.assertEqual(reference.rsplit(":", 1)[0] + "@" + DIGEST,
                                  pinned_registry_reference(reference, DIGEST))
-                self.assertEqual(reference + "@" + DIGEST,
-                                 image_requirement("dm", reference + "@" + DIGEST, image)["name"])
+                with self.assertRaisesRegex(ValueError, "APPLICATION_IMAGE_REFERENCE_INVALID"):
+                    image_requirement("dm", reference + "@" + DIGEST, image)
         for reference in ("registry.example/Team/image:SNAPSHOT", "registry.example/image:BAD TAG",
                           "registry.example/image:SNAPSHOT;echo", "registry.example/image@sha256:" + "A" * 64):
             with self.subTest(reference=reference), self.assertRaises(ValueError):
@@ -401,7 +401,8 @@ class ApplicationRuntimeTests(unittest.TestCase):
                   "volumes": {"user-data": {"driver": "local"}}, "x-user-extension": {"custom": True}}
         self.assertTrue(validate_compose(config, dict(job, configs=[]), "/private/api", "c" * 64))
         digest_job = dict(job, settings=dict(job["settings"], image="registry.example/probe@" + DIGEST))
-        self.assertTrue(validate_compose(config, digest_job, "/private/api", "c" * 64))
+        with self.assertRaisesRegex(ValueError, "APPLICATION_COMPOSE_IDENTITY_INVALID"):
+            validate_compose(config, digest_job, "/private/api", "c" * 64)
         tagged_job = dict(job, settings=dict(job["settings"], image="registry.example/probe:SNAPSHOT"))
         tagged_config = dict(config, services={"api-sdku": dict(service, image="registry.example/probe:SNAPSHOT")})
         self.assertTrue(validate_compose(tagged_config, tagged_job, "/private/api", "c" * 64))

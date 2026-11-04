@@ -637,6 +637,10 @@ restriction or additional target assertion is introduced.
 Application `defaults.image` remains the packaged image selection. An installation
 may override `platform_desired_state.applicationLibraryDeployments.<id>.applications.<slot>.overrides.image`.
 No parallel image_artifact/reference or operator-authored SHA/size is required.
+Application image settings use a named image reference. Image IDs and
+`@sha256:` references are rejected in those settings. The installer checks
+local availability by the planned Docker Image ID and uses the named reference
+in Compose. Registry manifest digests still pin internal downloads.
 `build_execution_runtime_bundle.py --application-image IMAGE artifacts/app.tar`
 indexes a Docker-save archive without loading it. Its image ID is the config
 digest; its archive digest and size belong to `components`, not the image entry.
