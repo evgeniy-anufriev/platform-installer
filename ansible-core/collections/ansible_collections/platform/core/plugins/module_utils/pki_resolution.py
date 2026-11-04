@@ -4,8 +4,10 @@ __metaclass__ = type
 
 try:
     from .project_validation import canonical_digest
+    from .service_endpoint_resolution import DNS_DOMAIN, DNS_LABEL
 except ImportError:
     from project_validation import canonical_digest
+    from service_endpoint_resolution import DNS_DOMAIN, DNS_LABEL
 
 
 REQUIRED_DEFAULT_KEYS = (
@@ -120,7 +122,7 @@ def _scope_key(scope, consumer):
     return "%s--%s" % (consumer["tlsProfileRef"], consumer["hostId"])
 
 
-def _endpoint_values(topology, resolved_service_endpoints, deployment_ids, policy, host_id=None):
+def _endpoint_values(topology, resolved_service_endpoints, deployment_ids, policy, host_id=None, application_endpoints=()):
     projection = resolved_service_endpoints if isinstance(resolved_service_endpoints, dict) else {}
     endpoints = projection.get("endpoints", {}) if isinstance(projection.get("endpoints"), dict) else {}
     selected = [endpoints[key] for key in sorted(endpoints) if key in deployment_ids and isinstance(endpoints[key], dict)]
@@ -146,14 +148,36 @@ def _endpoint_values(topology, resolved_service_endpoints, deployment_ids, polic
                     address.get("address") for address in virtual_addresses
                     if isinstance(address, dict) and _looks_like_ip(address.get("address"))
                 )
+    dns_endpoints = selected + selected_host + list(application_endpoints)
     return {
-        "dnsNames": _string_list(name for endpoint in selected + selected_host for name in endpoint.get("sanDnsNames", [])) if policy["includeEndpointFqdns"] else [],
-        "wildcardDnsNames": _string_list(name for endpoint in selected + selected_host for name in endpoint.get("wildcardDnsNames", [])) if policy["includeEndpointWildcard"] else [],
+        "dnsNames": _string_list(name for endpoint in dns_endpoints for name in endpoint.get("sanDnsNames", [])) if policy["includeEndpointFqdns"] else [],
+        "wildcardDnsNames": _string_list(name for endpoint in dns_endpoints for name in endpoint.get("wildcardDnsNames", [])) if policy["includeEndpointWildcard"] else [],
         "ipAddresses": _string_list(provider_addresses),
     }
 
 
-def resolve_certificate_requests(project_id, topology, host_vars, defaults=None, resolved_service_endpoints=None, inventory_deployments=None):
+def _application_endpoints_by_tls_binding(rows, desired):
+    endpoints = {}
+    for row in rows:
+        endpoint = row["settings"].get("endpoint", {})
+        if not endpoint.get("enabled") or endpoint.get("protocol") != "https":
+            continue
+        group = desired.get("endpointGroups", {}).get(endpoint.get("endpoint_group"), {})
+        domain = (group.get("address") or {}).get("domain")
+        if not isinstance(domain, str) or not DNS_DOMAIN.fullmatch(domain):
+            continue
+        instance_id = row["instanceId"]
+        if not isinstance(instance_id, str) or not DNS_LABEL.fullmatch(instance_id):
+            continue
+        names = {"sanDnsNames": [instance_id + "." + domain], "wildcardDnsNames": ["*." + domain]}
+        for binding in row.get("bindings", {}).values():
+            profile = binding.get("profileRef")
+            if profile:
+                endpoints.setdefault((row["hostId"], profile), []).append(names)
+    return endpoints
+
+
+def resolve_certificate_requests(project_id, topology, host_vars, defaults=None, resolved_service_endpoints=None, inventory_deployments=None, application_rows=()):
     """Purely derive certificate identity and target plans from topology bindings.
 
     It returns no key material or resolved secrets.  The generic `tlsProfile`
@@ -198,6 +222,7 @@ def resolve_certificate_requests(project_id, topology, host_vars, defaults=None,
         return {"status": "BLOCKED", "findings": findings, "requests": [], "materializationPlans": []}
 
     requests, plans = [], []
+    application_endpoints = _application_endpoints_by_tls_binding(application_rows, desired)
     for scope_id, group in sorted(grouped.items()):
         profile = _profile_defaults(profiles[group["profileRef"]], defaults)
         authority = authorities[group["authorityRef"]]
@@ -206,7 +231,14 @@ def resolve_certificate_requests(project_id, topology, host_vars, defaults=None,
         identities = [_host_identity(host_id, host_vars) for host_id in hosts]
         dns_names = _string_list(name for identity in identities for name in identity["dnsNames"]) if profile["sanPolicy"]["includeHostDns"] else []
         ip_addresses = _string_list(address for identity in identities for address in identity["ipAddresses"]) if profile["sanPolicy"]["includeHostIp"] else []
-        endpoint_values = _endpoint_values(desired, resolved_service_endpoints, set(value["deploymentId"] for value in consumers), profile["sanPolicy"], hosts[0] if len(hosts) == 1 else None)
+        endpoint_values = _endpoint_values(
+            desired, resolved_service_endpoints, {value["deploymentId"] for value in consumers},
+            profile["sanPolicy"], hosts[0] if len(hosts) == 1 else None,
+            application_endpoints=(
+                endpoint for host_id in hosts
+                for endpoint in application_endpoints.get((host_id, group["tlsProfileId"]), ())
+            ),
+        )
         dns_names = _string_list(dns_names + endpoint_values["dnsNames"] + endpoint_values["wildcardDnsNames"])
         ip_addresses = _string_list(ip_addresses + endpoint_values["ipAddresses"])
         request = {

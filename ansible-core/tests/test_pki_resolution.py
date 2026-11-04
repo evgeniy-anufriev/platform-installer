@@ -61,6 +61,45 @@ class PkiResolutionTests(unittest.TestCase):
         self.assertEqual(1, len(deployment["requests"]))
         self.assertEqual(["192.0.2.11", "192.0.2.12"], deployment["requests"][0]["ipAddresses"])
 
+    def test_service_and_application_endpoint_names_use_same_san_policy(self):
+        topology = self.topology()
+        topology["endpointGroups"] = {"installer-endpoint": {"address": {"domain": "installer.scada.local"}}}
+        policy = topology["certificateProfiles"]["infrastructure"]["sanPolicy"]
+        hosts = {"node1": {}, "node2": {}}
+        rows = [{
+            "instanceId": "keycloak", "hostId": "node1",
+            "bindings": {"pki": {"profileRef": "platform-tls"}},
+            "settings": {"endpoint": {"enabled": True, "protocol": "https", "endpoint_group": "installer-endpoint"}},
+        }]
+        topology["serviceDeployments"]["vault"] = topology["serviceDeployments"].pop("service-a")
+        endpoints = {"endpoints": {"vault": {
+            "sanDnsNames": ["vault.installer.scada.local"],
+            "wildcardDnsNames": ["*.installer.scada.local"],
+        }}}
+        for fqdns, wildcard in ((False, False), (True, False), (False, True), (True, True)):
+            with self.subTest(fqdns=fqdns, wildcard=wildcard):
+                policy.update(includeEndpointFqdns=fqdns, includeEndpointWildcard=wildcard)
+                baseline = pki.resolve_certificate_requests("p", topology, hosts, self.defaults, endpoints)
+                result = pki.resolve_certificate_requests("p", topology, hosts, self.defaults, endpoints,
+                                                          application_rows=rows)
+                self.assertEqual("PASS", result["status"])
+                expected = ["node1"]
+                if fqdns:
+                    expected.extend(["keycloak.installer.scada.local", "vault.installer.scada.local"])
+                if wildcard:
+                    expected.append("*.installer.scada.local")
+                self.assertEqual(sorted(expected), result["requests"][0]["dnsNames"])
+                self.assertEqual(baseline["requests"][1], result["requests"][1])
+
+        application_names = pki.resolve_certificate_requests("p", topology, hosts, self.defaults,
+                                                             application_rows=rows)
+        self.assertEqual(["*.installer.scada.local", "keycloak.installer.scada.local", "node1"],
+                         application_names["requests"][0]["dnsNames"])
+        rows[0]["bindings"]["pki"]["profileRef"] = "different-tls"
+        unbound = pki.resolve_certificate_requests("p", topology, hosts, self.defaults, endpoints,
+                                                   application_rows=rows)
+        self.assertEqual(baseline["requests"], unbound["requests"])
+
     def test_unknown_tls_profile_blocks_without_partial_plan(self):
         topology = self.topology()
         topology["serviceDeployments"]["service-a"]["configuration"]["tlsProfile"] = "unknown"

@@ -644,6 +644,7 @@ class ActionModule(ActionBase):
             pki = resolve_certificate_requests(
                 manifest.get("metadata", {}).get("id", os.path.basename(project_root)),
                 materialized, host_addresses, pki_defaults, endpoints, inventory_deployments,
+                application_rows=task_vars.get("platform_application_rows", ()),
             )
             haproxy = resolve_haproxy_backends(
                 materialized, catalog, host_addresses, inventory_deployments, endpoints, {}, configuration,
