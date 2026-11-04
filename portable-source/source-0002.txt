@@ -10069,7 +10069,7 @@ function DeleteDeploymentDialog({
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/UtilityPages.tsx","mode":420,"size":68270,"sha256":"49c81af8457afbf02d3ca04b9fe6a1e947fa54bda4a0c3511fa839340d7c7c50","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":62435}
+@@PORTABLE {"path":"frontend/src/UtilityPages.tsx","mode":420,"size":68460,"sha256":"5e4e99b3ef5f214da246fe1a2fb4e15688e4f2850b308b47045a97a712245764","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":62417}
 import { useEffect, useMemo, useState } from "react";
 import type {
   EditResult,
@@ -10762,12 +10762,11 @@ const eventColumns: EventColumn[] = [
 
 const defaultVisibleColumns = [
   "timestamp",
-  "eventType",
-  "safeMessage",
-  "serviceDeployment",
-  "host",
   "status",
   "ansibleOutput",
+  "serviceDeployment",
+  "host",
+  "taskName",
 ];
 
 function initialVisibleColumns(): string[] {
@@ -11038,6 +11037,10 @@ function EventLog({
                 </dd>
                 <dt>Редакция данных</dt>
                 <dd>{selectedEvent.redacted ? "Применена" : "Нет"}</dd>
+                <dt className="event-log-output-label">Вывод Ansible</dt>
+                <dd className="event-log-output">
+                  {selectedEvent.ansibleOutput || "—"}
+                </dd>
                 <dt>ID запуска</dt>
                 <dd>{selectedEvent.runId || runId || "—"}</dd>
               </dl>
@@ -11403,14 +11406,14 @@ export function UtilityPages({
               <p>Platform Installer V2</p>
             </div>
           </header>
-          <section className="utility-card">
+          <section c
+@@END
+@@PORTABLE {"path":"frontend/src/UtilityPages.tsx","mode":420,"size":68460,"sha256":"5e4e99b3ef5f214da246fe1a2fb4e15688e4f2850b308b47045a97a712245764","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":6043}
+lassName="utility-card">
             <h2>Сведения о программе</h2>
             <dl className="about-details">
               <dt>Продукт</dt>
-              <dd>Platform Installer V2</d
-@@END
-@@PORTABLE {"path":"frontend/src/UtilityPages.tsx","mode":420,"size":68270,"sha256":"49c81af8457afbf02d3ca04b9fe6a1e947fa54bda4a0c3511fa839340d7c7c50","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":5835}
-d>
+              <dd>Platform Installer V2</dd>
               <dt>Интерфейс</dt>
               <dd>Wails · React</dd>
               <dt>Схема конфигурации приложения</dt>
@@ -18780,7 +18783,7 @@ export function renderApplication(api: ProjectBackend) {
 :root{font-family:Inter,system-ui,sans-serif;color:#172033;background:#f5f7fb}*{box-sizing:border-box}body{margin:0}.shell{min-height:100vh;display:grid;grid-template-columns:224px 1fr}aside{background:#172033;color:#d9e1ed;padding:24px 14px}.brand{font-weight:750;font-size:21px;line-height:1.05;margin:4px 12px 34px}.brand span{color:#6de0c2}nav{display:grid;gap:4px}nav button{border:0;background:transparent;color:inherit;text-align:left;padding:11px 12px;border-radius:7px;font-size:14px}nav .active{background:#2b3a50;color:#fff}nav .future{opacity:.52;cursor:not-allowed}main{padding:0 36px 36px;max-width:1400px;width:100%;margin:auto}header{height:80px;display:flex;align-items:center;gap:16px;border-bottom:1px solid #e1e6ed}header>div:first-child{margin-right:auto;display:grid;gap:3px}header span{font-size:12px;color:#667085}.readonly{font-size:12px;color:#156f55;background:#e4f7ef;padding:6px 9px;border-radius:20px}.banner{margin:22px 0;padding:12px 15px;background:#e9f0ff;color:#23488b;border-radius:8px;font-size:14px}.title{display:flex;justify-content:space-between;align-items:center;margin:28px 0 18px}h1{font-size:26px;margin:0 0 7px}h2{font-size:16px;margin:0 0 15px}p{color:#5f6d80;line-height:1.5}.card{background:#fff;border:1px solid #e2e7ef;border-radius:10px;padding:22px;margin:18px 0;box-shadow:0 1px 2px #18243a08}.empty,.error{max-width:640px;margin:72px auto;text-align:center}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.stat{background:#fff;border:1px solid #e2e7ef;border-radius:10px;padding:16px;display:grid;gap:7px}.stat span{font-size:13px;color:#667085}.stat strong{font-size:26px}.stat small{color:#7b8796}button{font:inherit;cursor:pointer;background:#1f6feb;color:#fff;border:1px solid #1f6feb;border-radius:6px;padding:9px 13px}.outline{background:#fff;color:#29415e;border-color:#cbd5e1}dl{display:grid;grid-template-columns:180px 1fr;gap:10px;margin:0}dt{color:#667085}dd{margin:0;overflow-wrap:anywhere}code{display:block;margin:12px;color:#a33}@media(max-width:800px){.shell{grid-template-columns:1fr}aside{padding:12px}.brand{margin-bottom:12px}nav{grid-template-columns:repeat(2,1fr)}main{padding:0 18px 24px}.grid{grid-template-columns:repeat(2,1fr)}header{height:auto;padding:15px 0;flex-wrap:wrap}}.modal{position:fixed;inset:0;background:#17203388;display:grid;place-items:center;padding:20px}.dialog{width:min(520px,100%);display:grid;gap:14px}.dialog label{display:grid;gap:6px;font-weight:650}.dialog input{border:1px solid #cbd5e1;border-radius:6px;padding:10px;font:inherit}.actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}.field-error{margin:0;color:#c43b3b;font-size:.9rem}
 
 @@END
-@@PORTABLE {"path":"frontend/src/utility-pages.css","mode":420,"size":8714,"sha256":"03d08b17d90070550a5fa50d5aca8095c2ffe4e442b7124eed79b7de9669f72c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":8714}
+@@PORTABLE {"path":"frontend/src/utility-pages.css","mode":420,"size":8893,"sha256":"cbcf49b319945b4733ef53748f8cf48aec0b5f900ff78b9157ed089a3a45d042","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":8893}
 .utility-page {
   display: grid;
   align-content: start;
@@ -19144,6 +19147,7 @@ export function renderApplication(api: ProjectBackend) {
   border: 1px solid #d9e2ee;
   border-radius: 8px;
   background: #fff;
+  color: #172b49;
 }
 .event-log-table-panel {
   display: flex;
@@ -19223,6 +19227,7 @@ export function renderApplication(api: ProjectBackend) {
 .event-log-details h2 {
   margin: 0 0 12px;
   font-size: 14px;
+  color: inherit;
 }
 .event-log-details p {
   color: #314664;
@@ -19234,11 +19239,19 @@ export function renderApplication(api: ProjectBackend) {
   gap: 7px 10px;
 }
 .event-log-details dt {
-  color: #63728a;
+  color: #405570;
 }
 .event-log-details dd {
   margin: 0;
   overflow-wrap: anywhere;
+}
+.event-log-output-label,
+.event-log-output {
+  grid-column: 1 / -1;
+}
+.event-log-output {
+  font-family: monospace;
+  white-space: pre-wrap;
 }
 @media (max-width: 760px) {
   .help-category-cards,

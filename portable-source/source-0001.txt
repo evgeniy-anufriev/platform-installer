@@ -32644,7 +32644,7 @@ application_runtime_verify_vault: true
   no_log: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/image_delivery.yml","mode":420,"size":7204,"sha256":"833f912683034ce717bbfdc28bdc36ad312a6bf8386f541d79f8310dadd62f1d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7204}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/image_delivery.yml","mode":420,"size":7182,"sha256":"f210e6aa2700c72bd3a5c936a66ad2cec711a1f0d8b14409c60e9ea5503dbd48","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7182}
 ---
 - name: Проверка локального образа с зафиксированным digest перед доставкой
   ansible.builtin.command:
@@ -32659,7 +32659,7 @@ application_runtime_verify_vault: true
 - name: Доставка образа с зафиксированным digest при отсутствии на целевом узле
   when: application_local_image.rc != 0 or (application_local_image.stdout | from_json)[0].Id != application_runtime_job.authority.requirement.imageId
   block:
-    - name: "Загрузка образа из разрешённого реестра и удаление временных настроек загрузки"
+    - name: Загрузка образа из разрешённого реестра с сеансовой аутентификацией
       ansible.builtin.include_tasks: pull_registry.yml
       when: application_runtime_job.source.source == 'REPOSITORY'
     - name: Защищённое размещение проверенного архива для учётной записи Docker
@@ -33167,21 +33167,15 @@ application_runtime_verify_vault: true
   no_log: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/pull_registry.yml","mode":420,"size":2013,"sha256":"9f3135a5b1a647e92a1416e82451893598e34c3a73645219da84e1a0cb45e08a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2013}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/pull_registry.yml","mode":420,"size":1133,"sha256":"73f314f108ac31262abd7f35fb78883bdd751ba5dbc335487f8dad39f37d07bf","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1133}
 ---
-- name: Загрузка образа с зафиксированным digest без сохранения переопределения доставки
+- name: Загрузка образа с зафиксированным digest
   block:
     - name: Подготовка сеансовой аутентификации реестра для загрузки образа приложения
       ansible.builtin.include_tasks: registry_auth.yml
-    - name: "Создание временного Compose-файла с настройками загрузки из реестра"
-      ansible.builtin.copy:
-        content: "{{ {'services': {application_runtime_job.instanceId: {'image': (application_runtime_job.authority.repository.reference | platform.core.application_pinned_registry_reference(application_runtime_job.authority.repository.manifestDigest))}}} | to_nice_yaml }}"
-        dest: "{{ application_runtime_job.instancePath }}/.image-delivery.yml"
-        owner: "{{ application_runtime_job.account }}"
-        mode: '0600'
     - name: Получение точного манифеста авторизованной платформы
       ansible.builtin.command:
-        argv: "{{ application_runtime_job.composeArgv + ['-f', application_runtime_job.instancePath ~ '/.image-delivery.yml', 'pull', application_runtime_job.instanceId] }}"
+        argv: [docker, pull, "{{ application_runtime_job.authority.repository.reference | platform.core.application_pinned_registry_reference(application_runtime_job.authority.repository.manifestDigest) }}"]
       become_user: "{{ application_runtime_job.account }}"
       environment: "{{ application_registry_environment }}"
       no_log: true
@@ -33192,10 +33186,6 @@ application_runtime_verify_vault: true
         state: absent
       when: application_registry_auth_stage.path is defined
       changed_when: false
-    - name: "Удаление временного файла настроек загрузки из реестра"
-      ansible.builtin.file:
-        path: "{{ application_runtime_job.instancePath }}/.image-delivery.yml"
-        state: absent
 
 @@END
 @@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/registry_auth.yml","mode":420,"size":3555,"sha256":"3521f21e537c4498592799e77bddde7fc71f1f712a8e8c1e8f65658b1d6a2f42","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3555}
