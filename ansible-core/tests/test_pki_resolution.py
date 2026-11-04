@@ -82,6 +82,9 @@ class PkiResolutionTests(unittest.TestCase):
                 baseline = pki.resolve_certificate_requests("p", topology, hosts, self.defaults, endpoints)
                 result = pki.resolve_certificate_requests("p", topology, hosts, self.defaults, endpoints,
                                                           application_rows=rows)
+                projected = pki.application_pki_bindings(rows, topology)
+                self.assertEqual(result, pki.resolve_certificate_requests(
+                    "p", topology, hosts, self.defaults, endpoints, application_bindings=projected))
                 self.assertEqual("PASS", result["status"])
                 expected = ["node1"]
                 if fqdns:
@@ -115,6 +118,9 @@ class PkiResolutionTests(unittest.TestCase):
             "settings": {"endpoint": {"enabled": True, "protocol": "https", "endpoint_group": "asutp"}},
         }]
         result = pki.resolve_certificate_requests("p", topology, hosts, self.defaults, endpoints, application_rows=apps)
+        self.assertEqual(result, pki.resolve_certificate_requests(
+            "p", topology, hosts, self.defaults, endpoints,
+            application_bindings=pki.application_pki_bindings(apps, topology)))
         self.assertEqual("PASS", result["status"])
         request, = result["requests"]
         self.assertEqual("PROJECT", request["scope"])
@@ -136,6 +142,9 @@ class PkiResolutionTests(unittest.TestCase):
                  "settings": {"endpoint": {"enabled": False}}}]
         result = pki.resolve_certificate_requests("p", topology, {"node3": {}}, self.defaults,
                                                   application_rows=apps)
+        self.assertEqual(result, pki.resolve_certificate_requests(
+            "p", topology, {"node3": {}}, self.defaults,
+            application_bindings=pki.application_pki_bindings(apps, topology)))
         self.assertEqual("PASS", result["status"])
         request, = result["requests"]
         plan, = result["materializationPlans"]

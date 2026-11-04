@@ -574,6 +574,7 @@ def _validate_runtime_projection(journal, metadata, manifest):
             projection.get("platform_generated_state_path") != expected_generated_state_path or
             not isinstance(projection.get("platform_artifact_source_authorities_by_deployment"), dict) or
             projection.get("platform_pki_materialization_plans") != plans or
+            projection.get("platform_application_pki_bindings") != manifest.get("applicationPkiBindings") or
             not isinstance(projection.get("platform_pki_secret_files"), dict)):
             raise LifecycleError("EXECUTION_RUNTIME_PROJECTION_MISMATCH")
 
@@ -765,6 +766,8 @@ def _materialize_runtime_projection(journal, metadata, manifest):
         "platform_pki_materialization_plans": plans,
         "platform_pki_secret_files": secret_files,
     }
+    if "applicationPkiBindings" in manifest:
+        payload["platform_application_pki_bindings"] = manifest["applicationPkiBindings"]
     if manifest.get('serviceExecutionScope') is not None:
         payload['platform_execution_service_scope'] = manifest['serviceExecutionScope']
     if target_username is not None:
@@ -816,6 +819,7 @@ def validate_application_manifest(manifest, external_service_ids=()):
             raise LifecycleError('EXECUTION_MANIFEST_INVALID')
         prefix = dict(manifest)
         del prefix['applicationImageIntentsDigest']
+        prefix.pop('applicationPkiBindings', None)
         version = 'v1alpha7' if any(item['operation'] == 'APPLICATION_LIBRARIES_POST_INSTALL' for item in prefix['operations']) else 'v1alpha6'
         prefix['apiVersion'] = 'platform.installer/execution-manifest/' + ('v1alpha8' if 'serviceExecutionScope' in prefix else version)
         prefix['artifactRequirements'] = [item for item in prefix['artifactRequirements'] if item.get('artifactType') != 'container-image']

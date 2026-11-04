@@ -16,7 +16,7 @@ from ansible.plugins.action import ActionBase
 from ansible_collections.platform.core.plugins.module_utils.dns_resolution import resolve_dns_zones
 from ansible_collections.platform.core.plugins.module_utils.deployment_plan import _service_runtime_secret_requirements
 from ansible_collections.platform.core.plugins.module_utils.haproxy_resolution import resolve_haproxy_backends
-from ansible_collections.platform.core.plugins.module_utils.pki_resolution import resolve_certificate_requests
+from ansible_collections.platform.core.plugins.module_utils.pki_resolution import application_pki_bindings, resolve_certificate_requests
 from ansible_collections.platform.core.plugins.module_utils.project_snapshot import build_project_snapshot, project_documents
 from ansible_collections.platform.core.plugins.module_utils.project_snapshot_output import write_snapshot_output, SnapshotInputError, snapshot_input_message
 from ansible_collections.platform.core.plugins.module_utils.project_state import canonical_inventory_members
@@ -641,10 +641,11 @@ class ActionModule(ActionBase):
                 "roles", "pki_materialize", "defaults", "main.yml"
             )
             pki_defaults = self._load(pki_defaults_path).get("platform_pki_policy_defaults", {})
+            pki_bindings = application_pki_bindings(task_vars.get("platform_application_rows", ()), materialized)
             pki = resolve_certificate_requests(
                 manifest.get("metadata", {}).get("id", os.path.basename(project_root)),
                 materialized, host_addresses, pki_defaults, endpoints, inventory_deployments,
-                application_rows=task_vars.get("platform_application_rows", ()),
+                application_bindings=pki_bindings,
             )
             haproxy = resolve_haproxy_backends(
                 materialized, catalog, host_addresses, inventory_deployments, endpoints, {}, configuration,
@@ -740,6 +741,7 @@ class ActionModule(ActionBase):
             # execution manifest.
             return self._public_result({"changed": False, "snapshot": snapshot, "pki_materialization": pki,
                     "application_rows": task_vars.get('platform_application_rows', []),
+                    "application_pki_bindings": pki_bindings,
                     "application_image_lock": private_image_lock if applications_enabled else {},
                     "execution_configuration": configuration,
                     "execution_connections": execution_connections})

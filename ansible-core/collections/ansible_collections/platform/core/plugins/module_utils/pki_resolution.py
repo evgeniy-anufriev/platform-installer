@@ -159,29 +159,34 @@ def _endpoint_values(topology, resolved_service_endpoints, deployment_ids, polic
     }
 
 
-def _application_endpoints_by_tls_binding(rows, desired):
-    endpoints = {}
+def application_pki_bindings(rows, desired):
+    """Project only the TLS placement and endpoint identity needed for PKI."""
+    bindings = {}
     for row in rows:
         endpoint = row["settings"].get("endpoint", {})
-        if not endpoint.get("enabled") or endpoint.get("protocol") != "https":
-            continue
-        group = desired.get("endpointGroups", {}).get(endpoint.get("endpoint_group"), {})
-        domain = (group.get("address") or {}).get("domain")
-        if not isinstance(domain, str) or not DNS_DOMAIN.fullmatch(domain):
-            continue
-        instance_id = row["instanceId"]
-        if not isinstance(instance_id, str) or not DNS_LABEL.fullmatch(instance_id):
-            continue
-        names = {"sanDnsNames": [instance_id + "." + domain], "wildcardDnsNames": ["*." + domain],
-                 "endpointGroupId": endpoint["endpoint_group"]}
+        names = None
+        if endpoint.get("enabled") and endpoint.get("protocol") == "https":
+            group_id = endpoint.get("endpoint_group")
+            group = desired.get("endpointGroups", {}).get(group_id, {})
+            domain = (group.get("address") or {}).get("domain")
+            instance_id = row["instanceId"]
+            if (isinstance(domain, str) and DNS_DOMAIN.fullmatch(domain) and
+                    isinstance(instance_id, str) and DNS_LABEL.fullmatch(instance_id)):
+                names = {"sanDnsNames": [instance_id + "." + domain],
+                         "wildcardDnsNames": ["*." + domain], "endpointGroupId": group_id}
         for binding in row.get("bindings", {}).values():
             profile = binding.get("profileRef")
             if profile:
-                endpoints.setdefault((row["hostId"], profile), []).append(names)
-    return endpoints
+                host = row["hostId"]
+                key = (host, profile, group_id, instance_id) if names else (host, profile, "", "")
+                record = {"hostId": host, "tlsProfileId": profile}
+                if names:
+                    record["endpoint"] = names
+                bindings[key] = record
+    return [bindings[key] for key in sorted(bindings)]
 
 
-def resolve_certificate_requests(project_id, topology, host_vars, defaults=None, resolved_service_endpoints=None, inventory_deployments=None, application_rows=()):
+def resolve_certificate_requests(project_id, topology, host_vars, defaults=None, resolved_service_endpoints=None, inventory_deployments=None, application_rows=(), application_bindings=None):
     """Purely derive certificate identity and target plans from topology bindings.
 
     It returns no key material or resolved secrets.  The generic `tlsProfile`
@@ -189,6 +194,8 @@ def resolve_certificate_requests(project_id, topology, host_vars, defaults=None,
     services may opt in without manually creating one scope per Kafka member.
     """
     desired = topology if isinstance(topology, dict) else {}
+    if application_bindings is None:
+        application_bindings = application_pki_bindings(application_rows, desired)
     defaults = defaults if isinstance(defaults, dict) else {}
     missing_defaults = [key for key in REQUIRED_DEFAULT_KEYS if key not in defaults]
     if missing_defaults or not isinstance(defaults.get("sanPolicy"), dict) or not isinstance(defaults.get("subject"), dict):
@@ -208,8 +215,8 @@ def resolve_certificate_requests(project_id, topology, host_vars, defaults=None,
     if project_profiles:
         project_profile = project_profiles[0]
         application_hosts = {
-            row["hostId"] for row in application_rows
-            if any(binding.get("profileRef") == project_profile for binding in row.get("bindings", {}).values())
+            binding["hostId"] for binding in application_bindings
+            if binding["tlsProfileId"] == project_profile
         }
     consumers = _consumer_records(desired, inventory_deployments)
     if application_hosts:
@@ -250,7 +257,11 @@ def resolve_certificate_requests(project_id, topology, host_vars, defaults=None,
         return {"status": "BLOCKED", "findings": findings, "requests": [], "materializationPlans": []}
 
     requests, plans = [], []
-    application_endpoints = _application_endpoints_by_tls_binding(application_rows, desired)
+    application_endpoints = {}
+    for binding in application_bindings:
+        if "endpoint" in binding:
+            key = (binding["hostId"], binding["tlsProfileId"])
+            application_endpoints.setdefault(key, []).append(binding["endpoint"])
     for scope_id, group in sorted(grouped.items()):
         profile = _profile_defaults(profiles[group["profileRef"]], defaults)
         authority = authorities[group["authorityRef"]]

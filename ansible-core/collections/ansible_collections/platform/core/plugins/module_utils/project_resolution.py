@@ -114,7 +114,7 @@ def read(path, expected):
     result = envelope['result']
     if not isinstance(result, dict) or any(not isinstance(result.get(k), dict) for k in FIELDS):
         raise ValueError('PROJECT_RESOLUTION_INVALID')
-    if not isinstance(result.get('application_rows', []), list):
+    if any(not isinstance(result.get(key, []), list) for key in ('application_rows', 'application_pki_bindings')):
         raise ValueError('PROJECT_RESOLUTION_INVALID')
     if result['snapshot'].get('projectRevision') != expected['revision']:
         raise ValueError('PROJECT_RESOLUTION_INVALID')
@@ -139,7 +139,7 @@ def atomic_json(path, value):
 
 
 def write(path, expected, result):
-    result = {key: copy.deepcopy(result[key]) for key in (*FIELDS, 'application_rows') if key in result}
+    result = {key: copy.deepcopy(result[key]) for key in (*FIELDS, 'application_rows', 'application_pki_bindings') if key in result}
     atomic_json(path, dict(version=VERSION, identity=expected, result=result,
                            digest=canonical_digest(result)))
 

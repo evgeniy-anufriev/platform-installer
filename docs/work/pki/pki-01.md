@@ -172,6 +172,26 @@ the standard helper. No runtime bundle build/publication/rebind, real
 React/Wails flow, installation or Start was performed. The isolated installation
 requires an updated runtime bundle; existing failed-run history is unchanged.
 
+## Reuse of application SAN inputs, 2026-11-04
+
+The private execution manifest carries Core-derived TLS bindings and endpoint
+names for PKI. Independent service playbooks reuse those inputs when the
+manifest provides them. Standalone resolution retains its project-based path.
+
+On RED OS, three independent invocations of the common PKI resolution
+playbook against the same application project dropped from 309 to 54 tasks
+and from 23.070 to 9.756 seconds. The 255 application-resolution tasks
+disappeared, and the resulting requests and materialization plans were equal.
+Native project resolution preserved the bindings on a cache hit. The focused
+PKI, manifest and runtime projection checks passed.
+
+In an isolated TLS fixture, the actual PKI role issued a certificate containing
+`vault.installer.scada.local`, `keycloak.installer.scada.local` and
+`*.installer.scada.local`. The HAProxy frontend rendered from the production
+template served the deployed leaf certificate and passed hostname verification
+for both exact names and a wildcard-only probe. The benchmark covers the common
+PKI phase. Full installation timing and Wails acceptance remain unverified.
+
 ## Deferred integration
 
 PKI-01 supports only `MANAGED` authorities, PEM, dedicated PKCS12 stores and

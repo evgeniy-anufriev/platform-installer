@@ -124,6 +124,7 @@
     - platform_pki_resolve_managed | bool
     - (platform_desired_state | default({})).applicationLibraryDeployments is defined
     - platform_application_rows is not defined
+    - platform_application_pki_bindings is not defined
 
 - name: Расчёт управляемых запросов PKI по топологии
   platform.core.resolve_pki_requests:
@@ -136,6 +137,7 @@
     pki_defaults: "{{ platform_pki_policy_defaults | combine({'targetRoot': platform_pki_target_root}) }}"
     resolved_service_endpoints: "{{ platform_pki_resolved_service_endpoints | default({}) }}"
     application_rows: "{{ platform_application_rows | default([]) }}"
+    application_bindings: "{{ platform_application_pki_bindings | default(omit) }}"
   register: platform_pki_managed_resolution
   when: platform_pki_resolve_managed | bool
   no_log: "{{ platform_application_rows | default([]) | length > 0 }}"

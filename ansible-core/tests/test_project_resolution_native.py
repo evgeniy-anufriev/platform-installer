@@ -184,6 +184,7 @@ class NativeProjectResolutionTests(unittest.TestCase):
                     vars=variables, tasks=[{'ansible.builtin.include_role': {'name': 'platform.core.project_resolution'}},
                         {'ansible.builtin.assert': {'that': [
                             '_project_resolution_cache.hit == ' + str(expected_hit).lower(),
+                            'platform_project_resolution.application_pki_bindings | length > 0',
                             '(_application_inputs is defined) == ' + str(not expected_hit).lower()]}}])]))
                 completed = subprocess.run(['ansible-playbook', '-i', str(project / 'inventory/hosts.yml'), str(play)],
                     env=dict(environment, ANSIBLE_CALLBACKS_ENABLED='platform.core.project_snapshot_json',

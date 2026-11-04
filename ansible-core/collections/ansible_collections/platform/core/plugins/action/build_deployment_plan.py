@@ -69,6 +69,8 @@ class ActionModule(ActionBase):
                 if result.get('executionManifest'):
                     result['executionManifest'].update(apiVersion='platform.installer/execution-manifest/v1alpha9',
                         applicationImageIntentsDigest=canonical_digest(self._task.args['application_image_lock']))
+                    if 'application_pki_bindings' in self._task.args:
+                        result['executionManifest']['applicationPkiBindings'] = self._task.args['application_pki_bindings']
             result['executionManifestDigest'] = canonical_digest(result['executionManifest']) if result.get('executionManifest') else None
             destination = os.environ.get("PLATFORM_EXECUTION_MANIFEST_OUTPUT")
             manifest = result["executionManifest"]

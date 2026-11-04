@@ -106,6 +106,12 @@ Start still uses StartExecution/v1alpha2, staged SSH trust and the existing type
 
 Core computes one infrastructure model from resolved service Apply/Verify operations,
 full deployment coverage, runtime, connections, artifact authorities and PKI plans.
+
+The private v1alpha9 execution manifest can also carry the Core-derived
+application TLS placement and endpoint identities used for SAN calculation.
+PKI and service operations reuse those identities from the digest-bound
+runtime projection. Older manifests and standalone playbooks resolve
+application identities from the project when the projection is absent.
 Project revision/application operations do not substitute for this model. B0 keeps
 an operational index under `<execution-state>/infrastructure-verification/`, keyed
 by project identity. It holds generation, model and references to bounded private

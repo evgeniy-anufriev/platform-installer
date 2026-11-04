@@ -88,7 +88,11 @@ class RegistryAvailabilityTests(unittest.TestCase):
         for mode in ('FULL_PROJECT', 'APPLICATION_LIBRARIES_ONLY', 'INFRASTRUCTURE_VERIFY_ONLY'):
             with self.subTest(mode=mode), tempfile.TemporaryDirectory() as folder:
                 action = object.__new__(module.ActionModule)
+                bindings = [dict(hostId='node1', tlsProfileId='installer-tls', endpoint=dict(
+                    endpointGroupId='installer-endpoint', sanDnsNames=['keycloak.installer.scada.local'],
+                    wildcardDnsNames=['*.installer.scada.local']))]
                 action._task = SimpleNamespace(args=dict(snapshot=application_snapshot(), service_catalog=catalog(), runtime_release=runtime(),
+                    application_pki_bindings=bindings,
                     bundle_artifact_sources=sources(), deployment_order=['provider', 'consumer'], execution_mode=mode,
                     application_image_lock=lock, application_image_metadata=True, deferred_application_images=True,
                     skip_application_libraries=[], application_library_order=['sdku'], skip_infrastructure_verify=False))
@@ -98,6 +102,7 @@ class RegistryAvailabilityTests(unittest.TestCase):
                 self.assertEqual([], validator.validate(result['deployment_plan'], ROOT / 'contracts/plan/v1alpha12/schema.json'))
                 if destination.exists():
                     manifest = json.loads(destination.read_text())
+                    self.assertEqual(bindings, manifest['applicationPkiBindings'])
                     self.assertEqual([], validator.validate(manifest, ROOT / 'contracts/execution-manifest/v1alpha9/schema.json'))
                     validate_application_manifest(manifest)
 
