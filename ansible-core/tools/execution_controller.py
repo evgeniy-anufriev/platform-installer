@@ -25,7 +25,7 @@ import infrastructure_verification as infra
 import execution_ssh
 
 
-SERVICE_TYPES = frozenset(("kafka", "keepalived", "postgresql", "bind", "haproxy", "dns-client", "redis", "vault", "clickhouse", "docker"))
+SERVICE_TYPES = frozenset(("kafka", "keepalived", "postgresql", "bind", "haproxy", "dns-client", "redis", "vault", "clickhouse", "docker", "chrony"))
 PROJECT_ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,127}$")
 MAX_GENERATED_STATE_BYTES = 1024 * 1024
 MAX_PKI_MATERIALIZATION_PLANS = 4096

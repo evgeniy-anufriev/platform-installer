@@ -1,0 +1,38 @@
+---
+- name: Проверка Chrony при непосредственном вызове роли
+  ansible.builtin.include_tasks: preflight.yml
+  when: _platform_chrony_role is not defined
+
+- name: Доставка Chrony из утверждённого бандла
+  ansible.builtin.include_role:
+    name: platform.core.artifact_delivery
+  vars:
+    platform_artifact_delivery_requirements:
+      - {id: chrony, name: chrony}
+  when:
+    - platform_resolved_artifact_sources is defined
+    - platform_resolved_artifact_sources.chrony.source == 'OFFLINE_BUNDLE'
+
+- name: Установка Chrony из настроенного репозитория
+  ansible.builtin.package:
+    name: chrony
+    state: present
+  when: >-
+    platform_resolved_artifact_sources is not defined
+    or platform_resolved_artifact_sources.chrony.source == 'REPOSITORY'
+
+- name: Проверка и запись конфигурации Chrony
+  ansible.builtin.template:
+    src: chrony.conf.j2
+    dest: /etc/chrony.conf
+    owner: root
+    group: root
+    mode: '0644'
+    validate: /usr/sbin/chronyd -p -f %s
+  notify: Перезапуск chronyd
+
+- name: Запуск и включение chronyd
+  ansible.builtin.systemd_service:
+    name: chronyd
+    enabled: true
+    state: started

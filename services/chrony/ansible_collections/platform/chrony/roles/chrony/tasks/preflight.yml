@@ -1,0 +1,88 @@
+---
+- name: Проверка участника Chrony
+  ansible.builtin.include_tasks: member.yml
+
+- name: Проверка адреса NTP-сервера клиента
+  ansible.builtin.assert:
+    that:
+      - platform_chrony_ntp_server | platform.chrony.source_name | length > 0
+    fail_msg: Для клиента Chrony укажите FQDN или IP NTP-сервера.
+  when: _platform_chrony_role == 'client'
+
+- name: Проверка списка разрешённых сетей
+  ansible.builtin.assert:
+    that:
+      - platform_chrony_allowed_client_networks is string
+      - 1 <= platform_chrony_allowed_client_networks | length <= 512
+    fail_msg: Для сервера Chrony укажите список разрешённых сетей клиентов.
+  when: _platform_chrony_role == 'server'
+
+- name: Разбор разрешённых сетей
+  ansible.builtin.set_fact:
+    _platform_chrony_client_networks: "{{ platform_chrony_allowed_client_networks.split(',') | map('trim') | list }}"
+  when: _platform_chrony_role == 'server'
+
+- name: Проверка формата разрешённых сетей
+  ansible.builtin.assert:
+    that:
+      - item | platform.chrony.valid_network
+    fail_msg: Разрешённые сети Chrony должны быть заданы в формате CIDR.
+  loop: "{{ _platform_chrony_client_networks | default([]) }}"
+  when: _platform_chrony_role == 'server'
+
+- name: Проверка источника пакета Chrony
+  ansible.builtin.include_role:
+    name: platform.core.artifact_source_gate
+  vars:
+    platform_artifact_requirements:
+      - {id: chrony, name: chrony}
+  when: platform_resolved_artifact_sources is defined or (platform_artifact_source_authority_active | default(false))
+
+- name: Сбор сведений о службах времени
+  ansible.builtin.service_facts:
+
+- name: Проверка отсутствия другой активной службы времени
+  ansible.builtin.assert:
+    that:
+      - (ansible_facts.services[item] | default({})).get('state') != 'running'
+    fail_msg: "Перед установкой Chrony остановите конфликтующую службу {{ item }}."
+  loop: [ntpd.service, ntpsec.service, systemd-timesyncd.service, openntpd.service, ptp4l.service, phc2sys.service]
+
+- name: Проверка существующей конфигурации Chrony
+  ansible.builtin.stat:
+    path: /etc/chrony.conf
+  register: _platform_chrony_config
+
+- name: Проверка владельца конфигурации Chrony
+  when: _platform_chrony_config.stat.exists
+  block:
+    - name: Проверка типа файла конфигурации
+      ansible.builtin.assert:
+        that: _platform_chrony_config.stat.isreg
+        fail_msg: /etc/chrony.conf должен быть обычным файлом.
+
+    - name: Чтение существующей конфигурации
+      ansible.builtin.slurp:
+        src: /etc/chrony.conf
+      register: _platform_chrony_existing
+      no_log: true
+
+    - name: Проверка исходного файла пакета RPM
+      ansible.builtin.command:
+        argv: [rpm, -Vf, --nodeps, --noscripts, /etc/chrony.conf]
+      register: _platform_chrony_rpm_config
+      changed_when: false
+      failed_when: false
+      check_mode: false
+      when: not (_platform_chrony_existing.content | b64decode).startswith('# Managed by Platform Installer V2 Chrony:')
+
+    - name: Отклонение чужой конфигурации или противоположной роли
+      ansible.builtin.assert:
+        that:
+          - >-
+            (_platform_chrony_existing.content | b64decode).startswith(
+              '# Managed by Platform Installer V2 Chrony: ' ~ _platform_chrony_role ~ '\n')
+            or (_platform_chrony_rpm_config.rc | default(-1) in [0, 1]
+                and _platform_chrony_rpm_config.stderr == ''
+                and '/etc/chrony.conf' not in _platform_chrony_rpm_config.stdout)
+        fail_msg: Существующая конфигурация Chrony изменена вручную или принадлежит другой роли.

@@ -1,0 +1,15 @@
+---
+all:
+  vars:
+    platform_chrony_instances:
+      - {id: ntp-server, host: ntp-server, roles: [server]}
+      - {id: ntp-client, host: ntp-client, roles: [client]}
+  children:
+    platform_targets:
+      hosts:
+        ntp-server:
+          ansible_host: 192.0.2.10
+          platform_chrony_allowed_client_networks: "192.0.2.0/24, 2001:db8::/64"
+        ntp-client:
+          ansible_host: 192.0.2.20
+          platform_chrony_ntp_server: 192.0.2.10

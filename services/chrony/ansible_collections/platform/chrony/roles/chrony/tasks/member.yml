@@ -1,0 +1,16 @@
+---
+- name: Определение участника Chrony на хосте
+  ansible.builtin.set_fact:
+    _platform_chrony_members: >-
+      {{ platform_chrony_instances | selectattr('host', 'equalto', inventory_hostname) | list }}
+
+- name: Проверка назначения роли Chrony
+  ansible.builtin.assert:
+    that:
+      - _platform_chrony_members | length == 1
+      - _platform_chrony_members[0].roles in [['server'], ['client']]
+    fail_msg: Для хоста требуется ровно один участник Chrony с одной ролью server или client.
+
+- name: Определение роли Chrony
+  ansible.builtin.set_fact:
+    _platform_chrony_role: "{{ _platform_chrony_members[0].roles[0] }}"

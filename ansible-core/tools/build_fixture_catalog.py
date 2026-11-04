@@ -14,6 +14,7 @@ from service_catalog import build_catalog as generate_catalog, canonical_bytes, 
 REPOSITORY = Path(__file__).resolve().parents[2]
 OUTPUT = REPOSITORY / "examples" / "catalog" / "service-catalog.yml"
 SOURCES = (
+    ("chrony", REPOSITORY / "services" / "chrony" / "service.yml"),
     ("clickhouse", REPOSITORY / "services" / "clickhouse" / "service.yml"),
     ("docker", REPOSITORY / "services" / "docker" / "service.yml"),
     ("kafka", REPOSITORY / "services" / "kafka" / "service.yml"),

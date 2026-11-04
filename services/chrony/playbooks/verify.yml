@@ -1,0 +1,15 @@
+---
+- name: Проверка Chrony
+  hosts: platform_targets
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Загрузка конфигурации исполнения Chrony
+      ansible.builtin.include_role:
+        name: platform.core.runtime_role_variables
+      when: platform_execution_role_variables_by_host is defined
+
+    - name: Проверка службы и синхронизации клиентов
+      ansible.builtin.include_role:
+        name: platform.chrony.chrony
+        tasks_from: verify.yml

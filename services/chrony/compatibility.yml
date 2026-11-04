@@ -1,0 +1,9 @@
+apiVersion: platform.installer/compatibility/v1alpha1
+service: chrony
+combinations:
+  - os: redos
+    osVersion: "8.0"
+    architecture: x86_64
+    source: system-repository
+    status: candidate
+status: requires-chrony-runtime-evidence

@@ -67,6 +67,9 @@ argument parser interprets backslashes as escapes. Pass only identity file
 paths and safe routing/lock metadata, never passwords/token/share values.
 Use the configured installed Microsoft Edge; do not auto-download browsers.
 The preflight proves real bindings are callable, not full service acceptance.
+Before a project is opened, the Execution Node context may return
+`PROJECT_NOT_OPEN`. The preflight reports that state after a successful
+`GetApplicationConfig` call.
 
 The WebView2 loader intentionally clears remote-debugging environment overrides.
 Do not rely on those flags or patch vendor. The standard Wails dev server is

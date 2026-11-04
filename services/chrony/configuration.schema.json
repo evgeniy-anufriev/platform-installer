@@ -1,0 +1,10 @@
+{
+  "$id": "https://platform.installer/schemas/services/chrony/configuration-v1alpha1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "ntpServer": {"type": "string", "minLength": 1, "maxLength": 253},
+    "allowedClientNetworks": {"type": "string", "minLength": 1, "maxLength": 512}
+  }
+}

@@ -1,0 +1,34 @@
+---
+- name: Подготовка групп Chrony и проверка перед изменениями
+  hosts: platform_targets
+  become: true
+  gather_facts: false
+  any_errors_fatal: true
+  tasks:
+    - name: Загрузка конфигурации исполнения Chrony
+      ansible.builtin.include_role:
+        name: platform.core.runtime_role_variables
+      when: platform_execution_role_variables_by_host is defined
+
+    - name: Проверка размещения, настроек и состояния хоста
+      ansible.builtin.include_role:
+        name: platform.chrony.chrony
+        tasks_from: preflight.yml
+
+    - name: Группировка хостов по ролям Chrony
+      ansible.builtin.group_by:
+        key: "platform_chrony_{{ _platform_chrony_role }}_targets"
+      changed_when: false
+
+- name: Установка серверов Chrony
+  hosts: platform_chrony_server_targets
+  become: true
+  any_errors_fatal: true
+  roles:
+    - platform.chrony.chrony
+
+- name: Установка клиентов Chrony
+  hosts: platform_chrony_client_targets
+  become: true
+  roles:
+    - platform.chrony.chrony

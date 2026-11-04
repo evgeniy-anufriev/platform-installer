@@ -1,0 +1,46 @@
+apiVersion: platform.installer/service-manifest/v1alpha2
+kind: ServiceManifest
+metadata:
+  id: chrony
+  version: "1.0.0-alpha.1"
+  displayName: Chrony
+  description: Локальный NTP-сервер и клиенты Chrony
+  category: network
+modes:
+  ntp:
+    displayName: NTP
+    description: Серверы и клиенты на явно назначенных хостах
+    memberRoles: [server, client]
+    placement: {explicit: true, minMembers: 1, distinctHosts: true}
+capabilities: [service.chrony.ntp]
+dependencies: []
+configurationSchema: {$ref: configuration.schema.json}
+configuration:
+  additionalProperties: false
+  settings:
+    ntpServer:
+      kind: MANAGED
+      roleVariable: platform_chrony_ntp_server
+      type: string
+      scopes: [member]
+      validation: {minLength: 1, maxLength: 253}
+      ui: {label: NTP-сервер, description: Только для клиента. Укажите FQDN или IP источника времени., section: NTP, order: 10}
+    allowedClientNetworks:
+      kind: MANAGED
+      roleVariable: platform_chrony_allowed_client_networks
+      type: string
+      scopes: [member]
+      validation: {minLength: 1, maxLength: 512}
+      ui: {label: Разрешённые сети клиентов, description: Только для сервера. Укажите сети CIDR через запятую., section: NTP, order: 20}
+roleEntrypoints:
+  apply: {fqcn: platform.chrony.chrony, variablesPrefix: platform_chrony_, x-memberListVariable: platform_chrony_instances}
+  verify: {fqcn: platform.chrony.chrony, variablesPrefix: platform_chrony_, x-memberListVariable: platform_chrony_instances}
+artifacts: []
+runtimeRequirements:
+  - id: chrony
+    name: chrony
+    version: ""
+    os: redos
+    architecture: x86_64
+    requiredOffline: false
+compatibilityRef: compatibility.yml
