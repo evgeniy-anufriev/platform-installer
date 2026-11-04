@@ -25,18 +25,21 @@ class ApplicationRegistryAuthNativeTests(unittest.TestCase):
                     path.write_text('fixture-' + name); path.chmod(0o600)
                     files['registry-' + name] = str(path)
                     pair[name] = dict(source=dict(kind='runtime_secret_ref', ref='registry-' + name))
-                permanent = root / 'docker'; permanent.mkdir()
+                permanent = root / 'docker-config'; permanent.mkdir()
                 original = '{"auths":{"node-owned.example":{}}}'
                 (permanent / 'config.json').write_text(original)
-                instance = root / 'instance'; instance.mkdir()
+                instance = root / 'instance'
                 marker = root / 'auth-observed'
-                command = root / 'pull-fixture'
+                command = root / 'docker'
+                pinned = 'registry.example/app@sha256:' + 'a' * 64
                 command.write_text('#!/bin/sh\ntest -f "$DOCKER_CONFIG/config.json" || exit 22\n'
+                                   + 'test "$#" = 2 && test "$1" = pull && test "$2" = ' + pinned + ' || exit 24\n'
                                    + "touch '" + str(marker) + "'\nexit " + str(exit_code) + '\n')
                 command.chmod(0o700)
-                environment = dict(XDG_RUNTIME_DIR=str(root), DOCKER_CONFIG=str(permanent))
+                environment = dict(XDG_RUNTIME_DIR=str(root), DOCKER_CONFIG=str(permanent),
+                                   PATH=str(root) + os.pathsep + os.environ['PATH'])
                 job = dict(projectId='fixture', libraryId='fixture-library', account=getpass.getuser(),
-                           instanceId='fixture-app', instancePath=str(instance), composeArgv=[str(command)],
+                           instanceId='fixture-app', instancePath=str(instance),
                            dockerEnvironment=environment, registryCredentials=pair,
                            authority=dict(repository=dict(reference='registry.example/app:qa', manifestDigest='sha256:' + 'a' * 64)))
                 play = [dict(hosts='all', gather_facts=False, vars=dict(
@@ -51,5 +54,5 @@ class ApplicationRegistryAuthNativeTests(unittest.TestCase):
                 self.assertEqual(result.returncode == 0, exit_code == 0, result.stdout[-2400:])
                 self.assertTrue(marker.exists(), result.stdout[-2400:])
                 self.assertEqual(list(root.glob('.platform-registry-*')), [])
-                self.assertFalse((instance / '.image-delivery.yml').exists())
+                self.assertFalse(instance.exists())
                 self.assertEqual((permanent / 'config.json').read_text(), original)

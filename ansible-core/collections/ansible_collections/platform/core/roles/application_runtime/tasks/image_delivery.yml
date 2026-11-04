@@ -12,7 +12,7 @@
 - name: Доставка образа с зафиксированным digest при отсутствии на целевом узле
   when: application_local_image.rc != 0 or (application_local_image.stdout | from_json)[0].Id != application_runtime_job.authority.requirement.imageId
   block:
-    - name: "Загрузка образа из разрешённого реестра и удаление временных настроек загрузки"
+    - name: Загрузка образа из разрешённого реестра с сеансовой аутентификацией
       ansible.builtin.include_tasks: pull_registry.yml
       when: application_runtime_job.source.source == 'REPOSITORY'
     - name: Защищённое размещение проверенного архива для учётной записи Docker
