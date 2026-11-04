@@ -589,7 +589,7 @@
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/CertificatesPage.tsx","mode":420,"size":38024,"sha256":"cb5a98ea2d7c4cdffd880e3d0bacf4f135b80afe558d7578987ae7423cd1ff6c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":38024}
+@@PORTABLE {"path":"frontend/src/CertificatesPage.tsx","mode":420,"size":38152,"sha256":"083f2ef0d1c638f6c051de2eb6daaa3c9a0fe5ca7c4f105271465a7d870b7dd6","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":38152}
 import { useMemo, useState } from "react";
 import type {
   OpenResult,
@@ -955,7 +955,7 @@ function CertificateIdentities({
             <section key={identity.id} className="verified-identity">
               <b>{identity.id}</b>
               <small>
-                {identity.scope} · Профиль TLS: {identity.tlsProfileId}
+                {identity.scope === "PROJECT" ? "Весь проект" : identity.scope} · Профиль TLS: {identity.tlsProfileId}
               </small>
               <div>
                 <span>DNS: </span>
@@ -1296,6 +1296,7 @@ function CertificateDialog({
                 <option value="HOST">Сервер</option>
                 <option value="MEMBER">Экземпляр</option>
                 <option value="DEPLOYMENT">Развёртывание</option>
+                <option value="PROJECT">Весь проект</option>
               </select>
             </label>
             <label>
@@ -13068,7 +13069,7 @@ export function applicationDraft(
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/backend.ts","mode":420,"size":29491,"sha256":"6a930a86bbc96e8ddd72b409df2ae629db58a2fc13deba9d9402cd96ee2d91af","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":29491}
+@@PORTABLE {"path":"frontend/src/backend.ts","mode":420,"size":29503,"sha256":"a8df5943204031d2519bfc4975d277ad9c456aa9676589fbd587f84f88036f0c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":29503}
 import {
   ProbeServerInformation,
   CheckServerInformation,
@@ -13417,7 +13418,7 @@ export type VerifiedPKIView = {
   status: "CURRENT" | "INVALID" | "STALE" | "NOT_VERIFIED" | "UNAVAILABLE";
   identities?: Array<{
     id: string;
-    scope: "HOST" | "MEMBER" | "DEPLOYMENT";
+    scope: "HOST" | "MEMBER" | "DEPLOYMENT" | "PROJECT";
     tlsProfileId: string;
     dnsNames: string[];
     ipAddresses: string[];
@@ -29339,7 +29340,7 @@ func writeBrowserError(w http.ResponseWriter, status int, err error) {
 }
 
 @@END
-@@PORTABLE {"path":"internal/desktop/core_preview_diagnostics.go","mode":420,"size":36940,"sha256":"9a038bc39373b49d811e16a4e1d82b3ed64fd09420d444c9f2e377b6cd64da8c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":36940}
+@@PORTABLE {"path":"internal/desktop/core_preview_diagnostics.go","mode":420,"size":37318,"sha256":"f33b38f420cb57d010cf1af1f7a139af1869feed705c29046df7e240b78984b8","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":37318}
 package desktop
 
 import (
@@ -29383,6 +29384,8 @@ var projectFindingMessagesRU = map[string]string{
 	"CERTIFICATE_PROFILES_INVALID":                            "Некорректно описание профилей сертификатов.",
 	"CERTIFICATE_PROFILE_NOT_FOUND":                           "Указанный профиль сертификата не найден.",
 	"CERTIFICATE_SCOPE_INVALID":                               "Недопустима область действия сертификата.",
+	"PROJECT_TLS_PROFILE_CONFLICT":                            "Область «Весь проект» можно выбрать только для одного TLS-профиля.",
+	"CERTIFICATE_SCOPE_ID_CONFLICT":                           "Измените ID TLS-профиля: имя общего сертификата совпало с другим запросом.",
 	"CONTROLLER_LISTENER_REQUIRED":                            "Для контроллера Kafka необходимо настроить слушатель соединений.",
 	"DNS_CLIENT_SERVER_NOT_FOUND":                             "DNS-клиент должен ссылаться на существующее развёртывание авторитетного DNS-сервера.",
 	"DNS_CLIENT_SERVER_RESOLUTION_BLOCKED":                    "Параметры DNS-сервера, выбранного для клиента, не удалось разрешить из-за ошибок конфигурации.",
@@ -34419,7 +34422,7 @@ func (a *App) approvedTargetKeysForHostsLocked(projectID, revision string, ids [
 }
 
 @@END
-@@PORTABLE {"path":"internal/desktop/verified_pki_view.go","mode":420,"size":8010,"sha256":"e4cbb5c240663d45681a1b1670ed7b70b8d11a091dea7455d19075d4e7b7cae7","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":8010}
+@@PORTABLE {"path":"internal/desktop/verified_pki_view.go","mode":420,"size":8032,"sha256":"86c511dd17a3e7238c9f0a5ad6d6c3bb9e87058a3b29e10a037bbd5cb668595a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":8032}
 package desktop
 
 import (
@@ -34558,7 +34561,7 @@ func verifiedPKIIdentity(raw any) (VerifiedCertificateIdentity, error) {
 	ipAddresses, ipOK := verifiedPKIIPAddresses(value["ipAddresses"])
 	consumers, consumersOK := verifiedPKIConsumers(value["consumers"])
 	if !validID || !verifiedPKIIdentityID.MatchString(id) || !validProfile || !validPreviewIdentifier(tlsProfileID) || !validScope ||
-		(scope != "HOST" && scope != "MEMBER" && scope != "DEPLOYMENT") || !dnsOK || !ipOK || !consumersOK {
+		(scope != "HOST" && scope != "MEMBER" && scope != "DEPLOYMENT" && scope != "PROJECT") || !dnsOK || !ipOK || !consumersOK {
 		return VerifiedCertificateIdentity{}, errVerifiedPKIView
 	}
 	return VerifiedCertificateIdentity{ID: id, Scope: scope, TLSProfileID: tlsProfileID, DNSNames: dnsNames, IPAddresses: ipAddresses, Consumers: consumers}, nil
@@ -47513,7 +47516,7 @@ func pathEntryUnsafe(info os.FileInfo) bool {
 }
 
 @@END
-@@PORTABLE {"path":"internal/installer/pki_save.go","mode":420,"size":14363,"sha256":"ee1d297038d12c01f70eeffd2bf65898d758f7cf120f0913833b0e7a7443505e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":14363}
+@@PORTABLE {"path":"internal/installer/pki_save.go","mode":420,"size":14434,"sha256":"b5e0154d51705e81e1b67f7d22ddfc6ac82a6bb1eaaaec8afc0cba3965f74100","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":14434}
 package installer
 
 import (
@@ -47666,7 +47669,7 @@ func validPKIEntity(operation string, value map[string]any) error {
 		if ref, ok := value["storePasswordSecretRef"].(string); !ok || !runtimeRefPattern.MatchString(ref) {
 			return blocked("SECRET_REFERENCE_INVALID", "TLS profile requires an opaque runtime secret reference", "command.entity.storePasswordSecretRef")
 		}
-		if err := validOptionalScope(value, "scope", "command.entity.scope"); err != nil {
+		if err := validOptionalScope(value, "scope", "command.entity.scope", true); err != nil {
 			return err
 		}
 		return nil
@@ -47683,7 +47686,7 @@ func validPKIEntity(operation string, value map[string]any) error {
 	if err := validOptionalString(value, "displayName", 1, 0); err != nil {
 		return err
 	}
-	if err := validOptionalScope(value, "scope", "command.entity.scope"); err != nil {
+	if err := validOptionalScope(value, "scope", "command.entity.scope", false); err != nil {
 		return err
 	}
 	return validScopeSources(asMap(value["sources"]))
@@ -47759,12 +47762,12 @@ func validDesiredStateIdentifier(value string) bool {
 	return len(value) >= 1 && len(value) <= 128 && desiredStateIdentifierPattern.MatchString(value)
 }
 
-func validOptionalScope(value map[string]any, key, field string) error {
+func validOptionalScope(value map[string]any, key, field string, allowProject bool) error {
 	raw, present := value[key]
 	if !present {
 		return nil
 	}
-	if raw != "HOST" && raw != "MEMBER" && raw != "DEPLOYMENT" {
+	if raw != "HOST" && raw != "MEMBER" && raw != "DEPLOYMENT" && !(allowProject && raw == "PROJECT") {
 		return blocked("INVALID_VALUE", "PKI scope is invalid", field)
 	}
 	return nil
