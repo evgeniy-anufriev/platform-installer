@@ -74,6 +74,23 @@
   register: _platform_redis_acl_legacy_password
   no_log: true
 
+- name: Добавление аутентификации репликации существующему экземпляру Redis Sentinel HA
+  vars:
+    _platform_redis_saved_config: >-
+      {{ ((_platform_redis_acl_configs | default({})).get('results', [])
+          | selectattr('item', 'equalto', 'redis') | map(attribute='content', default='')
+          | first | default('')) | b64decode }}
+  ansible.builtin.lineinfile:
+    path: "{{ redis_member.config_directory }}/redis.conf"
+    regexp: '^\s*masterauth\s+'
+    line: "masterauth {{ lookup('ansible.builtin.file', platform_redis_secret_files[platform_redis_credential.passwordSecretRef]) | to_json }}"
+  register: _platform_redis_masterauth
+  when:
+    - platform_redis_mode == 'sentinel-ha'
+    - _platform_redis_has_persistent_state
+    - not (_platform_redis_saved_config is search('(?m)^[ \t]*masterauth[ \t]+\S'))
+  no_log: true
+
 - name: "Формирование службы systemd для экземпляра Redis"
   ansible.builtin.template:
     src: redis.service.j2
@@ -183,14 +200,14 @@
     name: "{{ platform_redis_name }}@{{ redis_member.instance_name }}.service"
     enabled: true
     state: restarted
-  when: _platform_redis_config.changed or _platform_redis_acl_config.changed or _platform_redis_acl_file.changed or _platform_redis_acl_legacy_password.changed or _platform_redis_tls_copy.changed or _platform_redis_unit.changed
+  when: _platform_redis_config.changed or _platform_redis_masterauth.changed or _platform_redis_acl_config.changed or _platform_redis_acl_file.changed or _platform_redis_acl_legacy_password.changed or _platform_redis_tls_copy.changed or _platform_redis_unit.changed
 
 - name: Запуск неизмененного экземпляра службы Redis
   ansible.builtin.systemd:
     name: "{{ platform_redis_name }}@{{ redis_member.instance_name }}.service"
     enabled: true
     state: started
-  when: not (_platform_redis_config.changed or _platform_redis_acl_config.changed or _platform_redis_acl_legacy_password.changed or _platform_redis_tls_copy.changed or _platform_redis_unit.changed)
+  when: not (_platform_redis_config.changed or _platform_redis_masterauth.changed or _platform_redis_acl_config.changed or _platform_redis_acl_legacy_password.changed or _platform_redis_tls_copy.changed or _platform_redis_unit.changed)
 
 - name: Включение и запуск экземпляра службы Sentinel
   ansible.builtin.systemd:

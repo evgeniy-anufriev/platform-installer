@@ -1,5 +1,6 @@
 from pathlib import Path
 import base64
+import json
 import unittest
 
 import yaml
@@ -139,12 +140,36 @@ class RedisContractTests(unittest.TestCase):
         member = (role / "tasks" / "member.yml").read_text(encoding="utf-8")
         finalize = (role / "tasks" / "finalize_bootstrap.yml").read_text(encoding="utf-8")
         main = (role / "tasks" / "main.yml").read_text(encoding="utf-8")
-        self.assertIn("platform_redis_mode == 'sentinel-ha' and redis_member.slot | int > 0", template)
+        env = Environment()
+        env.filters["to_json"] = json.dumps
+        rendered = env.from_string(template)
+        for mode, slot, expected_seed, expected_auth in (
+            ("sentinel-ha", 0, False, True),
+            ("sentinel-ha", 1, True, True),
+            ("standalone", 0, False, False),
+        ):
+            with self.subTest(mode=mode, slot=slot):
+                config = rendered.render(
+                    platform_redis_mode=mode,
+                    redis_member={"slot": slot, "address": "127.0.0.1", "config_directory": "/etc/redis",
+                                  "data_directory": "/var/lib/redis", "log_directory": "/var/log/redis"},
+                    _platform_redis_instances=[{"address": "127.0.0.1", "redis_port": 6379}],
+                    platform_redis_secret_files={"runtime:redis": "/fixture"},
+                    platform_redis_credential={"passwordSecretRef": "runtime:redis"},
+                    platform_redis_advanced_config={},
+                    lookup=lambda *_args: "fixture-only",
+                )
+                self.assertEqual("\nreplicaof " in config, expected_seed)
+                self.assertEqual('\nmasterauth "fixture-only"' in config, expected_auth)
         self.assertIn("when: not _platform_redis_has_persistent_state", member)
         self.assertIn("sentinel monitor {{ (_platform_redis_instances | first).id }}", sentinel_template)
         self.assertIn("sentinel sentinel-user default", sentinel_template)
         self.assertIn("sentinel sentinel-pass {{ lookup('ansible.builtin.file', platform_redis_secret_files[platform_redis_sentinel_credential.passwordSecretRef]) | to_json }}", sentinel_template)
         member_tasks = yaml.safe_load(member)
+        masterauth = next(task for task in member_tasks if task.get("register") == "_platform_redis_masterauth")
+        self.assertTrue(masterauth["no_log"])
+        self.assertIn("_platform_redis_has_persistent_state", masterauth["when"])
+        self.assertIn("_platform_redis_masterauth.changed", member)
         peer_user = next(task for task in member_tasks if task["name"] == "Настройка одноранговой аутентификации Sentinel для пользователя ACL по умолчанию")
         peer_password = next(task for task in member_tasks if task["name"] == "Настройка пароля узла Sentinel из секрета времени выполнения")
         self.assertTrue(peer_user["no_log"])
