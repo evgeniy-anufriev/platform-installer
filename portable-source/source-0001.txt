@@ -161,7 +161,7 @@ class ActionModule(ActionBase):
                 "_ansible_facts_cacheable": False, "_ansible_no_log": True}
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/build_deployment_plan.py","mode":420,"size":7673,"sha256":"f919f3862829521743395cef0f8016f84691a967dc2814a2b30693e86f4ae235","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7673}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/build_deployment_plan.py","mode":420,"size":7867,"sha256":"b845195a2617ceaf40a1df1118ef845ef68cd612adfd9405327e4f845d9d41eb","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7867}
 import json
 import os
 import tempfile
@@ -233,6 +233,8 @@ class ActionModule(ActionBase):
                 if result.get('executionManifest'):
                     result['executionManifest'].update(apiVersion='platform.installer/execution-manifest/v1alpha9',
                         applicationImageIntentsDigest=canonical_digest(self._task.args['application_image_lock']))
+                    if 'application_pki_bindings' in self._task.args:
+                        result['executionManifest']['applicationPkiBindings'] = self._task.args['application_pki_bindings']
             result['executionManifestDigest'] = canonical_digest(result['executionManifest']) if result.get('executionManifest') else None
             destination = os.environ.get("PLATFORM_EXECUTION_MANIFEST_OUTPUT")
             manifest = result["executionManifest"]
@@ -897,7 +899,7 @@ class ActionModule(ActionBase):
             return dict(failed=True, changed=False, msg=code, error_code=code)
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/project_snapshot.py","mode":420,"size":47364,"sha256":"36b9d056ddff989c626068c0da0b29c1f7185b618b2aa65ca7885102d5becd5f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":47364}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/project_snapshot.py","mode":420,"size":47536,"sha256":"901a0b3dfbaca2945e2386f0e38ef9ccf0ab6b1445e252d26144404a609500c3","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":47536}
 from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
@@ -916,7 +918,7 @@ from ansible.plugins.action import ActionBase
 from ansible_collections.platform.core.plugins.module_utils.dns_resolution import resolve_dns_zones
 from ansible_collections.platform.core.plugins.module_utils.deployment_plan import _service_runtime_secret_requirements
 from ansible_collections.platform.core.plugins.module_utils.haproxy_resolution import resolve_haproxy_backends
-from ansible_collections.platform.core.plugins.module_utils.pki_resolution import resolve_certificate_requests
+from ansible_collections.platform.core.plugins.module_utils.pki_resolution import application_pki_bindings, resolve_certificate_requests
 from ansible_collections.platform.core.plugins.module_utils.project_snapshot import build_project_snapshot, project_documents
 from ansible_collections.platform.core.plugins.module_utils.project_snapshot_output import write_snapshot_output, SnapshotInputError, snapshot_input_message
 from ansible_collections.platform.core.plugins.module_utils.project_state import canonical_inventory_members
@@ -1541,10 +1543,11 @@ class ActionModule(ActionBase):
                 "roles", "pki_materialize", "defaults", "main.yml"
             )
             pki_defaults = self._load(pki_defaults_path).get("platform_pki_policy_defaults", {})
+            pki_bindings = application_pki_bindings(task_vars.get("platform_application_rows", ()), materialized)
             pki = resolve_certificate_requests(
                 manifest.get("metadata", {}).get("id", os.path.basename(project_root)),
                 materialized, host_addresses, pki_defaults, endpoints, inventory_deployments,
-                application_rows=task_vars.get("platform_application_rows", ()),
+                application_bindings=pki_bindings,
             )
             haproxy = resolve_haproxy_backends(
                 materialized, catalog, host_addresses, inventory_deployments, endpoints, {}, configuration,
@@ -1640,6 +1643,7 @@ class ActionModule(ActionBase):
             # execution manifest.
             return self._public_result({"changed": False, "snapshot": snapshot, "pki_materialization": pki,
                     "application_rows": task_vars.get('platform_application_rows', []),
+                    "application_pki_bindings": pki_bindings,
                     "application_image_lock": private_image_lock if applications_enabled else {},
                     "execution_configuration": configuration,
                     "execution_connections": execution_connections})
@@ -27705,7 +27709,7 @@ def assert_reissue_unchanged(state_root, project_identity, expected):
         raise ValueError("PKI_REISSUE_PLAN_STALE")
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/pki_resolution.py","mode":420,"size":18955,"sha256":"53393fee444d1da6194ada74a1c4c43103355ca0394737ed7235e7660b102e45","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":18955}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/pki_resolution.py","mode":420,"size":19551,"sha256":"946a1cb23ee69aafca668598b188c40df0d60ddba48e6f30ebc4772ce39d4467","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":19551}
 from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
@@ -27867,29 +27871,34 @@ def _endpoint_values(topology, resolved_service_endpoints, deployment_ids, polic
     }
 
 
-def _application_endpoints_by_tls_binding(rows, desired):
-    endpoints = {}
+def application_pki_bindings(rows, desired):
+    """Project only the TLS placement and endpoint identity needed for PKI."""
+    bindings = {}
     for row in rows:
         endpoint = row["settings"].get("endpoint", {})
-        if not endpoint.get("enabled") or endpoint.get("protocol") != "https":
-            continue
-        group = desired.get("endpointGroups", {}).get(endpoint.get("endpoint_group"), {})
-        domain = (group.get("address") or {}).get("domain")
-        if not isinstance(domain, str) or not DNS_DOMAIN.fullmatch(domain):
-            continue
-        instance_id = row["instanceId"]
-        if not isinstance(instance_id, str) or not DNS_LABEL.fullmatch(instance_id):
-            continue
-        names = {"sanDnsNames": [instance_id + "." + domain], "wildcardDnsNames": ["*." + domain],
-                 "endpointGroupId": endpoint["endpoint_group"]}
+        names = None
+        if endpoint.get("enabled") and endpoint.get("protocol") == "https":
+            group_id = endpoint.get("endpoint_group")
+            group = desired.get("endpointGroups", {}).get(group_id, {})
+            domain = (group.get("address") or {}).get("domain")
+            instance_id = row["instanceId"]
+            if (isinstance(domain, str) and DNS_DOMAIN.fullmatch(domain) and
+                    isinstance(instance_id, str) and DNS_LABEL.fullmatch(instance_id)):
+                names = {"sanDnsNames": [instance_id + "." + domain],
+                         "wildcardDnsNames": ["*." + domain], "endpointGroupId": group_id}
         for binding in row.get("bindings", {}).values():
             profile = binding.get("profileRef")
             if profile:
-                endpoints.setdefault((row["hostId"], profile), []).append(names)
-    return endpoints
+                host = row["hostId"]
+                key = (host, profile, group_id, instance_id) if names else (host, profile, "", "")
+                record = {"hostId": host, "tlsProfileId": profile}
+                if names:
+                    record["endpoint"] = names
+                bindings[key] = record
+    return [bindings[key] for key in sorted(bindings)]
 
 
-def resolve_certificate_requests(project_id, topology, host_vars, defaults=None, resolved_service_endpoints=None, inventory_deployments=None, application_rows=()):
+def resolve_certificate_requests(project_id, topology, host_vars, defaults=None, resolved_service_endpoints=None, inventory_deployments=None, application_rows=(), application_bindings=None):
     """Purely derive certificate identity and target plans from topology bindings.
 
     It returns no key material or resolved secrets.  The generic `tlsProfile`
@@ -27897,6 +27906,8 @@ def resolve_certificate_requests(project_id, topology, host_vars, defaults=None,
     services may opt in without manually creating one scope per Kafka member.
     """
     desired = topology if isinstance(topology, dict) else {}
+    if application_bindings is None:
+        application_bindings = application_pki_bindings(application_rows, desired)
     defaults = defaults if isinstance(defaults, dict) else {}
     missing_defaults = [key for key in REQUIRED_DEFAULT_KEYS if key not in defaults]
     if missing_defaults or not isinstance(defaults.get("sanPolicy"), dict) or not isinstance(defaults.get("subject"), dict):
@@ -27916,8 +27927,8 @@ def resolve_certificate_requests(project_id, topology, host_vars, defaults=None,
     if project_profiles:
         project_profile = project_profiles[0]
         application_hosts = {
-            row["hostId"] for row in application_rows
-            if any(binding.get("profileRef") == project_profile for binding in row.get("bindings", {}).values())
+            binding["hostId"] for binding in application_bindings
+            if binding["tlsProfileId"] == project_profile
         }
     consumers = _consumer_records(desired, inventory_deployments)
     if application_hosts:
@@ -27958,7 +27969,11 @@ def resolve_certificate_requests(project_id, topology, host_vars, defaults=None,
         return {"status": "BLOCKED", "findings": findings, "requests": [], "materializationPlans": []}
 
     requests, plans = [], []
-    application_endpoints = _application_endpoints_by_tls_binding(application_rows, desired)
+    application_endpoints = {}
+    for binding in application_bindings:
+        if "endpoint" in binding:
+            key = (binding["hostId"], binding["tlsProfileId"])
+            application_endpoints.setdefault(key, []).append(binding["endpoint"])
     for scope_id, group in sorted(grouped.items()):
         profile = _profile_defaults(profiles[group["profileRef"]], defaults)
         authority = authorities[group["authorityRef"]]
@@ -28040,7 +28055,7 @@ def resolve_certificate_requests(project_id, topology, host_vars, defaults=None,
     return {"status": "PASS", "findings": [], "requests": requests, "materializationPlans": plans}
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/project_resolution.py","mode":420,"size":7650,"sha256":"eefad52e8934852dafde50fb654e373e7527cb6a68d6b8efe3ab564919740032","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7650}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/project_resolution.py","mode":420,"size":7728,"sha256":"10ac6fac663a5d2baa191b3d215a0ffea6f4584eca9a81983294d3b3c45e02dc","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7728}
 """Private desired-only result reuse; never a source of desired state."""
 import copy
 import hashlib
@@ -28157,7 +28172,7 @@ def read(path, expected):
     result = envelope['result']
     if not isinstance(result, dict) or any(not isinstance(result.get(k), dict) for k in FIELDS):
         raise ValueError('PROJECT_RESOLUTION_INVALID')
-    if not isinstance(result.get('application_rows', []), list):
+    if any(not isinstance(result.get(key, []), list) for key in ('application_rows', 'application_pki_bindings')):
         raise ValueError('PROJECT_RESOLUTION_INVALID')
     if result['snapshot'].get('projectRevision') != expected['revision']:
         raise ValueError('PROJECT_RESOLUTION_INVALID')
@@ -28182,7 +28197,7 @@ def atomic_json(path, value):
 
 
 def write(path, expected, result):
-    result = {key: copy.deepcopy(result[key]) for key in (*FIELDS, 'application_rows') if key in result}
+    result = {key: copy.deepcopy(result[key]) for key in (*FIELDS, 'application_rows', 'application_pki_bindings') if key in result}
     atomic_json(path, dict(version=VERSION, identity=expected, result=result,
                            digest=canonical_digest(result)))
 
@@ -32036,7 +32051,7 @@ if __name__ == "__main__":
     main()
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/modules/resolve_pki_requests.py","mode":420,"size":3698,"sha256":"c1c2342b8b76f7097ebbd37b4874786e3b83a1396259bf1e5be50dbddfe15f19","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3698}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/modules/resolve_pki_requests.py","mode":420,"size":3929,"sha256":"766353b7b0133d2128707f7e8872400909e3603c52e70f77a4f53f4cf4ffc2e7","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3929}
 #!/usr/bin/python
 from __future__ import absolute_import, division, print_function
 
@@ -32070,6 +32085,7 @@ def main():
         "pki_defaults": {"type": "dict", "required": True},
         "resolved_service_endpoints": {"type": "dict", "required": False, "default": {}},
         "application_rows": {"type": "list", "elements": "dict", "default": []},
+        "application_bindings": {"type": "list", "elements": "dict", "default": None},
     }, supports_check_mode=True)
     try:
         if module.params["desired_state"]:
@@ -32092,7 +32108,8 @@ def main():
             result = resolve_certificate_requests(
                 project_id, topology_with_inventory_members(desired, members), hosts,
                 module.params["pki_defaults"], module.params["resolved_service_endpoints"], by_host,
-                application_rows=module.params["application_rows"])
+                                                  application_rows=module.params["application_rows"],
+                                                  application_bindings=module.params["application_bindings"])
     except Exception as error:
         module.fail_json(msg="PKI request resolution failed", error_code="PKI_RESOLUTION_FAILED", safe_details=str(error))
     if result.get("status") != "PASS":
@@ -35221,7 +35238,7 @@ platform_pki_keytool_package: java-21-openjdk-headless
   when: _platform_pki_reissue_active or _platform_pki_reissue_materialized
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/pki_materialize/tasks/resolve.yml","mode":420,"size":7835,"sha256":"d28da4fea297d441c39e88e8e168b1fefb847c5909abd7449aec9759dac383d5","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7835}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/pki_materialize/tasks/resolve.yml","mode":420,"size":7974,"sha256":"5630e845e9d6bba091c34b33b555a6dcfb3b041defff55b82e0f94cfbc7a591b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7974}
 ---
 - name: Выбор пути к манифесту переносимого проекта для идентификатора PKI
   ansible.builtin.set_fact:
@@ -35348,6 +35365,7 @@ platform_pki_keytool_package: java-21-openjdk-headless
     - platform_pki_resolve_managed | bool
     - (platform_desired_state | default({})).applicationLibraryDeployments is defined
     - platform_application_rows is not defined
+    - platform_application_pki_bindings is not defined
 
 - name: Расчёт управляемых запросов PKI по топологии
   platform.core.resolve_pki_requests:
@@ -35360,6 +35378,7 @@ platform_pki_keytool_package: java-21-openjdk-headless
     pki_defaults: "{{ platform_pki_policy_defaults | combine({'targetRoot': platform_pki_target_root}) }}"
     resolved_service_endpoints: "{{ platform_pki_resolved_service_endpoints | default({}) }}"
     application_rows: "{{ platform_application_rows | default([]) }}"
+    application_bindings: "{{ platform_application_pki_bindings | default(omit) }}"
   register: platform_pki_managed_resolution
   when: platform_pki_resolve_managed | bool
   no_log: "{{ platform_application_rows | default([]) | length > 0 }}"
@@ -38743,7 +38762,7 @@ artifactLock:
     - role: platform.core.target_bootstrap
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/deployment-plan-machine.yml","mode":420,"size":2805,"sha256":"5dc9f96abec5b3e0b7897cd7ed6a2d7ea65175409300ba25e0621cb48d69d179","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2805}
+@@PORTABLE {"path":"ansible-core/playbooks/deployment-plan-machine.yml","mode":420,"size":2911,"sha256":"fe3c4a5b0f30c1d25faf98da8fb6bab13353cddddd25883a0af54363733b5b95","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2911}
 ---
 - name: Создание машиночитаемого плана развёртывания без обращения к целевым узлам
   hosts: localhost
@@ -38772,6 +38791,7 @@ artifactLock:
         runtime_release: "{{ platform_execution_runtime_release }}"
         bundle_artifact_sources: "{{ platform_execution_bundle_artifact_sources | default([]) }}"
         pki_materialization: "{{ platform_plan_snapshot.pki_materialization | default({}) }}"
+        application_pki_bindings: "{{ platform_plan_snapshot.application_pki_bindings | default(omit) }}"
         pki_state_root: "{{ platform_execution_state_root | default('/var/lib/platform-installer/execution') }}"
         execution_configuration: "{{ platform_plan_snapshot.execution_configuration | default({}) }}"
         execution_connections: "{{ platform_plan_snapshot.execution_connections | default({}) }}"
@@ -40333,7 +40353,7 @@ if __name__ == "__main__":
     raise SystemExit(main())
 
 @@END
-@@PORTABLE {"path":"ansible-core/tools/execution_controller.py","mode":420,"size":74632,"sha256":"c988d5cb8e3ecd6b8f35114ddae9344d3de47d7007b5959f7e0ff53edd1277ca","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"ansible-core/tools/execution_controller.py","mode":420,"size":74927,"sha256":"a726b479dc1b6aae50b0232ab32e4e75c5e30b1c1dba4f7971a51f37ee397042","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
 #!/usr/bin/env python3
 """Fixed Execution Node controller.  It never accepts a command or playbook."""
 from __future__ import print_function
@@ -40910,6 +40930,7 @@ def _validate_runtime_projection(journal, metadata, manifest):
             projection.get("platform_generated_state_path") != expected_generated_state_path or
             not isinstance(projection.get("platform_artifact_source_authorities_by_deployment"), dict) or
             projection.get("platform_pki_materialization_plans") != plans or
+            projection.get("platform_application_pki_bindings") != manifest.get("applicationPkiBindings") or
             not isinstance(projection.get("platform_pki_secret_files"), dict)):
             raise LifecycleError("EXECUTION_RUNTIME_PROJECTION_MISMATCH")
 
@@ -41101,6 +41122,8 @@ def _materialize_runtime_projection(journal, metadata, manifest):
         "platform_pki_materialization_plans": plans,
         "platform_pki_secret_files": secret_files,
     }
+    if "applicationPkiBindings" in manifest:
+        payload["platform_application_pki_bindings"] = manifest["applicationPkiBindings"]
     if manifest.get('serviceExecutionScope') is not None:
         payload['platform_execution_service_scope'] = manifest['serviceExecutionScope']
     if target_username is not None:
@@ -41152,6 +41175,7 @@ def validate_application_manifest(manifest, external_service_ids=()):
             raise LifecycleError('EXECUTION_MANIFEST_INVALID')
         prefix = dict(manifest)
         del prefix['applicationImageIntentsDigest']
+        prefix.pop('applicationPkiBindings', None)
         version = 'v1alpha7' if any(item['operation'] == 'APPLICATION_LIBRARIES_POST_INSTALL' for item in prefix['operations']) else 'v1alpha6'
         prefix['apiVersion'] = 'platform.installer/execution-manifest/' + ('v1alpha8' if 'serviceExecutionScope' in prefix else version)
         prefix['artifactRequirements'] = [item for item in prefix['artifactRequirements'] if item.get('artifactType') != 'container-image']
@@ -41183,15 +41207,15 @@ def validate_application_manifest(manifest, external_service_ids=()):
             raise LifecycleError('EXECUTION_MANIFEST_INVALID')
         try:
             prefix = validation_prefix(manifest)
-        except (ValueError, KeyError, TypeError) as error:
+        except (ValueError, KeyError, 
+@@END
+@@PORTABLE {"path":"ansible-core/tools/execution_controller.py","mode":420,"size":74927,"sha256":"a726b479dc1b6aae50b0232ab32e4e75c5e30b1c1dba4f7971a51f37ee397042","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":26927}
+TypeError) as error:
             raise LifecycleError(str(error)) from None
         validate_application_manifest(prefix, external_service_ids)
         return
     selection_scope = manifest.get('applicationExecutionScope', {})
-    image_metadata = manifest.get('apiVersion') in ('platform.instal
-@@END
-@@PORTABLE {"path":"ansible-core/tools/execution_controller.py","mode":420,"size":74632,"sha256":"c988d5cb8e3ecd6b8f35114ddae9344d3de47d7007b5959f7e0ff53edd1277ca","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":26632}
-ler/execution-manifest/v1alpha5', 'platform.installer/execution-manifest/v1alpha6')
+    image_metadata = manifest.get('apiVersion') in ('platform.installer/execution-manifest/v1alpha5', 'platform.installer/execution-manifest/v1alpha6')
     if manifest.get('apiVersion') in (infra.MANIFEST_VERSION, infra.SKIP_MANIFEST_VERSION, 'platform.installer/execution-manifest/v1alpha5', 'platform.installer/execution-manifest/v1alpha6'):
         module_utils = os.path.abspath(os.path.join(os.path.dirname(__file__),
             '../collections/ansible_collections/platform/core/plugins/module_utils'))
@@ -56257,7 +56281,7 @@ libraryExecutionPriorities:
 }
 
 @@END
-@@PORTABLE {"path":"contracts/execution-manifest/v1alpha9/schema.json","mode":420,"size":10547,"sha256":"ecb29a764098944c79d587c6536d20cc4098b31d1652aca6a375f858686c0bac","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":10547}
+@@PORTABLE {"path":"contracts/execution-manifest/v1alpha9/schema.json","mode":420,"size":11742,"sha256":"3a9b5be6581f7266f3a7f354ad4928aad706fd0e3170d7658ffb630a0298a4de","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":11742}
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "required": [
@@ -56288,6 +56312,36 @@ libraryExecutionPriorities:
   "$id": "https://platform-installer.local/contracts/execution-manifest/v1alpha9/schema.json",
   "additionalProperties": false,
   "properties": {
+    "applicationPkiBindings": {
+      "type": "array",
+      "maxItems": 4096,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "required": ["hostId", "tlsProfileId"],
+        "additionalProperties": false,
+        "properties": {
+          "hostId": { "type": "string", "minLength": 1, "maxLength": 253 },
+          "tlsProfileId": { "type": "string", "minLength": 1, "maxLength": 253 },
+          "endpoint": {
+            "type": "object",
+            "required": ["endpointGroupId", "sanDnsNames", "wildcardDnsNames"],
+            "additionalProperties": false,
+            "properties": {
+              "endpointGroupId": { "type": "string", "minLength": 1, "maxLength": 253 },
+              "sanDnsNames": {
+                "type": "array", "minItems": 1, "maxItems": 1,
+                "items": { "type": "string", "maxLength": 317, "pattern": "^[a-z0-9][a-z0-9.-]+$" }
+              },
+              "wildcardDnsNames": {
+                "type": "array", "minItems": 1, "maxItems": 1,
+                "items": { "type": "string", "maxLength": 255, "pattern": "^\\*\\.[a-z0-9][a-z0-9.-]+$" }
+              }
+            }
+          }
+        }
+      }
+    },
     "runtimeSecretDescriptorSetFingerprint": {
       "type": "string",
       "pattern": "^sha256:[a-f0-9]{64}$"
