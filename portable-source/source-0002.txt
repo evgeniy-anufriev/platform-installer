@@ -61566,10 +61566,11 @@ class FilterModule:
         }
 
 @@END
-@@PORTABLE {"path":"services/chrony/ansible_collections/platform/chrony/roles/chrony/defaults/main.yml","mode":420,"size":109,"sha256":"9e9d8b0d7c65cc55adc048764694d8c06fc7c97afdd84e667124d285a6ccc5f4","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":109}
+@@PORTABLE {"path":"services/chrony/ansible_collections/platform/chrony/roles/chrony/defaults/main.yml","mode":420,"size":145,"sha256":"877756cbc0907c91f65e591689aca9c1e13d6a27e8cf407163d1269c7f4148fd","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":145}
 ---
 platform_chrony_instances: []
 platform_chrony_ntp_server: ""
+platform_chrony_step_on_start: true
 platform_chrony_allowed_client_networks: ""
 
 @@END
@@ -61757,7 +61758,7 @@ platform_chrony_allowed_client_networks: ""
   when: _platform_chrony_role == 'client'
 
 @@END
-@@PORTABLE {"path":"services/chrony/ansible_collections/platform/chrony/roles/chrony/templates/chrony.conf.j2","mode":420,"size":335,"sha256":"16eb31aeab2d802bd0e32563af0cfb056d9722daf6404e523838f79aae08613e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":335}
+@@PORTABLE {"path":"services/chrony/ansible_collections/platform/chrony/roles/chrony/templates/chrony.conf.j2","mode":420,"size":408,"sha256":"94910a167cbb372ba8027a9df7983fa16b678544a984b5640ba3be8623944ae0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":408}
 # Managed by Platform Installer V2 Chrony: {{ _platform_chrony_role }}
 driftfile /var/lib/chrony/drift
 rtcsync
@@ -61768,6 +61769,9 @@ allow {{ network }}
 {% endfor %}
 {% else %}
 server {{ platform_chrony_ntp_server }} iburst
+{% if platform_chrony_step_on_start | bool %}
+makestep 1.0 3
+{% endif %}
 port 0
 {% endif %}
 
