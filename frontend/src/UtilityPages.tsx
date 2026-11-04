@@ -690,12 +690,11 @@ const eventColumns: EventColumn[] = [
 
 const defaultVisibleColumns = [
   "timestamp",
-  "eventType",
-  "safeMessage",
-  "serviceDeployment",
-  "host",
   "status",
   "ansibleOutput",
+  "serviceDeployment",
+  "host",
+  "taskName",
 ];
 
 function initialVisibleColumns(): string[] {
@@ -966,6 +965,10 @@ function EventLog({
                 </dd>
                 <dt>Редакция данных</dt>
                 <dd>{selectedEvent.redacted ? "Применена" : "Нет"}</dd>
+                <dt className="event-log-output-label">Вывод Ansible</dt>
+                <dd className="event-log-output">
+                  {selectedEvent.ansibleOutput || "—"}
+                </dd>
                 <dt>ID запуска</dt>
                 <dd>{selectedEvent.runId || runId || "—"}</dd>
               </dl>

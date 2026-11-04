@@ -361,6 +361,7 @@
   border: 1px solid #d9e2ee;
   border-radius: 8px;
   background: #fff;
+  color: #172b49;
 }
 .event-log-table-panel {
   display: flex;
@@ -440,6 +441,7 @@
 .event-log-details h2 {
   margin: 0 0 12px;
   font-size: 14px;
+  color: inherit;
 }
 .event-log-details p {
   color: #314664;
@@ -451,11 +453,19 @@
   gap: 7px 10px;
 }
 .event-log-details dt {
-  color: #63728a;
+  color: #405570;
 }
 .event-log-details dd {
   margin: 0;
   overflow-wrap: anywhere;
+}
+.event-log-output-label,
+.event-log-output {
+  grid-column: 1 / -1;
+}
+.event-log-output {
+  font-family: monospace;
+  white-space: pre-wrap;
 }
 @media (max-width: 760px) {
   .help-category-cards,

@@ -50,8 +50,12 @@ describe("UtilityPages logs", () => {
     ).toBeTruthy();
     expect(screen.getByRole("cell", { name: output })).toBeTruthy();
     expect(document.querySelector("script")).toBeNull();
+    fireEvent.click(screen.getByLabelText("Вывод Ansible"));
+    expect(screen.queryByRole("cell", { name: output })).toBeNull();
     expect(
-      screen.getByRole("cell", { name: "Задача 1 завершена" }),
+      within(
+        screen.getByRole("complementary", { name: "Подробности события" }),
+      ).getByText(output),
     ).toBeTruthy();
   });
 
@@ -68,14 +72,20 @@ describe("UtilityPages logs", () => {
       }),
     ).toBeTruthy();
     expect(
-      screen.getByRole("columnheader", { name: "Сообщение" }),
-    ).toBeTruthy();
+      screen.getAllByRole("columnheader").map((header) => header.textContent),
+    ).toEqual([
+      "Время",
+      "Статус",
+      "Вывод Ansible",
+      "Развёртывание сервиса",
+      "Узел",
+      "Задача",
+    ]);
     expect(screen.getAllByText("Задача 1 завершена").length).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getByText("Колонки (7 из 18)"));
+    fireEvent.click(screen.getByText("Колонки (6 из 18)"));
     const taskColumnToggle = screen.getByLabelText("Задача");
     fireEvent.click(screen.getByLabelText("Роль задачи"));
-    fireEvent.click(taskColumnToggle);
     expect(screen.getByRole("columnheader", { name: "Задача" })).toBeTruthy();
     const table = screen.getByRole("table");
     expect(within(table).getByText("task-1")).toBeTruthy();
@@ -91,12 +101,12 @@ describe("UtilityPages logs", () => {
     expect(within(table).getAllByRole("row")).toHaveLength(513);
     expect(screen.getByText("Показаны 1–512 из 513")).toBeTruthy();
     const newestPageRows = within(table).getAllByRole("row");
-    expect(newestPageRows[1].textContent).toContain("Задача 513 завершена");
-    expect(newestPageRows.at(-1)?.textContent).toContain("Задача 2 завершена");
+    expect(newestPageRows[1].textContent).toContain("task-513");
+    expect(newestPageRows.at(-1)?.textContent).toContain("task-2");
     fireEvent.click(screen.getByRole("button", { name: "Далее" }));
     expect(within(table).getAllByRole("row")).toHaveLength(2);
     expect(screen.getByText("Показаны 513–513 из 513")).toBeTruthy();
-    expect(within(table).getByText("Задача 1 завершена")).toBeTruthy();
+    expect(within(table).getByText("task-1")).toBeTruthy();
   });
 
   it("searches all current-run events rather than only the visible page", () => {
@@ -114,7 +124,7 @@ describe("UtilityPages logs", () => {
     const view = renderLogs([event(1), event(2)]);
     const table = screen.getByRole("table");
     expect(within(table).getAllByRole("row")[1].textContent).toContain(
-      "Задача 2 завершена",
+      "task-2",
     );
 
     view.rerender(
@@ -128,19 +138,19 @@ describe("UtilityPages logs", () => {
     );
 
     expect(within(table).getAllByRole("row")[1].textContent).toContain(
-      "Задача 3 завершена",
+      "task-3",
     );
   });
 
   it("retains selected columns when the logs page is reopened in the session", () => {
     const firstView = renderLogs([event(1)]);
-    fireEvent.click(screen.getByText("Колонки (7 из 18)"));
+    fireEvent.click(screen.getByText("Колонки (6 из 18)"));
     fireEvent.click(screen.getByLabelText("Роль задачи"));
     firstView.unmount();
 
     renderLogs([event(1)]);
 
-    expect(screen.getByText("Колонки (8 из 18)")).toBeTruthy();
+    expect(screen.getByText("Колонки (7 из 18)")).toBeTruthy();
     expect(
       screen.getByRole("columnheader", { name: "Роль задачи" }),
     ).toBeTruthy();
