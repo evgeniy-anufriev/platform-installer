@@ -1,26 +1,26 @@
 {
   "format": "platform-installer-portable-source-v3",
   "maxPartBytes": 5000000,
-  "sourceRevision": "b427f2e4275e24c8d3117afa74a9265292a8b0c7",
-  "files": 6593,
-  "sourceBytes": 69121573,
-  "textFiles": 6504,
+  "sourceRevision": "11c5d5d8b1f010aa1666d04a7c4f5db60fd4c596",
+  "files": 6594,
+  "sourceBytes": 69139560,
+  "textFiles": 6505,
   "binaryFiles": 89,
   "parts": [
     {
       "name": "source-0001.txt",
-      "bytes": 4891699,
-      "sha256": "123644635c8e4d4580f34f84fd48d21a469fc85ffe1922f86418e0bf1c6b0b67"
+      "bytes": 4856471,
+      "sha256": "84e696a003a66d81eb1abbdc49b64feb08a49e0cbde6a67b197b4691863dadc4"
     },
     {
       "name": "source-0002.txt",
-      "bytes": 4837074,
-      "sha256": "e3e0cede17f3a2a7df28e7ab2a2c58d5e344f929545bcacca797f2ad60f0ae1c"
+      "bytes": 4876467,
+      "sha256": "b562e8eaeb22c15fb8037d830ab09f8340b2a3572e8f2aacbb3d9aef438f98bc"
     },
     {
       "name": "source-0003.txt",
-      "bytes": 4911313,
-      "sha256": "857321846dd8b79aea5a8ef351141085e8f38e17d3620244028af52cae2f40d1"
+      "bytes": 4925397,
+      "sha256": "3e4e17ea7f3b56aad66aadbd3c1f24ce1c47e4d73af2ee105ddef6b2b0179053"
     },
     {
       "name": "source-0004.txt",

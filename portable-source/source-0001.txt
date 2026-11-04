@@ -257,7 +257,7 @@ class ActionModule(ActionBase):
             raise AnsibleError("DEPLOYMENT_PLAN_INPUT_INVALID: %s" % error)
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/build_runtime_secret_descriptors.py","mode":420,"size":921,"sha256":"da80bd0f795fb0c24bd24a1dc0cf1777c5466e379f0449ff76bef4804c222097","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":921}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/build_runtime_secret_descriptors.py","mode":420,"size":1019,"sha256":"d8ed7b0ccc84160771e1cffac3f6ca8ca60a52a20dda17f43aa313c1b1d46141","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1019}
 from ansible.plugins.action import ActionBase
 from ansible.errors import AnsibleError
 
@@ -274,7 +274,8 @@ class ActionModule(ActionBase):
             raise AnsibleError("RUNTIME_SECRET_DESCRIPTORS_INPUT_INVALID")
         result = build_runtime_secret_descriptors(snapshot, catalog,
                                                   self._task.args.get("pki_materialization"),
-                                                  self._task.args.get('application_image_lock'))
+                                                  self._task.args.get('application_image_lock'),
+                                                  self._task.args.get('editor_locations', False))
         return {"changed": False, "runtime_secret_descriptors": result}
 
 @@END
@@ -844,7 +845,7 @@ class ActionModule(ActionBase):
             return dict(status='BLOCKED', changed=False, code=code, providers=[], libraryJobs=[], instanceJobs=[])
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/project_resolution.py","mode":420,"size":2997,"sha256":"14cf179ffb6882af2277943372bb32bd09f78cbe61f1b13f6a2a3dbfb218b0fb","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2997}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/project_resolution.py","mode":420,"size":3232,"sha256":"bbb6a8b901ced5ce37f6b12aa9706897bfd59ff6d1fed1e99bc23781a9b49b5f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3232}
 """Load/store a controller-private desired-derived result."""
 import os
 import time
@@ -868,7 +869,10 @@ class ActionModule(ActionBase):
             runtime = task_vars['platform_project_resolution_runtime']
             expected, documents = resolution.identity(project, runtime,
                 task_vars.get('platform_installer_owned_paths', []))
-            shared = os.path.join(directory, resolution.scope_name(project, runtime)) if directory else None
+            context = task_vars.get('platform_plan_resolution_context')
+            if context:
+                expected.update(planContext=context, stagedProject=project)
+            shared = os.path.join(directory, resolution.scope_name(project, runtime)) if directory and not context else None
             if args.get('operation') == 'load':
                 result = resolution.read(local, expected)
                 source = 'request' if result is not None else 'fresh'
@@ -888,8 +892,9 @@ class ActionModule(ActionBase):
                 raise ValueError('PROJECT_RESOLUTION_INPUT_CHANGED')
             root = os.path.realpath(os.path.join(os.path.dirname(__file__), '../../../../../../..'))
             eligible = resolution.reusable(project, documents, result, os.path.join(root, 'services'))
-            if eligible:
+            if context or eligible:
                 resolution.write(local, expected, result)
+            if eligible and shared:
                 resolution.write(shared, expected, result)
             resolution.atomic_json(local + '.metrics', dict(hit=False, source='fresh', reusable=eligible,
                 resolveSeconds=round(time.monotonic() - previous['started'], 6)))
@@ -899,7 +904,7 @@ class ActionModule(ActionBase):
             return dict(failed=True, changed=False, msg=code, error_code=code)
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/project_snapshot.py","mode":420,"size":47536,"sha256":"901a0b3dfbaca2945e2386f0e38ef9ccf0ab6b1445e252d26144404a609500c3","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":47536}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/project_snapshot.py","mode":420,"size":47690,"sha256":"e0ade111282c4c13435580ee1e60c51e5ca36f5c00ce8dabee62d2cf8a81da3b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":47690}
 from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
@@ -1399,8 +1404,10 @@ class ActionModule(ActionBase):
             if resolved_result is not None:
                 stage = 'построение из разрешённой проекции Core'
                 from ansible_collections.platform.core.plugins.module_utils.project_resolution import enrich
+                prepared = self._task.args.get('prepared_application_images',
+                                               task_vars.get('platform_prepared_application_images'))
                 return self._public_result(enrich(resolved_result,
-                              None if self._task.args.get('desired_only') else task_vars.get('platform_prepared_application_images')))
+                                                 None if self._task.args.get('desired_only') else prepared))
             requested_root = self._task.args.get("project_root")
             if requested_root and not os.path.isdir(os.path.realpath(requested_root)):
                 raise SnapshotInputError('PROJECT_ROOT_MISSING')
@@ -24949,7 +24956,7 @@ def assemble_authority(requirement, offline=None, repository=None, image=False):
     }
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/deployment_plan.py","mode":420,"size":67430,"sha256":"83844b21790d89edb9d7997c3c559bfecb53ef3948ef8badca66f68d54a1c3dd","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48011}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/deployment_plan.py","mode":420,"size":69200,"sha256":"c296ba51031daa3fae59152cfcb963cf788dcad7da4eb44ddedb19930fa03325","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48011}
 """Deterministic, target-free DeploymentPlan construction for UI-BE-04B."""
 
 from __future__ import absolute_import, division, print_function
@@ -25372,7 +25379,29 @@ def _service_input_requirements(deployments, definitions, resolved_topology):
     return public, private, findings
 
 
-def build_runtime_secret_descriptors(snapshot, catalog, pki_materialization=None, application_image_lock=None):
+def _application_secret_editor_locations(snapshot, inputs):
+    by_ref = {item['sourceRef']: item for item in inputs if item['purpose'] == 'APPLICATION_SECRET'}
+    locations = {}
+    for library_id, library in snapshot['applicationLibraries']['libraries'].items():
+        groups = [('', library.get('providedConnections', {}))]
+        groups.extend((instance['slotId'], instance.get('credentialRequirements', {}))
+                      for instance in library.get('instances', {}).values())
+        for slot, accounts in groups:
+            for account_id, account in accounts.items():
+                for field, credential in account.get('credentials', {}).items():
+                    source = credential.get('source', {})
+                    item = by_ref.get(source.get('ref')) if source.get('kind') == 'runtime_secret_ref' else None
+                    if item is None or library_id not in item['applicationLibraries']:
+                        continue
+                    key = (library_id, slot, account_id, field)
+                    locations.setdefault(key, set()).add(item['requirementRef'])
+    return [dict(library=library, slot=slot, account=account, field=field, requirementRef=ref)
+            for (library, slot, account, field), refs in sorted(locations.items())
+            for ref in sorted(refs)]
+
+
+def build_runtime_secret_descriptors(snapshot, catalog, pki_materialization=None, application_image_lock=None,
+                                     editor_locations=False):
     """Build the closed safe v1alpha2 descriptor response from trusted Core data."""
     if not isinstance(snapshot, dict) or not isinstance(catalog, dict):
         raise ValueError("RUNTIME_SECRET_DESCRIPTORS_INPUT_INVALID")
@@ -25444,9 +25473,15 @@ def build_runtime_secret_descriptors(snapshot, catalog, pki_materialization=None
             raise ValueError('RUNTIME_SECRET_DESCRIPTORS_BLOCKED')
         registry_inputs = any(item['purpose'].startswith('APPLICATION_REGISTRY_') for item in app_inputs)
         result.update(apiVersion='BuildRuntimeSecretDescriptors/v1alpha4' if registry_inputs else 'BuildRuntimeSecretDescriptors/v1alpha3', applicationInputs=app_inputs)
-        result['descriptorSetFingerprint'] = canonical_digest(dict(
-            serviceInputs=[{key: item[key] for key in fields} for item in descriptors], applicationInputs=app_inputs))
-    if len(json.dumps(result, ensure_ascii=True, separators=(',', ':')).encode('utf-8')) > 65536:
+        proof = dict(serviceInputs=[{key: item[key] for key in fields} for item in descriptors],
+                     applicationInputs=app_inputs)
+        if editor_locations:
+            locations = _application_secret_editor_locations(snapshot, app_inputs)
+            proof['editorLocations'] = locations
+            result.update(apiVersion='BuildRuntimeSecretDescriptors/v1alpha5', editorLocations=locations)
+        result['descriptorSetFingerprint'] = canonical_digest(proof)
+    response_limit = 256 * 1024 if 'applicationInputs' in result else 64 * 1024
+    if len(json.dumps(result, ensure_ascii=True, separators=(',', ':')).encode('utf-8')) > response_limit:
         raise ValueError('RUNTIME_SECRET_DESCRIPTORS_BLOCKED')
     return result
 
@@ -25666,7 +25701,10 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
             if item['source'] == 'CURRENT_RUN_BOOTSTRAP':
                 provider = item['providerDeployment']
                 definition = definitions.get(deployments.get(provider, {}).get('serviceType'), {})
-                if provider not in selected or definition.get('x-secretOutputs') != {'protocol': 'SecretOutputDelivery/v1alpha1', 'entries': ['admin-token', 'unseal-shares']}:
+                if provider not in selected or definition.get
+@@END
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/deployment_plan.py","mode":420,"size":69200,"sha256":"c296ba51031daa3fae59152cfcb963cf788dcad7da4eb44ddedb19930fa03325","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":21189}
+('x-secretOutputs') != {'protocol': 'SecretOutputDelivery/v1alpha1', 'entries': ['admin-token', 'unseal-shares']}:
                     findings.append(_finding('APPLICATION_BOOTSTRAP_PROVIDER_INVALID', 'applicationLibraries',
                                              'Bootstrap source must be a Vault deployment of this plan'))
     if not explicit_identity or not isinstance(identity, str) or not identity:
@@ -25682,10 +25720,7 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
     service_public, service_private, service_secret_findings = _service_runtime_secret_requirements(deployments, definitions, sorted(snapshot.get("hosts", {}).keys()) if isinstance(snapshot.get("hosts"), dict) else [])
     service_input_public, service_input_private, service_input_findings = _service_input_requirements(
         selected, definitions,
-        (snapshot.get("topology") or {}).get("resolved", {}) if isinstance(snapshot
-@@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/deployment_plan.py","mode":420,"size":67430,"sha256":"83844b21790d89edb9d7997c3c559bfecb53ef3948ef8badca66f68d54a1c3dd","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":19419}
-.get("topology"), dict) else {},
+        (snapshot.get("topology") or {}).get("resolved", {}) if isinstance(snapshot.get("topology"), dict) else {},
     )
     required_credentials = pki_public + service_public + [
         {key: item[key] for key in ("requirementRef", "purpose", "hosts")}
@@ -38762,7 +38797,7 @@ artifactLock:
     - role: platform.core.target_bootstrap
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/deployment-plan-machine.yml","mode":420,"size":2911,"sha256":"fe3c4a5b0f30c1d25faf98da8fb6bab13353cddddd25883a0af54363733b5b95","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2911}
+@@PORTABLE {"path":"ansible-core/playbooks/deployment-plan-machine.yml","mode":420,"size":4984,"sha256":"f707043ef3cdb5273fefe674302a1a2ca091a53a087c9dd992d244831b6c0156","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4984}
 ---
 - name: Создание машиночитаемого плана развёртывания без обращения к целевым узлам
   hosts: localhost
@@ -38772,6 +38807,46 @@ artifactLock:
     - name: Разрешение проекта для авторитетного плана
       ansible.builtin.include_role:
         name: platform.core.project_resolution
+
+    - name: Проверка наличия подготовленных метаданных образов
+      ansible.builtin.stat:
+        path: "{{ platform_plan_prepared_images_path }}"
+        follow: false
+      register: platform_plan_prepared_images_file
+      when: platform_plan_prepared_images_path is defined
+
+    - name: Описание образов из проекции плана
+      when:
+        - platform_plan_prepared_images_path is defined
+        - not platform_plan_prepared_images_file.stat.exists
+      block:
+        - platform.core.prepare_application_images:
+            project_root: "{{ platform_project_root }}"
+            bundle_root: "{{ platform_execution_bundle_root }}"
+            snapshot: "{{ platform_project_resolution.snapshot }}"
+            connections: "{{ platform_project_resolution.execution_connections }}"
+            application_rows: "{{ platform_project_resolution.application_rows }}"
+          register: platform_plan_image_inputs
+        - ansible.builtin.copy:
+            content: "{{ platform_plan_image_inputs.inputs | to_json }}"
+            dest: "{{ platform_application_image_inputs_path }}"
+            mode: '0600'
+        - ansible.builtin.meta: end_play
+
+    - name: Добавление проверенных метаданных образов в проекцию плана
+      when: platform_plan_prepared_images_path is defined
+      block:
+        - ansible.builtin.include_vars:
+            file: "{{ platform_plan_prepared_images_path }}"
+            name: platform_plan_prepared_images
+        - platform.core.project_snapshot:
+            resolved_result_variable: platform_project_resolution
+            prepared_application_images: "{{ platform_plan_prepared_images }}"
+          register: platform_plan_enriched_resolution
+          no_log: true
+        - ansible.builtin.set_fact:
+            platform_project_resolution: "{{ platform_plan_enriched_resolution }}"
+          no_log: true
 
     - name: Сохранение разрешённых входов планировщика
       ansible.builtin.set_fact:
@@ -38803,8 +38878,8 @@ artifactLock:
         execution_mode: "{{ platform_execution_mode | default(omit) }}"
         skip_infrastructure_verify: "{{ platform_execution_skip_infrastructure_verify | default(false) }}"
         application_image_lock: "{{ platform_plan_snapshot.application_image_lock | default({}) }}"
-        application_image_metadata: "{{ platform_application_image_metadata | default(platform_prepared_application_images is defined) }}"
-        deferred_application_images: "{{ platform_application_deferred_images | default(false) }}"
+        application_image_metadata: "{{ platform_application_image_metadata | default(platform_prepared_application_images is defined or platform_plan_prepared_images_path is defined) }}"
+        deferred_application_images: "{{ platform_application_deferred_images | default(platform_plan_prepared_images_path is defined) }}"
       changed_when: false
       become: false
 
@@ -38983,7 +39058,7 @@ artifactLock:
       run_once: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/runtime-secret-descriptors.yml","mode":420,"size":1259,"sha256":"47d1c56f2b741f035a9f36d3c8e6bd14b494e43e5b92ea88b54a221cdf67628e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1259}
+@@PORTABLE {"path":"ansible-core/playbooks/runtime-secret-descriptors.yml","mode":420,"size":1351,"sha256":"c084004084712f96bb88729a9cd75415e6f617ad97d0988e0ffd6063060c3f63","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1351}
 ---
 - name: "Формирование описаний runtime-секретов без обращения к целевым узлам"
   hosts: localhost
@@ -39002,6 +39077,7 @@ artifactLock:
         name: platform_secret_catalog
       changed_when: false
     - platform.core.build_runtime_secret_descriptors:
+        editor_locations: "{{ platform_runtime_secret_editor_locations | default(false) }}"
         snapshot: "{{ platform_secret_snapshot.snapshot }}"
         application_image_lock: "{{ platform_secret_snapshot.application_image_lock | default({}) }}"
         pki_materialization: "{{ platform_secret_snapshot.pki_materialization | default({}) }}"
@@ -42444,7 +42520,7 @@ def _secret_output_retention_pending(root, journal):
     return False
 
 @@END
-@@PORTABLE {"path":"ansible-core/tools/execution_protocol.py","mode":420,"size":84135,"sha256":"12e9561893241dad631132882e9508c5d05eb269e1a5e66f54993d28968adc1f","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"ansible-core/tools/execution_protocol.py","mode":420,"size":86752,"sha256":"56e1af64fed8a260c3fac75bbcda8f5ac13bad1e2ef21883ec1a4c6dd5b03921","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
 #!/usr/bin/env python3
 """Fixed JSON protocol for the activated Execution Node runtime.
 
@@ -42592,6 +42668,13 @@ def request():
                 fields.update(('skipApplicationLibraries', 'applicationLibraryOrder'))
             if value['apiVersion'] in (SERVICE_SELECTION_REQUEST_VERSION, AVAILABILITY_REQUEST_VERSION):
                 fields.add('skipServiceDeployments')
+            if value['apiVersion'] == AVAILABILITY_REQUEST_VERSION and 'applicationVaultSources' in value:
+                fields.add('applicationVaultSources')
+                sources = value['applicationVaultSources']
+                if (not isinstance(sources, dict) or len(sources) > 16 or
+                        any(re.fullmatch(r'[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*', key) is None
+                            or kind not in ('RUNTIME_INPUT', 'CURRENT_RUN_BOOTSTRAP') for key, kind in sources.items())):
+                    raise LifecycleError('APPLICATION_VAULT_SOURCE_INVALID')
         elif value.get('phase') == 'PREPARE':
             fields.add('inputsDigest')
             if 'preparationLease' in value:
@@ -42680,6 +42763,7 @@ def _application_capabilities(args):
     result['apiVersion'] = 'platform.installer/execution-capabilities/v1alpha7'
     result['deploymentPlanRequestVersions'] = [DEPLOYMENT_PLAN_REQUEST_VERSION, APPLICATION_PLAN_REQUEST_VERSION]
     result['runtimeSecretDescriptors']['protocol'] = 'BuildRuntimeSecretDescriptors/v1alpha3'
+    result['runtimeSecretDescriptors']['maxResponseBytes'] = 256 * 1024
     result['runtimeSecretDescriptors'].pop('maxDescriptors', None)
     result['applicationExecution'] = {'manifestContract': 'platform.installer/execution-manifest/v1alpha2',
                                      'planContract': 'platform.installer/plan/v1alpha4',
@@ -43204,7 +43288,10 @@ def start(value, state_root, runtime_release, controller, active_bundle_digest="
         raise LifecycleError("EXECUTION_RUNTIME_RELEASE_MISMATCH")
     if not isinstance(manifest.get("operations"), list):
         raise LifecycleError("EXECUTION_MANIFEST_INVALID")
-    metadata = {"runId": run_id, "projectIdentity": value["projectIdentity"], "planFingerprint": value["planFingerprint"], "manifestDigest": digest(manifest), "runtimeRelease": value["runtimeRelease"]["bundleDigest"], "unit": unit_name(run_id)}
+    metadata = {"runId": run_id, "projectIdentity": value["projectIdentity"], "planFingerprint": v
+@@END
+@@PORTABLE {"path":"ansible-core/tools/execution_protocol.py","mode":420,"size":86752,"sha256":"56e1af64fed8a260c3fac75bbcda8f5ac13bad1e2ef21883ec1a4c6dd5b03921","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":38752}
+alue["planFingerprint"], "manifestDigest": digest(manifest), "runtimeRelease": value["runtimeRelease"]["bundleDigest"], "unit": unit_name(run_id)}
     os.makedirs(state_root, mode=0o700, exist_ok=True)
     active_lock = os.open(os.path.join(state_root, ".active-runs.lock"), os.O_CREAT | os.O_RDWR, 0o600)
     fcntl.flock(active_lock, fcntl.LOCK_EX)
@@ -43215,10 +43302,7 @@ def start(value, state_root, runtime_release, controller, active_bundle_digest="
             owned(journal)
             return {"run": journal.status(), "idempotent": True}
         runs = os.path.join(state_root, "runs")
-        for candidate in os.listdir(runs)
-@@END
-@@PORTABLE {"path":"ansible-core/tools/execution_protocol.py","mode":420,"size":84135,"sha256":"12e9561893241dad631132882e9508c5d05eb269e1a5e66f54993d28968adc1f","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":36135}
-:
+        for candidate in os.listdir(runs):
             if candidate == run_id: continue
             other = Journal(state_root, candidate)
             try:
@@ -43329,7 +43413,8 @@ def _core_operation(value, state_root, runtime_release, operation, runtime_ident
             if not isinstance(release_manifest, dict) or release_manifest.get("catalogDigest") != snapshot_request.get("catalogLockDigest"):
                 raise LifecycleError("PROJECT_SNAPSHOT_RUNTIME_MISMATCH")
         extra = {"platform_project_root": project, "platform_project_manifest_path": os.path.join(project, "project.yml"), "platform_service_catalog_path": os.path.join(release, "catalog", "service-catalog.yml"), "platform_installer_owned_paths": owned_paths}
-    elif operation == 'PrepareApplicationImages':
+    elif (operation == 'PrepareApplicationImages' and
+          not (value['apiVersion'] == AVAILABILITY_REQUEST_VERSION and 'applicationVaultSources' in value)):
         playbook, inventory = 'applications/images/inputs.yml', os.path.join(project, 'inventory', 'hosts.yml')
         extra = dict(platform_project_root=project,
                      platform_service_catalog_path=os.path.join(release, 'catalog/service-catalog.yml'),
@@ -43337,7 +43422,7 @@ def _core_operation(value, state_root, runtime_release, operation, runtime_ident
                      platform_execution_mode=value['executionMode'],
                      platform_application_image_inputs_path=os.path.join(journal.directory, 'application-image-inputs.json'))
         extra['platform_application_image_availability_only'] = value['apiVersion'] == AVAILABILITY_REQUEST_VERSION
-    elif operation in ("BuildDeploymentPlan", "BuildRuntimeSecretDescriptors"):
+    elif operation in ("BuildDeploymentPlan", "BuildRuntimeSecretDescriptors", "PrepareApplicationImages"):
         # Core remains target-free (the playbook runs on localhost), but it must
         # load the staged project inventory so snapshot receives its canonical
         # desired state, groups and host variables.
@@ -43351,8 +43436,9 @@ def _core_operation(value, state_root, runtime_release, operation, runtime_ident
         if not isinstance(sources, list):
             raise LifecycleError("EXECUTION_RUNTIME_RELEASE_INVALID")
         extra = {"platform_project_root": project, "platform_project_manifest_path": os.path.join(project, "project.yml"), "platform_service_catalog_path": os.path.join(release, "catalog", "service-catalog.yml"), "platform_execution_runtime_release": value["runtimeRelease"], "platform_execution_bundle_artifact_sources": sources, "platform_execution_state_root": state_root}
-        if operation == "BuildDeploymentPlan":
-            if value.get('apiVersion') in IMAGE_REQUEST_VERSIONS:
+        canonical_images = operation == 'PrepareApplicationImages'
+        if operation in ("BuildDeploymentPlan", "PrepareApplicationImages"):
+            if operation == "BuildDeploymentPlan" and value.get('apiVersion') in IMAGE_REQUEST_VERSIONS:
                 prepared = execution_secret_lease._read(os.path.join(journal.directory, 'application-images.json'))
                 if digest(prepared) != value['applicationImagePreparation']:
                     raise LifecycleError('APPLICATION_IMAGE_PREPARATION_STALE')
@@ -43361,11 +43447,16 @@ def _core_operation(value, state_root, runtime_release, operation, runtime_ident
                        (('skipApplicationLibraries', 'applicationLibraryOrder') if value['apiVersion'] in SELECTION_REQUEST_VERSIONS else ()) +
                        (('skipServiceDeployments',) if value['apiVersion'] in (SERVICE_SELECTION_REQUEST_VERSION, AVAILABILITY_REQUEST_VERSION) else ())):
                     raise LifecycleError('APPLICATION_IMAGE_PREPARATION_STALE')
-                extra.update(platform_prepared_application_images=prepared, platform_application_image_metadata=True)
+                canonical_images = 'applicationVaultSources' in inputs
+                if canonical_images and inputs['applicationVaultSources'] != value['applicationVaultSources']:
+                    raise LifecycleError('APPLICATION_IMAGE_PREPARATION_STALE')
+                if not canonical_images:
+                    extra.update(platform_prepared_application_images=prepared, platform_application_image_metadata=True)
                 if value['apiVersion'] == AVAILABILITY_REQUEST_VERSION:
                     if prepared.get('apiVersion') != 'platform.installer/application-image-intents/v1alpha1':
                         raise LifecycleError('APPLICATION_IMAGE_PREPARATION_STALE')
-                    extra['platform_application_deferred_images'] = True
+                    if not canonical_images:
+                        extra['platform_application_deferred_images'] = True
             if value.get('apiVersion') in SELECTION_REQUEST_VERSIONS:
                 extra['platform_execution_skip_application_libraries'] = value['skipApplicationLibraries']
             if value.get('apiVersion') in (SERVICE_SELECTION_REQUEST_VERSION, AVAILABILITY_REQUEST_VERSION) and value['executionMode'] == 'FULL_PROJECT':
@@ -43377,8 +43468,18 @@ def _core_operation(value, state_root, runtime_release, operation, runtime_ident
             if value.get('apiVersion') in (B0_PLAN_REQUEST_VERSION, SKIP_PLAN_REQUEST_VERSION, image_preparation.REQUEST_VERSION, SELECTION_REQUEST_VERSION, SERVICE_SELECTION_REQUEST_VERSION, AVAILABILITY_REQUEST_VERSION):
                 extra['platform_execution_mode'] = value['executionMode']
                 extra['platform_execution_skip_infrastructure_verify'] = value.get('skipInfrastructureVerify', False)
+        if canonical_images:
+            prepared_path = os.path.join(journal.directory, 'application-images.json')
+            if operation == 'PrepareApplicationImages' and os.path.lexists(prepared_path):
+                raise LifecycleError('APPLICATION_IMAGE_PREPARATION_STALE')
+            extra.update(platform_execution_bundle_root=release,
+                         platform_application_image_availability_only=True,
+                         platform_application_image_inputs_path=os.path.join(journal.directory, 'application-image-inputs.json'),
+                         platform_plan_prepared_images_path=prepared_path)
+            extra['platform_plan_resolution_context'] = digest(extra)
         if operation == "BuildRuntimeSecretDescriptors":
             playbook = "runtime-secret-descriptors.yml"
+            extra['platform_runtime_secret_editor_locations'] = value.get('descriptorResponse') == 'BuildRuntimeSecretDescriptors/v1alpha5'
     else:
         raise LifecycleError("EXECUTION_OPERATION_UNSUPPORTED")
     if operation == 'PrepareApplicationImages' and value.get('apiVersion') in SELECTION_REQUEST_VERSIONS:
@@ -43481,6 +43582,8 @@ def _core_operation(value, state_root, runtime_release, operation, runtime_ident
             inputs.update({key: value[key] for key in ('skipApplicationLibraries', 'applicationLibraryOrder')})
         if value['apiVersion'] in (SERVICE_SELECTION_REQUEST_VERSION, AVAILABILITY_REQUEST_VERSION):
             inputs['skipServiceDeployments'] = value['skipServiceDeployments']
+        if 'applicationVaultSources' in value:
+            inputs['applicationVaultSources'] = value['applicationVaultSources']
         inputs['expiresAt'] = int(time.time()) + 120
         execution_secret_lease._write(os.path.join(journal.directory, 'application-image-inputs.json'), inputs)
         return dict(status='INPUTS_READY', inputsDigest=digest(inputs), inputs=inputs,
@@ -43670,7 +43773,15 @@ def main():
         if value.get('runtimeRelease') != expected_release:
             raise LifecycleError('EXECUTION_RUNTIME_RELEASE_INVALID')
     if operation == "GetCapabilities":
-        return reply(_image_capabilities(args, value['apiVersion'] in SELECTION_REQUEST_VERSIONS, value['apiVersion'] in (SERVICE_SELECTION_REQUEST_VERSION, AVAILABILITY_REQUEST_VERSION), value['apiVersion'] == AVAILABILITY_REQUEST_VERSION) if value['apiVersion'] in IMAGE_REQUEST_VERSIONS else _b0_capabilities(args, value['apiVersion'] == SKIP_PLAN_REQUEST_VERSION) if value['apiVersion'] in (B0_PLAN_REQUEST_VERSION, SKIP_PLAN_REQUEST_VERSION) else _application_capabilities(args) if value['apiVersion'] == APPLICATION_PLAN_REQUEST_VERSION else _capabilities_v4(args))
+        if value['apiVersion'] in IMAGE_REQUEST_VERSIONS:
+            availability = value['apiVersion'] == AVAILABILITY_REQUEST_VERSION
+            result = _image_capabilities(args, value['apiVersion'] in SELECTION_REQUEST_VERSIONS,
+                                         value['apiVersion'] in (SERVICE_SELECTION_REQUEST_VERSION, AVAILABILITY_REQUEST_VERSION),
+                                         availability)
+            if availability and value.get('canonicalPlanContext') is True:
+                result['applicationImagePlanning']['protocol'] = 'RegistryAvailabilityPlanning/v1alpha2'
+            return reply(result)
+        return reply(_b0_capabilities(args, value['apiVersion'] == SKIP_PLAN_REQUEST_VERSION) if value['apiVersion'] in (B0_PLAN_REQUEST_VERSION, SKIP_PLAN_REQUEST_VERSION) else _application_capabilities(args) if value['apiVersion'] == APPLICATION_PLAN_REQUEST_VERSION else _capabilities_v4(args))
     if operation == 'PrepareApplicationImages':
         if value['phase'] == 'DESCRIBE':
             return reply(core_operation(value, args.state_root, args.runtime_release, operation, observed))
@@ -51778,7 +51889,7 @@ libraryExecutionPriorities:
 }
 
 @@END
-@@PORTABLE {"path":"contracts/execution-capabilities/v1alpha10/schema.json","mode":420,"size":5286,"sha256":"97bd81388e8968a5df6f6fb8e13de9edeead783b2a0a6fb4516e4feab1a5c3a3","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5286}
+@@PORTABLE {"path":"contracts/execution-capabilities/v1alpha10/schema.json","mode":420,"size":5295,"sha256":"fe1617cc21097ae95eb3898e2ec9578f19935d3c019d8ca0587a8508860dfd45","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5295}
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://platform-installer.local/contracts/execution-capabilities/v1alpha10/schema.json",
@@ -51877,7 +51988,7 @@ libraryExecutionPriorities:
           "const": 256
         },
         "maxResponseBytes": {
-          "const": 65536
+          "enum": [65536, 262144]
         }
       }
     },
@@ -51973,7 +52084,7 @@ libraryExecutionPriorities:
 }
 
 @@END
-@@PORTABLE {"path":"contracts/execution-capabilities/v1alpha11/schema.json","mode":420,"size":6041,"sha256":"0a23e8a40388f482076453bcd48e288c1ed0b09688f0c935bdfffa73d345408c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":6041}
+@@PORTABLE {"path":"contracts/execution-capabilities/v1alpha11/schema.json","mode":420,"size":6050,"sha256":"02bcf38b6cd9de657e58cf179c00bc995d7353dfa12eb19b155a762bac1961a8","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":6050}
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://platform-installer.local/contracts/execution-capabilities/v1alpha11/schema.json",
@@ -52073,7 +52184,7 @@ libraryExecutionPriorities:
           "const": 256
         },
         "maxResponseBytes": {
-          "const": 65536
+          "enum": [65536, 262144]
         }
       }
     },
@@ -52196,7 +52307,7 @@ libraryExecutionPriorities:
 }
 
 @@END
-@@PORTABLE {"path":"contracts/execution-capabilities/v1alpha13/schema.json","mode":420,"size":7136,"sha256":"86334a86c3348da825814eb60518b7b776763919d8ef47fed8927c60a90eac68","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7136}
+@@PORTABLE {"path":"contracts/execution-capabilities/v1alpha13/schema.json","mode":420,"size":7145,"sha256":"299bfc178dadc9bab7b49ee7e4be4e961fda5fa11204520960c1bc12c6ff7131","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7145}
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://platform-installer.local/contracts/execution-capabilities/v1alpha13/schema.json",
@@ -52298,7 +52409,7 @@ libraryExecutionPriorities:
           "const": 256
         },
         "maxResponseBytes": {
-          "const": 65536
+          "enum": [65536, 262144]
         }
       }
     },
@@ -52461,7 +52572,7 @@ libraryExecutionPriorities:
 }
 
 @@END
-@@PORTABLE {"path":"contracts/execution-capabilities/v1alpha14/schema.json","mode":420,"size":7664,"sha256":"1cf4a58c934488cd92f94a4eade6923166500da9cd7bd10d355b9a0c450070cf","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7664}
+@@PORTABLE {"path":"contracts/execution-capabilities/v1alpha14/schema.json","mode":420,"size":7673,"sha256":"2b5356d471dd7ce91351317b3e36d5d3e7f41b2c9d748fa6ab5bbafeba165a64","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7673}
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://platform-installer.local/contracts/execution-capabilities/v1alpha14/schema.json",
@@ -52564,7 +52675,7 @@ libraryExecutionPriorities:
           "const": 256
         },
         "maxResponseBytes": {
-          "const": 65536
+          "enum": [65536, 262144]
         }
       }
     },
@@ -52747,7 +52858,7 @@ libraryExecutionPriorities:
 }
 
 @@END
-@@PORTABLE {"path":"contracts/execution-capabilities/v1alpha15/schema.json","mode":420,"size":8220,"sha256":"878d50036b27ea92d93ec3b5eaac5fabaf2da93f91d27368dd7f58c060737f43","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":8220}
+@@PORTABLE {"path":"contracts/execution-capabilities/v1alpha15/schema.json","mode":420,"size":8271,"sha256":"46b4334cabd89fc1f3fd432aea04f51cdff0a8e964e113dca045d57dc7293c96","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":8271}
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://platform-installer.local/contracts/execution-capabilities/v1alpha15/schema.json",
@@ -52851,7 +52962,7 @@ libraryExecutionPriorities:
           "const": 256
         },
         "maxResponseBytes": {
-          "const": 65536
+          "enum": [65536, 262144]
         }
       }
     },
@@ -53040,7 +53151,7 @@ libraryExecutionPriorities:
           "const": "platform.installer/execution-manifest/v1alpha9"
         },
         "protocol": {
-          "const": "RegistryAvailabilityPlanning/v1alpha1"
+          "enum": ["RegistryAvailabilityPlanning/v1alpha1", "RegistryAvailabilityPlanning/v1alpha2"]
         }
       },
       "type": "object",
@@ -53214,7 +53325,7 @@ libraryExecutionPriorities:
 }
 
 @@END
-@@PORTABLE {"path":"contracts/execution-capabilities/v1alpha7/schema.json","mode":420,"size":3265,"sha256":"5e469b76533c68d79c7caa8c83eb407163e4584ed4c3fac62bca65e11f698770","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3265}
+@@PORTABLE {"path":"contracts/execution-capabilities/v1alpha7/schema.json","mode":420,"size":3274,"sha256":"2bf71d460a732270453c147fd358350fb9475247851ade918c3b3a9abfbff9c1","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3274}
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://platform-installer.local/contracts/execution-capabilities/v1alpha7/schema.json",
@@ -53290,7 +53401,7 @@ libraryExecutionPriorities:
           "const": 256
         },
         "maxResponseBytes": {
-          "const": 65536
+          "enum": [65536, 262144]
         }
       }
     },
@@ -53333,7 +53444,7 @@ libraryExecutionPriorities:
 }
 
 @@END
-@@PORTABLE {"path":"contracts/execution-capabilities/v1alpha8/schema.json","mode":420,"size":4246,"sha256":"a6897097ae0762a53ec6cb0fd08979c45317b364d8753af4e49eed88236bf0dd","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4246}
+@@PORTABLE {"path":"contracts/execution-capabilities/v1alpha8/schema.json","mode":420,"size":4255,"sha256":"f2a71ae56c56e277b7bfb577f66a5bfedac0816b6028e763d23ac6cfa6667b6a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4255}
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://platform-installer.local/contracts/execution-capabilities/v1alpha8/schema.json",
@@ -53410,7 +53521,7 @@ libraryExecutionPriorities:
           "const": 256
         },
         "maxResponseBytes": {
-          "const": 65536
+          "enum": [65536, 262144]
         }
       }
     },
@@ -53486,7 +53597,7 @@ libraryExecutionPriorities:
 }
 
 @@END
-@@PORTABLE {"path":"contracts/execution-capabilities/v1alpha9/schema.json","mode":420,"size":4397,"sha256":"38702b8133bd8a4f22ffebc0af904095e88c948a8df04f1186fcc90015bf4473","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4397}
+@@PORTABLE {"path":"contracts/execution-capabilities/v1alpha9/schema.json","mode":420,"size":4406,"sha256":"6850cc67851050b2f0122b5f7114625f46f056286d19076be9e47a9a1d6f4f7f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4406}
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://platform-installer.local/contracts/execution-capabilities/v1alpha9/schema.json",
@@ -53564,7 +53675,7 @@ libraryExecutionPriorities:
           "const": 256
         },
         "maxResponseBytes": {
-          "const": 65536
+          "enum": [65536, 262144]
         }
       }
     },
@@ -57503,7 +57614,7 @@ libraryExecutionPriorities:
 }
 
 @@END
-@@PORTABLE {"path":"contracts/execution-runtime/v1alpha9/prepare-application-images.schema.json","mode":420,"size":3402,"sha256":"34e40809610845337a4f156ea862e893318f20ada8da3375423afeda50739ff6","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3402}
+@@PORTABLE {"path":"contracts/execution-runtime/v1alpha9/prepare-application-images.schema.json","mode":420,"size":3643,"sha256":"121be784633d525dade5ee8d18a0c0c131df63452f67796e86e30b46e3175def","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3643}
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://platform-installer.local/contracts/execution-runtime/v1alpha9/prepare-application-images.schema.json",
@@ -57547,6 +57658,9 @@ libraryExecutionPriorities:
     },
     "skipInfrastructureVerify": {
       "type": "boolean"
+    },
+    "applicationVaultSources": {
+      "$ref": "build-deployment-plan.schema.json#/properties/applicationVaultSources"
     },
     "inputsDigest": {
       "$ref": "../../artifact-source/v1alpha2/image-lock.schema.json#/$defs/digest"
@@ -57632,6 +57746,11 @@ libraryExecutionPriorities:
             {
               "required": [
                 "skipInfrastructureVerify"
+              ]
+            },
+            {
+              "required": [
+                "applicationVaultSources"
               ]
             },
             {
@@ -65748,6 +65867,291 @@ libraryExecutionPriorities:
         ]
       },
       "type": "array"
+    }
+  }
+}
+
+@@END
+@@PORTABLE {"path":"contracts/runtime-secret-descriptors/v1alpha5/schema.json","mode":420,"size":7245,"sha256":"91da1dfaa41da0b1633a9599942edf765702a1489ad351c50aa6e729b5724177","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7245}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/runtime-secret-descriptors/v1alpha5/schema.json",
+  "title": "Safe target-free typed runtime input descriptors",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "apiVersion",
+    "projectIdentity",
+    "projectRevision",
+    "descriptors",
+    "descriptorSetFingerprint",
+    "applicationInputs",
+    "editorLocations"
+  ],
+  "properties": {
+    "apiVersion": {
+      "const": "BuildRuntimeSecretDescriptors/v1alpha5"
+    },
+    "projectIdentity": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,127}$"
+    },
+    "projectRevision": {
+      "$ref": "../../runtime-secret-lease/v1alpha1/request.schema.json#/$defs/digest"
+    },
+    "descriptorSetFingerprint": {
+      "$ref": "../../runtime-secret-lease/v1alpha1/request.schema.json#/$defs/digest"
+    },
+    "descriptors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "requirementRef",
+          "purpose",
+          "serviceDeployment",
+          "displayLabel",
+          "hosts",
+          "requiredWhen",
+          "operations"
+        ],
+        "properties": {
+          "requirementRef": {
+            "$ref": "../../target-credential-payload/v1alpha4/schema.json#/$defs/requirement"
+          },
+          "purpose": {
+            "enum": [
+              "PKI_STORE_PASSWORD",
+              "SERVICE_PASSWORD",
+              "SERVICE_ADMIN_TOKEN",
+              "SERVICE_UNSEAL_SHARES"
+            ]
+          },
+          "serviceDeployment": {
+            "oneOf": [
+              {
+                "$ref": "../../target-credential-payload/v1alpha4/schema.json#/$defs/deployment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "displayLabel": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "hosts": {
+            "type": "array",
+            "maxItems": 256,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "../../target-credential-payload/v1alpha4/schema.json#/$defs/deployment"
+            }
+          },
+          "requiredWhen": {
+            "enum": [
+              "ALWAYS",
+              "INITIALIZED",
+              "SEALED"
+            ]
+          },
+          "operations": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 2,
+            "uniqueItems": true,
+            "items": {
+              "enum": [
+                "SERVICE_APPLY",
+                "SERVICE_VERIFY"
+              ]
+            }
+          }
+        },
+        "oneOf": [
+          {
+            "properties": {
+              "purpose": {
+                "const": "PKI_STORE_PASSWORD"
+              },
+              "serviceDeployment": {
+                "const": null
+              },
+              "requiredWhen": {
+                "const": "ALWAYS"
+              },
+              "operations": {
+                "const": [
+                  "SERVICE_APPLY",
+                  "SERVICE_VERIFY"
+                ]
+              }
+            }
+          },
+          {
+            "properties": {
+              "purpose": {
+                "const": "SERVICE_PASSWORD"
+              },
+              "requiredWhen": {
+                "const": "ALWAYS"
+              },
+              "operations": {
+                "const": [
+                  "SERVICE_APPLY",
+                  "SERVICE_VERIFY"
+                ]
+              }
+            }
+          },
+          {
+            "properties": {
+              "purpose": {
+                "const": "SERVICE_ADMIN_TOKEN"
+              },
+              "requiredWhen": {
+                "const": "INITIALIZED"
+              },
+              "operations": {
+                "const": [
+                  "SERVICE_APPLY",
+                  "SERVICE_VERIFY"
+                ]
+              }
+            }
+          },
+          {
+            "properties": {
+              "purpose": {
+                "const": "SERVICE_UNSEAL_SHARES"
+              },
+              "requiredWhen": {
+                "const": "SEALED"
+              },
+              "operations": {
+                "const": [
+                  "SERVICE_APPLY"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    "applicationInputs": {
+      "items": {
+        "properties": {
+          "providerDeployment": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "purpose": {
+            "enum": [
+              "APPLICATION_SECRET",
+              "APPLICATION_VAULT_ADMIN_TOKEN",
+              "APPLICATION_REGISTRY_USERNAME",
+              "APPLICATION_REGISTRY_PASSWORD"
+            ]
+          },
+          "operations": {
+            "const": [
+              "APPLICATION_LIBRARIES_APPLY",
+              "APPLICATION_LIBRARIES_VERIFY"
+            ]
+          },
+          "hosts": {
+            "minItems": 1,
+            "uniqueItems": true,
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 256
+          },
+          "requirementRef": {
+            "pattern": "^application-secret-[a-f0-9]{32}$",
+            "type": "string"
+          },
+          "applicationLibraries": {
+            "minItems": 1,
+            "uniqueItems": true,
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 256
+          },
+          "sourceRef": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$"
+          },
+          "displayLabel": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "requirementRef",
+          "purpose",
+          "providerDeployment",
+          "applicationLibraries",
+          "hosts",
+          "operations",
+          "sourceRef",
+          "displayLabel"
+        ]
+      },
+      "type": "array"
+    },
+    "editorLocations": {
+      "type": "array",
+      "maxItems": 1024,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "library",
+          "slot",
+          "account",
+          "field",
+          "requirementRef"
+        ],
+        "properties": {
+          "library": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "slot": {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 128
+          },
+          "account": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "field": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "requirementRef": {
+            "type": "string",
+            "pattern": "^application-secret-[a-f0-9]{32}$"
+          }
+        }
+      }
     }
   }
 }
@@ -98427,1309 +98831,4 @@ export function inferParameterValue(text: string): string | number | boolean {
   return text;
 }
 
-@@END
-@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":77997,"sha256":"895d41b503450bf1c40a40a1779e2ea57ff88950a505a044ef5c7625c029dd26","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":49891}
-import { ApplicationProvidedConnections } from "./ApplicationProvidedConnections";
-import { type ApplicationSecretSession } from "./ApplicationRuntimeSecretField";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { ApplicationLibraryResources } from "./ApplicationLibraryResources";
-import { ApplicationTopicBindings } from "./ApplicationTopicBindings";
-import { ApplicationPorts, type PortSource } from "./ApplicationPorts";
-import { ApplicationReadiness } from "./ApplicationReadiness";
-import { ApplicationRegistryCredentials } from "./ApplicationRegistryCredentials";
-import {
-  ApplicationBindings,
-  connectionCandidates,
-} from "./ApplicationBindings";
-import { ApplicationSecretBindings } from "./ApplicationSecretBindings";
-import { ApplicationCredentials } from "./ApplicationCredentials";
-import { ApplicationValueFields } from "./ApplicationValueFields";
-import { ApplicationFileSettings } from "./ApplicationFileSettings";
-import { ApplicationPackageImport } from "./ApplicationPackageImport";
-import type {
-  OpenResult,
-  RuntimeSecretDescriptorOperation,
-  RuntimeSecretValuesInput,
-} from "./backend";
-import "./applications.css";
-
-import {
-  applicationDraft,
-  objectValue,
-  type ApplicationIntent,
-  type ObjectValue,
-} from "./application-draft";
-export {
-  isApplicationIntent,
-  type ApplicationIntent,
-} from "./application-draft";
-
-export function ApplicationsPage({
-  managed,
-  snapshot,
-  intents,
-  busy,
-  onAppend,
-  onAmend,
-  onReview,
-  onInstallation,
-  onDirtyChange,
-  loadSecrets,
-  loadPendingSecrets,
-  saveSecrets,
-  loadSecretAvailability,
-  executionContextKey = "",
-  choosePackage,
-  onImport,
-  draftActive,
-  backendError,
-  importCompleted = false,
-}: {
-  choosePackage?: () => Promise<string>;
-  onImport: (
-    source: string,
-    kind: string,
-    name: string,
-    version: string,
-    digest: string,
-  ) => Promise<boolean>;
-  draftActive: boolean;
-  backendError?: string;
-  importCompleted?: boolean;
-  onProviderSecrets?: (deploymentId: string) => void;
-  loadSecrets?: () => Promise<RuntimeSecretDescriptorOperation>;
-  loadPendingSecrets?: (context: {
-    applicationLibrary: string;
-    applicationSlot?: string;
-  }) => Promise<RuntimeSecretDescriptorOperation>;
-  saveSecrets?: (input: RuntimeSecretValuesInput) => Promise<void>;
-  loadSecretAvailability?: () => Promise<RuntimeSecretDescriptorOperation>;
-  executionContextKey?: string;
-  managed: OpenResult["managed"];
-  snapshot: OpenResult["snapshot"];
-  intents: ApplicationIntent[];
-  busy: boolean;
-  onAppend: (intent: ApplicationIntent) => Promise<boolean>;
-  onAmend: (
-    previous: ApplicationIntent,
-    replacement: ApplicationIntent | null,
-  ) => Promise<boolean>;
-  onReview: () => void;
-  onInstallation: () => void;
-  onDirtyChange: (dirty: boolean) => void;
-}) {
-  const { libraries, placements, libraryEndpointGroups } = applicationDraft(
-    managed,
-    intents,
-  );
-  const packages = objectValue(managed?.applicationPackages);
-  const [selected, setSelected] = useState("");
-  const [slot, setSlot] = useState("");
-  const [tab, setTab] = useState("Общее");
-  const [search, setSearch] = useState("");
-  const [formEpoch, setFormEpoch] = useState(0);
-  const [addingEnvironment, setAddingEnvironment] = useState(false);
-  const [create, setCreate] = useState(false);
-  const [id, setId] = useState("");
-  const [ref, setRef] = useState("");
-  const [runtime, setRuntime] = useState("");
-  const runtimeOptions = Object.entries(managed?.deployments ?? {})
-    .filter(([, row]) => row.serviceType === "docker")
-    .map(([key]) => key);
-  const selectedRuntime =
-    runtime || (runtimeOptions.length === 1 ? runtimeOptions[0] : "");
-  const [local, setLocal] = useState<Record<string, string>>({});
-  const [editing, setEditing] = useState<Set<string>>(new Set());
-  const [error, setError] = useState("");
-  // One public descriptor query per saved revision and execution context.
-  // A fresh query intentionally invalidates attached service inputs on the backend.
-  const secretDescriptors = useRef<
-    { context: string; operation: RuntimeSecretDescriptorOperation } | undefined
-  >(undefined);
-  const descriptorContext = JSON.stringify([
-    managed?.projectRevision,
-    executionContextKey,
-  ]);
-  const secretScope = JSON.stringify([
-    selected,
-    slot,
-    managed?.projectRevision,
-    executionContextKey,
-  ]);
-  const [secretAvailability, setSecretAvailability] = useState<{
-    value: RuntimeSecretDescriptorOperation;
-    snapshot: OpenResult["snapshot"];
-    scope: string;
-  }>();
-  const availabilityGeneration = useRef(0);
-  const availabilityQueue = useRef<Promise<void>>(Promise.resolve());
-  const secretDescriptorLoad = useRef<
-    | {
-        context: string;
-        promise: Promise<RuntimeSecretDescriptorOperation>;
-      }
-    | undefined
-  >(undefined);
-  const loadApplicationSecrets = useCallback(async () => {
-    if (
-      secretDescriptors.current &&
-      secretDescriptors.current.context === descriptorContext
-    )
-      return secretDescriptors.current.operation;
-    const revision = managed?.projectRevision ?? "";
-    if (secretDescriptorLoad.current?.context === descriptorContext)
-      return secretDescriptorLoad.current.promise;
-    const promise = loadSecrets!()
-      .then((result) => {
-        if (secretDescriptorLoad.current?.promise === promise) {
-          secretDescriptors.current =
-            result.status === "READY" && result.projectRevision === revision
-              ? { context: descriptorContext, operation: result }
-              : undefined;
-        }
-        return result;
-      })
-      .finally(() => {
-        if (secretDescriptorLoad.current?.promise === promise)
-          secretDescriptorLoad.current = undefined;
-      });
-    secretDescriptorLoad.current = { context: descriptorContext, promise };
-    return promise;
-  }, [loadSecrets, managed?.projectRevision, descriptorContext]);
-  const refreshSecretAvailability = useCallback(() => {
-    const generation = ++availabilityGeneration.current;
-    const request = availabilityQueue.current
-      .catch(() => {})
-      .then(async () => {
-        if (generation !== availabilityGeneration.current) return;
-        try {
-          const cached = secretDescriptors.current;
-          const descriptors =
-            cached?.context === descriptorContext
-              ? cached.operation
-              : undefined;
-          const result = await loadSecretAvailability!();
-          if (generation !== availabilityGeneration.current) return;
-          setSecretAvailability(
-            result.status === "READY" &&
-              result.projectRevision === managed?.projectRevision &&
-              descriptors?.status === "READY" &&
-              result.descriptorSetFingerprint ===
-                descriptors.descriptorSetFingerprint
-              ? {
-                  value: {
-                    ...descriptors,
-                    applicationSecretAvailability:
-                      result.applicationSecretAvailability,
-                  },
-                  snapshot,
-                  scope: secretScope,
-                }
-              : undefined,
-          );
-        } catch {
-          if (generation === availabilityGeneration.current)
-            setSecretAvailability(undefined);
-        }
-      });
-    availabilityQueue.current = request;
-    return request;
-  }, [
-    loadSecretAvailability,
-    managed?.projectRevision,
-    snapshot,
-    secretScope,
-    descriptorContext,
-  ]);
-  const saveApplicationSecrets = async (input: RuntimeSecretValuesInput) => {
-    ++availabilityGeneration.current;
-    setSecretAvailability(undefined);
-    try {
-      await saveSecrets!(input);
-      if (loadSecretAvailability) await refreshSecretAvailability();
-    } catch (error) {
-      secretDescriptors.current = undefined;
-      ++availabilityGeneration.current;
-      setSecretAvailability(undefined);
-      throw error;
-    }
-  };
-  const childDirtyKeys = useRef(new Set<string>());
-  const [childDirty, setChildDirty] = useState(false);
-  const dirty = Object.keys(local).length > 0 || childDirty;
-  const markChildDirty = (value: boolean, key = "active") => {
-    if (value) childDirtyKeys.current.add(key);
-    else childDirtyKeys.current.delete(key);
-    setChildDirty(childDirtyKeys.current.size > 0);
-    onDirtyChange(
-      childDirtyKeys.current.size > 0 || Object.keys(local).length > 0,
-    );
-  };
-  const library = libraries[selected] ?? {};
-  const placementHosts = new Set(
-    managed?.deployments[String(library.runtimeRef)]?.serviceType === "docker"
-      ? [...(managed.hostPlacements ?? []), ...(managed.memberPlacements ?? [])]
-          .filter((row) => row.deploymentId === library.runtimeRef)
-          .map((row) => row.hostId)
-      : [],
-  );
-  const availablePlacementHosts = Object.keys(managed?.servers ?? {}).filter(
-    (host) => placementHosts.has(host),
-  );
-  const packageDefinition = (kind: string, reference: unknown) =>
-    objectValue(
-      objectValue(packages[kind + ":" + String(reference)]).definition,
-    );
-  const definition = packageDefinition("library", library.libraryRef);
-  const declaredConnections = (value: unknown): ObjectValue =>
-    Array.isArray(value)
-      ? Object.fromEntries(
-          value.map((key) => [
-            String(key),
-            objectValue(objectValue(definition.connections)[String(key)]),
-          ]),
-        )
-      : objectValue(value);
-  const recipe = objectValue(definition.slots);
-  const bindingHints: Record<string, string> = {};
-  const bindingConnectionNames: Record<string, string[]> = {};
-  const declareConnection = (connectionName: string, connection: unknown) => {
-    const name = objectValue(connection).library_binding;
-    if (typeof name === "string") {
-      bindingHints[name] = "deployment";
-      (bindingConnectionNames[name] ??= []).push(connectionName);
-    }
-  };
-  for (const [name, connection] of Object.entries(
-    objectValue(definition.connections),
-  )) {
-    declareConnection(name, connection);
-  }
-  for (const raw of Object.values(recipe)) {
-    const def = packageDefinition(
-      "application",
-      objectValue(raw).applicationRef,
-    );
-    for (const [name, connection] of Object.entries(
-      declaredConnections(def.connections),
-    )) {
-      declareConnection(name, connection);
-    }
-  }
-  for (const raw of Object.values(objectValue(definition.shared_secrets))) {
-    const source = objectValue(objectValue(raw).source);
-    if (source.kind === "pki_credential" && typeof source.binding === "string")
-      bindingHints[source.binding] = "pki";
-  }
-  const slotDefinition = objectValue(recipe[slot]);
-  const appDefinition = packageDefinition(
-    "application",
-    slotDefinition.applicationRef,
-  );
-  const appConnections = declaredConnections(appDefinition.connections);
-  const defaults = objectValue(appDefinition.defaults);
-  const authored = objectValue(objectValue(library.applications)[slot]);
-  const overrides = objectValue(authored.overrides);
-  const change = (key: string, value: string) => {
-    setLocal((v) => ({ ...v, [key]: value }));
-    onDirtyChange(true);
-  };
-  const clearLocal = () => {
-    setAddingEnvironment(false);
-    setLocal({});
-    setEditing(new Set());
-    setChildDirty(false);
-    childDirtyKeys.current.clear();
-    setFormEpoch((v) => v + 1);
-    onDirtyChange(false);
-  };
-  const navigate = (next: () => void) => {
-    if (
-      dirty &&
-      !window.confirm(
-        "Отбросить несохранённый ввод формы? Изменения, уже добавленные в черновик проекта, сохранятся.",
-      )
-    )
-      return;
-    clearLocal();
-    setError("");
-    next();
-  };
-  const send = async (c: ApplicationIntent) => {
-    const pendingCreate =
-      c.operation === "UpdateApplicationLibraryDeployment"
-        ? intents.find(
-            (p) =>
-              p.deploymentId === c.deploymentId &&
-              p.operation === "CreateApplicationLibraryDeployment",
-          )
-        : undefined;
-    const previous =
-      pendingCreate ??
-      [...intents]
-        .reverse()
-        .find(
-          (p) =>
-            p.deploymentId === c.deploymentId &&
-            p.entityId === c.entityId &&
-            p.hostId === c.hostId &&
-            p.setting === c.setting &&
-            p.property === c.property &&
-            p.operation.replace(/^(Set|Remove|Clear)/, "") ===
-              c.operation.replace(/^(Set|Remove|Clear)/, ""),
-        );
-    try {
-      if (
-        previous &&
-        c.entity &&
-        (c.operation === "UpdateApplicationLibraryDeployment" ||
-          c.operation === "SetApplicationLibrarySlot")
-      )
-        c = { ...c, entity: { ...previous.entity, ...c.entity } };
-      if (pendingCreate)
-        c = { ...c, operation: "CreateApplicationLibraryDeployment" };
-      const ok = previous ? await onAmend(previous, c) : await onAppend(c);
-      if (ok) {
-        setError("");
-      }
-      return ok;
-    } catch {
-      setError(
-        "Не удалось добавить изменение. Проверьте состояние черновика и повторите.",
-      );
-      return false;
-    }
-  };
-  const override = (
-    setting: string,
-    value: unknown,
-    property?: string,
-  ): ApplicationIntent => ({
-    operation: "SetApplicationLibraryOverride",
-    deploymentId: selected,
-    entityId: slot,
-    setting,
-    ...(property ? { property } : {}),
-    value,
-  });
-  const remove = (setting: string, property?: string): ApplicationIntent => ({
-    operation: "RemoveApplicationLibraryOverride",
-    deploymentId: selected,
-    entityId: slot,
-    setting,
-    ...(property ? { property } : {}),
-  });
-  const clearField = (key: string, ok: boolean) => {
-    if (!ok) return;
-    const next = { ...local };
-    delete next[key];
-    setLocal(next);
-    onDirtyChange(childDirty || Object.keys(next).length > 0);
-  };
-  const scalar = (
-    key: string,
-    label: string,
-    defaultValue: unknown,
-    authoredValue: unknown,
-    save: (v: string) => Promise<boolean>,
-    reset?: () => Promise<boolean>,
-    type = "text",
-  ) => (
-    <div
-      className={
-        "application-field" +
-        (key === "image" ? " application-image-field" : "")
-      }
-      key={key}
-    >
-      <div className="application-field-origin">
-        <span>
-          {authoredValue === undefined
-            ? defaultValue === undefined
-              ? "Не задано в пакете"
-              : "Из пакета"
-            : "Переопределено"}
-        </span>
-        <button
-          className="application-link"
-          type="button"
-          disabled={busy}
-          aria-label={`Переопределить: ${label}`}
-          onClick={() => setEditing((current) => new Set(current).add(key))}
-        >
-          Переопределить
-        </button>
-      </div>
-      <label>
-        {label}
-        {type === "multiline" ? (
-          <textarea
-            value={local[key] ?? String(authoredValue ?? defaultValue ?? "")}
-            disabled={
-              busy || (authoredValue === undefined && !editing.has(key))
-            }
-            onChange={(e) => change(key, e.target.value)}
-          />
-        ) : (
-          <input
-            type={type}
-            placeholder={
-              key.startsWith("port:") && defaultValue === undefined
-                ? "См. источники портов"
-                : undefined
-            }
-            min={type === "number" ? 1 : undefined}
-            max={type === "number" ? 65535 : undefined}
-            value={local[key] ?? String(authoredValue ?? defaultValue ?? "")}
-            onChange={(e) => change(key, e.target.value)}
-            disabled={
-              busy || (authoredValue === undefined && !editing.has(key))
-            }
-          />
-        )}
-      </label>
-      <small>
-        {authoredValue !== undefined
-          ? "Переопределено в экземпляре"
-          : "Значение пакета · без вычисления Ansible"}
-      </small>
-      <div className="row">
-        <button
-          hidden={key === "image" && local[key] === undefined}
-          disabled={
-            busy ||
-            local[key] === undefined ||
-            (type === "number" &&
-              (!Number.isInteger(Number(local[key])) ||
-                Number(local[key]) < 1 ||
-                Number(local[key]) > 65535))
-          }
-          onClick={() =>
-            void save(local[key]).then((ok) => clearField(key, ok))
-          }
-        >
-          В черновик
-        </button>
-        {reset && (
-          <button
-            className="outline"
-            hidden={key === "image" && authoredValue === undefined}
-            disabled={busy || authoredValue === undefined}
-            onClick={() =>
-              void reset().then((ok) => {
-                clearField(key, ok);
-                if (ok)
-                  setEditing((current) => {
-                    const next = new Set(current);
-                    next.delete(key);
-                    return next;
-                  });
-              })
-            }
-          >
-            Сбросить к default
-          </button>
-        )}
-      </div>
-    </div>
-  );
-  const tabs = slot
-    ? ["Основное", "Секреты", "Файлы", "Запуск", "Состояние"]
-    : ["Общее", "Общие параметры", "Подключения", "Ресурсы и секреты"];
-  const selectedTab = tabs.includes(tab) ? tab : tabs[0];
-  const resolved = snapshot?.applicationLibraries?.libraries?.[selected];
-  const freshSecrets =
-    !busy &&
-    !draftActive &&
-    !dirty &&
-    intents.length === 0 &&
-    snapshot?.projectRevision === managed?.projectRevision;
-  const editableSecretSession =
-    !busy && !draftActive && !dirty && intents.length === 0;
-  const pendingSecretContext = JSON.stringify([
-    selected,
-    slot,
-    managed?.projectRevision,
-  ]);
-  const [pendingAvailability, setPendingAvailability] = useState<{
-    context: string;
-    value: RuntimeSecretDescriptorOperation;
-  }>();
-  const pendingGeneration = useRef(0);
-  const loadPendingApplicationSecrets = useCallback(async () => {
-    const generation = ++pendingGeneration.current;
-    const value = await loadPendingSecrets!({
-      applicationLibrary: selected,
-      applicationSlot: slot,
-    });
-    if (pendingGeneration.current === generation)
-      setPendingAvailability({ context: pendingSecretContext, value });
-    return value;
-  }, [loadPendingSecrets, selected, slot, pendingSecretContext]);
-  useEffect(() => {
-    if (
-      !loadPendingSecrets ||
-      !editableSecretSession ||
-      !["Секреты", "Подключения", "Ресурсы и секреты"].includes(selectedTab)
-    )
-      return;
-    const refresh = () => {
-      void loadPendingApplicationSecrets().catch(() =>
-        setPendingAvailability(undefined),
-      );
-    };
-    refresh();
-    const interval = window.setInterval(refresh, 10000);
-    return () => {
-      ++pendingGeneration.current;
-      window.clearInterval(interval);
-    };
-  }, [
-    loadPendingSecrets,
-    editableSecretSession,
-    selectedTab,
-    loadPendingApplicationSecrets,
-  ]);
-  // Selecting an authored reference must not depend on successful Core resolution.
-  const providedConnectionChoices = Object.entries(libraries).flatMap(
-    ([id, lib]) =>
-      Object.keys(
-        objectValue(
-          packageDefinition("library", lib.libraryRef).provided_connections,
-        ),
-      ).map((name) => id + "/" + name),
-  );
-  const secretContext = JSON.stringify([
-    selected,
-    slot,
-    managed?.projectRevision,
-    freshSecrets,
-  ]);
-  useEffect(() => {
-    ++availabilityGeneration.current;
-    if (
-      !["Секреты", "Подключения", "Ресурсы и секреты"].includes(selectedTab) ||
-      !!loadPendingSecrets ||
-      !freshSecrets ||
-      !loadSecrets ||
-      !loadSecretAvailability
-    )
-      return;
-    let active = true;
-    let pending = false;
-    const refresh = async () => {
-      if (!active || pending) return;
-      pending = true;
-      try {
-        await refreshSecretAvailability();
-      } finally {
-        pending = false;
-      }
-    };
-    // Descriptor discovery is an explicit context-entry operation, never a poll.
-    void loadApplicationSecrets()
-      .then(() => {
-        if (active) void refresh();
-      })
-      .catch(() => {
-        if (active) setSecretAvailability(undefined);
-      });
-    const interval = window.setInterval(() => void refresh(), 10000);
-    window.addEventListener("focus", refresh);
-    return () => {
-      active = false;
-      ++availabilityGeneration.current;
-      window.clearInterval(interval);
-      window.removeEventListener("focus", refresh);
-    };
-  }, [
-    secretContext,
-    slot,
-    selectedTab,
-    freshSecrets,
-    loadSecrets,
-    loadPendingSecrets,
-    loadSecretAvailability,
-    loadApplicationSecrets,
-    refreshSecretAvailability,
-  ]);
-  const resolvedSecretAccounts = freshSecrets
-    ? objectValue(
-        Object.values(resolved?.instances ?? {}).find(
-          (instance) => instance.slotId === slot,
-        )?.credentialRequirements,
-      )
-    : {};
-  const librarySecretSession: ApplicationSecretSession | undefined =
-    (loadSecrets || loadPendingSecrets) && saveSecrets
-      ? {
-          projectRevision: managed?.projectRevision ?? "",
-          contextKey: executionContextKey,
-          libraryId: selected,
-          pending: !!loadPendingSecrets,
-          applicationSlot: slot,
-          disabled: loadPendingSecrets
-            ? !editableSecretSession
-            : busy || !freshSecrets,
-          availability: loadPendingSecrets
-            ? pendingAvailability?.context === pendingSecretContext
-              ? pendingAvailability.value
-              : undefined
-            : freshSecrets &&
-                secretAvailability &&
-                secretAvailability?.snapshot === snapshot &&
-                secretAvailability.scope === secretScope
-              ? secretAvailability.value
-              : undefined,
-          load: loadPendingSecrets
-            ? loadPendingApplicationSecrets
-            : loadApplicationSecrets,
-          save: loadPendingSecrets
-            ? async (input) => {
-                await saveSecrets(input);
-                await loadPendingApplicationSecrets();
-              }
-            : saveApplicationSecrets,
-        }
-      : undefined;
-  const secretRefCounts: Record<string, number> = {};
-  for (const resolvedLibrary of Object.values(
-    snapshot?.applicationLibraries?.libraries ?? {},
-  )) {
-    for (const secret of Object.values(
-      objectValue(resolvedLibrary.sharedSecretRequirements),
-    )) {
-      const source = objectValue(objectValue(secret).source);
-      if (
-        source.kind === "runtime_secret_ref" &&
-        typeof source.ref === "string"
-      )
-        secretRefCounts[source.ref] = (secretRefCounts[source.ref] ?? 0) + 1;
-    }
-    for (const instance of Object.values(resolvedLibrary.instances ?? {})) {
-      for (const account of Object.values(
-        objectValue(instance.credentialRequirements),
-      )) {
-        for (const credential of Object.values(
-          objectValue(objectValue(account).credentials),
-        )) {
-          const source = objectValue(objectValue(credential).source);
-          if (
-            source.kind === "runtime_secret_ref" &&
-            typeof source.ref === "string"
-          )
-            secretRefCounts[source.ref] =
-              (secretRefCounts[source.ref] ?? 0) + 1;
-        }
-      }
-    }
-  }
-  const resolvedTopics =
-    !draftActive && snapshot?.projectRevision === managed?.projectRevision
-      ? objectValue(resolved?.topics)
-      : {};
-  const resolvedResources =
-    !draftActive && snapshot?.projectRevision === managed?.projectRevision
-      ? objectValue(resolved?.resources)
-      : {};
-  const [baselineHost, setBaselineHost] = useState("");
-  const instancePlacements =
-    Object.values(resolved?.instances ?? {}).find(
-      (instance) => instance.slotId === slot,
-    )?.placements ?? {};
-  const hosts = Object.keys(instancePlacements);
-  const selectedBaselineHost = hosts.includes(baselineHost)
-    ? baselineHost
-    : hosts[0];
-  const inherited = objectValue(
-    objectValue(instancePlacements[selectedBaselineHost]).inherited,
-  );
-  const commonActive =
-    slotDefinition.inherit_defaults !== false &&
-    (Object.keys(objectValue(definition.defaults)).length > 0 ||
-      Object.keys(objectValue(library.overrides)).length > 0);
-  const freshBaseline =
-    snapshot?.projectRevision === managed?.projectRevision &&
-    !draftActive &&
-    intents.length === 0 &&
-    Object.keys(inherited).length > 0;
-  const startupDefaults = freshBaseline
-    ? inherited
-    : commonActive
-      ? {}
-      : defaults;
-  const portSources: PortSource[] = [
-    { label: "Пакет приложения", ports: objectValue(defaults.ports) },
-    {
-      label: "Пакет библиотеки · " + slot,
-      ports: objectValue(objectValue(slotDefinition.overrides).ports),
-    },
-    { label: "Экземпляр", ports: objectValue(overrides.ports) },
-    ...Object.entries(placements)
-      .filter(([, members]) => Object.hasOwn(members, selected))
-      .map(([host, members]) => ({
-        label: "Размещение · " + host,
-        ports: objectValue(
-          objectValue(objectValue(members[selected]).overrides).ports,
-        ),
-      })),
-    ...Object.entries(resolved?.instances ?? {})
-      .filter(([, instance]) => instance.slotId === slot)
-      .flatMap(([, instance]) =>
-        Object.entries(instance.placements ?? {}).map(([host, placement]) => ({
-          label:
-            "Core · " +
-            host +
-            " · " +
-            (snapshot?.projectRevision ?? "последняя проверка"),
-          ports: objectValue(placement.ports),
-        })),
-      ),
-  ];
-  return (
-    <section className="applications-page">
-      <header className="page-heading">
-        <div>
-          <h1>Приложения</h1>
-          <p>Пакеты, настройки экземпляров и подключения к сервисам</p>
-        </div>
-        <button className="outline" onClick={() => navigate(onInstallation)}>
-          К плану установки
-        </button>
-      </header>
-      {(error || backendError) && <p role="alert">{error || backendError}</p>}
-      {importCompleted && (
-        <p role="status">
-          Пакет успешно импортирован и доступен для выбора при добавлении
-          библиотеки или приложения. Чтобы добавить библиотеку, нажмите
-          «Добавить библиотеку».
-        </p>
-      )}
-      <div className="applications-layout">
-        <aside className="application-list">
-          <label>
-            Поиск
-            <input value={search} onChange={(e) => setSearch(e.target.value)} />
-          </label>
-          <button
-            disabled={busy}
-            onClick={() =>
-              navigate(() => {
-                setCreate(true);
-                setSelected("");
-                setSlot("");
-              })
-            }
-          >
-            Добавить библиотеку
-          </button>
-          <ApplicationPackageImport
-            disabled={busy || draftActive || dirty}
-            choose={choosePackage}
-            review={onImport}
-          />
-          {Object.keys(libraries).length === 0 && (
-            <p>Библиотеки ещё не добавлены.</p>
-          )}
-          {Object.entries(libraries)
-            .filter(([key, row]) =>
-              [
-                key,
-                String(row.libraryRef),
-                ...Object.keys(objectValue(row.applications)),
-              ]
-                .join(" ")
-                .toLocaleLowerCase()
-                .includes(search.toLocaleLowerCase()),
-            )
-            .map(([key, row]) => (
-              <div className="application-group" key={key}>
-                <button
-                  className="outline"
-                  aria-current={selected === key && !slot ? "true" : undefined}
-                  onClick={() =>
-                    navigate(() => {
-                      setSelected(key);
-                      setSlot("");
-                      setCreate(false);
-                    })
-                  }
-                >
-                  <strong>{key}</strong>
-                  <small>{String(row.libraryRef)}</small>
-                </button>
-                {Object.keys(objectValue(row.applications)).map((name) => (
-                  <button
-                    className="outline application-slot"
-                    key={name}
-                    aria-current={
-                      selected === key && slot === name ? "true" : undefined
-                    }
-                    onClick={() =>
-                      navigate(() => {
-                        setSelected(key);
-                        setSlot(name);
-                        setCreate(false);
-                      })
-                    }
-                  >
-                    ↳ {name}
-                  </button>
-                ))}
-              </div>
-            ))}
-        </aside>
-        <article className="application-editor" key={formEpoch}>
-          {create ? (
-            <>
-              <h2>Добавить библиотеку</h2>
-              <label>
-                ID библиотеки
-                <input
-                  value={id}
-                  onChange={(e) => {
-                    setId(e.target.value);
-                    markChildDirty(true, "create");
-                  }}
-                />
-              </label>
-              <div className="row">
-                <small>
-                  По умолчанию — имя выбранной библиотеки. Можно изменить до
-                  создания.
-                </small>
-                <button
-                  type="button"
-                  className="outline"
-                  disabled={busy || !ref || id === ref.split("@")[0]}
-                  onClick={() => {
-                    setId(ref.split("@")[0]);
-                    markChildDirty(true, "create");
-                  }}
-                >
-                  Сбросить ID к имени библиотеки
-                </button>
-              </div>
-              <label>
-                Пакет
-                <select
-                  value={ref}
-                  onChange={(e) => {
-                    setRef(e.target.value);
-                    if (!id || id === ref.split("@")[0])
-                      setId(e.target.value.split("@")[0]);
-                    markChildDirty(true, "create");
-                  }}
-                >
-                  <option value="">Выберите пакет</option>
-                  {Object.values(packages)
-                    .map(objectValue)
-                    .filter((p) => p.kind === "library")
-                    .map((p) => (
-                      <option key={String(p.ref)}>{String(p.ref)}</option>
-                    ))}
-                </select>
-              </label>
-              <label>
-                Docker runtime
-                <select
-                  value={selectedRuntime}
-                  onChange={(e) => {
-                    setRuntime(e.target.value);
-                    markChildDirty(true, "create");
-                  }}
-                >
-                  <option value="">Выберите deployment</option>
-                  {runtimeOptions.map((key) => (
-                    <option key={key}>{key}</option>
-                  ))}
-                </select>
-              </label>
-              <p>Совместимость runtime и пакета проверяет Core.</p>
-              <button
-                disabled={busy || !id || !ref || !selectedRuntime}
-                onClick={() =>
-                  void send({
-                    operation: "CreateApplicationLibraryDeployment",
-                    deploymentId: id,
-                    entity: {
-                      libraryRef: ref,
-                      runtimeRef: selectedRuntime,
-                      applications: Object.fromEntries(
-                        Object.entries(
-                          objectValue(packageDefinition("library", ref).slots),
-                        )
-                          .filter(([, value]) =>
-                            Object.hasOwn(
-                              packages,
-                              "application:" +
-                                String(objectValue(value).applicationRef),
-                            ),
-                          )
-                          .map(([name]) => [name, {}]),
-                      ),
-                    },
-                  }).then((ok) => {
-                    if (ok) {
-                      markChildDirty(false, "create");
-                      setSelected(id);
-                      setCreate(false);
-                    }
-                  })
-                }
-              >
-                В черновик
-              </button>
-            </>
-          ) : !Object.hasOwn(libraries, selected) ? (
-            <p>Выберите библиотеку или приложение.</p>
-          ) : (
-            <>
-              <header>
-                <div className="application-breadcrumb">
-                  <button
-                    className="application-link"
-                    onClick={() =>
-                      navigate(() => {
-                        setSlot("");
-                        setTab("Общее");
-                      })
-                    }
-                  >
-                    {selected}
-                  </button>
-                  {slot && <span> / {slot}</span>}
-                </div>
-                <h2>{slot || selected}</h2>
-                {slot && typeof slotDefinition.applicationRef === "string" && (
-                  <ApplicationPackageImport
-                    key={slotDefinition.applicationRef}
-                    applicationRef={slotDefinition.applicationRef}
-                    disabled={busy || draftActive || dirty}
-                    choose={choosePackage}
-                    review={onImport}
-                  />
-                )}
-                <small>
-                  {String(
-                    slot
-                      ? (slotDefinition.applicationRef ?? "Пакет недоступен")
-                      : library.libraryRef,
-                  )}
-                </small>
-                {slot && (
-                  <button
-                    className="outline"
-                    disabled={busy || !Object.keys(authored).length}
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          "Сбросить настройки экземпляра к пакету? Это не отключает приложение и не удаляет установленные ресурсы.",
-                        )
-                      )
-                        void send({
-                          operation: "SetApplicationLibrarySlot",
-                          deploymentId: selected,
-                          entityId: slot,
-                          entity: {
-                            overrides: {},
-                            accounts: {},
-                            credentials: {},
-                          },
-                        });
-                    }}
-                  >
-                    Сбросить настройки
-                  </button>
-                )}
-                <button
-                  className="outline"
-                  disabled={busy || dirty}
-                  onClick={() => {
-                    if (
-                      !window.confirm(
-                        slot
-                          ? "Удалить экземпляр приложения из проекта? Установленные ресурсы и данные сохранятся."
-                          : "Удалить экземпляр библиотеки со всеми приложениями и размещениями из проекта? Установленные ресурсы и данные сохранятся.",
-                      )
-                    )
-                      return;
-                    void send(
-                      slot
-                        ? {
-                            operation: "RemoveApplicationLibrarySlot",
-                            deploymentId: selected,
-                            entityId: slot,
-                          }
-                        : {
-                            operation: "DeleteApplicationLibraryWithPlacements",
-                            deploymentId: selected,
-                          },
-                    ).then((ok) => {
-                      if (!ok) return;
-                      clearLocal();
-                      setSlot("");
-                      if (!slot) setSelected("");
-                    });
-                  }}
-                >
-                  {slot ? "Удалить приложение" : "Удалить библиотеку"}
-                </button>
-                {((slot && selectedTab === "Запуск") ||
-                  (!slot && selectedTab === "Общие параметры")) && (
-                  <button
-                    className="outline"
-                    disabled={busy || addingEnvironment}
-                    onClick={() => setAddingEnvironment(true)}
-                  >
-                    Добавить параметр
-                  </button>
-                )}
-                <nav className="application-tabs">
-                  {tabs.map((t) => (
-                    <button
-                      key={t}
-                      className="outline"
-                      aria-pressed={selectedTab === t}
-                      onClick={() => navigate(() => setTab(t))}
-                    >
-                      {t}
-                    </button>
-                  ))}
-                </nav>
-              </header>
-              <div className="application-content">
-                {!Object.keys(definition).length && (
-                  <p role="alert">
-                    Определение пакета недоступно. Существующие настройки
-                    сохранены.
-                  </p>
-                )}
-                {!slot && selectedTab === "Общее" && (
-                  <>
-                    <section className="application-library-overview">
-                      <h3>Экземпляр библиотеки</h3>
-                      {Object.keys(recipe).some(
-                        (name) =>
-                          !Object.hasOwn(
-                            objectValue(library.applications),
-                            name,
-                          ),
-                      ) && (
-                        <label>
-                          Добавить приложение
-                          <select
-                            aria-label="Добавить приложение"
-                            value=""
-                            disabled={busy || dirty}
-                            onChange={(event) => {
-                              const name = event.target.value;
-                              if (name)
-                                void send({
-                                  operation: "SetApplicationLibrarySlot",
-                                  deploymentId: selected,
-                                  entityId: name,
-                                  entity: {},
-                                }).then((ok) => {
-                                  if (ok) {
-                                    setSlot(name);
-                                    setTab("Общее");
-                                  }
-                                });
-                            }}
-                          >
-                            <option value="">Выберите приложение</option>
-                            {Object.keys(recipe)
-                              .filter(
-                                (name) =>
-                                  !Object.hasOwn(
-                                    objectValue(library.applications),
-                                    name,
-                                  ),
-                              )
-                              .map((name) => (
-                                <option key={name}>{name}</option>
-                              ))}
-                          </select>
-                        </label>
-                      )}
-                      <label>
-                        ID экземпляра библиотеки
-                        <input value={selected} readOnly />
-                      </label>
-                      <label>
-                        Среда контейнеризации
-                        <select
-                          aria-label="Среда контейнеризации"
-                          value={String(library.runtimeRef ?? "")}
-                          disabled={busy}
-                          onChange={(e) =>
-                            void send({
-                              operation: "UpdateApplicationLibraryDeployment",
-                              deploymentId: selected,
-                              entity: { runtimeRef: e.target.value },
-                            })
-                          }
-                        >
-                          <option value="">Выберите среду</option>
-                          {!!library.runtimeRef &&
-                            !Object.hasOwn(
-                              managed?.deployments ?? {},
-                              String(library.runtimeRef),
-                            ) && (
-                              <option value={String(library.runtimeRef)}>
-                                {String(library.runtimeRef)} · недоступна
-                              </option>
-                            )}
-                          {Object.entries(managed?.deployments ?? {})
-                            .filter(
-                              ([key, row]) =>
-                                row.serviceType === "docker" ||
-                                key === library.runtimeRef,
-                            )
-                            .map(([key]) => (
-                              <option key={key}>{key}</option>
-                            ))}
-                        </select>
-                      </label>
-                      <label>
-                        Каталог библиотеки
-                        <input
-                          aria-label="Каталог библиотеки"
-                          defaultValue={String(library.runtime_directory ?? "")}
-                          key={
-                            selected + String(library.runtime_directory ?? "")
-                          }
-                          placeholder={
-                            resolved?.runtimeDirectory ||
-                            "По умолчанию из пакета: ~/<ID библиотеки>"
-                          }
-                          disabled={busy}
-                          onBlur={(e) => {
-                            if (
-                              e.target.value !==
-                              String(library.runtime_directory ?? "")
-                            )
-                              void send({
-                                operation: "UpdateApplicationLibraryDeployment",
-                                deploymentId: selected,
-                                entity: { runtime_directory: e.target.value },
-                              });
-                          }}
-                        />
-                      </label>
-                      <button
-                        className="outline"
-                        disabled={busy || !library.runtime_directory}
-                        onClick={() =>
-                          void send({
-                            operation: "UpdateApplicationLibraryDeployment",
-                            deploymentId: selected,
-                            entity: { runtime_directory: "" },
-                          })
-                        }
-                      >
-                        По умолчанию
-                      </button>
-                      <p className="muted">
-                        Пакет: {String(library.libraryRef)} · ID задаётся при
-                        создании
-                      </p>
-                    </section>
-                    <ApplicationRegistryCredentials
-                      key={`${selected}:${managed?.projectRevision}`}
-                      libraryId={selected}
-                      projectRevision={managed?.projectRevision}
-                      value={library.registry_credentials}
-                      registries={resolved?.registries ?? []}
-                      disabled={busy}
-                      runtimeDisabled={busy || draftActive || dirty}
-                      onChange={(value) =>
-                        void send({
-                          operation: "UpdateApplicationLibraryDeployment",
-                          deploymentId: selected,
-                          entity: { registry_credentials: value },
-                        })
-                      }
-                      save={saveSecrets ? saveApplicationSecrets : undefined}
-                    />
-                    <section className="application-library-placement">
-                      <h3>Размещение</h3>
-                      <p className="muted">
-                        Серверы для экземпляров этой библиотеки
-                      </p>
-                      {availablePlacementHosts.length === 0 && (
-                        <p>Нет серверов с выбранной средой контейнеризации.</p>
-                      )}
-                      {availablePlacementHosts.map((host) => (
-                        <label className="application-placement" key={host}>
-                          <input
-                            type="checkbox"
-                            checked={Object.hasOwn(
-                              placements[host] ?? {},
-                              selected,
-                            )}
-                            disabled={busy}
-                            onChange={() =>
-                              void send({
-                                operation: Object.hasOwn(
-                                  placements[host] ?? {},
-                                  selected,
-                                )
-                                  ? "RemoveApplicationLibraryPlacement"
-                                  : "SetApplicationLibraryPlacement",
-                                deploymentId: selected,
-                                hostId: host,
-                                ...(Object.hasOwn(
-                                  placements[host] ?? {},
-                                  selected,
-                                )
-                                  ? {}
-                                  : { placement: {} }),
-                              })
-                            }
-                          />
-                          <span>{host}</span>
-                        </label>
-                      ))}
-                    </section>
-                  </>
-                )}
-                {!slot && selectedTab === "Общие параметры" && (
-                  <>
-                    <p className="muted">
-                      Общие значения библиотеки. Изменения сохраняются в
-                      group_vars; собственные значения приложений задаются в их
-                      настройках.
-                    </p>
-                    {["environment", "parameters"].map((section) => (
-                      <ApplicationValueFields
-                        key={selected + section + formEpoch}
-                        compact
-                        hiddenKeys={
-                          section === "parameters" ? ["IDENTITY_GROUPS"] : []
-                        }
-                        addControl={
-                          section === "environment"
-                            ? {
-                                adding: addingEnvironment,
-                                setAdding: setAddingEnvironment,
-                              }
-                            : undefined
-                        }
-                        label={
-                          section === "environment"
-                            ? "Общие ENV"
-                            : "Общие параметры конфигурации"
-                        }
-                        value={objectValue(
-                          objectValue(library.overrides)[section],
-                        )}
-                        defaults={objectValue(
-                          objectValue(definition.defaults)[section],
-                        )}
-                        disabled={busy}
-                        onDirtyChange={(value) =>
-                          markChildDirty(value, section)
-               
 @@END

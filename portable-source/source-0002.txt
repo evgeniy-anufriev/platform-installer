@@ -1,3 +1,1308 @@
+@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":77997,"sha256":"895d41b503450bf1c40a40a1779e2ea57ff88950a505a044ef5c7625c029dd26","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":49891}
+import { ApplicationProvidedConnections } from "./ApplicationProvidedConnections";
+import { type ApplicationSecretSession } from "./ApplicationRuntimeSecretField";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ApplicationLibraryResources } from "./ApplicationLibraryResources";
+import { ApplicationTopicBindings } from "./ApplicationTopicBindings";
+import { ApplicationPorts, type PortSource } from "./ApplicationPorts";
+import { ApplicationReadiness } from "./ApplicationReadiness";
+import { ApplicationRegistryCredentials } from "./ApplicationRegistryCredentials";
+import {
+  ApplicationBindings,
+  connectionCandidates,
+} from "./ApplicationBindings";
+import { ApplicationSecretBindings } from "./ApplicationSecretBindings";
+import { ApplicationCredentials } from "./ApplicationCredentials";
+import { ApplicationValueFields } from "./ApplicationValueFields";
+import { ApplicationFileSettings } from "./ApplicationFileSettings";
+import { ApplicationPackageImport } from "./ApplicationPackageImport";
+import type {
+  OpenResult,
+  RuntimeSecretDescriptorOperation,
+  RuntimeSecretValuesInput,
+} from "./backend";
+import "./applications.css";
+
+import {
+  applicationDraft,
+  objectValue,
+  type ApplicationIntent,
+  type ObjectValue,
+} from "./application-draft";
+export {
+  isApplicationIntent,
+  type ApplicationIntent,
+} from "./application-draft";
+
+export function ApplicationsPage({
+  managed,
+  snapshot,
+  intents,
+  busy,
+  onAppend,
+  onAmend,
+  onReview,
+  onInstallation,
+  onDirtyChange,
+  loadSecrets,
+  loadPendingSecrets,
+  saveSecrets,
+  loadSecretAvailability,
+  executionContextKey = "",
+  choosePackage,
+  onImport,
+  draftActive,
+  backendError,
+  importCompleted = false,
+}: {
+  choosePackage?: () => Promise<string>;
+  onImport: (
+    source: string,
+    kind: string,
+    name: string,
+    version: string,
+    digest: string,
+  ) => Promise<boolean>;
+  draftActive: boolean;
+  backendError?: string;
+  importCompleted?: boolean;
+  onProviderSecrets?: (deploymentId: string) => void;
+  loadSecrets?: () => Promise<RuntimeSecretDescriptorOperation>;
+  loadPendingSecrets?: (context: {
+    applicationLibrary: string;
+    applicationSlot?: string;
+  }) => Promise<RuntimeSecretDescriptorOperation>;
+  saveSecrets?: (input: RuntimeSecretValuesInput) => Promise<void>;
+  loadSecretAvailability?: () => Promise<RuntimeSecretDescriptorOperation>;
+  executionContextKey?: string;
+  managed: OpenResult["managed"];
+  snapshot: OpenResult["snapshot"];
+  intents: ApplicationIntent[];
+  busy: boolean;
+  onAppend: (intent: ApplicationIntent) => Promise<boolean>;
+  onAmend: (
+    previous: ApplicationIntent,
+    replacement: ApplicationIntent | null,
+  ) => Promise<boolean>;
+  onReview: () => void;
+  onInstallation: () => void;
+  onDirtyChange: (dirty: boolean) => void;
+}) {
+  const { libraries, placements, libraryEndpointGroups } = applicationDraft(
+    managed,
+    intents,
+  );
+  const packages = objectValue(managed?.applicationPackages);
+  const [selected, setSelected] = useState("");
+  const [slot, setSlot] = useState("");
+  const [tab, setTab] = useState("Общее");
+  const [search, setSearch] = useState("");
+  const [formEpoch, setFormEpoch] = useState(0);
+  const [addingEnvironment, setAddingEnvironment] = useState(false);
+  const [create, setCreate] = useState(false);
+  const [id, setId] = useState("");
+  const [ref, setRef] = useState("");
+  const [runtime, setRuntime] = useState("");
+  const runtimeOptions = Object.entries(managed?.deployments ?? {})
+    .filter(([, row]) => row.serviceType === "docker")
+    .map(([key]) => key);
+  const selectedRuntime =
+    runtime || (runtimeOptions.length === 1 ? runtimeOptions[0] : "");
+  const [local, setLocal] = useState<Record<string, string>>({});
+  const [editing, setEditing] = useState<Set<string>>(new Set());
+  const [error, setError] = useState("");
+  // One public descriptor query per saved revision and execution context.
+  // A fresh query intentionally invalidates attached service inputs on the backend.
+  const secretDescriptors = useRef<
+    { context: string; operation: RuntimeSecretDescriptorOperation } | undefined
+  >(undefined);
+  const descriptorContext = JSON.stringify([
+    managed?.projectRevision,
+    executionContextKey,
+  ]);
+  const secretScope = JSON.stringify([
+    selected,
+    slot,
+    managed?.projectRevision,
+    executionContextKey,
+  ]);
+  const [secretAvailability, setSecretAvailability] = useState<{
+    value: RuntimeSecretDescriptorOperation;
+    snapshot: OpenResult["snapshot"];
+    scope: string;
+  }>();
+  const availabilityGeneration = useRef(0);
+  const availabilityQueue = useRef<Promise<void>>(Promise.resolve());
+  const secretDescriptorLoad = useRef<
+    | {
+        context: string;
+        promise: Promise<RuntimeSecretDescriptorOperation>;
+      }
+    | undefined
+  >(undefined);
+  const loadApplicationSecrets = useCallback(async () => {
+    if (
+      secretDescriptors.current &&
+      secretDescriptors.current.context === descriptorContext
+    )
+      return secretDescriptors.current.operation;
+    const revision = managed?.projectRevision ?? "";
+    if (secretDescriptorLoad.current?.context === descriptorContext)
+      return secretDescriptorLoad.current.promise;
+    const promise = loadSecrets!()
+      .then((result) => {
+        if (secretDescriptorLoad.current?.promise === promise) {
+          secretDescriptors.current =
+            result.status === "READY" && result.projectRevision === revision
+              ? { context: descriptorContext, operation: result }
+              : undefined;
+        }
+        return result;
+      })
+      .finally(() => {
+        if (secretDescriptorLoad.current?.promise === promise)
+          secretDescriptorLoad.current = undefined;
+      });
+    secretDescriptorLoad.current = { context: descriptorContext, promise };
+    return promise;
+  }, [loadSecrets, managed?.projectRevision, descriptorContext]);
+  const refreshSecretAvailability = useCallback(() => {
+    const generation = ++availabilityGeneration.current;
+    const request = availabilityQueue.current
+      .catch(() => {})
+      .then(async () => {
+        if (generation !== availabilityGeneration.current) return;
+        try {
+          const cached = secretDescriptors.current;
+          const descriptors =
+            cached?.context === descriptorContext
+              ? cached.operation
+              : undefined;
+          const result = await loadSecretAvailability!();
+          if (generation !== availabilityGeneration.current) return;
+          setSecretAvailability(
+            result.status === "READY" &&
+              result.projectRevision === managed?.projectRevision &&
+              descriptors?.status === "READY" &&
+              result.descriptorSetFingerprint ===
+                descriptors.descriptorSetFingerprint
+              ? {
+                  value: {
+                    ...descriptors,
+                    applicationSecretAvailability:
+                      result.applicationSecretAvailability,
+                  },
+                  snapshot,
+                  scope: secretScope,
+                }
+              : undefined,
+          );
+        } catch {
+          if (generation === availabilityGeneration.current)
+            setSecretAvailability(undefined);
+        }
+      });
+    availabilityQueue.current = request;
+    return request;
+  }, [
+    loadSecretAvailability,
+    managed?.projectRevision,
+    snapshot,
+    secretScope,
+    descriptorContext,
+  ]);
+  const saveApplicationSecrets = async (input: RuntimeSecretValuesInput) => {
+    ++availabilityGeneration.current;
+    setSecretAvailability(undefined);
+    try {
+      await saveSecrets!(input);
+      if (loadSecretAvailability) await refreshSecretAvailability();
+    } catch (error) {
+      secretDescriptors.current = undefined;
+      ++availabilityGeneration.current;
+      setSecretAvailability(undefined);
+      throw error;
+    }
+  };
+  const childDirtyKeys = useRef(new Set<string>());
+  const [childDirty, setChildDirty] = useState(false);
+  const dirty = Object.keys(local).length > 0 || childDirty;
+  const markChildDirty = (value: boolean, key = "active") => {
+    if (value) childDirtyKeys.current.add(key);
+    else childDirtyKeys.current.delete(key);
+    setChildDirty(childDirtyKeys.current.size > 0);
+    onDirtyChange(
+      childDirtyKeys.current.size > 0 || Object.keys(local).length > 0,
+    );
+  };
+  const library = libraries[selected] ?? {};
+  const placementHosts = new Set(
+    managed?.deployments[String(library.runtimeRef)]?.serviceType === "docker"
+      ? [...(managed.hostPlacements ?? []), ...(managed.memberPlacements ?? [])]
+          .filter((row) => row.deploymentId === library.runtimeRef)
+          .map((row) => row.hostId)
+      : [],
+  );
+  const availablePlacementHosts = Object.keys(managed?.servers ?? {}).filter(
+    (host) => placementHosts.has(host),
+  );
+  const packageDefinition = (kind: string, reference: unknown) =>
+    objectValue(
+      objectValue(packages[kind + ":" + String(reference)]).definition,
+    );
+  const definition = packageDefinition("library", library.libraryRef);
+  const declaredConnections = (value: unknown): ObjectValue =>
+    Array.isArray(value)
+      ? Object.fromEntries(
+          value.map((key) => [
+            String(key),
+            objectValue(objectValue(definition.connections)[String(key)]),
+          ]),
+        )
+      : objectValue(value);
+  const recipe = objectValue(definition.slots);
+  const bindingHints: Record<string, string> = {};
+  const bindingConnectionNames: Record<string, string[]> = {};
+  const declareConnection = (connectionName: string, connection: unknown) => {
+    const name = objectValue(connection).library_binding;
+    if (typeof name === "string") {
+      bindingHints[name] = "deployment";
+      (bindingConnectionNames[name] ??= []).push(connectionName);
+    }
+  };
+  for (const [name, connection] of Object.entries(
+    objectValue(definition.connections),
+  )) {
+    declareConnection(name, connection);
+  }
+  for (const raw of Object.values(recipe)) {
+    const def = packageDefinition(
+      "application",
+      objectValue(raw).applicationRef,
+    );
+    for (const [name, connection] of Object.entries(
+      declaredConnections(def.connections),
+    )) {
+      declareConnection(name, connection);
+    }
+  }
+  for (const raw of Object.values(objectValue(definition.shared_secrets))) {
+    const source = objectValue(objectValue(raw).source);
+    if (source.kind === "pki_credential" && typeof source.binding === "string")
+      bindingHints[source.binding] = "pki";
+  }
+  const slotDefinition = objectValue(recipe[slot]);
+  const appDefinition = packageDefinition(
+    "application",
+    slotDefinition.applicationRef,
+  );
+  const appConnections = declaredConnections(appDefinition.connections);
+  const defaults = objectValue(appDefinition.defaults);
+  const authored = objectValue(objectValue(library.applications)[slot]);
+  const overrides = objectValue(authored.overrides);
+  const change = (key: string, value: string) => {
+    setLocal((v) => ({ ...v, [key]: value }));
+    onDirtyChange(true);
+  };
+  const clearLocal = () => {
+    setAddingEnvironment(false);
+    setLocal({});
+    setEditing(new Set());
+    setChildDirty(false);
+    childDirtyKeys.current.clear();
+    setFormEpoch((v) => v + 1);
+    onDirtyChange(false);
+  };
+  const navigate = (next: () => void) => {
+    if (
+      dirty &&
+      !window.confirm(
+        "Отбросить несохранённый ввод формы? Изменения, уже добавленные в черновик проекта, сохранятся.",
+      )
+    )
+      return;
+    clearLocal();
+    setError("");
+    next();
+  };
+  const send = async (c: ApplicationIntent) => {
+    const pendingCreate =
+      c.operation === "UpdateApplicationLibraryDeployment"
+        ? intents.find(
+            (p) =>
+              p.deploymentId === c.deploymentId &&
+              p.operation === "CreateApplicationLibraryDeployment",
+          )
+        : undefined;
+    const previous =
+      pendingCreate ??
+      [...intents]
+        .reverse()
+        .find(
+          (p) =>
+            p.deploymentId === c.deploymentId &&
+            p.entityId === c.entityId &&
+            p.hostId === c.hostId &&
+            p.setting === c.setting &&
+            p.property === c.property &&
+            p.operation.replace(/^(Set|Remove|Clear)/, "") ===
+              c.operation.replace(/^(Set|Remove|Clear)/, ""),
+        );
+    try {
+      if (
+        previous &&
+        c.entity &&
+        (c.operation === "UpdateApplicationLibraryDeployment" ||
+          c.operation === "SetApplicationLibrarySlot")
+      )
+        c = { ...c, entity: { ...previous.entity, ...c.entity } };
+      if (pendingCreate)
+        c = { ...c, operation: "CreateApplicationLibraryDeployment" };
+      const ok = previous ? await onAmend(previous, c) : await onAppend(c);
+      if (ok) {
+        setError("");
+      }
+      return ok;
+    } catch {
+      setError(
+        "Не удалось добавить изменение. Проверьте состояние черновика и повторите.",
+      );
+      return false;
+    }
+  };
+  const override = (
+    setting: string,
+    value: unknown,
+    property?: string,
+  ): ApplicationIntent => ({
+    operation: "SetApplicationLibraryOverride",
+    deploymentId: selected,
+    entityId: slot,
+    setting,
+    ...(property ? { property } : {}),
+    value,
+  });
+  const remove = (setting: string, property?: string): ApplicationIntent => ({
+    operation: "RemoveApplicationLibraryOverride",
+    deploymentId: selected,
+    entityId: slot,
+    setting,
+    ...(property ? { property } : {}),
+  });
+  const clearField = (key: string, ok: boolean) => {
+    if (!ok) return;
+    const next = { ...local };
+    delete next[key];
+    setLocal(next);
+    onDirtyChange(childDirty || Object.keys(next).length > 0);
+  };
+  const scalar = (
+    key: string,
+    label: string,
+    defaultValue: unknown,
+    authoredValue: unknown,
+    save: (v: string) => Promise<boolean>,
+    reset?: () => Promise<boolean>,
+    type = "text",
+  ) => (
+    <div
+      className={
+        "application-field" +
+        (key === "image" ? " application-image-field" : "")
+      }
+      key={key}
+    >
+      <div className="application-field-origin">
+        <span>
+          {authoredValue === undefined
+            ? defaultValue === undefined
+              ? "Не задано в пакете"
+              : "Из пакета"
+            : "Переопределено"}
+        </span>
+        <button
+          className="application-link"
+          type="button"
+          disabled={busy}
+          aria-label={`Переопределить: ${label}`}
+          onClick={() => setEditing((current) => new Set(current).add(key))}
+        >
+          Переопределить
+        </button>
+      </div>
+      <label>
+        {label}
+        {type === "multiline" ? (
+          <textarea
+            value={local[key] ?? String(authoredValue ?? defaultValue ?? "")}
+            disabled={
+              busy || (authoredValue === undefined && !editing.has(key))
+            }
+            onChange={(e) => change(key, e.target.value)}
+          />
+        ) : (
+          <input
+            type={type}
+            placeholder={
+              key.startsWith("port:") && defaultValue === undefined
+                ? "См. источники портов"
+                : undefined
+            }
+            min={type === "number" ? 1 : undefined}
+            max={type === "number" ? 65535 : undefined}
+            value={local[key] ?? String(authoredValue ?? defaultValue ?? "")}
+            onChange={(e) => change(key, e.target.value)}
+            disabled={
+              busy || (authoredValue === undefined && !editing.has(key))
+            }
+          />
+        )}
+      </label>
+      <small>
+        {authoredValue !== undefined
+          ? "Переопределено в экземпляре"
+          : "Значение пакета · без вычисления Ansible"}
+      </small>
+      <div className="row">
+        <button
+          hidden={key === "image" && local[key] === undefined}
+          disabled={
+            busy ||
+            local[key] === undefined ||
+            (type === "number" &&
+              (!Number.isInteger(Number(local[key])) ||
+                Number(local[key]) < 1 ||
+                Number(local[key]) > 65535))
+          }
+          onClick={() =>
+            void save(local[key]).then((ok) => clearField(key, ok))
+          }
+        >
+          В черновик
+        </button>
+        {reset && (
+          <button
+            className="outline"
+            hidden={key === "image" && authoredValue === undefined}
+            disabled={busy || authoredValue === undefined}
+            onClick={() =>
+              void reset().then((ok) => {
+                clearField(key, ok);
+                if (ok)
+                  setEditing((current) => {
+                    const next = new Set(current);
+                    next.delete(key);
+                    return next;
+                  });
+              })
+            }
+          >
+            Сбросить к default
+          </button>
+        )}
+      </div>
+    </div>
+  );
+  const tabs = slot
+    ? ["Основное", "Секреты", "Файлы", "Запуск", "Состояние"]
+    : ["Общее", "Общие параметры", "Подключения", "Ресурсы и секреты"];
+  const selectedTab = tabs.includes(tab) ? tab : tabs[0];
+  const resolved = snapshot?.applicationLibraries?.libraries?.[selected];
+  const freshSecrets =
+    !busy &&
+    !draftActive &&
+    !dirty &&
+    intents.length === 0 &&
+    snapshot?.projectRevision === managed?.projectRevision;
+  const editableSecretSession =
+    !busy && !draftActive && !dirty && intents.length === 0;
+  const pendingSecretContext = JSON.stringify([
+    selected,
+    slot,
+    managed?.projectRevision,
+  ]);
+  const [pendingAvailability, setPendingAvailability] = useState<{
+    context: string;
+    value: RuntimeSecretDescriptorOperation;
+  }>();
+  const pendingGeneration = useRef(0);
+  const loadPendingApplicationSecrets = useCallback(async () => {
+    const generation = ++pendingGeneration.current;
+    const value = await loadPendingSecrets!({
+      applicationLibrary: selected,
+      applicationSlot: slot,
+    });
+    if (pendingGeneration.current === generation)
+      setPendingAvailability({ context: pendingSecretContext, value });
+    return value;
+  }, [loadPendingSecrets, selected, slot, pendingSecretContext]);
+  useEffect(() => {
+    if (
+      !loadPendingSecrets ||
+      !editableSecretSession ||
+      !["Секреты", "Подключения", "Ресурсы и секреты"].includes(selectedTab)
+    )
+      return;
+    const refresh = () => {
+      void loadPendingApplicationSecrets().catch(() =>
+        setPendingAvailability(undefined),
+      );
+    };
+    refresh();
+    const interval = window.setInterval(refresh, 10000);
+    return () => {
+      ++pendingGeneration.current;
+      window.clearInterval(interval);
+    };
+  }, [
+    loadPendingSecrets,
+    editableSecretSession,
+    selectedTab,
+    loadPendingApplicationSecrets,
+  ]);
+  // Selecting an authored reference must not depend on successful Core resolution.
+  const providedConnectionChoices = Object.entries(libraries).flatMap(
+    ([id, lib]) =>
+      Object.keys(
+        objectValue(
+          packageDefinition("library", lib.libraryRef).provided_connections,
+        ),
+      ).map((name) => id + "/" + name),
+  );
+  const secretContext = JSON.stringify([
+    selected,
+    slot,
+    managed?.projectRevision,
+    freshSecrets,
+  ]);
+  useEffect(() => {
+    ++availabilityGeneration.current;
+    if (
+      !["Секреты", "Подключения", "Ресурсы и секреты"].includes(selectedTab) ||
+      !!loadPendingSecrets ||
+      !freshSecrets ||
+      !loadSecrets ||
+      !loadSecretAvailability
+    )
+      return;
+    let active = true;
+    let pending = false;
+    const refresh = async () => {
+      if (!active || pending) return;
+      pending = true;
+      try {
+        await refreshSecretAvailability();
+      } finally {
+        pending = false;
+      }
+    };
+    // Descriptor discovery is an explicit context-entry operation, never a poll.
+    void loadApplicationSecrets()
+      .then(() => {
+        if (active) void refresh();
+      })
+      .catch(() => {
+        if (active) setSecretAvailability(undefined);
+      });
+    const interval = window.setInterval(() => void refresh(), 10000);
+    window.addEventListener("focus", refresh);
+    return () => {
+      active = false;
+      ++availabilityGeneration.current;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refresh);
+    };
+  }, [
+    secretContext,
+    slot,
+    selectedTab,
+    freshSecrets,
+    loadSecrets,
+    loadPendingSecrets,
+    loadSecretAvailability,
+    loadApplicationSecrets,
+    refreshSecretAvailability,
+  ]);
+  const resolvedSecretAccounts = freshSecrets
+    ? objectValue(
+        Object.values(resolved?.instances ?? {}).find(
+          (instance) => instance.slotId === slot,
+        )?.credentialRequirements,
+      )
+    : {};
+  const librarySecretSession: ApplicationSecretSession | undefined =
+    (loadSecrets || loadPendingSecrets) && saveSecrets
+      ? {
+          projectRevision: managed?.projectRevision ?? "",
+          contextKey: executionContextKey,
+          libraryId: selected,
+          pending: !!loadPendingSecrets,
+          applicationSlot: slot,
+          disabled: loadPendingSecrets
+            ? !editableSecretSession
+            : busy || !freshSecrets,
+          availability: loadPendingSecrets
+            ? pendingAvailability?.context === pendingSecretContext
+              ? pendingAvailability.value
+              : undefined
+            : freshSecrets &&
+                secretAvailability &&
+                secretAvailability?.snapshot === snapshot &&
+                secretAvailability.scope === secretScope
+              ? secretAvailability.value
+              : undefined,
+          load: loadPendingSecrets
+            ? loadPendingApplicationSecrets
+            : loadApplicationSecrets,
+          save: loadPendingSecrets
+            ? async (input) => {
+                await saveSecrets(input);
+                await loadPendingApplicationSecrets();
+              }
+            : saveApplicationSecrets,
+        }
+      : undefined;
+  const secretRefCounts: Record<string, number> = {};
+  for (const resolvedLibrary of Object.values(
+    snapshot?.applicationLibraries?.libraries ?? {},
+  )) {
+    for (const secret of Object.values(
+      objectValue(resolvedLibrary.sharedSecretRequirements),
+    )) {
+      const source = objectValue(objectValue(secret).source);
+      if (
+        source.kind === "runtime_secret_ref" &&
+        typeof source.ref === "string"
+      )
+        secretRefCounts[source.ref] = (secretRefCounts[source.ref] ?? 0) + 1;
+    }
+    for (const instance of Object.values(resolvedLibrary.instances ?? {})) {
+      for (const account of Object.values(
+        objectValue(instance.credentialRequirements),
+      )) {
+        for (const credential of Object.values(
+          objectValue(objectValue(account).credentials),
+        )) {
+          const source = objectValue(objectValue(credential).source);
+          if (
+            source.kind === "runtime_secret_ref" &&
+            typeof source.ref === "string"
+          )
+            secretRefCounts[source.ref] =
+              (secretRefCounts[source.ref] ?? 0) + 1;
+        }
+      }
+    }
+  }
+  const resolvedTopics =
+    !draftActive && snapshot?.projectRevision === managed?.projectRevision
+      ? objectValue(resolved?.topics)
+      : {};
+  const resolvedResources =
+    !draftActive && snapshot?.projectRevision === managed?.projectRevision
+      ? objectValue(resolved?.resources)
+      : {};
+  const [baselineHost, setBaselineHost] = useState("");
+  const instancePlacements =
+    Object.values(resolved?.instances ?? {}).find(
+      (instance) => instance.slotId === slot,
+    )?.placements ?? {};
+  const hosts = Object.keys(instancePlacements);
+  const selectedBaselineHost = hosts.includes(baselineHost)
+    ? baselineHost
+    : hosts[0];
+  const inherited = objectValue(
+    objectValue(instancePlacements[selectedBaselineHost]).inherited,
+  );
+  const commonActive =
+    slotDefinition.inherit_defaults !== false &&
+    (Object.keys(objectValue(definition.defaults)).length > 0 ||
+      Object.keys(objectValue(library.overrides)).length > 0);
+  const freshBaseline =
+    snapshot?.projectRevision === managed?.projectRevision &&
+    !draftActive &&
+    intents.length === 0 &&
+    Object.keys(inherited).length > 0;
+  const startupDefaults = freshBaseline
+    ? inherited
+    : commonActive
+      ? {}
+      : defaults;
+  const portSources: PortSource[] = [
+    { label: "Пакет приложения", ports: objectValue(defaults.ports) },
+    {
+      label: "Пакет библиотеки · " + slot,
+      ports: objectValue(objectValue(slotDefinition.overrides).ports),
+    },
+    { label: "Экземпляр", ports: objectValue(overrides.ports) },
+    ...Object.entries(placements)
+      .filter(([, members]) => Object.hasOwn(members, selected))
+      .map(([host, members]) => ({
+        label: "Размещение · " + host,
+        ports: objectValue(
+          objectValue(objectValue(members[selected]).overrides).ports,
+        ),
+      })),
+    ...Object.entries(resolved?.instances ?? {})
+      .filter(([, instance]) => instance.slotId === slot)
+      .flatMap(([, instance]) =>
+        Object.entries(instance.placements ?? {}).map(([host, placement]) => ({
+          label:
+            "Core · " +
+            host +
+            " · " +
+            (snapshot?.projectRevision ?? "последняя проверка"),
+          ports: objectValue(placement.ports),
+        })),
+      ),
+  ];
+  return (
+    <section className="applications-page">
+      <header className="page-heading">
+        <div>
+          <h1>Приложения</h1>
+          <p>Пакеты, настройки экземпляров и подключения к сервисам</p>
+        </div>
+        <button className="outline" onClick={() => navigate(onInstallation)}>
+          К плану установки
+        </button>
+      </header>
+      {(error || backendError) && <p role="alert">{error || backendError}</p>}
+      {importCompleted && (
+        <p role="status">
+          Пакет успешно импортирован и доступен для выбора при добавлении
+          библиотеки или приложения. Чтобы добавить библиотеку, нажмите
+          «Добавить библиотеку».
+        </p>
+      )}
+      <div className="applications-layout">
+        <aside className="application-list">
+          <label>
+            Поиск
+            <input value={search} onChange={(e) => setSearch(e.target.value)} />
+          </label>
+          <button
+            disabled={busy}
+            onClick={() =>
+              navigate(() => {
+                setCreate(true);
+                setSelected("");
+                setSlot("");
+              })
+            }
+          >
+            Добавить библиотеку
+          </button>
+          <ApplicationPackageImport
+            disabled={busy || draftActive || dirty}
+            choose={choosePackage}
+            review={onImport}
+          />
+          {Object.keys(libraries).length === 0 && (
+            <p>Библиотеки ещё не добавлены.</p>
+          )}
+          {Object.entries(libraries)
+            .filter(([key, row]) =>
+              [
+                key,
+                String(row.libraryRef),
+                ...Object.keys(objectValue(row.applications)),
+              ]
+                .join(" ")
+                .toLocaleLowerCase()
+                .includes(search.toLocaleLowerCase()),
+            )
+            .map(([key, row]) => (
+              <div className="application-group" key={key}>
+                <button
+                  className="outline"
+                  aria-current={selected === key && !slot ? "true" : undefined}
+                  onClick={() =>
+                    navigate(() => {
+                      setSelected(key);
+                      setSlot("");
+                      setCreate(false);
+                    })
+                  }
+                >
+                  <strong>{key}</strong>
+                  <small>{String(row.libraryRef)}</small>
+                </button>
+                {Object.keys(objectValue(row.applications)).map((name) => (
+                  <button
+                    className="outline application-slot"
+                    key={name}
+                    aria-current={
+                      selected === key && slot === name ? "true" : undefined
+                    }
+                    onClick={() =>
+                      navigate(() => {
+                        setSelected(key);
+                        setSlot(name);
+                        setCreate(false);
+                      })
+                    }
+                  >
+                    ↳ {name}
+                  </button>
+                ))}
+              </div>
+            ))}
+        </aside>
+        <article className="application-editor" key={formEpoch}>
+          {create ? (
+            <>
+              <h2>Добавить библиотеку</h2>
+              <label>
+                ID библиотеки
+                <input
+                  value={id}
+                  onChange={(e) => {
+                    setId(e.target.value);
+                    markChildDirty(true, "create");
+                  }}
+                />
+              </label>
+              <div className="row">
+                <small>
+                  По умолчанию — имя выбранной библиотеки. Можно изменить до
+                  создания.
+                </small>
+                <button
+                  type="button"
+                  className="outline"
+                  disabled={busy || !ref || id === ref.split("@")[0]}
+                  onClick={() => {
+                    setId(ref.split("@")[0]);
+                    markChildDirty(true, "create");
+                  }}
+                >
+                  Сбросить ID к имени библиотеки
+                </button>
+              </div>
+              <label>
+                Пакет
+                <select
+                  value={ref}
+                  onChange={(e) => {
+                    setRef(e.target.value);
+                    if (!id || id === ref.split("@")[0])
+                      setId(e.target.value.split("@")[0]);
+                    markChildDirty(true, "create");
+                  }}
+                >
+                  <option value="">Выберите пакет</option>
+                  {Object.values(packages)
+                    .map(objectValue)
+                    .filter((p) => p.kind === "library")
+                    .map((p) => (
+                      <option key={String(p.ref)}>{String(p.ref)}</option>
+                    ))}
+                </select>
+              </label>
+              <label>
+                Docker runtime
+                <select
+                  value={selectedRuntime}
+                  onChange={(e) => {
+                    setRuntime(e.target.value);
+                    markChildDirty(true, "create");
+                  }}
+                >
+                  <option value="">Выберите deployment</option>
+                  {runtimeOptions.map((key) => (
+                    <option key={key}>{key}</option>
+                  ))}
+                </select>
+              </label>
+              <p>Совместимость runtime и пакета проверяет Core.</p>
+              <button
+                disabled={busy || !id || !ref || !selectedRuntime}
+                onClick={() =>
+                  void send({
+                    operation: "CreateApplicationLibraryDeployment",
+                    deploymentId: id,
+                    entity: {
+                      libraryRef: ref,
+                      runtimeRef: selectedRuntime,
+                      applications: Object.fromEntries(
+                        Object.entries(
+                          objectValue(packageDefinition("library", ref).slots),
+                        )
+                          .filter(([, value]) =>
+                            Object.hasOwn(
+                              packages,
+                              "application:" +
+                                String(objectValue(value).applicationRef),
+                            ),
+                          )
+                          .map(([name]) => [name, {}]),
+                      ),
+                    },
+                  }).then((ok) => {
+                    if (ok) {
+                      markChildDirty(false, "create");
+                      setSelected(id);
+                      setCreate(false);
+                    }
+                  })
+                }
+              >
+                В черновик
+              </button>
+            </>
+          ) : !Object.hasOwn(libraries, selected) ? (
+            <p>Выберите библиотеку или приложение.</p>
+          ) : (
+            <>
+              <header>
+                <div className="application-breadcrumb">
+                  <button
+                    className="application-link"
+                    onClick={() =>
+                      navigate(() => {
+                        setSlot("");
+                        setTab("Общее");
+                      })
+                    }
+                  >
+                    {selected}
+                  </button>
+                  {slot && <span> / {slot}</span>}
+                </div>
+                <h2>{slot || selected}</h2>
+                {slot && typeof slotDefinition.applicationRef === "string" && (
+                  <ApplicationPackageImport
+                    key={slotDefinition.applicationRef}
+                    applicationRef={slotDefinition.applicationRef}
+                    disabled={busy || draftActive || dirty}
+                    choose={choosePackage}
+                    review={onImport}
+                  />
+                )}
+                <small>
+                  {String(
+                    slot
+                      ? (slotDefinition.applicationRef ?? "Пакет недоступен")
+                      : library.libraryRef,
+                  )}
+                </small>
+                {slot && (
+                  <button
+                    className="outline"
+                    disabled={busy || !Object.keys(authored).length}
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          "Сбросить настройки экземпляра к пакету? Это не отключает приложение и не удаляет установленные ресурсы.",
+                        )
+                      )
+                        void send({
+                          operation: "SetApplicationLibrarySlot",
+                          deploymentId: selected,
+                          entityId: slot,
+                          entity: {
+                            overrides: {},
+                            accounts: {},
+                            credentials: {},
+                          },
+                        });
+                    }}
+                  >
+                    Сбросить настройки
+                  </button>
+                )}
+                <button
+                  className="outline"
+                  disabled={busy || dirty}
+                  onClick={() => {
+                    if (
+                      !window.confirm(
+                        slot
+                          ? "Удалить экземпляр приложения из проекта? Установленные ресурсы и данные сохранятся."
+                          : "Удалить экземпляр библиотеки со всеми приложениями и размещениями из проекта? Установленные ресурсы и данные сохранятся.",
+                      )
+                    )
+                      return;
+                    void send(
+                      slot
+                        ? {
+                            operation: "RemoveApplicationLibrarySlot",
+                            deploymentId: selected,
+                            entityId: slot,
+                          }
+                        : {
+                            operation: "DeleteApplicationLibraryWithPlacements",
+                            deploymentId: selected,
+                          },
+                    ).then((ok) => {
+                      if (!ok) return;
+                      clearLocal();
+                      setSlot("");
+                      if (!slot) setSelected("");
+                    });
+                  }}
+                >
+                  {slot ? "Удалить приложение" : "Удалить библиотеку"}
+                </button>
+                {((slot && selectedTab === "Запуск") ||
+                  (!slot && selectedTab === "Общие параметры")) && (
+                  <button
+                    className="outline"
+                    disabled={busy || addingEnvironment}
+                    onClick={() => setAddingEnvironment(true)}
+                  >
+                    Добавить параметр
+                  </button>
+                )}
+                <nav className="application-tabs">
+                  {tabs.map((t) => (
+                    <button
+                      key={t}
+                      className="outline"
+                      aria-pressed={selectedTab === t}
+                      onClick={() => navigate(() => setTab(t))}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </nav>
+              </header>
+              <div className="application-content">
+                {!Object.keys(definition).length && (
+                  <p role="alert">
+                    Определение пакета недоступно. Существующие настройки
+                    сохранены.
+                  </p>
+                )}
+                {!slot && selectedTab === "Общее" && (
+                  <>
+                    <section className="application-library-overview">
+                      <h3>Экземпляр библиотеки</h3>
+                      {Object.keys(recipe).some(
+                        (name) =>
+                          !Object.hasOwn(
+                            objectValue(library.applications),
+                            name,
+                          ),
+                      ) && (
+                        <label>
+                          Добавить приложение
+                          <select
+                            aria-label="Добавить приложение"
+                            value=""
+                            disabled={busy || dirty}
+                            onChange={(event) => {
+                              const name = event.target.value;
+                              if (name)
+                                void send({
+                                  operation: "SetApplicationLibrarySlot",
+                                  deploymentId: selected,
+                                  entityId: name,
+                                  entity: {},
+                                }).then((ok) => {
+                                  if (ok) {
+                                    setSlot(name);
+                                    setTab("Общее");
+                                  }
+                                });
+                            }}
+                          >
+                            <option value="">Выберите приложение</option>
+                            {Object.keys(recipe)
+                              .filter(
+                                (name) =>
+                                  !Object.hasOwn(
+                                    objectValue(library.applications),
+                                    name,
+                                  ),
+                              )
+                              .map((name) => (
+                                <option key={name}>{name}</option>
+                              ))}
+                          </select>
+                        </label>
+                      )}
+                      <label>
+                        ID экземпляра библиотеки
+                        <input value={selected} readOnly />
+                      </label>
+                      <label>
+                        Среда контейнеризации
+                        <select
+                          aria-label="Среда контейнеризации"
+                          value={String(library.runtimeRef ?? "")}
+                          disabled={busy}
+                          onChange={(e) =>
+                            void send({
+                              operation: "UpdateApplicationLibraryDeployment",
+                              deploymentId: selected,
+                              entity: { runtimeRef: e.target.value },
+                            })
+                          }
+                        >
+                          <option value="">Выберите среду</option>
+                          {!!library.runtimeRef &&
+                            !Object.hasOwn(
+                              managed?.deployments ?? {},
+                              String(library.runtimeRef),
+                            ) && (
+                              <option value={String(library.runtimeRef)}>
+                                {String(library.runtimeRef)} · недоступна
+                              </option>
+                            )}
+                          {Object.entries(managed?.deployments ?? {})
+                            .filter(
+                              ([key, row]) =>
+                                row.serviceType === "docker" ||
+                                key === library.runtimeRef,
+                            )
+                            .map(([key]) => (
+                              <option key={key}>{key}</option>
+                            ))}
+                        </select>
+                      </label>
+                      <label>
+                        Каталог библиотеки
+                        <input
+                          aria-label="Каталог библиотеки"
+                          defaultValue={String(library.runtime_directory ?? "")}
+                          key={
+                            selected + String(library.runtime_directory ?? "")
+                          }
+                          placeholder={
+                            resolved?.runtimeDirectory ||
+                            "По умолчанию из пакета: ~/<ID библиотеки>"
+                          }
+                          disabled={busy}
+                          onBlur={(e) => {
+                            if (
+                              e.target.value !==
+                              String(library.runtime_directory ?? "")
+                            )
+                              void send({
+                                operation: "UpdateApplicationLibraryDeployment",
+                                deploymentId: selected,
+                                entity: { runtime_directory: e.target.value },
+                              });
+                          }}
+                        />
+                      </label>
+                      <button
+                        className="outline"
+                        disabled={busy || !library.runtime_directory}
+                        onClick={() =>
+                          void send({
+                            operation: "UpdateApplicationLibraryDeployment",
+                            deploymentId: selected,
+                            entity: { runtime_directory: "" },
+                          })
+                        }
+                      >
+                        По умолчанию
+                      </button>
+                      <p className="muted">
+                        Пакет: {String(library.libraryRef)} · ID задаётся при
+                        создании
+                      </p>
+                    </section>
+                    <ApplicationRegistryCredentials
+                      key={`${selected}:${managed?.projectRevision}`}
+                      libraryId={selected}
+                      projectRevision={managed?.projectRevision}
+                      value={library.registry_credentials}
+                      registries={resolved?.registries ?? []}
+                      disabled={busy}
+                      runtimeDisabled={busy || draftActive || dirty}
+                      onChange={(value) =>
+                        void send({
+                          operation: "UpdateApplicationLibraryDeployment",
+                          deploymentId: selected,
+                          entity: { registry_credentials: value },
+                        })
+                      }
+                      save={saveSecrets ? saveApplicationSecrets : undefined}
+                    />
+                    <section className="application-library-placement">
+                      <h3>Размещение</h3>
+                      <p className="muted">
+                        Серверы для экземпляров этой библиотеки
+                      </p>
+                      {availablePlacementHosts.length === 0 && (
+                        <p>Нет серверов с выбранной средой контейнеризации.</p>
+                      )}
+                      {availablePlacementHosts.map((host) => (
+                        <label className="application-placement" key={host}>
+                          <input
+                            type="checkbox"
+                            checked={Object.hasOwn(
+                              placements[host] ?? {},
+                              selected,
+                            )}
+                            disabled={busy}
+                            onChange={() =>
+                              void send({
+                                operation: Object.hasOwn(
+                                  placements[host] ?? {},
+                                  selected,
+                                )
+                                  ? "RemoveApplicationLibraryPlacement"
+                                  : "SetApplicationLibraryPlacement",
+                                deploymentId: selected,
+                                hostId: host,
+                                ...(Object.hasOwn(
+                                  placements[host] ?? {},
+                                  selected,
+                                )
+                                  ? {}
+                                  : { placement: {} }),
+                              })
+                            }
+                          />
+                          <span>{host}</span>
+                        </label>
+                      ))}
+                    </section>
+                  </>
+                )}
+                {!slot && selectedTab === "Общие параметры" && (
+                  <>
+                    <p className="muted">
+                      Общие значения библиотеки. Изменения сохраняются в
+                      group_vars; собственные значения приложений задаются в их
+                      настройках.
+                    </p>
+                    {["environment", "parameters"].map((section) => (
+                      <ApplicationValueFields
+                        key={selected + section + formEpoch}
+                        compact
+                        hiddenKeys={
+                          section === "parameters" ? ["IDENTITY_GROUPS"] : []
+                        }
+                        addControl={
+                          section === "environment"
+                            ? {
+                                adding: addingEnvironment,
+                                setAdding: setAddingEnvironment,
+                              }
+                            : undefined
+                        }
+                        label={
+                          section === "environment"
+                            ? "Общие ENV"
+                            : "Общие параметры конфигурации"
+                        }
+                        value={objectValue(
+                          objectValue(library.overrides)[section],
+                        )}
+                        defaults={objectValue(
+                          objectValue(definition.defaults)[section],
+                        )}
+                        disabled={busy}
+                        onDirtyChange={(value) =>
+                          markChildDirty(value, section)
+               
+@@END
 @@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":77997,"sha256":"895d41b503450bf1c40a40a1779e2ea57ff88950a505a044ef5c7625c029dd26","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":28106}
          }
                         onSave={(value) =>
@@ -25207,7 +26512,7 @@ func (a *CommandAdapter) BuildSnapshot(ctx context.Context, projectRoot string, 
 }
 
 @@END
-@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":116957,"sha256":"9d0bfdb566e6ff528a5f36fdbbb7f7da25be36009bc291fe372ece6d4ece2487","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48387}
+@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":117200,"sha256":"0f9cb93aba30c67771c00fd642da5b6c394e86f283531f10625e39510605432a","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48387}
 package desktop
 
 import (
@@ -25439,6 +26744,7 @@ type runtimeSecretDescriptorEvidence struct {
 	runtime                                         executionnode.RuntimeEvidence
 	descriptors                                     []RuntimeSecretDescriptorView
 	applicationInputs                               []executionnode.ApplicationSecretDescriptor
+	editorLocations                                 []executionnode.ApplicationSecretEditorLocation
 	applicationSources                              map[string]string
 }
 
@@ -25822,10 +27128,12 @@ func (a *App) verifyProjectWithBindingLocked(binding *executionNodeBinding, revi
 	return a.verifyProjectWithReaderLocked(binding.reader, revision, binding)
 }
 
+const projectCoreResolutionTimeout = 5 * time.Minute
+
 func (a *App) verifyProjectWithReaderLocked(reader interface {
 	BuildSnapshot(context.Context, string) (*coreadapter.Snapshot, error)
 }, revision string, binding *executionNodeBinding) ProjectVerification {
-	ctx, cancel := a.operationContext(2 * time.Minute)
+	ctx, cancel := a.operationContext(projectCoreResolutionTimeout)
 	defer cancel()
 	verificationReader, ok := reader.(interface {
 		BuildVerificationSnapshot(context.Context, string) (verificationSnapshot, error)
@@ -26316,11 +27624,11 @@ func (a *App) importPendingDeploymentRuntimeSecretFileBound(input PendingRuntime
 }
 
 func (a *App) pendingRuntimeSecretDescriptorsLocked(serviceDeployment string) ([]RuntimeSecretDescriptorView, error) {
-	if a.current.Status != "OPEN" || a.current.Project == nil || a.current.Managed == nil || a.current.Catalog == nil || a.current.Catalog.Status != "READY" || serviceDeployment == "" {
-		return nil, errors.New("RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE")
+	if a.current.Status != "OPEN" || a.current.Project == nil || a.current.Managed == ni
 @@END
-@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":116957,"sha256":"9d0bfdb566e6ff528a5f36fdbbb7f7da25be36009bc291fe372ece6d4ece2487","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48091}
-
+@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":117200,"sha256":"0f9cb93aba30c67771c00fd642da5b6c394e86f283531f10625e39510605432a","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48091}
+l || a.current.Catalog == nil || a.current.Catalog.Status != "READY" || serviceDeployment == "" {
+		return nil, errors.New("RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE")
 	}
 	deployment, exists := a.current.Managed.Deployments[serviceDeployment]
 	if !exists {
@@ -26524,7 +27832,7 @@ func (a *App) getRuntimeSecretDescriptorsLocked(clearAttached bool) RuntimeSecre
 	if err != nil {
 		return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: "RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE", Message: "Could not create a bounded secret descriptor request."}}
 	}
-	ctx, cancel := a.operationContext(2 * time.Minute)
+	ctx, cancel := a.operationContext(projectCoreResolutionTimeout)
 	defer cancel()
 	result, err := transport.BuildRuntimeSecretDescriptors(ctx, binding.node, a.current.Root, binding.reader.runtimeRelease, executionnode.RuntimeSecretDescriptorRequest{RequestID: requestID, ProjectIdentity: a.current.Project.ID, ProjectRevision: revision, ArtifactLockDigest: a.current.Project.Source.BundleDigest, CatalogLockDigest: a.current.Project.Source.CatalogDigest})
 	if err != nil {
@@ -26568,6 +27876,7 @@ func (a *App) getRuntimeSecretDescriptorsLocked(clearAttached bool) RuntimeSecre
 	}
 	a.runtimeSecretEvidence = &runtimeSecretDescriptorEvidence{projectID: a.current.Project.ID, projectRevision: revision, nodeID: binding.node.ID, runtime: result.Runtime, fingerprint: result.DescriptorSetFingerprint, descriptors: append([]RuntimeSecretDescriptorView(nil), view.Descriptors...)}
 	a.runtimeSecretEvidence.applicationInputs = append([]executionnode.ApplicationSecretDescriptor(nil), view.ApplicationInputs...)
+	a.runtimeSecretEvidence.editorLocations = result.EditorLocations
 	return a.bindRuntimeSecretDescriptorsLocked(view)
 }
 
@@ -27291,15 +28600,15 @@ func (a *App) GetServiceConfigurationPreview() (result executionnode.ServiceConf
 			}
 		}
 		if service == nil {
-			return executionnode.ServiceConfigurationPreview{}, errors.New("SERVICE_CONFIGURATION_PREVIEW_RESPONSE_INVALID")
+			return executionnode.ServiceConfigurationPreview{}, error
+@@END
+@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":117200,"sha256":"0f9cb93aba30c67771c00fd642da5b6c394e86f283531f10625e39510605432a","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":20722}
+s.New("SERVICE_CONFIGURATION_PREVIEW_RESPONSE_INVALID")
 		}
 		filter := func(values map[string]executionnode.ServiceConfigurationValue) {
 			for settingID, item := range values {
 				var descriptor *projectlifecycle.ProjectCatalogSetting
-				f
-@@END
-@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":116957,"sha256":"9d0bfdb566e6ff528a5f36fdbbb7f7da25be36009bc291fe372ece6d4ece2487","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":20479}
-or index := range service.ConfigurationSettings {
+				for index := range service.ConfigurationSettings {
 					if service.ConfigurationSettings[index].ID == settingID {
 						descriptor = &service.ConfigurationSettings[index]
 						break
@@ -27899,7 +29208,7 @@ func (a *App) ReviewApplicationPackageImport(sessionID, source, kind, name, vers
 }
 
 @@END
-@@PORTABLE {"path":"internal/desktop/application_secret_descriptors.go","mode":420,"size":11869,"sha256":"03c3054cba79b4ae1ad7a322e6bb52fa9d2257759618b5db1b7b86ccfed01df0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":11869}
+@@PORTABLE {"path":"internal/desktop/application_secret_descriptors.go","mode":420,"size":13483,"sha256":"5a8fb6632912dd7fcf3b7f7fd548d1348933a8a2467d21cd8d405108840d2d98","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":13483}
 package desktop
 
 import (
@@ -27910,7 +29219,6 @@ import (
 	"regexp"
 	"slices"
 	"sort"
-	"time"
 
 	"platform-installer/internal/executionnode"
 	"platform-installer/internal/runtimesecret"
@@ -28134,6 +29442,41 @@ func (a *App) pendingApplicationSourceBindingsLocked(binding runtimesecret.Bindi
 	if !slices.ContainsFunc(locations, func(item located) bool { return presence[item.key] }) {
 		return result, nil
 	}
+	if evidence := a.runtimeSecretEvidence; evidence != nil && evidence.editorLocations != nil {
+		type locationKey struct{ library, slot, account, field string }
+		resolved := map[locationKey]string{}
+		descriptors := map[string]executionnode.ApplicationSecretDescriptor{}
+		for _, descriptor := range inputs {
+			descriptors[descriptor.RequirementRef] = descriptor
+		}
+		for _, location := range evidence.editorLocations {
+			descriptor := descriptors[location.RequirementRef]
+			if descriptor.Purpose != "APPLICATION_SECRET" || !slices.Contains(descriptor.ApplicationLibraries, location.Library) ||
+				!applicationSecretID.MatchString(location.Library) || (location.Slot != "" && !applicationSecretID.MatchString(location.Slot)) ||
+				len(location.Account) == 0 || len(location.Account) > 128 || len(location.Field) == 0 || len(location.Field) > 128 {
+				return nil, errors.New("RUNTIME_SECRET_DESCRIPTORS_STALE")
+			}
+			key := locationKey{location.Library, location.Slot, location.Account, location.Field}
+			if previous := resolved[key]; previous != "" && previous != location.RequirementRef {
+				return nil, errors.New("RUNTIME_SECRET_DESCRIPTORS_STALE")
+			}
+			resolved[key] = location.RequirementRef
+		}
+		for _, item := range locations {
+			if !presence[item.key] {
+				continue
+			}
+			ref := resolved[locationKey{item.library, item.slot, item.account, item.field}]
+			if ref == "" {
+				continue
+			}
+			if previous := result[item.key]; previous != "" && previous != ref {
+				return nil, errors.New("RUNTIME_SECRET_DESCRIPTORS_STALE")
+			}
+			result[item.key] = ref
+		}
+		return result, nil
+	}
 	// Reuse only mappings already attested by Core for the current scope. A
 	// newly entered, unmapped editor input still needs the normal snapshot.
 	if a.runtimeSecretEvidenceDescriptorsLocked(revision) != nil && a.runtimeSecretEvidence.applicationSources != nil {
@@ -28145,7 +29488,7 @@ func (a *App) pendingApplicationSourceBindingsLocked(binding runtimesecret.Bindi
 			return result, nil
 		}
 	}
-	ctx, cancel := a.operationContext(2 * time.Minute)
+	ctx, cancel := a.operationContext(projectCoreResolutionTimeout)
 	defer cancel()
 	proof, err := a.binding.reader.BuildVerificationSnapshot(ctx, a.current.Root)
 	if err != nil || proof.Snapshot == nil || proof.Snapshot.ProjectRevision != revision || proof.Snapshot.Partial || proof.Snapshot.ApplicationLibraries == nil {
@@ -35728,7 +37071,7 @@ func decodeApplicationImage(raw any, deferred ...bool) (ApplicationImageRequirem
 }
 
 @@END
-@@PORTABLE {"path":"internal/executionnode/application_image_preparation.go","mode":420,"size":7517,"sha256":"bcefb600fc82574bb7c0832cd441b7f850c37680fd96b4ea88ec16d7de9962c1","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7517}
+@@PORTABLE {"path":"internal/executionnode/application_image_preparation.go","mode":420,"size":7747,"sha256":"f2eeaac442d93cbe47ba839d34a4d41107b8e061b4d71a3614f3f5bec7ae2820","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7747}
 package executionnode
 
 import (
@@ -35746,7 +37089,7 @@ func availabilityPlanCapabilitySupported(c map[string]any) bool {
 	return ok && c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha15" &&
 		contains(c["deploymentPlanRequestVersions"], availabilityPlanRequestVersion) &&
 		closedKeys(feature, "protocol", "planContract", "manifestContract") &&
-		feature["protocol"] == "RegistryAvailabilityPlanning/v1alpha1" &&
+		(feature["protocol"] == "RegistryAvailabilityPlanning/v1alpha1" || feature["protocol"] == "RegistryAvailabilityPlanning/v1alpha2") &&
 		feature["planContract"] == "platform.installer/plan/v1alpha12" &&
 		feature["manifestContract"] == "platform.installer/execution-manifest/v1alpha9"
 }
@@ -35770,7 +37113,7 @@ type ImageTargetConnection struct {
 }
 
 func (t OpenSSHTransport) imagePlanningCapabilities(ctx context.Context, node Node, fallback string) (map[string]any, error) {
-	if capability, err := t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": availabilityPlanRequestVersion, "operation": "GetCapabilities"}); err == nil && availabilityPlanCapabilitySupported(capability) {
+	if capability, err := t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": availabilityPlanRequestVersion, "operation": "GetCapabilities", "canonicalPlanContext": true}); err == nil && availabilityPlanCapabilitySupported(capability) {
 		return capability, nil
 	}
 	if len(serviceSelection(ctx)) > 0 {
@@ -35808,7 +37151,7 @@ func imagePlanCapabilitySupported(c map[string]any) bool {
 		images["protocol"] == "PrepareApplicationImages/v1alpha1" && images["leaseProtocol"] == "platform.installer/application-image-preparation-lease/v1alpha1"
 }
 
-func (t OpenSSHTransport) prepareApplicationImages(ctx context.Context, node Node, request map[string]any) error {
+func (t OpenSSHTransport) prepareApplicationImages(ctx context.Context, node Node, request map[string]any, canonicalPlanContext bool) error {
 	base := map[string]any{"apiVersion": request["apiVersion"], "operation": "PrepareApplicationImages", "runId": request["runId"], "runtimeRelease": request["runtimeRelease"]}
 	describe := map[string]any{}
 	for key, value := range base {
@@ -35824,6 +37167,9 @@ func (t OpenSSHTransport) prepareApplicationImages(ctx context.Context, node Nod
 	}
 	if request["apiVersion"] == serviceSelectionRequestVersion || request["apiVersion"] == availabilityPlanRequestVersion {
 		describe["skipServiceDeployments"] = request["skipServiceDeployments"]
+	}
+	if canonicalPlanContext {
+		describe["applicationVaultSources"] = request["applicationVaultSources"]
 	}
 	response, err := t.runtimeProtocol(ctx, node, describe)
 	if err != nil {
@@ -40680,7 +42026,7 @@ fi
 `
 
 @@END
-@@PORTABLE {"path":"internal/executionnode/runtime_protocol.go","mode":420,"size":72291,"sha256":"d5ebd4a62d6a256c421965af7e49827d2bfd2c5d83c97f67d57cc9e22c1ac494","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"internal/executionnode/runtime_protocol.go","mode":420,"size":73445,"sha256":"b007c48b5a7027288286c4c2ebf90a1a48e5fc4bc060ba801f5cf24d6d7d6355","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
 package executionnode
 
 // Typed access to the fixed UI-BE-04C runtime protocol.  This is transport
@@ -40819,7 +42165,13 @@ type RuntimeSecretDescriptor struct {
 	Hosts                                                    []string
 }
 
+type ApplicationSecretEditorLocation struct {
+	Library, Slot, Account, Field, RequirementRef string
+}
+
 type RuntimeSecretDescriptorResult struct {
+	APIVersion                                                 string                            `json:"apiVersion"`
+	EditorLocations                                            []ApplicationSecretEditorLocation `json:"editorLocations"`
 	ProjectIdentity, ProjectRevision, DescriptorSetFingerprint string
 	Descriptors                                                []RuntimeSecretDescriptor
 	ApplicationInputs                                          []ApplicationSecretDescriptor `json:"applicationInputs"`
@@ -40962,7 +42314,9 @@ func (t OpenSSHTransport) buildDeploymentPlanRequest(ctx context.Context, node N
 	}
 	request["operation"], request["runId"], request["project"] = "BuildDeploymentPlan", runID, "/var/lib/platform-installer/execution/runs/"+runID+"/project"
 	if request["apiVersion"] == availabilityPlanRequestVersion || request["apiVersion"] == imagePlanRequestVersion || (request["apiVersion"] == selectionPlanRequestVersion || request["apiVersion"] == serviceSelectionRequestVersion) {
-		if err := t.prepareApplicationImages(ctx, node, request); err != nil {
+		feature, _ := capability["applicationImagePlanning"].(map[string]any)
+		canonicalPlanContext := request["apiVersion"] == availabilityPlanRequestVersion && feature["protocol"] == "RegistryAvailabilityPlanning/v1alpha2"
+		if err := t.prepareApplicationImages(ctx, node, request, canonicalPlanContext); err != nil {
 			return DeploymentPlan{}, err
 		}
 	}
@@ -41348,7 +42702,7 @@ func (t OpenSSHTransport) BuildRuntimeSecretDescriptors(ctx context.Context, nod
 	}
 	defer t.cleanupSnapshotStaging(node, runID, request.RequestID, archiveDigest)
 	payload := map[string]any{"apiVersion": "platform.installer/project-snapshot-request/v1alpha1", "kind": "BuildProjectSnapshotRequest", "requestId": request.RequestID, "projectIdentity": request.ProjectIdentity, "candidateProjectRevision": request.ProjectRevision, "projectArchiveDigest": archiveDigest, "artifactLockDigest": request.ArtifactLockDigest, "catalogLockDigest": request.CatalogLockDigest, "installerOwnedLogicalPaths": []string{}, "projectContract": "v2alpha1", "snapshotContract": "v1alpha1", "editContract": "v1alpha2"}
-	response, err := t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": "platform.installer/execution-runtime/v1alpha1", "operation": "BuildRuntimeSecretDescriptors", "runId": runID, "runtimeRelease": runtimeRelease, "snapshotRequest": payload})
+	response, err := t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": "platform.installer/execution-runtime/v1alpha1", "operation": "BuildRuntimeSecretDescriptors", "descriptorResponse": "BuildRuntimeSecretDescriptors/v1alpha5", "runId": runID, "runtimeRelease": runtimeRelease, "snapshotRequest": payload})
 	if err != nil {
 		return RuntimeSecretDescriptorResult{}, err
 	}
@@ -41356,12 +42710,19 @@ func (t OpenSSHTransport) BuildRuntimeSecretDescriptors(ctx context.Context, nod
 	if !ok {
 		return RuntimeSecretDescriptorResult{}, errors.New("RUNTIME_SECRET_DESCRIPTORS_RESPONSE_INVALID")
 	}
+	responseLimit := 64 * 1024
+	if version := value["apiVersion"]; version == "BuildRuntimeSecretDescriptors/v1alpha3" || version == "BuildRuntimeSecretDescriptors/v1alpha4" || version == "BuildRuntimeSecretDescriptors/v1alpha5" {
+		responseLimit = 256 * 1024
+	}
 	data, err := json.Marshal(value)
-	if err != nil || len(data) > 65536 {
+	if err != nil || len(data) > responseLimit {
 		return RuntimeSecretDescriptorResult{}, errors.New("RUNTIME_SECRET_DESCRIPTORS_RESPONSE_INVALID")
 	}
 	var result RuntimeSecretDescriptorResult
 	if err := json.Unmarshal(data, &result); err != nil || result.ProjectIdentity != request.ProjectIdentity || result.ProjectRevision != request.ProjectRevision || !validSHA256(result.DescriptorSetFingerprint) {
+		return RuntimeSecretDescriptorResult{}, errors.New("RUNTIME_SECRET_DESCRIPTORS_RESPONSE_INVALID")
+	}
+	if result.APIVersion == "BuildRuntimeSecretDescriptors/v1alpha5" && (result.EditorLocations == nil || len(result.EditorLocations) > 1024) {
 		return RuntimeSecretDescriptorResult{}, errors.New("RUNTIME_SECRET_DESCRIPTORS_RESPONSE_INVALID")
 	}
 	result.Runtime, ok = decodeRuntimeEvidence(response["runtimeEvidence"])
@@ -41601,7 +42962,10 @@ func decodeRun(response map[string]any) (ExecutionRun, error) {
 		run.ProjectIdentity = v
 	}
 	if metadata, ok := response["metadata"].(map[string]any); ok {
-		if v, ok := metadata["projectIdentity"].(string); ok {
+		if v, ok := metadata["projectIdentity
+@@END
+@@PORTABLE {"path":"internal/executionnode/runtime_protocol.go","mode":420,"size":73445,"sha256":"b007c48b5a7027288286c4c2ebf90a1a48e5fc4bc060ba801f5cf24d6d7d6355","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":25445}
+"].(string); ok {
 			run.ProjectIdentity = v
 		}
 		if run.RunID == "" {
@@ -41634,10 +42998,7 @@ func decodeEventPage(response map[string]any, runID string, afterSequence, limit
 	if earliestExists != truncatedExists || earliestExists && (!earliestOK || !truncatedOK || earliest < 0 || earliest != float64(int(earliest))) {
 		return ExecutionEventPage{}, errExecutionEventsResponseInvalid
 	}
-	earliestPresen
-@@END
-@@PORTABLE {"path":"internal/executionnode/runtime_protocol.go","mode":420,"size":72291,"sha256":"d5ebd4a62d6a256c421965af7e49827d2bfd2c5d83c97f67d57cc9e22c1ac494","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":24291}
-t := earliestExists
+	earliestPresent := earliestExists
 	truncatedPresent := truncatedExists
 	expectedSequence := afterSequence + 1
 	if truncatedPresent && truncated {
@@ -56196,7 +57557,7 @@ func ReadLocks(ctx context.Context, projectRoot string, _ executionbundle.Verifi
 }
 
 @@END
-@@PORTABLE {"path":"internal/runtimesecret/broker.go","mode":420,"size":46540,"sha256":"6411a7497c5f81d6a00f8951832352657034a4a79b649ba497512f7e9022c55f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":46540}
+@@PORTABLE {"path":"internal/runtimesecret/broker.go","mode":420,"size":46647,"sha256":"8e781c21ee646bc9fe38e7d8bddc0930c87b7bc2dc703422b752cd28ee71e867","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":46647}
 // Package runtimesecret holds short-lived, application-local target session
 // credentials. It deliberately has no persistence or transport capability.
 package runtimesecret
@@ -56563,9 +57924,11 @@ func (b *Broker) PendingApplicationSecretPresence(binding Binding, sources []str
 	return result
 }
 
+const maxPendingApplicationSecretValues = 512
+
 // SetPendingApplicationSecretValues holds source values until Core attestation.
 func (b *Broker) SetPendingApplicationSecretValues(binding Binding, values map[string]string) error {
-	if binding.Root == "" || binding.ID == "" || len(values) == 0 || len(values) > 128 {
+	if binding.Root == "" || binding.ID == "" || len(values) == 0 || len(values) > maxPendingApplicationSecretValues {
 		return errors.New("RUNTIME_SECRET_INPUT_INVALID")
 	}
 	for source, value := range values {
@@ -56585,7 +57948,7 @@ func (b *Broker) SetPendingApplicationSecretValues(binding Binding, values map[s
 	for _, value := range next {
 		total += len(value)
 	}
-	if len(next) > 128 || total > 65536 {
+	if len(next) > maxPendingApplicationSecretValues || total > 65536 {
 		zeroSecretMap(next)
 		return errors.New("RUNTIME_SECRET_INPUT_INVALID")
 	}
@@ -119795,489 +121158,6 @@ import {Call} from "./calls";
  */
 export function ScreenGetAll() {
     return Call(":wails:ScreenGetAll");
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/frontend/runtime/desktop/window.js","mode":420,"size":4688,"sha256":"d80b7d19f1a35a3c0e8aad4a40c2986b349d5ab327666ea7c94582eb91dca824","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4688}
-/*
- _	   __	  _ __
-| |	 / /___ _(_) /____
-| | /| / / __ `/ / / ___/
-| |/ |/ / /_/ / / (__  )
-|__/|__/\__,_/_/_/____/
-The electron alternative for Go
-(c) Lea Anthony 2019-present
-*/
-
-/* jshint esversion: 9 */
-
-
-import {Call} from "./calls";
-
-export function WindowReload() {
-    window.location.reload();
-}
-
-export function WindowReloadApp() {
-    window.WailsInvoke('WR');
-}
-
-export function WindowSetSystemDefaultTheme() {
-    window.WailsInvoke('WASDT');
-}
-
-export function WindowSetLightTheme() {
-    window.WailsInvoke('WALT');
-}
-
-export function WindowSetDarkTheme() {
-    window.WailsInvoke('WADT');
-}
-
-/**
- * Place the window in the center of the screen
- *
- * @export
- */
-export function WindowCenter() {
-    window.WailsInvoke('Wc');
-}
-
-/**
- * Sets the window title
- *
- * @param {string} title
- * @export
- */
-export function WindowSetTitle(title) {
-    window.WailsInvoke('WT' + title);
-}
-
-/**
- * Makes the window go fullscreen
- *
- * @export
- */
-export function WindowFullscreen() {
-    window.WailsInvoke('WF');
-}
-
-/**
- * Reverts the window from fullscreen
- *
- * @export
- */
-export function WindowUnfullscreen() {
-    window.WailsInvoke('Wf');
-}
-
-/**
- * Returns the state of the window, i.e. whether the window is in full screen mode or not.
- *
- * @export
- * @return {Promise<boolean>} The state of the window
- */
-export function WindowIsFullscreen() {
-    return Call(":wails:WindowIsFullscreen");
-}
-
-/**
- * Set the Size of the window
- *
- * @export
- * @param {number} width
- * @param {number} height
- */
-export function WindowSetSize(width, height) {
-    window.WailsInvoke('Ws:' + width + ':' + height);
-}
-
-/**
- * Get the Size of the window
- *
- * @export
- * @return {Promise<{w: number, h: number}>} The size of the window
-
- */
-export function WindowGetSize() {
-    return Call(":wails:WindowGetSize");
-}
-
-/**
- * Set the maximum size of the window
- *
- * @export
- * @param {number} width
- * @param {number} height
- */
-export function WindowSetMaxSize(width, height) {
-    window.WailsInvoke('WZ:' + width + ':' + height);
-}
-
-/**
- * Set the minimum size of the window
- *
- * @export
- * @param {number} width
- * @param {number} height
- */
-export function WindowSetMinSize(width, height) {
-    window.WailsInvoke('Wz:' + width + ':' + height);
-}
-
-
-
-/**
- * Set the window AlwaysOnTop or not on top
- *
- * @export
- */
-export function WindowSetAlwaysOnTop(b) {
-
-    window.WailsInvoke('WATP:' + (b ? '1' : '0'));
-}
-
-
-
-
-/**
- * Set the Position of the window
- *
- * @export
- * @param {number} x
- * @param {number} y
- */
-export function WindowSetPosition(x, y) {
-    window.WailsInvoke('Wp:' + x + ':' + y);
-}
-
-/**
- * Get the Position of the window
- *
- * @export
- * @return {Promise<{x: number, y: number}>} The position of the window
- */
-export function WindowGetPosition() {
-    return Call(":wails:WindowGetPos");
-}
-
-/**
- * Hide the Window
- *
- * @export
- */
-export function WindowHide() {
-    window.WailsInvoke('WH');
-}
-
-/**
- * Show the Window
- *
- * @export
- */
-export function WindowShow() {
-    window.WailsInvoke('WS');
-}
-
-/**
- * Maximise the Window
- *
- * @export
- */
-export function WindowMaximise() {
-    window.WailsInvoke('WM');
-}
-
-/**
- * Toggle the Maximise of the Window
- *
- * @export
- */
-export function WindowToggleMaximise() {
-    window.WailsInvoke('Wt');
-}
-
-/**
- * Unmaximise the Window
- *
- * @export
- */
-export function WindowUnmaximise() {
-    window.WailsInvoke('WU');
-}
-
-/**
- * Returns the state of the window, i.e. whether the window is maximised or not.
- *
- * @export
- * @return {Promise<boolean>} The state of the window
- */
-export function WindowIsMaximised() {
-    return Call(":wails:WindowIsMaximised");
-}
-
-/**
- * Minimise the Window
- *
- * @export
- */
-export function WindowMinimise() {
-    window.WailsInvoke('Wm');
-}
-
-/**
- * Unminimise the Window
- *
- * @export
- */
-export function WindowUnminimise() {
-    window.WailsInvoke('Wu');
-}
-
-/**
- * Returns the state of the window, i.e. whether the window is minimised or not.
- *
- * @export
- * @return {Promise<boolean>} The state of the window
- */
-export function WindowIsMinimised() {
-    return Call(":wails:WindowIsMinimised");
-}
-
-/**
- * Returns the state of the window, i.e. whether the window is normal or not.
- *
- * @export
- * @return {Promise<boolean>} The state of the window
- */
-export function WindowIsNormal() {
-    return Call(":wails:WindowIsNormal");
-}
-
-/**
- * Sets the background colour of the window
- *
- * @export
- * @param {number} R Red
- * @param {number} G Green
- * @param {number} B Blue
- * @param {number} A Alpha
- */
-export function WindowSetBackgroundColour(R, G, B, A) {
-    let rgba = JSON.stringify({r: R || 0, g: G || 0, b: B || 0, a: A || 255});
-    window.WailsInvoke('Wr:' + rgba);
-}
-
-
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/frontend/runtime/dev/Overlay.svelte","mode":420,"size":4278,"sha256":"3d6d398fd0172a09cb571728557054bf8a12645876b9615ed5adf10dce4162e4","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4278}
-<script>
-
-    import {overlayVisible} from './store'
-    import {fade,} from 'svelte/transition';
-</script>
-
-{#if $overlayVisible }
-    <div class="wails-reconnect-overlay" transition:fade="{{ duration: 300 }}">
-        <div class="wails-reconnect-overlay-content">
-            <div class="wails-reconnect-overlay-loadingspinner"></div>
-        </div>
-    </div>
-{/if}
-
-<style>
-    .wails-reconnect-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        backdrop-filter: blur(2px) saturate(0%) contrast(50%) brightness(25%);
-        z-index: 999999
-    }
-
-    .wails-reconnect-overlay-content {
-        position: relative;
-        top: 50%;
-        transform: translateY(-50%);
-        margin: 0;
-        background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEsAAAA7CAMAAAAEsocZAAAC91BMVEUAAACzQ0PjMjLkMjLZLS7XLS+vJCjkMjKlEx6uGyHjMDGiFx7GJyrAISjUKy3mMzPlMjLjMzOsGyDKJirkMjK6HyXmMjLgMDC6IiLcMjLULC3MJyrRKSy+IibmMzPmMjK7ISXlMjLIJimzHSLkMjKtGiHZLC7BIifgMDCpGSDFIivcLy+yHSKoGR+eFBzNKCvlMjKxHSPkMTKxHSLmMjLKJyq5ICXDJCe6ISXdLzDkMjLmMzPFJSm2HyTlMTLhMDGyHSKUEBmhFx24HyTCJCjHJijjMzOiFh7mMjJ6BhDaLDCuGyOKABjnMzPGJinJJiquHCGEChSmGB/pMzOiFh7VKy3OKCu1HiSvHCLjMTLMKCrBIyeICxWxHCLDIyjSKizBIyh+CBO9ISa6ISWDChS9Iie1HyXVLC7FJSrLKCrlMjLiMTGPDhicFRywGyKXFBuhFx1/BxO7IiXkMTGeFBx8BxLkMTGnGR/GJCi4ICWsGyGJDxXSLS2yGiHSKi3CJCfnMzPQKiyECRTKJiq6ISWUERq/Iye0HiPDJCjGJSm6ICaPDxiTEBrdLy+3HyXSKiy0HyOQEBi4ICWhFh1+CBO9IieODhfSKyzWLC2LDhh8BxHKKCq7ISWaFBzkMzPqNDTTLC3EJSiHDBacExyvGyO1HyTPKCy+IieoGSC7ISaVEhrMKCvQKyusGyG0HiKACBPIJSq/JCaABxR5BRLEJCnkMzPJJinEJimPDRZ2BRKqHx/jMjLnMzPgMDHULC3NKSvQKSzsNDTWLS7SKyy3HyTKJyrDJSjbLzDYLC6mGB/GJSnVLC61HiPLKCrHJSm/Iye8Iia6ICWzHSKxHCLaLi/PKSupGR+7ICXpMzPbLi/IJinJJSmsGyGrGiCkFx6PDheJCxaFChXBIyfAIieSDxmBCBPlMjLeLzDdLzC5HySMDRe+ISWvGyGcFBzSKSzPJyvMJyrEJCjDIyefFRyWERriMDHUKiy/ISaZExv0NjbwNTXuNDTrMzMI0c+yAAAAu3RSTlMAA8HR/gwGgAj+MEpGCsC+hGpjQjYnIxgWBfzx7urizMrFqqB1bF83KhsR/fz8+/r5+fXv7unZ1tC+t6mmopqKdW1nYVpVRjUeHhIQBPr59/b28/Hx8ODg3NvUw8O/vKeim5aNioiDgn1vZWNjX1xUU1JPTUVFPT08Mi4qJyIh/Pv7+/n4+Pf39fT08/Du7efn5uXj4uHa19XNwsG/vrq2tbSuramlnpyYkpGNiIZ+enRraGVjVVBKOzghdjzRsAAABJVJREFUWMPtllVQG1EYhTc0ASpoobS0FCulUHd3oUjd3d3d3d3d3d2b7CYhnkBCCHGDEIK7Vh56d0NpOgwkYfLQzvA9ZrLfnPvfc+8uVEst/yheBJup3Nya2MjU6pa/jWLZtxjXpZFtVB4uVNI6m5gIruNkVFebqIb5Ug2ym4TIEM/gtUOGbg613oBzjAzZFrZ+lXu/3TIiMXXS5M6HTvrNHeLpZLEh6suGNW9fzZ9zd/qVi2eOHygqi5cDE5GUrJocONgzyqo0UXNSUlKSEhMztFqtXq9vNxImAmS3g7Y6QlbjdBWVGW36jt4wDGTUXjUsafh5zJWRkdFuZGtWGnCRmg+HasiGMUClTTzW0ZuVgLlGDIPM4Lhi0IrVq+tv2hS21fNrSONQgpM9DsJ4t3fM9PkvJuKj2ZjrZwvILKvaSTgciUSirjt6dOfOpyd169bDb9rMOwF9Hj4OD100gY0YXYb299bjzMrqj9doNByJWlVXFB9DT5dmJuvy+cq83JyuS6ayEYSHulKL8dmFnBkrCeZlHKMrC5XRhXGCZB2Ty1fkleRQaMCFT2DBsEafzRFJu7/2MicbKynPhQUDLiZwMWLJZKNLzoLbJBYVcurSmbmn+rcyJ8vCMgmlmaW6gnwun/+3C96VpAUuET1ZgRR36r2xWlnYSnf3oKABA14uXDDvydxHs6cpTV1p3hlJ2rJCiUjIZCByItXg8sHJijuvT64CuMTABUYvb6NN1Jdp1PH7D7f3bo2eS5KvW4RJr7atWT5w4MBBg9zdBw9+37BS7QIoFS5WnIaj12dr1DEXFgdvr4fh4eFl+u/wz8uf3jjHic8s4DL2Dal0IANyUBeCRCcwOBJV26JsjSpGwHVuSai69jvqD+jr56OgtKy0zAAK5mLTVBKVKL5tNthGAR9JneJQ/bFsHNzy+U7IlCYROxtMpIjR0ceoQVnowracLLpAQWETqV361bPoFo3cEbz2zYLZM7t3HWXcxmiBOgttS1ycWkTXMWh4mGigdug9DFdttqCFgTN6nD0q1XEVSoCxEjyFCi2eNC6Z69MRVIImJ6JQSf5gcFVCuF+aDhCa1F6MJFDaiNBQAh2TMfWBjhmLsAxUjG/fmjs0qjJck8D0GPBcuUuZW1LS/tIsPzqmQt17PvZQknlwnf4tHDBc+7t5VV3QQCkdc+Ur8/hdrz0but0RCumWiYbiKmLJ7EVbRomj4Q7+y5wsaXvfTGFpQcHB7n2WbG4MGdniw2Tm8xl5Yhr7MrSYHQ3uampz10aWyHyuzxvqaW/6W4MjXAUD3QV2aw97ZxhGjxCohYf5TpTHMXU1BbsAuoFnkRygVieIGAbqiF7rrH4rfWpKJouBCtyHJF8ctEyGubBa+C6NsMYEUonJFITHZqWBxXUA12Dv76Tf/PgOBmeNiiLG1pcKo1HAq8jLpY4JU1yWEixVNaOgoRJAKBSZHTZTU+wJOMtUDZvlVITC6FTlksyrEBoPHXpxxbzdaqzigUtVDkJVIOtVQ9UEOR4VGUh/kHWq0edJ6CxnZ+eePXva2bnY/cF/I1RLLf8vvwDANdMSMegxcAAAAABJRU5ErkJggg==);
-        background-repeat: no-repeat;
-        background-position: center
-    }
-
-    .wails-reconnect-overlay-loadingspinner {
-        pointer-events: none;
-        width: 2.5em;
-        height: 2.5em;
-        border: .4em solid transparent;
-        border-color: #f00 #eee0 #f00 #eee0;
-        border-radius: 50%;
-        animation: loadingspin 1s linear infinite;
-        margin: auto;
-        padding: 2.5em
-    }
-
-    @keyframes loadingspin {
-        100% {
-            transform: rotate(360deg);
-        }
-    }
-
-</style>
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/frontend/runtime/dev/build.js","mode":420,"size":417,"sha256":"091c5f1fe2fa43b774bd25dd4cacb5a11b196bbde8a0c3336b71c7289730a0d1","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":417}
-/* jshint esversion: 8 */
-const esbuild = require("esbuild");
-const sveltePlugin = require("esbuild-svelte");
-
-esbuild
-    .build({
-        entryPoints: ["main.js"],
-        bundle: true,
-        minify: true,
-        outfile: "../ipc_websocket.js",
-        plugins: [sveltePlugin({compilerOptions: {css: "injected"}})],
-        logLevel: "info",
-        sourcemap: "inline",
-    })
-    .catch(() => process.exit(1));
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/frontend/runtime/dev/log.js","mode":420,"size":349,"sha256":"ce193fcb7b54517848ea9043c710e91c2e96b00c24ff51a5640dd24f3c532cd8","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":349}
-export function log(message) {
-    // eslint-disable-next-line
-    console.log(
-        '%c wails dev %c ' + message + ' ',
-        'background: #aa0000; color: #fff; border-radius: 3px 0px 0px 3px; padding: 1px; font-size: 0.7rem',
-        'background: #009900; color: #fff; border-radius: 0px 3px 3px 0px; padding: 1px; font-size: 0.7rem'
-    );
-}
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/frontend/runtime/dev/main.js","mode":420,"size":3053,"sha256":"d1986f80f9228e88f9bf7f221abc68e6e223570daaa26a1a67204a49bbfe9ed2","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3053}
-/*
- _       __      _ __
-| |     / /___ _(_) /____
-| | /| / / __ `/ / / ___/
-| |/ |/ / /_/ / / (__  )
-|__/|__/\__,_/_/_/____/
-The electron alternative for Go
-(c) Lea Anthony 2019-present
-*/
-/* jshint esversion: 6 */
-
-import {log} from "./log";
-import Overlay from "./Overlay.svelte";
-import {hideOverlay, showOverlay} from "./store";
-
-let components = {};
-
-let wailsInvokeInternal = null;
-let messageQueue = [];
-
-window.WailsInvoke = (message) => {
-    if (!wailsInvokeInternal) {
-        console.log("Queueing: " + message);
-        messageQueue.push(message);
-        return;
-    }
-    wailsInvokeInternal(message);
-};
-
-window.addEventListener('DOMContentLoaded', () => {
-    components.overlay = new Overlay({
-        target: document.body,
-        anchor: document.querySelector('#wails-spinner'),
-    });
-});
-
-let websocket = null;
-let connectTimer;
-
-window.onbeforeunload = function () {
-    if (websocket) {
-        websocket.onclose = function () {
-        };
-        websocket.close();
-        websocket = null;
-    }
-};
-
-// ...and attempt to connect
-connect();
-
-function setupIPCBridge() {
-    wailsInvokeInternal = (message) => {
-        websocket.send(message);
-    };
-    for (let i = 0; i < messageQueue.length; i++) {
-        console.log("sending queued message: " + messageQueue[i]);
-        window.WailsInvoke(messageQueue[i]);
-    }
-    messageQueue = [];
-}
-
-// Handles incoming websocket connections
-function handleConnect() {
-    log('Connected to backend');
-    hideOverlay();
-    setupIPCBridge();
-    clearInterval(connectTimer);
-    websocket.onclose = handleDisconnect;
-    websocket.onmessage = handleMessage;
-}
-
-// Handles websocket disconnects
-function handleDisconnect() {
-    log('Disconnected from backend');
-    websocket = null;
-    showOverlay();
-    connect();
-}
-
-function _connect() {
-    if (websocket == null) {
-        websocket = new WebSocket((window.location.protocol.startsWith("https") ? "wss://" : "ws://") + window.location.host + "/wails/ipc");
-        websocket.onopen = handleConnect;
-        websocket.onerror = function (e) {
-            e.stopImmediatePropagation();
-            e.stopPropagation();
-            e.preventDefault();
-            websocket = null;
-            return false;
-        };
-    }
-}
-
-// Try to connect to the backend every .5s
-function connect() {
-    _connect();
-    connectTimer = setInterval(_connect, 500);
-}
-
-function handleMessage(message) {
-
-    if (message.data === "reload") {
-        window.runtime.WindowReload();
-        return;
-    }
-    if (message.data === "reloadapp") {
-        window.runtime.WindowReloadApp()
-        return;
-    }
-
-    // As a bridge we ignore js and css injections
-    switch (message.data[0]) {
-        // Notifications
-        case 'n':
-            window.wails.EventsNotify(message.data.slice(1));
-            break;
-        case 'c':
-            const callbackData = message.data.slice(1);
-            window.wails.Callback(callbackData);
-            break;
-        default:
-            log('Unknown message: ' + message.data);
-    }
 }
 
 @@END
