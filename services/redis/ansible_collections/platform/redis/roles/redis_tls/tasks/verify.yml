@@ -196,3 +196,4 @@
 
 - name: Проверка и сохранение пользователя по умолчанию ACL после проверки работоспособности экземпляра службы
   ansible.builtin.include_tasks: acl_runtime.yml
+  when: not (platform_redis_verify_only | bool)

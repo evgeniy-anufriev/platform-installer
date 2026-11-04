@@ -13,5 +13,10 @@
 - name: Проверка выбранных серверных целей только для чтения
   ansible.builtin.include_tasks: check_targets.yml
 
-- name: Проверка существующей службы и конфигурации HAProxy
+- name: Проверка синтаксиса активной конфигурации HAProxy
+  ansible.builtin.command:
+    argv: ["{{ platform_haproxy_binary }}", '-c', '-f', "{{ platform_haproxy_main_config }}", '-f', "{{ platform_haproxy_conf_directory }}"]
+  changed_when: false
+
+- name: Проверка существующей службы и портов HAProxy
   ansible.builtin.include_tasks: verify.yml

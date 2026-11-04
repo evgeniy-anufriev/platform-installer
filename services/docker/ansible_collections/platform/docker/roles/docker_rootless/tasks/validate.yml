@@ -27,64 +27,67 @@
       - platform_docker_lxc_veth_limit | int <= 64
     fail_msg: DOCKER_ROOTLESS_INPUT_INVALID
 
-- name: Проверка целевого идентификатора RED OS
-  ansible.builtin.slurp:
-    src: /etc/os-release
-  register: _platform_docker_os_release
+- name: Проверка предпосылок установки Docker
+  when: not (platform_docker_verify_only | bool)
+  block:
+    - name: Проверка целевого идентификатора RED OS
+      ansible.builtin.slurp:
+        src: /etc/os-release
+      register: _platform_docker_os_release
 
-- name: Проверка архитектуры целевой машины
-  ansible.builtin.command:
-    argv: [uname, -m]
-  register: _platform_docker_architecture
-  changed_when: false
+    - name: Проверка архитектуры целевой машины
+      ansible.builtin.command:
+        argv: [uname, -m]
+      register: _platform_docker_architecture
+      changed_when: false
 
-- name: Проверка поддерживаемой архитектуры RED OS
-  ansible.builtin.assert:
-    that:
-      - ( _platform_docker_os_release.content | b64decode ) is search('(?m)^ID=\"?redos\"?$')
-      - _platform_docker_architecture.stdout == 'x86_64'
-    fail_msg: DOCKER_ROOTLESS_UNSUPPORTED_TARGET
+    - name: Проверка поддерживаемой архитектуры RED OS
+      ansible.builtin.assert:
+        that:
+          - ( _platform_docker_os_release.content | b64decode ) is search('(?m)^ID=\"?redos\"?$')
+          - _platform_docker_architecture.stdout == 'x86_64'
+        fail_msg: DOCKER_ROOTLESS_UNSUPPORTED_TARGET
 
-- name: Проверка корневого демона и сокета Docker
-  ansible.builtin.command:
-    argv: [systemctl, is-active, docker.service, docker.socket]
-  register: _platform_docker_rootful_units
-  changed_when: false
-  failed_when: false
+    - name: Проверка корневого демона и сокета Docker
+      ansible.builtin.command:
+        argv: [systemctl, is-active, docker.service, docker.socket]
+      register: _platform_docker_rootful_units
+      changed_when: false
+      failed_when: false
 
-- name: Отклонение конфликта с активным Docker с правами root
-  ansible.builtin.assert:
-    that: "'active' not in _platform_docker_rootful_units.stdout_lines"
-    fail_msg: DOCKER_ROOTFUL_CONFLICT
+    - name: Отклонение конфликта с активным Docker с правами root
+      ansible.builtin.assert:
+        that: "'active' not in _platform_docker_rootful_units.stdout_lines"
+        fail_msg: DOCKER_ROOTFUL_CONFLICT
 
-- name: Проверка SecretRef среды выполнения создания пользователя
-  ansible.builtin.assert:
-    that:
-      - platform_docker_account_credential is mapping
-      - platform_docker_account_credential.passwordSecretRef | default('') is match('^runtime:[a-z][a-z0-9-]{0,127}$')
-      - platform_docker_secret_files is mapping
-      - platform_docker_account_credential.passwordSecretRef in platform_docker_secret_files
-    fail_msg: DOCKER_ACCOUNT_PASSWORD_REQUIRED
-  no_log: true
+    - name: Проверка SecretRef среды выполнения создания пользователя
+      ansible.builtin.assert:
+        that:
+          - platform_docker_account_credential is mapping
+          - platform_docker_account_credential.passwordSecretRef | default('') is match('^runtime:[a-z][a-z0-9-]{0,127}$')
+          - platform_docker_secret_files is mapping
+          - platform_docker_account_credential.passwordSecretRef in platform_docker_secret_files
+        fail_msg: DOCKER_ACCOUNT_PASSWORD_REQUIRED
+      no_log: true
 
-- name: Проверка файла паролей среды выполнения создания пользователя на контроллере
-  ansible.builtin.stat:
-    path: "{{ platform_docker_secret_files[platform_docker_account_credential.passwordSecretRef] }}"
-    follow: false
-    get_mime: false
-    get_attributes: false
-    get_checksum: false
-  delegate_to: localhost
-  become: false
-  register: _platform_docker_password_file
-  no_log: true
+    - name: Проверка файла паролей среды выполнения создания пользователя на контроллере
+      ansible.builtin.stat:
+        path: "{{ platform_docker_secret_files[platform_docker_account_credential.passwordSecretRef] }}"
+        follow: false
+        get_mime: false
+        get_attributes: false
+        get_checksum: false
+      delegate_to: localhost
+      become: false
+      register: _platform_docker_password_file
+      no_log: true
 
-- name: Проверка типа, размера и защиты runtime-файла пароля
-  ansible.builtin.assert:
-    that:
-      - _platform_docker_password_file.stat.isreg
-      - not _platform_docker_password_file.stat.islnk
-      - _platform_docker_password_file.stat.size >= 1
-      - _platform_docker_password_file.stat.size <= 4096
-    fail_msg: DOCKER_ACCOUNT_PASSWORD_INVALID
-  no_log: true
+    - name: Проверка типа, размера и защиты runtime-файла пароля
+      ansible.builtin.assert:
+        that:
+          - _platform_docker_password_file.stat.isreg
+          - not _platform_docker_password_file.stat.islnk
+          - _platform_docker_password_file.stat.size >= 1
+          - _platform_docker_password_file.stat.size <= 4096
+        fail_msg: DOCKER_ACCOUNT_PASSWORD_INVALID
+      no_log: true

@@ -4,8 +4,12 @@
 `standalone` и `pg_auto_failover`. Platform configuration подключается через
 include; initdb-owned `postgresql.conf` не заменяется.
 
-Запуск: `services/postgresql/playbooks/apply.yml` и `verify.yml`; оба включают
-PKI lifecycle. Настраиваются mode, member topology, port/data/config/log paths,
+Запуск: `services/postgresql/playbooks/apply.yml` и `verify.yml`. Apply
+подготавливает PKI. Verify выполняет `SELECT 1` на каждом экземпляре с
+настроенной аутентификацией и TLS. В HA Verify также проверяет на мониторе через
+`pg_autoctl show state --json`, что оба ожидаемых узла данных доступны, их
+текущие и назначенные роли совпадают, а secondary входит в кворум репликации.
+Настраиваются mode, member topology, port/data/config/log paths,
 TLS profile, administrator и pg_auto_failover credential references.
 `platform_postgresql_secret_files` содержит только runtime-only secret-file
 mapping. В HA members задают monitor/database role, host address и port.

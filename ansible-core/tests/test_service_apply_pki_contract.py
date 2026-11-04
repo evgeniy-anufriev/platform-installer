@@ -224,18 +224,12 @@ class ServiceApplyPkiContractTests(unittest.TestCase):
         self.assertIn("platform.core.apply_runtime_role_variables", tasks)
         self.assertNotIn("| dict2items", tasks)
 
-    def test_kafka_verify_reloads_controller_owned_generated_state(self):
+    def test_kafka_verify_does_not_read_controller_owned_generated_state(self):
         verify = os.path.join(ROOT, "services/kafka/playbooks/verify.yml")
-        loader = os.path.join(ROOT, "services/kafka/playbooks/load_generated_state.yml")
         with open(verify, encoding="utf-8") as handle:
             verify_tasks = handle.read()
-        with open(loader, encoding="utf-8") as handle:
-            loader_tasks = handle.read()
-        self.assertIn("import_playbook: load_generated_state.yml", verify_tasks)
-        self.assertIn("Передача подготовленного контроллером состояния Kafka на узлы проверки", verify_tasks)
-        self.assertIn("platform_generated_state_path", loader_tasks)
-        self.assertIn("KAFKA_GENERATED_STATE_REQUIRED", loader_tasks)
-        self.assertIn("_platform_kafka_generated_state_document.platform_generated_state", loader_tasks)
+        self.assertNotIn("load_generated_state.yml", verify_tasks)
+        self.assertNotIn("platform_generated_state_path", verify_tasks)
 
     def test_pg_auto_failover_uses_routable_member_addresses_for_cluster_identity(self):
         lifecycle = os.path.join(

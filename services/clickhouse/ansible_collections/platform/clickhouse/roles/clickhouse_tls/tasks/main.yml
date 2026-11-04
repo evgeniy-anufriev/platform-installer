@@ -27,6 +27,7 @@
 
 - name: "Выбор TLS-файлов ClickHouse по плану PKI"
   ansible.builtin.include_tasks: resolve_tls.yml
+  when: not (platform_clickhouse_verify_only | bool)
 
 - name: Проверка владения пакетом ClickHouse и экземпляром службы перед применением
   ansible.builtin.include_tasks: preflight.yml
@@ -52,3 +53,10 @@
   loop_control:
     loop_var: clickhouse_member
     label: "{{ clickhouse_member.id }}"
+
+- name: Проверка кворума Keeper в режиме HA
+  ansible.builtin.include_tasks: verify_keeper_quorum.yml
+  run_once: true
+  when:
+    - platform_clickhouse_verify_only | bool
+    - platform_clickhouse_mode == 'raft-ha'

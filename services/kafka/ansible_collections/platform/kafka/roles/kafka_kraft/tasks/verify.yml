@@ -2,6 +2,7 @@
 - name: Проверка каждого экземпляра службы Kafka в детерминированном порядке
   ansible.builtin.include_tasks: verify_member.yml
   loop: "{{ range(_platform_kafka_local_instances | length) | list }}"
+  when: not (platform_kafka_verify_only | bool)
   vars:
     kafka_member: "{{ (_platform_kafka_local_instances | sort(attribute='node_id'))[kafka_verify_member_index] }}"
   # Ansible groups includes by both loop item and label; keep them host-independent.

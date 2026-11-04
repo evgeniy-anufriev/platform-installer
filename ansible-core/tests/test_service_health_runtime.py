@@ -1,10 +1,12 @@
 """Run production health tasks through Ansible against isolated TLS endpoints."""
+import getpass
 import http.server
 import json
 import os
 from pathlib import Path
 import secrets
 import shutil
+import socketserver
 import ssl
 import subprocess
 import tempfile
@@ -169,8 +171,55 @@ class ServiceHealthRuntimeTests(unittest.TestCase):
         finally:
             self.health["sealed"] = False
 
+    def test_clickhouse_keeper_quorum_over_mutual_tls(self):
+        config = self.directory / "keeper-instance"
+        pki = config / "pki"
+        pki.mkdir(parents=True)
+        for source, name in [(self.ca, "ca-chain.pem"), (self.ca, "certificate.pem"), (self.key, "private-key.pem")]:
+            shutil.copyfile(source, pki / name)
+
+        class Keeper(socketserver.StreamRequestHandler):
+            def handle(self):
+                if self.rfile.read(4) == b"mntr":
+                    self.wfile.write(self.server.reply.encode())
+
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.load_cert_chain(str(self.ca), str(self.key))
+        context.load_verify_locations(str(self.ca))
+        context.verify_mode = ssl.CERT_REQUIRED
+        servers = []
+        for _ in range(3):
+            server = socketserver.TCPServer(("127.0.0.1", 0), Keeper)
+            server.socket = context.wrap_socket(server.socket, server_side=True)
+            threading.Thread(target=server.serve_forever, daemon=True).start()
+            self.addCleanup(server.server_close)
+            self.addCleanup(server.shutdown)
+            servers.append(server)
+        members = [
+            {"id": f"keeper-{index}", "address": "127.0.0.1", "keeper_client_port": server.server_address[1],
+             "config_directory": str(config)}
+            for index, server in enumerate(servers, 1)
+        ]
+        variables = {"_platform_clickhouse_instances": members, "_platform_clickhouse_local_instances": members[:1]}
+        leader = "zk_server_state\tleader\nzk_synced_followers\t1\n"
+        follower = "zk_server_state\tfollower\n"
+        unavailable = "This instance is not currently serving requests"
+        for label, replies, expected in [
+            ("majority", [leader, follower, unavailable], True),
+            ("no leader", [unavailable, follower, follower], False),
+            ("stale leader", [leader.replace("followers\t1", "followers\t0"), follower, follower], False),
+            ("multiple leaders", [leader, leader, follower], False),
+        ]:
+            with self.subTest(label=label):
+                for server, reply in zip(servers, replies):
+                    server.reply = reply
+                output = self.invoke("clickhouse", "clickhouse_tls", "verify_keeper_quorum.yml", variables, expected)
+                if not expected:
+                    self.assertIn("CLICKHOUSE_KEEPER_QUORUM_NOT_READY", output)
+
     def postgres(self, password):
-        return {"_platform_postgresql_local_members": [{"address": "127.0.0.1"}],
+        return {"platform_postgresql_mode": "standalone",
+                "_platform_postgresql_local_members": [{"address": "127.0.0.1", "roles": ["database"]}],
                 "_platform_postgresql_effective_port": 5432,
                 "platform_postgresql_admin_superuser": {"username": "admin", "passwordSecretRef": "runtime:password"},
                 "platform_postgresql_secret_files": {"runtime:password": str(password)},
@@ -180,6 +229,44 @@ class ServiceHealthRuntimeTests(unittest.TestCase):
     def test_postgres_sql_authentication_tls_environment_and_repeat(self):
         for _ in range(2):
             self.invoke("postgresql", "postgresql", "verify.yml", self.postgres(self.password), True)
+
+    def test_postgres_ha_requires_healthy_expected_quorum_members(self):
+        state = self.directory / "postgres-ha-state.json"
+        pg_autoctl = self.bin / "pg_autoctl"
+        pg_autoctl.write_text(
+            "#!/usr/bin/python3\nimport pathlib,sys\n"
+            f"assert sys.argv[1:] == ['show', 'state', '--pgdata', {str(self.directory)!r}, '--json']\n"
+            f"print(pathlib.Path({str(state)!r}).read_text())\n"
+        )
+        pg_autoctl.chmod(0o700)
+        variables = self.postgres(self.password)
+        monitor = {"id": "monitor-1", "address": "127.0.0.1", "roles": ["monitor"]}
+        members = [
+            {"id": "database-1", "address": "192.0.2.1", "port": 5433, "roles": ["database"]},
+            {"id": "database-2", "address": "192.0.2.2", "roles": ["database"]},
+        ]
+        variables.update(platform_postgresql_mode="pg_auto_failover",
+                         platform_postgresql_user=getpass.getuser(),
+                         platform_postgresql_data_directory=str(self.directory),
+                         platform_postgresql_port=5432,
+                         platform_postgresql_instances=[monitor, *members],
+                         _platform_postgresql_local_members=[monitor])
+        primary = dict(nodehost="192.0.2.1", nodeport=5433, health=1, replication_quorum=True,
+                       current_group_state="primary", assigned_group_state="primary")
+        secondary = dict(nodehost="192.0.2.2", nodeport=5432, health=1, replication_quorum=True,
+                         current_group_state="secondary", assigned_group_state="secondary")
+
+        for label, nodes, expected in [
+            ("ready", [primary, secondary], True),
+            ("no quorum", [primary, dict(secondary, replication_quorum=False)], "POSTGRES_AUTO_FAILOVER_QUORUM_NOT_READY"),
+            ("transition", [primary, dict(secondary, assigned_group_state="catchingup")], "POSTGRES_AUTO_FAILOVER_QUORUM_NOT_READY"),
+            ("wrong member", [primary, dict(secondary, nodehost="192.0.2.3")], "POSTGRES_AUTO_FAILOVER_MEMBER_MISMATCH"),
+        ]:
+            with self.subTest(label=label):
+                state.write_text(json.dumps(nodes))
+                output = self.invoke("postgresql", "postgresql", "verify.yml", variables, expected is True)
+                if expected is not True:
+                    self.assertIn(expected, output)
 
     def test_postgres_invalid_password_rejected(self):
         bad = self.private / "invalid-password"

@@ -31,11 +31,6 @@
     kafka_tls_member: "{{ kafka_member }}"
   when: kafka_member.listener_endpoints | selectattr('security_protocol', 'in', ['SSL', 'SASL_SSL']) | list | length > 0
 
-- name: Сохранение TLS-проекции экземпляра только для текущего Verify
-  ansible.builtin.set_fact:
-    _platform_kafka_verify_tls_by_member: "{{ _platform_kafka_verify_tls_by_member | default({}) | combine({kafka_member.id: _platform_kafka_tls_runtime}) }}"
-  when: kafka_member.listener_endpoints | selectattr('security_protocol', 'in', ['SSL', 'SASL_SSL']) | list | length > 0
-
 - name: Проверка SSL listeners Kafka через реальное TLS-соединение
   ansible.builtin.include_tasks: verify_ssl_listener.yml
   vars:

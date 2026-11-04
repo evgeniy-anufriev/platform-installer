@@ -1,5 +1,3 @@
-- import_playbook: load_generated_state.yml
-
 - import_playbook: ../../../ansible-core/playbooks/pki-resolve.yml
 
 - name: Проверка экземпляров службы Kafka KRaft
@@ -11,10 +9,6 @@
       ansible.builtin.include_role:
         name: platform.core.runtime_role_variables
       when: platform_execution_role_variables_by_host is defined
-    - name: Передача подготовленного контроллером состояния Kafka на узлы проверки
-      ansible.builtin.set_fact:
-        platform_generated_state: "{{ hostvars['localhost'].platform_generated_state }}"
-      when: platform_generated_state_path is defined
   roles:
     - role: platform.kafka.kafka_kraft
       platform_kafka_verify_only: true

@@ -1,31 +1,34 @@
 ---
-- name: Проверка состояния службы сервера ClickHouse
-  ansible.builtin.command:
-    argv: [systemctl, is-active, "{{ clickhouse_member.server_unit_name }}"]
-  register: _platform_clickhouse_server_status
-  changed_when: false
-  failed_when: false
+- name: Проверка служб ClickHouse и Keeper после Apply
+  when: not (platform_clickhouse_verify_only | bool)
+  block:
+    - name: Проверка состояния службы сервера ClickHouse
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ clickhouse_member.server_unit_name }}"]
+      register: _platform_clickhouse_server_status
+      changed_when: false
+      failed_when: false
 
-- name: Проверка активности управляемого экземпляра ClickHouse
-  ansible.builtin.assert:
-    that:
-      - _platform_clickhouse_server_status.rc == 0
-      - _platform_clickhouse_server_status.stdout == 'active'
-    fail_msg: CLICKHOUSE_SERVER_NOT_ACTIVE
+    - name: Проверка активности управляемого экземпляра ClickHouse
+      ansible.builtin.assert:
+        that:
+          - _platform_clickhouse_server_status.rc == 0
+          - _platform_clickhouse_server_status.stdout == 'active'
+        fail_msg: CLICKHOUSE_SERVER_NOT_ACTIVE
 
-- name: Наблюдение за точной службой Keeper systemd только для HA
-  ansible.builtin.command:
-    argv: [systemctl, is-active, "{{ clickhouse_member.keeper_unit_name }}"]
-  register: _platform_clickhouse_keeper_status
-  changed_when: false
-  failed_when: false
+    - name: Наблюдение за точной службой Keeper systemd только для HA
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ clickhouse_member.keeper_unit_name }}"]
+      register: _platform_clickhouse_keeper_status
+      changed_when: false
+      failed_when: false
 
-- name: "Проверка состояния Keeper в соответствии с режимом ClickHouse"
-  ansible.builtin.assert:
-    that: >-
-      (platform_clickhouse_mode == 'raft-ha' and _platform_clickhouse_keeper_status.stdout == 'active') or
-      (platform_clickhouse_mode == 'standalone' and _platform_clickhouse_keeper_status.stdout != 'active')
-    fail_msg: CLICKHOUSE_KEEPER_MODE_MISMATCH
+    - name: "Проверка состояния Keeper в соответствии с режимом ClickHouse"
+      ansible.builtin.assert:
+        that: >-
+          (platform_clickhouse_mode == 'raft-ha' and _platform_clickhouse_keeper_status.stdout == 'active') or
+          (platform_clickhouse_mode == 'standalone' and _platform_clickhouse_keeper_status.stdout != 'active')
+        fail_msg: CLICKHOUSE_KEEPER_MODE_MISMATCH
 
 - name: HTTPS-запрос ClickHouse с runtime-паролем пользователя по умолчанию и доверенным CA
   ansible.builtin.uri:
@@ -65,5 +68,7 @@
     port: "{{ clickhouse_member.keeper_client_port }}"
     state: started
     timeout: 30
-  when: platform_clickhouse_mode == 'raft-ha'
+  when:
+    - not (platform_clickhouse_verify_only | bool)
+    - platform_clickhouse_mode == 'raft-ha'
   changed_when: false

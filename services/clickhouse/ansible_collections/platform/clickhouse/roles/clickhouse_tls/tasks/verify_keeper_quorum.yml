@@ -1,0 +1,50 @@
+---
+- name: Чтение состояния Raft у настроенных участников Keeper по mTLS
+  ansible.builtin.command:
+    argv:
+      - timeout
+      - '10'
+      - openssl
+      - s_client
+      - -quiet
+      - -ignore_unexpected_eof
+      - -verify_return_error
+      - "{{ '-verify_ip' if ':' in item.address or item.address is match('^[0-9.]+$') else '-verify_hostname' }}"
+      - "{{ item.address }}"
+      - -connect
+      - "{{ ('[' ~ item.address ~ ']' if ':' in item.address else item.address) ~ ':' ~ item.keeper_client_port }}"
+      - -no-CApath
+      - -no-CAstore
+      - -CAfile
+      - "{{ _clickhouse_keeper_client_pki }}/ca-chain.pem"
+      - -cert
+      - "{{ _clickhouse_keeper_client_pki }}/certificate.pem"
+      - -key
+      - "{{ _clickhouse_keeper_client_pki }}/private-key.pem"
+    stdin: mntr
+    stdin_add_newline: false
+  vars:
+    _clickhouse_keeper_client_pki: "{{ (_platform_clickhouse_local_instances | first).config_directory }}/pki"
+  loop: "{{ _platform_clickhouse_instances }}"
+  loop_control:
+    label: "{{ item.id }}"
+  register: _clickhouse_keeper_status
+  changed_when: false
+  failed_when: false
+
+- name: Подтверждение лидера и большинства синхронизированных участников Keeper
+  ansible.builtin.assert:
+    that:
+      - _clickhouse_keeper_leaders | length == 1
+      - _clickhouse_keeper_voters | length > (_platform_clickhouse_instances | length // 2)
+      - _clickhouse_keeper_synced_followers | int >= (_platform_clickhouse_instances | length // 2)
+    fail_msg: CLICKHOUSE_KEEPER_QUORUM_NOT_READY
+  vars:
+    _clickhouse_keeper_voters: >-
+      {{ _clickhouse_keeper_status.results | selectattr('rc', 'equalto', 0) | map(attribute='stdout')
+         | select('search', '(?m)^zk_server_state[ \t]+(?:leader|follower)$') | list }}
+    _clickhouse_keeper_leaders: >-
+      {{ _clickhouse_keeper_voters | select('search', '(?m)^zk_server_state[ \t]+leader$') | list }}
+    _clickhouse_keeper_synced_followers: >-
+      {{ (_clickhouse_keeper_leaders | first | default('')
+          | regex_findall('(?m)^zk_synced_followers[ \t]+([0-9]+)$') | first | default(0)) }}

@@ -49,26 +49,29 @@
     that: _platform_docker_info.rc == 0
     fail_msg: DOCKER_ROOTLESS_DAEMON_UNAVAILABLE
 
-- name: Проверка работы Docker без прав root и без Swarm
-  ansible.builtin.assert:
-    that:
-      - "'rootless' in ((_platform_docker_info.stdout | from_json).SecurityOptions | join(' '))"
-    fail_msg: DOCKER_ROOTLESS_RUNTIME_INVALID
+- name: Проверка rootless и Compose после Apply
+  when: not (platform_docker_verify_only | bool)
+  block:
+    - name: Проверка работы Docker в режиме rootless
+      ansible.builtin.assert:
+        that:
+          - "'rootless' in ((_platform_docker_info.stdout | from_json).SecurityOptions | join(' '))"
+        fail_msg: DOCKER_ROOTLESS_RUNTIME_INVALID
 
-- name: Проверка плагина Docker Compose CLI
-  ansible.builtin.command:
-    argv: [docker, compose, version, --short]
-  become: true
-  become_user: "{{ platform_docker_account_name }}"
-  environment:
-    XDG_RUNTIME_DIR: "/run/user/{{ _platform_docker_uid }}"
-  register: _platform_docker_compose_version
-  changed_when: false
+    - name: Проверка плагина Docker Compose CLI
+      ansible.builtin.command:
+        argv: [docker, compose, version, --short]
+      become: true
+      become_user: "{{ platform_docker_account_name }}"
+      environment:
+        XDG_RUNTIME_DIR: "/run/user/{{ _platform_docker_uid }}"
+      register: _platform_docker_compose_version
+      changed_when: false
 
-- name: Проверка наличия плагина Docker Compose
-  ansible.builtin.assert:
-    that: _platform_docker_compose_version.stdout is match('^v?[0-9]+\.[0-9]+\.[0-9]+')
-    fail_msg: DOCKER_COMPOSE_NOT_AVAILABLE
+    - name: Проверка наличия плагина Docker Compose
+      ansible.builtin.assert:
+        that: _platform_docker_compose_version.stdout is match('^v?[0-9]+\.[0-9]+\.[0-9]+')
+        fail_msg: DOCKER_COMPOSE_NOT_AVAILABLE
 
 - name: Проверка взаимного TLS на внешне опубликованном Docker API
   ansible.builtin.command:

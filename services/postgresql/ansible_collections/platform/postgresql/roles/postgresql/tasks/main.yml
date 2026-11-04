@@ -16,7 +16,9 @@
 
 - name: "Выбор плана PKI для PostgreSQL до внесения изменений"
   ansible.builtin.include_tasks: resolve_tls.yml
-  when: platform_postgresql_tls_profile | length > 0
+  when:
+    - not (platform_postgresql_verify_only | bool)
+    - platform_postgresql_tls_profile | length > 0
 
 - name: Проверка разрешенных источников артефактов PostgreSQL перед изменением
   ansible.builtin.include_role:
@@ -56,6 +58,7 @@
 
 - name: "Определение каталога исполняемых файлов PostgreSQL"
   ansible.builtin.include_tasks: resolve_binary_directory.yml
+  when: not (platform_postgresql_verify_only | bool)
 
 - name: Определение экземпляра PostgreSQL на узле inventory
   ansible.builtin.set_fact:
@@ -71,6 +74,7 @@
   when: not (platform_postgresql_verify_only | bool)
 
 - name: "Определение имени службы PostgreSQL в systemd"
+  when: not (platform_postgresql_verify_only | bool)
   ansible.builtin.set_fact:
     _platform_postgresql_unit_name: >-
       {{ platform_postgresql_name ~ '@' ~ platform_postgresql_deployment_id ~ '-'
@@ -134,12 +138,14 @@
     - not (platform_postgresql_verify_only | bool)
     - platform_postgresql_clean_install | bool
 
-- name: Согласование PostgreSQL за исключением операции очистки
+- name: Проверка или согласование PostgreSQL за исключением операции очистки
   ansible.builtin.include_tasks:
     file: "{{ 'verify.yml' if platform_postgresql_verify_only | bool else 'reconcile.yml' }}"
     apply:
       environment:
-        PATH: "{{ platform_postgresql_binary_directory }}:{{ ansible_env.PATH | default('/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin') }}"
+        PATH: >-
+          {{ platform_postgresql_binary_directory |
+             default('/usr/bin:/usr/pgsql-' ~ platform_postgresql_version.split('.')[0] ~ '/bin', true) }}:{{ ansible_env.PATH | default('/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin') }}
   when: >-
     platform_postgresql_verify_only | bool or
     not (platform_postgresql_clean_install | bool and platform_postgresql_clear_only | bool)

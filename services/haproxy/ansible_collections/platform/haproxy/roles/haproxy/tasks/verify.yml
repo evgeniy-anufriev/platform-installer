@@ -1,23 +1,13 @@
 ---
-- name: Проверка пакета HAProxy и активной конфигурации, доступной только для чтения
-  ansible.builtin.command:
-    argv: ["{{ platform_haproxy_binary }}", '-c', '-f', "{{ platform_haproxy_main_config }}", '-f', "{{ platform_haproxy_conf_directory }}"]
-  changed_when: false
-
 - name: "Проверка активности службы HAProxy без внесения изменений"
   ansible.builtin.command:
     argv: [systemctl, is-active, --quiet, "{{ platform_haproxy_service_name }}"]
   changed_when: false
 
-- name: Проверка публичного и локального портов статистики HAProxy без изменений
+- name: Проверка прослушивания публичного порта и порта статистики HAProxy
   ansible.builtin.command:
-    argv: [ss, -ltn]
+    argv: [ss, -H, -ltn, "sport = :{{ item }}"]
+  loop: "{{ [platform_haproxy_public_port, platform_haproxy_internal_stats_port] | unique | list }}"
   changed_when: false
-  register: _platform_haproxy_listeners
-
-- name: Проверка наличия публичного и локального портов статистики HAProxy
-  ansible.builtin.assert:
-    that:
-      - "':' ~ (platform_haproxy_public_port | string) in _platform_haproxy_listeners.stdout"
-      - "':' ~ (platform_haproxy_internal_stats_port | string) in _platform_haproxy_listeners.stdout"
-    fail_msg: HAPROXY_LISTENER_VERIFICATION_FAILED
+  register: _platform_haproxy_listener
+  failed_when: _platform_haproxy_listener.rc != 0 or not (_platform_haproxy_listener.stdout | trim)

@@ -1,6 +1,4 @@
 ---
-- import_playbook: ../../../ansible-core/playbooks/pki-resolve.yml
-
 - name: Проверка развертывания ClickHouse TLS
   hosts: platform_targets
   become: true

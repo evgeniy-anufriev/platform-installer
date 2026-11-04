@@ -40,10 +40,9 @@
     _platform_kafka_broker_instances: "{{ _platform_kafka_instances | selectattr('roles', 'contains', 'broker') | list }}"
     _platform_kafka_local_instances: "{{ _platform_kafka_instances | selectattr('host', 'equalto', inventory_hostname) | list }}"
 
-- name: Выбор способа аутентификации и начало локального расчёта TLS для Verify
+- name: Выбор способа аутентификации Kafka CLI
   ansible.builtin.set_fact:
     _platform_kafka_scram_enabled: "{{ _platform_kafka_instances | map(attribute='listeners') | map('dict2items') | flatten | selectattr('value.securityProtocol', 'equalto', 'SASL_SSL') | list | length > 0 }}"
-    _platform_kafka_verify_tls_by_member: {}
 
 - name: Проверка работоспособности узлов и кластера Kafka
   ansible.builtin.include_tasks: verify.yml

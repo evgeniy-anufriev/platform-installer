@@ -24,3 +24,42 @@
   delay: 2
   until: _platform_postgresql_health.rc == 0 and _platform_postgresql_health.stdout | trim == '1'
   no_log: true
+
+- name: Проверка кворума pg_auto_failover на мониторе
+  when:
+    - platform_postgresql_mode == 'pg_auto_failover'
+    - "'monitor' in (_platform_postgresql_local_members | first).roles"
+  block:
+    - name: Получение состояния узлов pg_auto_failover
+      ansible.builtin.command:
+        argv: [pg_autoctl, show, state, --pgdata, "{{ platform_postgresql_data_directory }}", --json]
+      become: true
+      become_user: "{{ platform_postgresql_user }}"
+      environment:
+        PGCONNECT_TIMEOUT: '5'
+      register: _platform_postgresql_ha_state
+      changed_when: false
+
+    - name: Подтверждение готовности primary и реплики с правом участия в кворуме
+      ansible.builtin.assert:
+        that:
+          - _postgresql_ha_nodes | length == _postgresql_database_members | length
+          - _postgresql_ha_nodes | selectattr('health', 'equalto', 1) | list | length == _postgresql_ha_nodes | length
+          - _postgresql_ha_nodes | selectattr('current_group_state', 'equalto', 'primary') | selectattr('assigned_group_state', 'equalto', 'primary') | list | length == 1
+          - _postgresql_ha_nodes | selectattr('current_group_state', 'equalto', 'secondary') | selectattr('assigned_group_state', 'equalto', 'secondary') | selectattr('replication_quorum', 'equalto', true) | list | length == 1
+        fail_msg: POSTGRES_AUTO_FAILOVER_QUORUM_NOT_READY
+
+    - name: Подтверждение состава узлов данных по адресам и портам
+      ansible.builtin.assert:
+        that: >-
+          _postgresql_ha_nodes
+          | selectattr('nodehost', 'equalto', item.address)
+          | selectattr('nodeport', 'equalto', item.port | default(platform_postgresql_port) | int)
+          | list | length == 1
+        fail_msg: POSTGRES_AUTO_FAILOVER_MEMBER_MISMATCH
+      loop: "{{ _postgresql_database_members }}"
+      loop_control:
+        label: "{{ item.id }}"
+  vars:
+    _postgresql_ha_nodes: "{{ _platform_postgresql_ha_state.stdout | from_json }}"
+    _postgresql_database_members: "{{ platform_postgresql_instances | selectattr('roles', 'contains', 'database') | list }}"

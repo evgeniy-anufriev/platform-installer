@@ -35,6 +35,7 @@ class VerifyHealthRuntimeTests(unittest.TestCase):
         server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         context.load_cert_chain(str(self.source / 'certificate.pem'), str(self.source / 'private-key.pem'))
+        self.registry_tls = context
         server.socket = context.wrap_socket(server.socket, server_side=True)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
@@ -100,13 +101,13 @@ class VerifyHealthRuntimeTests(unittest.TestCase):
         return subprocess.run(['ansible-playbook', '-i', 'localhost,', str(play)],
                               env=environment, capture_output=True, text=True, timeout=120)
 
-    def test_health_repeat_and_single_tls_resolution(self):
+    def test_health_repeat_resolves_only_cli_tls(self):
         for _ in range(2):
             result = self.run_verify()
             output = result.stdout + result.stderr
             self.assertEqual(0, result.returncode, output[-4000:])
             self.assertIn('changed=0', output)
-            self.assertEqual(1, output.count('TASK [platform.kafka.kafka_kraft : Выбор действующих запросов и наборов планов PKI-01]'))
+            self.assertEqual(2, output.count('TASK [platform.kafka.kafka_kraft : Выбор действующих запросов и наборов планов PKI-01]'))
             self.assertNotIn('Проверка ресурсов Schema Registry перед модификацией Kafka', output)
 
     def test_kafka38_numeric_voters_and_broker_headers_pass(self):
@@ -123,11 +124,11 @@ class VerifyHealthRuntimeTests(unittest.TestCase):
         result = self.run_verify()
         self.assertNotEqual(0, result.returncode)
 
-    def test_inactive_node_fails(self):
+    def test_verify_does_not_call_systemctl(self):
         self.script('systemctl', 'printf "ActiveState=inactive\\nMainPID=0\\n"')
         result = self.run_verify()
-        self.assertNotEqual(0, result.returncode)
-        self.assertIn('Kafka member systemd instance is not active', result.stdout)
+        self.assertEqual(0, result.returncode, result.stdout[-3000:])
+        self.assertNotIn('Проверка состояния экземпляра службы Kafka systemd', result.stdout)
 
     def test_wrong_quorum_fails(self):
         self.script('kafka-metadata-quorum.sh', 'printf \'LeaderId: 99\\nCurrentVoters: [{"id":99}]\\n\'')
@@ -145,7 +146,7 @@ class VerifyHealthRuntimeTests(unittest.TestCase):
         self.handler.status = 503
         result = self.run_verify()
         self.assertNotEqual(0, result.returncode)
-        self.assertIn('Выполнение реального TLS-соединения', result.stdout)
+        self.assertIn('Проверка готовности каждого локального Schema Registry', result.stdout)
         self.assertIn('503', result.stdout)
 
     def test_scram_cli_uses_runtime_credentials_and_same_tls_projection(self):
@@ -184,6 +185,7 @@ class VerifyHealthRuntimeTests(unittest.TestCase):
                       _platform_kafka_local_instances="{{ _platform_kafka_instances | selectattr('host', 'equalto', inventory_hostname) | list }}")
         call = copy.deepcopy(yaml.safe_load((ROLE / 'tasks/verify.yml').read_text())[0])
         call['ansible.builtin.include_tasks'] = str(ROLE / 'tasks/verify_member.yml')
+        values['platform_kafka_verify_only'] = False
         play = self.root / 'parallel.yml'
         play.write_text(yaml.safe_dump([dict(hosts='all', connection='local', gather_facts=False,
             vars=values, tasks=[{'ansible.builtin.include_role': dict(name='platform.kafka.kafka_kraft',
@@ -227,11 +229,17 @@ class VerifyHealthRuntimeTests(unittest.TestCase):
         shutil.copyfile(other, self.source / 'ca-chain.pem')
         result = self.run_verify()
         self.assertNotEqual(0, result.returncode)
-        self.assertIn('Выполнение реального TLS-соединения', result.stdout)
+        self.assertIn('Проверка готовности каждого локального Schema Registry', result.stdout)
 
     def test_wrong_tls_identity_fails(self):
-        values = copy.deepcopy(self.values)
-        values['platform_kafka_instances'][0]['advertised_host'] = 'wrong.invalid'
-        result = self.run_verify(values)
+        extensions = self.root / 'registry-wrong-name.cnf'
+        extensions.write_text('subjectAltName=DNS:wrong.invalid\nextendedKeyUsage=serverAuth\n')
+        certificate = self.root / 'registry-wrong-name.pem'
+        subprocess.run(['openssl', 'x509', '-req', '-in', str(self.root / 'leaf.csr'),
+            '-CA', str(self.source / 'ca-chain.pem'), '-CAkey', str(self.root / 'ca.key'),
+            '-CAcreateserial', '-days', '1', '-extfile', str(extensions), '-out', str(certificate)],
+            check=True, capture_output=True)
+        self.registry_tls.load_cert_chain(str(certificate), str(self.source / 'private-key.pem'))
+        result = self.run_verify()
         self.assertNotEqual(0, result.returncode)
-        self.assertIn('Выполнение реального TLS-соединения', result.stdout)
+        self.assertIn('Проверка готовности каждого локального Schema Registry', result.stdout)

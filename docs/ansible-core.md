@@ -45,7 +45,14 @@ belong to Apply reconciliation or explicit provider diagnostics, not ordinary
 service Verify. `pki-resolve.yml` reconstructs the runtime PKI projection without
 auditing target files; explicit `pki-verify.yml` remains available. This does not
 change target-free project validation or explicit application-provider Verify.
-BIND and HAProxy retain their existing configuration checks by owner decision.
+BIND retains its configuration checks. HAProxy service Verify checks the active
+unit and the public and statistics TCP listeners. Docker checks the user unit,
+the Unix socket and the published mTLS API. Redis and Sentinel check TLS
+authentication and replication health, including Sentinel quorum and agreement
+on the current master in HA mode. ClickHouse uses authenticated HTTPS SQL and
+in HA checks Keeper leadership and a synchronized majority through mTLS.
+Kafka uses KRaft and broker registration diagnostics, and checks Schema
+Registry HTTPS readiness when enabled.
 
 Service entrypoints use `playbooks/validate-infrastructure.yml` for their
 infrastructure prerequisites. It shares input preparation and the existing
