@@ -364,9 +364,11 @@ func (b *Broker) PendingApplicationSecretPresence(binding Binding, sources []str
 	return result
 }
 
+const maxPendingApplicationSecretValues = 512
+
 // SetPendingApplicationSecretValues holds source values until Core attestation.
 func (b *Broker) SetPendingApplicationSecretValues(binding Binding, values map[string]string) error {
-	if binding.Root == "" || binding.ID == "" || len(values) == 0 || len(values) > 128 {
+	if binding.Root == "" || binding.ID == "" || len(values) == 0 || len(values) > maxPendingApplicationSecretValues {
 		return errors.New("RUNTIME_SECRET_INPUT_INVALID")
 	}
 	for source, value := range values {
@@ -386,7 +388,7 @@ func (b *Broker) SetPendingApplicationSecretValues(binding Binding, values map[s
 	for _, value := range next {
 		total += len(value)
 	}
-	if len(next) > 128 || total > 65536 {
+	if len(next) > maxPendingApplicationSecretValues || total > 65536 {
 		zeroSecretMap(next)
 		return errors.New("RUNTIME_SECRET_INPUT_INVALID")
 	}

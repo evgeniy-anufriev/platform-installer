@@ -1,9 +1,28 @@
 package runtimesecret
 
 import (
+	"fmt"
 	"testing"
 	"time"
 )
+
+func TestPendingApplicationSecretsForFiftyApplications(t *testing.T) {
+	b := NewBroker()
+	t.Cleanup(b.Close)
+	binding := Binding{Root: t.TempDir(), ID: "scale-50"}
+	for app := 0; app < 50; app++ {
+		values := make(map[string]string, 5)
+		for provider := 0; provider < 5; provider++ {
+			values[fmt.Sprintf("app-%d-provider-%d", app, provider)] = "synthetic-password"
+		}
+		if err := b.SetPendingApplicationSecretValues(binding, values); err != nil {
+			t.Fatalf("application %d: %v", app, err)
+		}
+	}
+	if got := len(b.pending.applicationValues); got != 250 {
+		t.Fatalf("stored %d application values, want 250", got)
+	}
+}
 
 func TestPendingApplicationSourcesRequireCoreMappingAndExpire(t *testing.T) {
 	now := time.Now()

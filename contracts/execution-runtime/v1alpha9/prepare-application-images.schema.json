@@ -42,6 +42,9 @@
     "skipInfrastructureVerify": {
       "type": "boolean"
     },
+    "applicationVaultSources": {
+      "$ref": "build-deployment-plan.schema.json#/properties/applicationVaultSources"
+    },
     "inputsDigest": {
       "$ref": "../../artifact-source/v1alpha2/image-lock.schema.json#/$defs/digest"
     },
@@ -126,6 +129,11 @@
             {
               "required": [
                 "skipInfrastructureVerify"
+              ]
+            },
+            {
+              "required": [
+                "applicationVaultSources"
               ]
             },
             {

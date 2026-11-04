@@ -73,7 +73,7 @@
           "const": 256
         },
         "maxResponseBytes": {
-          "const": 65536
+          "enum": [65536, 262144]
         }
       }
     },

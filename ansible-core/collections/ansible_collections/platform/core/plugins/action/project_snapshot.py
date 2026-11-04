@@ -497,8 +497,10 @@ class ActionModule(ActionBase):
             if resolved_result is not None:
                 stage = 'построение из разрешённой проекции Core'
                 from ansible_collections.platform.core.plugins.module_utils.project_resolution import enrich
+                prepared = self._task.args.get('prepared_application_images',
+                                               task_vars.get('platform_prepared_application_images'))
                 return self._public_result(enrich(resolved_result,
-                              None if self._task.args.get('desired_only') else task_vars.get('platform_prepared_application_images')))
+                                                 None if self._task.args.get('desired_only') else prepared))
             requested_root = self._task.args.get("project_root")
             if requested_root and not os.path.isdir(os.path.realpath(requested_root)):
                 raise SnapshotInputError('PROJECT_ROOT_MISSING')

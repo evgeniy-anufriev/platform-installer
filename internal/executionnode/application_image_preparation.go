@@ -15,7 +15,7 @@ func availabilityPlanCapabilitySupported(c map[string]any) bool {
 	return ok && c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha15" &&
 		contains(c["deploymentPlanRequestVersions"], availabilityPlanRequestVersion) &&
 		closedKeys(feature, "protocol", "planContract", "manifestContract") &&
-		feature["protocol"] == "RegistryAvailabilityPlanning/v1alpha1" &&
+		(feature["protocol"] == "RegistryAvailabilityPlanning/v1alpha1" || feature["protocol"] == "RegistryAvailabilityPlanning/v1alpha2") &&
 		feature["planContract"] == "platform.installer/plan/v1alpha12" &&
 		feature["manifestContract"] == "platform.installer/execution-manifest/v1alpha9"
 }
@@ -39,7 +39,7 @@ type ImageTargetConnection struct {
 }
 
 func (t OpenSSHTransport) imagePlanningCapabilities(ctx context.Context, node Node, fallback string) (map[string]any, error) {
-	if capability, err := t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": availabilityPlanRequestVersion, "operation": "GetCapabilities"}); err == nil && availabilityPlanCapabilitySupported(capability) {
+	if capability, err := t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": availabilityPlanRequestVersion, "operation": "GetCapabilities", "canonicalPlanContext": true}); err == nil && availabilityPlanCapabilitySupported(capability) {
 		return capability, nil
 	}
 	if len(serviceSelection(ctx)) > 0 {
@@ -77,7 +77,7 @@ func imagePlanCapabilitySupported(c map[string]any) bool {
 		images["protocol"] == "PrepareApplicationImages/v1alpha1" && images["leaseProtocol"] == "platform.installer/application-image-preparation-lease/v1alpha1"
 }
 
-func (t OpenSSHTransport) prepareApplicationImages(ctx context.Context, node Node, request map[string]any) error {
+func (t OpenSSHTransport) prepareApplicationImages(ctx context.Context, node Node, request map[string]any, canonicalPlanContext bool) error {
 	base := map[string]any{"apiVersion": request["apiVersion"], "operation": "PrepareApplicationImages", "runId": request["runId"], "runtimeRelease": request["runtimeRelease"]}
 	describe := map[string]any{}
 	for key, value := range base {
@@ -93,6 +93,9 @@ func (t OpenSSHTransport) prepareApplicationImages(ctx context.Context, node Nod
 	}
 	if request["apiVersion"] == serviceSelectionRequestVersion || request["apiVersion"] == availabilityPlanRequestVersion {
 		describe["skipServiceDeployments"] = request["skipServiceDeployments"]
+	}
+	if canonicalPlanContext {
+		describe["applicationVaultSources"] = request["applicationVaultSources"]
 	}
 	response, err := t.runtimeProtocol(ctx, node, describe)
 	if err != nil {

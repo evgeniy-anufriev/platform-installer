@@ -229,6 +229,7 @@ type runtimeSecretDescriptorEvidence struct {
 	runtime                                         executionnode.RuntimeEvidence
 	descriptors                                     []RuntimeSecretDescriptorView
 	applicationInputs                               []executionnode.ApplicationSecretDescriptor
+	editorLocations                                 []executionnode.ApplicationSecretEditorLocation
 	applicationSources                              map[string]string
 }
 
@@ -612,10 +613,12 @@ func (a *App) verifyProjectWithBindingLocked(binding *executionNodeBinding, revi
 	return a.verifyProjectWithReaderLocked(binding.reader, revision, binding)
 }
 
+const projectCoreResolutionTimeout = 5 * time.Minute
+
 func (a *App) verifyProjectWithReaderLocked(reader interface {
 	BuildSnapshot(context.Context, string) (*coreadapter.Snapshot, error)
 }, revision string, binding *executionNodeBinding) ProjectVerification {
-	ctx, cancel := a.operationContext(2 * time.Minute)
+	ctx, cancel := a.operationContext(projectCoreResolutionTimeout)
 	defer cancel()
 	verificationReader, ok := reader.(interface {
 		BuildVerificationSnapshot(context.Context, string) (verificationSnapshot, error)
@@ -1311,7 +1314,7 @@ func (a *App) getRuntimeSecretDescriptorsLocked(clearAttached bool) RuntimeSecre
 	if err != nil {
 		return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: "RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE", Message: "Could not create a bounded secret descriptor request."}}
 	}
-	ctx, cancel := a.operationContext(2 * time.Minute)
+	ctx, cancel := a.operationContext(projectCoreResolutionTimeout)
 	defer cancel()
 	result, err := transport.BuildRuntimeSecretDescriptors(ctx, binding.node, a.current.Root, binding.reader.runtimeRelease, executionnode.RuntimeSecretDescriptorRequest{RequestID: requestID, ProjectIdentity: a.current.Project.ID, ProjectRevision: revision, ArtifactLockDigest: a.current.Project.Source.BundleDigest, CatalogLockDigest: a.current.Project.Source.CatalogDigest})
 	if err != nil {
@@ -1355,6 +1358,7 @@ func (a *App) getRuntimeSecretDescriptorsLocked(clearAttached bool) RuntimeSecre
 	}
 	a.runtimeSecretEvidence = &runtimeSecretDescriptorEvidence{projectID: a.current.Project.ID, projectRevision: revision, nodeID: binding.node.ID, runtime: result.Runtime, fingerprint: result.DescriptorSetFingerprint, descriptors: append([]RuntimeSecretDescriptorView(nil), view.Descriptors...)}
 	a.runtimeSecretEvidence.applicationInputs = append([]executionnode.ApplicationSecretDescriptor(nil), view.ApplicationInputs...)
+	a.runtimeSecretEvidence.editorLocations = result.EditorLocations
 	return a.bindRuntimeSecretDescriptorsLocked(view)
 }
 

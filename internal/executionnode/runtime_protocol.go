@@ -136,7 +136,13 @@ type RuntimeSecretDescriptor struct {
 	Hosts                                                    []string
 }
 
+type ApplicationSecretEditorLocation struct {
+	Library, Slot, Account, Field, RequirementRef string
+}
+
 type RuntimeSecretDescriptorResult struct {
+	APIVersion                                                 string                            `json:"apiVersion"`
+	EditorLocations                                            []ApplicationSecretEditorLocation `json:"editorLocations"`
 	ProjectIdentity, ProjectRevision, DescriptorSetFingerprint string
 	Descriptors                                                []RuntimeSecretDescriptor
 	ApplicationInputs                                          []ApplicationSecretDescriptor `json:"applicationInputs"`
@@ -279,7 +285,9 @@ func (t OpenSSHTransport) buildDeploymentPlanRequest(ctx context.Context, node N
 	}
 	request["operation"], request["runId"], request["project"] = "BuildDeploymentPlan", runID, "/var/lib/platform-installer/execution/runs/"+runID+"/project"
 	if request["apiVersion"] == availabilityPlanRequestVersion || request["apiVersion"] == imagePlanRequestVersion || (request["apiVersion"] == selectionPlanRequestVersion || request["apiVersion"] == serviceSelectionRequestVersion) {
-		if err := t.prepareApplicationImages(ctx, node, request); err != nil {
+		feature, _ := capability["applicationImagePlanning"].(map[string]any)
+		canonicalPlanContext := request["apiVersion"] == availabilityPlanRequestVersion && feature["protocol"] == "RegistryAvailabilityPlanning/v1alpha2"
+		if err := t.prepareApplicationImages(ctx, node, request, canonicalPlanContext); err != nil {
 			return DeploymentPlan{}, err
 		}
 	}
@@ -665,7 +673,7 @@ func (t OpenSSHTransport) BuildRuntimeSecretDescriptors(ctx context.Context, nod
 	}
 	defer t.cleanupSnapshotStaging(node, runID, request.RequestID, archiveDigest)
 	payload := map[string]any{"apiVersion": "platform.installer/project-snapshot-request/v1alpha1", "kind": "BuildProjectSnapshotRequest", "requestId": request.RequestID, "projectIdentity": request.ProjectIdentity, "candidateProjectRevision": request.ProjectRevision, "projectArchiveDigest": archiveDigest, "artifactLockDigest": request.ArtifactLockDigest, "catalogLockDigest": request.CatalogLockDigest, "installerOwnedLogicalPaths": []string{}, "projectContract": "v2alpha1", "snapshotContract": "v1alpha1", "editContract": "v1alpha2"}
-	response, err := t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": "platform.installer/execution-runtime/v1alpha1", "operation": "BuildRuntimeSecretDescriptors", "runId": runID, "runtimeRelease": runtimeRelease, "snapshotRequest": payload})
+	response, err := t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": "platform.installer/execution-runtime/v1alpha1", "operation": "BuildRuntimeSecretDescriptors", "descriptorResponse": "BuildRuntimeSecretDescriptors/v1alpha5", "runId": runID, "runtimeRelease": runtimeRelease, "snapshotRequest": payload})
 	if err != nil {
 		return RuntimeSecretDescriptorResult{}, err
 	}
@@ -673,12 +681,19 @@ func (t OpenSSHTransport) BuildRuntimeSecretDescriptors(ctx context.Context, nod
 	if !ok {
 		return RuntimeSecretDescriptorResult{}, errors.New("RUNTIME_SECRET_DESCRIPTORS_RESPONSE_INVALID")
 	}
+	responseLimit := 64 * 1024
+	if version := value["apiVersion"]; version == "BuildRuntimeSecretDescriptors/v1alpha3" || version == "BuildRuntimeSecretDescriptors/v1alpha4" || version == "BuildRuntimeSecretDescriptors/v1alpha5" {
+		responseLimit = 256 * 1024
+	}
 	data, err := json.Marshal(value)
-	if err != nil || len(data) > 65536 {
+	if err != nil || len(data) > responseLimit {
 		return RuntimeSecretDescriptorResult{}, errors.New("RUNTIME_SECRET_DESCRIPTORS_RESPONSE_INVALID")
 	}
 	var result RuntimeSecretDescriptorResult
 	if err := json.Unmarshal(data, &result); err != nil || result.ProjectIdentity != request.ProjectIdentity || result.ProjectRevision != request.ProjectRevision || !validSHA256(result.DescriptorSetFingerprint) {
+		return RuntimeSecretDescriptorResult{}, errors.New("RUNTIME_SECRET_DESCRIPTORS_RESPONSE_INVALID")
+	}
+	if result.APIVersion == "BuildRuntimeSecretDescriptors/v1alpha5" && (result.EditorLocations == nil || len(result.EditorLocations) > 1024) {
 		return RuntimeSecretDescriptorResult{}, errors.New("RUNTIME_SECRET_DESCRIPTORS_RESPONSE_INVALID")
 	}
 	result.Runtime, ok = decodeRuntimeEvidence(response["runtimeEvidence"])

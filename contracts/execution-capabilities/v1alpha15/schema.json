@@ -101,7 +101,7 @@
           "const": 256
         },
         "maxResponseBytes": {
-          "const": 65536
+          "enum": [65536, 262144]
         }
       }
     },
@@ -290,7 +290,7 @@
           "const": "platform.installer/execution-manifest/v1alpha9"
         },
         "protocol": {
-          "const": "RegistryAvailabilityPlanning/v1alpha1"
+          "enum": ["RegistryAvailabilityPlanning/v1alpha1", "RegistryAvailabilityPlanning/v1alpha2"]
         }
       },
       "type": "object",

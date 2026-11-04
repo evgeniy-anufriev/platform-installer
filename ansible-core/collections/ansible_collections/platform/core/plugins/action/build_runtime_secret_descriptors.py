@@ -14,5 +14,6 @@ class ActionModule(ActionBase):
             raise AnsibleError("RUNTIME_SECRET_DESCRIPTORS_INPUT_INVALID")
         result = build_runtime_secret_descriptors(snapshot, catalog,
                                                   self._task.args.get("pki_materialization"),
-                                                  self._task.args.get('application_image_lock'))
+                                                  self._task.args.get('application_image_lock'),
+                                                  self._task.args.get('editor_locations', False))
         return {"changed": False, "runtime_secret_descriptors": result}

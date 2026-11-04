@@ -8,7 +8,6 @@ import (
 	"regexp"
 	"slices"
 	"sort"
-	"time"
 
 	"platform-installer/internal/executionnode"
 	"platform-installer/internal/runtimesecret"
@@ -232,6 +231,41 @@ func (a *App) pendingApplicationSourceBindingsLocked(binding runtimesecret.Bindi
 	if !slices.ContainsFunc(locations, func(item located) bool { return presence[item.key] }) {
 		return result, nil
 	}
+	if evidence := a.runtimeSecretEvidence; evidence != nil && evidence.editorLocations != nil {
+		type locationKey struct{ library, slot, account, field string }
+		resolved := map[locationKey]string{}
+		descriptors := map[string]executionnode.ApplicationSecretDescriptor{}
+		for _, descriptor := range inputs {
+			descriptors[descriptor.RequirementRef] = descriptor
+		}
+		for _, location := range evidence.editorLocations {
+			descriptor := descriptors[location.RequirementRef]
+			if descriptor.Purpose != "APPLICATION_SECRET" || !slices.Contains(descriptor.ApplicationLibraries, location.Library) ||
+				!applicationSecretID.MatchString(location.Library) || (location.Slot != "" && !applicationSecretID.MatchString(location.Slot)) ||
+				len(location.Account) == 0 || len(location.Account) > 128 || len(location.Field) == 0 || len(location.Field) > 128 {
+				return nil, errors.New("RUNTIME_SECRET_DESCRIPTORS_STALE")
+			}
+			key := locationKey{location.Library, location.Slot, location.Account, location.Field}
+			if previous := resolved[key]; previous != "" && previous != location.RequirementRef {
+				return nil, errors.New("RUNTIME_SECRET_DESCRIPTORS_STALE")
+			}
+			resolved[key] = location.RequirementRef
+		}
+		for _, item := range locations {
+			if !presence[item.key] {
+				continue
+			}
+			ref := resolved[locationKey{item.library, item.slot, item.account, item.field}]
+			if ref == "" {
+				continue
+			}
+			if previous := result[item.key]; previous != "" && previous != ref {
+				return nil, errors.New("RUNTIME_SECRET_DESCRIPTORS_STALE")
+			}
+			result[item.key] = ref
+		}
+		return result, nil
+	}
 	// Reuse only mappings already attested by Core for the current scope. A
 	// newly entered, unmapped editor input still needs the normal snapshot.
 	if a.runtimeSecretEvidenceDescriptorsLocked(revision) != nil && a.runtimeSecretEvidence.applicationSources != nil {
@@ -243,7 +277,7 @@ func (a *App) pendingApplicationSourceBindingsLocked(binding runtimesecret.Bindi
 			return result, nil
 		}
 	}
-	ctx, cancel := a.operationContext(2 * time.Minute)
+	ctx, cancel := a.operationContext(projectCoreResolutionTimeout)
 	defer cancel()
 	proof, err := a.binding.reader.BuildVerificationSnapshot(ctx, a.current.Root)
 	if err != nil || proof.Snapshot == nil || proof.Snapshot.ProjectRevision != revision || proof.Snapshot.Partial || proof.Snapshot.ApplicationLibraries == nil {

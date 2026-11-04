@@ -21,7 +21,10 @@ class ActionModule(ActionBase):
             runtime = task_vars['platform_project_resolution_runtime']
             expected, documents = resolution.identity(project, runtime,
                 task_vars.get('platform_installer_owned_paths', []))
-            shared = os.path.join(directory, resolution.scope_name(project, runtime)) if directory else None
+            context = task_vars.get('platform_plan_resolution_context')
+            if context:
+                expected.update(planContext=context, stagedProject=project)
+            shared = os.path.join(directory, resolution.scope_name(project, runtime)) if directory and not context else None
             if args.get('operation') == 'load':
                 result = resolution.read(local, expected)
                 source = 'request' if result is not None else 'fresh'
@@ -41,8 +44,9 @@ class ActionModule(ActionBase):
                 raise ValueError('PROJECT_RESOLUTION_INPUT_CHANGED')
             root = os.path.realpath(os.path.join(os.path.dirname(__file__), '../../../../../../..'))
             eligible = resolution.reusable(project, documents, result, os.path.join(root, 'services'))
-            if eligible:
+            if context or eligible:
                 resolution.write(local, expected, result)
+            if eligible and shared:
                 resolution.write(shared, expected, result)
             resolution.atomic_json(local + '.metrics', dict(hit=False, source='fresh', reusable=eligible,
                 resolveSeconds=round(time.monotonic() - previous['started'], 6)))

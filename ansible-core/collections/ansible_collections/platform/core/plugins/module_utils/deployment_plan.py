@@ -420,7 +420,29 @@ def _service_input_requirements(deployments, definitions, resolved_topology):
     return public, private, findings
 
 
-def build_runtime_secret_descriptors(snapshot, catalog, pki_materialization=None, application_image_lock=None):
+def _application_secret_editor_locations(snapshot, inputs):
+    by_ref = {item['sourceRef']: item for item in inputs if item['purpose'] == 'APPLICATION_SECRET'}
+    locations = {}
+    for library_id, library in snapshot['applicationLibraries']['libraries'].items():
+        groups = [('', library.get('providedConnections', {}))]
+        groups.extend((instance['slotId'], instance.get('credentialRequirements', {}))
+                      for instance in library.get('instances', {}).values())
+        for slot, accounts in groups:
+            for account_id, account in accounts.items():
+                for field, credential in account.get('credentials', {}).items():
+                    source = credential.get('source', {})
+                    item = by_ref.get(source.get('ref')) if source.get('kind') == 'runtime_secret_ref' else None
+                    if item is None or library_id not in item['applicationLibraries']:
+                        continue
+                    key = (library_id, slot, account_id, field)
+                    locations.setdefault(key, set()).add(item['requirementRef'])
+    return [dict(library=library, slot=slot, account=account, field=field, requirementRef=ref)
+            for (library, slot, account, field), refs in sorted(locations.items())
+            for ref in sorted(refs)]
+
+
+def build_runtime_secret_descriptors(snapshot, catalog, pki_materialization=None, application_image_lock=None,
+                                     editor_locations=False):
     """Build the closed safe v1alpha2 descriptor response from trusted Core data."""
     if not isinstance(snapshot, dict) or not isinstance(catalog, dict):
         raise ValueError("RUNTIME_SECRET_DESCRIPTORS_INPUT_INVALID")
@@ -492,9 +514,15 @@ def build_runtime_secret_descriptors(snapshot, catalog, pki_materialization=None
             raise ValueError('RUNTIME_SECRET_DESCRIPTORS_BLOCKED')
         registry_inputs = any(item['purpose'].startswith('APPLICATION_REGISTRY_') for item in app_inputs)
         result.update(apiVersion='BuildRuntimeSecretDescriptors/v1alpha4' if registry_inputs else 'BuildRuntimeSecretDescriptors/v1alpha3', applicationInputs=app_inputs)
-        result['descriptorSetFingerprint'] = canonical_digest(dict(
-            serviceInputs=[{key: item[key] for key in fields} for item in descriptors], applicationInputs=app_inputs))
-    if len(json.dumps(result, ensure_ascii=True, separators=(',', ':')).encode('utf-8')) > 65536:
+        proof = dict(serviceInputs=[{key: item[key] for key in fields} for item in descriptors],
+                     applicationInputs=app_inputs)
+        if editor_locations:
+            locations = _application_secret_editor_locations(snapshot, app_inputs)
+            proof['editorLocations'] = locations
+            result.update(apiVersion='BuildRuntimeSecretDescriptors/v1alpha5', editorLocations=locations)
+        result['descriptorSetFingerprint'] = canonical_digest(proof)
+    response_limit = 256 * 1024 if 'applicationInputs' in result else 64 * 1024
+    if len(json.dumps(result, ensure_ascii=True, separators=(',', ':')).encode('utf-8')) > response_limit:
         raise ValueError('RUNTIME_SECRET_DESCRIPTORS_BLOCKED')
     return result
 
