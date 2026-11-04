@@ -1,0 +1,12 @@
+# Managed by Platform Installer V2 Chrony: {{ _platform_chrony_role }}
+driftfile /var/lib/chrony/drift
+rtcsync
+{% if _platform_chrony_role == 'server' %}
+local stratum 10
+{% for network in _platform_chrony_client_networks %}
+allow {{ network }}
+{% endfor %}
+{% else %}
+server {{ platform_chrony_ntp_server }} iburst
+port 0
+{% endif %}

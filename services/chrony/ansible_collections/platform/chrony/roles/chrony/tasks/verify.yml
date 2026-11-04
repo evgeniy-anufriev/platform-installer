@@ -1,0 +1,22 @@
+---
+- name: Определение роли для проверки Chrony
+  ansible.builtin.include_tasks: member.yml
+
+- name: Проверка состояния chronyd
+  ansible.builtin.command:
+    argv: [systemctl, is-active, chronyd]
+  changed_when: false
+  check_mode: false
+
+- name: Ожидание синхронизации с настроенным NTP-сервером
+  ansible.builtin.command:
+    argv: [chronyc, -N, -c, sources]
+  register: _platform_chrony_sources
+  changed_when: false
+  check_mode: false
+  until: >-
+    _platform_chrony_sources.rc == 0
+    and (_platform_chrony_sources.stdout | platform.chrony.synchronized_to(platform_chrony_ntp_server))
+  retries: 24
+  delay: 5
+  when: _platform_chrony_role == 'client'

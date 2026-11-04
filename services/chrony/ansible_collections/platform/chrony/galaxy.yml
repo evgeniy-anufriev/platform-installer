@@ -1,0 +1,9 @@
+namespace: platform
+name: chrony
+version: 1.0.0
+readme: README.md
+authors: [Platform Installer maintainers]
+description: Chrony NTP role for Platform Installer V2
+license: [Apache-2.0]
+tags: [chrony, ntp, network]
+repository: https://platform-installer.local

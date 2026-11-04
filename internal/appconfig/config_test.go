@@ -39,7 +39,7 @@ func TestLoadValidApplicationConfig(t *testing.T) {
 
 func TestRepositoryApplicationConfigLoads(t *testing.T) {
 	config, err := Load(filepath.Join("..", "..", "config", "application.yml"))
-	if err != nil || config.SchemaVersion != 3 || len(config.ServerTypes) != 3 || len(config.ServiceExecutionPriorities) != 10 || !config.HasServerType("infra") || !config.HasServerType("app") || !config.HasServerType("db") {
+	if err != nil || config.SchemaVersion != 3 || len(config.ServerTypes) != 3 || len(config.ServiceExecutionPriorities) != 11 || !config.HasServerType("infra") || !config.HasServerType("app") || !config.HasServerType("db") {
 		t.Fatalf("config=%#v err=%v", config, err)
 	}
 }
