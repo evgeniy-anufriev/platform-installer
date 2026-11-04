@@ -2253,8 +2253,10 @@ class FilterModule:
                 'application_ready_shared_jobs': shared_vault_jobs}
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/filter/application_runtime.py","mode":420,"size":1343,"sha256":"0a457e12b1c458c247a77899e75aea3f68eb788b6fde4f4249b9eee713a0e797","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1343}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/filter/application_runtime.py","mode":420,"size":1757,"sha256":"f6d16bb84e4e254f5cd7fdcdcafd70b48c24ec735f5bc17f75c623c68d2d717c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1757}
 """Validate Core-owned values from the native Compose JSON projection."""
+from posixpath import commonpath, isabs
+
 from ansible.parsing.dataloader import DataLoader
 from ansible_collections.platform.core.plugins.module_utils.application_libraries import account_policies
 from ansible_collections.platform.core.plugins.module_utils.application_runtime import validate_compose, validate_config_contents, selected_archive, pinned_registry_reference, agent_config, validate_agent
@@ -2275,9 +2277,20 @@ def parent_paths(paths):
     return sorted(result)
 
 
+def bind_sources_changed(sources, changed_paths):
+    for source in sources:
+        if not isabs(source):
+            continue
+        for changed in changed_paths:
+            if isabs(changed) and commonpath((source, changed)) in (source, changed):
+                return True
+    return False
+
+
 class FilterModule(object):
     def filters(self):
         return {"application_agent_config": agent_config, "application_validate_agent": validate_agent, "application_validate_compose": validate_compose, "application_parent_paths": parent_paths,
+                "application_bind_sources_changed": bind_sources_changed,
                 "application_validate_configs": validate_config_contents, "application_account_policies": account_policies,
                 "application_selected_archive": selected_archive_path,
                 "application_pinned_registry_reference": pinned_registry_reference}
@@ -31460,7 +31473,7 @@ def resolve_topology(manifest, topology, inventory_hosts, service_catalog, place
     }
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/modules/application_identity_files.py","mode":420,"size":5413,"sha256":"629d46c2d7850863b324b418e28776e40556afc9481c2c7aa92f0d37087db46f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5413}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/modules/application_identity_files.py","mode":420,"size":5602,"sha256":"10c9ee5282a2fb6a8a54d1fab12427a423e2465f5d5acc7a9f9a8db5a56281fe","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5602}
 #!/usr/bin/python
 """Private bind files for the actual rootless container UID, without secret output."""
 import os
@@ -31569,18 +31582,21 @@ def main():
                             raise ValueError()
         if args['preflight'] or module.check_mode:
             module.exit_json(changed=False, host_uid=uid, host_gid=gid)
-        changed = False
+        changed_volumes = []
         for name, contents in payloads.items():
+            volume_changed = False
             directory = root+'/'+name
             if not os.path.exists(directory):
                 os.mkdir(directory, 0o700)
                 os.chown(directory, uid, gid)
-                changed = True
+                volume_changed = True
             for filename, content in contents.items():
                 if not content:
                     raise ValueError()
-                changed = write(directory+'/'+filename, content, uid, gid) or changed
-        module.exit_json(changed=changed, host_uid=uid, host_gid=gid)
+                volume_changed = write(directory+'/'+filename, content, uid, gid) or volume_changed
+            if volume_changed:
+                changed_volumes.append(directory)
+        module.exit_json(changed=bool(changed_volumes), changed_volumes=changed_volumes, host_uid=uid, host_gid=gid)
     except (ValueError, KeyError, OSError):
         module.fail_json(msg='APPLICATION_PRIVATE_IDENTITY_MATERIALIZATION_INVALID')
 
@@ -32417,7 +32433,7 @@ platform_application_registry_config_directory: ''
 application_runtime_verify_vault: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/activate_instance.yml","mode":420,"size":2347,"sha256":"3c77552bc32fdfafb53c1a2215308a20b69dee3777597d6dc241258474239534","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2347}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/activate_instance.yml","mode":420,"size":4045,"sha256":"904d3c7eab534042fd572631b5d2efa3a26ce53b313e2736a94a1c9add0a88c7","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4045}
 ---
 - name: Просмотр предыдущего точного контейнера перед согласованием
   ansible.builtin.command:
@@ -32437,6 +32453,7 @@ application_runtime_verify_vault: true
         argv: "{{ application_runtime_job.composeArgv + ['up', '-d', '--no-build', '--pull', 'never', '--no-deps', application_runtime_job.instanceId] }}"
       become_user: "{{ application_runtime_job.account }}"
       environment: "{{ application_runtime_job.dockerEnvironment }}"
+      register: application_compose_up
       changed_when: false
       no_log: true
   rescue:
@@ -32446,6 +32463,35 @@ application_runtime_verify_vault: true
       become_user: "{{ application_runtime_job.account }}"
       environment: "{{ application_runtime_job.dockerEnvironment }}"
       changed_when: false
+      no_log: true
+
+- name: Обновление работающего экземпляра после изменения файлов в томах
+  when:
+    - (application_runtime_job.libraryId ~ '/' ~ application_runtime_job.instanceId) in (application_changed_volume_instances | default([]))
+    - application_compose_up.rc == 0
+    - application_container_before.rc == 0
+    - (application_container_before.stdout | from_json)[0].State.Running
+  block:
+    - name: Проверка, запускал ли Compose контейнер заново
+      ansible.builtin.command:
+        argv: [docker, container, inspect, "{{ application_runtime_job.placement.containerName }}"]
+      become_user: "{{ application_runtime_job.account }}"
+      environment: "{{ application_runtime_job.dockerEnvironment }}"
+      register: application_container_after_up
+      changed_when: false
+      no_log: true
+
+    - name: Перезапуск экземпляра для перечитывания файлов в томах
+      ansible.builtin.command:
+        argv: "{{ application_runtime_job.composeArgv + ['restart', '--no-deps', application_runtime_job.instanceId] }}"
+      become_user: "{{ application_runtime_job.account }}"
+      environment: "{{ application_runtime_job.dockerEnvironment }}"
+      vars:
+        application_before_up: "{{ (application_container_before.stdout | from_json)[0] }}"
+        application_after_up: "{{ (application_container_after_up.stdout | from_json)[0] }}"
+      when:
+        - application_before_up.Id == application_after_up.Id
+        - application_before_up.State.StartedAt == application_after_up.State.StartedAt
       no_log: true
 
 - name: Проверка наблюдаемого экземпляра после сверки
@@ -32526,7 +32572,7 @@ application_runtime_verify_vault: true
   no_log: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/apply_directory.yml","mode":420,"size":1107,"sha256":"cdee1dd569ff661802405f88f784d73e3471f4dad9ba862540d36ff28da6158a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1107}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/apply_directory.yml","mode":420,"size":1492,"sha256":"9c3a793f1e4131dc86c95ab02dacafb818adcb81634fe92772b02e7c4781a6bd","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1492}
 ---
 - name: Получение списка содержимого объявленного каталога конфигурации
   ansible.builtin.find:
@@ -32546,19 +32592,32 @@ application_runtime_verify_vault: true
     application_directory_allowed: >-
       {{ (application_directory.members | map(attribute='destination') | map('regex_replace', '^', application_runtime_job.instancePath ~ '/config/') | list) +
          (application_directory.subdirectories | map('regex_replace', '^', application_runtime_job.instancePath ~ '/config/') | list) }}
+  register: application_removed_config_entries
   loop: "{{ application_directory_existing.files | sort(attribute='path', reverse=true) }}"
   when: item.path not in application_directory_allowed
   no_log: true
 
+- name: Учёт удалённых путей в каталоге конфигурации
+  ansible.builtin.set_fact:
+    application_changed_config_paths: >-
+      {{ application_changed_config_paths +
+         (application_removed_config_entries.results | selectattr('changed') | map(attribute='item.path') | list) }}
+  no_log: true
+
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/apply_instance.yml","mode":420,"size":5780,"sha256":"f31c13e27775fa528b7976aafea571ab6e2a2007bd63bf20e7e4b176ab226da3","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5780}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/apply_instance.yml","mode":420,"size":7518,"sha256":"0b9bdf5653644c1eaf31b58704bd2e43843b038e9a95f96a83ca43f9d789253c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7518}
 ---
+- name: Инициализация списка изменённых путей конфигурации экземпляра
+  ansible.builtin.set_fact:
+    application_changed_config_paths: []
+
 - name: Создание точных каталогов конфигурации экземпляра
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
     owner: "{{ application_runtime_job.account }}"
     mode: '0700'
+  register: application_created_config_dirs
   loop: "{{ ([application_runtime_job.instancePath ~ '/config'] + (application_runtime_job.configs | map(attribute='destination') | map('dirname') | map('regex_replace', '^', application_runtime_job.instancePath ~ '/config/') | list) + (application_runtime_job.directoryConfigs | map(attribute='destination') | map('dirname') | map('regex_replace', '^', application_runtime_job.instancePath ~ '/config/') | list) + (application_runtime_job.archiveConfigs | map(attribute='destination') | map('dirname') | map('regex_replace', '^', application_runtime_job.instancePath ~ '/config/') | list)) | map('regex_replace', '/+$', '') | unique | list }}"
 
 - name: Применение объявленных режимов каталогов к смонтированным каталогам конфигурации
@@ -32567,6 +32626,7 @@ application_runtime_verify_vault: true
     state: directory
     owner: "{{ application_runtime_job.account }}"
     mode: "{{ item.directory_mode | default('0755') }}"
+  register: application_config_dirs
   loop: "{{ application_runtime_job.directoryConfigs }}"
   no_log: true
 
@@ -32576,6 +32636,7 @@ application_runtime_verify_vault: true
     state: directory
     owner: "{{ application_runtime_job.account }}"
     mode: "{{ item.0.directory_mode | default('0755') }}"
+  register: application_config_subdirs
   loop: "{{ application_runtime_job.directoryConfigs | subelements('subdirectories') }}"
   no_log: true
 
@@ -32600,6 +32661,7 @@ application_runtime_verify_vault: true
     dest: "{{ application_runtime_job.instancePath }}/config/{{ item.destination }}"
     owner: "{{ application_runtime_job.account }}"
     mode: "{{ item.mode }}"
+  register: application_config_files
   loop: "{{ application_runtime_job.configContents }}"
   no_log: true
 
@@ -32628,6 +32690,7 @@ application_runtime_verify_vault: true
     ca: "{{ hostvars['localhost'].platform_application_vault_runtime[application_runtime_job.vault.providerId].ca if application_runtime_job.agentTemplate else omit }}"
     agent: "{{ application_runtime_job.agentContent if application_runtime_job.agentTemplate else omit }}"
     pki_plans: "{{ application_runtime_job.pkiPlans | default([]) }}"
+  register: application_identity_delivery
   when: application_runtime_job.agentTemplate or (application_runtime_job.pkiPlans | default([]) | length > 0)
   no_log: true
 
@@ -32646,8 +32709,27 @@ application_runtime_verify_vault: true
     fail_msg: APPLICATION_CORE_COMPOSE_PROJECTION_INVALID
   no_log: true
 
+- name: Фиксация изменения файлов в томах экземпляра приложения
+  ansible.builtin.set_fact:
+    application_changed_volume_instances: >-
+      {{ (application_changed_volume_instances | default([])) +
+         [application_runtime_job.libraryId ~ '/' ~ application_runtime_job.instanceId] }}
+  vars:
+    application_changed_mount_paths: >-
+      {{ application_changed_config_paths + (application_library_changed_paths | default([])) +
+         (application_identity_delivery.changed_volumes | default([])) +
+         (application_created_config_dirs.results | selectattr('changed') | map(attribute='path') | list) +
+         (application_config_dirs.results | selectattr('changed') | map(attribute='path') | list) +
+         (application_config_subdirs.results | selectattr('changed') | map(attribute='path') | list) +
+         (application_config_files.results | selectattr('changed') | map(attribute='dest') | list) }}
+    application_bind_sources: >-
+      {{ (application_compose_config.stdout | from_json).services[application_runtime_job.instanceId].volumes |
+         default([]) | selectattr('type', 'equalto', 'bind') | map(attribute='source') | list }}
+  when: application_bind_sources | platform.core.application_bind_sources_changed(application_changed_mount_paths)
+  no_log: true
+
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/apply_library.yml","mode":420,"size":3508,"sha256":"c5ca3bd7aa5eee89b34387bdc16214421a3315c3f9df935427f6de774e8e9eb7","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3508}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/apply_library.yml","mode":420,"size":3842,"sha256":"b099b1df8394f9d0bbd599cf23603769bcb165410da5b76aba23362f76e64740","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3842}
 ---
 - name: Привязка всех размещений с общей проекцией узла библиотеки
   ansible.builtin.set_fact:
@@ -32687,9 +32769,14 @@ application_runtime_verify_vault: true
         dest: "{{ application_library_jobs[0].libraryPath }}/{{ item.name }}"
         owner: "{{ application_library_jobs[0].account }}"
         mode: '0600'
+      register: application_shared_compose_files
       loop:
         - { name: .env, content: "{{ application_library_jobs[0].envContent }}" }
         - { name: "{{ application_library_jobs[0].baseFilename }}", content: "{{ application_library_jobs[0].baseContent }}" }
+      no_log: true
+    - name: Учёт изменённых общих файлов библиотеки
+      ansible.builtin.set_fact:
+        application_library_changed_paths: "{{ application_shared_compose_files.results | selectattr('changed') | map(attribute='dest') | list }}"
       no_log: true
     - name: Подготовка и проверка каждого приложения в отдельном проекте Compose
       ansible.builtin.include_tasks: apply_instance.yml
@@ -33312,7 +33399,7 @@ application_runtime_verify_vault: true
       no_log: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/replace_archive.yml","mode":420,"size":6067,"sha256":"f5b47319cbe54843b0fc41c3ddd97a03994663790f35f77bae393b328de20dba","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":6067}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/replace_archive.yml","mode":420,"size":6349,"sha256":"906716e7fe5139a0fe81c44985344309c77ecafea694c364663bf4d7e705c1f5","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":6349}
 ---
 - name: Удаление предыдущего временного каталога распаковки архива приложения
   ansible.builtin.file:
@@ -33420,6 +33507,12 @@ application_runtime_verify_vault: true
   ansible.builtin.file:
     path: "{{ application_runtime_job.instancePath }}/config/.archive-previous-{{ application_archive.destination | hash('sha256') }}"
     state: absent
+
+- name: Учёт заменённого каталога архива
+  ansible.builtin.set_fact:
+    application_changed_config_paths: >-
+      {{ application_changed_config_paths +
+         [application_runtime_job.instancePath ~ '/config/' ~ application_archive.destination] }}
 
 @@END
 @@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/resolve_paths.yml","mode":420,"size":1697,"sha256":"e65d61c9f40091e4c2570fb80608096ae93e772c319c43a3e918ece23ac0d449","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1697}
