@@ -8,7 +8,10 @@
     "roles/library_szi/defaults/main.yml",
     "roles/library_szi/templates/.base_compose.yml.j2",
     "assets/scripts/prepare-groups.sh",
-    "assets/group-roles/service-accounts.json.j2"
+    "assets/group-roles/service-accounts.json.j2",
+    "assets/group-roles/evo-szi-admin.json.j2",
+    "assets/group-roles/system-admin.json.j2",
+    "assets/group-roles/service-admin.json.j2"
   ],
   "render": {
     "base_compose_template": "roles/library_szi/templates/.base_compose.yml.j2",
