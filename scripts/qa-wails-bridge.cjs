@@ -16,8 +16,13 @@ const { chromium } = require('../frontend/node_modules/playwright-core');
     const status = await page.evaluate(async () => {
       const app = window.go.main.App;
       await app.GetApplicationConfig();
-      const node = await app.GetExecutionNodeContext();
-      return { bridge: 'REAL_WAILS', node: node.status };
+      try {
+        const node = await app.GetExecutionNodeContext();
+        return { bridge: 'REAL_WAILS', node: node.status };
+      } catch (error) {
+        if (error.message !== 'PROJECT_NOT_OPEN') throw error;
+        return { bridge: 'REAL_WAILS', node: 'PROJECT_NOT_OPEN' };
+      }
     });
     console.log(JSON.stringify(status));
   } finally {
