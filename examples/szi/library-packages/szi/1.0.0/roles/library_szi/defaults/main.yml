@@ -9,6 +9,7 @@ platform_library_definition:
         - name: ТУЗ
           roles_file: "{{ lookup('ansible.builtin.template', platform_project_root ~ '/library-packages/szi/1.0.0/assets/group-roles/service-accounts.json.j2', convert_data=false) | from_json }}"
         - name: Администратор ЭВО СЗИ
+          members: [admin]
           roles_file: "{{ lookup('ansible.builtin.template', platform_project_root ~ '/library-packages/szi/1.0.0/assets/group-roles/evo-szi-admin.json.j2', convert_data=false) | from_json }}"
         - name: Администратор системы
           roles_file: "{{ lookup('ansible.builtin.template', platform_project_root ~ '/library-packages/szi/1.0.0/assets/group-roles/system-admin.json.j2', convert_data=false) | from_json }}"

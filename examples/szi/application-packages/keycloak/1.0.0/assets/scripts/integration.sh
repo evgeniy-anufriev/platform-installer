@@ -146,6 +146,18 @@ get_exact() {
   jq --arg field "$field" --arg value "$name" '[.[] | select(.[$field] == $value)]' "$work/matches.json" > "$work/exact.json" || fail
   jq -r '.[0].id // empty' "$work/exact.json"
 }
+ensure_group_membership() {
+  membership_resource="users/$1/groups"
+  membership_group=$2
+  kc get "$membership_resource" -r "$realm" > "$work/memberships.json" || fail
+  if ! jq -e --arg id "$membership_group" 'any(.[]; .id == $id)' "$work/memberships.json" >/dev/null; then
+    kc update "$membership_resource/$membership_group" -r "$realm" -n >/dev/null || fail
+    changed=true
+    kc get "$membership_resource" -r "$realm" > "$work/memberships.json" || fail
+    jq -e --arg id "$membership_group" 'any(.[]; .id == $id)' "$work/memberships.json" >/dev/null || fail
+  fi
+}
+
 group() {
   identity_step=10
   name=$1
@@ -223,19 +235,35 @@ reconcile_roles() {
 dispatch_invocation() {
 printf '%s' "$payload" > "$work/payload.json"
 case "$operation" in
-  groups|group-roles)
+  groups|group-roles|group-members)
     jq 'if type == "array" then {groups: .} else . end' "$work/payload.json" > "$work/groups-payload.json" || fail
     jq -e '.groups | type == "array" and all(.[]; (if type == "object" then .name else . end) |
       type == "string" and length > 0 and (test("[\r\n]") | not))' "$work/groups-payload.json" >/dev/null || fail
+    jq -e '.groups | all(.[] | objects | select(has("members")); .members |
+      type == "array" and all(.[]; type == "string" and length > 0 and (test("[\u0000-\u001f]") | not)))' \
+      "$work/groups-payload.json" >/dev/null || fail
     jq -c '.groups[] | if type == "string" then {name:.,roles_file:{realm_roles:[],client_roles:{}}} else . end' \
       "$work/groups-payload.json" > "$work/groups"
     while IFS= read -r group_json; do
       printf '%s' "$group_json" > "$work/group-input.json"
       name=$(jq -r '.name' "$work/group-input.json")
-      group "$name"
-      if [ "$operation" = group-roles ]; then
-        jq '.roles_file' "$work/group-input.json" > "$work/role-file.json"
-        principal_roles groups
+      if [ "$operation" = group-members ]; then
+        identity_step=15
+        jq -r '(.members // []) | unique[]' "$work/group-input.json" > "$work/group-members" || fail
+        [ -s "$work/group-members" ] || continue
+        id=$(get_exact groups name "$name") || fail
+        [ -n "$id" ] || fail
+        while IFS= read -r username; do
+          member_id=$(get_exact users username "$username") || fail
+          [ -n "$member_id" ] || continue
+          ensure_group_membership "$member_id" "$id"
+        done < "$work/group-members"
+      else
+        group "$name"
+        if [ "$operation" = group-roles ]; then
+          jq '.roles_file' "$work/group-input.json" > "$work/role-file.json"
+          principal_roles groups
+        fi
       fi
     done < "$work/groups"
     ;;
@@ -403,13 +431,7 @@ case "$operation" in
         jq -r '.parameters.groups[]? ' "$work/account.json" > "$work/groups"
         while IFS= read -r name; do
           group_id=$(get_exact groups name "$name"); [ -n "$group_id" ] || fail
-          kc get "users/$id/groups" -r "$realm" > "$work/memberships.json" || fail
-          if ! jq -e --arg id "$group_id" 'any(.[]; .id == $id)' "$work/memberships.json" >/dev/null; then
-            kc update "users/$id/groups/$group_id" -r "$realm" -n >/dev/null || fail
-            changed=true
-          fi
-          kc get "users/$id/groups" -r "$realm" > "$work/memberships.json" || fail
-          jq -e --arg id "$group_id" 'any(.[]; .id == $id)' "$work/memberships.json" >/dev/null || fail
+          ensure_group_membership "$id" "$group_id"
         done < "$work/groups"
         jq '.parameters as $p | ($p.roles_file // {realm_roles:[],client_roles:{}}) |
           .realm_roles = ((.realm_roles // []) + ($p.roles // []) | unique)' \

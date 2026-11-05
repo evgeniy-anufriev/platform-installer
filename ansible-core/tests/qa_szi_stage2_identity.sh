@@ -149,6 +149,22 @@ phase=accounts-create
 apply accounts '{}'; expect_result changed
 phase=accounts-repeat
 apply accounts '{}'; expect_result unchanged
+phase=group-members-missing
+apply group-members '[{"name":"ТУЗ","members":["absent-qa-user"]}]'; expect_result unchanged
+phase=group-members-add
+members='[{"name":"ТУЗ","members":["absent-qa-user","admin","admin","qa-user"]}]'
+apply group-members "$members"; expect_result changed
+phase=group-members-repeat
+apply group-members "$members"; expect_result unchanged
+phase=group-members-readback
+docker exec "$name" /bin/sh -c '
+  set -eu
+  cli=/usr/lib/keycloak/bin/kcadm.sh; config=/run/identity-work/admin.config
+  for username in admin qa-user; do
+    id=$($cli get users -r master -q username="$username" -q exact=true --config "$config" | jq -er ".[0].id")
+    $cli get "users/$id/groups" -r master --config "$config" | jq -e "any(.[]; .name == \"ТУЗ\")" >/dev/null
+  done
+' >"$diagnostic" 2>&1
 # Password rotation must update only the owned user, then become no-change.
 docker exec "$name" /bin/sh -c 'jq ".passwords[\"qa-library/consumer/identity\"] += \"-rotated\"" /run/identity-accounts > /tmp/accounts.new; mv /tmp/accounts.new /run/identity-accounts'
 phase=password-rotation
