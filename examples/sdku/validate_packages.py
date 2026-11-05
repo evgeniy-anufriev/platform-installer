@@ -39,7 +39,7 @@ base = str(package_root/'library-packages/sdku/1.0.0'/library['render']['base_co
 # Compose-only fixture uses the resolved common ENV; provider group preparation
 # is exercised by standalone integration tests rather than recursive raw defaults.
 compose_common = dict(common, parameters={})
-fixture_applications = {name: {'overrides': {'endpoint': {'endpoint_group': 'apps'}}}
+fixture_applications = {name: {}
                         for kind, name in packages if kind == 'application'}
 fixture_desired = {'applicationLibraryDeployments': {'sdku-main': {'applications': fixture_applications}},
                    'endpointGroups': {'apps': {'address': {'domain': 'example.invalid'}}}}
@@ -47,7 +47,8 @@ rendered = []
 base_contents = set()
 jobs = [dict(application={'definition': {'defaults': {'ports': p['definition']['defaults'].get('ports', {})}}},
              libraryId='sdku-main', slotId=n, hostId='example-host',
-             slot={'overrides': {}}, instance={'overrides': {}}, hostOverride={})
+             slot={'overrides': {}}, instance={'overrides': {}}, hostOverride={},
+             deployment={'bindings': {'sso': {'providedConnectionRef': {'libraryId': 'szi', 'name': 'sso'}}}})
         for (kind, n), p in packages.items() if kind == 'application']
 for (kind,name), package in packages.items():
     if kind != 'application': continue
@@ -57,11 +58,12 @@ for (kind,name), package in packages.items():
     if not params.get('database_name'):
         params['database_name'] = 'fixture_database'
     for key,value in params.items():
-        if isinstance(value, str) and (not value or 'platform_desired_state' in value):
+        if isinstance(value, str) and key != 'szi_proxy_url' and (not value or 'platform_desired_state' in value):
             params[key] = 'example.invalid'
     for key,value in params.get('mount_sources', {}).items():
         if not value: params['mount_sources'][key] = '/tmp/sdku-fixture'
     variables = dict(platform_desired_state=fixture_desired, application_connections={},
+        platform_application_provided_connections={'szi': {'sso': {'parameters': {'proxy_url': 'https://nginx.szi.example.invalid'}}}},
         platform_project_root=str(package_root), application_name=name, application_instance_id=name+'-sdku-main', application_parameters=params,
         application_topics={'kafka': {ref: dict(resourceId=ref, name=value['name'])
                             for ref, value in library['definition']['resource_defaults']['kafka']['topics'].items()}},
@@ -79,7 +81,18 @@ for (kind,name), package in packages.items():
         library_runtime={'library_id':'sdku-main','host_id':'example-host','defaults':compose_common,'connections':{key:{'targets':[{'hostId':'example-host','address':'example.invalid','port':12345}]} for key in library['definition'].get('connections',{})}},
         application_runtime={'image':settings['image'],'container_name':name+'-sdku-main-example-host','base_compose_path':'/tmp/.base_compose.yml','base_service':'base','vault_path':'/tmp/vault','pki_path':'/tmp/pki', 'config_path':'/tmp/config', 'connections':{key:{'targets':[{'address':'example.invalid','port':12345}]} for key in package['definition'].get('connections',{})}})
     templar=Templar(loader=DataLoader(),variables=variables)
+    variables['application_parameters'] = templar.template(params)
+    templar.available_variables = variables
     settings=templar.template(settings)
+    frontend_addresses = {
+        'hmi-frontend-viewer': ('CSPA_HMI_BACK_WS', 'wss://nginx.szi.example.invalid/hmi-backend'),
+        'hmi-frontend-alarms': ('PUBLIC_HOST', 'nginx.szi.example.invalid'),
+        'sdku-vtor-ui': ('REACT_APP_VTOR_HOST_URL', 'https://nginx.szi.example.invalid/sdku-vtor'),
+        'hmi-backend': ('DATAMANAGER_ROOT_URL', 'https://data-manager-sdku-main.example.invalid'),
+    }
+    if name in frontend_addresses:
+        key, value = frontend_addresses[name]
+        assert settings['environment'][key] == value, (name, key)
     env=dict(common.get('environment', {}) if library['definition']['slots'][name].get('inherit_defaults', True) else {})
     env.update(settings.get('environment',{}))
     variables.update(application_effective=settings,application_environment=env)

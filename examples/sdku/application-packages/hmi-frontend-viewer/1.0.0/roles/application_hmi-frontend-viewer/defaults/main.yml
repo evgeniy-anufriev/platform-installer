@@ -8,17 +8,20 @@ platform_application_definition:
         command:
             - /app/docker-entrypoint.sh
         environment:
-            ALARMS_URL: https://{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/hmi-frontend-alarms
-            CSPA_HMI_BACK: https://{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/hmi-backend
-            CSPA_HMI_BACK_WS: wss://{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/hmi-backend
-            GRANT_ACCESS: https://{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/grant-access
-            GRANT_ACCESS_AUDIT: https://{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/grant-access-audit
-            HMI_BACK: https://{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/ef-backend
-            NGINX_URL: ""
-            SVG_EDITOR: https://{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/hmi-frontend-svg-editor
-            TRENDS_URL: https://{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/hmi-frontend-trends
-            VTOR_URL: https://{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/sdku-vtor-ui
+            ALARMS_URL: "{{ application_parameters.szi_proxy_url }}/hmi-frontend-alarms"
+            CSPA_HMI_BACK: "{{ application_parameters.szi_proxy_url }}/hmi-backend"
+            CSPA_HMI_BACK_WS: "{{ application_parameters.szi_proxy_url | regex_replace('^https://', 'wss://') }}/hmi-backend"
+            GRANT_ACCESS: "{{ application_parameters.szi_proxy_url }}/grant-access"
+            GRANT_ACCESS_AUDIT: "{{ application_parameters.szi_proxy_url }}/grant-access-audit"
+            HMI_BACK: "{{ application_parameters.szi_proxy_url }}/ef-backend"
+            NGINX_URL: '{{ application_parameters.szi_proxy_url }}'
+            SVG_EDITOR: "{{ application_parameters.szi_proxy_url }}/hmi-frontend-svg-editor"
+            TRENDS_URL: "{{ application_parameters.szi_proxy_url }}/hmi-frontend-trends"
+            VTOR_URL: "{{ application_parameters.szi_proxy_url }}/sdku-vtor-ui"
         parameters:
+            szi_proxy_url: >-
+                {%- set ref = application_job.deployment.bindings.sso.providedConnectionRef -%}
+                {{ platform_application_provided_connections[ref.libraryId][ref.name].parameters.proxy_url }}
             mount_sources:
                 mount-1: ""
                 mount-2: ""

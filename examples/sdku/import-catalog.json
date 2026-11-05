@@ -49,14 +49,14 @@
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:8713809ff6e3481d0a213fe2bdf8dc10bc14564687bb6898e2bb87eacadb904d",
+    "digest": "sha256:974ca11e14e2641851e3cf521e9f9a2a7edf063bf4fe97ca7059548652e5a470",
     "kind": "application",
     "name": "hmi-backend",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:05db7d0181d80c774d67bc99b90e642130df3ec16cf293e47f4219671f6a906f",
+    "digest": "sha256:2e9831eca122fda377cd961f78df617863d6b1eb5564e82ced7880118abd6737",
     "kind": "application",
     "name": "hmi-frontend-alarms",
     "sourceDirectory": ".",
@@ -84,7 +84,7 @@
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:ddb4aed73b22993d285d761a5c788535809cd938ce5a5c163b0813b94fa77353",
+    "digest": "sha256:269b4f5a9ba0421f855a16840c0ac902e51ad60a16c59be1f29fc4775506f025",
     "kind": "application",
     "name": "hmi-frontend-viewer",
     "sourceDirectory": ".",
@@ -168,7 +168,7 @@
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:7a9e52387f1c2200134372d46f582ec09c38671060a2f21cb787c1b316049a82",
+    "digest": "sha256:9b19f1914a0772e7d47683d7679987eef284672c698ea96820a0e33a6299ed4c",
     "kind": "application",
     "name": "sdku-vtor-ui",
     "sourceDirectory": ".",
