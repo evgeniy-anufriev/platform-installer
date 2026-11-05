@@ -46078,7 +46078,7 @@ def safe_task_error(result, no_log=False):
     return {'code': code, 'summary': summary}
 
 @@END
-@@PORTABLE {"path":"ansible-core/tools/infrastructure_verification.py","mode":420,"size":29458,"sha256":"44ff5b4007a5f65e32b7d9411729ffa8ac8ddcd8063cf9d82baf56cca5ee048b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":29458}
+@@PORTABLE {"path":"ansible-core/tools/infrastructure_verification.py","mode":420,"size":29856,"sha256":"74a5b5a8f7bd09a3c8b912cf66c1772e9329b0ffc7a8e26fb68f8806908c44fb","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":29856}
 """B0 bounded infrastructure evidence in the existing private execution namespace.
 
 Local clients may cache the returned summary, but only this node's journal may
@@ -46193,9 +46193,17 @@ def application_suffix(operations):
     return apps
 
 
+def _has_terminal_application_hook(manifest):
+    operations = manifest.get('operations', [])
+    return (manifest.get('apiVersion') in ('platform.installer/execution-manifest/v1alpha7',
+                                          'platform.installer/execution-manifest/v1alpha8',
+                                          'platform.installer/execution-manifest/v1alpha9')
+            and bool(operations) and operations[-1].get('operation') == 'APPLICATION_LIBRARIES_POST_INSTALL')
+
+
 def has_library_verify_prefix(manifest):
     operations = manifest.get('operations', [])
-    if manifest.get('apiVersion') == 'platform.installer/execution-manifest/v1alpha7' and operations and operations[-1].get('operation') == 'APPLICATION_LIBRARIES_POST_INSTALL':
+    if _has_terminal_application_hook(manifest):
         operations = operations[:-1]
     try:
         apps = application_suffix(operations)
@@ -46298,7 +46306,7 @@ def assert_admission(root, manifest, run_id=None):
 
 
 def validate_manifest(manifest):
-    if manifest.get('apiVersion') == 'platform.installer/execution-manifest/v1alpha7':
+    if manifest.get('apiVersion') == 'platform.installer/execution-manifest/v1alpha7' or _has_terminal_application_hook(manifest):
         from application_post_install import validation_prefix
         try:
             return validate_manifest(validation_prefix(manifest))
