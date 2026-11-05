@@ -86,6 +86,31 @@ def check_registration(manifest):
         raise SystemExit(1)
 
 
+def check_start_requirements(manifest):
+    from execution_secret_lease import _validate_typed_secret_requirements
+
+    typed_ok = True
+    try:
+        _validate_typed_secret_requirements(manifest.get("runtimeSecretInputs", []))
+    except Exception as error:
+        print_failure("TYPED_INPUTS_FAILED", error)
+        typed_ok = False
+    else:
+        print("TYPED_INPUTS_OK")
+
+    requirements = manifest.get("runtimeSecretRequirements", [])
+    if not isinstance(requirements, list):
+        print("REQUIREMENTS_NOT_LIST")
+        return False
+    for index, item in enumerate(requirements):
+        if not isinstance(item, dict):
+            print("REQUIREMENT_NOT_OBJECT", index)
+            typed_ok = False
+            continue
+        print("REQUIREMENT", index, token(item.get("purpose")), *(token(key) for key in sorted(item)))
+    return typed_ok
+
+
 def diagnose():
     diagnostic = read_document("core-diagnostic.json")
     if diagnostic is not None:
@@ -122,7 +147,10 @@ def diagnose():
         print_failure("VALIDATION_FAILED", error)
         raise SystemExit(1) from None
     print("VALIDATION_OK")
+    start_ok = check_start_requirements(manifest)
     check_registration(manifest)
+    if not start_ok:
+        raise SystemExit(1)
 
 
 runtime = Path(sys.argv[1])
