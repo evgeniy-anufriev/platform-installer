@@ -74010,7 +74010,7 @@ server {
 
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/hmi-frontend-para/1.0.0/roles/application_hmi-frontend-para/defaults/main.yml","mode":420,"size":1670,"sha256":"030b55736577c16569f0aec88fab393db8fdee72f93348b37ce51ad8fdabd9fa","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1670}
+@@PORTABLE {"path":"examples/sdku/application-packages/hmi-frontend-para/1.0.0/roles/application_hmi-frontend-para/defaults/main.yml","mode":420,"size":2012,"sha256":"fd0a474a5eae37a287aac50f23c4e46865f886b1ff7411daf90fd3cb43c3fe10","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2012}
 platform_application_definition:
     name: hmi-frontend-para
     version: 1.0.0
@@ -74043,6 +74043,10 @@ platform_application_definition:
             destination: hmi-frontend-para.conf
             mode: "0644"
         parameters:
+            # Library provider hooks need the resolved groups even for a frontend without inherited ENV.
+            IDENTITY_GROUPS: >-
+                {{ (_application_shared.overrides.parameters | default({})).get(
+                  'IDENTITY_GROUPS', (_application_shared.defaults.parameters | default({})).get('IDENTITY_GROUPS', [])) }}
             IDENTITY_CLIENT: "{{ (lookup('ansible.builtin.template', (application_job.application.defaultsPath | dirname) ~ '/../../../assets/keycloak-client.json.j2', convert_data=false) | from_json) if 'sso' in application_connections else {} }}"
         ports:
             port-1:
@@ -77253,7 +77257,7 @@ platform_application_libraries:
   sdku-main: {}
 
 @@END
-@@PORTABLE {"path":"examples/sdku/import-catalog.json","mode":420,"size":5771,"sha256":"4f8213c74f01b1bbd62ed56f632a61194b61938a2f3d2f9d579d4e3d24ff0aa0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5771}
+@@PORTABLE {"path":"examples/sdku/import-catalog.json","mode":420,"size":5771,"sha256":"0bf4f8b1aeb10a97ce485eeec1c566705bf1981c9567d4878cd3d302a935c1fe","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5771}
 [
   {
     "digest": "sha256:51a85d8d0276e47498b98243d47d2a7e17d354d239f7467b4822ed4d64e9f021",
@@ -77319,7 +77323,7 @@ platform_application_libraries:
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:8ea1e2cc36ec65a742d8b8516ca55af2516660573626a0dbc186861125bbb02a",
+    "digest": "sha256:d0d0fe96c7d5da0aff25a7beb2c620ae924b5b3dd0610e3c6c2217e823345a86",
     "kind": "application",
     "name": "hmi-frontend-para",
     "sourceDirectory": ".",
@@ -79027,7 +79031,7 @@ public final class StartupMock {
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/validate_packages.py","mode":420,"size":8435,"sha256":"c6199c9e39e45b4af150f24851b9215ce239f762cd516ad4ad9e240be3a55830","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":8435}
+@@PORTABLE {"path":"examples/sdku/validate_packages.py","mode":420,"size":8720,"sha256":"ed2b55a9e020b635436eb4e679115299ddc14dc2fdca5b2ad88a986e1b0454ce","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":8720}
 import sys, json, pathlib, yaml
 from ansible.parsing.dataloader import DataLoader
 from ansible.template import Templar
@@ -79093,6 +79097,7 @@ for (kind,name), package in packages.items():
     for key,value in params.get('mount_sources', {}).items():
         if not value: params['mount_sources'][key] = '/tmp/sdku-fixture'
     variables = dict(platform_desired_state=fixture_desired, application_connections={},
+        _application_shared={'defaults': {'parameters': {'IDENTITY_GROUPS': [{'name': 'Fixture group', 'roles_file': {}}]}}, 'overrides': {}},
         platform_application_provided_connections={'szi': {'sso': {'parameters': {'proxy_url': 'https://nginx.szi.example.invalid'}}}},
         platform_project_root=str(package_root), application_name=name, application_instance_id=name+'-sdku-main', application_parameters=params,
         application_topics={'kafka': {ref: dict(resourceId=ref, name=value['name'])
@@ -79114,6 +79119,8 @@ for (kind,name), package in packages.items():
     variables['application_parameters'] = templar.template(params)
     templar.available_variables = variables
     settings=templar.template(settings)
+    if name == 'hmi-frontend-para':
+        assert settings['parameters']['IDENTITY_GROUPS'] == [{'name': 'Fixture group', 'roles_file': {}}]
     frontend_addresses = {
         'hmi-frontend-viewer': ('CSPA_HMI_BACK_WS', 'wss://nginx.szi.example.invalid/hmi-backend'),
         'hmi-frontend-alarms': ('PUBLIC_HOST', 'nginx.szi.example.invalid'),
