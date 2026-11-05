@@ -27744,7 +27744,7 @@ def assert_reissue_unchanged(state_root, project_identity, expected):
         raise ValueError("PKI_REISSUE_PLAN_STALE")
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/pki_resolution.py","mode":420,"size":19551,"sha256":"946a1cb23ee69aafca668598b188c40df0d60ddba48e6f30ebc4772ce39d4467","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":19551}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/pki_resolution.py","mode":420,"size":19563,"sha256":"3d56c5d123be0ee48726fe6a14ed5a38f36d8a4ef1d7572c1aa9191ecb33e7b4","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":19563}
 from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
@@ -27933,6 +27933,13 @@ def application_pki_bindings(rows, desired):
     return [bindings[key] for key in sorted(bindings)]
 
 
+def materialization_fingerprint(request_fingerprint, plan):
+    return canonical_digest({
+        "requestFingerprint": request_fingerprint,
+        **{key: plan[key] for key in ("hostId", "targetDirectory", "formats", "keyAlias", "trustAlias")},
+    })
+
+
 def resolve_certificate_requests(project_id, topology, host_vars, defaults=None, resolved_service_endpoints=None, inventory_deployments=None, application_rows=(), application_bindings=None):
     """Purely derive certificate identity and target plans from topology bindings.
 
@@ -28076,14 +28083,8 @@ def resolve_certificate_requests(project_id, topology, host_vars, defaults=None,
                 "trustAlias": "platform-ca-%s" % group["authorityRef"].replace("_", "-"),
                 "storePasswordSecretRef": group["tlsProfile"].get("storePasswordSecretRef"),
             }
-            plan["materializationFingerprint"] = canonical_digest({
-                "requestFingerprint": request["certificateRequestFingerprint"],
-                "hostId": host_id,
-                "targetDirectory": target_root,
-                "formats": plan["formats"],
-                "keyAlias": plan["keyAlias"],
-                "trustAlias": plan["trustAlias"],
-            })
+            plan["materializationFingerprint"] = materialization_fingerprint(
+                request["certificateRequestFingerprint"], plan)
             plans.append(plan)
     if findings:
         return {"status": "BLOCKED", "findings": findings, "requests": [], "materializationPlans": []}
@@ -31845,6 +31846,127 @@ def main():
 
 
 if __name__ == "__main__":
+    main()
+
+@@END
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/modules/pki_reuse_probe.py","mode":420,"size":5369,"sha256":"a0491ecb54ef6b8bcd9fe3f3e0635778399e759f65b929a7cc5f2ec6745a5f8d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5369}
+"""Read-only validation of the approved PKI projection before a managed Apply."""
+
+import grp
+import hashlib
+import os
+from pathlib import Path
+import pwd
+import stat
+import subprocess
+
+from ansible.module_utils.basic import AnsibleModule
+from ansible_collections.platform.core.plugins.module_utils.pki_resolution import materialization_fingerprint
+
+
+FILES = (
+    ('ca-chain.pem', 'ca.crt', 0o644),
+    ('certificate.pem', 'leaf.crt', 0o644),
+    ('private-key.pem', 'leaf.key', 0o600),
+    ('keystore.p12', 'keystore.p12', 0o600),
+    ('truststore.p12', 'truststore.p12', 0o600),
+)
+
+
+def digest(value):
+    return hashlib.sha256(value).hexdigest()
+
+
+def regular(path, owner, group, mode):
+    info = path.lstat()
+    if (path.resolve() != path or not stat.S_ISREG(info.st_mode) or
+            info.st_uid != owner or info.st_gid != group or
+            stat.S_IMODE(info.st_mode) != mode or not 0 < info.st_size <= 1048576):
+        raise ValueError('Invalid PKI file')
+    return path.read_bytes()
+
+
+def run(*args, data=None):
+    return subprocess.run(list(map(str, args)), input=data, stdout=subprocess.PIPE,
+                          stderr=subprocess.DEVNULL, check=True, timeout=15).stdout
+
+
+def source(args, uid, gid):
+    root = Path(args['source_root'])
+    expected = {}
+    for plan in args['plans']:
+        request = root / 'requests' / plan['requestId']
+        authority = root / 'authorities' / plan['authorityId']
+        if os.path.lexists(root / 'reissues' / (plan['requestId'] + '.fingerprint')):
+            raise ValueError('Pending PKI reissue')
+        request_fingerprint = regular(request / 'request-fingerprint', uid, gid, 0o600).decode('ascii').strip()
+        if materialization_fingerprint(request_fingerprint, plan) != plan['materializationFingerprint']:
+            raise ValueError('PKI request fingerprint mismatch')
+        if plan['requestId'] not in expected:
+            paths = [authority / FILES[0][1], *(request / entry[1] for entry in FILES[1:])]
+            expected[plan['requestId']] = [digest(regular(path, uid, gid, 0o600)) for path in paths]
+            ca, leaf, key, keystore, truststore = paths
+            run('openssl', 'verify', '-CAfile', ca, leaf)
+            public_key = run('openssl', 'pkey', '-in', key, '-passin', 'pass:', '-pubout')
+            if public_key != run('openssl', 'x509', '-in', leaf, '-pubkey', '-noout'):
+                raise ValueError('PKI key mismatch')
+            password_file = args['secret_files'][plan['storePasswordSecretRef']]
+            for store, certificate, alias in ((keystore, leaf, plan['keyAlias']),
+                                               (truststore, ca, plan['trustAlias'])):
+                stored = run('keytool', '-exportcert', '-storetype', 'PKCS12', '-keystore', store,
+                             '-alias', alias, '-storepass:file', password_file)
+                if stored != run('openssl', 'x509', '-in', certificate, '-outform', 'DER'):
+                    raise ValueError('PKI store mismatch')
+            stored_key = run('openssl', 'pkcs12', '-in', keystore, '-passin', 'file:' + password_file,
+                             '-nocerts', '-nodes')
+            if public_key != run('openssl', 'pkey', '-pubout', data=stored_key):
+                raise ValueError('PKI store key mismatch')
+    return expected
+
+
+def target(args, uid, gid):
+    token = digest(args['project_id'].encode())
+    for plan in args['plans']:
+        directory = Path(plan['targetDirectory'])
+        info = directory.lstat()
+        if (directory.resolve() != directory or not stat.S_ISDIR(info.st_mode) or
+                (info.st_uid, info.st_gid, stat.S_IMODE(info.st_mode)) != (uid, gid, 0o700)):
+            return False
+        actual = [digest(regular(directory / name, uid, gid, mode)) for name, _, mode in FILES]
+        if actual != args['expected'].get(plan['requestId']):
+            return False
+        marker = regular(directory / 'materialization-fingerprint', uid, gid, 0o644)
+        if marker != (plan['materializationFingerprint'] + '\n').encode():
+            return False
+        anchor = 'platform-installer-%s-%s.crt' % (token, digest(plan['authorityId'].encode()))
+        if digest(regular(Path('/etc/pki/ca-trust/source/anchors') / anchor, 0, 0, 0o644)) != actual[0]:
+            return False
+        run('openssl', 'verify', directory / 'certificate.pem')
+    return True
+
+
+def main():
+    module = AnsibleModule(argument_spec=dict(
+        plans=dict(type='list', elements='dict', required=True),
+        project_id=dict(type='str', required=True),
+        owner=dict(type='str', required=True),
+        group=dict(type='str', required=True),
+        source_root=dict(type='path'),
+        secret_files=dict(type='dict', default={}, no_log=True),
+        expected=dict(type='dict', default={}, no_log=True),
+    ), supports_check_mode=True)
+    args = module.params
+    try:
+        uid = pwd.getpwnam(args['owner']).pw_uid
+        gid = grp.getgrnam(args['group']).gr_gid
+        if args['source_root']:
+            module.exit_json(changed=False, ready=True, expected=source(args, uid, gid))
+        module.exit_json(changed=False, ready=target(args, uid, gid))
+    except (OSError, KeyError, ValueError, RuntimeError, subprocess.SubprocessError):
+        module.exit_json(changed=False, ready=False)
+
+
+if __name__ == '__main__':
     main()
 
 @@END
@@ -38910,12 +39032,65 @@ artifactLock:
       become: false
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/pki-apply.yml","mode":420,"size":438,"sha256":"bb353d40cbde0119e0ffe09f2ed150b6cabc657b5b93303495c965963daec005","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":438}
+@@PORTABLE {"path":"ansible-core/playbooks/pki-apply.yml","mode":420,"size":3717,"sha256":"f59f2bb96f985013e811555717f7020d96ea34fc6d91b5e77e3130b4d15fde46","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3717}
 ---
+- name: Проверка исходных материалов утверждённого плана PKI
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Проверка сертификатов, ключей и хранилищ на узле выполнения
+      platform.core.pki_reuse_probe:
+        plans: "{{ platform_pki_materialization_plans }}"
+        project_id: "{{ platform_project_id }}"
+        owner: "{{ platform_pki_owner | default(platform_execution_technical_user | default('root', true)) }}"
+        group: "{{ platform_pki_group | default(platform_execution_technical_group | default(platform_execution_technical_user | default('root', true), true)) }}"
+        source_root: "{{ platform_pki_state_root | default((platform_execution_state_root | default('/var/lib/platform-installer/execution')) ~ '/pki') }}/{{ platform_project_id }}"
+        secret_files: "{{ platform_pki_secret_files | default({}) }}"
+      register: _platform_pki_source_probe
+      no_log: true
+      tags: [never, platform_pki_reuse]
+
+- name: Проверка ранее доставленных материалов утверждённого плана PKI
+  hosts: platform_targets
+  become: true
+  gather_facts: false
+  any_errors_fatal: true
+  tasks:
+    - name: Сравнение файлов PKI и системного доверия с утверждённым планом
+      platform.core.pki_reuse_probe:
+        plans: "{{ platform_pki_materialization_plans | selectattr('hostId', 'equalto', inventory_hostname) | list }}"
+        project_id: "{{ platform_project_id }}"
+        owner: "{{ platform_pki_owner | default('root') }}"
+        group: "{{ platform_pki_group | default('root') }}"
+        expected: "{{ hostvars.localhost._platform_pki_source_probe.expected }}"
+      register: _platform_pki_target_probe
+      when:
+        - hostvars.localhost._platform_pki_source_probe.ready
+        - inventory_hostname in (platform_pki_materialization_plans | map(attribute='hostId') | list)
+      no_log: true
+      tags: [never, platform_pki_reuse]
+
 - name: Расчёт управляемых запросов PKI на узле выполнения
   hosts: localhost
   connection: local
   gather_facts: false
+  pre_tasks:
+    - name: Проверка готовности PKI на всех узлах утверждённого плана
+      ansible.builtin.set_fact:
+        _platform_pki_reuse_ready: >-
+          {%- set readiness = [] -%}
+          {%- for host in platform_pki_materialization_plans | map(attribute='hostId') | unique -%}
+          {%- set ready = host in hostvars and (hostvars[host]._platform_pki_target_probe.ready | default(false)) -%}
+          {%- set ignored = readiness.append(ready | bool) -%}
+          {%- endfor -%}
+          {{ platform_pki_materialization_plans | length > 0 and false not in readiness }}
+      tags: [never, platform_pki_reuse]
+
+    - name: Пропуск подготовки PKI при совпадении всех материалов с планом
+      ansible.builtin.meta: end_play
+      when: _platform_pki_reuse_ready | bool
+      tags: [never, platform_pki_reuse]
   roles:
     - role: platform.core.pki_materialize
 
@@ -38923,6 +39098,11 @@ artifactLock:
   hosts: platform_targets
   become: true
   gather_facts: false
+  pre_tasks:
+    - name: Пропуск доставки уже проверенных PKI-материалов
+      ansible.builtin.meta: end_play
+      when: hostvars.localhost._platform_pki_reuse_ready | bool
+      tags: [never, platform_pki_reuse]
   roles:
     - role: platform.core.pki_deploy
 
@@ -40429,7 +40609,7 @@ if __name__ == "__main__":
     raise SystemExit(main())
 
 @@END
-@@PORTABLE {"path":"ansible-core/tools/execution_controller.py","mode":420,"size":74927,"sha256":"a726b479dc1b6aae50b0232ab32e4e75c5e30b1c1dba4f7971a51f37ee397042","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"ansible-core/tools/execution_controller.py","mode":420,"size":75024,"sha256":"ca6e897e08eaef3b695b0d08772c9d67a438c6388caa5f6a409055cd1d378cfc","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
 #!/usr/bin/env python3
 """Fixed Execution Node controller.  It never accepts a command or playbook."""
 from __future__ import print_function
@@ -40911,6 +41091,8 @@ def _command(release, journal, operation):
         if not os.path.isfile(projection) or os.path.islink(projection):
             raise LifecycleError("EXECUTION_RUNTIME_PROJECTION_MISSING")
         command = ["ansible-playbook", "-i", os.path.join(journal.directory, "project", "inventory", "hosts.yml"), os.path.join(release, "ansible-core", "playbooks", "pki-reissue.yml" if kind == "PKI_REISSUE" else "pki-apply.yml"), "-e", "@" + projection]
+        if kind == "PKI_APPLY":
+            command.extend(["--tags", "all,platform_pki_reuse"])
         if kind == "PKI_REISSUE":
             selected = operation.get("reissueRequests")
             if (operation.get("operationId") != "pki:reissue" or not isinstance(selected, list) or
@@ -41281,12 +41463,12 @@ def validate_application_manifest(manifest, external_service_ids=()):
         contracts = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../contracts'))
         if SchemaValidator(contracts).validate(manifest, os.path.join(contracts, 'execution-manifest/v1alpha7/schema.json')):
             raise LifecycleError('EXECUTION_MANIFEST_INVALID')
-        try:
-            prefix = validation_prefix(manifest)
-        except (ValueError, KeyError, 
+   
 @@END
-@@PORTABLE {"path":"ansible-core/tools/execution_controller.py","mode":420,"size":74927,"sha256":"a726b479dc1b6aae50b0232ab32e4e75c5e30b1c1dba4f7971a51f37ee397042","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":26927}
-TypeError) as error:
+@@PORTABLE {"path":"ansible-core/tools/execution_controller.py","mode":420,"size":75024,"sha256":"ca6e897e08eaef3b695b0d08772c9d67a438c6388caa5f6a409055cd1d378cfc","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":27024}
+     try:
+            prefix = validation_prefix(manifest)
+        except (ValueError, KeyError, TypeError) as error:
             raise LifecycleError(str(error)) from None
         validate_application_manifest(prefix, external_service_ids)
         return
