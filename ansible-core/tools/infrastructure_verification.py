@@ -112,9 +112,17 @@ def application_suffix(operations):
     return apps
 
 
+def _has_terminal_application_hook(manifest):
+    operations = manifest.get('operations', [])
+    return (manifest.get('apiVersion') in ('platform.installer/execution-manifest/v1alpha7',
+                                          'platform.installer/execution-manifest/v1alpha8',
+                                          'platform.installer/execution-manifest/v1alpha9')
+            and bool(operations) and operations[-1].get('operation') == 'APPLICATION_LIBRARIES_POST_INSTALL')
+
+
 def has_library_verify_prefix(manifest):
     operations = manifest.get('operations', [])
-    if manifest.get('apiVersion') == 'platform.installer/execution-manifest/v1alpha7' and operations and operations[-1].get('operation') == 'APPLICATION_LIBRARIES_POST_INSTALL':
+    if _has_terminal_application_hook(manifest):
         operations = operations[:-1]
     try:
         apps = application_suffix(operations)
@@ -217,7 +225,7 @@ def assert_admission(root, manifest, run_id=None):
 
 
 def validate_manifest(manifest):
-    if manifest.get('apiVersion') == 'platform.installer/execution-manifest/v1alpha7':
+    if manifest.get('apiVersion') == 'platform.installer/execution-manifest/v1alpha7' or _has_terminal_application_hook(manifest):
         from application_post_install import validation_prefix
         try:
             return validate_manifest(validation_prefix(manifest))

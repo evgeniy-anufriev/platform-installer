@@ -71,6 +71,19 @@ class PostInstallTests(unittest.TestCase):
         self.assertEqual([], model['actions'])
         self.assertEqual([], model['runtimeSecretRequirements'])
 
+    def test_image_manifest_start_admission_with_terminal_hook(self):
+        import infrastructure_verification as infra
+        for skip in (True, False):
+            with self.subTest(skipInfrastructureVerify=skip):
+                snapshot = self.fixture()
+                result = ApplicationPlanTests().build(snapshot)
+                result = scope_plan(result, 'APPLICATION_LIBRARIES_ONLY', '/nonexistent-post-install-qa', skip)
+                manifest = promote(result, execution_scope(snapshot), skip)['executionManifest']
+                manifest['apiVersion'] = 'platform.installer/execution-manifest/v1alpha9'
+                manifest['applicationImageIntentsDigest'] = DIGEST
+                validate_application_manifest(manifest)
+                infra.assert_admission('/nonexistent-post-install-qa', manifest)
+
     def test_old_package_rejects_new_phase(self):
         validator = SchemaValidator(str(ROOT/'contracts'))
         for version in ('v1alpha2', 'v1alpha3'):
