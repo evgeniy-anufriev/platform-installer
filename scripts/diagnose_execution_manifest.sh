@@ -102,12 +102,57 @@ def check_start_requirements(manifest):
     if not isinstance(requirements, list):
         print("REQUIREMENTS_NOT_LIST")
         return False
+    seen_refs = set()
+    seen_ids = set()
+    pki_count = 0
+    fields = {"hosts", "purpose", "requirementRef", "runtimeReference"}
     for index, item in enumerate(requirements):
         if not isinstance(item, dict):
             print("REQUIREMENT_NOT_OBJECT", index)
             typed_ok = False
             continue
-        print("REQUIREMENT", index, token(item.get("purpose")), *(token(key) for key in sorted(item)))
+        purpose = item.get("purpose")
+        ref = item.get("runtimeReference")
+        req_id = item.get("requirementRef")
+        deployment = item.get("serviceDeployment")
+        hosts = item.get("hosts")
+        issues = []
+        if not isinstance(hosts, list) or len(hosts) > 256:
+            issues.append("hosts")
+        if isinstance(ref, str) and (deployment is None or isinstance(deployment, str)):
+            scoped_ref = (deployment, ref)
+            if scoped_ref in seen_refs:
+                issues.append("duplicate_runtimeReference")
+            seen_refs.add(scoped_ref)
+        if isinstance(req_id, str):
+            if req_id in seen_ids:
+                issues.append("duplicate_requirementRef")
+            seen_ids.add(req_id)
+        if purpose == "SERVICE_PASSWORD":
+            if set(item) != fields | {"serviceDeployment"}:
+                issues.append("fields")
+            for field, value, pattern in (
+                ("requirementRef", req_id, r"[a-z][a-z0-9-]{0,63}"),
+                ("runtimeReference", ref, r"runtime:[a-z][a-z0-9-]{0,127}"),
+                ("serviceDeployment", deployment, r"[a-z0-9][a-z0-9-]{0,127}"),
+            ):
+                if not isinstance(value, str) or re.fullmatch(pattern, value) is None:
+                    issues.append(field)
+        elif purpose == "PKI_STORE_PASSWORD":
+            pki_count += 1
+            if pki_count > 1:
+                issues.append("duplicate_PKI_STORE_PASSWORD")
+            if set(item) != fields:
+                issues.append("fields")
+            if req_id != "pki-store-password":
+                issues.append("requirementRef")
+            if ref != "runtime:pki-store-password":
+                issues.append("runtimeReference")
+        else:
+            issues.append("purpose")
+        print("REQUIREMENT", index, token(purpose), *(issues or ["OK"]))
+        if issues:
+            typed_ok = False
     return typed_ok
 
 
