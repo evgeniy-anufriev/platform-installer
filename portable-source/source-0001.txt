@@ -81534,7 +81534,7 @@ case "$(cat "$work/result")" in
 esac
 
 @@END
-@@PORTABLE {"path":"examples/szi/application-packages/keycloak/1.0.0/assets/scripts/integration.sh","mode":420,"size":22212,"sha256":"751c7e64ba66a316f0ea7d213b3c122d77a0235bd5b55f8b83d2f2f9acee80a6","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":22212}
+@@PORTABLE {"path":"examples/szi/application-packages/keycloak/1.0.0/assets/scripts/integration.sh","mode":420,"size":23166,"sha256":"19a8c74aef35deebfcd7081f95cce0aa6447b3252986dd9a591dfb43c7e1635c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":23166}
 #!/bin/sh
 # Provider-owned REST client. Core supplies argv and private input files only.
 set -eu
@@ -81683,6 +81683,18 @@ get_exact() {
   jq --arg field "$field" --arg value "$name" '[.[] | select(.[$field] == $value)]' "$work/matches.json" > "$work/exact.json" || fail
   jq -r '.[0].id // empty' "$work/exact.json"
 }
+ensure_group_membership() {
+  membership_resource="users/$1/groups"
+  membership_group=$2
+  kc get "$membership_resource" -r "$realm" > "$work/memberships.json" || fail
+  if ! jq -e --arg id "$membership_group" 'any(.[]; .id == $id)' "$work/memberships.json" >/dev/null; then
+    kc update "$membership_resource/$membership_group" -r "$realm" -n >/dev/null || fail
+    changed=true
+    kc get "$membership_resource" -r "$realm" > "$work/memberships.json" || fail
+    jq -e --arg id "$membership_group" 'any(.[]; .id == $id)' "$work/memberships.json" >/dev/null || fail
+  fi
+}
+
 group() {
   identity_step=10
   name=$1
@@ -81760,19 +81772,35 @@ reconcile_roles() {
 dispatch_invocation() {
 printf '%s' "$payload" > "$work/payload.json"
 case "$operation" in
-  groups|group-roles)
+  groups|group-roles|group-members)
     jq 'if type == "array" then {groups: .} else . end' "$work/payload.json" > "$work/groups-payload.json" || fail
     jq -e '.groups | type == "array" and all(.[]; (if type == "object" then .name else . end) |
       type == "string" and length > 0 and (test("[\r\n]") | not))' "$work/groups-payload.json" >/dev/null || fail
+    jq -e '.groups | all(.[] | objects | select(has("members")); .members |
+      type == "array" and all(.[]; type == "string" and length > 0 and (test("[\u0000-\u001f]") | not)))' \
+      "$work/groups-payload.json" >/dev/null || fail
     jq -c '.groups[] | if type == "string" then {name:.,roles_file:{realm_roles:[],client_roles:{}}} else . end' \
       "$work/groups-payload.json" > "$work/groups"
     while IFS= read -r group_json; do
       printf '%s' "$group_json" > "$work/group-input.json"
       name=$(jq -r '.name' "$work/group-input.json")
-      group "$name"
-      if [ "$operation" = group-roles ]; then
-        jq '.roles_file' "$work/group-input.json" > "$work/role-file.json"
-        principal_roles groups
+      if [ "$operation" = group-members ]; then
+        identity_step=15
+        jq -r '(.members // []) | unique[]' "$work/group-input.json" > "$work/group-members" || fail
+        [ -s "$work/group-members" ] || continue
+        id=$(get_exact groups name "$name") || fail
+        [ -n "$id" ] || fail
+        while IFS= read -r username; do
+          member_id=$(get_exact users username "$username") || fail
+          [ -n "$member_id" ] || continue
+          ensure_group_membership "$member_id" "$id"
+        done < "$work/group-members"
+      else
+        group "$name"
+        if [ "$operation" = group-roles ]; then
+          jq '.roles_file' "$work/group-input.json" > "$work/role-file.json"
+          principal_roles groups
+        fi
       fi
     done < "$work/groups"
     ;;
@@ -81940,13 +81968,7 @@ case "$operation" in
         jq -r '.parameters.groups[]? ' "$work/account.json" > "$work/groups"
         while IFS= read -r name; do
           group_id=$(get_exact groups name "$name"); [ -n "$group_id" ] || fail
-          kc get "users/$id/groups" -r "$realm" > "$work/memberships.json" || fail
-          if ! jq -e --arg id "$group_id" 'any(.[]; .id == $id)' "$work/memberships.json" >/dev/null; then
-            kc update "users/$id/groups/$group_id" -r "$realm" -n >/dev/null || fail
-            changed=true
-          fi
-          kc get "users/$id/groups" -r "$realm" > "$work/memberships.json" || fail
-          jq -e --arg id "$group_id" 'any(.[]; .id == $id)' "$work/memberships.json" >/dev/null || fail
+          ensure_group_membership "$id" "$group_id"
         done < "$work/groups"
         jq '.parameters as $p | ($p.roles_file // {realm_roles:[],client_roles:{}}) |
           .realm_roles = ((.realm_roles // []) + ($p.roles // []) | unique)' \
@@ -83975,7 +83997,7 @@ set -eu
 exec /bin/sh ./application-packages/keycloak/1.0.0/assets/scripts/integration.sh "$@"
 
 @@END
-@@PORTABLE {"path":"examples/szi/library-packages/szi/1.0.0/library.yml","mode":420,"size":2883,"sha256":"f8c2d546a8a552c2062b3f4e6da7ffc557c6bf1a16b67df8f63aa518fc389902","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2883}
+@@PORTABLE {"path":"examples/szi/library-packages/szi/1.0.0/library.yml","mode":420,"size":3697,"sha256":"2beed3fa892e0e165ec33509665ef179eaafc8432f28ed95abc49b137d1fe318","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3697}
 {
   "apiVersion": "platform.installer/application-package/v1alpha4",
   "kind": "LibraryPackage",
@@ -84092,12 +84114,34 @@ exec /bin/sh ./application-packages/keycloak/1.0.0/assets/scripts/integration.sh
       "order": 100,
       "run_on": "execution_node",
       "batch": true
+    },
+    {
+      "id": "assign-identity-group-members",
+      "source": "assets/scripts/prepare-groups.sh",
+      "phase": "post_install",
+      "execution": "once",
+      "requires_connections": ["sso"],
+      "target": {"connection": "sso"},
+      "argv": [
+        "group-members",
+        {"valueFrom": "connection", "name": "sso"},
+        {"valueFrom": "connection", "name": "sso", "field": "parameters.realm"},
+        {"valueFrom": "connection", "name": "sso", "field": "credentials.username.source.value"},
+        {"valueFrom": "applicationId"},
+        "",
+        "",
+        {"valueFrom": "parameter", "name": "IDENTITY_GROUPS"}
+      ],
+      "secretInputs": {
+        "admin_password": {"valueFrom": "connection", "name": "sso", "credential": "password"}
+      },
+      "run_on": "execution_node"
     }
   ]
 }
 
 @@END
-@@PORTABLE {"path":"examples/szi/library-packages/szi/1.0.0/roles/library_szi/defaults/main.yml","mode":420,"size":3823,"sha256":"f333b8651e52fb78ab26379abbca43298f340e611cfa4172282894cf66595b53","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3823}
+@@PORTABLE {"path":"examples/szi/library-packages/szi/1.0.0/roles/library_szi/defaults/main.yml","mode":420,"size":3850,"sha256":"3a1dfc2976d822df9347be52465cac33cd85e6425c209e337f32cb32fbaa5254","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3850}
 platform_library_definition:
   name: szi
   version: 1.0.0
@@ -84109,6 +84153,7 @@ platform_library_definition:
         - name: ТУЗ
           roles_file: "{{ lookup('ansible.builtin.template', platform_project_root ~ '/library-packages/szi/1.0.0/assets/group-roles/service-accounts.json.j2', convert_data=false) | from_json }}"
         - name: Администратор ЭВО СЗИ
+          members: [admin]
           roles_file: "{{ lookup('ansible.builtin.template', platform_project_root ~ '/library-packages/szi/1.0.0/assets/group-roles/evo-szi-admin.json.j2', convert_data=false) | from_json }}"
         - name: Администратор системы
           roles_file: "{{ lookup('ansible.builtin.template', platform_project_root ~ '/library-packages/szi/1.0.0/assets/group-roles/system-admin.json.j2', convert_data=false) | from_json }}"
