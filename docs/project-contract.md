@@ -686,8 +686,9 @@ second desired-state store is introduced.
 Applications may select a unique list of library connection keys, e.g.
 connections: [clickhouse, kafka, redis, vault]. Library connections remains a map
 of full library_binding/protocol/purpose declarations. Old application declaration
-maps remain supported. Standard Ansible tasks validate keys and resolve one map
-before resource contexts and parameters/ENV; providers and accounts reuse it.
+maps remain supported. Core validates keys and normalizes declarations once per
+library and application package pair. Ansible resolves the placement-specific
+connection values before resource contexts and parameters/ENV.
 Accounts, usernames, privileges and ENV remain application-owned. No per-app
 connection inference from credentials/ENV or independent UI/Go resolver is added.
 

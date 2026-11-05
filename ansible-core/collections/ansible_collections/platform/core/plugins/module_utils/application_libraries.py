@@ -226,6 +226,17 @@ def library_database_resources(definition, deployment, applications=()):
     return resources
 
 
+def _literal_library_input(value):
+    if isinstance(value, str):
+        return not any(marker in value for marker in ('{', '}', '#jinja2'))
+    if isinstance(value, dict):
+        return all(isinstance(key, str) and _literal_library_input(key) and
+                   _literal_library_input(item) for key, item in value.items())
+    if isinstance(value, list):
+        return all(_literal_library_input(item) for item in value)
+    return value is None or type(value) in (bool, int, float)
+
+
 def prepare(root, desired, memberships, contract, loader, contracts_root):
     schema_version(desired, contract)
     validator = SchemaValidator(contracts_root)
@@ -254,6 +265,7 @@ def prepare(root, desired, memberships, contract, loader, contracts_root):
         return {"jobs": [], "findings": findings}
     jobs = []
     package = invocation_package_loader(root, loader, validator)
+    connection_maps = {}
     for library_id, deployment in sorted(deployments.items()):
         field = "applicationLibraryDeployments." + library_id
         try:
@@ -261,6 +273,8 @@ def prepare(root, desired, memberships, contract, loader, contracts_root):
             deployment = copy.deepcopy(deployment)
             if set(deployment.get('provided_connections', {})) - set(library['definition'].get('provided_connections', {})):
                 raise ValueError('Unknown provided connection override')
+            has_exports = bool(library['definition'].get('provided_connections') or
+                               deployment.get('provided_connections'))
             for resource in deployment.get("resources", {}).values():
                 restore = resource.get("parameters", {}).get("restore_on_create")
                 if restore is None:
@@ -280,6 +294,13 @@ def prepare(root, desired, memberships, contract, loader, contracts_root):
                 raise ValueError("Recipe slots mismatch")
             deployment['resources'] = library_database_resources(library['definition'], deployment,
                 [package(slots[name]['applicationRef'], 'application')['definition'] for name in selected])
+            reuse_library_defaults = len(selected) > 1 and all(_literal_library_input(value) for value in (
+                library['definition'].get('resource_defaults', {}),
+                library['definition'].get('defaults', {}),
+                deployment.get('resource_defaults', {}),
+                deployment.get('overrides', {}),
+                deployment['resources'],
+            ))
             placements = [host for host, membership in sorted(memberships.items()) if library_id in membership]
             if not placements:
                 findings.append(finding("APPLICATION_LIBRARY_PLACEMENT_MISSING", field))
@@ -290,13 +311,34 @@ def prepare(root, desired, memberships, contract, loader, contracts_root):
                 if application["name"] in app_names:
                     raise ValueError("Duplicate application definition")
                 app_names.add(application["name"])
+                connection_pair = (deployment["libraryRef"], slot["applicationRef"])
+                if connection_pair not in connection_maps:
+                    declarations = application["definition"].get("connections", {})
+                    library_connections = library["definition"].get("connections", {})
+                    if isinstance(declarations, dict):
+                        connection_maps[connection_pair] = declarations
+                    elif all(key in library_connections for key in declarations):
+                        connection_maps[connection_pair] = {key: library_connections[key] for key in declarations}
+                    else:
+                        connection_maps[connection_pair] = None
                 for host in placements:
-                    if 'connections' in memberships[host][library_id].get('overrides', {}):
+                    host_override = memberships[host][library_id].get('overrides', {})
+                    if 'connections' in host_override:
                         raise ValueError('Host connection override is not supported')
+                    # Keep the early Ansible render for templated endpoint inputs,
+                    # including libraries whose endpoints are never exported.
+                    skip_connection_topology = not has_exports and all(
+                        isinstance(values.get(key, {}), dict) and _literal_library_input(values.get(key, {}))
+                        for values in (application['definition'].get('defaults', {}), slot.get('overrides', {}),
+                                       selected[slot_id].get('overrides', {}), host_override)
+                        for key in ('endpoint', 'ports'))
                     jobs.append({"libraryId": library_id, "slotId": slot_id, "hostId": host,
                                  "library": library, "application": application,
+                                 "connections": connection_maps[connection_pair],
+                                 "reuseLibraryDefaults": reuse_library_defaults,
+                                 "skipConnectionTopology": skip_connection_topology,
                                  "deployment": deployment, "instance": selected[slot_id],
-                                 "slot": slot, "hostOverride": memberships[host][library_id].get("overrides", {})})
+                                 "slot": slot, "hostOverride": host_override})
         except (ValueError, OSError, KeyError, TypeError):
             findings.append(finding("APPLICATION_PACKAGE_INVALID", field))
     return {"jobs": [] if findings else jobs, "findings": findings}

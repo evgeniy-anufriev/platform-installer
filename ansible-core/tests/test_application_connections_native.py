@@ -29,6 +29,10 @@ class NativeApplicationConnectionsTests(unittest.TestCase):
             definition['platform_application_definition']['defaults']['environment']['QA_UNDEFINED'] = (
                 "{{ qa_undefined_application_input if library_instance_id == 'sdku' else 'ok' }}")
             broken_defaults.write_text(json.dumps(definition))
+            unknown_connection_defaults = Path(directory) / 'unknown-connection.yml'
+            definition = json.loads(defaults.read_text())
+            definition['platform_application_definition']['connections'] = ['unknown-connection']
+            unknown_connection_defaults.write_text(json.dumps(definition))
             tasks = [
                 include,
                 {'ansible.builtin.assert': {'that': [
@@ -41,6 +45,17 @@ class NativeApplicationConnectionsTests(unittest.TestCase):
                 {'ansible.builtin.assert': {'that': [
                     ordered_libraries + " == ['cspa']",
                     "platform_application_findings | length > 0",
+                ]}},
+                {'ansible.builtin.copy': {'src': str(unknown_connection_defaults), 'dest': str(defaults), 'mode': '0600'},
+                 'no_log': True},
+                include,
+                {'ansible.builtin.assert': {'that': [
+                    'platform_application_rows == []',
+                    "platform_application_findings | selectattr('code', 'equalto', 'APPLICATION_INPUT_INVALID') | "
+                    "map(attribute='field') | list == ["
+                    "'applicationLibraryDeployments.cspa.applications.gateway.placements.node1', "
+                    "'applicationLibraryDeployments.sdku.applications.gateway.placements.node1', "
+                    "'applicationLibraryDeployments.sdku.applications.gateway.placements.node2']",
                 ]}},
                 {'ansible.builtin.set_fact': {'platform_desired_state': (
                     "{{ platform_desired_state | combine({'applicationLibraryDeployments': {}}) }}")}},
@@ -56,7 +71,7 @@ class NativeApplicationConnectionsTests(unittest.TestCase):
                 '-e', 'platform_project_root=' + str(root), '-e', 'platform_contracts_root=' + str(ROOT / 'contracts')],
                 capture_output=True, text=True, timeout=90, env=env)
             self.assertEqual(0, result.returncode, result.stdout[-4000:] + result.stderr[-1000:])
-            self.assertEqual(3, result.stdout.count(
+            self.assertEqual(4, result.stdout.count(
                 'TASK [platform.core.resolve_application_libraries : Сбор рассчитанных записей приложений в порядке размещений]'))
             self.assertIn('the output has been hidden', result.stdout)
 
@@ -140,22 +155,29 @@ class NativeApplicationConnectionsTests(unittest.TestCase):
                                                 'dest': str(output), 'mode': '0600'}, 'no_log': True}])]))
             env = dict(os.environ, ANSIBLE_CONFIG=str(ROOT / 'ansible-core/ansible.cfg'),
                        ANSIBLE_COLLECTIONS_PATH=str(ROOT / 'ansible-core/collections'))
-            def resolve():
+            def resolve(expected_status='PASS'):
                 command = ['ansible-playbook', '-i', str(root / 'inventory/hosts.yml'), str(play),
                            '-e', 'platform_project_root=' + str(root), '-e', 'platform_contracts_root=' + str(ROOT / 'contracts')]
                 result = subprocess.run(command, capture_output=True, text=True, timeout=90, env=env)
                 self.assertEqual(0, result.returncode, 'Native export resolution failed')
                 self.assertEqual(1, result.stdout.count(
                     'TASK [platform.core.resolve_application_libraries : Сбор рассчитанных записей приложений в порядке размещений]'))
+                self.assertEqual(1, result.stdout.count(
+                    'TASK [platform.core.resolve_application_libraries : Определение топологии подключений по параметрам пакета и установки]'))
                 rows = json.loads(output.read_text())
                 state = json.loads(vars_path.read_text())['platform_desired_state']
                 hosts = {name: {'ansibleHost': address, 'platformDeployments': {'docker': {}}}
                          for name, address in [('node1', '192.0.2.11'), ('node2', '192.0.2.12')]}
                 effective = {'services': {'vault-main': {'configuration': {'port': {'value': 8200, 'state': 'RESOLVED'}}}}}
                 projection = project(rows, state, effective, {}, hosts)
-                self.assertEqual('PASS', projection['status'], projection['findings'])
+                self.assertEqual(expected_status, projection['status'], projection['findings'])
+                if expected_status != 'PASS':
+                    self.assertTrue(any(row['code'] == 'APPLICATION_PROVIDED_CONNECTION_INVALID'
+                                        and row['field'].endswith('.connections.identity')
+                                        for row in projection['findings']), projection['findings'])
                 return rows, projection['libraries']
             rows, libraries = resolve()
+            self.assertTrue(all(row['providedConnections'] == {} for row in rows if row['libraryId'] == 'sdku'))
             self.assertEqual(libraries['sdku']['sharedSecretRequirements']['client']['source'],
                              {'kind': 'runtime_secret_ref', 'ref': 'explicit-client'})
             instance = libraries['sdku']['instances']['apigateway-sdku']
@@ -179,3 +201,7 @@ class NativeApplicationConnectionsTests(unittest.TestCase):
                 credentials={'password': {'source': source}}))
             _, libraries = resolve()
             self.assertEqual(source, libraries['cspa']['providedConnections']['admin']['credentials']['password']['source'])
+            edit(vars_path, lambda data: data['platform_desired_state']['applicationLibraryDeployments']['sdku']['applications']['gateway']['overrides']['connections']['identity'].update(enabled=True))
+            edit(vars_path, lambda data: data['platform_desired_state']['applicationLibraryDeployments']['sdku']['bindings']['identity-admin']['providedConnectionRef'].update(name='missing'))
+            edit(defaults, lambda data: data['platform_application_definition']['defaults']['environment'].update(API_ENDPOINT='fixture'))
+            resolve(expected_status='BLOCKED')

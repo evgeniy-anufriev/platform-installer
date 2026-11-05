@@ -25,6 +25,16 @@ def load(path):
 
 
 class ApplicationLibrariesTest(unittest.TestCase):
+    def test_only_literal_library_inputs_can_be_reused_across_placements(self):
+        self.assertTrue(APP._literal_library_input({'resources': [{'name': 'events', 'partitions': 3}]}))
+        for value in (
+            {'resources': [{'name': '{{ library_instance_id }}'}]},
+            {'{{ resource_id }}': 'events'},
+            {'defaults': '#jinja2: variable_start_string: "[["\n[[ inventory_hostname ]]'},
+        ):
+            with self.subTest(value=value):
+                self.assertFalse(APP._literal_library_input(value))
+
     def test_szi_keycloak_uses_directory_and_archive_settings(self):
         package = os.path.join(REPO, "examples/szi/application-packages/keycloak/1.0.0")
         with open(os.path.join(package, "roles/application_keycloak/defaults/main.yml"), encoding="utf-8") as stream:
@@ -255,6 +265,30 @@ class ApplicationLibrariesTest(unittest.TestCase):
         self.assertEqual(1, scans.call_count)
         self.assertEqual(3, loads.call_count)  # Two libraries share one application.
         self.assertEqual(3, len({(call.args[2], call.args[1]) for call in loads.call_args_list}))
+
+    def test_connection_keys_normalize_once_for_all_placements_of_a_package_pair(self):
+        with tempfile.TemporaryDirectory() as directory:
+            shutil.copytree(FIXTURE, directory, dirs_exist_ok=True)
+            app_path = os.path.join(directory,
+                'application-packages/apigateway/1.0.0/roles/application_apigateway/defaults/main.yml')
+            application = load(app_path)
+            declarations = application['platform_application_definition']['connections']
+            application['platform_application_definition']['connections'] = list(declarations)
+            with open(app_path, 'w', encoding='utf-8') as stream:
+                json.dump(application, stream)
+            for name in ('sdku', 'cspa'):
+                library_path = os.path.join(directory, 'library-packages', name, '1.0.0',
+                                            'roles', 'library_' + name, 'defaults/main.yml')
+                library = load(library_path)
+                library['platform_library_definition']['connections'] = declarations
+                with open(library_path, 'w', encoding='utf-8') as stream:
+                    json.dump(library, stream)
+            prepared = self.prepare(directory)
+        self.assertEqual([], prepared['findings'])
+        cspa, sdku_node1, sdku_node2 = (job['connections'] for job in prepared['jobs'])
+        self.assertEqual(declarations, sdku_node1)
+        self.assertIs(sdku_node1, sdku_node2)
+        self.assertIsNot(cspa, sdku_node1)
 
     def test_preparation_cache_does_not_hide_changes_in_next_invocation(self):
         with tempfile.TemporaryDirectory() as directory:

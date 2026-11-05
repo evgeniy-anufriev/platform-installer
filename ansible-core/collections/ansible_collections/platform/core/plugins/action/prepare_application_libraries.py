@@ -3,6 +3,7 @@ import os
 
 from ansible.plugins.action import ActionBase
 from ansible.errors import AnsibleError
+from ansible.utils.vars import merge_hash
 from ansible_collections.platform.core.plugins.module_utils.application_libraries import prepare, finding
 from ansible_collections.platform.core.plugins.module_utils.project_snapshot_output import snapshot_input_message
 
@@ -41,7 +42,11 @@ class ActionModule(ActionBase):
                 defaults = self._loader.load_from_file(args['defaults_path'])['platform_library_definition'].get(field, {})
                 overrides = task_vars['platform_desired_state']['applicationLibraryDeployments'][args['library_id']].get(
                     field if field != 'defaults' else 'overrides', {})
-                return dict(defaults=templar.template(defaults), overrides=templar.template(overrides), changed=False)
+                defaults, overrides = templar.template(defaults), templar.template(overrides)
+                if field == 'resource_defaults':
+                    merged = merge_hash(defaults, overrides, recursive=True, list_merge='replace')
+                    return dict(resource_defaults=merged, changed=False)
+                return dict(defaults=defaults, overrides=overrides, changed=False)
             except (ValueError, OSError, KeyError, TypeError, AnsibleError) as error:
                 context = {'libraryId': args.get('library_id'), 'hostId': args.get('host_id'),
                            'slotId': task_vars.get('application_job', {}).get('slotId')}
@@ -57,4 +62,22 @@ class ActionModule(ActionBase):
                              lambda path: self._loader.load_from_file(path), args["contracts_root"])
         except (ValueError, OSError, KeyError, TypeError, AnsibleError):
             result = {"jobs": [], "findings": [finding("APPLICATION_INPUT_INVALID", "applicationLibraryDeployments")]}
+        literal_addresses = {}
+        for job in result['jobs']:
+            if job['skipConnectionTopology']:
+                host = job['hostId']
+                if host not in literal_addresses:
+                    address = task_vars['hostvars'].raw_get(host).get('ansible_host')
+                    literal_addresses[host] = isinstance(address, str) and not any(
+                        marker in address for marker in ('{', '}', '#jinja2'))
+                job['skipConnectionTopology'] = literal_addresses[host]
+            if job['connections'] is not None:
+                continue
+            context = {key: job[key] for key in ('libraryId', 'slotId', 'hostId')}
+            diagnostic = finding('APPLICATION_INPUT_INVALID',
+                'applicationLibraryDeployments.%s.applications.%s.placements.%s' %
+                (job['libraryId'], job['slotId'], job['hostId']))
+            diagnostic['safeMessage'] = snapshot_input_message(
+                'application-settings', AnsibleError('Unknown library connection'), context)
+            result['findings'].append(diagnostic)
         return dict(result, changed=False)

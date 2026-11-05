@@ -12,6 +12,7 @@
     platform_application_rows: []
     platform_application_connection_rows: []
     platform_application_findings: "{{ _application_inputs.findings }}"
+    _library_resolved_defaults: {}
   no_log: true
   become: false
 
@@ -32,7 +33,7 @@
 
 - name: "Определение топологии подключений перед формированием окружения потребителя"
   ansible.builtin.include_tasks: connection_topology.yml
-  loop: "{{ _application_inputs.jobs }}"
+  loop: "{{ _application_inputs.jobs | rejectattr('skipConnectionTopology') | list }}"
   loop_control:
     loop_var: application_job
   no_log: true
@@ -55,21 +56,28 @@
   vars:
     _library_package: "{{ lookup('vars', '_library_package_' ~ ([application_job.libraryId, application_job.hostId] | to_json | hash('sha256'))) }}"
     _application_package: "{{ lookup('vars', '_application_package_' ~ ((application_job.libraryId ~ application_job.slotId ~ application_job.hostId) | hash('sha256'))) }}"
+    _library_resolution_key: "{{ application_job.libraryId ~ '/' ~ application_job.hostId }}"
+    _application_library_inputs: "{{ _library_resolved_defaults.get(_library_resolution_key, {}) }}"
+    _application_resource_defaults: "{{ _application_library_inputs.resourceDefaults if _application_library_inputs else _application_resource_inputs.resource_defaults | default({}) }}"
+    _application_shared: "{{ _application_library_inputs.shared if _application_library_inputs else _application_shared_render }}"
   loop: "{{ _application_inputs.jobs }}"
   loop_control:
     loop_var: application_job
     index_var: _application_row_index
     label: "{{ application_job.libraryId }} / {{ application_job.slotId }} / {{ application_job.hostId }}"
+  when: application_job.connections is not none
   no_log: true
 
 - name: Сбор рассчитанных записей приложений в порядке размещений
   ansible.builtin.set_fact:
     platform_application_rows: >-
       {%- set rows = [] -%}
-      {%- for index in range(_application_inputs.jobs | length) -%}
-        {%- set row = lookup('vars', '_application_resolved_row_' ~ index) -%}
-        {%- if row is not false -%}
-          {%- set _ = rows.append(row) -%}
+      {%- for job in _application_inputs.jobs -%}
+        {%- if job.connections is not none -%}
+          {%- set row = lookup('vars', '_application_resolved_row_' ~ loop.index0) -%}
+          {%- if row is not false -%}
+            {%- set _ = rows.append(row) -%}
+          {%- endif -%}
         {%- endif -%}
       {%- endfor -%}
       {{ rows }}
