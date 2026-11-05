@@ -60118,6 +60118,125 @@ sudo find /var/lib/platform-installer/execution/runs \
   
 
 @@END
+@@PORTABLE {"path":"scripts/diagnose_execution_manifest.sh","mode":420,"size":3773,"sha256":"145c12a3905216ad1d3531a647c4705918ad34d3b7c867e40d8b7c919ebb3514","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3773}
+#!/bin/sh
+# Run on the Execution Node. With no argument, list recent plan files.
+set -eu
+
+if [ "$#" -gt 1 ]; then
+    echo "Usage: sudo sh $0 [installer-stage-id]" >&2
+    exit 2
+fi
+
+runtime=$(readlink -f /var/lib/platform-installer/runtime/current)
+case "$runtime" in
+    /var/lib/platform-installer/runtime/releases/*) ;;
+    *) echo RUNTIME_NOT_FOUND >&2; exit 1 ;;
+esac
+test -d "$runtime/contracts" || { echo RUNTIME_NOT_FOUND >&2; exit 1; }
+runs=/var/lib/platform-installer/execution/runs
+printf 'Runtime: %s\n' "${runtime##*/}"
+date -Is
+
+if [ "$#" -eq 0 ]; then
+    find "$runs" -maxdepth 2 -type f \
+        \( -name manifest.json -o -name deployment-plan.json -o -name core-diagnostic.json \) \
+        -mmin -10 -printf '%TY-%Tm-%Td %TH:%TM:%TS %p\n' |
+        sort -r | head -20
+    exit
+fi
+
+python3 -B - "$runtime" "$runs" "$1" <<'PY'
+import json
+import re
+import sys
+import traceback
+from pathlib import Path
+
+
+def token(value):
+    return value if isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9_./:\[\]-]{1,512}", value) else "-"
+
+
+def read_document(name):
+    path = stage / name
+    if not path.is_symlink() and path.is_file():
+        return json.loads(path.read_text(encoding="utf-8"))
+    return None
+
+
+def print_findings(label, findings):
+    for finding in findings:
+        print(label, token(finding.get("code")), token(finding.get("field")))
+
+
+def print_failure(label, error):
+    code = str(error)
+    print(label, type(error).__name__, code if re.fullmatch(r"[A-Z][A-Z0-9_]{1,127}", code) else "-")
+    for frame in traceback.extract_tb(error.__traceback__):
+        print("AT", Path(frame.filename).name, frame.lineno, frame.name)
+
+
+def diagnose():
+    diagnostic = read_document("core-diagnostic.json")
+    if diagnostic is not None:
+        print("CORE_DIAGNOSTIC", token(diagnostic.get("errorCode")))
+        print_findings("CORE_FINDING", diagnostic.get("findings", []))
+
+    plan = read_document("deployment-plan.json")
+    if plan is not None:
+        print("PLAN", token(plan.get("status")), token(plan.get("apiVersion")))
+        print_findings("PLAN_FINDING", plan.get("findings", []))
+
+    manifest = read_document("manifest.json")
+    if manifest is None:
+        raise SystemExit("MANIFEST_NOT_FOUND")
+    version = manifest["apiVersion"].rsplit("/", 1)[-1]
+    if not re.fullmatch(r"v[0-9]+alpha[0-9]+", version):
+        raise SystemExit("MANIFEST_VERSION_INVALID")
+    print("MANIFEST", version, token(manifest.get("executionMode")))
+    print("OPERATIONS", *(token(op.get("operation")) for op in manifest.get("operations", [])))
+
+    from execution_controller import validate_application_manifest
+    from schema_validation import SchemaValidator
+
+    contracts = runtime / "contracts"
+    schema = contracts / "execution-manifest" / version / "schema.json"
+    if schema.is_file():
+        print_findings("SCHEMA_FINDING", SchemaValidator(str(contracts)).validate(manifest, schema))
+    else:
+        print("SCHEMA_MISSING", version)
+
+    try:
+        validate_application_manifest(manifest)
+    except Exception as error:
+        print_failure("VALIDATION_FAILED", error)
+        raise SystemExit(1) from None
+    print("VALIDATION_OK")
+
+
+runtime = Path(sys.argv[1])
+runs = Path(sys.argv[2]).resolve()
+stage_id = sys.argv[3]
+if not re.fullmatch(r"installer-[a-f0-9]+", stage_id):
+    raise SystemExit("STAGE_ID_INVALID")
+stage = runs / stage_id
+if stage.is_symlink() or not stage.is_dir():
+    raise SystemExit("STAGE_NOT_FOUND")
+
+core = runtime / "ansible-core"
+sys.path[:0] = [
+    str(core / "tools"),
+    str(core / "collections/ansible_collections/platform/core/plugins/module_utils"),
+]
+try:
+    diagnose()
+except Exception as error:
+    print_failure("DIAGNOSTIC_FAILED", error)
+    raise SystemExit(1) from None
+PY
+
+@@END
 @@PORTABLE {"path":"scripts/diagnose_pki_pairs.sh","mode":493,"size":9025,"sha256":"51bf8e2ea1180a9ea0df117b7a8db089ef906d18633a507affdb19490d9b4a2d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":9025}
 #!/usr/bin/env bash
 # Read-only diagnostics on the Execution Node; never prints private key data.
@@ -120929,235 +121048,4 @@ window.addEventListener('contextmenu', function(e) {
 });
 
 window.WailsInvoke("runtime:ready");
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/frontend/runtime/desktop/notifications.js","mode":420,"size":7207,"sha256":"5bef9ea11416aed9cc1c80c14d74be56dfe22159c37955c5136fc02975d8b2dd","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7207}
-/*
- _       __      _ __
-| |     / /___ _(_) /____
-| | /| / / __ `/ / / ___/
-| |/ |/ / /_/ / / (__  )
-|__/|__/\__,_/_/_/____/
-The electron alternative for Go
-(c) Lea Anthony 2019-present
-*/
-/* jshint esversion: 9 */
-
-import {Call} from "./calls";
-
-/**
- * Initialize the notification service for the application.
- * This must be called before sending any notifications.
- * On macOS, this also ensures the notification delegate is properly initialized.
- *
- * @export
- * @return {Promise<void>}
- */
-export function InitializeNotifications() {
-    return Call(":wails:InitializeNotifications");
-}
-
-/**
- * Clean up notification resources and release any held connections.
- * This should be called when shutting down the application to properly release resources
- * (primarily needed on Linux to close D-Bus connections).
- *
- * @export
- * @return {Promise<void>}
- */
-export function CleanupNotifications() {
-    return Call(":wails:CleanupNotifications");
-}
-
-/**
- * Check if notifications are available on the current platform.
- *
- * @export
- * @return {Promise<boolean>} True if notifications are available, false otherwise
- */
-export function IsNotificationAvailable() {
-    return Call(":wails:IsNotificationAvailable");
-}
-
-/**
- * Request notification authorization from the user.
- * On macOS, this prompts the user to allow notifications.
- * On other platforms, this always returns true.
- *
- * @export
- * @return {Promise<boolean>} True if authorization was granted, false otherwise
- */
-export function RequestNotificationAuthorization() {
-    return Call(":wails:RequestNotificationAuthorization");
-}
-
-/**
- * Check the current notification authorization status.
- * On macOS, this checks if the app has notification permissions.
- * On other platforms, this always returns true.
- *
- * @export
- * @return {Promise<boolean>} True if authorized, false otherwise
- */
-export function CheckNotificationAuthorization() {
-    return Call(":wails:CheckNotificationAuthorization");
-}
-
-/**
- * Send a basic notification with the given options.
- * The notification will display with the provided title, subtitle (if supported), and body text.
- *
- * @export
- * @param {Object} options - Notification options
- * @param {string} options.id - Unique identifier for the notification
- * @param {string} options.title - Notification title
- * @param {string} [options.subtitle] - Notification subtitle (macOS and Linux only)
- * @param {string} [options.body] - Notification body text
- * @param {string} [options.categoryId] - Category ID for action buttons (requires SendNotificationWithActions)
- * @param {Object<string, any>} [options.data] - Additional user data to attach to the notification
- * @return {Promise<void>}
- */
-export function SendNotification(options) {
-    return Call(":wails:SendNotification", [options]);
-}
-
-/**
- * Send a notification with action buttons.
- * A NotificationCategory must be registered first using RegisterNotificationCategory.
- * The options.categoryId must match a previously registered category ID.
- * If the category is not found, a basic notification will be sent instead.
- *
- * @export
- * @param {Object} options - Notification options
- * @param {string} options.id - Unique identifier for the notification
- * @param {string} options.title - Notification title
- * @param {string} [options.subtitle] - Notification subtitle (macOS and Linux only)
- * @param {string} [options.body] - Notification body text
- * @param {string} options.categoryId - Category ID that matches a registered category
- * @param {Object<string, any>} [options.data] - Additional user data to attach to the notification
- * @return {Promise<void>}
- */
-export function SendNotificationWithActions(options) {
-    return Call(":wails:SendNotificationWithActions", [options]);
-}
-
-/**
- * Register a notification category that can be used with SendNotificationWithActions.
- * Categories define the action buttons and optional reply fields that will appear on notifications.
- * Registering a category with the same ID as a previously registered category will override it.
- *
- * @export
- * @param {Object} category - Notification category definition
- * @param {string} category.id - Unique identifier for the category
- * @param {Array<Object>} [category.actions] - Array of action buttons
- * @param {string} category.actions[].id - Unique identifier for the action
- * @param {string} category.actions[].title - Display title for the action button
- * @param {boolean} [category.actions[].destructive] - Whether the action is destructive (macOS-specific)
- * @param {boolean} [category.hasReplyField] - Whether to include a text input field for replies
- * @param {string} [category.replyPlaceholder] - Placeholder text for the reply field (required if hasReplyField is true)
- * @param {string} [category.replyButtonTitle] - Title for the reply button (required if hasReplyField is true)
- * @return {Promise<void>}
- */
-export function RegisterNotificationCategory(category) {
-    return Call(":wails:RegisterNotificationCategory", [category]);
-}
-
-/**
- * Remove a previously registered notification category.
- *
- * @export
- * @param {string} categoryId - The ID of the category to remove
- * @return {Promise<void>}
- */
-export function RemoveNotificationCategory(categoryId) {
-    return Call(":wails:RemoveNotificationCategory", [categoryId]);
-}
-
-/**
- * Remove all pending notifications from the notification center.
- * On Windows, this is a no-op as the platform manages notification lifecycle automatically.
- *
- * @export
- * @return {Promise<void>}
- */
-export function RemoveAllPendingNotifications() {
-    return Call(":wails:RemoveAllPendingNotifications");
-}
-
-/**
- * Remove a specific pending notification by its identifier.
- * On Windows, this is a no-op as the platform manages notification lifecycle automatically.
- *
- * @export
- * @param {string} identifier - The ID of the notification to remove
- * @return {Promise<void>}
- */
-export function RemovePendingNotification(identifier) {
-    return Call(":wails:RemovePendingNotification", [identifier]);
-}
-
-/**
- * Remove all delivered notifications from the notification center.
- * On Windows, this is a no-op as the platform manages notification lifecycle automatically.
- *
- * @export
- * @return {Promise<void>}
- */
-export function RemoveAllDeliveredNotifications() {
-    return Call(":wails:RemoveAllDeliveredNotifications");
-}
-
-/**
- * Remove a specific delivered notification by its identifier.
- * On Windows, this is a no-op as the platform manages notification lifecycle automatically.
- *
- * @export
- * @param {string} identifier - The ID of the notification to remove
- * @return {Promise<void>}
- */
-export function RemoveDeliveredNotification(identifier) {
-    return Call(":wails:RemoveDeliveredNotification", [identifier]);
-}
-
-/**
- * Remove a notification by its identifier.
- * This is a convenience function that works across platforms.
- * On macOS, use the more specific RemovePendingNotification or RemoveDeliveredNotification functions.
- *
- * @export
- * @param {string} identifier - The ID of the notification to remove
- * @return {Promise<void>}
- */
-export function RemoveNotification(identifier) {
-    return Call(":wails:RemoveNotification", [identifier]);
-}
-
-
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/frontend/runtime/desktop/screen.js","mode":420,"size":551,"sha256":"1752eead5fc7125a0bf117ad782fb98c0be8db22055ec3bf28eab5b1a2a4efc5","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":551}
-/*
- _	   __	  _ __
-| |	 / /___ _(_) /____
-| | /| / / __ `/ / / ___/
-| |/ |/ / /_/ / / (__  )
-|__/|__/\__,_/_/_/____/
-The electron alternative for Go
-(c) Lea Anthony 2019-present
-*/
-
-/* jshint esversion: 9 */
-
-
-import {Call} from "./calls";
-
-
-/**
- * Gets the all screens. Call this anew each time you want to refresh data from the underlying windowing system.
- * @export
- * @typedef {import('../wrapper/runtime').Screen} Screen
- * @return {Promise<{Screen[]}>} The screens
- */
-export function ScreenGetAll() {
-    return Call(":wails:ScreenGetAll");
-}
-
 @@END
