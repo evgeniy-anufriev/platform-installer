@@ -73435,7 +73435,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/hmi-backend/1.0.0/roles/application_hmi-backend/defaults/main.yml","mode":420,"size":12689,"sha256":"d9404b3312fa48e675afd4ebf0e21be22f7a0f12bf87a1b4ee036eea1a5caaf6","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":12689}
+@@PORTABLE {"path":"examples/sdku/application-packages/hmi-backend/1.0.0/roles/application_hmi-backend/defaults/main.yml","mode":420,"size":12857,"sha256":"6388ecf1c3cdd5d8a41c3ded5d4b57b4bd6e9b4ff76733efb6ce364090c078ef","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":12857}
 platform_application_definition:
     name: hmi-backend
     version: 1.0.0
@@ -73564,7 +73564,7 @@ platform_application_definition:
             ALARMSERVICE_URL_ROOT: ""
             CSPA_TOPIC_ROUTE_ROOT: '{{ application_topics.kafka.main.name }}'
             CSPA_TOPICS: '{{ application_topics.kafka.main.name }}'
-            DATAMANAGER_ROOT_URL: '{{ (''https://data-manager-'' ~ library_instance_id ~ ''.'' ~ platform_desired_state.endpointGroups[platform_desired_state.applicationLibraryDeployments[library_instance_id].applications[''data-manager''].overrides.endpoint.endpoint_group].address.domain) if ''data-manager'' in platform_desired_state.applicationLibraryDeployments[library_instance_id].applications else '''' }}'
+            DATAMANAGER_ROOT_URL: '{{ (''https://data-manager-'' ~ library_instance_id ~ ''.'' ~ platform_desired_state.endpointGroups[platform_desired_state.applicationLibraryDeployments[library_instance_id].applications[''data-manager''].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group)].address.domain) if ''data-manager'' in platform_desired_state.applicationLibraryDeployments[library_instance_id].applications else '''' }}'
             DB_CONNECTION_STRING: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_databases.clickhouse.history.name }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             DB_TYPE: clickhouse
             EVO_MANAGER_HOT_TOPICS: '{{ application_topics.kafka.main.name }}'
@@ -73573,7 +73573,7 @@ platform_application_definition:
             MAIN_TOPIC: '{{ application_topics.kafka.main_compact.name }}'
             SERVER_ALLOWED_ORIGINS: '*'
             SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
-            TN_SCADA_DATA_MANAGER_URL_ROOT: '{{ (''https://data-manager-'' ~ library_instance_id ~ ''.'' ~ platform_desired_state.endpointGroups[platform_desired_state.applicationLibraryDeployments[library_instance_id].applications[''data-manager''].overrides.endpoint.endpoint_group].address.domain) if ''data-manager'' in platform_desired_state.applicationLibraryDeployments[library_instance_id].applications else '''' }}'
+            TN_SCADA_DATA_MANAGER_URL_ROOT: '{{ (''https://data-manager-'' ~ library_instance_id ~ ''.'' ~ platform_desired_state.endpointGroups[platform_desired_state.applicationLibraryDeployments[library_instance_id].applications[''data-manager''].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group)].address.domain) if ''data-manager'' in platform_desired_state.applicationLibraryDeployments[library_instance_id].applications else '''' }}'
             TN_SCADA_METADATA_TARGET_PROJECT: TNSV
             USER_ACTION_TAGNAME: _MaskCauseList.Description
             evo-manager.alarm-subscription.topic: '{{ application_topics.kafka.alarms_compact.name }}'
@@ -73589,7 +73589,7 @@ platform_application_definition:
             tn-scada.cspa.topic-route.root.project.TNSVHYDRO.root.descentRule: rcv
             tn-scada.cspa.topic-route.root.project.TNSVHYDRO.root.topic: '{{ application_topics.kafka.main.name }}'
             tn-scada.cspa.topic-route.root.topic: '{{ application_topics.kafka.main.name }}'
-            tn-scada.data-manager.url: '{{ (''https://data-manager-'' ~ library_instance_id ~ ''.'' ~ platform_desired_state.endpointGroups[platform_desired_state.applicationLibraryDeployments[library_instance_id].applications[''data-manager''].overrides.endpoint.endpoint_group].address.domain) if ''data-manager'' in platform_desired_state.applicationLibraryDeployments[library_instance_id].applications else '''' }}'
+            tn-scada.data-manager.url: '{{ (''https://data-manager-'' ~ library_instance_id ~ ''.'' ~ platform_desired_state.endpointGroups[platform_desired_state.applicationLibraryDeployments[library_instance_id].applications[''data-manager''].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group)].address.domain) if ''data-manager'' in platform_desired_state.applicationLibraryDeployments[library_instance_id].applications else '''' }}'
             tn-scada.metadata.dontShowTargetProjectInNames: false
             tn-scada.metadata.load-projects: TNSV,TNSVHYDRO
             EVO_MANAGER_APP_ID: '{{ application_instance_id }}'
@@ -73745,7 +73745,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/hmi-frontend-alarms/1.0.0/roles/application_hmi-frontend-alarms/defaults/main.yml","mode":420,"size":2274,"sha256":"10aa828347b7479bd19a7f2e7cdb163485d5678e67c9571a03fa4f72a31e5b7b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2274}
+@@PORTABLE {"path":"examples/sdku/application-packages/hmi-frontend-alarms/1.0.0/roles/application_hmi-frontend-alarms/defaults/main.yml","mode":420,"size":2359,"sha256":"33a69e71f5f8cd798796d9d691a16a8f0229237f242a6ac568b42eacba6b1fad","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2359}
 platform_application_definition:
     name: hmi-frontend-alarms
     version: 1.0.0
@@ -73756,7 +73756,7 @@ platform_application_definition:
         command:
             - /app/docker-entrypoint.sh
         environment:
-            PUBLIC_HOST: '{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}'
+            PUBLIC_HOST: '{{ application_parameters.szi_proxy_url | urlsplit(''netloc'') }}'
             ALARMS_HEADER_TITLE: ""
             ALARMS_IMPORTANT_QUERY_PAGE_SIZE: 50
             ALARMS_OFFSET_TO_FUTURE_IN_REST_REQ_MS: 0
@@ -73774,7 +73774,7 @@ platform_application_definition:
             NGINX_GRANT_ACCESS_AUDIT: grant-access-audit
             NGINX_GRANT_ACCESS_FRONT: grant-access-front
             NGINX_GRANT_ACCESS_INTEGRITY: grant-access-integrity
-            NGINX_URL: ""
+            NGINX_URL: '{{ application_parameters.szi_proxy_url }}'
             NGINX_URL_TRENDS_FRONT: hmi-frontend-trends
             NGINX_VTOR_SERVICE_FRONT: sdku-vtor-ui
             PAUSE_BETWEEN_ALL_CRITICAL: 10000
@@ -73785,6 +73785,9 @@ platform_application_definition:
             USE_SIGNAL_ID_IN_FILTER: falses
             VOICES: '{"Windows" : "Microsoft Pavel - Russian (Russia)", "Linux" : ""}'
         parameters:
+            szi_proxy_url: >-
+                {%- set ref = application_job.deployment.bindings.sso.providedConnectionRef -%}
+                {{ platform_application_provided_connections[ref.libraryId][ref.name].parameters.proxy_url }}
             mount_sources:
                 mount-1: ""
                 mount-2: ""
@@ -74372,7 +74375,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/hmi-frontend-viewer/1.0.0/roles/application_hmi-frontend-viewer/defaults/main.yml","mode":420,"size":3428,"sha256":"1e6b52765deb40aea46a15aab12ba0c860680ee87282cbc81ff4056a518cfe04","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3428}
+@@PORTABLE {"path":"examples/sdku/application-packages/hmi-frontend-viewer/1.0.0/roles/application_hmi-frontend-viewer/defaults/main.yml","mode":420,"size":1749,"sha256":"ea4aae157ed1f8eb1a995a63897e688a6de2b1b9f4fa2ba565fd87fb825cc6f1","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1749}
 platform_application_definition:
     name: hmi-frontend-viewer
     version: 1.0.0
@@ -74383,17 +74386,20 @@ platform_application_definition:
         command:
             - /app/docker-entrypoint.sh
         environment:
-            ALARMS_URL: https://{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/hmi-frontend-alarms
-            CSPA_HMI_BACK: https://{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/hmi-backend
-            CSPA_HMI_BACK_WS: wss://{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/hmi-backend
-            GRANT_ACCESS: https://{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/grant-access
-            GRANT_ACCESS_AUDIT: https://{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/grant-access-audit
-            HMI_BACK: https://{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/ef-backend
-            NGINX_URL: ""
-            SVG_EDITOR: https://{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/hmi-frontend-svg-editor
-            TRENDS_URL: https://{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/hmi-frontend-trends
-            VTOR_URL: https://{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/sdku-vtor-ui
+            ALARMS_URL: "{{ application_parameters.szi_proxy_url }}/hmi-frontend-alarms"
+            CSPA_HMI_BACK: "{{ application_parameters.szi_proxy_url }}/hmi-backend"
+            CSPA_HMI_BACK_WS: "{{ application_parameters.szi_proxy_url | regex_replace('^https://', 'wss://') }}/hmi-backend"
+            GRANT_ACCESS: "{{ application_parameters.szi_proxy_url }}/grant-access"
+            GRANT_ACCESS_AUDIT: "{{ application_parameters.szi_proxy_url }}/grant-access-audit"
+            HMI_BACK: "{{ application_parameters.szi_proxy_url }}/ef-backend"
+            NGINX_URL: '{{ application_parameters.szi_proxy_url }}'
+            SVG_EDITOR: "{{ application_parameters.szi_proxy_url }}/hmi-frontend-svg-editor"
+            TRENDS_URL: "{{ application_parameters.szi_proxy_url }}/hmi-frontend-trends"
+            VTOR_URL: "{{ application_parameters.szi_proxy_url }}/sdku-vtor-ui"
         parameters:
+            szi_proxy_url: >-
+                {%- set ref = application_job.deployment.bindings.sso.providedConnectionRef -%}
+                {{ platform_application_provided_connections[ref.libraryId][ref.name].parameters.proxy_url }}
             mount_sources:
                 mount-1: ""
                 mount-2: ""
@@ -76552,7 +76558,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/sdku-vtor-ui/1.0.0/roles/application_sdku-vtor-ui/defaults/main.yml","mode":420,"size":1132,"sha256":"1ab90ce9aeafaeea558abfd44bf87b8dc7f0f29d6ee9c548d0eaf3ac1b45aa56","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1132}
+@@PORTABLE {"path":"examples/sdku/application-packages/sdku-vtor-ui/1.0.0/roles/application_sdku-vtor-ui/defaults/main.yml","mode":420,"size":995,"sha256":"388217a07a31dad1e2a7ab3275f2614c6eb33ef96fa1aae01125776fb4e2e8bc","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":995}
 platform_application_definition:
     name: sdku-vtor-ui
     version: 1.0.0
@@ -76563,8 +76569,12 @@ platform_application_definition:
         command:
             - /app/docker-entrypoint.sh
         environment:
-            REACT_APP_VTOR_HOST_URL: https://nginx.{{ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/sdku-vtor
-            REACT_APP_VTOR_HOST_URL_WS: wss://nginx.{{ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/sdku-vtor
+            REACT_APP_VTOR_HOST_URL: "{{ application_parameters.szi_proxy_url }}/sdku-vtor"
+            REACT_APP_VTOR_HOST_URL_WS: "{{ application_parameters.szi_proxy_url | regex_replace('^https://', 'wss://') }}/sdku-vtor"
+        parameters:
+            szi_proxy_url: >-
+                {%- set ref = application_job.deployment.bindings.sso.providedConnectionRef -%}
+                {{ platform_application_provided_connections[ref.libraryId][ref.name].parameters.proxy_url }}
         ports:
             port-1:
                 container: 10311
@@ -77173,7 +77183,7 @@ platform_desired_state:
               port-1: {container: 10022, published: 10022}
 
 @@END
-@@PORTABLE {"path":"examples/sdku/configuration/group_vars.yml.example","mode":420,"size":2674,"sha256":"620bbc8a6345695fbd398e696418df65e90086edfbff8ea5111ff06f2100242e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2674}
+@@PORTABLE {"path":"examples/sdku/configuration/group_vars.yml.example","mode":420,"size":2888,"sha256":"8b9a9d183467a2da2fe03da2d1a410f88bde5202d5116821f56afd1f4e819e68","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2888}
 ---
 # Merge this fragment into the project's ordinary inventory/group_vars.
 # References below must name existing deployments of THAT project.
@@ -77181,6 +77191,9 @@ platform_desired_state:
 # Requires a runtime containing direct Kafka/PostgreSQL resource keys.
 
 platform_desired_state:
+  endpointGroups:
+    sdk-endpoint:
+      address: {domain: sdk.example.invalid, wildcard: true}
   applicationLibraryDeployments:
     sdku-main:
       libraryRef: sdku@1.0.0
@@ -77198,6 +77211,8 @@ platform_desired_state:
         messaging: {deploymentRef: kafka-apps}
         secrets: {deploymentRef: vault-apps}
         application-pki: {profileRef: application-pki}
+        endpoint: {endpointGroupRef: sdk-endpoint}
+        sso: {providedConnectionRef: {libraryId: szi, name: sso}}
       connection_defaults:
         kafka: {connectionRef: SASL_SSL}
         # Choose sentinel only for a Sentinel-backed Redis connection.
@@ -77238,7 +77253,7 @@ platform_application_libraries:
   sdku-main: {}
 
 @@END
-@@PORTABLE {"path":"examples/sdku/import-catalog.json","mode":420,"size":5771,"sha256":"8332d5782bdef3e89270299c727478c18c15ee38e003c604483825f1cf206f8a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5771}
+@@PORTABLE {"path":"examples/sdku/import-catalog.json","mode":420,"size":5771,"sha256":"4f8213c74f01b1bbd62ed56f632a61194b61938a2f3d2f9d579d4e3d24ff0aa0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5771}
 [
   {
     "digest": "sha256:51a85d8d0276e47498b98243d47d2a7e17d354d239f7467b4822ed4d64e9f021",
@@ -77290,14 +77305,14 @@ platform_application_libraries:
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:8713809ff6e3481d0a213fe2bdf8dc10bc14564687bb6898e2bb87eacadb904d",
+    "digest": "sha256:974ca11e14e2641851e3cf521e9f9a2a7edf063bf4fe97ca7059548652e5a470",
     "kind": "application",
     "name": "hmi-backend",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:05db7d0181d80c774d67bc99b90e642130df3ec16cf293e47f4219671f6a906f",
+    "digest": "sha256:2e9831eca122fda377cd961f78df617863d6b1eb5564e82ced7880118abd6737",
     "kind": "application",
     "name": "hmi-frontend-alarms",
     "sourceDirectory": ".",
@@ -77325,7 +77340,7 @@ platform_application_libraries:
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:ddb4aed73b22993d285d761a5c788535809cd938ce5a5c163b0813b94fa77353",
+    "digest": "sha256:269b4f5a9ba0421f855a16840c0ac902e51ad60a16c59be1f29fc4775506f025",
     "kind": "application",
     "name": "hmi-frontend-viewer",
     "sourceDirectory": ".",
@@ -77409,7 +77424,7 @@ platform_application_libraries:
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:7a9e52387f1c2200134372d46f582ec09c38671060a2f21cb787c1b316049a82",
+    "digest": "sha256:9b19f1914a0772e7d47683d7679987eef284672c698ea96820a0e33a6299ed4c",
     "kind": "application",
     "name": "sdku-vtor-ui",
     "sourceDirectory": ".",
@@ -79012,7 +79027,7 @@ public final class StartupMock {
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/validate_packages.py","mode":420,"size":7547,"sha256":"ca087f27bd986d8dfff16891c5cbb848a1d19b2828167f8f4a95adcc6f0495a0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7547}
+@@PORTABLE {"path":"examples/sdku/validate_packages.py","mode":420,"size":8435,"sha256":"c6199c9e39e45b4af150f24851b9215ce239f762cd516ad4ad9e240be3a55830","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":8435}
 import sys, json, pathlib, yaml
 from ansible.parsing.dataloader import DataLoader
 from ansible.template import Templar
@@ -79054,7 +79069,7 @@ base = str(package_root/'library-packages/sdku/1.0.0'/library['render']['base_co
 # Compose-only fixture uses the resolved common ENV; provider group preparation
 # is exercised by standalone integration tests rather than recursive raw defaults.
 compose_common = dict(common, parameters={})
-fixture_applications = {name: {'overrides': {'endpoint': {'endpoint_group': 'apps'}}}
+fixture_applications = {name: {}
                         for kind, name in packages if kind == 'application'}
 fixture_desired = {'applicationLibraryDeployments': {'sdku-main': {'applications': fixture_applications}},
                    'endpointGroups': {'apps': {'address': {'domain': 'example.invalid'}}}}
@@ -79062,7 +79077,8 @@ rendered = []
 base_contents = set()
 jobs = [dict(application={'definition': {'defaults': {'ports': p['definition']['defaults'].get('ports', {})}}},
              libraryId='sdku-main', slotId=n, hostId='example-host',
-             slot={'overrides': {}}, instance={'overrides': {}}, hostOverride={})
+             slot={'overrides': {}}, instance={'overrides': {}}, hostOverride={},
+             deployment={'bindings': {'sso': {'providedConnectionRef': {'libraryId': 'szi', 'name': 'sso'}}}})
         for (kind, n), p in packages.items() if kind == 'application']
 for (kind,name), package in packages.items():
     if kind != 'application': continue
@@ -79072,11 +79088,12 @@ for (kind,name), package in packages.items():
     if not params.get('database_name'):
         params['database_name'] = 'fixture_database'
     for key,value in params.items():
-        if isinstance(value, str) and (not value or 'platform_desired_state' in value):
+        if isinstance(value, str) and key != 'szi_proxy_url' and (not value or 'platform_desired_state' in value):
             params[key] = 'example.invalid'
     for key,value in params.get('mount_sources', {}).items():
         if not value: params['mount_sources'][key] = '/tmp/sdku-fixture'
     variables = dict(platform_desired_state=fixture_desired, application_connections={},
+        platform_application_provided_connections={'szi': {'sso': {'parameters': {'proxy_url': 'https://nginx.szi.example.invalid'}}}},
         platform_project_root=str(package_root), application_name=name, application_instance_id=name+'-sdku-main', application_parameters=params,
         application_topics={'kafka': {ref: dict(resourceId=ref, name=value['name'])
                             for ref, value in library['definition']['resource_defaults']['kafka']['topics'].items()}},
@@ -79094,7 +79111,18 @@ for (kind,name), package in packages.items():
         library_runtime={'library_id':'sdku-main','host_id':'example-host','defaults':compose_common,'connections':{key:{'targets':[{'hostId':'example-host','address':'example.invalid','port':12345}]} for key in library['definition'].get('connections',{})}},
         application_runtime={'image':settings['image'],'container_name':name+'-sdku-main-example-host','base_compose_path':'/tmp/.base_compose.yml','base_service':'base','vault_path':'/tmp/vault','pki_path':'/tmp/pki', 'config_path':'/tmp/config', 'connections':{key:{'targets':[{'address':'example.invalid','port':12345}]} for key in package['definition'].get('connections',{})}})
     templar=Templar(loader=DataLoader(),variables=variables)
+    variables['application_parameters'] = templar.template(params)
+    templar.available_variables = variables
     settings=templar.template(settings)
+    frontend_addresses = {
+        'hmi-frontend-viewer': ('CSPA_HMI_BACK_WS', 'wss://nginx.szi.example.invalid/hmi-backend'),
+        'hmi-frontend-alarms': ('PUBLIC_HOST', 'nginx.szi.example.invalid'),
+        'sdku-vtor-ui': ('REACT_APP_VTOR_HOST_URL', 'https://nginx.szi.example.invalid/sdku-vtor'),
+        'hmi-backend': ('DATAMANAGER_ROOT_URL', 'https://data-manager-sdku-main.example.invalid'),
+    }
+    if name in frontend_addresses:
+        key, value = frontend_addresses[name]
+        assert settings['environment'][key] == value, (name, key)
     env=dict(common.get('environment', {}) if library['definition']['slots'][name].get('inherit_defaults', True) else {})
     env.update(settings.get('environment',{}))
     variables.update(application_effective=settings,application_environment=env)
