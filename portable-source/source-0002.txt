@@ -60341,7 +60341,7 @@ except Exception as error:
 PY
 
 @@END
-@@PORTABLE {"path":"scripts/diagnose_keycloak_create_admin.sh","mode":420,"size":1716,"sha256":"0938f8e1918f49478049185022e1a774aea5dd9d89b11f731d34ac7c1f2bb3f8","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1716}
+@@PORTABLE {"path":"scripts/diagnose_keycloak_create_admin.sh","mode":420,"size":1879,"sha256":"49297c2408916ccb9f55d37457f0b4f3ee3a53eb5f6df50c66cef04ab8adc557","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1879}
 #!/usr/bin/env bash
 # Run on the host where create-admin failed.
 set -euo pipefail
@@ -60370,17 +60370,21 @@ stat -c 'MODIFIED: %y' -- "$log"
 
 awk '
     BEGIN { phase = "BEFORE_LOGIN" }
-    /keycloak-admin trace: .*config credentials.*--client temp-admin([[:space:]]|$)/ {
-        phase = "LOGIN_TEMP_ADMIN"; next
+    /^[[:space:]]*[+]+[[:space:]]|keycloak-admin trace:/ {
+        if ($0 ~ /kcadm\.sh config credentials.*--client temp-admin([[:space:]]|$)/)
+            phase = "LOGIN_TEMP_ADMIN"
+        else if ($0 ~ /kcadm\.sh config credentials.*--client admin-cli([[:space:]]|$)/)
+            phase = "LOGIN_ADMIN_CLI"
+        else if ($0 ~ /kcadm\.sh get clients.*clientId=temp-admin([[:space:]]|$)/)
+            phase = "GET_CLIENTS"
+        else if ($0 ~ /[[:space:]]fail 60([[:space:]]|$)/)
+            phase = "STEP_60"
+        else
+            next
+        print NR, phase
+        traced = 1
+        next
     }
-    /keycloak-admin trace: .*config credentials.*--client admin-cli([[:space:]]|$)/ {
-        phase = "LOGIN_ADMIN_CLI"; next
-    }
-    /keycloak-admin trace: .*get clients.*clientId=temp-admin([[:space:]]|$)/ {
-        phase = "GET_CLIENTS"; next
-    }
-    /keycloak-admin trace: .*fail 60([[:space:]]|$)/ { print NR, "STEP_60"; next }
-    /keycloak-admin trace:/ { next }
     {
         line = tolower($0)
         while (match(line, /http( error| status)?[ :]+[0-9][0-9][0-9]|[0-9][0-9][0-9] (unauthorized|forbidden)|invalid_client|invalid_grant|unauthorized|forbidden|connection refused|timed out|pkix|certificate verify failed|failed to send request/)) {
@@ -60389,7 +60393,10 @@ awk '
             line = substr(line, RSTART + RLENGTH)
         }
     }
-    END { if (!found) print "NO_KNOWN_ERROR_MARKERS" }
+    END {
+        if (!traced) print "NO_KNOWN_TRACE_PHASES"
+        if (!found) print "NO_KNOWN_ERROR_MARKERS"
+    }
 ' "$log"
 
 @@END
