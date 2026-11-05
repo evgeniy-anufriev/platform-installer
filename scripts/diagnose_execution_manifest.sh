@@ -20,7 +20,7 @@ date -Is
 if [ "$#" -eq 0 ]; then
     find "$runs" -maxdepth 2 -type f \
         \( -name manifest.json -o -name deployment-plan.json -o -name core-diagnostic.json \) \
-        -mmin -10 -printf '%TY-%Tm-%Td %TH:%TM:%TS %p\n' |
+        -printf '%TY-%Tm-%Td %TH:%TM:%TS %p\n' |
         sort -r | head -20
     exit
 fi
@@ -54,6 +54,36 @@ def print_failure(label, error):
     print(label, type(error).__name__, code if re.fullmatch(r"[A-Z][A-Z0-9_]{1,127}", code) else "-")
     for frame in traceback.extract_tb(error.__traceback__):
         print("AT", Path(frame.filename).name, frame.lineno, frame.name)
+
+
+def check_registration(manifest):
+    import execution_secret_lease as lease
+    from execution_lifecycle import LifecycleError, digest
+
+    project = manifest.get("projectIdentity")
+    fingerprint = manifest.get("planFingerprint")
+    project_ok = isinstance(project, str) and bool(lease._PROJECT.fullmatch(project))
+    fingerprint_ok = isinstance(fingerprint, str) and bool(lease._DIGEST.fullmatch(fingerprint))
+    release_ok = isinstance(manifest.get("runtimeRelease"), dict)
+    print("PROJECT_ID_FORMAT_OK", project_ok)
+    print("PLAN_FINGERPRINT_FORMAT_OK", fingerprint_ok)
+    print("RUNTIME_RELEASE_IS_OBJECT", release_ok)
+    if not (project_ok and fingerprint_ok and release_ok):
+        raise SystemExit("REGISTRATION_INPUT_INVALID")
+
+    try:
+        record = lease.resolve_plan(str(runs.parent), {
+            "executionManifestDigest": digest(manifest),
+            "projectIdentity": project,
+            "planFingerprint": fingerprint,
+        })
+    except LifecycleError as error:
+        print_failure("REGISTRATION_FAILED", error)
+        raise SystemExit(1) from None
+    matches = record.get("stagingId") == stage_id
+    print("REGISTRATION_MATCHES_STAGE", matches)
+    if not matches:
+        raise SystemExit(1)
 
 
 def diagnose():
@@ -92,6 +122,7 @@ def diagnose():
         print_failure("VALIDATION_FAILED", error)
         raise SystemExit(1) from None
     print("VALIDATION_OK")
+    check_registration(manifest)
 
 
 runtime = Path(sys.argv[1])
