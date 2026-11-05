@@ -186,6 +186,13 @@ def application_pki_bindings(rows, desired):
     return [bindings[key] for key in sorted(bindings)]
 
 
+def materialization_fingerprint(request_fingerprint, plan):
+    return canonical_digest({
+        "requestFingerprint": request_fingerprint,
+        **{key: plan[key] for key in ("hostId", "targetDirectory", "formats", "keyAlias", "trustAlias")},
+    })
+
+
 def resolve_certificate_requests(project_id, topology, host_vars, defaults=None, resolved_service_endpoints=None, inventory_deployments=None, application_rows=(), application_bindings=None):
     """Purely derive certificate identity and target plans from topology bindings.
 
@@ -329,14 +336,8 @@ def resolve_certificate_requests(project_id, topology, host_vars, defaults=None,
                 "trustAlias": "platform-ca-%s" % group["authorityRef"].replace("_", "-"),
                 "storePasswordSecretRef": group["tlsProfile"].get("storePasswordSecretRef"),
             }
-            plan["materializationFingerprint"] = canonical_digest({
-                "requestFingerprint": request["certificateRequestFingerprint"],
-                "hostId": host_id,
-                "targetDirectory": target_root,
-                "formats": plan["formats"],
-                "keyAlias": plan["keyAlias"],
-                "trustAlias": plan["trustAlias"],
-            })
+            plan["materializationFingerprint"] = materialization_fingerprint(
+                request["certificateRequestFingerprint"], plan)
             plans.append(plan)
     if findings:
         return {"status": "BLOCKED", "findings": findings, "requests": [], "materializationPlans": []}

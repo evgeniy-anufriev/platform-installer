@@ -15,6 +15,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pki_test_fixture import isolated_deploy_role
 
@@ -328,6 +329,64 @@ class PKISinglePassResolutionTests(unittest.TestCase):
         output = self.run_play([self.play([self.role()])], extra=variables, success=success)
         self.assertNotIn(password, output)
         return output
+
+    def test_managed_apply_reuses_current_material_and_repairs_target_drift(self):
+        del self.desired["serviceDeployments"]["bravo"]
+        # Local inventory aliases share a filesystem. Use one target so
+        # the per-host markers cannot overwrite one another.
+        inventory = json.loads(self.inventory.read_text(encoding="utf-8"))
+        del inventory["all"]["children"]["platform_targets"]["hosts"]["qa-b"]
+        self.write_json("hosts.json", inventory)
+        resolved = self.resolve_in_fresh_process()
+        password = self.root / "store-password"
+        password.write_text("qa-fixture-store-password", encoding="ascii")
+        password.chmod(0o600)
+        self.variables.update(platform_pki_materialization_plans=resolved["materializationPlans"],
+                              platform_pki_secret_files={"runtime:qa-missing-password": str(password)})
+
+        # Exercise production plays and roles while redirecting only the OS
+        # trust boundary so the QA VM's installed CAs are never modified.
+        plays = yaml.safe_load((CORE / "playbooks/pki-apply.yml").read_text(encoding="utf-8"))
+        plays[-1]["roles"] = [self.deploy_role]
+        module = CORE / "collections/ansible_collections/platform/core/plugins/modules/pki_reuse_probe.py"
+        library = self.root / "library"
+        library.mkdir()
+        (library / module.name).write_text(
+            module.read_text(encoding="utf-8")
+            .replace("Path('/etc/pki/ca-trust/source/anchors')", "Path(" + repr(str(self.root / "trust-anchors")) + ")")
+            .replace(" / anchor, 0, 0, 0o644", " / anchor, uid, gid, 0o644")
+            .replace("run('openssl', 'verify', directory / 'certificate.pem')",
+                     "run('openssl', 'verify', '-CAfile', directory / 'ca-chain.pem', directory / 'certificate.pem')"),
+            encoding="utf-8")
+        for play in plays[:2]:
+            task = play["tasks"][0]
+            task["pki_reuse_probe"] = task.pop("platform.core.pki_reuse_probe")
+        playbook = self.write_json("approved-pki.json", plays)
+        variables = self.write_json("approved-vars.json", self.variables)
+
+        def apply(label, reuse, expected_materialization):
+            command = ["ansible-playbook", "-i", str(self.inventory), "-e", "@" + str(variables), str(playbook)]
+            if reuse:
+                command += ["--tags", "all,platform_pki_reuse"]
+            start = time.monotonic()
+            result = subprocess.run(command, cwd=self.root, env=self.environment, text=True,
+                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=600)
+            self.assertEqual(0, result.returncode, result.stdout[-12000:])
+            self.assertEqual(expected_materialization,
+                             result.stdout.count("TASK [platform.core.pki_materialize : Определение путей файлов запроса PKI]"))
+            print(f"{label}: {result.stdout.count('TASK [')} task headings, {time.monotonic() - start:.3f}s",
+                  flush=True)
+
+        apply("fresh", reuse=True, expected_materialization=1)
+        for index in range(2):
+            apply(f"baseline repeat {index + 1}", reuse=False, expected_materialization=1)
+            apply(f"optimized repeat {index + 1}", reuse=True, expected_materialization=0)
+        key = Path(resolved["materializationPlans"][0]["targetDirectory"]) / "private-key.pem"
+        original = key.read_bytes()
+        key.write_bytes(b"corrupted fixture")
+        apply("corrupted target", reuse=True, expected_materialization=1)
+        self.assertTrue(original == key.read_bytes(), "PKI key was not restored")
+        apply("repaired repeat", reuse=True, expected_materialization=0)
 
     def test_changed_request_reissues_once_and_stale_recovery_only_finalizes(self):
         self.desired["certificateProfiles"]["qa-cert"]["usages"] = ["serverAuth"]
