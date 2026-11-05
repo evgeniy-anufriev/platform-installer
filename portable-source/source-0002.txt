@@ -60118,7 +60118,7 @@ sudo find /var/lib/platform-installer/execution/runs \
   
 
 @@END
-@@PORTABLE {"path":"scripts/diagnose_execution_manifest.sh","mode":420,"size":5038,"sha256":"90a9a96b672cf6849ef0b8874e70a7a070d9d84e9e44acd2b03f6f517f970372","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5038}
+@@PORTABLE {"path":"scripts/diagnose_execution_manifest.sh","mode":420,"size":6000,"sha256":"f38db46db73926892eb37b0e48ee544fc9c501bbb4b8d7f6d05193dad2d959d0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":6000}
 #!/bin/sh
 # Run on the Execution Node. With no argument, list recent plan files.
 set -eu
@@ -60207,6 +60207,31 @@ def check_registration(manifest):
         raise SystemExit(1)
 
 
+def check_start_requirements(manifest):
+    from execution_secret_lease import _validate_typed_secret_requirements
+
+    typed_ok = True
+    try:
+        _validate_typed_secret_requirements(manifest.get("runtimeSecretInputs", []))
+    except Exception as error:
+        print_failure("TYPED_INPUTS_FAILED", error)
+        typed_ok = False
+    else:
+        print("TYPED_INPUTS_OK")
+
+    requirements = manifest.get("runtimeSecretRequirements", [])
+    if not isinstance(requirements, list):
+        print("REQUIREMENTS_NOT_LIST")
+        return False
+    for index, item in enumerate(requirements):
+        if not isinstance(item, dict):
+            print("REQUIREMENT_NOT_OBJECT", index)
+            typed_ok = False
+            continue
+        print("REQUIREMENT", index, token(item.get("purpose")), *(token(key) for key in sorted(item)))
+    return typed_ok
+
+
 def diagnose():
     diagnostic = read_document("core-diagnostic.json")
     if diagnostic is not None:
@@ -60243,7 +60268,10 @@ def diagnose():
         print_failure("VALIDATION_FAILED", error)
         raise SystemExit(1) from None
     print("VALIDATION_OK")
+    start_ok = check_start_requirements(manifest)
     check_registration(manifest)
+    if not start_ok:
+        raise SystemExit(1)
 
 
 runtime = Path(sys.argv[1])
