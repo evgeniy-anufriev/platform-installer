@@ -181,8 +181,8 @@
 
     - name: Сбор служебной записи рассчитанных параметров для структурированных операций
       ansible.builtin.set_fact:
-        platform_application_rows: >-
-          {{ platform_application_rows + [{
+        "_application_resolved_row_{{ _application_row_index }}": >-
+          {{ {
             'libraryId': application_job.libraryId,
             'libraryRef': application_job.deployment.libraryRef,
             'slotId': application_job.slotId,
@@ -223,7 +223,7 @@
                 application_job.instance.overrides | default({}),
                 {'accounts': application_job.instance.accounts | default({})},
                 application_job.hostOverride])
-          }] }}
+          } }}
       no_log: true
       become: false
   rescue:
@@ -241,5 +241,6 @@
     - name: Добавление ошибки настроек приложения в замечания проекта
       ansible.builtin.set_fact:
         platform_application_findings: "{{ platform_application_findings + [_application_failed.finding] }}"
+        "_application_resolved_row_{{ _application_row_index }}": "{{ false }}"
       no_log: true
       become: false

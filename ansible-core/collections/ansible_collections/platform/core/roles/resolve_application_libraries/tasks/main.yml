@@ -58,5 +58,20 @@
   loop: "{{ _application_inputs.jobs }}"
   loop_control:
     loop_var: application_job
+    index_var: _application_row_index
     label: "{{ application_job.libraryId }} / {{ application_job.slotId }} / {{ application_job.hostId }}"
   no_log: true
+
+- name: Сбор рассчитанных записей приложений в порядке размещений
+  ansible.builtin.set_fact:
+    platform_application_rows: >-
+      {%- set rows = [] -%}
+      {%- for index in range(_application_inputs.jobs | length) -%}
+        {%- set row = lookup('vars', '_application_resolved_row_' ~ index) -%}
+        {%- if row is not false -%}
+          {%- set _ = rows.append(row) -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ rows }}
+  no_log: true
+  become: false

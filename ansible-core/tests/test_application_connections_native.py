@@ -15,6 +15,51 @@ from application_libraries import project
 
 @unittest.skipUnless(shutil.which('ansible-playbook'), 'native Ansible required')
 class NativeApplicationConnectionsTests(unittest.TestCase):
+    def test_rows_preserve_placement_order_and_clear_between_role_invocations(self):
+        with tempfile.TemporaryDirectory(prefix='application-row-order-') as directory:
+            root = Path(directory) / 'project'
+            shutil.copytree(ROOT / 'examples/valid/application-libraries', root)
+            include = {'ansible.builtin.include_role': {'name': 'platform.core.resolve_application_libraries'}}
+            ordered_hosts = "platform_application_rows | map(attribute='hostId') | list"
+            ordered_libraries = "platform_application_rows | map(attribute='libraryId') | list"
+            play = Path(directory) / 'rows.yml'
+            defaults = root / 'application-packages/apigateway/1.0.0/roles/application_apigateway/defaults/main.yml'
+            broken_defaults = Path(directory) / 'broken-defaults.yml'
+            definition = json.loads(defaults.read_text())
+            definition['platform_application_definition']['defaults']['environment']['QA_UNDEFINED'] = (
+                "{{ qa_undefined_application_input if library_instance_id == 'sdku' else 'ok' }}")
+            broken_defaults.write_text(json.dumps(definition))
+            tasks = [
+                include,
+                {'ansible.builtin.assert': {'that': [
+                    ordered_hosts + " == ['node1', 'node1', 'node2']",
+                    ordered_libraries + " == ['cspa', 'sdku', 'sdku']",
+                ]}},
+                {'ansible.builtin.copy': {'src': str(broken_defaults), 'dest': str(defaults), 'mode': '0600'},
+                 'no_log': True},
+                include,
+                {'ansible.builtin.assert': {'that': [
+                    ordered_libraries + " == ['cspa']",
+                    "platform_application_findings | length > 0",
+                ]}},
+                {'ansible.builtin.set_fact': {'platform_desired_state': (
+                    "{{ platform_desired_state | combine({'applicationLibraryDeployments': {}}) }}")}},
+                include,
+                {'ansible.builtin.assert': {'that': ['platform_application_rows == []']}},
+            ]
+            play.write_text(json.dumps([dict(hosts='localhost', connection='local', gather_facts=False, tasks=tasks)]))
+            # Replace the desired-state fact in the last invocation, including its empty deployments.
+            env = dict(os.environ, ANSIBLE_CONFIG=str(ROOT / 'ansible-core/ansible.cfg'),
+                       ANSIBLE_COLLECTIONS_PATH=str(ROOT / 'ansible-core/collections'),
+                       ANSIBLE_HASH_BEHAVIOUR='replace')
+            result = subprocess.run(['ansible-playbook', '-i', str(root / 'inventory/hosts.yml'), str(play),
+                '-e', 'platform_project_root=' + str(root), '-e', 'platform_contracts_root=' + str(ROOT / 'contracts')],
+                capture_output=True, text=True, timeout=90, env=env)
+            self.assertEqual(0, result.returncode, result.stdout[-4000:] + result.stderr[-1000:])
+            self.assertEqual(3, result.stdout.count(
+                'TASK [platform.core.resolve_application_libraries : Сбор рассчитанных записей приложений в порядке размещений]'))
+            self.assertIn('the output has been hidden', result.stdout)
+
     def test_exports_parameters_accounts_and_disabled_override_use_native_rows(self):
         with tempfile.TemporaryDirectory(prefix='provided-connections-') as directory:
             root = Path(directory) / 'project'
@@ -100,6 +145,8 @@ class NativeApplicationConnectionsTests(unittest.TestCase):
                            '-e', 'platform_project_root=' + str(root), '-e', 'platform_contracts_root=' + str(ROOT / 'contracts')]
                 result = subprocess.run(command, capture_output=True, text=True, timeout=90, env=env)
                 self.assertEqual(0, result.returncode, 'Native export resolution failed')
+                self.assertEqual(1, result.stdout.count(
+                    'TASK [platform.core.resolve_application_libraries : Сбор рассчитанных записей приложений в порядке размещений]'))
                 rows = json.loads(output.read_text())
                 state = json.loads(vars_path.read_text())['platform_desired_state']
                 hosts = {name: {'ansibleHost': address, 'platformDeployments': {'docker': {}}}
