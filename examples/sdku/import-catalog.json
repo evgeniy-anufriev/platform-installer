@@ -63,7 +63,7 @@
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:8ea1e2cc36ec65a742d8b8516ca55af2516660573626a0dbc186861125bbb02a",
+    "digest": "sha256:d0d0fe96c7d5da0aff25a7beb2c620ae924b5b3dd0610e3c6c2217e823345a86",
     "kind": "application",
     "name": "hmi-frontend-para",
     "sourceDirectory": ".",

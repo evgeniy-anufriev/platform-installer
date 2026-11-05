@@ -63,6 +63,7 @@ for (kind,name), package in packages.items():
     for key,value in params.get('mount_sources', {}).items():
         if not value: params['mount_sources'][key] = '/tmp/sdku-fixture'
     variables = dict(platform_desired_state=fixture_desired, application_connections={},
+        _application_shared={'defaults': {'parameters': {'IDENTITY_GROUPS': [{'name': 'Fixture group', 'roles_file': {}}]}}, 'overrides': {}},
         platform_application_provided_connections={'szi': {'sso': {'parameters': {'proxy_url': 'https://nginx.szi.example.invalid'}}}},
         platform_project_root=str(package_root), application_name=name, application_instance_id=name+'-sdku-main', application_parameters=params,
         application_topics={'kafka': {ref: dict(resourceId=ref, name=value['name'])
@@ -84,6 +85,8 @@ for (kind,name), package in packages.items():
     variables['application_parameters'] = templar.template(params)
     templar.available_variables = variables
     settings=templar.template(settings)
+    if name == 'hmi-frontend-para':
+        assert settings['parameters']['IDENTITY_GROUPS'] == [{'name': 'Fixture group', 'roles_file': {}}]
     frontend_addresses = {
         'hmi-frontend-viewer': ('CSPA_HMI_BACK_WS', 'wss://nginx.szi.example.invalid/hmi-backend'),
         'hmi-frontend-alarms': ('PUBLIC_HOST', 'nginx.szi.example.invalid'),
