@@ -26,17 +26,21 @@ stat -c 'MODIFIED: %y' -- "$log"
 
 awk '
     BEGIN { phase = "BEFORE_LOGIN" }
-    /keycloak-admin trace: .*config credentials.*--client temp-admin([[:space:]]|$)/ {
-        phase = "LOGIN_TEMP_ADMIN"; next
+    /^[[:space:]]*[+]+[[:space:]]|keycloak-admin trace:/ {
+        if ($0 ~ /kcadm\.sh config credentials.*--client temp-admin([[:space:]]|$)/)
+            phase = "LOGIN_TEMP_ADMIN"
+        else if ($0 ~ /kcadm\.sh config credentials.*--client admin-cli([[:space:]]|$)/)
+            phase = "LOGIN_ADMIN_CLI"
+        else if ($0 ~ /kcadm\.sh get clients.*clientId=temp-admin([[:space:]]|$)/)
+            phase = "GET_CLIENTS"
+        else if ($0 ~ /[[:space:]]fail 60([[:space:]]|$)/)
+            phase = "STEP_60"
+        else
+            next
+        print NR, phase
+        traced = 1
+        next
     }
-    /keycloak-admin trace: .*config credentials.*--client admin-cli([[:space:]]|$)/ {
-        phase = "LOGIN_ADMIN_CLI"; next
-    }
-    /keycloak-admin trace: .*get clients.*clientId=temp-admin([[:space:]]|$)/ {
-        phase = "GET_CLIENTS"; next
-    }
-    /keycloak-admin trace: .*fail 60([[:space:]]|$)/ { print NR, "STEP_60"; next }
-    /keycloak-admin trace:/ { next }
     {
         line = tolower($0)
         while (match(line, /http( error| status)?[ :]+[0-9][0-9][0-9]|[0-9][0-9][0-9] (unauthorized|forbidden)|invalid_client|invalid_grant|unauthorized|forbidden|connection refused|timed out|pkix|certificate verify failed|failed to send request/)) {
@@ -45,5 +49,8 @@ awk '
             line = substr(line, RSTART + RLENGTH)
         }
     }
-    END { if (!found) print "NO_KNOWN_ERROR_MARKERS" }
+    END {
+        if (!traced) print "NO_KNOWN_TRACE_PHASES"
+        if (!found) print "NO_KNOWN_ERROR_MARKERS"
+    }
 ' "$log"
