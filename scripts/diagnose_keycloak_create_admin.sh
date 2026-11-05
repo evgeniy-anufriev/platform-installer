@@ -24,13 +24,26 @@ log=${latest#*$'\t'}
 printf 'LOG: %s\n' "$log"
 stat -c 'MODIFIED: %y' -- "$log"
 
-pattern='HTTP( Error| status)?[ :]+[0-9]{3}|[0-9]{3} (Forbidden|Unauthorized)|forbidden|unauthorized|invalid_grant|invalid_client|connection refused|timed out|PKIX|certificate verify failed'
-if matches=$(grep -Eoi -- "$pattern" "$log"); then
-    printf '%s\n' "$matches" | sort -fu
-else
-    status=$?
-    if (( status != 1 )); then
-        exit "$status"
-    fi
-    echo NO_KNOWN_ERROR_MARKERS
-fi
+awk '
+    BEGIN { phase = "BEFORE_LOGIN" }
+    /keycloak-admin trace: .*config credentials.*--client temp-admin([[:space:]]|$)/ {
+        phase = "LOGIN_TEMP_ADMIN"; next
+    }
+    /keycloak-admin trace: .*config credentials.*--client admin-cli([[:space:]]|$)/ {
+        phase = "LOGIN_ADMIN_CLI"; next
+    }
+    /keycloak-admin trace: .*get clients.*clientId=temp-admin([[:space:]]|$)/ {
+        phase = "GET_CLIENTS"; next
+    }
+    /keycloak-admin trace: .*fail 60([[:space:]]|$)/ { print NR, "STEP_60"; next }
+    /keycloak-admin trace:/ { next }
+    {
+        line = tolower($0)
+        while (match(line, /http( error| status)?[ :]+[0-9][0-9][0-9]|[0-9][0-9][0-9] (unauthorized|forbidden)|invalid_client|invalid_grant|unauthorized|forbidden|connection refused|timed out|pkix|certificate verify failed|failed to send request/)) {
+            print NR, phase, substr(line, RSTART, RLENGTH)
+            found = 1
+            line = substr(line, RSTART + RLENGTH)
+        }
+    }
+    END { if (!found) print "NO_KNOWN_ERROR_MARKERS" }
+' "$log"
