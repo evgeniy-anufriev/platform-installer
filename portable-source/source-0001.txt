@@ -22421,7 +22421,7 @@ def shared_vault_jobs(jobs, inputs, completed, delivered=()):
     return result
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_libraries.py","mode":420,"size":59097,"sha256":"d97d2e21b6725603ae4502c2936866258a9b3221b21acc1d05a37eb04ab9d655","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_libraries.py","mode":420,"size":59967,"sha256":"234fa3cba94dbec1c8325bef54a6a752942931a41dc097615d2cd97f6dafba97","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
 """Read-only application contract checks. Ansible owns composition and templating."""
 import hashlib
 import copy
@@ -22653,22 +22653,42 @@ def invocation_package_loader(root, loader, validator):
     return load
 
 
-def library_database_resources(definition, deployment, applications=()):
-    """Select package-declared databases; Ansible resolves their parameter defaults."""
+def library_resources(definition, deployment, applications=()):
+    """Select default resources through the library's unambiguous provider bindings."""
     resources = {}
+    explicit = deployment.get('resources', {})
     connections = list(definition.get('connections', {}).items())
     for application in applications:
         if isinstance(application.get('connections'), dict):
             connections.extend(application['connections'].items())
-    for provider, roles in (('postgresql', ('postgres', 'postgresql')), ('clickhouse', ('clickhouse',))):
+    defaults = (definition.get('resource_defaults', {}), deployment.get('resource_defaults', {}))
+    kinds = (
+        ('postgresql.database', 'databases', ('postgres', 'postgresql')),
+        ('clickhouse.database', 'databases', ('clickhouse',)),
+        ('kafka.topic', 'topics', ('kafka',)),
+        ('redis.key', 'keys', ('redis',)),
+    )
+    for kind, section, roles in kinds:
         bindings = {row['library_binding'] for name, row in connections
                     if name in roles and isinstance(row, dict) and row.get('library_binding')}
         if len(bindings) != 1:
             continue
         binding = next(iter(bindings))
-        for name in definition.get('resource_defaults', {}).get(provider, {}).get('databases', {}):
-            resources[name] = dict(kind=provider + '.database', binding=binding, mode='managed', parameters={})
-    resources.update(copy.deepcopy(deployment.get('resources', {})))
+        provider = kind.split('.')[0]
+        identifiers = set()
+        for source in defaults:
+            provider_defaults = source.get(provider, {})
+            if not isinstance(provider_defaults, dict) or not isinstance(provider_defaults.get(section, {}), dict):
+                raise ValueError("Library resource defaults must be mappings")
+            identifiers.update(provider_defaults.get(section, {}))
+        for name in sorted(identifiers - explicit.keys()):
+            if name in resources:
+                raise ValueError("Library resource default IDs must be unique across providers")
+            resource = dict(kind=kind, binding=binding, parameters={})
+            if kind != 'redis.key':
+                resource['mode'] = 'managed'
+            resources[name] = resource
+    resources.update(copy.deepcopy(explicit))
     return resources
 
 
@@ -22724,7 +22744,7 @@ def prepare(root, desired, memberships, contract, loader, contracts_root):
             slots = library["definition"]["slots"]
             if set(selected) - set(slots) or any(slot.get("required", False) and name not in selected for name, slot in slots.items()):
                 raise ValueError("Recipe slots mismatch")
-            deployment['resources'] = library_database_resources(library['definition'], deployment,
+            deployment['resources'] = library_resources(library['definition'], deployment,
                 [package(slots[name]['applicationRef'], 'application')['definition'] for name in selected])
             placements = [host for host, membership in sorted(memberships.items()) if library_id in membership]
             if not placements:
@@ -23143,7 +23163,10 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
                                                            "connections": connections, 'topics': topic_bindings, "credentialRequirements": accounts,
                                                            "identityEnvironment": {name: app_id for name in row["identityNames"]},
                                                            "agentRequired": agent_required, "executionPrerequisites": ["A2_IMAGE_DELIVERY", "A4_PROVIDER_PROVISIONING"] if accounts or agent_required else ["A2_IMAGE_DELIVERY"]})
-        if library['resources'] != row['resources'] or library['sharedSecretRequirements'] != row['sharedSecrets']:
+        if library['resources'] != row['resources'] or library['sharedSecretRequirements'] !=
+@@END
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_libraries.py","mode":420,"size":59967,"sha256":"234fa3cba94dbec1c8325bef54a6a752942931a41dc097615d2cd97f6dafba97","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":11967}
+ row['sharedSecrets']:
             findings.append(finding('APPLICATION_HOST_RESOURCE_CONFLICT', field))
         if instance['connections'] != connections:
             findings.append(finding('APPLICATION_HOST_CONNECTION_CONFLICT', field))
@@ -23155,10 +23178,7 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
             findings.append(finding('APPLICATION_HOST_RESOURCE_CONFLICT', field))
         if instance["credentialRequirements"] != accounts:
             findings.append(finding("APPLICATION_HOST_CREDENTIAL_CONFLICT", field))
-        if instance['agentRequired'] != agent_re
-@@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_libraries.py","mode":420,"size":59097,"sha256":"d97d2e21b6725603ae4502c2936866258a9b3221b21acc1d05a37eb04ab9d655","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":11097}
-quired or ('secretBindings' in instance and instance['secretBindings'] != secret_bindings):
+        if instance['agentRequired'] != agent_required or ('secretBindings' in instance and instance['secretBindings'] != secret_bindings):
             findings.append(finding('APPLICATION_HOST_SECRET_BINDING_CONFLICT', field))
         instance["imageRequirement"] = {"image": settings.get("image"), "artifactType": "container-image",
                                         "sourcePolicy": "REPOSITORY_THEN_OFFLINE"}
@@ -96375,7 +96395,7 @@ export function ApplicationKafkaAccess({
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/ApplicationLibraryResources.tsx","mode":420,"size":19123,"sha256":"9c1d7ac4db5f92c6d87d3cf1a45e35ba6c7de716ded53c88d224c3fbe2941eb1","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":19123}
+@@PORTABLE {"path":"frontend/src/ApplicationLibraryResources.tsx","mode":420,"size":18640,"sha256":"4f4355dc4acc876217c71636d1f287e137e6797f8b5d856124ca775e3b4d156b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":18640}
 import { Fragment, useState, type ReactNode } from "react";
 import { objectValue, type ObjectValue } from "./application-draft";
 
@@ -96433,15 +96453,15 @@ export function ApplicationLibraryResources({
   };
   const hasDefault = Object.hasOwn(defaultsByKind[kind] ?? {}, edit ?? "");
   const inheritedResources: ObjectValue = {};
-  for (const resourceKind of ["postgresql.database", "clickhouse.database"]) {
+  for (const [resourceKind, defaults] of Object.entries(defaultsByKind)) {
     const candidates = compatibleBindings(resourceKind);
-    for (const id of Object.keys(defaultsByKind[resourceKind])) {
+    for (const id of Object.keys(defaults)) {
       inheritedResources[id] = {
         kind: resourceKind,
         binding:
           objectValue(resolvedResources[id]).binding ??
           (candidates.length === 1 ? candidates[0] : ""),
-        mode: "managed",
+        ...(resourceKind === "redis.key" ? {} : { mode: "managed" }),
         parameters: {},
       };
     }
@@ -96519,20 +96539,6 @@ export function ApplicationLibraryResources({
           )}
         </>
       )}
-      {showAddActions &&
-        Object.entries(defaultsByKind).flatMap(([resourceKind, defaults]) =>
-          Object.keys(defaults)
-            .filter((id) => !Object.hasOwn(displayedResources, id))
-            .map((id) => (
-              <button
-                key={resourceKind + id}
-                disabled={disabled}
-                onClick={() => open(id, resourceKind)}
-              >
-                Добавить из defaults · {id}
-              </button>
-            )),
-        )}
       <p className="muted">
         Общие для приложений библиотеки. Удаление записи и изменение имени не
         удаляют и не переименовывают установленный ресурс. Ссылки проверяет Core

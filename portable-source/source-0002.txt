@@ -1,4 +1,4 @@
-@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":77997,"sha256":"895d41b503450bf1c40a40a1779e2ea57ff88950a505a044ef5c7625c029dd26","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":49891}
+@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":78114,"sha256":"1dcdf8a04d2a58ac8bca1d54c4c55da7ba9887f391640edab022cea7faf0182c","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":49860}
 import { ApplicationProvidedConnections } from "./ApplicationProvidedConnections";
 import { type ApplicationSecretSession } from "./ApplicationRuntimeSecretField";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -251,6 +251,20 @@ export function ApplicationsPage({
       objectValue(packages[kind + ":" + String(reference)]).definition,
     );
   const definition = packageDefinition("library", library.libraryRef);
+  const resourceDefaults = (provider: string, section: string): ObjectValue => {
+    const defaults = (value: unknown) =>
+      objectValue(objectValue(objectValue(value)[provider])[section]);
+    const packaged = defaults(definition.resource_defaults);
+    const instance = defaults(library.resource_defaults);
+    return Object.fromEntries(
+      [...new Set([...Object.keys(packaged), ...Object.keys(instance)])].map(
+        (id) => [
+          id,
+          { ...objectValue(packaged[id]), ...objectValue(instance[id]) },
+        ],
+      ),
+    );
+  };
   const declaredConnections = (value: unknown): ObjectValue =>
     Array.isArray(value)
       ? Object.fromEntries(
@@ -1289,7 +1303,10 @@ export function ApplicationsPage({
                         }
                         label={
                           section === "environment"
-                            ? "Общие ENV"
+             
+@@END
+@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":78114,"sha256":"1dcdf8a04d2a58ac8bca1d54c4c55da7ba9887f391640edab022cea7faf0182c","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":28254}
+               ? "Общие ENV"
                             : "Общие параметры конфигурации"
                         }
                         value={objectValue(
@@ -1301,10 +1318,7 @@ export function ApplicationsPage({
                         disabled={busy}
                         onDirtyChange={(value) =>
                           markChildDirty(value, section)
-               
-@@END
-@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":77997,"sha256":"895d41b503450bf1c40a40a1779e2ea57ff88950a505a044ef5c7625c029dd26","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":28106}
-         }
+                        }
                         onSave={(value) =>
                           send(
                             Object.keys(value).length
@@ -1389,26 +1403,16 @@ export function ApplicationsPage({
                       resources={objectValue(library.resources)}
                       resolvedTopics={resolvedTopics}
                       resolvedResources={resolvedResources}
-                      redisDefaults={objectValue(
-                        objectValue(
-                          objectValue(definition.resource_defaults).redis,
-                        ).keys,
+                      redisDefaults={resourceDefaults("redis", "keys")}
+                      databaseDefaults={resourceDefaults(
+                        "postgresql",
+                        "databases",
                       )}
-                      databaseDefaults={objectValue(
-                        objectValue(
-                          objectValue(definition.resource_defaults).postgresql,
-                        ).databases,
+                      clickhouseDefaults={resourceDefaults(
+                        "clickhouse",
+                        "databases",
                       )}
-                      clickhouseDefaults={objectValue(
-                        objectValue(
-                          objectValue(definition.resource_defaults).clickhouse,
-                        ).databases,
-                      )}
-                      topicDefaults={objectValue(
-                        objectValue(
-                          objectValue(definition.resource_defaults).kafka,
-                        ).topics,
-                      )}
+                      topicDefaults={resourceDefaults("kafka", "topics")}
                       bindings={objectValue(library.bindings)}
                       disabled={busy}
                       onDirtyChange={(v) => markChildDirty(v, "resources")}
@@ -121024,120 +121028,4 @@ The electron alternative for Go
 		window.WailsInvoke = (message) => window.webkit.messageHandlers.external.postMessage(message);
 	}
 })();
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/frontend/runtime/desktop/log.js","mode":420,"size":1919,"sha256":"d1b7c1339a8b14772d74539783d456da346e66a8af845abbea9caa19bb1aab33","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1919}
-/*
- _       __      _ __
-| |     / /___ _(_) /____
-| | /| / / __ `/ / / ___/
-| |/ |/ / /_/ / / (__  )
-|__/|__/\__,_/_/_/____/
-The electron alternative for Go
-(c) Lea Anthony 2019-present
-*/
-
-/* jshint esversion: 6 */
-
-/**
- * Sends a log message to the backend with the given level + message
- *
- * @param {string} level
- * @param {string} message
- */
-function sendLogMessage(level, message) {
-
-	// Log Message format:
-	// l[type][message]
-	window.WailsInvoke('L' + level + message);
-}
-
-/**
- * Log the given trace message with the backend
- *
- * @export
- * @param {string} message
- */
-export function LogTrace(message) {
-	sendLogMessage('T', message);
-}
-
-/**
- * Log the given message with the backend
- *
- * @export
- * @param {string} message
- */
-export function LogPrint(message) {
-	sendLogMessage('P', message);
-}
-
-/**
- * Log the given debug message with the backend
- *
- * @export
- * @param {string} message
- */
-export function LogDebug(message) {
-	sendLogMessage('D', message);
-}
-
-/**
- * Log the given info message with the backend
- *
- * @export
- * @param {string} message
- */
-export function LogInfo(message) {
-	sendLogMessage('I', message);
-}
-
-/**
- * Log the given warning message with the backend
- *
- * @export
- * @param {string} message
- */
-export function LogWarning(message) {
-	sendLogMessage('W', message);
-}
-
-/**
- * Log the given error message with the backend
- *
- * @export
- * @param {string} message
- */
-export function LogError(message) {
-	sendLogMessage('E', message);
-}
-
-/**
- * Log the given fatal message with the backend
- *
- * @export
- * @param {string} message
- */
-export function LogFatal(message) {
-	sendLogMessage('F', message);
-}
-
-/**
- * Sets the Log level to the given log level
- *
- * @export
- * @param {number} loglevel
- */
-export function SetLogLevel(loglevel) {
-	sendLogMessage('S', loglevel);
-}
-
-// Log levels
-export const LogLevel = {
-	TRACE: 1,
-	DEBUG: 2,
-	INFO: 3,
-	WARNING: 4,
-	ERROR: 5,
-};
-
 @@END
