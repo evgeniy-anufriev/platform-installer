@@ -585,12 +585,13 @@ class ActionModule(ActionBase):
             return dict(failed=True, changed=False, error_code=code, msg=code, finding=finding)
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/prepare_application_libraries.py","mode":420,"size":4274,"sha256":"2a87d829b3c2f0897446dabff256a8ccf899cbbe033858a00b4778cf521a5061","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4274}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/prepare_application_libraries.py","mode":420,"size":5332,"sha256":"bb0887e8e20ef011afb039d8829dbe8268a3743a5b650c80d289b044d8d5a2d3","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5332}
 """Validate local package closure before Ansible loads/expands its defaults."""
 import os
 
 from ansible.plugins.action import ActionBase
 from ansible.errors import AnsibleError
+from ansible.template import AnsibleNativeEnvironment
 from ansible_collections.platform.core.plugins.module_utils.application_libraries import prepare, finding
 from ansible_collections.platform.core.plugins.module_utils.project_snapshot_output import snapshot_input_message
 
@@ -613,6 +614,18 @@ class ActionModule(ActionBase):
                 if previous.get('code') == 'APPLICATION_INPUT_INVALID' and previous.get('safeMessage') else
                 snapshot_input_message(args.get('stage', 'application-settings'), AnsibleError(message), context))
             return dict(changed=False, finding=diagnostic)
+        if args.get('application_defaults'):
+            try:
+                defaults = self._loader.load_from_file(args['defaults_path'])['platform_application_definition']['defaults']
+                templar = self._templar.copy_with_new_env(
+                    environment_class=AnsibleNativeEnvironment, available_variables=task_vars)
+                return dict(defaults=templar.template(defaults), changed=False)
+            except (ValueError, OSError, KeyError, TypeError, AnsibleError) as error:
+                job = task_vars.get('application_job', {})
+                context = {key: job.get(key) for key in ('libraryId', 'slotId', 'hostId')}
+                diagnostic = finding('APPLICATION_INPUT_INVALID', 'applicationLibraryDeployments')
+                diagnostic['safeMessage'] = snapshot_input_message('application-settings', error, context)
+                return dict(failed=True, finding=diagnostic, changed=False)
         if args.get('shared_defaults') or args.get('resource_defaults') or args.get('provided_connections'):
             try:
                 variables = dict(task_vars)
@@ -623,7 +636,8 @@ class ActionModule(ActionBase):
                 variables['library_instance_id'] = args['library_id']
                 if args.get('shared_defaults'):
                     variables['library_resources'] = task_vars['library_resources']
-                templar = self._templar.copy_with_new_env(available_variables=variables)
+                templar = self._templar.copy_with_new_env(
+                    environment_class=AnsibleNativeEnvironment, available_variables=variables)
                 field = ('provided_connections' if args.get('provided_connections') else
                          'resource_defaults' if args.get('resource_defaults') else 'defaults')
                 defaults = self._loader.load_from_file(args['defaults_path'])['platform_library_definition'].get(field, {})
@@ -904,7 +918,7 @@ class ActionModule(ActionBase):
             return dict(failed=True, changed=False, msg=code, error_code=code)
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/project_snapshot.py","mode":420,"size":47690,"sha256":"e0ade111282c4c13435580ee1e60c51e5ca36f5c00ce8dabee62d2cf8a81da3b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":47690}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/project_snapshot.py","mode":420,"size":47774,"sha256":"374b8fb354bf9ae789ad7d7ed92013a29ae3997256c5a8595ab5929573ce746f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":47774}
 from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
@@ -1609,7 +1623,8 @@ class ActionModule(ActionBase):
                     resolved_findings.extend(validator.validate(definition, os.path.join(repo_root, "contracts", "application-libraries", "v1alpha1", "application.schema.json")))
                     resolved_findings.extend(validator.validate(
                         dict(name=row['libraryId'], version='1.0.0', slots={}, resource_defaults=row.get('resourceDefaults', {}),
-                             provided_connections=row.get('providedConnections', {})),
+                             provided_connections=row.get('providedConnections', {}),
+                             connection_defaults=row.get('connectionDefaults', {})),
                         os.path.join(repo_root, 'contracts', 'application-libraries', 'v1alpha1', 'library.schema.json')))
                 applications = project_application_libraries(
                     task_vars["platform_application_rows"], materialized, configuration, catalog, hosts,
@@ -22406,7 +22421,7 @@ def shared_vault_jobs(jobs, inputs, completed, delivered=()):
     return result
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_libraries.py","mode":420,"size":58270,"sha256":"2c9f33bc8691b48e9bb98e04110f2a963a681910f63eeed69631452a84e6edb6","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_libraries.py","mode":420,"size":59097,"sha256":"d97d2e21b6725603ae4502c2936866258a9b3221b21acc1d05a37eb04ab9d655","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
 """Read-only application contract checks. Ansible owns composition and templating."""
 import hashlib
 import copy
@@ -22508,6 +22523,23 @@ def package_inputs(root):
     return paths
 
 
+def _has_template_key(value):
+    pending = [value]
+    visited = set()
+    while pending:
+        item = pending.pop()
+        if not isinstance(item, (dict, list)) or id(item) in visited:
+            continue
+        visited.add(id(item))
+        if isinstance(item, dict):
+            if any(isinstance(key, str) and ("{{" in key or "{%" in key) for key in item):
+                return True
+            pending.extend(item.values())
+        else:
+            pending.extend(item)
+    return False
+
+
 def load_package(root, reference, kind, loader, validator, inputs=None):
     match = REF.fullmatch(reference or "")
     if not match:
@@ -22578,7 +22610,12 @@ def load_package(root, reference, kind, loader, validator, inputs=None):
     if set(defaults) != {key}:
         raise ValueError("Package defaults namespace invalid")
     definition = defaults[key]
-    if validator.validate(definition, os.path.join(validator.schema_root, "application-libraries", "v1alpha1", kind + ".schema.json")):
+    if _has_template_key(definition):
+        raise ValueError("Package defaults keys must be static")
+    template_sections = ("defaults",) if kind == "application" else (
+        "defaults", "resource_defaults", "connection_defaults", "provided_connections")
+    if validator.validate(definition, os.path.join(validator.schema_root, "application-libraries", "v1alpha1", kind + ".schema.json"),
+                          template_sections=template_sections):
         raise ValueError("Package defaults shape invalid")
     if (definition["name"], definition["version"]) != (name, version):
         raise ValueError("Defaults identity mismatch")
@@ -23118,7 +23155,10 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
             findings.append(finding('APPLICATION_HOST_RESOURCE_CONFLICT', field))
         if instance["credentialRequirements"] != accounts:
             findings.append(finding("APPLICATION_HOST_CREDENTIAL_CONFLICT", field))
-        if instance['agentRequired'] != agent_required or ('secretBindings' in instance and instance['secretBindings'] != secret_bindings):
+        if instance['agentRequired'] != agent_re
+@@END
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_libraries.py","mode":420,"size":59097,"sha256":"d97d2e21b6725603ae4502c2936866258a9b3221b21acc1d05a37eb04ab9d655","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":11097}
+quired or ('secretBindings' in instance and instance['secretBindings'] != secret_bindings):
             findings.append(finding('APPLICATION_HOST_SECRET_BINDING_CONFLICT', field))
         instance["imageRequirement"] = {"image": settings.get("image"), "artifactType": "container-image",
                                         "sourcePolicy": "REPOSITORY_THEN_OFFLINE"}
@@ -23126,10 +23166,7 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
         instance["runtimeSecretRequirements"] = sorted({source["ref"] for account in accounts.values()
                                                         for credential in account["credentials"].values()
                                                         for source in [credential["source"]] if source["kind"] == "runtime_secret_ref"})
-        instance["approle"] = {"bind_secret_id": False, "t
-@@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_libraries.py","mode":420,"size":58270,"sha256":"2c9f33bc8691b48e9bb98e04110f2a963a681910f63eeed69631452a84e6edb6","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":10270}
-oken_bound_cidrs": "RUNTIME_HOST_SUBNET_AND_LOOPBACK"} if agent_required else None
+        instance["approle"] = {"bind_secret_id": False, "token_bound_cidrs": "RUNTIME_HOST_SUBNET_AND_LOOPBACK"} if agent_required else None
         # Settings safe projection is explicit: do not send raw defaults/hostvars to callers.
         instance["placements"][host] = {"SERVER_ID": host, "runtimeRef": runtime_ref, "command": settings.get("command", []),
                                           "commonDefaults": row.get('commonDefaults', {}), "inherited": row.get('inherited', {}),
@@ -29707,7 +29744,7 @@ def secret_input_requirement_ref(service_deployment, manifest_requirement_ref, p
     return "si-" + hashlib.sha256(encoded).hexdigest()[:40]
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/schema_validation.py","mode":420,"size":9203,"sha256":"8c405903e34e7fe10a5531bf86f77348da987821da465e81f6b298ac1ad2da59","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":9203}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/schema_validation.py","mode":420,"size":10635,"sha256":"85b54e1fbc80fa1454225c7ab9151a1716845cd64305a436954d7e28ccf5bc66","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":10635}
 from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
@@ -29721,6 +29758,7 @@ jsonschema exception text directly (which could contain a secret value).
 
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -29825,6 +29863,34 @@ def _safe_schema_path(error):
     return _json_pointer(error.absolute_schema_path)
 
 
+_TEMPLATE = re.compile(r"\{\{.+?\}\}|\{%.+?%\}", re.DOTALL)
+_VALUE_KEYWORDS = {
+    "const", "enum", "format", "maxLength", "minLength", "pattern",
+    "maximum", "minimum", "exclusiveMaximum", "exclusiveMinimum", "multipleOf",
+}
+_SCALAR_TYPES = {"string", "integer", "number", "boolean", "null"}
+
+
+def _deferred_template_error(error, sections):
+    path = error.absolute_path
+    if not path or path[0] not in sections or "propertyNames" in error.absolute_schema_path:
+        return False
+    if error.validator in ("anyOf", "oneOf"):
+        # Each context path starts with its alternative's index. One
+        # otherwise valid alternative suffices until the value is rendered.
+        branches = {}
+        for child in error.context:
+            branches.setdefault(child.schema_path[0], []).append(child)
+        return any(all(_deferred_template_error(child, sections) for child in branch)
+                   for branch in branches.values())
+    if len(path) < 2 or not isinstance(error.instance, str) or not _TEMPLATE.search(error.instance):
+        return False
+    if error.validator == "type":
+        types = error.validator_value
+        return bool(_SCALAR_TYPES.intersection([types] if isinstance(types, str) else types))
+    return error.validator in _VALUE_KEYWORDS
+
+
 class SchemaValidator(object):
     """Validate documents with a local-only Draft 2020-12 registry."""
 
@@ -29850,7 +29916,7 @@ class SchemaValidator(object):
                 )
             self.schemas[schema_id] = document
 
-    def validate(self, instance, schema_path):
+    def validate(self, instance, schema_path, template_sections=()):
         """Return safe Finding dictionaries for one local schema path."""
         path = Path(schema_path).resolve()
         try:
@@ -29918,6 +29984,8 @@ class SchemaValidator(object):
             )
         findings = []
         for error in errors:
+            if template_sections and _deferred_template_error(error, template_sections):
+                continue
             findings.append(
                 {
                     "apiVersion": "platform.installer/finding/v1alpha1",
@@ -36755,7 +36823,7 @@ platform_name_prefix: ''
       become: false
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/resolve_application_libraries/tasks/instance.yml","mode":420,"size":16854,"sha256":"d4f38d3b4271e60b1388d7ea8df5307b4419fc73efab929ca58f14649243cdb4","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":16854}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/resolve_application_libraries/tasks/instance.yml","mode":420,"size":17160,"sha256":"70978f70541bc8b3d4e12a123fecd269a1dc5706c7773228c4303eb2b49dc0f3","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":17160}
 ---
 - name: Расчёт настроек с безопасной диагностикой отказа
   block:
@@ -36926,11 +36994,19 @@ platform_name_prefix: ''
       no_log: true
       become: false
 
+    - name: Вычисление значений приложения по умолчанию с сохранением типов
+      platform.core.prepare_application_libraries:
+        application_defaults: true
+        defaults_path: "{{ application_job.application.defaultsPath }}"
+      register: _application_defaults
+      no_log: true
+      become: false
+
     - name: Определение наследуемых настроек приложения без явных переопределений
       ansible.builtin.set_fact:
         application_inherited: >-
           {{ (_application_shared.defaults if application_job.slot.inherit_defaults | default(true) else {}) |
-             combine(_application_package.platform_application_definition.defaults, recursive=true, list_merge='replace') |
+             combine(_application_defaults.defaults, recursive=true, list_merge='replace') |
              combine(({'endpoint': _application_library_endpoint} if _application_library_endpoint else {}), recursive=true, list_merge='replace') |
              combine(application_job.slot.overrides | default({}), recursive=true, list_merge='replace') |
              combine(_application_shared.overrides if application_job.slot.inherit_defaults | default(true) else {}, recursive=true, list_merge='replace') }}
@@ -36976,7 +37052,7 @@ platform_name_prefix: ''
               combine(({'accounts': application_job.instance.accounts} if application_job.instance.accounts is defined else {}), recursive=true, list_merge='replace') |
               combine(application_job.hostOverride, recursive=true, list_merge='replace') |
               platform.core.application_account_policies([
-                _application_package.platform_application_definition.defaults,
+                _application_defaults.defaults,
                 application_job.slot.overrides | default({}),
                 application_job.instance.overrides | default({}),
                 {'accounts': application_job.instance.accounts | default({})},
