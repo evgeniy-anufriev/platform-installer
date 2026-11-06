@@ -655,6 +655,14 @@ statuses are reserved for an operation that cannot return a trustworthy snapshot
 missing rows without matching findings and changed input identities still fail.
 Runtime/execution admission remains blocked by the existing validation gates.
 
+Package defaults can contain literal values and quoted Jinja expressions.
+Core checks literals when it reads the package and checks computed values
+after Ansible renders them. This applies to application `defaults` and library
+`defaults`, `resource_defaults`, `connection_defaults` and
+`provided_connections`. Keep YAML keys, package references and slot
+declarations static. For example, a Kafka topic default can use
+`name: '{{ library_instance_id }}-alarms'`.
+
 Standard Ansible tasks merge library package resource_defaults, instance
 resource_defaults and explicit selected resource.parameters, in that order.
 Kafka uses resource_defaults.kafka.topics; PostgreSQL uses

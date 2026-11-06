@@ -99,6 +99,23 @@ def package_inputs(root):
     return paths
 
 
+def _has_template_key(value):
+    pending = [value]
+    visited = set()
+    while pending:
+        item = pending.pop()
+        if not isinstance(item, (dict, list)) or id(item) in visited:
+            continue
+        visited.add(id(item))
+        if isinstance(item, dict):
+            if any(isinstance(key, str) and ("{{" in key or "{%" in key) for key in item):
+                return True
+            pending.extend(item.values())
+        else:
+            pending.extend(item)
+    return False
+
+
 def load_package(root, reference, kind, loader, validator, inputs=None):
     match = REF.fullmatch(reference or "")
     if not match:
@@ -169,7 +186,12 @@ def load_package(root, reference, kind, loader, validator, inputs=None):
     if set(defaults) != {key}:
         raise ValueError("Package defaults namespace invalid")
     definition = defaults[key]
-    if validator.validate(definition, os.path.join(validator.schema_root, "application-libraries", "v1alpha1", kind + ".schema.json")):
+    if _has_template_key(definition):
+        raise ValueError("Package defaults keys must be static")
+    template_sections = ("defaults",) if kind == "application" else (
+        "defaults", "resource_defaults", "connection_defaults", "provided_connections")
+    if validator.validate(definition, os.path.join(validator.schema_root, "application-libraries", "v1alpha1", kind + ".schema.json"),
+                          template_sections=template_sections):
         raise ValueError("Package defaults shape invalid")
     if (definition["name"], definition["version"]) != (name, version):
         raise ValueError("Defaults identity mismatch")

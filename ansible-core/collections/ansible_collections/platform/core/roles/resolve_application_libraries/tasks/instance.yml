@@ -168,11 +168,19 @@
       no_log: true
       become: false
 
+    - name: Вычисление значений приложения по умолчанию с сохранением типов
+      platform.core.prepare_application_libraries:
+        application_defaults: true
+        defaults_path: "{{ application_job.application.defaultsPath }}"
+      register: _application_defaults
+      no_log: true
+      become: false
+
     - name: Определение наследуемых настроек приложения без явных переопределений
       ansible.builtin.set_fact:
         application_inherited: >-
           {{ (_application_shared.defaults if application_job.slot.inherit_defaults | default(true) else {}) |
-             combine(_application_package.platform_application_definition.defaults, recursive=true, list_merge='replace') |
+             combine(_application_defaults.defaults, recursive=true, list_merge='replace') |
              combine(({'endpoint': _application_library_endpoint} if _application_library_endpoint else {}), recursive=true, list_merge='replace') |
              combine(application_job.slot.overrides | default({}), recursive=true, list_merge='replace') |
              combine(_application_shared.overrides if application_job.slot.inherit_defaults | default(true) else {}, recursive=true, list_merge='replace') }}
@@ -218,7 +226,7 @@
               combine(({'accounts': application_job.instance.accounts} if application_job.instance.accounts is defined else {}), recursive=true, list_merge='replace') |
               combine(application_job.hostOverride, recursive=true, list_merge='replace') |
               platform.core.application_account_policies([
-                _application_package.platform_application_definition.defaults,
+                _application_defaults.defaults,
                 application_job.slot.overrides | default({}),
                 application_job.instance.overrides | default({}),
                 {'accounts': application_job.instance.accounts | default({})},

@@ -3,6 +3,7 @@ import os
 
 from ansible.plugins.action import ActionBase
 from ansible.errors import AnsibleError
+from ansible.template import AnsibleNativeEnvironment
 from ansible_collections.platform.core.plugins.module_utils.application_libraries import prepare, finding
 from ansible_collections.platform.core.plugins.module_utils.project_snapshot_output import snapshot_input_message
 
@@ -25,6 +26,18 @@ class ActionModule(ActionBase):
                 if previous.get('code') == 'APPLICATION_INPUT_INVALID' and previous.get('safeMessage') else
                 snapshot_input_message(args.get('stage', 'application-settings'), AnsibleError(message), context))
             return dict(changed=False, finding=diagnostic)
+        if args.get('application_defaults'):
+            try:
+                defaults = self._loader.load_from_file(args['defaults_path'])['platform_application_definition']['defaults']
+                templar = self._templar.copy_with_new_env(
+                    environment_class=AnsibleNativeEnvironment, available_variables=task_vars)
+                return dict(defaults=templar.template(defaults), changed=False)
+            except (ValueError, OSError, KeyError, TypeError, AnsibleError) as error:
+                job = task_vars.get('application_job', {})
+                context = {key: job.get(key) for key in ('libraryId', 'slotId', 'hostId')}
+                diagnostic = finding('APPLICATION_INPUT_INVALID', 'applicationLibraryDeployments')
+                diagnostic['safeMessage'] = snapshot_input_message('application-settings', error, context)
+                return dict(failed=True, finding=diagnostic, changed=False)
         if args.get('shared_defaults') or args.get('resource_defaults') or args.get('provided_connections'):
             try:
                 variables = dict(task_vars)
@@ -35,7 +48,8 @@ class ActionModule(ActionBase):
                 variables['library_instance_id'] = args['library_id']
                 if args.get('shared_defaults'):
                     variables['library_resources'] = task_vars['library_resources']
-                templar = self._templar.copy_with_new_env(available_variables=variables)
+                templar = self._templar.copy_with_new_env(
+                    environment_class=AnsibleNativeEnvironment, available_variables=variables)
                 field = ('provided_connections' if args.get('provided_connections') else
                          'resource_defaults' if args.get('resource_defaults') else 'defaults')
                 defaults = self._loader.load_from_file(args['defaults_path'])['platform_library_definition'].get(field, {})

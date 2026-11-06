@@ -25,6 +25,34 @@ def load(path):
 
 
 class ApplicationLibrariesTest(unittest.TestCase):
+    def test_template_key_check_handles_yaml_aliases(self):
+        aliases = yaml.safe_load('shared: &shared [value]\nfirst: *shared\nsecond: *shared')
+        self.assertFalse(APP._has_template_key(aliases))
+        self.assertFalse(APP._has_template_key(yaml.safe_load('recursive: &recursive [*recursive]')))
+        aliases['first'].append({'{{ dynamic_key }}': 'value'})
+        self.assertTrue(APP._has_template_key(aliases))
+
+    def test_package_admission_only_defers_templated_values(self):
+        validator = SchemaValidator(CONTRACTS)
+        for topic_name, slot, expected_error in (
+            ('{{ library_instance_id }}-events', 'gateway', None),
+            ('invalid topic', 'gateway', 'Package defaults shape invalid'),
+            ('events', '{{ slot_id }}', 'Package defaults keys must be static'),
+        ):
+            def load_defaults(path):
+                document = load(path)
+                if path.endswith('defaults/main.yml'):
+                    definition = document['platform_library_definition']
+                    definition['resource_defaults'] = {'kafka': {'topics': {'events': {'name': topic_name}}}}
+                    definition['slots'][slot] = definition['slots'].pop('gateway')
+                return document
+            with self.subTest(topic=topic_name, slot=slot):
+                if expected_error:
+                    with self.assertRaisesRegex(ValueError, expected_error):
+                        APP.load_package(FIXTURE, 'sdku@1.0.0', 'library', load_defaults, validator)
+                else:
+                    APP.load_package(FIXTURE, 'sdku@1.0.0', 'library', load_defaults, validator)
+
     def test_szi_keycloak_uses_directory_and_archive_settings(self):
         package = os.path.join(REPO, "examples/szi/application-packages/keycloak/1.0.0")
         with open(os.path.join(package, "roles/application_keycloak/defaults/main.yml"), encoding="utf-8") as stream:
