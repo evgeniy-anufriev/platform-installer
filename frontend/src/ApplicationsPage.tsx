@@ -250,6 +250,20 @@ export function ApplicationsPage({
       objectValue(packages[kind + ":" + String(reference)]).definition,
     );
   const definition = packageDefinition("library", library.libraryRef);
+  const resourceDefaults = (provider: string, section: string): ObjectValue => {
+    const defaults = (value: unknown) =>
+      objectValue(objectValue(objectValue(value)[provider])[section]);
+    const packaged = defaults(definition.resource_defaults);
+    const instance = defaults(library.resource_defaults);
+    return Object.fromEntries(
+      [...new Set([...Object.keys(packaged), ...Object.keys(instance)])].map(
+        (id) => [
+          id,
+          { ...objectValue(packaged[id]), ...objectValue(instance[id]) },
+        ],
+      ),
+    );
+  };
   const declaredConnections = (value: unknown): ObjectValue =>
     Array.isArray(value)
       ? Object.fromEntries(
@@ -1385,26 +1399,16 @@ export function ApplicationsPage({
                       resources={objectValue(library.resources)}
                       resolvedTopics={resolvedTopics}
                       resolvedResources={resolvedResources}
-                      redisDefaults={objectValue(
-                        objectValue(
-                          objectValue(definition.resource_defaults).redis,
-                        ).keys,
+                      redisDefaults={resourceDefaults("redis", "keys")}
+                      databaseDefaults={resourceDefaults(
+                        "postgresql",
+                        "databases",
                       )}
-                      databaseDefaults={objectValue(
-                        objectValue(
-                          objectValue(definition.resource_defaults).postgresql,
-                        ).databases,
+                      clickhouseDefaults={resourceDefaults(
+                        "clickhouse",
+                        "databases",
                       )}
-                      clickhouseDefaults={objectValue(
-                        objectValue(
-                          objectValue(definition.resource_defaults).clickhouse,
-                        ).databases,
-                      )}
-                      topicDefaults={objectValue(
-                        objectValue(
-                          objectValue(definition.resource_defaults).kafka,
-                        ).topics,
-                      )}
+                      topicDefaults={resourceDefaults("kafka", "topics")}
                       bindings={objectValue(library.bindings)}
                       disabled={busy}
                       onDirtyChange={(v) => markChildDirty(v, "resources")}

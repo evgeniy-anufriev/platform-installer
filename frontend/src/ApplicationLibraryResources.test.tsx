@@ -75,9 +75,7 @@ describe("library resource table", () => {
       onDirtyChange: vi.fn(),
     };
     const view = render(<ApplicationLibraryResources {...props} />);
-    await user.click(
-      screen.getByRole("button", { name: "Добавить из defaults · dm-meta" }),
-    );
+    await user.click(screen.getByRole("button", { name: "Настроить" }));
     expect(screen.queryByLabelText("Управление")).toBeNull();
     expect(screen.queryByLabelText("Партиции")).toBeNull();
     await user.click(screen.getByRole("button", { name: "В черновик" }));
@@ -230,9 +228,7 @@ describe("library resource table", () => {
       onDirtyChange: vi.fn(),
     };
     const view = render(<ApplicationLibraryResources {...props} />);
-    await user.click(
-      screen.getByRole("button", { name: "Добавить из defaults · events" }),
-    );
+    await user.click(screen.getByRole("button", { name: "Настроить" }));
     await user.click(screen.getByRole("button", { name: "В черновик" }));
     expect(save).toHaveBeenLastCalledWith({
       events: {

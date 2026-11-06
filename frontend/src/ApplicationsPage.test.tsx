@@ -1371,21 +1371,31 @@ it("keeps the selected instance when deletion is not acknowledged", async () => 
   confirm.mockRestore();
 });
 
-it("shows package databases immediately and saves only explicit overrides", async () => {
+it("shows inherited resources immediately and saves only explicit overrides", async () => {
   const view = structuredClone(managed);
-  Object.assign(view.deployments, { pg: { serviceType: "postgresql" } });
+  Object.assign(view.deployments, {
+    pg: { serviceType: "postgresql" },
+    kafka: { serviceType: "kafka" },
+    redis: { serviceType: "redis" },
+  });
   view.applicationLibraries.sdku.bindings = {
     database: { deploymentRef: "pg" },
+    messaging: { deploymentRef: "kafka" },
+    cache: { deploymentRef: "redis" },
   };
   objectValue(
     view.applicationPackages["library:sdku@1.0.0"].definition,
   ).resource_defaults = {
+    redis: { keys: { metadata: { name: "sdku-meta" } } },
     postgresql: {
       databases: {
         "keycloak-db": { name: "keycloak" },
         "audit-db": { name: "szi_audit" },
       },
     },
+  };
+  objectValue(view.applicationLibraries.sdku).resource_defaults = {
+    kafka: { topics: { events: { name: "sdku.events" } } },
   };
   const calls: ApplicationIntent[] = [];
   render(<Harness calls={calls} view={view} />);
@@ -1395,6 +1405,8 @@ it("shows package databases immediately and saves only explicit overrides", asyn
   );
   expect(screen.getByText("keycloak")).toBeTruthy();
   expect(screen.getByText("szi_audit")).toBeTruthy();
+  expect(screen.getByText("sdku.events")).toBeTruthy();
+  expect(screen.getByText("sdku-meta")).toBeTruthy();
   expect(screen.queryByText("Ресурсы библиотеки не заданы.")).toBeNull();
   expect(calls).toEqual([]);
   await userEvent.click(

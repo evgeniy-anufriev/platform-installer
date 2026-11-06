@@ -229,22 +229,42 @@ def invocation_package_loader(root, loader, validator):
     return load
 
 
-def library_database_resources(definition, deployment, applications=()):
-    """Select package-declared databases; Ansible resolves their parameter defaults."""
+def library_resources(definition, deployment, applications=()):
+    """Select default resources through the library's unambiguous provider bindings."""
     resources = {}
+    explicit = deployment.get('resources', {})
     connections = list(definition.get('connections', {}).items())
     for application in applications:
         if isinstance(application.get('connections'), dict):
             connections.extend(application['connections'].items())
-    for provider, roles in (('postgresql', ('postgres', 'postgresql')), ('clickhouse', ('clickhouse',))):
+    defaults = (definition.get('resource_defaults', {}), deployment.get('resource_defaults', {}))
+    kinds = (
+        ('postgresql.database', 'databases', ('postgres', 'postgresql')),
+        ('clickhouse.database', 'databases', ('clickhouse',)),
+        ('kafka.topic', 'topics', ('kafka',)),
+        ('redis.key', 'keys', ('redis',)),
+    )
+    for kind, section, roles in kinds:
         bindings = {row['library_binding'] for name, row in connections
                     if name in roles and isinstance(row, dict) and row.get('library_binding')}
         if len(bindings) != 1:
             continue
         binding = next(iter(bindings))
-        for name in definition.get('resource_defaults', {}).get(provider, {}).get('databases', {}):
-            resources[name] = dict(kind=provider + '.database', binding=binding, mode='managed', parameters={})
-    resources.update(copy.deepcopy(deployment.get('resources', {})))
+        provider = kind.split('.')[0]
+        identifiers = set()
+        for source in defaults:
+            provider_defaults = source.get(provider, {})
+            if not isinstance(provider_defaults, dict) or not isinstance(provider_defaults.get(section, {}), dict):
+                raise ValueError("Library resource defaults must be mappings")
+            identifiers.update(provider_defaults.get(section, {}))
+        for name in sorted(identifiers - explicit.keys()):
+            if name in resources:
+                raise ValueError("Library resource default IDs must be unique across providers")
+            resource = dict(kind=kind, binding=binding, parameters={})
+            if kind != 'redis.key':
+                resource['mode'] = 'managed'
+            resources[name] = resource
+    resources.update(copy.deepcopy(explicit))
     return resources
 
 
@@ -300,7 +320,7 @@ def prepare(root, desired, memberships, contract, loader, contracts_root):
             slots = library["definition"]["slots"]
             if set(selected) - set(slots) or any(slot.get("required", False) and name not in selected for name, slot in slots.items()):
                 raise ValueError("Recipe slots mismatch")
-            deployment['resources'] = library_database_resources(library['definition'], deployment,
+            deployment['resources'] = library_resources(library['definition'], deployment,
                 [package(slots[name]['applicationRef'], 'application')['definition'] for name in selected])
             placements = [host for host, membership in sorted(memberships.items()) if library_id in membership]
             if not placements:
