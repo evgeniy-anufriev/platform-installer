@@ -55,15 +55,15 @@ export function ApplicationLibraryResources({
   };
   const hasDefault = Object.hasOwn(defaultsByKind[kind] ?? {}, edit ?? "");
   const inheritedResources: ObjectValue = {};
-  for (const resourceKind of ["postgresql.database", "clickhouse.database"]) {
+  for (const [resourceKind, defaults] of Object.entries(defaultsByKind)) {
     const candidates = compatibleBindings(resourceKind);
-    for (const id of Object.keys(defaultsByKind[resourceKind])) {
+    for (const id of Object.keys(defaults)) {
       inheritedResources[id] = {
         kind: resourceKind,
         binding:
           objectValue(resolvedResources[id]).binding ??
           (candidates.length === 1 ? candidates[0] : ""),
-        mode: "managed",
+        ...(resourceKind === "redis.key" ? {} : { mode: "managed" }),
         parameters: {},
       };
     }
@@ -141,20 +141,6 @@ export function ApplicationLibraryResources({
           )}
         </>
       )}
-      {showAddActions &&
-        Object.entries(defaultsByKind).flatMap(([resourceKind, defaults]) =>
-          Object.keys(defaults)
-            .filter((id) => !Object.hasOwn(displayedResources, id))
-            .map((id) => (
-              <button
-                key={resourceKind + id}
-                disabled={disabled}
-                onClick={() => open(id, resourceKind)}
-              >
-                Добавить из defaults · {id}
-              </button>
-            )),
-        )}
       <p className="muted">
         Общие для приложений библиотеки. Удаление записи и изменение имени не
         удаляют и не переименовывают установленный ресурс. Ссылки проверяет Core

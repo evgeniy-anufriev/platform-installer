@@ -585,12 +585,13 @@ class ActionModule(ActionBase):
             return dict(failed=True, changed=False, error_code=code, msg=code, finding=finding)
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/prepare_application_libraries.py","mode":420,"size":4274,"sha256":"2a87d829b3c2f0897446dabff256a8ccf899cbbe033858a00b4778cf521a5061","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4274}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/prepare_application_libraries.py","mode":420,"size":5332,"sha256":"bb0887e8e20ef011afb039d8829dbe8268a3743a5b650c80d289b044d8d5a2d3","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5332}
 """Validate local package closure before Ansible loads/expands its defaults."""
 import os
 
 from ansible.plugins.action import ActionBase
 from ansible.errors import AnsibleError
+from ansible.template import AnsibleNativeEnvironment
 from ansible_collections.platform.core.plugins.module_utils.application_libraries import prepare, finding
 from ansible_collections.platform.core.plugins.module_utils.project_snapshot_output import snapshot_input_message
 
@@ -613,6 +614,18 @@ class ActionModule(ActionBase):
                 if previous.get('code') == 'APPLICATION_INPUT_INVALID' and previous.get('safeMessage') else
                 snapshot_input_message(args.get('stage', 'application-settings'), AnsibleError(message), context))
             return dict(changed=False, finding=diagnostic)
+        if args.get('application_defaults'):
+            try:
+                defaults = self._loader.load_from_file(args['defaults_path'])['platform_application_definition']['defaults']
+                templar = self._templar.copy_with_new_env(
+                    environment_class=AnsibleNativeEnvironment, available_variables=task_vars)
+                return dict(defaults=templar.template(defaults), changed=False)
+            except (ValueError, OSError, KeyError, TypeError, AnsibleError) as error:
+                job = task_vars.get('application_job', {})
+                context = {key: job.get(key) for key in ('libraryId', 'slotId', 'hostId')}
+                diagnostic = finding('APPLICATION_INPUT_INVALID', 'applicationLibraryDeployments')
+                diagnostic['safeMessage'] = snapshot_input_message('application-settings', error, context)
+                return dict(failed=True, finding=diagnostic, changed=False)
         if args.get('shared_defaults') or args.get('resource_defaults') or args.get('provided_connections'):
             try:
                 variables = dict(task_vars)
@@ -623,7 +636,8 @@ class ActionModule(ActionBase):
                 variables['library_instance_id'] = args['library_id']
                 if args.get('shared_defaults'):
                     variables['library_resources'] = task_vars['library_resources']
-                templar = self._templar.copy_with_new_env(available_variables=variables)
+                templar = self._templar.copy_with_new_env(
+                    environment_class=AnsibleNativeEnvironment, available_variables=variables)
                 field = ('provided_connections' if args.get('provided_connections') else
                          'resource_defaults' if args.get('resource_defaults') else 'defaults')
                 defaults = self._loader.load_from_file(args['defaults_path'])['platform_library_definition'].get(field, {})
@@ -904,7 +918,7 @@ class ActionModule(ActionBase):
             return dict(failed=True, changed=False, msg=code, error_code=code)
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/project_snapshot.py","mode":420,"size":47690,"sha256":"e0ade111282c4c13435580ee1e60c51e5ca36f5c00ce8dabee62d2cf8a81da3b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":47690}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/project_snapshot.py","mode":420,"size":47774,"sha256":"374b8fb354bf9ae789ad7d7ed92013a29ae3997256c5a8595ab5929573ce746f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":47774}
 from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
@@ -1609,7 +1623,8 @@ class ActionModule(ActionBase):
                     resolved_findings.extend(validator.validate(definition, os.path.join(repo_root, "contracts", "application-libraries", "v1alpha1", "application.schema.json")))
                     resolved_findings.extend(validator.validate(
                         dict(name=row['libraryId'], version='1.0.0', slots={}, resource_defaults=row.get('resourceDefaults', {}),
-                             provided_connections=row.get('providedConnections', {})),
+                             provided_connections=row.get('providedConnections', {}),
+                             connection_defaults=row.get('connectionDefaults', {})),
                         os.path.join(repo_root, 'contracts', 'application-libraries', 'v1alpha1', 'library.schema.json')))
                 applications = project_application_libraries(
                     task_vars["platform_application_rows"], materialized, configuration, catalog, hosts,
@@ -22406,7 +22421,7 @@ def shared_vault_jobs(jobs, inputs, completed, delivered=()):
     return result
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_libraries.py","mode":420,"size":58270,"sha256":"2c9f33bc8691b48e9bb98e04110f2a963a681910f63eeed69631452a84e6edb6","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_libraries.py","mode":420,"size":59967,"sha256":"234fa3cba94dbec1c8325bef54a6a752942931a41dc097615d2cd97f6dafba97","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
 """Read-only application contract checks. Ansible owns composition and templating."""
 import hashlib
 import copy
@@ -22508,6 +22523,23 @@ def package_inputs(root):
     return paths
 
 
+def _has_template_key(value):
+    pending = [value]
+    visited = set()
+    while pending:
+        item = pending.pop()
+        if not isinstance(item, (dict, list)) or id(item) in visited:
+            continue
+        visited.add(id(item))
+        if isinstance(item, dict):
+            if any(isinstance(key, str) and ("{{" in key or "{%" in key) for key in item):
+                return True
+            pending.extend(item.values())
+        else:
+            pending.extend(item)
+    return False
+
+
 def load_package(root, reference, kind, loader, validator, inputs=None):
     match = REF.fullmatch(reference or "")
     if not match:
@@ -22578,7 +22610,12 @@ def load_package(root, reference, kind, loader, validator, inputs=None):
     if set(defaults) != {key}:
         raise ValueError("Package defaults namespace invalid")
     definition = defaults[key]
-    if validator.validate(definition, os.path.join(validator.schema_root, "application-libraries", "v1alpha1", kind + ".schema.json")):
+    if _has_template_key(definition):
+        raise ValueError("Package defaults keys must be static")
+    template_sections = ("defaults",) if kind == "application" else (
+        "defaults", "resource_defaults", "connection_defaults", "provided_connections")
+    if validator.validate(definition, os.path.join(validator.schema_root, "application-libraries", "v1alpha1", kind + ".schema.json"),
+                          template_sections=template_sections):
         raise ValueError("Package defaults shape invalid")
     if (definition["name"], definition["version"]) != (name, version):
         raise ValueError("Defaults identity mismatch")
@@ -22616,22 +22653,42 @@ def invocation_package_loader(root, loader, validator):
     return load
 
 
-def library_database_resources(definition, deployment, applications=()):
-    """Select package-declared databases; Ansible resolves their parameter defaults."""
+def library_resources(definition, deployment, applications=()):
+    """Select default resources through the library's unambiguous provider bindings."""
     resources = {}
+    explicit = deployment.get('resources', {})
     connections = list(definition.get('connections', {}).items())
     for application in applications:
         if isinstance(application.get('connections'), dict):
             connections.extend(application['connections'].items())
-    for provider, roles in (('postgresql', ('postgres', 'postgresql')), ('clickhouse', ('clickhouse',))):
+    defaults = (definition.get('resource_defaults', {}), deployment.get('resource_defaults', {}))
+    kinds = (
+        ('postgresql.database', 'databases', ('postgres', 'postgresql')),
+        ('clickhouse.database', 'databases', ('clickhouse',)),
+        ('kafka.topic', 'topics', ('kafka',)),
+        ('redis.key', 'keys', ('redis',)),
+    )
+    for kind, section, roles in kinds:
         bindings = {row['library_binding'] for name, row in connections
                     if name in roles and isinstance(row, dict) and row.get('library_binding')}
         if len(bindings) != 1:
             continue
         binding = next(iter(bindings))
-        for name in definition.get('resource_defaults', {}).get(provider, {}).get('databases', {}):
-            resources[name] = dict(kind=provider + '.database', binding=binding, mode='managed', parameters={})
-    resources.update(copy.deepcopy(deployment.get('resources', {})))
+        provider = kind.split('.')[0]
+        identifiers = set()
+        for source in defaults:
+            provider_defaults = source.get(provider, {})
+            if not isinstance(provider_defaults, dict) or not isinstance(provider_defaults.get(section, {}), dict):
+                raise ValueError("Library resource defaults must be mappings")
+            identifiers.update(provider_defaults.get(section, {}))
+        for name in sorted(identifiers - explicit.keys()):
+            if name in resources:
+                raise ValueError("Library resource default IDs must be unique across providers")
+            resource = dict(kind=kind, binding=binding, parameters={})
+            if kind != 'redis.key':
+                resource['mode'] = 'managed'
+            resources[name] = resource
+    resources.update(copy.deepcopy(explicit))
     return resources
 
 
@@ -22687,7 +22744,7 @@ def prepare(root, desired, memberships, contract, loader, contracts_root):
             slots = library["definition"]["slots"]
             if set(selected) - set(slots) or any(slot.get("required", False) and name not in selected for name, slot in slots.items()):
                 raise ValueError("Recipe slots mismatch")
-            deployment['resources'] = library_database_resources(library['definition'], deployment,
+            deployment['resources'] = library_resources(library['definition'], deployment,
                 [package(slots[name]['applicationRef'], 'application')['definition'] for name in selected])
             placements = [host for host, membership in sorted(memberships.items()) if library_id in membership]
             if not placements:
@@ -23106,7 +23163,10 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
                                                            "connections": connections, 'topics': topic_bindings, "credentialRequirements": accounts,
                                                            "identityEnvironment": {name: app_id for name in row["identityNames"]},
                                                            "agentRequired": agent_required, "executionPrerequisites": ["A2_IMAGE_DELIVERY", "A4_PROVIDER_PROVISIONING"] if accounts or agent_required else ["A2_IMAGE_DELIVERY"]})
-        if library['resources'] != row['resources'] or library['sharedSecretRequirements'] != row['sharedSecrets']:
+        if library['resources'] != row['resources'] or library['sharedSecretRequirements'] !=
+@@END
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_libraries.py","mode":420,"size":59967,"sha256":"234fa3cba94dbec1c8325bef54a6a752942931a41dc097615d2cd97f6dafba97","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":11967}
+ row['sharedSecrets']:
             findings.append(finding('APPLICATION_HOST_RESOURCE_CONFLICT', field))
         if instance['connections'] != connections:
             findings.append(finding('APPLICATION_HOST_CONNECTION_CONFLICT', field))
@@ -23126,10 +23186,7 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
         instance["runtimeSecretRequirements"] = sorted({source["ref"] for account in accounts.values()
                                                         for credential in account["credentials"].values()
                                                         for source in [credential["source"]] if source["kind"] == "runtime_secret_ref"})
-        instance["approle"] = {"bind_secret_id": False, "t
-@@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_libraries.py","mode":420,"size":58270,"sha256":"2c9f33bc8691b48e9bb98e04110f2a963a681910f63eeed69631452a84e6edb6","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":10270}
-oken_bound_cidrs": "RUNTIME_HOST_SUBNET_AND_LOOPBACK"} if agent_required else None
+        instance["approle"] = {"bind_secret_id": False, "token_bound_cidrs": "RUNTIME_HOST_SUBNET_AND_LOOPBACK"} if agent_required else None
         # Settings safe projection is explicit: do not send raw defaults/hostvars to callers.
         instance["placements"][host] = {"SERVER_ID": host, "runtimeRef": runtime_ref, "command": settings.get("command", []),
                                           "commonDefaults": row.get('commonDefaults', {}), "inherited": row.get('inherited', {}),
@@ -27744,7 +27801,7 @@ def assert_reissue_unchanged(state_root, project_identity, expected):
         raise ValueError("PKI_REISSUE_PLAN_STALE")
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/pki_resolution.py","mode":420,"size":19551,"sha256":"946a1cb23ee69aafca668598b188c40df0d60ddba48e6f30ebc4772ce39d4467","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":19551}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/pki_resolution.py","mode":420,"size":19563,"sha256":"3d56c5d123be0ee48726fe6a14ed5a38f36d8a4ef1d7572c1aa9191ecb33e7b4","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":19563}
 from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
@@ -27933,6 +27990,13 @@ def application_pki_bindings(rows, desired):
     return [bindings[key] for key in sorted(bindings)]
 
 
+def materialization_fingerprint(request_fingerprint, plan):
+    return canonical_digest({
+        "requestFingerprint": request_fingerprint,
+        **{key: plan[key] for key in ("hostId", "targetDirectory", "formats", "keyAlias", "trustAlias")},
+    })
+
+
 def resolve_certificate_requests(project_id, topology, host_vars, defaults=None, resolved_service_endpoints=None, inventory_deployments=None, application_rows=(), application_bindings=None):
     """Purely derive certificate identity and target plans from topology bindings.
 
@@ -28076,14 +28140,8 @@ def resolve_certificate_requests(project_id, topology, host_vars, defaults=None,
                 "trustAlias": "platform-ca-%s" % group["authorityRef"].replace("_", "-"),
                 "storePasswordSecretRef": group["tlsProfile"].get("storePasswordSecretRef"),
             }
-            plan["materializationFingerprint"] = canonical_digest({
-                "requestFingerprint": request["certificateRequestFingerprint"],
-                "hostId": host_id,
-                "targetDirectory": target_root,
-                "formats": plan["formats"],
-                "keyAlias": plan["keyAlias"],
-                "trustAlias": plan["trustAlias"],
-            })
+            plan["materializationFingerprint"] = materialization_fingerprint(
+                request["certificateRequestFingerprint"], plan)
             plans.append(plan)
     if findings:
         return {"status": "BLOCKED", "findings": findings, "requests": [], "materializationPlans": []}
@@ -29706,7 +29764,7 @@ def secret_input_requirement_ref(service_deployment, manifest_requirement_ref, p
     return "si-" + hashlib.sha256(encoded).hexdigest()[:40]
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/schema_validation.py","mode":420,"size":9203,"sha256":"8c405903e34e7fe10a5531bf86f77348da987821da465e81f6b298ac1ad2da59","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":9203}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/schema_validation.py","mode":420,"size":10635,"sha256":"85b54e1fbc80fa1454225c7ab9151a1716845cd64305a436954d7e28ccf5bc66","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":10635}
 from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
@@ -29720,6 +29778,7 @@ jsonschema exception text directly (which could contain a secret value).
 
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -29824,6 +29883,34 @@ def _safe_schema_path(error):
     return _json_pointer(error.absolute_schema_path)
 
 
+_TEMPLATE = re.compile(r"\{\{.+?\}\}|\{%.+?%\}", re.DOTALL)
+_VALUE_KEYWORDS = {
+    "const", "enum", "format", "maxLength", "minLength", "pattern",
+    "maximum", "minimum", "exclusiveMaximum", "exclusiveMinimum", "multipleOf",
+}
+_SCALAR_TYPES = {"string", "integer", "number", "boolean", "null"}
+
+
+def _deferred_template_error(error, sections):
+    path = error.absolute_path
+    if not path or path[0] not in sections or "propertyNames" in error.absolute_schema_path:
+        return False
+    if error.validator in ("anyOf", "oneOf"):
+        # Each context path starts with its alternative's index. One
+        # otherwise valid alternative suffices until the value is rendered.
+        branches = {}
+        for child in error.context:
+            branches.setdefault(child.schema_path[0], []).append(child)
+        return any(all(_deferred_template_error(child, sections) for child in branch)
+                   for branch in branches.values())
+    if len(path) < 2 or not isinstance(error.instance, str) or not _TEMPLATE.search(error.instance):
+        return False
+    if error.validator == "type":
+        types = error.validator_value
+        return bool(_SCALAR_TYPES.intersection([types] if isinstance(types, str) else types))
+    return error.validator in _VALUE_KEYWORDS
+
+
 class SchemaValidator(object):
     """Validate documents with a local-only Draft 2020-12 registry."""
 
@@ -29849,7 +29936,7 @@ class SchemaValidator(object):
                 )
             self.schemas[schema_id] = document
 
-    def validate(self, instance, schema_path):
+    def validate(self, instance, schema_path, template_sections=()):
         """Return safe Finding dictionaries for one local schema path."""
         path = Path(schema_path).resolve()
         try:
@@ -29917,6 +30004,8 @@ class SchemaValidator(object):
             )
         findings = []
         for error in errors:
+            if template_sections and _deferred_template_error(error, template_sections):
+                continue
             findings.append(
                 {
                     "apiVersion": "platform.installer/finding/v1alpha1",
@@ -31845,6 +31934,127 @@ def main():
 
 
 if __name__ == "__main__":
+    main()
+
+@@END
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/modules/pki_reuse_probe.py","mode":420,"size":5369,"sha256":"a0491ecb54ef6b8bcd9fe3f3e0635778399e759f65b929a7cc5f2ec6745a5f8d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5369}
+"""Read-only validation of the approved PKI projection before a managed Apply."""
+
+import grp
+import hashlib
+import os
+from pathlib import Path
+import pwd
+import stat
+import subprocess
+
+from ansible.module_utils.basic import AnsibleModule
+from ansible_collections.platform.core.plugins.module_utils.pki_resolution import materialization_fingerprint
+
+
+FILES = (
+    ('ca-chain.pem', 'ca.crt', 0o644),
+    ('certificate.pem', 'leaf.crt', 0o644),
+    ('private-key.pem', 'leaf.key', 0o600),
+    ('keystore.p12', 'keystore.p12', 0o600),
+    ('truststore.p12', 'truststore.p12', 0o600),
+)
+
+
+def digest(value):
+    return hashlib.sha256(value).hexdigest()
+
+
+def regular(path, owner, group, mode):
+    info = path.lstat()
+    if (path.resolve() != path or not stat.S_ISREG(info.st_mode) or
+            info.st_uid != owner or info.st_gid != group or
+            stat.S_IMODE(info.st_mode) != mode or not 0 < info.st_size <= 1048576):
+        raise ValueError('Invalid PKI file')
+    return path.read_bytes()
+
+
+def run(*args, data=None):
+    return subprocess.run(list(map(str, args)), input=data, stdout=subprocess.PIPE,
+                          stderr=subprocess.DEVNULL, check=True, timeout=15).stdout
+
+
+def source(args, uid, gid):
+    root = Path(args['source_root'])
+    expected = {}
+    for plan in args['plans']:
+        request = root / 'requests' / plan['requestId']
+        authority = root / 'authorities' / plan['authorityId']
+        if os.path.lexists(root / 'reissues' / (plan['requestId'] + '.fingerprint')):
+            raise ValueError('Pending PKI reissue')
+        request_fingerprint = regular(request / 'request-fingerprint', uid, gid, 0o600).decode('ascii').strip()
+        if materialization_fingerprint(request_fingerprint, plan) != plan['materializationFingerprint']:
+            raise ValueError('PKI request fingerprint mismatch')
+        if plan['requestId'] not in expected:
+            paths = [authority / FILES[0][1], *(request / entry[1] for entry in FILES[1:])]
+            expected[plan['requestId']] = [digest(regular(path, uid, gid, 0o600)) for path in paths]
+            ca, leaf, key, keystore, truststore = paths
+            run('openssl', 'verify', '-CAfile', ca, leaf)
+            public_key = run('openssl', 'pkey', '-in', key, '-passin', 'pass:', '-pubout')
+            if public_key != run('openssl', 'x509', '-in', leaf, '-pubkey', '-noout'):
+                raise ValueError('PKI key mismatch')
+            password_file = args['secret_files'][plan['storePasswordSecretRef']]
+            for store, certificate, alias in ((keystore, leaf, plan['keyAlias']),
+                                               (truststore, ca, plan['trustAlias'])):
+                stored = run('keytool', '-exportcert', '-storetype', 'PKCS12', '-keystore', store,
+                             '-alias', alias, '-storepass:file', password_file)
+                if stored != run('openssl', 'x509', '-in', certificate, '-outform', 'DER'):
+                    raise ValueError('PKI store mismatch')
+            stored_key = run('openssl', 'pkcs12', '-in', keystore, '-passin', 'file:' + password_file,
+                             '-nocerts', '-nodes')
+            if public_key != run('openssl', 'pkey', '-pubout', data=stored_key):
+                raise ValueError('PKI store key mismatch')
+    return expected
+
+
+def target(args, uid, gid):
+    token = digest(args['project_id'].encode())
+    for plan in args['plans']:
+        directory = Path(plan['targetDirectory'])
+        info = directory.lstat()
+        if (directory.resolve() != directory or not stat.S_ISDIR(info.st_mode) or
+                (info.st_uid, info.st_gid, stat.S_IMODE(info.st_mode)) != (uid, gid, 0o700)):
+            return False
+        actual = [digest(regular(directory / name, uid, gid, mode)) for name, _, mode in FILES]
+        if actual != args['expected'].get(plan['requestId']):
+            return False
+        marker = regular(directory / 'materialization-fingerprint', uid, gid, 0o644)
+        if marker != (plan['materializationFingerprint'] + '\n').encode():
+            return False
+        anchor = 'platform-installer-%s-%s.crt' % (token, digest(plan['authorityId'].encode()))
+        if digest(regular(Path('/etc/pki/ca-trust/source/anchors') / anchor, 0, 0, 0o644)) != actual[0]:
+            return False
+        run('openssl', 'verify', directory / 'certificate.pem')
+    return True
+
+
+def main():
+    module = AnsibleModule(argument_spec=dict(
+        plans=dict(type='list', elements='dict', required=True),
+        project_id=dict(type='str', required=True),
+        owner=dict(type='str', required=True),
+        group=dict(type='str', required=True),
+        source_root=dict(type='path'),
+        secret_files=dict(type='dict', default={}, no_log=True),
+        expected=dict(type='dict', default={}, no_log=True),
+    ), supports_check_mode=True)
+    args = module.params
+    try:
+        uid = pwd.getpwnam(args['owner']).pw_uid
+        gid = grp.getgrnam(args['group']).gr_gid
+        if args['source_root']:
+            module.exit_json(changed=False, ready=True, expected=source(args, uid, gid))
+        module.exit_json(changed=False, ready=target(args, uid, gid))
+    except (OSError, KeyError, ValueError, RuntimeError, subprocess.SubprocessError):
+        module.exit_json(changed=False, ready=False)
+
+
+if __name__ == '__main__':
     main()
 
 @@END
@@ -36633,7 +36843,7 @@ platform_name_prefix: ''
       become: false
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/resolve_application_libraries/tasks/instance.yml","mode":420,"size":16854,"sha256":"d4f38d3b4271e60b1388d7ea8df5307b4419fc73efab929ca58f14649243cdb4","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":16854}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/resolve_application_libraries/tasks/instance.yml","mode":420,"size":17160,"sha256":"70978f70541bc8b3d4e12a123fecd269a1dc5706c7773228c4303eb2b49dc0f3","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":17160}
 ---
 - name: Расчёт настроек с безопасной диагностикой отказа
   block:
@@ -36804,11 +37014,19 @@ platform_name_prefix: ''
       no_log: true
       become: false
 
+    - name: Вычисление значений приложения по умолчанию с сохранением типов
+      platform.core.prepare_application_libraries:
+        application_defaults: true
+        defaults_path: "{{ application_job.application.defaultsPath }}"
+      register: _application_defaults
+      no_log: true
+      become: false
+
     - name: Определение наследуемых настроек приложения без явных переопределений
       ansible.builtin.set_fact:
         application_inherited: >-
           {{ (_application_shared.defaults if application_job.slot.inherit_defaults | default(true) else {}) |
-             combine(_application_package.platform_application_definition.defaults, recursive=true, list_merge='replace') |
+             combine(_application_defaults.defaults, recursive=true, list_merge='replace') |
              combine(({'endpoint': _application_library_endpoint} if _application_library_endpoint else {}), recursive=true, list_merge='replace') |
              combine(application_job.slot.overrides | default({}), recursive=true, list_merge='replace') |
              combine(_application_shared.overrides if application_job.slot.inherit_defaults | default(true) else {}, recursive=true, list_merge='replace') }}
@@ -36854,7 +37072,7 @@ platform_name_prefix: ''
               combine(({'accounts': application_job.instance.accounts} if application_job.instance.accounts is defined else {}), recursive=true, list_merge='replace') |
               combine(application_job.hostOverride, recursive=true, list_merge='replace') |
               platform.core.application_account_policies([
-                _application_package.platform_application_definition.defaults,
+                _application_defaults.defaults,
                 application_job.slot.overrides | default({}),
                 application_job.instance.overrides | default({}),
                 {'accounts': application_job.instance.accounts | default({})},
@@ -38910,12 +39128,65 @@ artifactLock:
       become: false
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/pki-apply.yml","mode":420,"size":438,"sha256":"bb353d40cbde0119e0ffe09f2ed150b6cabc657b5b93303495c965963daec005","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":438}
+@@PORTABLE {"path":"ansible-core/playbooks/pki-apply.yml","mode":420,"size":3717,"sha256":"f59f2bb96f985013e811555717f7020d96ea34fc6d91b5e77e3130b4d15fde46","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3717}
 ---
+- name: Проверка исходных материалов утверждённого плана PKI
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Проверка сертификатов, ключей и хранилищ на узле выполнения
+      platform.core.pki_reuse_probe:
+        plans: "{{ platform_pki_materialization_plans }}"
+        project_id: "{{ platform_project_id }}"
+        owner: "{{ platform_pki_owner | default(platform_execution_technical_user | default('root', true)) }}"
+        group: "{{ platform_pki_group | default(platform_execution_technical_group | default(platform_execution_technical_user | default('root', true), true)) }}"
+        source_root: "{{ platform_pki_state_root | default((platform_execution_state_root | default('/var/lib/platform-installer/execution')) ~ '/pki') }}/{{ platform_project_id }}"
+        secret_files: "{{ platform_pki_secret_files | default({}) }}"
+      register: _platform_pki_source_probe
+      no_log: true
+      tags: [never, platform_pki_reuse]
+
+- name: Проверка ранее доставленных материалов утверждённого плана PKI
+  hosts: platform_targets
+  become: true
+  gather_facts: false
+  any_errors_fatal: true
+  tasks:
+    - name: Сравнение файлов PKI и системного доверия с утверждённым планом
+      platform.core.pki_reuse_probe:
+        plans: "{{ platform_pki_materialization_plans | selectattr('hostId', 'equalto', inventory_hostname) | list }}"
+        project_id: "{{ platform_project_id }}"
+        owner: "{{ platform_pki_owner | default('root') }}"
+        group: "{{ platform_pki_group | default('root') }}"
+        expected: "{{ hostvars.localhost._platform_pki_source_probe.expected }}"
+      register: _platform_pki_target_probe
+      when:
+        - hostvars.localhost._platform_pki_source_probe.ready
+        - inventory_hostname in (platform_pki_materialization_plans | map(attribute='hostId') | list)
+      no_log: true
+      tags: [never, platform_pki_reuse]
+
 - name: Расчёт управляемых запросов PKI на узле выполнения
   hosts: localhost
   connection: local
   gather_facts: false
+  pre_tasks:
+    - name: Проверка готовности PKI на всех узлах утверждённого плана
+      ansible.builtin.set_fact:
+        _platform_pki_reuse_ready: >-
+          {%- set readiness = [] -%}
+          {%- for host in platform_pki_materialization_plans | map(attribute='hostId') | unique -%}
+          {%- set ready = host in hostvars and (hostvars[host]._platform_pki_target_probe.ready | default(false)) -%}
+          {%- set ignored = readiness.append(ready | bool) -%}
+          {%- endfor -%}
+          {{ platform_pki_materialization_plans | length > 0 and false not in readiness }}
+      tags: [never, platform_pki_reuse]
+
+    - name: Пропуск подготовки PKI при совпадении всех материалов с планом
+      ansible.builtin.meta: end_play
+      when: _platform_pki_reuse_ready | bool
+      tags: [never, platform_pki_reuse]
   roles:
     - role: platform.core.pki_materialize
 
@@ -38923,6 +39194,11 @@ artifactLock:
   hosts: platform_targets
   become: true
   gather_facts: false
+  pre_tasks:
+    - name: Пропуск доставки уже проверенных PKI-материалов
+      ansible.builtin.meta: end_play
+      when: hostvars.localhost._platform_pki_reuse_ready | bool
+      tags: [never, platform_pki_reuse]
   roles:
     - role: platform.core.pki_deploy
 
@@ -40429,7 +40705,7 @@ if __name__ == "__main__":
     raise SystemExit(main())
 
 @@END
-@@PORTABLE {"path":"ansible-core/tools/execution_controller.py","mode":420,"size":74927,"sha256":"a726b479dc1b6aae50b0232ab32e4e75c5e30b1c1dba4f7971a51f37ee397042","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"ansible-core/tools/execution_controller.py","mode":420,"size":75024,"sha256":"ca6e897e08eaef3b695b0d08772c9d67a438c6388caa5f6a409055cd1d378cfc","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
 #!/usr/bin/env python3
 """Fixed Execution Node controller.  It never accepts a command or playbook."""
 from __future__ import print_function
@@ -40911,6 +41187,8 @@ def _command(release, journal, operation):
         if not os.path.isfile(projection) or os.path.islink(projection):
             raise LifecycleError("EXECUTION_RUNTIME_PROJECTION_MISSING")
         command = ["ansible-playbook", "-i", os.path.join(journal.directory, "project", "inventory", "hosts.yml"), os.path.join(release, "ansible-core", "playbooks", "pki-reissue.yml" if kind == "PKI_REISSUE" else "pki-apply.yml"), "-e", "@" + projection]
+        if kind == "PKI_APPLY":
+            command.extend(["--tags", "all,platform_pki_reuse"])
         if kind == "PKI_REISSUE":
             selected = operation.get("reissueRequests")
             if (operation.get("operationId") != "pki:reissue" or not isinstance(selected, list) or
@@ -41281,12 +41559,12 @@ def validate_application_manifest(manifest, external_service_ids=()):
         contracts = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../contracts'))
         if SchemaValidator(contracts).validate(manifest, os.path.join(contracts, 'execution-manifest/v1alpha7/schema.json')):
             raise LifecycleError('EXECUTION_MANIFEST_INVALID')
-        try:
-            prefix = validation_prefix(manifest)
-        except (ValueError, KeyError, 
+   
 @@END
-@@PORTABLE {"path":"ansible-core/tools/execution_controller.py","mode":420,"size":74927,"sha256":"a726b479dc1b6aae50b0232ab32e4e75c5e30b1c1dba4f7971a51f37ee397042","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":26927}
-TypeError) as error:
+@@PORTABLE {"path":"ansible-core/tools/execution_controller.py","mode":420,"size":75024,"sha256":"ca6e897e08eaef3b695b0d08772c9d67a438c6388caa5f6a409055cd1d378cfc","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":27024}
+     try:
+            prefix = validation_prefix(manifest)
+        except (ValueError, KeyError, TypeError) as error:
             raise LifecycleError(str(error)) from None
         validate_application_manifest(prefix, external_service_ids)
         return
@@ -46078,7 +46356,7 @@ def safe_task_error(result, no_log=False):
     return {'code': code, 'summary': summary}
 
 @@END
-@@PORTABLE {"path":"ansible-core/tools/infrastructure_verification.py","mode":420,"size":29458,"sha256":"44ff5b4007a5f65e32b7d9411729ffa8ac8ddcd8063cf9d82baf56cca5ee048b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":29458}
+@@PORTABLE {"path":"ansible-core/tools/infrastructure_verification.py","mode":420,"size":29856,"sha256":"74a5b5a8f7bd09a3c8b912cf66c1772e9329b0ffc7a8e26fb68f8806908c44fb","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":29856}
 """B0 bounded infrastructure evidence in the existing private execution namespace.
 
 Local clients may cache the returned summary, but only this node's journal may
@@ -46193,9 +46471,17 @@ def application_suffix(operations):
     return apps
 
 
+def _has_terminal_application_hook(manifest):
+    operations = manifest.get('operations', [])
+    return (manifest.get('apiVersion') in ('platform.installer/execution-manifest/v1alpha7',
+                                          'platform.installer/execution-manifest/v1alpha8',
+                                          'platform.installer/execution-manifest/v1alpha9')
+            and bool(operations) and operations[-1].get('operation') == 'APPLICATION_LIBRARIES_POST_INSTALL')
+
+
 def has_library_verify_prefix(manifest):
     operations = manifest.get('operations', [])
-    if manifest.get('apiVersion') == 'platform.installer/execution-manifest/v1alpha7' and operations and operations[-1].get('operation') == 'APPLICATION_LIBRARIES_POST_INSTALL':
+    if _has_terminal_application_hook(manifest):
         operations = operations[:-1]
     try:
         apps = application_suffix(operations)
@@ -46298,7 +46584,7 @@ def assert_admission(root, manifest, run_id=None):
 
 
 def validate_manifest(manifest):
-    if manifest.get('apiVersion') == 'platform.installer/execution-manifest/v1alpha7':
+    if manifest.get('apiVersion') == 'platform.installer/execution-manifest/v1alpha7' or _has_terminal_application_hook(manifest):
         from application_post_install import validation_prefix
         try:
             return validate_manifest(validation_prefix(manifest))
@@ -73245,7 +73531,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/hmi-backend/1.0.0/roles/application_hmi-backend/defaults/main.yml","mode":420,"size":12689,"sha256":"d9404b3312fa48e675afd4ebf0e21be22f7a0f12bf87a1b4ee036eea1a5caaf6","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":12689}
+@@PORTABLE {"path":"examples/sdku/application-packages/hmi-backend/1.0.0/roles/application_hmi-backend/defaults/main.yml","mode":420,"size":12857,"sha256":"6388ecf1c3cdd5d8a41c3ded5d4b57b4bd6e9b4ff76733efb6ce364090c078ef","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":12857}
 platform_application_definition:
     name: hmi-backend
     version: 1.0.0
@@ -73374,7 +73660,7 @@ platform_application_definition:
             ALARMSERVICE_URL_ROOT: ""
             CSPA_TOPIC_ROUTE_ROOT: '{{ application_topics.kafka.main.name }}'
             CSPA_TOPICS: '{{ application_topics.kafka.main.name }}'
-            DATAMANAGER_ROOT_URL: '{{ (''https://data-manager-'' ~ library_instance_id ~ ''.'' ~ platform_desired_state.endpointGroups[platform_desired_state.applicationLibraryDeployments[library_instance_id].applications[''data-manager''].overrides.endpoint.endpoint_group].address.domain) if ''data-manager'' in platform_desired_state.applicationLibraryDeployments[library_instance_id].applications else '''' }}'
+            DATAMANAGER_ROOT_URL: '{{ (''https://data-manager-'' ~ library_instance_id ~ ''.'' ~ platform_desired_state.endpointGroups[platform_desired_state.applicationLibraryDeployments[library_instance_id].applications[''data-manager''].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group)].address.domain) if ''data-manager'' in platform_desired_state.applicationLibraryDeployments[library_instance_id].applications else '''' }}'
             DB_CONNECTION_STRING: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_databases.clickhouse.history.name }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             DB_TYPE: clickhouse
             EVO_MANAGER_HOT_TOPICS: '{{ application_topics.kafka.main.name }}'
@@ -73383,7 +73669,7 @@ platform_application_definition:
             MAIN_TOPIC: '{{ application_topics.kafka.main_compact.name }}'
             SERVER_ALLOWED_ORIGINS: '*'
             SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
-            TN_SCADA_DATA_MANAGER_URL_ROOT: '{{ (''https://data-manager-'' ~ library_instance_id ~ ''.'' ~ platform_desired_state.endpointGroups[platform_desired_state.applicationLibraryDeployments[library_instance_id].applications[''data-manager''].overrides.endpoint.endpoint_group].address.domain) if ''data-manager'' in platform_desired_state.applicationLibraryDeployments[library_instance_id].applications else '''' }}'
+            TN_SCADA_DATA_MANAGER_URL_ROOT: '{{ (''https://data-manager-'' ~ library_instance_id ~ ''.'' ~ platform_desired_state.endpointGroups[platform_desired_state.applicationLibraryDeployments[library_instance_id].applications[''data-manager''].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group)].address.domain) if ''data-manager'' in platform_desired_state.applicationLibraryDeployments[library_instance_id].applications else '''' }}'
             TN_SCADA_METADATA_TARGET_PROJECT: TNSV
             USER_ACTION_TAGNAME: _MaskCauseList.Description
             evo-manager.alarm-subscription.topic: '{{ application_topics.kafka.alarms_compact.name }}'
@@ -73399,7 +73685,7 @@ platform_application_definition:
             tn-scada.cspa.topic-route.root.project.TNSVHYDRO.root.descentRule: rcv
             tn-scada.cspa.topic-route.root.project.TNSVHYDRO.root.topic: '{{ application_topics.kafka.main.name }}'
             tn-scada.cspa.topic-route.root.topic: '{{ application_topics.kafka.main.name }}'
-            tn-scada.data-manager.url: '{{ (''https://data-manager-'' ~ library_instance_id ~ ''.'' ~ platform_desired_state.endpointGroups[platform_desired_state.applicationLibraryDeployments[library_instance_id].applications[''data-manager''].overrides.endpoint.endpoint_group].address.domain) if ''data-manager'' in platform_desired_state.applicationLibraryDeployments[library_instance_id].applications else '''' }}'
+            tn-scada.data-manager.url: '{{ (''https://data-manager-'' ~ library_instance_id ~ ''.'' ~ platform_desired_state.endpointGroups[platform_desired_state.applicationLibraryDeployments[library_instance_id].applications[''data-manager''].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group)].address.domain) if ''data-manager'' in platform_desired_state.applicationLibraryDeployments[library_instance_id].applications else '''' }}'
             tn-scada.metadata.dontShowTargetProjectInNames: false
             tn-scada.metadata.load-projects: TNSV,TNSVHYDRO
             EVO_MANAGER_APP_ID: '{{ application_instance_id }}'
@@ -73555,7 +73841,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/hmi-frontend-alarms/1.0.0/roles/application_hmi-frontend-alarms/defaults/main.yml","mode":420,"size":2274,"sha256":"10aa828347b7479bd19a7f2e7cdb163485d5678e67c9571a03fa4f72a31e5b7b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2274}
+@@PORTABLE {"path":"examples/sdku/application-packages/hmi-frontend-alarms/1.0.0/roles/application_hmi-frontend-alarms/defaults/main.yml","mode":420,"size":2359,"sha256":"33a69e71f5f8cd798796d9d691a16a8f0229237f242a6ac568b42eacba6b1fad","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2359}
 platform_application_definition:
     name: hmi-frontend-alarms
     version: 1.0.0
@@ -73566,7 +73852,7 @@ platform_application_definition:
         command:
             - /app/docker-entrypoint.sh
         environment:
-            PUBLIC_HOST: '{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}'
+            PUBLIC_HOST: '{{ application_parameters.szi_proxy_url | urlsplit(''netloc'') }}'
             ALARMS_HEADER_TITLE: ""
             ALARMS_IMPORTANT_QUERY_PAGE_SIZE: 50
             ALARMS_OFFSET_TO_FUTURE_IN_REST_REQ_MS: 0
@@ -73584,7 +73870,7 @@ platform_application_definition:
             NGINX_GRANT_ACCESS_AUDIT: grant-access-audit
             NGINX_GRANT_ACCESS_FRONT: grant-access-front
             NGINX_GRANT_ACCESS_INTEGRITY: grant-access-integrity
-            NGINX_URL: ""
+            NGINX_URL: '{{ application_parameters.szi_proxy_url }}'
             NGINX_URL_TRENDS_FRONT: hmi-frontend-trends
             NGINX_VTOR_SERVICE_FRONT: sdku-vtor-ui
             PAUSE_BETWEEN_ALL_CRITICAL: 10000
@@ -73595,6 +73881,9 @@ platform_application_definition:
             USE_SIGNAL_ID_IN_FILTER: falses
             VOICES: '{"Windows" : "Microsoft Pavel - Russian (Russia)", "Linux" : ""}'
         parameters:
+            szi_proxy_url: >-
+                {%- set ref = application_job.deployment.bindings.sso.providedConnectionRef -%}
+                {{ platform_application_provided_connections[ref.libraryId][ref.name].parameters.proxy_url }}
             mount_sources:
                 mount-1: ""
                 mount-2: ""
@@ -73817,7 +74106,7 @@ server {
 
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/hmi-frontend-para/1.0.0/roles/application_hmi-frontend-para/defaults/main.yml","mode":420,"size":1670,"sha256":"030b55736577c16569f0aec88fab393db8fdee72f93348b37ce51ad8fdabd9fa","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1670}
+@@PORTABLE {"path":"examples/sdku/application-packages/hmi-frontend-para/1.0.0/roles/application_hmi-frontend-para/defaults/main.yml","mode":420,"size":2012,"sha256":"fd0a474a5eae37a287aac50f23c4e46865f886b1ff7411daf90fd3cb43c3fe10","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2012}
 platform_application_definition:
     name: hmi-frontend-para
     version: 1.0.0
@@ -73850,6 +74139,10 @@ platform_application_definition:
             destination: hmi-frontend-para.conf
             mode: "0644"
         parameters:
+            # Library provider hooks need the resolved groups even for a frontend without inherited ENV.
+            IDENTITY_GROUPS: >-
+                {{ (_application_shared.overrides.parameters | default({})).get(
+                  'IDENTITY_GROUPS', (_application_shared.defaults.parameters | default({})).get('IDENTITY_GROUPS', [])) }}
             IDENTITY_CLIENT: "{{ (lookup('ansible.builtin.template', (application_job.application.defaultsPath | dirname) ~ '/../../../assets/keycloak-client.json.j2', convert_data=false) | from_json) if 'sso' in application_connections else {} }}"
         ports:
             port-1:
@@ -74182,7 +74475,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/hmi-frontend-viewer/1.0.0/roles/application_hmi-frontend-viewer/defaults/main.yml","mode":420,"size":3428,"sha256":"1e6b52765deb40aea46a15aab12ba0c860680ee87282cbc81ff4056a518cfe04","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3428}
+@@PORTABLE {"path":"examples/sdku/application-packages/hmi-frontend-viewer/1.0.0/roles/application_hmi-frontend-viewer/defaults/main.yml","mode":420,"size":1749,"sha256":"ea4aae157ed1f8eb1a995a63897e688a6de2b1b9f4fa2ba565fd87fb825cc6f1","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1749}
 platform_application_definition:
     name: hmi-frontend-viewer
     version: 1.0.0
@@ -74193,17 +74486,20 @@ platform_application_definition:
         command:
             - /app/docker-entrypoint.sh
         environment:
-            ALARMS_URL: https://{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/hmi-frontend-alarms
-            CSPA_HMI_BACK: https://{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/hmi-backend
-            CSPA_HMI_BACK_WS: wss://{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/hmi-backend
-            GRANT_ACCESS: https://{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/grant-access
-            GRANT_ACCESS_AUDIT: https://{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/grant-access-audit
-            HMI_BACK: https://{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/ef-backend
-            NGINX_URL: ""
-            SVG_EDITOR: https://{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/hmi-frontend-svg-editor
-            TRENDS_URL: https://{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/hmi-frontend-trends
-            VTOR_URL: https://{{ "nginx." ~ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/sdku-vtor-ui
+            ALARMS_URL: "{{ application_parameters.szi_proxy_url }}/hmi-frontend-alarms"
+            CSPA_HMI_BACK: "{{ application_parameters.szi_proxy_url }}/hmi-backend"
+            CSPA_HMI_BACK_WS: "{{ application_parameters.szi_proxy_url | regex_replace('^https://', 'wss://') }}/hmi-backend"
+            GRANT_ACCESS: "{{ application_parameters.szi_proxy_url }}/grant-access"
+            GRANT_ACCESS_AUDIT: "{{ application_parameters.szi_proxy_url }}/grant-access-audit"
+            HMI_BACK: "{{ application_parameters.szi_proxy_url }}/ef-backend"
+            NGINX_URL: '{{ application_parameters.szi_proxy_url }}'
+            SVG_EDITOR: "{{ application_parameters.szi_proxy_url }}/hmi-frontend-svg-editor"
+            TRENDS_URL: "{{ application_parameters.szi_proxy_url }}/hmi-frontend-trends"
+            VTOR_URL: "{{ application_parameters.szi_proxy_url }}/sdku-vtor-ui"
         parameters:
+            szi_proxy_url: >-
+                {%- set ref = application_job.deployment.bindings.sso.providedConnectionRef -%}
+                {{ platform_application_provided_connections[ref.libraryId][ref.name].parameters.proxy_url }}
             mount_sources:
                 mount-1: ""
                 mount-2: ""
@@ -76362,7 +76658,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/sdku-vtor-ui/1.0.0/roles/application_sdku-vtor-ui/defaults/main.yml","mode":420,"size":1132,"sha256":"1ab90ce9aeafaeea558abfd44bf87b8dc7f0f29d6ee9c548d0eaf3ac1b45aa56","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1132}
+@@PORTABLE {"path":"examples/sdku/application-packages/sdku-vtor-ui/1.0.0/roles/application_sdku-vtor-ui/defaults/main.yml","mode":420,"size":995,"sha256":"388217a07a31dad1e2a7ab3275f2614c6eb33ef96fa1aae01125776fb4e2e8bc","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":995}
 platform_application_definition:
     name: sdku-vtor-ui
     version: 1.0.0
@@ -76373,8 +76669,12 @@ platform_application_definition:
         command:
             - /app/docker-entrypoint.sh
         environment:
-            REACT_APP_VTOR_HOST_URL: https://nginx.{{ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/sdku-vtor
-            REACT_APP_VTOR_HOST_URL_WS: wss://nginx.{{ platform_desired_state.endpointGroups[(platform_desired_state.applicationLibraryDeployments[library_instance_id].applications["nginx"].overrides.endpoint.endpoint_group | default(_application_library_endpoint.endpoint_group))].address.domain }}/sdku-vtor
+            REACT_APP_VTOR_HOST_URL: "{{ application_parameters.szi_proxy_url }}/sdku-vtor"
+            REACT_APP_VTOR_HOST_URL_WS: "{{ application_parameters.szi_proxy_url | regex_replace('^https://', 'wss://') }}/sdku-vtor"
+        parameters:
+            szi_proxy_url: >-
+                {%- set ref = application_job.deployment.bindings.sso.providedConnectionRef -%}
+                {{ platform_application_provided_connections[ref.libraryId][ref.name].parameters.proxy_url }}
         ports:
             port-1:
                 container: 10311
@@ -76983,7 +77283,7 @@ platform_desired_state:
               port-1: {container: 10022, published: 10022}
 
 @@END
-@@PORTABLE {"path":"examples/sdku/configuration/group_vars.yml.example","mode":420,"size":2674,"sha256":"620bbc8a6345695fbd398e696418df65e90086edfbff8ea5111ff06f2100242e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2674}
+@@PORTABLE {"path":"examples/sdku/configuration/group_vars.yml.example","mode":420,"size":2888,"sha256":"8b9a9d183467a2da2fe03da2d1a410f88bde5202d5116821f56afd1f4e819e68","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2888}
 ---
 # Merge this fragment into the project's ordinary inventory/group_vars.
 # References below must name existing deployments of THAT project.
@@ -76991,6 +77291,9 @@ platform_desired_state:
 # Requires a runtime containing direct Kafka/PostgreSQL resource keys.
 
 platform_desired_state:
+  endpointGroups:
+    sdk-endpoint:
+      address: {domain: sdk.example.invalid, wildcard: true}
   applicationLibraryDeployments:
     sdku-main:
       libraryRef: sdku@1.0.0
@@ -77008,6 +77311,8 @@ platform_desired_state:
         messaging: {deploymentRef: kafka-apps}
         secrets: {deploymentRef: vault-apps}
         application-pki: {profileRef: application-pki}
+        endpoint: {endpointGroupRef: sdk-endpoint}
+        sso: {providedConnectionRef: {libraryId: szi, name: sso}}
       connection_defaults:
         kafka: {connectionRef: SASL_SSL}
         # Choose sentinel only for a Sentinel-backed Redis connection.
@@ -77048,7 +77353,7 @@ platform_application_libraries:
   sdku-main: {}
 
 @@END
-@@PORTABLE {"path":"examples/sdku/import-catalog.json","mode":420,"size":5771,"sha256":"8332d5782bdef3e89270299c727478c18c15ee38e003c604483825f1cf206f8a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5771}
+@@PORTABLE {"path":"examples/sdku/import-catalog.json","mode":420,"size":5771,"sha256":"0bf4f8b1aeb10a97ce485eeec1c566705bf1981c9567d4878cd3d302a935c1fe","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5771}
 [
   {
     "digest": "sha256:51a85d8d0276e47498b98243d47d2a7e17d354d239f7467b4822ed4d64e9f021",
@@ -77100,21 +77405,21 @@ platform_application_libraries:
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:8713809ff6e3481d0a213fe2bdf8dc10bc14564687bb6898e2bb87eacadb904d",
+    "digest": "sha256:974ca11e14e2641851e3cf521e9f9a2a7edf063bf4fe97ca7059548652e5a470",
     "kind": "application",
     "name": "hmi-backend",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:05db7d0181d80c774d67bc99b90e642130df3ec16cf293e47f4219671f6a906f",
+    "digest": "sha256:2e9831eca122fda377cd961f78df617863d6b1eb5564e82ced7880118abd6737",
     "kind": "application",
     "name": "hmi-frontend-alarms",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:8ea1e2cc36ec65a742d8b8516ca55af2516660573626a0dbc186861125bbb02a",
+    "digest": "sha256:d0d0fe96c7d5da0aff25a7beb2c620ae924b5b3dd0610e3c6c2217e823345a86",
     "kind": "application",
     "name": "hmi-frontend-para",
     "sourceDirectory": ".",
@@ -77135,7 +77440,7 @@ platform_application_libraries:
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:ddb4aed73b22993d285d761a5c788535809cd938ce5a5c163b0813b94fa77353",
+    "digest": "sha256:269b4f5a9ba0421f855a16840c0ac902e51ad60a16c59be1f29fc4775506f025",
     "kind": "application",
     "name": "hmi-frontend-viewer",
     "sourceDirectory": ".",
@@ -77219,7 +77524,7 @@ platform_application_libraries:
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:7a9e52387f1c2200134372d46f582ec09c38671060a2f21cb787c1b316049a82",
+    "digest": "sha256:9b19f1914a0772e7d47683d7679987eef284672c698ea96820a0e33a6299ed4c",
     "kind": "application",
     "name": "sdku-vtor-ui",
     "sourceDirectory": ".",
@@ -78822,7 +79127,7 @@ public final class StartupMock {
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/validate_packages.py","mode":420,"size":7547,"sha256":"ca087f27bd986d8dfff16891c5cbb848a1d19b2828167f8f4a95adcc6f0495a0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7547}
+@@PORTABLE {"path":"examples/sdku/validate_packages.py","mode":420,"size":8720,"sha256":"ed2b55a9e020b635436eb4e679115299ddc14dc2fdca5b2ad88a986e1b0454ce","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":8720}
 import sys, json, pathlib, yaml
 from ansible.parsing.dataloader import DataLoader
 from ansible.template import Templar
@@ -78864,7 +79169,7 @@ base = str(package_root/'library-packages/sdku/1.0.0'/library['render']['base_co
 # Compose-only fixture uses the resolved common ENV; provider group preparation
 # is exercised by standalone integration tests rather than recursive raw defaults.
 compose_common = dict(common, parameters={})
-fixture_applications = {name: {'overrides': {'endpoint': {'endpoint_group': 'apps'}}}
+fixture_applications = {name: {}
                         for kind, name in packages if kind == 'application'}
 fixture_desired = {'applicationLibraryDeployments': {'sdku-main': {'applications': fixture_applications}},
                    'endpointGroups': {'apps': {'address': {'domain': 'example.invalid'}}}}
@@ -78872,7 +79177,8 @@ rendered = []
 base_contents = set()
 jobs = [dict(application={'definition': {'defaults': {'ports': p['definition']['defaults'].get('ports', {})}}},
              libraryId='sdku-main', slotId=n, hostId='example-host',
-             slot={'overrides': {}}, instance={'overrides': {}}, hostOverride={})
+             slot={'overrides': {}}, instance={'overrides': {}}, hostOverride={},
+             deployment={'bindings': {'sso': {'providedConnectionRef': {'libraryId': 'szi', 'name': 'sso'}}}})
         for (kind, n), p in packages.items() if kind == 'application']
 for (kind,name), package in packages.items():
     if kind != 'application': continue
@@ -78882,11 +79188,13 @@ for (kind,name), package in packages.items():
     if not params.get('database_name'):
         params['database_name'] = 'fixture_database'
     for key,value in params.items():
-        if isinstance(value, str) and (not value or 'platform_desired_state' in value):
+        if isinstance(value, str) and key != 'szi_proxy_url' and (not value or 'platform_desired_state' in value):
             params[key] = 'example.invalid'
     for key,value in params.get('mount_sources', {}).items():
         if not value: params['mount_sources'][key] = '/tmp/sdku-fixture'
     variables = dict(platform_desired_state=fixture_desired, application_connections={},
+        _application_shared={'defaults': {'parameters': {'IDENTITY_GROUPS': [{'name': 'Fixture group', 'roles_file': {}}]}}, 'overrides': {}},
+        platform_application_provided_connections={'szi': {'sso': {'parameters': {'proxy_url': 'https://nginx.szi.example.invalid'}}}},
         platform_project_root=str(package_root), application_name=name, application_instance_id=name+'-sdku-main', application_parameters=params,
         application_topics={'kafka': {ref: dict(resourceId=ref, name=value['name'])
                             for ref, value in library['definition']['resource_defaults']['kafka']['topics'].items()}},
@@ -78904,7 +79212,20 @@ for (kind,name), package in packages.items():
         library_runtime={'library_id':'sdku-main','host_id':'example-host','defaults':compose_common,'connections':{key:{'targets':[{'hostId':'example-host','address':'example.invalid','port':12345}]} for key in library['definition'].get('connections',{})}},
         application_runtime={'image':settings['image'],'container_name':name+'-sdku-main-example-host','base_compose_path':'/tmp/.base_compose.yml','base_service':'base','vault_path':'/tmp/vault','pki_path':'/tmp/pki', 'config_path':'/tmp/config', 'connections':{key:{'targets':[{'address':'example.invalid','port':12345}]} for key in package['definition'].get('connections',{})}})
     templar=Templar(loader=DataLoader(),variables=variables)
+    variables['application_parameters'] = templar.template(params)
+    templar.available_variables = variables
     settings=templar.template(settings)
+    if name == 'hmi-frontend-para':
+        assert settings['parameters']['IDENTITY_GROUPS'] == [{'name': 'Fixture group', 'roles_file': {}}]
+    frontend_addresses = {
+        'hmi-frontend-viewer': ('CSPA_HMI_BACK_WS', 'wss://nginx.szi.example.invalid/hmi-backend'),
+        'hmi-frontend-alarms': ('PUBLIC_HOST', 'nginx.szi.example.invalid'),
+        'sdku-vtor-ui': ('REACT_APP_VTOR_HOST_URL', 'https://nginx.szi.example.invalid/sdku-vtor'),
+        'hmi-backend': ('DATAMANAGER_ROOT_URL', 'https://data-manager-sdku-main.example.invalid'),
+    }
+    if name in frontend_addresses:
+        key, value = frontend_addresses[name]
+        assert settings['environment'][key] == value, (name, key)
     env=dict(common.get('environment', {}) if library['definition']['slots'][name].get('inherit_defaults', True) else {})
     env.update(settings.get('environment',{}))
     variables.update(application_effective=settings,application_environment=env)
@@ -81351,7 +81672,7 @@ cat "$diagnostic_log" >&2
 printf '{"status":"ok","changed":true}\n'
 
 @@END
-@@PORTABLE {"path":"examples/szi/application-packages/keycloak/1.0.0/assets/scripts/create-admin.sh","mode":420,"size":7935,"sha256":"bbf94f3a57b282d8f3fc6f536103bd59a8fee18d7a8084a7860f1e2d42a749b0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7935}
+@@PORTABLE {"path":"examples/szi/application-packages/keycloak/1.0.0/assets/scripts/create-admin.sh","mode":420,"size":9563,"sha256":"3777fd48c9d3b88334946353d4fae8d4ea9fcca4d52f279fb23c34aac6bc8afd","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":9563}
 #!/bin/sh
 set -eu
 umask 077
@@ -81441,6 +81762,31 @@ url=$1
 password=$(cat /run/platform-admin-password)
 [ -s /run/platform-bootstrap-secret ] && [ -n "$password" ] || fail
 
+printf '%s\n' '{"username":"admin","enabled":true,"firstName":"admin","lastName":"admin","email":"admin@admin.ru","attributes":{"middleName":["admin"],"platform.installer.bootstrap":["szi"]}}' \
+  > /run/platform-admin-work/admin.json
+
+fill_admin_profile() {
+  "$kc" get "users/$1" -r master --fields firstName,lastName,email,attributes --config "$config" \
+    > /run/platform-admin-work/admin-current.json || fail 170
+  jq --slurpfile defaults /run/platform-admin-work/admin.json '
+    def fill($fallback): if . == null or . == "" then $fallback else . end;
+    $defaults[0] as $default |
+    {firstName, lastName, email, attributes} as $current |
+    ($current |
+      .firstName |= fill($default.firstName) |
+      .lastName |= fill($default.lastName) |
+      .email |= fill($default.email) |
+      .attributes.middleName |=
+        (if . == null or . == [] or . == [""] then $default.attributes.middleName else . end)) as $updated |
+    if $updated == $current then empty else $updated end
+  ' /run/platform-admin-work/admin-current.json > /run/platform-admin-work/admin-profile.json || fail 171
+  if [ -s /run/platform-admin-work/admin-profile.json ]; then
+    "$kc" update "users/$1" -r master -f /run/platform-admin-work/admin-profile.json \
+      --config "$config" || fail 172
+    profile_changed=true
+  fi
+}
+
 # The CLI uses a private truststore; TLS name checking remains enabled.
 keytool -importcert -noprompt -alias platform-ca -file /opt/application/pki/ca-chain.pem \
   -keystore /run/platform-admin-work/truststore.p12 -storetype PKCS12 \
@@ -81459,7 +81805,18 @@ if ! KC_CLI_CLIENT_SECRET="$(cat /run/platform-bootstrap-secret)" \
     --format csv --noquotes --config "$config") || fail 60
   clients=$(printf '%s\n' "$raw_clients" | grep -E '^[0-9a-fA-F-]{36}$' || true)
   [ -z "$clients" ] || fail 61
-  printf 'unchanged' > /run/platform-admin-work/result
+  raw_users=$("$kc" get users -r master -q username=admin -q exact=true --fields id \
+    --format csv --noquotes --config "$config") || fail 70
+  users=$(printf '%s\n' "$raw_users" | grep -E '^[0-9a-fA-F-]{36}$' || true)
+  case "$users" in *'
+'*|'') fail 71;; esac
+  profile_changed=false
+  fill_admin_profile "$users"
+  if [ "$profile_changed" = true ]; then
+    printf 'changed' > /run/platform-admin-work/result
+  else
+    printf 'unchanged' > /run/platform-admin-work/result
+  fi
   exit 0
 fi
 
@@ -81471,8 +81828,6 @@ case "$users" in *'
 new_admin=false
 if [ -z "$users" ]; then
   new_admin=true
-  printf '%s\n' '{"username":"admin","enabled":true,"attributes":{"platform.installer.bootstrap":["szi"]}}' \
-    > /run/platform-admin-work/admin.json
   "$kc" create users -r master -f /run/platform-admin-work/admin.json \
     --config "$config" || fail 80
   raw_users=$("$kc" get users -r master -q username=admin -q exact=true --fields id \
@@ -81486,6 +81841,7 @@ else
     printf '%s\n' "$attributes" | grep -F '"platform.installer.bootstrap"' >/dev/null || fail 101
     printf '%s\n' "$attributes" | grep -F '"szi"' >/dev/null || fail 101
   fi
+  fill_admin_profile "$users"
 fi
 
 roles=$("$kc" get-roles -r master --uusername admin --fields name --format csv --noquotes \
@@ -96039,7 +96395,7 @@ export function ApplicationKafkaAccess({
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/ApplicationLibraryResources.tsx","mode":420,"size":19123,"sha256":"9c1d7ac4db5f92c6d87d3cf1a45e35ba6c7de716ded53c88d224c3fbe2941eb1","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":19123}
+@@PORTABLE {"path":"frontend/src/ApplicationLibraryResources.tsx","mode":420,"size":18640,"sha256":"4f4355dc4acc876217c71636d1f287e137e6797f8b5d856124ca775e3b4d156b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":18640}
 import { Fragment, useState, type ReactNode } from "react";
 import { objectValue, type ObjectValue } from "./application-draft";
 
@@ -96097,15 +96453,15 @@ export function ApplicationLibraryResources({
   };
   const hasDefault = Object.hasOwn(defaultsByKind[kind] ?? {}, edit ?? "");
   const inheritedResources: ObjectValue = {};
-  for (const resourceKind of ["postgresql.database", "clickhouse.database"]) {
+  for (const [resourceKind, defaults] of Object.entries(defaultsByKind)) {
     const candidates = compatibleBindings(resourceKind);
-    for (const id of Object.keys(defaultsByKind[resourceKind])) {
+    for (const id of Object.keys(defaults)) {
       inheritedResources[id] = {
         kind: resourceKind,
         binding:
           objectValue(resolvedResources[id]).binding ??
           (candidates.length === 1 ? candidates[0] : ""),
-        mode: "managed",
+        ...(resourceKind === "redis.key" ? {} : { mode: "managed" }),
         parameters: {},
       };
     }
@@ -96183,20 +96539,6 @@ export function ApplicationLibraryResources({
           )}
         </>
       )}
-      {showAddActions &&
-        Object.entries(defaultsByKind).flatMap(([resourceKind, defaults]) =>
-          Object.keys(defaults)
-            .filter((id) => !Object.hasOwn(displayedResources, id))
-            .map((id) => (
-              <button
-                key={resourceKind + id}
-                disabled={disabled}
-                onClick={() => open(id, resourceKind)}
-              >
-                Добавить из defaults · {id}
-              </button>
-            )),
-        )}
       <p className="muted">
         Общие для приложений библиотеки. Удаление записи и изменение имени не
         удаляют и не переименовывают установленный ресурс. Ссылки проверяет Core

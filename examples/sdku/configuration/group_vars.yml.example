@@ -5,6 +5,9 @@
 # Requires a runtime containing direct Kafka/PostgreSQL resource keys.
 
 platform_desired_state:
+  endpointGroups:
+    sdk-endpoint:
+      address: {domain: sdk.example.invalid, wildcard: true}
   applicationLibraryDeployments:
     sdku-main:
       libraryRef: sdku@1.0.0
@@ -22,6 +25,8 @@ platform_desired_state:
         messaging: {deploymentRef: kafka-apps}
         secrets: {deploymentRef: vault-apps}
         application-pki: {profileRef: application-pki}
+        endpoint: {endpointGroupRef: sdk-endpoint}
+        sso: {providedConnectionRef: {libraryId: szi, name: sso}}
       connection_defaults:
         kafka: {connectionRef: SASL_SSL}
         # Choose sentinel only for a Sentinel-backed Redis connection.

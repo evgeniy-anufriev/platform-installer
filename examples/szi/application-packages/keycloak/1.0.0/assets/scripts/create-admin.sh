@@ -87,6 +87,31 @@ url=$1
 password=$(cat /run/platform-admin-password)
 [ -s /run/platform-bootstrap-secret ] && [ -n "$password" ] || fail
 
+printf '%s\n' '{"username":"admin","enabled":true,"firstName":"admin","lastName":"admin","email":"admin@admin.ru","attributes":{"middleName":["admin"],"platform.installer.bootstrap":["szi"]}}' \
+  > /run/platform-admin-work/admin.json
+
+fill_admin_profile() {
+  "$kc" get "users/$1" -r master --fields firstName,lastName,email,attributes --config "$config" \
+    > /run/platform-admin-work/admin-current.json || fail 170
+  jq --slurpfile defaults /run/platform-admin-work/admin.json '
+    def fill($fallback): if . == null or . == "" then $fallback else . end;
+    $defaults[0] as $default |
+    {firstName, lastName, email, attributes} as $current |
+    ($current |
+      .firstName |= fill($default.firstName) |
+      .lastName |= fill($default.lastName) |
+      .email |= fill($default.email) |
+      .attributes.middleName |=
+        (if . == null or . == [] or . == [""] then $default.attributes.middleName else . end)) as $updated |
+    if $updated == $current then empty else $updated end
+  ' /run/platform-admin-work/admin-current.json > /run/platform-admin-work/admin-profile.json || fail 171
+  if [ -s /run/platform-admin-work/admin-profile.json ]; then
+    "$kc" update "users/$1" -r master -f /run/platform-admin-work/admin-profile.json \
+      --config "$config" || fail 172
+    profile_changed=true
+  fi
+}
+
 # The CLI uses a private truststore; TLS name checking remains enabled.
 keytool -importcert -noprompt -alias platform-ca -file /opt/application/pki/ca-chain.pem \
   -keystore /run/platform-admin-work/truststore.p12 -storetype PKCS12 \
@@ -105,7 +130,18 @@ if ! KC_CLI_CLIENT_SECRET="$(cat /run/platform-bootstrap-secret)" \
     --format csv --noquotes --config "$config") || fail 60
   clients=$(printf '%s\n' "$raw_clients" | grep -E '^[0-9a-fA-F-]{36}$' || true)
   [ -z "$clients" ] || fail 61
-  printf 'unchanged' > /run/platform-admin-work/result
+  raw_users=$("$kc" get users -r master -q username=admin -q exact=true --fields id \
+    --format csv --noquotes --config "$config") || fail 70
+  users=$(printf '%s\n' "$raw_users" | grep -E '^[0-9a-fA-F-]{36}$' || true)
+  case "$users" in *'
+'*|'') fail 71;; esac
+  profile_changed=false
+  fill_admin_profile "$users"
+  if [ "$profile_changed" = true ]; then
+    printf 'changed' > /run/platform-admin-work/result
+  else
+    printf 'unchanged' > /run/platform-admin-work/result
+  fi
   exit 0
 fi
 
@@ -117,8 +153,6 @@ case "$users" in *'
 new_admin=false
 if [ -z "$users" ]; then
   new_admin=true
-  printf '%s\n' '{"username":"admin","enabled":true,"attributes":{"platform.installer.bootstrap":["szi"]}}' \
-    > /run/platform-admin-work/admin.json
   "$kc" create users -r master -f /run/platform-admin-work/admin.json \
     --config "$config" || fail 80
   raw_users=$("$kc" get users -r master -q username=admin -q exact=true --fields id \
@@ -132,6 +166,7 @@ else
     printf '%s\n' "$attributes" | grep -F '"platform.installer.bootstrap"' >/dev/null || fail 101
     printf '%s\n' "$attributes" | grep -F '"szi"' >/dev/null || fail 101
   fi
+  fill_admin_profile "$users"
 fi
 
 roles=$("$kc" get-roles -r master --uusername admin --fields name --format csv --noquotes \

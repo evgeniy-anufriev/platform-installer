@@ -437,7 +437,7 @@ reported as a warning, not rejected as policy.
 Library `resource_defaults.kafka.topics.<resourceId>` supplies Kafka parameter
 defaults. The same subtree in library instance group_vars overrides the package;
 `resources.<resourceId>.parameters` overrides both (recursive config merge).
-Only selected `resources` are created. Defaults alone create nothing. Effective
+Topic defaults select resources when the library has an unambiguous Kafka binding. Effective
 RF/minISR are calculated after merging against the selected deployment.
 
 Application defaults or instance `overrides.topicBindings` map declared Kafka
@@ -655,15 +655,21 @@ statuses are reserved for an operation that cannot return a trustworthy snapshot
 missing rows without matching findings and changed input identities still fail.
 Runtime/execution admission remains blocked by the existing validation gates.
 
+Package defaults can contain literal values and quoted Jinja expressions.
+Core checks literals when it reads the package and checks computed values
+after Ansible renders them. This applies to application `defaults` and library
+`defaults`, `resource_defaults`, `connection_defaults` and
+`provided_connections`. Keep YAML keys, package references and slot
+declarations static. For example, a Kafka topic default can use
+`name: '{{ library_instance_id }}-alarms'`.
+
 Standard Ansible tasks merge library package resource_defaults, instance
 resource_defaults and explicit selected resource.parameters, in that order.
-Kafka uses resource_defaults.kafka.topics; PostgreSQL uses
-resource_defaults.postgresql.databases. Package-declared PostgreSQL and ClickHouse
-database defaults select effective library resources when the selected library/app
-connections declare one unambiguous provider binding. Explicit resources override
-the corresponding IDs. Names and parameters still resolve through ordinary
-Ansible defaults/overrides; no entries are copied into desired-state files.
-Kafka topics and other resource kinds still require explicit selection.
+Database, Kafka topic and Redis key defaults select effective resources when
+the library and selected applications declare one unambiguous provider binding
+for that kind. Explicit resources override the corresponding IDs. Names and
+parameters resolve through ordinary Ansible defaults and overrides. Core
+keeps these resources in the runtime projection.
 Before parameters and ENV expand, each placement receives
 application_topics.<connection>.<resourceId>.name and
 application_databases.<connection>.<resourceId>.name (plus resourceId).

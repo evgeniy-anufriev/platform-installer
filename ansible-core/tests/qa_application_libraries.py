@@ -106,10 +106,12 @@ class StandaloneLibrariesQA(unittest.TestCase):
             self.edit(path, lambda d: d['platform_library_definition'].update(
                 connections=connections, resource_defaults={'clickhouse': {'databases': {
                     'history': {'name': "{{ library_instance_id | replace('-', '_') }}"},
-                    'unused': {'name': 'not_created'}}}}))
+                    f'{library}-default': {'name': f'{library}_default'}}}}))
         def setup(d):
-            for lib in d['platform_desired_state']['applicationLibraryDeployments'].values():
+            for key, lib in d['platform_desired_state']['applicationLibraryDeployments'].items():
                 lib['resources']['history'] = dict(kind='clickhouse.database', binding='analytics', parameters={})
+                lib['resources'][f'{key}-explicit'] = dict(
+                    kind='clickhouse.database', binding='analytics', parameters={'name': f'{key}_explicit'})
         self.edit(self.vars, setup)
         def app(d):
             definition = d['platform_application_definition']
@@ -124,8 +126,11 @@ class StandaloneLibrariesQA(unittest.TestCase):
             self.assertEqual('PASS', result['status'], [(f['code'], f.get('field')) for f in result['findings']])
             for key, library in result['applicationLibraries']['libraries'].items():
                 name = expected if key == 'sdku' else 'cspa'
-                self.assertNotIn('unused', library['resources'])
-                self.assertEqual(name, library['resources']['history']['parameters']['name'])
+                databases = {resource_id: resource['parameters']['name']
+                             for resource_id, resource in library['resources'].items()
+                             if resource['kind'] == 'clickhouse.database'}
+                self.assertEqual({'history': name, f'{key}-default': f'{key}_default',
+                                  f'{key}-explicit': f'{key}_explicit'}, databases)
                 instance = library['instances']['apigateway-' + key]
                 self.assertEqual('clickhouse', instance['connections']['archive']['serviceType'])
                 for placement in instance['placements'].values():
@@ -143,7 +148,10 @@ class StandaloneLibrariesQA(unittest.TestCase):
         self.edit(self.vars, lambda d: d['platform_desired_state']['applicationLibraryDeployments']['sdku'].pop('resource_defaults'))
         projected()
         self.edit(self.defaults, lambda d: d['platform_application_definition']['connections'].append('missing'))
-        self.snapshot(expected_error='Unknown library connection:')
+        result = self.snapshot()
+        self.assertEqual('PARTIAL', result['status'])
+        self.assertIn(('APPLICATION_INPUT_INVALID', 'applicationLibraryDeployments.sdku.applications.gateway.placements.node1'),
+                      [(f['code'], f.get('field')) for f in result['findings']])
 
     def test_direct_resource_keys_and_legacy_collision_reset(self):
         for library in ('sdku', 'cspa'):
@@ -173,8 +181,8 @@ class StandaloneLibrariesQA(unittest.TestCase):
             result = self.snapshot()
             self.assertEqual('PASS', result['status'], [(f['code'], f.get('field')) for f in result['findings']])
             for key, lib in result['applicationLibraries']['libraries'].items():
-                self.assertNotIn('unused', lib['resources'])
-                self.assertNotIn('unused_db', lib['resources'])
+                self.assertEqual('not.created', lib['resources']['unused']['parameters']['name'])
+                self.assertEqual('not-created', lib['resources']['unused_db']['parameters']['name'])
                 db = database if key == 'sdku' else key + '-db'
                 self.assertEqual(db, lib['resources']['model']['parameters']['name'])
                 for row in lib['instances']['apigateway-' + key]['placements'].values():
@@ -194,9 +202,45 @@ class StandaloneLibrariesQA(unittest.TestCase):
         self.edit(self.vars, lambda d: d['platform_desired_state']['applicationLibraryDeployments']['sdku']['applications']['gateway']['overrides'].pop('topicBindings'))
         projected()
         self.edit(self.vars, lambda d: resources(d)['main'].update(binding='database'))
-        self.snapshot(expected_error='FAILED!')
+        self.assertEqual('PARTIAL', self.snapshot()['status'])
         self.edit(self.vars, lambda d: resources(d).pop('main'))
-        self.snapshot(expected_error='FAILED!')
+        projected()
+
+    def test_templated_package_defaults_are_validated_after_resolution(self):
+        library = os.path.join(self.root, 'library-packages/sdku/1.0.0/roles/library_sdku/defaults/main.yml')
+        def defaults(data):
+            definition = data['platform_library_definition']
+            definition['connection_defaults']['kafka']['connectionRef'] = "{{ 'CLIENT_SSL' }}"
+            definition['resource_defaults'] = {'kafka': {'topics': {'events': {
+                'name': '{{ library_instance_id }}-events', 'partitions': '{{ qa_kafka_partitions }}'}}},
+                'redis': {'keys': {'metadata': {'name': '{{ library_instance_id }}-meta'}}}}
+        self.edit(library, defaults)
+        def project_values(data):
+            data['qa_kafka_partitions'] = 2
+            gateway = data['platform_desired_state']['applicationLibraryDeployments']['sdku']['applications']['gateway']
+            gateway['overrides'].pop('ports')
+
+        self.edit(self.vars, project_values)
+        self.edit(self.defaults, lambda d: d['platform_application_definition']['defaults'].update(
+            ports={'http': {'container': '{{ 8080 }}', 'published': '{{ 18080 }}'}}))
+
+        snapshot = self.snapshot()
+        self.assertEqual('PASS', snapshot['status'], snapshot['findings'])
+        sdku = snapshot['applicationLibraries']['libraries']['sdku']
+        self.assertEqual('CLIENT_SSL', sdku['instances']['apigateway-sdku']['connections']['kafka']['connectionRef'])
+        self.assertEqual('sdku-events', sdku['topics']['events']['name'])
+        self.assertEqual(2, sdku['topics']['events']['partitions'])
+        self.assertEqual({'kind': 'redis.key', 'binding': 'cache', 'parameters': {'name': 'sdku-meta'}},
+                         sdku['resources']['metadata'])
+        self.assertEqual(8080, sdku['instances']['apigateway-sdku']['placements']['node1']['ports']['http']['container'])
+
+        # An inherited resource default still goes through the strict resolved schema.
+        self.edit(library, lambda d: d['platform_library_definition']['resource_defaults']['kafka']['topics'].update(
+            invalid={'name': "{{ 'invalid topic' }}"}))
+        snapshot = self.snapshot()
+        self.assertEqual('PARTIAL', snapshot['status'])
+        self.assertIn(('SCHEMA_VALIDATION_FAILED', '/resource_defaults/kafka/topics/invalid/name'),
+                      [(f['code'], f.get('field')) for f in snapshot['findings']])
 
     def test_named_topic_roles_inherit_names_and_reset_without_target_writes(self):
         library_defaults = os.path.join(self.root, 'library-packages/sdku/1.0.0/roles/library_sdku/defaults/main.yml')
@@ -215,7 +259,10 @@ class StandaloneLibrariesQA(unittest.TestCase):
             value = self.snapshot()
             self.assertEqual('PASS', value['status'], [(f['code'], f.get('field')) for f in value['findings']])
             for key, lib in value['applicationLibraries']['libraries'].items():
-                self.assertNotIn('unused', lib['topics'])
+                if key == 'sdku':
+                    self.assertEqual('not.created', lib['topics']['unused']['name'])
+                else:
+                    self.assertNotIn('unused', lib['topics'])
                 instance = lib['instances']['apigateway-' + key]
                 name = instance['topics']['kafka']['main']['name']
                 self.assertTrue(all(p['environment']['MAIN_TOPIC'] == name for p in instance['placements'].values()))
@@ -240,10 +287,10 @@ class StandaloneLibrariesQA(unittest.TestCase):
         projected()
         for ref in ('', 'missing'):
             self.edit(self.vars, lambda d: d['platform_desired_state']['applicationLibraryDeployments']['sdku']['applications']['gateway']['overrides'].update(topicBindings={'kafka': {'main': ref}}))
-            self.snapshot(expected_error='Invalid Kafka topic role: sdku/gateway/kafka/main')
+            self.assertEqual('PARTIAL', self.snapshot()['status'])
         self.edit(self.vars, lambda d: d['platform_desired_state']['applicationLibraryDeployments']['sdku']['applications']['gateway']['overrides'].pop('topicBindings'))
         self.edit(self.vars, lambda d: d['platform_desired_state']['applicationLibraryDeployments']['sdku']['resources']['events'].update(binding='wrong'))
-        self.snapshot(expected_error='Invalid Kafka topic role: sdku/gateway/kafka/main')
+        self.assertEqual('PARTIAL', self.snapshot()['status'])
 
     def test_required_environment_resolves_after_package_parameter_defaults(self):
         def defaults(data):

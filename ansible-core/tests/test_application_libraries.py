@@ -35,6 +35,34 @@ class ApplicationLibrariesTest(unittest.TestCase):
             with self.subTest(value=value):
                 self.assertFalse(APP._literal_library_input(value))
 
+    def test_template_key_check_handles_yaml_aliases(self):
+        aliases = yaml.safe_load('shared: &shared [value]\nfirst: *shared\nsecond: *shared')
+        self.assertFalse(APP._has_template_key(aliases))
+        self.assertFalse(APP._has_template_key(yaml.safe_load('recursive: &recursive [*recursive]')))
+        aliases['first'].append({'{{ dynamic_key }}': 'value'})
+        self.assertTrue(APP._has_template_key(aliases))
+
+    def test_package_admission_only_defers_templated_values(self):
+        validator = SchemaValidator(CONTRACTS)
+        for topic_name, slot, expected_error in (
+            ('{{ library_instance_id }}-events', 'gateway', None),
+            ('invalid topic', 'gateway', 'Package defaults shape invalid'),
+            ('events', '{{ slot_id }}', 'Package defaults keys must be static'),
+        ):
+            def load_defaults(path):
+                document = load(path)
+                if path.endswith('defaults/main.yml'):
+                    definition = document['platform_library_definition']
+                    definition['resource_defaults'] = {'kafka': {'topics': {'events': {'name': topic_name}}}}
+                    definition['slots'][slot] = definition['slots'].pop('gateway')
+                return document
+            with self.subTest(topic=topic_name, slot=slot):
+                if expected_error:
+                    with self.assertRaisesRegex(ValueError, expected_error):
+                        APP.load_package(FIXTURE, 'sdku@1.0.0', 'library', load_defaults, validator)
+                else:
+                    APP.load_package(FIXTURE, 'sdku@1.0.0', 'library', load_defaults, validator)
+
     def test_szi_keycloak_uses_directory_and_archive_settings(self):
         package = os.path.join(REPO, "examples/szi/application-packages/keycloak/1.0.0")
         with open(os.path.join(package, "roles/application_keycloak/defaults/main.yml"), encoding="utf-8") as stream:
@@ -236,19 +264,38 @@ class ApplicationLibrariesTest(unittest.TestCase):
                 for expression, prefix in expressions:
                     self.assertEqual(prefix + expected if expected else '', templar.template(expression, fail_on_undefined=True))
 
-    def test_library_database_defaults_select_resources_without_freezing_names(self):
+    def test_library_defaults_select_resources_without_freezing_names(self):
         definition = {'connections': {'postgres': {'library_binding': 'database'}, 'clickhouse': {'library_binding': 'analytics'}},
                       'resource_defaults': {'postgresql': {'databases': {'keycloak-db': {'name': '{{ library_instance_id }}'}}},
                                             'clickhouse': {'databases': {'archive': {'name': 'archive'}}}}}
         deployment = {'resources': {'keycloak-db': {'kind': 'postgresql.database', 'binding': 'database', 'parameters': {'name': 'custom'}}}}
         before = copy.deepcopy(deployment)
-        resources = APP.library_database_resources(definition, deployment)
+        resources = APP.library_resources(definition, deployment)
         self.assertEqual(before, deployment)
         self.assertEqual('custom', resources['keycloak-db']['parameters']['name'])
         self.assertEqual({'kind': 'clickhouse.database', 'binding': 'analytics', 'mode': 'managed', 'parameters': {}}, resources['archive'])
-        empty = APP.library_database_resources(definition, {})
+        empty = APP.library_resources(definition, {})
         self.assertEqual({}, empty['keycloak-db']['parameters'])
         self.assertEqual('database', empty['keycloak-db']['binding'])
+
+    def test_kafka_and_redis_defaults_follow_provider_binding_and_explicit_overrides(self):
+        definition = {
+            'connections': {'kafka': {'library_binding': 'messaging'}, 'redis': {'library_binding': 'cache'}},
+            'resource_defaults': {'kafka': {'topics': {'events': {'name': 'package-events'}}},
+                                  'redis': {'keys': {'metadata': {'name': 'package-meta'}}}},
+        }
+        deployment = {
+            'resource_defaults': {'redis': {'keys': {'alerts': {'name': 'project-alerts'}}}},
+            'resources': {'events': {'kind': 'kafka.topic', 'binding': 'messaging', 'mode': 'existing',
+                                     'parameters': {'name': 'explicit-events'}}},
+        }
+        resources = APP.library_resources(definition, deployment)
+        self.assertEqual(deployment['resources']['events'], resources['events'])
+        for name in ('metadata', 'alerts'):
+            self.assertEqual({'kind': 'redis.key', 'binding': 'cache', 'parameters': {}}, resources[name])
+        resources = APP.library_resources(definition, {})
+        self.assertEqual({'kind': 'kafka.topic', 'binding': 'messaging', 'mode': 'managed', 'parameters': {}},
+                         resources['events'])
 
     def test_package_closure_two_libraries_two_hosts(self):
         prepared = self.prepare()

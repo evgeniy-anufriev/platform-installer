@@ -103,7 +103,8 @@ case "$*" in
       *) [ "$TEST_ADMIN_LOGIN_ALLOWED" = 1 ] && [ "${KC_CLI_PASSWORD:-}" = fixture-admin ];;
     esac;;
   'get users -r '*) printf 'id\\n11111111-1111-1111-1111-111111111111\\n';;
-  'get users/'*) printf '{}\\n';;
+  'get users/'*) printf '{"firstName":"Existing","attributes":{"custom":["keep"]}}\\n';;
+  'update users/'*) exit 0;;
   'get-roles '*) printf 'name\\nadmin\\n';;
   'get clients '*) printf 'id\\n22222222-2222-2222-2222-222222222222\\n';;
   'delete clients/'*) exit 0;;
@@ -131,6 +132,11 @@ esac
                     self.assertEqual(0, result.returncode, result.stderr)
                     self.assertEqual('changed', (root / 'work/result').read_text())
                     self.assertIn('delete clients/22222222-', commands)
+                    self.assertIn('update users/11111111-', commands)
+                    self.assertEqual({
+                        'firstName': 'Existing', 'lastName': 'admin', 'email': 'admin@admin.ru',
+                        'attributes': {'custom': ['keep'], 'middleName': ['admin']},
+                    }, json.loads((root / 'work/admin-profile.json').read_text()))
                 else:
                     self.assertNotEqual(0, result.returncode)
                     self.assertNotIn('delete clients/', commands)
@@ -183,6 +189,10 @@ esac
             self.assertTrue((root / 'password-set').exists())
             self.assertTrue((root / 'removed').exists())
             self.assertFalse((root / 'early-login').exists())
+            profile = json.loads((root / 'work/admin.json').read_text())
+            self.assertEqual(('admin', 'admin', 'admin@admin.ru', ['admin']),
+                             (profile['firstName'], profile['lastName'], profile['email'],
+                              profile['attributes']['middleName']))
 
     def test_admin_host_wrapper_does_not_read_container_private_pki(self):
         script = ROOT / 'examples/szi/application-packages/keycloak/1.0.0/assets/scripts/create-admin.sh'

@@ -30,6 +30,10 @@ platform_application_definition:
             destination: hmi-frontend-para.conf
             mode: "0644"
         parameters:
+            # Library provider hooks need the resolved groups even for a frontend without inherited ENV.
+            IDENTITY_GROUPS: >-
+                {{ (_application_shared.overrides.parameters | default({})).get(
+                  'IDENTITY_GROUPS', (_application_shared.defaults.parameters | default({})).get('IDENTITY_GROUPS', [])) }}
             IDENTITY_CLIENT: "{{ (lookup('ansible.builtin.template', (application_job.application.defaultsPath | dirname) ~ '/../../../assets/keycloak-client.json.j2', convert_data=false) | from_json) if 'sso' in application_connections else {} }}"
         ports:
             port-1:

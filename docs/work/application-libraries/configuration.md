@@ -462,7 +462,7 @@ infrastructure desired state, not an application-account hook side effect.
 Standard Ansible tasks merge library package resource_defaults, instance
 resource_defaults and explicit selected resource.parameters, in that order.
 Kafka uses resource_defaults.kafka.topics; PostgreSQL uses
-resource_defaults.postgresql.databases. Defaults alone select/create nothing.
+resource_defaults.postgresql.databases. Defaults select resources with an unambiguous provider binding.
 Before parameters and ENV expand, each placement receives
 application_topics.<connection>.<resourceId>.name and
 application_databases.<connection>.<resourceId>.name (plus resourceId).
@@ -511,7 +511,7 @@ Redis keys use resource_defaults.redis.keys and selected resources of kind
 redis.key (binding plus parameters.name). Precedence is package -> library
 instance resource_defaults -> selected resource.parameters. Clear removes the
 explicit name override. Redis key references have no mode or databaseRef; manually
-supplying those fields is invalid. Defaults alone select nothing.
+supplying those fields is invalid. Redis key defaults select resources with an unambiguous Redis binding.
 
 library_resources exposes the normalized selected map to library/application
 templates. SDKU declares dm-meta, alert-hdl, alert-class. Shared library ENV uses,

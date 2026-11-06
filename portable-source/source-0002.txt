@@ -1,4 +1,4 @@
-@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":77997,"sha256":"895d41b503450bf1c40a40a1779e2ea57ff88950a505a044ef5c7625c029dd26","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":49891}
+@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":78114,"sha256":"1dcdf8a04d2a58ac8bca1d54c4c55da7ba9887f391640edab022cea7faf0182c","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":49860}
 import { ApplicationProvidedConnections } from "./ApplicationProvidedConnections";
 import { type ApplicationSecretSession } from "./ApplicationRuntimeSecretField";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -251,6 +251,20 @@ export function ApplicationsPage({
       objectValue(packages[kind + ":" + String(reference)]).definition,
     );
   const definition = packageDefinition("library", library.libraryRef);
+  const resourceDefaults = (provider: string, section: string): ObjectValue => {
+    const defaults = (value: unknown) =>
+      objectValue(objectValue(objectValue(value)[provider])[section]);
+    const packaged = defaults(definition.resource_defaults);
+    const instance = defaults(library.resource_defaults);
+    return Object.fromEntries(
+      [...new Set([...Object.keys(packaged), ...Object.keys(instance)])].map(
+        (id) => [
+          id,
+          { ...objectValue(packaged[id]), ...objectValue(instance[id]) },
+        ],
+      ),
+    );
+  };
   const declaredConnections = (value: unknown): ObjectValue =>
     Array.isArray(value)
       ? Object.fromEntries(
@@ -1289,7 +1303,10 @@ export function ApplicationsPage({
                         }
                         label={
                           section === "environment"
-                            ? "Общие ENV"
+             
+@@END
+@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":78114,"sha256":"1dcdf8a04d2a58ac8bca1d54c4c55da7ba9887f391640edab022cea7faf0182c","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":28254}
+               ? "Общие ENV"
                             : "Общие параметры конфигурации"
                         }
                         value={objectValue(
@@ -1301,10 +1318,7 @@ export function ApplicationsPage({
                         disabled={busy}
                         onDirtyChange={(value) =>
                           markChildDirty(value, section)
-               
-@@END
-@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":77997,"sha256":"895d41b503450bf1c40a40a1779e2ea57ff88950a505a044ef5c7625c029dd26","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":28106}
-         }
+                        }
                         onSave={(value) =>
                           send(
                             Object.keys(value).length
@@ -1389,26 +1403,16 @@ export function ApplicationsPage({
                       resources={objectValue(library.resources)}
                       resolvedTopics={resolvedTopics}
                       resolvedResources={resolvedResources}
-                      redisDefaults={objectValue(
-                        objectValue(
-                          objectValue(definition.resource_defaults).redis,
-                        ).keys,
+                      redisDefaults={resourceDefaults("redis", "keys")}
+                      databaseDefaults={resourceDefaults(
+                        "postgresql",
+                        "databases",
                       )}
-                      databaseDefaults={objectValue(
-                        objectValue(
-                          objectValue(definition.resource_defaults).postgresql,
-                        ).databases,
+                      clickhouseDefaults={resourceDefaults(
+                        "clickhouse",
+                        "databases",
                       )}
-                      clickhouseDefaults={objectValue(
-                        objectValue(
-                          objectValue(definition.resource_defaults).clickhouse,
-                        ).databases,
-                      )}
-                      topicDefaults={objectValue(
-                        objectValue(
-                          objectValue(definition.resource_defaults).kafka,
-                        ).topics,
-                      )}
+                      topicDefaults={resourceDefaults("kafka", "topics")}
                       bindings={objectValue(library.bindings)}
                       disabled={busy}
                       onDirtyChange={(v) => markChildDirty(v, "resources")}
@@ -60341,6 +60345,65 @@ except Exception as error:
 PY
 
 @@END
+@@PORTABLE {"path":"scripts/diagnose_keycloak_create_admin.sh","mode":420,"size":1879,"sha256":"49297c2408916ccb9f55d37457f0b4f3ee3a53eb5f6df50c66cef04ab8adc557","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1879}
+#!/usr/bin/env bash
+# Run on the host where create-admin failed.
+set -euo pipefail
+
+if (( $# > 1 )); then
+    echo "Usage: sudo bash $0 [runtime-directory]" >&2
+    exit 2
+fi
+
+root=${1:-/home/scada-docker}
+if [[ ! -d "$root" ]]; then
+    printf 'SEARCH_DIRECTORY_NOT_FOUND: %s\n' "$root" >&2
+    exit 1
+fi
+root=$(realpath -- "$root")
+
+latest=$(find "$root" -type f -path '*/.scripts/diagnostics/create-admin-*.log' \
+    -printf '%T@\t%p\0' | sort -z -k1,1n | tail -z -n 1 | tr -d '\000')
+if [[ -z "$latest" ]]; then
+    printf 'CREATE_ADMIN_LOG_NOT_FOUND: %s\n' "$root" >&2
+    exit 1
+fi
+log=${latest#*$'\t'}
+printf 'LOG: %s\n' "$log"
+stat -c 'MODIFIED: %y' -- "$log"
+
+awk '
+    BEGIN { phase = "BEFORE_LOGIN" }
+    /^[[:space:]]*[+]+[[:space:]]|keycloak-admin trace:/ {
+        if ($0 ~ /kcadm\.sh config credentials.*--client temp-admin([[:space:]]|$)/)
+            phase = "LOGIN_TEMP_ADMIN"
+        else if ($0 ~ /kcadm\.sh config credentials.*--client admin-cli([[:space:]]|$)/)
+            phase = "LOGIN_ADMIN_CLI"
+        else if ($0 ~ /kcadm\.sh get clients.*clientId=temp-admin([[:space:]]|$)/)
+            phase = "GET_CLIENTS"
+        else if ($0 ~ /[[:space:]]fail 60([[:space:]]|$)/)
+            phase = "STEP_60"
+        else
+            next
+        print NR, phase
+        traced = 1
+        next
+    }
+    {
+        line = tolower($0)
+        while (match(line, /http( error| status)?[ :]+[0-9][0-9][0-9]|[0-9][0-9][0-9] (unauthorized|forbidden)|invalid_client|invalid_grant|unauthorized|forbidden|connection refused|timed out|pkix|certificate verify failed|failed to send request/)) {
+            print NR, phase, substr(line, RSTART, RLENGTH)
+            found = 1
+            line = substr(line, RSTART + RLENGTH)
+        }
+    }
+    END {
+        if (!traced) print "NO_KNOWN_TRACE_PHASES"
+        if (!found) print "NO_KNOWN_ERROR_MARKERS"
+    }
+' "$log"
+
+@@END
 @@PORTABLE {"path":"scripts/diagnose_pki_pairs.sh","mode":493,"size":9025,"sha256":"51bf8e2ea1180a9ea0df117b7a8db089ef906d18633a507affdb19490d9b4a2d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":9025}
 #!/usr/bin/env bash
 # Read-only diagnostics on the Execution Node; never prints private key data.
@@ -60537,6 +60600,158 @@ if (( statuses[0] != 0 || statuses[1] != 0 )); then
   exit 2
 fi
 exit "${statuses[2]}"
+
+@@END
+@@PORTABLE {"path":"scripts/diagnose_project_verify.sh","mode":420,"size":6491,"sha256":"5ad0fa7c981a9b1b49c463f5e322783454136d283dfef35392dd4a63ddf19182","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":6491}
+#!/bin/sh
+# Run on the Execution Node with an archive from a trusted project.
+set -eu
+
+if [ "$#" -lt 1 ] || [ "$#" -gt 3 ]; then
+    echo "Usage: sudo sh $0 <full-sha256-revision> [library@version] [application@version]" >&2
+    exit 2
+fi
+
+python3 -B - "$1" "${2:-sdku@1.0.0}" "${3:-data-manager@1.0.0}" <<'PY'
+import json
+import os
+from pathlib import Path
+import re
+import subprocess
+import sys
+import tarfile
+import tempfile
+
+import yaml
+
+expected, library_ref, app_ref = sys.argv[1:]
+if not re.fullmatch(r"sha256:[0-9a-f]{64}", expected):
+    raise SystemExit("Укажите полный sha256 из сообщения Verify.")
+if any(not re.fullmatch(r"[a-z0-9][a-z0-9_.-]*@[0-9]+\.[0-9]+\.[0-9]+", ref)
+       for ref in (library_ref, app_ref)):
+    raise SystemExit("Укажите ссылки на пакеты в формате имя@версия.")
+
+runtime = Path("/var/lib/platform-installer/runtime/current").resolve()
+collections = runtime / "ansible-core/collections"
+utils = collections / "ansible_collections/platform/core/plugins/module_utils"
+if not (utils / "project_snapshot.py").is_file() or not (runtime / "contracts").is_dir():
+    raise SystemExit("Активный runtime Installer не найден.")
+sys.path.insert(0, str(utils))
+from application_libraries import load_package
+from project_snapshot import project_documents
+from schema_validation import SchemaValidator
+
+SAFE_PACKAGE_ERRORS = {
+    "APPLICATION_PACKAGE_VERSION_UNSUPPORTED",
+    "Defaults absent from allowlist",
+    "Defaults identity mismatch",
+    "Duplicate package script identity",
+    "Invalid exact package reference",
+    "Invalid package component",
+    "Invalid package directory",
+    "Invalid package path",
+    "Library dotenv contract invalid",
+    "Package allowlist mismatch",
+    "Package defaults namespace invalid",
+    "Package defaults shape invalid",
+    "Package directory symlink",
+    "Package file limit exceeded",
+    "Package file missing",
+    "Package identity mismatch",
+    "Package manifest shape invalid",
+    "Package path escapes project",
+    "Package root must not be a symlink",
+    "Package script is not allowlisted",
+    "Package script reference invalid",
+    "Package symlinks are forbidden",
+}
+
+
+class PackageYamlError(Exception):
+    pass
+
+
+def read_yaml(path, project):
+    try:
+        return yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+    except yaml.YAMLError as error:
+        mark = getattr(error, "problem_mark", None)
+        location = f", строка {mark.line + 1}, столбец {mark.column + 1}" if mark else ""
+        raise PackageYamlError(f"{Path(path).relative_to(project)}{location}") from None
+
+
+def verify(project):
+    validator = SchemaValidator(str(runtime / "contracts"))
+    packages_ok = True
+    for kind, ref in (("library", library_ref), ("application", app_ref)):
+        try:
+            load_package(str(project), ref, kind, lambda path: read_yaml(path, project), validator)
+        except PackageYamlError as error:
+            print(f"{kind} {ref}: ошибка YAML в {error}")
+            packages_ok = False
+        except (OSError, ValueError, KeyError, TypeError, AttributeError) as error:
+            reason = str(error)
+            print(f"{kind} {ref}: {reason if reason in SAFE_PACKAGE_ERRORS else type(error).__name__}")
+            packages_ok = False
+        else:
+            print(f"{kind} {ref}: OK")
+
+    snapshot = project.parent / "verify-snapshot.json"
+    env = dict(os.environ,
+               ANSIBLE_CONFIG=str(runtime / "ansible-core/ansible.cfg"),
+               ANSIBLE_STDOUT_CALLBACK="default",
+               ANSIBLE_CALLBACKS_ENABLED="platform.core.project_snapshot_json",
+               PLATFORM_PROJECT_SNAPSHOT_OUTPUT=str(snapshot),
+               ANSIBLE_COLLECTIONS_PATH=os.pathsep.join(
+                   [str(collections)] + [str(p) for p in sorted(runtime.glob("services/*/ansible_collections"))]))
+    variables = {
+        "platform_project_root": str(project),
+        "platform_project_manifest_path": str(project / "project.yml"),
+        "platform_service_catalog_path": str(runtime / "catalog/service-catalog.yml"),
+    }
+    result = subprocess.run([
+        "ansible-playbook", "-i", str(project / "inventory/hosts.yml"),
+        str(runtime / "ansible-core/playbooks/project-snapshot-machine.yml"), "-e", json.dumps(variables),
+    ], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+    if not snapshot.is_file():
+        print(f"Снимок Verify не создан. Код выхода Ansible: {result.returncode}")
+        return 1
+    document = json.loads(snapshot.read_text(encoding="utf-8"))
+    print("Статус Verify:", document.get("status"))
+    for finding in document.get("findings", []):
+        print(json.dumps({key: finding[key] for key in ("code", "field", "safeMessage")
+                          if key in finding}, ensure_ascii=False))
+    return 0 if packages_ok and result.returncode == 0 and document.get("status") == "PASS" else 1
+
+
+base = Path("/var/lib/platform-installer/execution/project-archives")
+archives = sorted((p for p in base.glob("*/project.tar") if p.is_file() and not p.is_symlink()),
+                  key=lambda p: p.stat().st_mtime, reverse=True)
+for archive in archives:
+    with tempfile.TemporaryDirectory(prefix="installer-core-check-") as temporary:
+        project = Path(temporary) / "project"
+        project.mkdir(mode=0o700)
+        try:
+            with tarfile.open(archive) as package:
+                members = package.getmembers()
+                if any(Path(m.name).is_absolute() or ".." in Path(m.name).parts
+                       or not (m.isfile() or m.isdir()) for m in members):
+                    continue
+                for member in members:
+                    member.mode = 0o700 if member.isdir() else 0o600
+                    member.uid, member.gid = os.geteuid(), os.getegid()
+                    member.uname = member.gname = ""
+                package.extractall(project, members=members, numeric_owner=False)
+            _, revision = project_documents(str(project))
+        except (OSError, tarfile.TarError, ValueError):
+            continue
+        if revision == expected:
+            print("Ревизия:", revision)
+            print("Архив:", archive)
+            raise SystemExit(verify(project))
+
+raise SystemExit("Архив указанной ревизии не найден на этом Execution Node.")
+PY
 
 @@END
 @@PORTABLE {"path":"scripts/diagnose_vault_ca.sh","mode":493,"size":5217,"sha256":"e3fe3abafe59f5612eeeb41f7db3994ead477ba34135a3104bfc0b553c2c6266","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5217}
@@ -120813,343 +121028,4 @@ The electron alternative for Go
 		window.WailsInvoke = (message) => window.webkit.messageHandlers.external.postMessage(message);
 	}
 })();
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/frontend/runtime/desktop/log.js","mode":420,"size":1919,"sha256":"d1b7c1339a8b14772d74539783d456da346e66a8af845abbea9caa19bb1aab33","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1919}
-/*
- _       __      _ __
-| |     / /___ _(_) /____
-| | /| / / __ `/ / / ___/
-| |/ |/ / /_/ / / (__  )
-|__/|__/\__,_/_/_/____/
-The electron alternative for Go
-(c) Lea Anthony 2019-present
-*/
-
-/* jshint esversion: 6 */
-
-/**
- * Sends a log message to the backend with the given level + message
- *
- * @param {string} level
- * @param {string} message
- */
-function sendLogMessage(level, message) {
-
-	// Log Message format:
-	// l[type][message]
-	window.WailsInvoke('L' + level + message);
-}
-
-/**
- * Log the given trace message with the backend
- *
- * @export
- * @param {string} message
- */
-export function LogTrace(message) {
-	sendLogMessage('T', message);
-}
-
-/**
- * Log the given message with the backend
- *
- * @export
- * @param {string} message
- */
-export function LogPrint(message) {
-	sendLogMessage('P', message);
-}
-
-/**
- * Log the given debug message with the backend
- *
- * @export
- * @param {string} message
- */
-export function LogDebug(message) {
-	sendLogMessage('D', message);
-}
-
-/**
- * Log the given info message with the backend
- *
- * @export
- * @param {string} message
- */
-export function LogInfo(message) {
-	sendLogMessage('I', message);
-}
-
-/**
- * Log the given warning message with the backend
- *
- * @export
- * @param {string} message
- */
-export function LogWarning(message) {
-	sendLogMessage('W', message);
-}
-
-/**
- * Log the given error message with the backend
- *
- * @export
- * @param {string} message
- */
-export function LogError(message) {
-	sendLogMessage('E', message);
-}
-
-/**
- * Log the given fatal message with the backend
- *
- * @export
- * @param {string} message
- */
-export function LogFatal(message) {
-	sendLogMessage('F', message);
-}
-
-/**
- * Sets the Log level to the given log level
- *
- * @export
- * @param {number} loglevel
- */
-export function SetLogLevel(loglevel) {
-	sendLogMessage('S', loglevel);
-}
-
-// Log levels
-export const LogLevel = {
-	TRACE: 1,
-	DEBUG: 2,
-	INFO: 3,
-	WARNING: 4,
-	ERROR: 5,
-};
-
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/frontend/runtime/desktop/main.js","mode":420,"size":6167,"sha256":"2f3f53b9c4d6189fc1c1c44cd51d803c0553a1d17bf68477b162deeb2c286ba5","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":6167}
-/*
- _	   __	  _ __
-| |	 / /___ _(_) /____
-| | /| / / __ `/ / / ___/
-| |/ |/ / /_/ / / (__  )
-|__/|__/\__,_/_/_/____/
-The electron alternative for Go
-(c) Lea Anthony 2019-present
-*/
-/* jshint esversion: 9 */
-import * as Log from './log';
-import {
-  eventListeners,
-  EventsEmit,
-  EventsNotify,
-  EventsOff,
-  EventsOffAll,
-  EventsOn,
-  EventsOnce,
-  EventsOnMultiple,
-} from "./events";
-import { Call, Callback, callbacks } from './calls';
-import { SetBindings } from "./bindings";
-import * as Window from "./window";
-import * as Screen from "./screen";
-import * as Browser from "./browser";
-import * as Clipboard from "./clipboard";
-import * as DragAndDrop from "./draganddrop";
-import * as ContextMenu from "./contextmenu";
-import * as Notifications from "./notifications";
-
-export function Quit() {
-    window.WailsInvoke('Q');
-}
-
-export function Show() {
-    window.WailsInvoke('S');
-}
-
-export function Hide() {
-    window.WailsInvoke('H');
-}
-
-export function Environment() {
-    return Call(":wails:Environment");
-}
-
-// The JS runtime
-window.runtime = {
-    ...Log,
-    ...Window,
-    ...Browser,
-    ...Screen,
-    ...Clipboard,
-    ...DragAndDrop,
-    ...Notifications,
-    EventsOn,
-    EventsOnce,
-    EventsOnMultiple,
-    EventsEmit,
-    EventsOff,
-    EventsOffAll,
-    Environment,
-    Show,
-    Hide,
-    Quit
-};
-
-// Internal wails endpoints
-window.wails = {
-    Callback,
-    EventsNotify,
-    SetBindings,
-    eventListeners,
-    callbacks,
-    flags: {
-        disableScrollbarDrag: false,
-        disableDefaultContextMenu: false,
-        enableResize: false,
-        defaultCursor: null,
-        borderThickness: 6,
-        shouldDrag: false,
-        deferDragToMouseMove: true,
-        cssDragProperty: "--wails-draggable",
-        cssDragValue: "drag",
-        cssDropProperty: "--wails-drop-target",
-        cssDropValue: "drop",
-        enableWailsDragAndDrop: false,
-    }
-};
-
-// Set the bindings
-if (window.wailsbindings) {
-    window.wails.SetBindings(window.wailsbindings);
-    delete window.wails.SetBindings;
-}
-
-// (bool) This is evaluated at build time in package.json
-if (!DEBUG) {
-    delete window.wailsbindings;
-}
-
-let dragTest = function(e) {
-    var val = window.getComputedStyle(e.target).getPropertyValue(window.wails.flags.cssDragProperty);
-    if (val) {
-        val = val.trim();
-    }
-
-    if (val !== window.wails.flags.cssDragValue) {
-        return false;
-    }
-
-    if (e.buttons !== 1) {
-        // Do not start dragging if not the primary button has been clicked.
-        return false;
-    }
-
-    if (e.detail !== 1) {
-        // Do not start dragging if more than once has been clicked, e.g. when double clicking
-        return false;
-    }
-
-    return true;
-};
-
-window.wails.setCSSDragProperties = function(property, value) {
-    window.wails.flags.cssDragProperty = property;
-    window.wails.flags.cssDragValue = value;
-}
-
-window.wails.setCSSDropProperties = function(property, value) {
-    window.wails.flags.cssDropProperty = property;
-    window.wails.flags.cssDropValue = value;
-}
-
-window.addEventListener('mousedown', (e) => {
-    // Check for resizing
-    if (window.wails.flags.resizeEdge) {
-        window.WailsInvoke("resize:" + window.wails.flags.resizeEdge);
-        e.preventDefault();
-        return;
-    }
-
-    if (dragTest(e)) {
-        if (window.wails.flags.disableScrollbarDrag) {
-            // This checks for clicks on the scroll bar
-            if (e.offsetX > e.target.clientWidth || e.offsetY > e.target.clientHeight) {
-                return;
-            }
-        }
-        if (window.wails.flags.deferDragToMouseMove) {
-            window.wails.flags.shouldDrag = true;
-        } else {
-            e.preventDefault()
-            window.WailsInvoke("drag");
-        }
-        return;
-    } else {
-        window.wails.flags.shouldDrag = false;
-    }
-});
-
-window.addEventListener('mouseup', () => {
-    window.wails.flags.shouldDrag = false;
-});
-
-function setResize(cursor) {
-    document.documentElement.style.cursor = cursor || window.wails.flags.defaultCursor;
-    window.wails.flags.resizeEdge = cursor;
-}
-
-window.addEventListener('mousemove', function(e) {
-    if (window.wails.flags.shouldDrag) {
-        window.wails.flags.shouldDrag = false;
-        let mousePressed = e.buttons !== undefined ? e.buttons : e.which;
-        if (mousePressed > 0) {
-            window.WailsInvoke("drag");
-            return;
-        }
-    }
-    if (!window.wails.flags.enableResize) {
-        return;
-    }
-    if (window.wails.flags.defaultCursor == null) {
-        window.wails.flags.defaultCursor = document.documentElement.style.cursor;
-    }
-    if (window.outerWidth - e.clientX < window.wails.flags.borderThickness && window.outerHeight - e.clientY < window.wails.flags.borderThickness) {
-        document.documentElement.style.cursor = "se-resize";
-    }
-    let rightBorder = window.outerWidth - e.clientX < window.wails.flags.borderThickness;
-    let leftBorder = e.clientX < window.wails.flags.borderThickness;
-    let topBorder = e.clientY < window.wails.flags.borderThickness;
-    let bottomBorder = window.outerHeight - e.clientY < window.wails.flags.borderThickness;
-
-    // If we aren't on an edge, but were, reset the cursor to default
-    if (!leftBorder && !rightBorder && !topBorder && !bottomBorder && window.wails.flags.resizeEdge !== undefined) {
-        setResize();
-    } else if (rightBorder && bottomBorder) setResize("se-resize");
-    else if (leftBorder && bottomBorder) setResize("sw-resize");
-    else if (leftBorder && topBorder) setResize("nw-resize");
-    else if (topBorder && rightBorder) setResize("ne-resize");
-    else if (leftBorder) setResize("w-resize");
-    else if (topBorder) setResize("n-resize");
-    else if (bottomBorder) setResize("s-resize");
-    else if (rightBorder) setResize("e-resize");
-
-});
-
-// Setup context menu hook
-window.addEventListener('contextmenu', function(e) {
-    // always show the contextmenu in debug & dev
-    if (DEBUG) return;
-
-    if (window.wails.flags.disableDefaultContextMenu) {
-        e.preventDefault();
-    } else {
-        ContextMenu.processDefaultContextMenu(e);
-    }
-});
-
-window.WailsInvoke("runtime:ready");
 @@END

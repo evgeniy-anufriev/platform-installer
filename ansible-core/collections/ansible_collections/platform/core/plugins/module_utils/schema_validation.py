@@ -11,6 +11,7 @@ jsonschema exception text directly (which could contain a secret value).
 
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -115,6 +116,34 @@ def _safe_schema_path(error):
     return _json_pointer(error.absolute_schema_path)
 
 
+_TEMPLATE = re.compile(r"\{\{.+?\}\}|\{%.+?%\}", re.DOTALL)
+_VALUE_KEYWORDS = {
+    "const", "enum", "format", "maxLength", "minLength", "pattern",
+    "maximum", "minimum", "exclusiveMaximum", "exclusiveMinimum", "multipleOf",
+}
+_SCALAR_TYPES = {"string", "integer", "number", "boolean", "null"}
+
+
+def _deferred_template_error(error, sections):
+    path = error.absolute_path
+    if not path or path[0] not in sections or "propertyNames" in error.absolute_schema_path:
+        return False
+    if error.validator in ("anyOf", "oneOf"):
+        # Each context path starts with its alternative's index. One
+        # otherwise valid alternative suffices until the value is rendered.
+        branches = {}
+        for child in error.context:
+            branches.setdefault(child.schema_path[0], []).append(child)
+        return any(all(_deferred_template_error(child, sections) for child in branch)
+                   for branch in branches.values())
+    if len(path) < 2 or not isinstance(error.instance, str) or not _TEMPLATE.search(error.instance):
+        return False
+    if error.validator == "type":
+        types = error.validator_value
+        return bool(_SCALAR_TYPES.intersection([types] if isinstance(types, str) else types))
+    return error.validator in _VALUE_KEYWORDS
+
+
 class SchemaValidator(object):
     """Validate documents with a local-only Draft 2020-12 registry."""
 
@@ -140,7 +169,7 @@ class SchemaValidator(object):
                 )
             self.schemas[schema_id] = document
 
-    def validate(self, instance, schema_path):
+    def validate(self, instance, schema_path, template_sections=()):
         """Return safe Finding dictionaries for one local schema path."""
         path = Path(schema_path).resolve()
         try:
@@ -208,6 +237,8 @@ class SchemaValidator(object):
             )
         findings = []
         for error in errors:
+            if template_sections and _deferred_template_error(error, template_sections):
+                continue
             findings.append(
                 {
                     "apiVersion": "platform.installer/finding/v1alpha1",

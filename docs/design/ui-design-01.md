@@ -370,9 +370,9 @@ Owner temporarily hides database/topic/Redis/from-default resource add actions
 in the library Resources and secrets screen. Existing configured resources and
 their edit/remove actions remain. The full selected list is grouped by deployment
 inside a vertically scrollable420px table with sticky headings; no pagination.
-resource_defaults describes parameter templates, not implicitly selected
-resources. Hiding add actions does not activate those templates or create new
-desired resources. The older HTML prototype does not show these refinements;
+The table includes database, Kafka topic and Redis key defaults alongside explicit
+resources. Editing or resetting an inherited row uses the existing override flow.
+The older HTML prototype does not show these refinements;
 the owner requests resolve that layout discrepancy.
 
 The production Secrets tab edits `overrides.provisioner.secret_bindings` through

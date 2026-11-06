@@ -479,6 +479,8 @@ def _command(release, journal, operation):
         if not os.path.isfile(projection) or os.path.islink(projection):
             raise LifecycleError("EXECUTION_RUNTIME_PROJECTION_MISSING")
         command = ["ansible-playbook", "-i", os.path.join(journal.directory, "project", "inventory", "hosts.yml"), os.path.join(release, "ansible-core", "playbooks", "pki-reissue.yml" if kind == "PKI_REISSUE" else "pki-apply.yml"), "-e", "@" + projection]
+        if kind == "PKI_APPLY":
+            command.extend(["--tags", "all,platform_pki_reuse"])
         if kind == "PKI_REISSUE":
             selected = operation.get("reissueRequests")
             if (operation.get("operationId") != "pki:reissue" or not isinstance(selected, list) or

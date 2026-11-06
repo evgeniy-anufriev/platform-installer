@@ -25,6 +25,15 @@ hydro-calculation, hydro-history-and-model, hmi-frontend-hydrocyclone.
 Исправлено имя пакета `kafka-ch-replicator`; ссылка на исходный образ с именем
 `kafka-ch-replicatior` сохранена буквально.
 
+### Подключение к СЗИ
+
+В проекте с СЗИ назначьте библиотеке SDKU группу через `bindings.endpoint`
+и подключите `bindings.sso` к предоставляемому подключению `szi/sso`.
+Пример в `configuration/group_vars.yml.example` использует ID экземпляра
+СЗИ `szi`. Подставьте ID из своего проекта. Фронтенды, обращающиеся к СЗИ,
+берут адрес прокси из `sso.parameters.proxy_url`. Для `data-manager` можно
+задать собственную группу endpoint в overrides или унаследовать группу SDKU.
+
 ### Проверенные SDKU/CSPA и alarm-view-service
 
 Библиотеки SDKU/CSPA и общий `alarm-view-service` актуализированы из проверенного

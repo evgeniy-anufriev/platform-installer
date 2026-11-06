@@ -1,8 +1,61 @@
 ---
+- name: Проверка исходных материалов утверждённого плана PKI
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Проверка сертификатов, ключей и хранилищ на узле выполнения
+      platform.core.pki_reuse_probe:
+        plans: "{{ platform_pki_materialization_plans }}"
+        project_id: "{{ platform_project_id }}"
+        owner: "{{ platform_pki_owner | default(platform_execution_technical_user | default('root', true)) }}"
+        group: "{{ platform_pki_group | default(platform_execution_technical_group | default(platform_execution_technical_user | default('root', true), true)) }}"
+        source_root: "{{ platform_pki_state_root | default((platform_execution_state_root | default('/var/lib/platform-installer/execution')) ~ '/pki') }}/{{ platform_project_id }}"
+        secret_files: "{{ platform_pki_secret_files | default({}) }}"
+      register: _platform_pki_source_probe
+      no_log: true
+      tags: [never, platform_pki_reuse]
+
+- name: Проверка ранее доставленных материалов утверждённого плана PKI
+  hosts: platform_targets
+  become: true
+  gather_facts: false
+  any_errors_fatal: true
+  tasks:
+    - name: Сравнение файлов PKI и системного доверия с утверждённым планом
+      platform.core.pki_reuse_probe:
+        plans: "{{ platform_pki_materialization_plans | selectattr('hostId', 'equalto', inventory_hostname) | list }}"
+        project_id: "{{ platform_project_id }}"
+        owner: "{{ platform_pki_owner | default('root') }}"
+        group: "{{ platform_pki_group | default('root') }}"
+        expected: "{{ hostvars.localhost._platform_pki_source_probe.expected }}"
+      register: _platform_pki_target_probe
+      when:
+        - hostvars.localhost._platform_pki_source_probe.ready
+        - inventory_hostname in (platform_pki_materialization_plans | map(attribute='hostId') | list)
+      no_log: true
+      tags: [never, platform_pki_reuse]
+
 - name: Расчёт управляемых запросов PKI на узле выполнения
   hosts: localhost
   connection: local
   gather_facts: false
+  pre_tasks:
+    - name: Проверка готовности PKI на всех узлах утверждённого плана
+      ansible.builtin.set_fact:
+        _platform_pki_reuse_ready: >-
+          {%- set readiness = [] -%}
+          {%- for host in platform_pki_materialization_plans | map(attribute='hostId') | unique -%}
+          {%- set ready = host in hostvars and (hostvars[host]._platform_pki_target_probe.ready | default(false)) -%}
+          {%- set ignored = readiness.append(ready | bool) -%}
+          {%- endfor -%}
+          {{ platform_pki_materialization_plans | length > 0 and false not in readiness }}
+      tags: [never, platform_pki_reuse]
+
+    - name: Пропуск подготовки PKI при совпадении всех материалов с планом
+      ansible.builtin.meta: end_play
+      when: _platform_pki_reuse_ready | bool
+      tags: [never, platform_pki_reuse]
   roles:
     - role: platform.core.pki_materialize
 
@@ -10,5 +63,10 @@
   hosts: platform_targets
   become: true
   gather_facts: false
+  pre_tasks:
+    - name: Пропуск доставки уже проверенных PKI-материалов
+      ansible.builtin.meta: end_play
+      when: hostvars.localhost._platform_pki_reuse_ready | bool
+      tags: [never, platform_pki_reuse]
   roles:
     - role: platform.core.pki_deploy
