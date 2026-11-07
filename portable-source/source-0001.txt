@@ -22421,7 +22421,7 @@ def shared_vault_jobs(jobs, inputs, completed, delivered=()):
     return result
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_libraries.py","mode":420,"size":59967,"sha256":"234fa3cba94dbec1c8325bef54a6a752942931a41dc097615d2cd97f6dafba97","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_libraries.py","mode":420,"size":60358,"sha256":"1a5bd8fc29736e7de6549f925c4d4a2e7b1eac2256768f5f5e3ef84b330b7ee6","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
 """Read-only application contract checks. Ansible owns composition and templating."""
 import hashlib
 import copy
@@ -22692,6 +22692,10 @@ def library_resources(definition, deployment, applications=()):
     return resources
 
 
+def application_instance_id(slot_id, library_id, strategy='qualified'):
+    return slot_id if strategy == 'application-name' else slot_id + '-' + library_id
+
+
 def prepare(root, desired, memberships, contract, loader, contracts_root):
     schema_version(desired, contract)
     validator = SchemaValidator(contracts_root)
@@ -22749,17 +22753,15 @@ def prepare(root, desired, memberships, contract, loader, contracts_root):
             placements = [host for host, membership in sorted(memberships.items()) if library_id in membership]
             if not placements:
                 findings.append(finding("APPLICATION_LIBRARY_PLACEMENT_MISSING", field))
-            app_names = set()
             for slot_id in sorted(selected):
                 slot = slots[slot_id]
                 application = package(slot["applicationRef"], "application")
-                if application["name"] in app_names:
-                    raise ValueError("Duplicate application definition")
-                app_names.add(application["name"])
                 for host in placements:
                     if 'connections' in memberships[host][library_id].get('overrides', {}):
                         raise ValueError('Host connection override is not supported')
                     jobs.append({"libraryId": library_id, "slotId": slot_id, "hostId": host,
+                                 "instanceId": application_instance_id(slot_id, library_id,
+                                     library['definition'].get('instance_id_strategy', 'qualified')),
                                  "library": library, "application": application,
                                  "deployment": deployment, "instance": selected[slot_id],
                                  "slot": slot, "hostOverride": memberships[host][library_id].get("overrides", {})})
@@ -22988,7 +22990,7 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
         instance_owners[app_id] = owner
         settings = row["settings"]
         strategy = row.get("instanceIdStrategy", "qualified")
-        expected_id = row["applicationName"] if strategy == "application-name" else row["applicationName"] + "-" + library_id
+        expected_id = application_instance_id(row['slotId'], library_id, strategy)
         if strategy not in ("qualified", "application-name") or app_id != expected_id or host not in hosts or not ID.fullmatch(app_id) or len(app_id) > 128:
             findings.append(finding("APPLICATION_IDENTITY_INVALID", field))
         for section in ("parameters", "environment", "command"):
@@ -23162,11 +23164,11 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
                                                             "scripts": row.get('applicationScripts', []),
                                                            "connections": connections, 'topics': topic_bindings, "credentialRequirements": accounts,
                                                            "identityEnvironment": {name: app_id for name in row["identityNames"]},
-                                                           "agentRequired": agent_required, "executionPrerequisites": ["A2_IMAGE_DELIVERY", "A4_PROVIDER_PROVISIONING"] if accounts or agent_required else ["A2_IMAGE_DELIVERY"]})
-        if library['resources'] != row['resources'] or library['sharedSecretRequirements'] !=
+                                                           "agentRequired": agent_required, "executionPrerequisites": ["A2_IMAGE_DELIVERY", "A4_PROVIDER_PROVISIONING"] if accounts or agent_required else ["A2_IMAGE_DEL
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_libraries.py","mode":420,"size":59967,"sha256":"234fa3cba94dbec1c8325bef54a6a752942931a41dc097615d2cd97f6dafba97","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":11967}
- row['sharedSecrets']:
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_libraries.py","mode":420,"size":60358,"sha256":"1a5bd8fc29736e7de6549f925c4d4a2e7b1eac2256768f5f5e3ef84b330b7ee6","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":12358}
+IVERY"]})
+        if library['resources'] != row['resources'] or library['sharedSecretRequirements'] != row['sharedSecrets']:
             findings.append(finding('APPLICATION_HOST_RESOURCE_CONFLICT', field))
         if instance['connections'] != connections:
             findings.append(finding('APPLICATION_HOST_CONNECTION_CONFLICT', field))
@@ -23222,7 +23224,13 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
                 except (ValueError, KeyError, TypeError):
                     findings.append(finding('APPLICATION_CONNECTION_CALLBACK_INVALID',
                                             'applicationLibraryDeployments.' + library_id + '.provided_connections.' + export_name))
-        named = {instance['applicationName']: instance for instance in library['instances'].values()}
+        named = {instance['slotId']: instance for instance in library['instances'].values()}
+        packages = {}
+        for instance in library['instances'].values():
+            packages.setdefault(instance['applicationName'], []).append(instance)
+        for name, instances in packages.items():
+            if len(instances) == 1:
+                named.setdefault(name, instances[0])
         for consumer in library['instances'].values():
             for alias, connection in consumer.get('connections', {}).items():
                 if not connection.get('connectionProvisioner'):
@@ -24463,7 +24471,7 @@ def validate_agent(content, runtime):
     return True
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_scripts.py","mode":420,"size":13702,"sha256":"9ae09ed3b023d2bbedae5e5059e907248b1a326e89176d09dfdaad224a5efa41","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":13702}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_scripts.py","mode":420,"size":13868,"sha256":"f345d9868b011c31a521f8557420b240c26b7d1fe01ddb128ff779f656a947f8","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":13868}
 """Resolve versioned package scripts from the existing application projection."""
 import json
 import hashlib
@@ -24499,7 +24507,10 @@ def _script_metadata(script, path):
 
 def _instance(library, name):
     matches = [(instance_id, value) for instance_id, value in library['instances'].items()
-               if value['applicationName'] == name]
+               if value.get('slotId') == name]
+    if not matches:
+        matches = [(instance_id, value) for instance_id, value in library['instances'].items()
+                   if value['applicationName'] == name]
     if len(matches) != 1:
         raise ValueError('APPLICATION_SCRIPT_REFERENCE_INVALID')
     return matches[0]
@@ -36755,7 +36766,7 @@ platform_name_prefix: ''
     quiet: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/resolve_application_libraries/tasks/connection_topology.yml","mode":420,"size":5066,"sha256":"cd3e064e3984e79f65745c28e5af9be07e3af91240db366febd19a1bb2ecd3b2","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5066}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/resolve_application_libraries/tasks/connection_topology.yml","mode":420,"size":4854,"sha256":"068f4a86d939da7773368359bf054080a64ffe845ac8d72263b7f876bb913d80","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4854}
 ---
 - name: Расчёт настроек с безопасной диагностикой отказа
   block:
@@ -36805,9 +36816,7 @@ platform_name_prefix: ''
         platform_application_connection_rows: >-
           {{ platform_application_connection_rows + [{
             'libraryId': application_job.libraryId, 'slotId': application_job.slotId,
-            'instanceId': (application_job.application.name if
-              application_job.library.definition.instance_id_strategy | default('qualified') == 'application-name'
-              else application_job.application.name ~ '-' ~ application_job.libraryId),
+            'instanceId': application_job.instanceId,
             'hostId': application_job.hostId, 'startupPriority': application_job.slot.start_priority | default(100),
             'providedConnections': application_provided_connection_definitions,
             'settings': {
@@ -36843,7 +36852,7 @@ platform_name_prefix: ''
       become: false
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/resolve_application_libraries/tasks/instance.yml","mode":420,"size":17160,"sha256":"70978f70541bc8b3d4e12a123fecd269a1dc5706c7773228c4303eb2b49dc0f3","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":17160}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/resolve_application_libraries/tasks/instance.yml","mode":420,"size":16939,"sha256":"6d79192b6278e1911925224c682cbe007fd128006c2f55f7628e11460c287ab3","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":16939}
 ---
 - name: Расчёт настроек с безопасной диагностикой отказа
   block:
@@ -36857,10 +36866,7 @@ platform_name_prefix: ''
     - name: Привязка идентификаторов и контекста параметров размещения приложения
       ansible.builtin.set_fact:
         application_name: "{{ application_job.application.name }}"
-        application_instance_id: >-
-          {{ application_job.application.name if
-             (application_job.library.definition.instance_id_strategy | default('qualified')) == 'application-name'
-             else application_job.application.name ~ '-' ~ application_job.libraryId }}
+        application_instance_id: "{{ application_job.instanceId }}"
         library_instance_id: "{{ application_job.libraryId }}"
         _application_library_endpoint: >-
           {{ {'endpoint_group': application_job.deployment.bindings.endpoint.endpointGroupRef | default(platform_desired_state['x-applicationLibraryEndpointGroups'][application_job.libraryId] | default(''))}
