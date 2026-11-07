@@ -1,3 +1,1487 @@
+@@PORTABLE {"path":"frontend/src/ApplicationRuntimeSecretField.tsx","mode":420,"size":6668,"sha256":"13d06c24738a3ec430137f387186fd3d566300e1f059a37fb5e42674b9e4fded","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":6668}
+import { useState } from "react";
+import type {
+  RuntimeSecretDescriptorOperation,
+  RuntimeSecretValuesInput,
+} from "./backend";
+
+type Session = {
+  pending?: boolean;
+  applicationSlot?: string;
+  projectRevision: string;
+  contextKey?: string;
+  libraryId: string;
+  disabled: boolean;
+  availability?: RuntimeSecretDescriptorOperation;
+  load: () => Promise<RuntimeSecretDescriptorOperation>;
+  save: (input: RuntimeSecretValuesInput) => Promise<void>;
+};
+export type ApplicationSecretSession = Session;
+
+export function ApplicationSecretAvailabilityBadge({
+  session,
+  sourceRefs,
+  resolved,
+}: {
+  session: Session;
+  sourceRefs: string[];
+  resolved: boolean;
+}) {
+  const evidence = session.availability;
+  const states = sourceRefs.map((sourceRef) => {
+    const matches = evidence?.applicationInputs?.filter(
+      (item) =>
+        item.purpose === "APPLICATION_SECRET" &&
+        item.sourceRef === sourceRef &&
+        item.applicationLibraries.includes(session.libraryId),
+    );
+    return matches?.length === 1
+      ? evidence?.applicationSecretAvailability?.[matches[0].requirementRef]
+      : undefined;
+  });
+  const current =
+    !session.disabled &&
+    resolved &&
+    evidence?.status === "READY" &&
+    evidence.projectRevision === session.projectRevision;
+  const present =
+    current && states.length > 0 && states.every((state) => state === true);
+  const missing = current && states.some((state) => state === false);
+  const unneeded = !session.disabled && resolved && sourceRefs.length === 0;
+  return (
+    <span
+      className={`status-chip status-chip--${present ? "success" : missing ? "warning" : "neutral"}`}
+      role="status"
+    >
+      <span className="status-chip-symbol" aria-hidden="true">
+        {present ? "✓" : missing ? "!" : "?"}
+      </span>
+      {present
+        ? "Секрет задан"
+        : missing
+          ? "Секрет не задан"
+          : unneeded
+            ? "Сессионный секрет не требуется"
+            : "Статус секрета недоступен"}
+    </span>
+  );
+}
+
+export function ApplicationRuntimeSecretField({
+  session,
+  sourceRef,
+  label,
+  shared = false,
+}: {
+  session: Session;
+  sourceRef: string;
+  label: string;
+  shared?: boolean;
+}) {
+  // A context change must discard unsubmitted values and previous success messages.
+  return (
+    <RuntimeSecretField
+      key={JSON.stringify([
+        session.projectRevision,
+        session.contextKey,
+        session.libraryId,
+        session.disabled,
+        sourceRef,
+        label,
+      ])}
+      session={session}
+      sourceRef={sourceRef}
+      label={label}
+      shared={shared}
+    />
+  );
+}
+
+function RuntimeSecretField({
+  session,
+  sourceRef,
+  label,
+  shared,
+}: {
+  session: Session;
+  sourceRef: string;
+  label: string;
+  shared: boolean;
+}) {
+  const [value, setValue] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const disabled = session.disabled || busy || !sourceRef;
+  const submit = async () => {
+    if (disabled || !value) return;
+    const submitted = value;
+    setValue("");
+    setMessage("");
+    setBusy(true);
+    try {
+      const operation = await session.load();
+      const matches = operation.applicationInputs?.filter(
+        (item) =>
+          item.purpose === "APPLICATION_SECRET" &&
+          item.sourceRef === sourceRef &&
+          item.applicationLibraries.includes(session.libraryId),
+      );
+      if (
+        operation.status !== "READY" ||
+        operation.projectRevision !== session.projectRevision ||
+        (!session.pending && !operation.descriptorSetFingerprint) ||
+        matches?.length !== 1
+      )
+        throw new Error("RUNTIME_SECRET_DESCRIPTOR_UNAVAILABLE");
+      const requirementRef = matches[0].requirementRef;
+      await session.save({
+        ...(session.pending
+          ? {
+              pendingApplicationInput: true,
+              applicationSlot: session.applicationSlot,
+            }
+          : {}),
+        projectRevision: operation.projectRevision,
+        descriptorSetFingerprint: operation.descriptorSetFingerprint ?? "",
+        serviceDeployment: "",
+        applicationLibrary: session.libraryId,
+        applicationRequirementRef: requirementRef,
+        values: { [requirementRef]: submitted },
+      });
+      setMessage("Секрет отправлен в сессию");
+    } catch {
+      setMessage(
+        "Не удалось сохранить секрет; проверьте актуальность проекта и runtime-сессии",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="application-runtime-secret">
+      <div className="application-runtime-secret-entry">
+        <label>
+          <span className="application-credential-label">{label}</span>
+          <input
+            type="password"
+            aria-label={label}
+            autoComplete="new-password"
+            placeholder="Введите секрет"
+            value={value}
+            disabled={disabled}
+            onChange={(event) => {
+              setValue(event.target.value);
+              setMessage("");
+            }}
+          />
+        </label>
+        <button
+          type="button"
+          title="Сохранить в сессии"
+          aria-label={`Сохранить в сессии: ${label}`}
+          disabled={disabled || !value}
+          onClick={() => void submit()}
+        >
+          ✓
+        </button>
+        <button
+          type="button"
+          className="outline"
+          title="Очистить ввод"
+          aria-label={`Очистить ввод: ${label}`}
+          disabled={busy || !value}
+          onClick={() => {
+            setValue("");
+            setMessage("");
+          }}
+        >
+          ×
+        </button>
+      </div>
+      {shared && (
+        <small title="Один секрет используется несколькими ресурсами; замена действует на всех потребителей.">
+          <span className="application-credential-label">
+            Один секрет используется несколькими ресурсами; замена действует на
+            всех потребителей.
+          </span>
+          <span aria-hidden="true">ⓘ</span>
+        </small>
+      )}
+      {message && (
+        <small role="status" title={message}>
+          <span className="application-credential-label">{message}</span>
+          <span aria-hidden="true">ⓘ</span>
+        </small>
+      )}
+    </div>
+  );
+}
+
+@@END
+@@PORTABLE {"path":"frontend/src/ApplicationSecretBindings.tsx","mode":420,"size":12714,"sha256":"fb9085c5283edca851a3afabbf1931ccc9291ece3f59d09d4cb88b01d7005f21","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":12714}
+import { useRef, useState } from "react";
+import { objectValue } from "./application-draft";
+
+type Obj = Record<string, unknown>;
+const sourceKey = (binding: unknown) => {
+  const source = objectValue(objectValue(binding).source);
+  return source.account &&
+    ["username", "password"].includes(String(source.field))
+    ? `${source.account}:${source.field}`
+    : "";
+};
+
+// Edits ordinary authored secret_bindings; Core still resolves inheritance and validates sources.
+export function ApplicationSecretBindings({
+  value,
+  defaults,
+  accounts,
+  disabled,
+  onSave,
+  onDirtyChange,
+  credential,
+}: {
+  value: Obj;
+  defaults: Obj;
+  accounts: Obj[];
+  disabled: boolean;
+  onSave: (value: Obj) => Promise<boolean>;
+  onDirtyChange: (dirty: boolean) => void;
+  credential?: { account: string; field: string };
+}) {
+  const authored = objectValue(value.secret_bindings),
+    base = objectValue(defaults.secret_bindings);
+  const sources = [
+    ...new Set(accounts.flatMap((list) => Object.keys(list))),
+  ].flatMap((account) =>
+    ["username", "password"]
+      .filter((field) =>
+        accounts.some((list) =>
+          Object.hasOwn(
+            objectValue(objectValue(list[account]).credentials),
+            field,
+          ),
+        ),
+      )
+      .map((field) => ({ key: account + ":" + field, account, field })),
+  );
+  const dirty = useRef(new Set<string>());
+  const mark = (key: string, active: boolean) => {
+    if (active) dirty.current.add(key);
+    else dirty.current.delete(key);
+    onDirtyChange(dirty.current.size > 0);
+  };
+  const [name, setName] = useState(""),
+    [source, setSource] = useState("");
+  const save = (next: Obj) => {
+    const provisioner = { ...value };
+    if (Object.keys(next).length) {
+      provisioner.secret_bindings = next;
+      for (const key of ["type", "mode"])
+        if (!Object.hasOwn(provisioner, key) && Object.hasOwn(defaults, key))
+          provisioner[key] = defaults[key];
+    } else delete provisioner.secret_bindings;
+    return onSave(provisioner);
+  };
+  const setBinding = (variable: string, key: string) => {
+    const item = sources.find((item) => item.key === key);
+    return item
+      ? save({
+          ...authored,
+          [variable]: {
+            ...objectValue(base[variable]),
+            ...objectValue(authored[variable]),
+            source: { account: item.account, field: item.field },
+          },
+        })
+      : Promise.resolve(false);
+  };
+  const reset = (variable: string) => {
+    const next = { ...authored };
+    delete next[variable];
+    return save(next);
+  };
+  const names = Object.keys({ ...base, ...authored });
+  if (credential) {
+    const key = `${credential.account}:${credential.field}`;
+    const inherited = Object.keys(base).filter(
+      (name) =>
+        sourceKey(base[name]) === key &&
+        sourceKey(authored[name] ?? base[name]) === key,
+    );
+    const aliases = names.filter(
+      (name) =>
+        sourceKey(authored[name] ?? base[name]) === key &&
+        !inherited.includes(name),
+    );
+    return (
+      <CredentialVariableNames
+        key={JSON.stringify([key, authored, base])}
+        label={`${credential.account} ${credential.field}`}
+        inherited={inherited}
+        aliases={aliases}
+        names={names}
+        disabled={disabled}
+        explicit={names.some(
+          (name) =>
+            Object.hasOwn(authored, name) &&
+            (sourceKey(authored[name]) === key ||
+              sourceKey(base[name]) === key),
+        )}
+        onDirtyChange={onDirtyChange}
+        onSave={(aliases) => {
+          const next = { ...authored };
+          for (const name of names)
+            if (sourceKey(authored[name]) === key && !Object.hasOwn(base, name))
+              delete next[name];
+          for (const name of aliases)
+            next[name] = { source: { ...credential } };
+          return save(next);
+        }}
+        onReset={() => {
+          const next = { ...authored };
+          for (const name of names)
+            if (
+              sourceKey(authored[name]) === key ||
+              sourceKey(base[name]) === key
+            )
+              delete next[name];
+          return save(next);
+        }}
+      />
+    );
+  }
+  return (
+    <section className="application-section application-secret-bindings">
+      <h3>Переменные приложения из credentials</h3>
+      <p>
+        Поле username/password в Vault не меняется. Vault Agent передаёт его
+        значение процессу приложения под выбранным именем переменной.
+      </p>
+      <p>
+        Привязки пакета сохраняются. Новое имя добавляет переменную, а сброс
+        убирает только переопределение экземпляра.
+      </p>
+      {names
+        .filter((variable) => sourceKey(authored[variable] ?? base[variable]))
+        .map((variable) => (
+          <BindingRow
+            key={
+              variable + JSON.stringify([authored[variable], base[variable]])
+            }
+            variable={variable}
+            current={sourceKey(authored[variable] ?? base[variable])}
+            packageSource={sourceKey(base[variable])}
+            explicit={Object.hasOwn(authored, variable)}
+            disabled={disabled}
+            sources={sources}
+            onSave={(key) => setBinding(variable, key)}
+            onReset={() => reset(variable)}
+            onDirtyChange={(v) => mark(variable, v)}
+          />
+        ))}
+      {names.some(
+        (variable) => !sourceKey(authored[variable] ?? base[variable]),
+      ) && (
+        <p>
+          Привязки общих секретов сохранены отдельно; эта форма меняет только
+          username/password аккаунтов.
+        </p>
+      )}
+      <fieldset>
+        <legend>Добавить переменную</legend>
+        <label>
+          Имя переменной приложения
+          <input
+            value={name}
+            disabled={disabled}
+            onChange={(e) => {
+              setName(e.target.value);
+              mark("__new", true);
+            }}
+          />
+        </label>
+        <label>
+          Поле credentials
+          <select
+            aria-label="Поле credentials"
+            value={source}
+            disabled={disabled}
+            onChange={(e) => {
+              setSource(e.target.value);
+              mark("__new", true);
+            }}
+          >
+            <option value="">Выберите аккаунт и поле</option>
+            {sources.map((item) => (
+              <option key={item.key} value={item.key}>
+                {item.account} · {item.field}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          disabled={
+            disabled ||
+            !/^[A-Za-z_][A-Za-z0-9_]*$/.test(name) ||
+            names.includes(name) ||
+            !source
+          }
+          onClick={() =>
+            void setBinding(name, source).then((ok) => {
+              if (ok) {
+                setName("");
+                setSource("");
+                mark("__new", false);
+              }
+            })
+          }
+        >
+          В черновик
+        </button>
+        {name && names.includes(name) && (
+          <p role="status">
+            Переменная уже объявлена; измените её привязку выше.
+          </p>
+        )}
+      </fieldset>
+    </section>
+  );
+}
+function CredentialVariableNames({
+  label,
+  inherited,
+  aliases,
+  names,
+  disabled,
+  explicit,
+  onDirtyChange,
+  onSave,
+  onReset,
+}: {
+  label: string;
+  inherited: string[];
+  aliases: string[];
+  names: string[];
+  disabled: boolean;
+  explicit: boolean;
+  onDirtyChange: (dirty: boolean) => void;
+  onSave: (names: string[]) => Promise<boolean>;
+  onReset: () => Promise<boolean>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(aliases.join(", "));
+  const next = text
+    .split(",")
+    .map((v) => v.trim())
+    .filter(Boolean);
+  const valid =
+    next.every(
+      (v) =>
+        /^[A-Za-z_][A-Za-z0-9_]*$/.test(v) &&
+        (!names.includes(v) || aliases.includes(v)),
+    ) && new Set(next).size === next.length;
+  const finish = (ok: boolean) => {
+    if (ok) {
+      onDirtyChange(false);
+      setEditing(false);
+    }
+  };
+  return (
+    <div className="application-credential-variables">
+      <span
+        className="application-credential-variable-names"
+        title={[...inherited, ...(!editing ? aliases : [])].join(", ")}
+      >
+        {inherited.map((name) => (
+          <code key={name} title={`Из пакета: ${name}`}>
+            {name}
+          </code>
+        ))}
+        {!editing && aliases.map((name) => <code key={name}>{name}</code>)}
+      </span>
+      {editing ? (
+        <>
+          <input
+            aria-label={`Переменные ${label}`}
+            placeholder="Дополнительные имена, через запятую"
+            value={text}
+            disabled={disabled}
+            onChange={(e) => {
+              setText(e.target.value);
+              onDirtyChange(true);
+            }}
+          />
+          <button
+            title="В черновик"
+            aria-label={`Сохранить переменные ${label}`}
+            disabled={disabled || !valid}
+            onClick={() => void onSave(next).then(finish)}
+          >
+            ✓
+          </button>
+        </>
+      ) : (
+        <button
+          className="outline"
+          title="Переопределить переменные; пакетные имена сохраняются"
+          aria-label={`Переопределить переменные ${label}`}
+          disabled={disabled}
+          onClick={() => setEditing(true)}
+        >
+          ✎
+        </button>
+      )}
+      <button
+        className="outline"
+        title="Сбросить переменные к default"
+        aria-label={`Сбросить переменные ${label} к default`}
+        disabled={disabled || !explicit}
+        onClick={() => void onReset().then(finish)}
+      >
+        ↺
+      </button>
+    </div>
+  );
+}
+function BindingRow({
+  variable,
+  current,
+  packageSource,
+  explicit,
+  disabled,
+  sources,
+  onSave,
+  onReset,
+  onDirtyChange,
+}: {
+  variable: string;
+  current: string;
+  packageSource: string;
+  explicit: boolean;
+  disabled: boolean;
+  sources: { key: string; account: string; field: string }[];
+  onSave: (key: string) => Promise<boolean>;
+  onReset: () => Promise<boolean>;
+  onDirtyChange: (dirty: boolean) => void;
+}) {
+  const [editing, setEditing] = useState(explicit),
+    [source, setSource] = useState(current),
+    [dirty, setDirty] = useState(false);
+  const finish = (ok: boolean) => {
+    if (ok) {
+      setDirty(false);
+      onDirtyChange(false);
+    }
+  };
+  return (
+    <fieldset>
+      <legend>{variable}</legend>
+      <p>
+        Пакет: {packageSource.replace(":", " · ") || "Не объявлена"} ·{" "}
+        {explicit ? "Переопределено" : "Из пакета"}
+      </p>
+      <label>
+        Источник {variable}
+        <select
+          aria-label={`Источник ${variable}`}
+          value={source}
+          disabled={disabled || !editing}
+          onChange={(e) => {
+            setSource(e.target.value);
+            setDirty(true);
+            onDirtyChange(true);
+          }}
+        >
+          {!sources.some((item) => item.key === source) && (
+            <option value={source}>{source.replace(":", " · ")}</option>
+          )}
+          {sources.map((item) => (
+            <option key={item.key} value={item.key}>
+              {item.account} · {item.field}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div className="row">
+        <button
+          className="outline"
+          disabled={disabled || editing}
+          onClick={() => setEditing(true)}
+        >
+          Переопределить {variable}
+        </button>
+        <button
+          disabled={
+            disabled || !dirty || !sources.some((item) => item.key === source)
+          }
+          onClick={() => void onSave(source).then(finish)}
+        >
+          В черновик
+        </button>
+        <button
+          className="outline"
+          disabled={disabled || !explicit}
+          onClick={() => void onReset().then(finish)}
+        >
+          Сбросить {variable} к default
+        </button>
+      </div>
+    </fieldset>
+  );
+}
+
+@@END
+@@PORTABLE {"path":"frontend/src/ApplicationSecretInputs.tsx","mode":420,"size":5139,"sha256":"0770bbfc08ac600d1cea84d8fa82a370ce83b343fcf37b66e6addb576529f746","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5139}
+import { useRef, useState } from "react";
+import type {
+  RuntimeSecretDescriptorOperation,
+  RuntimeSecretValuesInput,
+} from "./backend";
+
+export function ApplicationSecretInputs({
+  disabled,
+  inline = false,
+  load,
+  save,
+  libraryId,
+  title = "Секреты библиотек",
+  registryOnly = false,
+}: {
+  disabled: boolean;
+  inline?: boolean;
+  libraryId?: string;
+  title?: string;
+  registryOnly?: boolean;
+  load: () => Promise<RuntimeSecretDescriptorOperation>;
+  save: (input: RuntimeSecretValuesInput) => Promise<void>;
+}) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  const [operation, setOperation] =
+    useState<RuntimeSecretDescriptorOperation>();
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const close = () => {
+    setValues({});
+    setOperation(undefined);
+    dialog.current?.close();
+  };
+  const open = async () => {
+    setBusy(true);
+    setMessage("");
+    try {
+      const result = await load();
+      if (result.status !== "READY") {
+        setMessage(result.error?.message || "Требования к секретам недоступны");
+        return;
+      }
+      const inputs = result.applicationInputs?.filter(
+        (item) =>
+          (!libraryId || item.applicationLibraries.includes(libraryId)) &&
+          item.purpose.startsWith("APPLICATION_REGISTRY_") === registryOnly,
+      );
+      if (!inputs?.length) {
+        setMessage("Секреты библиотек не требуются");
+        return;
+      }
+      setValues({});
+      setOperation({ ...result, applicationInputs: inputs });
+      if (!inline) dialog.current?.showModal();
+    } catch {
+      setMessage("Не удалось получить требования к секретам");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const form = (
+    <form
+      method="dialog"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!operation?.projectRevision || !operation.descriptorSetFingerprint)
+          return;
+        setBusy(true);
+        void save({
+          projectRevision: operation.projectRevision,
+          descriptorSetFingerprint: operation.descriptorSetFingerprint,
+          serviceDeployment: "",
+          ...(libraryId ? { applicationLibrary: libraryId } : {}),
+          values,
+        })
+          .then(() => {
+            close();
+            setMessage("Секреты сохранены только в сессии");
+          })
+          .catch(() => {
+            setValues({});
+            setMessage(
+              "Не удалось сохранить секреты; проверьте актуальность проекта и сессии",
+            );
+          })
+          .finally(() => setBusy(false));
+      }}
+    >
+      <h2>{title}</h2>
+      <p className="muted">
+        {registryOnly
+          ? "Логин и пароль остаются только в runtime-сессии и применяются на целевых серверах."
+          : "Значения остаются только в памяти и передаются через runtime lease для одобренного плана."}
+      </p>
+      {operation?.applicationInputs?.map((item) => (
+        <label key={item.requirementRef}>
+          <span>{item.displayLabel}</span>
+          {inline && (
+            <small>
+              Источник: {item.sourceRef} ·{" "}
+              {registryOnly
+                ? "Registry"
+                : (item.providerDeployment ?? "Приложение")}
+            </small>
+          )}
+          <input
+            aria-label={item.displayLabel}
+            type={
+              item.purpose === "APPLICATION_REGISTRY_USERNAME"
+                ? "text"
+                : "password"
+            }
+            autoComplete="new-password"
+            required
+            disabled={disabled || busy}
+            value={values[item.requirementRef] || ""}
+            onChange={(event) =>
+              setValues((current) => ({
+                ...current,
+                [item.requirementRef]: event.target.value,
+              }))
+            }
+          />
+        </label>
+      ))}
+      <button type="button" disabled={busy} onClick={close}>
+        Отмена
+      </button>
+      <button type="submit" disabled={disabled || busy}>
+        Сохранить в сессии
+      </button>
+    </form>
+  );
+  return (
+    <section className="card">
+      <button
+        type="button"
+        disabled={disabled || busy}
+        onClick={() => void open()}
+      >
+        {title}
+      </button>
+      {message && <p role="status">{message}</p>}
+      {inline ? (
+        operation && <div className="application-inline-secrets">{form}</div>
+      ) : (
+        <dialog
+          ref={dialog}
+          className="runtime-secret-dialog"
+          aria-label={title}
+          onCancel={(event) => {
+            event.preventDefault();
+            close();
+          }}
+        >
+          {form}{" "}
+        </dialog>
+      )}
+    </section>
+  );
+}
+
+@@END
+@@PORTABLE {"path":"frontend/src/ApplicationTopicBindings.tsx","mode":420,"size":6916,"sha256":"f95ada15af5304b3c76531d3ce7ff9f552ac1422b9a5880436d1d5a1b14a0d3a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":6916}
+import { objectValue, type ObjectValue } from "./application-draft";
+
+export function ApplicationTopicBindings({
+  connections,
+  resources,
+  bindings,
+  deployments,
+  defaults,
+  authored,
+  disabled,
+  onSave,
+  onReset,
+  resolvedTopics = {},
+}: {
+  connections: ObjectValue;
+  resources: ObjectValue;
+  bindings: ObjectValue;
+  deployments: Record<string, { serviceType: string }>;
+  defaults: ObjectValue;
+  authored: ObjectValue;
+  disabled: boolean;
+  onSave: (value: ObjectValue) => Promise<boolean>;
+  onReset: () => Promise<boolean>;
+  resolvedTopics?: ObjectValue;
+}) {
+  const kafka = Object.entries(connections).filter(
+    ([, raw]) =>
+      deployments[
+        String(
+          objectValue(bindings[String(objectValue(raw).library_binding)])
+            .deploymentRef,
+        )
+      ]?.serviceType === "kafka",
+  );
+  if (
+    !kafka.length ||
+    (!Object.keys(defaults).length && !Object.keys(authored).length)
+  )
+    return null;
+  return (
+    <section className="application-section">
+      <h3>Топики Kafka</h3>
+      <p>
+        Выберите ресурсы библиотеки. Именованные роли используются в шаблонах
+        ENV приложения. Выбор не создаёт ACL.
+      </p>
+      {kafka.map(([alias, raw]) => {
+        const provider = objectValue(
+          bindings[String(objectValue(raw).library_binding)],
+        ).deploymentRef;
+        const inherited = defaults[alias];
+        const roles = objectValue(inherited);
+        const roleOverrides = objectValue(authored[alias]);
+        const saveRoles = (next: ObjectValue) => {
+          const value = { ...authored };
+          if (Object.keys(next).length) value[alias] = next;
+          else delete value[alias];
+          void (Object.keys(value).length ? onSave(value) : onReset());
+        };
+        const selected = Array.isArray(authored[alias] ?? inherited)
+          ? ((authored[alias] ?? inherited) as string[])
+          : [];
+        const available = Object.entries(resources).filter(([, value]) => {
+          const r = objectValue(value);
+          return (
+            r.kind === "kafka.topic" &&
+            objectValue(bindings[String(r.binding)]).deploymentRef === provider
+          );
+        });
+        return (
+          <fieldset key={alias}>
+            <legend>
+              {alias} · {String(provider)}
+            </legend>
+            <small>
+              {Object.hasOwn(authored, alias)
+                ? "Переопределение экземпляра"
+                : "Из defaults приложения"}
+            </small>
+            {Object.keys(roles).length > 0
+              ? Object.keys(roles).map((role) => {
+                  const value = String(
+                    roleOverrides[role] ?? roles[role] ?? "",
+                  );
+                  return (
+                    <div key={role}>
+                      <label>
+                        {role}
+                        <select
+                          aria-label={`Топик ${alias}.${role}`}
+                          value={value}
+                          disabled={disabled}
+                          onChange={(e) =>
+                            saveRoles({
+                              ...roleOverrides,
+                              [role]: e.target.value,
+                            })
+                          }
+                        >
+                          <option value="">Выберите ресурс</option>
+                          {value && !available.some(([id]) => id === value) && (
+                            <option value={value}>
+                              Недоступный ресурс: {value}
+                            </option>
+                          )}
+                          {available.map(([id]) => (
+                            <option key={id} value={id}>
+                              {id}
+                              {resolvedTopics[id]
+                                ? ` · ${String(objectValue(resolvedTopics[id]).name)}`
+                                : " · имя ещё не рассчитано Core"}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <small>
+                        {Object.hasOwn(roleOverrides, role)
+                          ? "Переопределение экземпляра"
+                          : "Из defaults приложения"}
+                      </small>
+                      <button
+                        type="button"
+                        className="outline"
+                        disabled={
+                          disabled || !Object.hasOwn(roleOverrides, role)
+                        }
+                        onClick={() => {
+                          const next = { ...roleOverrides };
+                          delete next[role];
+                          saveRoles(next);
+                        }}
+                      >
+                        Сбросить · {role}
+                      </button>
+                    </div>
+                  );
+                })
+              : available.map(([id, rawResource]) => (
+                  <label key={id}>
+                    <input
+                      type="checkbox"
+                      checked={selected.includes(id)}
+                      disabled={disabled}
+                      onChange={(e) =>
+                        void onSave({
+                          ...authored,
+                          [alias]: e.target.checked
+                            ? [...selected, id]
+                            : selected.filter((x) => x !== id),
+                        })
+                      }
+                    />
+                    {String(
+                      objectValue(objectValue(rawResource).parameters).name ??
+                        id,
+                    )}{" "}
+                    · {id}
+                  </label>
+                ))}
+            {selected
+              .filter((id) => !available.some(([key]) => key === id))
+              .map((id) => (
+                <p key={id}>Недоступный ресурс: {id}</p>
+              ))}
+            {!available.length && (
+              <p>Совместимые топики библиотеки не заданы.</p>
+            )}
+            <button
+              type="button"
+              className="outline"
+              disabled={disabled || !Object.hasOwn(authored, alias)}
+              onClick={() => {
+                const next = { ...authored };
+                delete next[alias];
+                void (Object.keys(next).length ? onSave(next) : onReset());
+              }}
+            >
+              Сбросить топики · {alias}
+            </button>
+          </fieldset>
+        );
+      })}
+    </section>
+  );
+}
+
+@@END
+@@PORTABLE {"path":"frontend/src/ApplicationValueFields.tsx","mode":420,"size":15286,"sha256":"313c103e135e7313d3fccf98d1326c692c853ceccb68fad958ce6afb4df16f4c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":15286}
+import { useRef, useState } from "react";
+import { objectValue } from "./application-draft";
+
+type Obj = Record<string, unknown>;
+// Small authored key/value control for concrete parameter/environment sections.
+// It edits JSON-shaped data; it never evaluates schema rules or Ansible values.
+export function ApplicationValueFields({
+  label,
+  value,
+  defaults,
+  disabled,
+  onSave,
+  onDirtyChange,
+  excludeKeys = [],
+  hiddenKeys = [],
+  defaultLabel = "Из пакета · без вычисления Ansible",
+  compact = false,
+  addControl,
+  resolvedValues = {},
+}: {
+  label: string;
+  value: Obj;
+  defaults: Obj;
+  disabled: boolean;
+  onSave: (value: Obj) => Promise<boolean>;
+  onDirtyChange: (dirty: boolean) => void;
+  excludeKeys?: string[];
+  hiddenKeys?: string[];
+  defaultLabel?: string;
+  compact?: boolean;
+  addControl?: { adding: boolean; setAdding: (adding: boolean) => void };
+  resolvedValues?: Obj;
+}) {
+  const dirtyFields = useRef(new Set<string>());
+  const mark = (key: string, dirty: boolean) => {
+    if (dirty) dirtyFields.current.add(key);
+    else dirtyFields.current.delete(key);
+    onDirtyChange(dirtyFields.current.size > 0);
+  };
+  const [name, setName] = useState("");
+  const [localAdding, setLocalAdding] = useState(false);
+  const adding = addControl?.adding ?? localAdding;
+  const setAdding = addControl?.setAdding ?? setLocalAdding;
+  const keys = Object.keys({ ...defaults, ...value, ...resolvedValues }).filter(
+    (key) => !hiddenKeys.includes(key),
+  );
+  return (
+    <section className={compact ? "application-compact-values" : undefined}>
+      <h3>{label}</h3>
+      {compact && keys.length > 0 && (
+        <div className="application-value-heading" aria-hidden="true">
+          <div>
+            <span>Имя</span>
+            <span>Значение</span>
+          </div>
+          <span>Действия</span>
+        </div>
+      )}
+      {keys.map((key) => {
+        const inherited = defaults[key],
+          authored = value[key];
+        const current = authored ?? inherited;
+        const reset = () => {
+          const next = { ...value };
+          delete next[key];
+          return onSave(next);
+        };
+        if (current && typeof current === "object" && !Array.isArray(current))
+          return (
+            <fieldset key={key}>
+              <legend>{key}</legend>
+              <ApplicationValueFields
+                label={key}
+                compact={compact}
+                value={objectValue(authored)}
+                defaults={objectValue(inherited)}
+                defaultLabel={defaultLabel}
+                disabled={disabled}
+                onSave={(next) => onSave({ ...value, [key]: next })}
+                onDirtyChange={(dirty) => mark(key, dirty)}
+              />
+              <button
+                className="outline"
+                disabled={disabled || !Object.hasOwn(value, key)}
+                onClick={() => void reset()}
+              >
+                Сбросить {key}
+              </button>
+            </fieldset>
+          );
+        if (Array.isArray(current))
+          return (
+            <div key={key}>
+              <strong>{key}</strong>
+              <ApplicationArrayFields
+                label={key}
+                compact={compact}
+                value={current}
+                disabled={disabled}
+                onDirtyChange={(dirty) => mark(key, dirty)}
+                onSave={(rows) => onSave({ ...value, [key]: rows })}
+              />
+              <button
+                className="outline"
+                disabled={disabled || !Object.hasOwn(value, key)}
+                onClick={() => void reset()}
+              >
+                Сбросить {key}
+              </button>
+            </div>
+          );
+        return (
+          <ScalarValue
+            compact={compact}
+            key={key + JSON.stringify(current)}
+            label={key}
+            value={current}
+            resolvedValue={resolvedValues[key]}
+            defaultValue={inherited}
+            inferType={inherited === undefined && current === ""}
+            explicit={Object.hasOwn(value, key)}
+            defaultLabel={defaultLabel}
+            disabled={disabled}
+            onDirtyChange={(dirty) => mark(key, dirty)}
+            onSave={(next) => onSave({ ...value, [key]: next })}
+            onReset={reset}
+          />
+        );
+      })}
+      {!adding ? (
+        !addControl && (
+          <button
+            className="outline"
+            disabled={disabled}
+            onClick={() => setAdding(true)}
+          >
+            Добавить параметр · {label}
+          </button>
+        )
+      ) : (
+        <form
+          className="application-add-parameter"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (
+              !name ||
+              keys.includes(name) ||
+              excludeKeys.includes(name) ||
+              hiddenKeys.includes(name)
+            )
+              return;
+            void onSave({ ...value, [name]: "" }).then((ok) => {
+              if (ok) {
+                setName("");
+                setAdding(false);
+                mark("__add", false);
+              }
+            });
+          }}
+        >
+          <label>
+            Имя параметра
+            <input
+              value={name}
+              disabled={disabled}
+              autoFocus
+              onChange={(e) => {
+                setName(e.target.value);
+                mark("__add", true);
+              }}
+            />
+          </label>
+          <button
+            disabled={
+              disabled ||
+              !name ||
+              keys.includes(name) ||
+              excludeKeys.includes(name) ||
+              hiddenKeys.includes(name)
+            }
+          >
+            Добавить
+          </button>
+          <button
+            type="button"
+            className="outline"
+            disabled={disabled}
+            onClick={() => {
+              setName("");
+              setAdding(false);
+              mark("__add", false);
+            }}
+          >
+            Отмена
+          </button>
+          <small>Значение задаётся в строке параметра после добавления.</small>
+        </form>
+      )}
+    </section>
+  );
+}
+
+export function ApplicationArrayFields({
+  label,
+  value,
+  disabled,
+  onSave,
+  onDirtyChange,
+  compact = false,
+}: {
+  label: string;
+  value: unknown[];
+  disabled: boolean;
+  onSave: (value: unknown[]) => Promise<boolean>;
+  onDirtyChange: (dirty: boolean) => void;
+  compact?: boolean;
+}) {
+  const dirtyRows = useRef(new Set<number>());
+  const mark = (index: number, dirty: boolean) => {
+    if (dirty) dirtyRows.current.add(index);
+    else dirtyRows.current.delete(index);
+    onDirtyChange(dirtyRows.current.size > 0);
+  };
+  return (
+    <section>
+      <p>Изменение заменяет список {label} целиком.</p>
+      {value.map((row, index) => (
+        <fieldset key={index}>
+          <legend>
+            {label} · {index + 1}
+          </legend>
+          {row && typeof row === "object" && !Array.isArray(row) ? (
+            <ApplicationValueFields
+              label={label}
+              compact={compact}
+              value={objectValue(row)}
+              defaults={{}}
+              disabled={disabled}
+              onDirtyChange={(dirty) => mark(index, dirty)}
+              onSave={(next) =>
+                onSave(value.map((v, i) => (i === index ? next : v)))
+              }
+            />
+          ) : Array.isArray(row) ? (
+            <ApplicationArrayFields
+              label={label}
+              compact={compact}
+              value={row}
+              disabled={disabled}
+              onDirtyChange={(dirty) => mark(index, dirty)}
+              onSave={(next) =>
+                onSave(value.map((v, i) => (i === index ? next : v)))
+              }
+            />
+          ) : (
+            <ScalarValue
+              label={label}
+              compact={compact}
+              value={row}
+              explicit={true}
+              disabled={disabled}
+              onDirtyChange={(dirty) => mark(index, dirty)}
+              onSave={(next) =>
+                onSave(value.map((v, i) => (i === index ? next : v)))
+              }
+              onReset={() => onSave(value.filter((_, i) => i !== index))}
+            />
+          )}
+          <button
+            className="outline"
+            disabled={disabled}
+            onClick={() => void onSave(value.filter((_, i) => i !== index))}
+          >
+            Убрать элемент
+          </button>
+        </fieldset>
+      ))}
+      <button
+        className="outline"
+        disabled={disabled}
+        onClick={() => void onSave([...value, ""])}
+      >
+        Добавить строку
+      </button>
+      <button
+        className="outline"
+        disabled={disabled}
+        onClick={() => void onSave([...value, {}])}
+      >
+        Добавить объект
+      </button>
+    </section>
+  );
+}
+function ScalarValue({
+  label,
+  value,
+  explicit,
+  disabled,
+  onSave,
+  onReset,
+  onDirtyChange,
+  inferType = false,
+  defaultLabel = "Из пакета · без вычисления Ansible",
+  compact = false,
+  resolvedValue,
+  defaultValue,
+}: {
+  label: string;
+  value: unknown;
+  explicit: boolean;
+  disabled: boolean;
+  onSave: (value: unknown) => Promise<boolean>;
+  onReset: () => Promise<boolean>;
+  onDirtyChange: (dirty: boolean) => void;
+  inferType?: boolean;
+  defaultLabel?: string;
+  compact?: boolean;
+  resolvedValue?: unknown;
+  defaultValue?: unknown;
+}) {
+  const [text, setText] = useState(String(value ?? ""));
+  const [dirty, setDirty] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const showResolved =
+    compact &&
+    !focused &&
+    !dirty &&
+    ["string", "number", "boolean"].includes(typeof resolvedValue);
+  const [manualType, setManualType] = useState("auto");
+  const inferred = inferParameterValue(text);
+  const originalType = typeof value;
+  const type = compact
+    ? typeof inferred
+    : manualType !== "auto"
+      ? manualType
+      : inferType
+        ? typeof inferred
+        : originalType;
+  const parsed =
+    type === "number"
+      ? Number(text)
+      : type === "boolean"
+        ? text === "true"
+        : text;
+  const valid =
+    type === "number"
+      ? text.trim() !== "" && Number.isFinite(Number(text))
+      : type === "boolean"
+        ? ["true", "false"].includes(text)
+        : true;
+  const typeLabel =
+    type === "number" ? "Число" : type === "boolean" ? "Логическое" : "Строка";
+  const saveValue = () =>
+    void onSave(parsed).then((ok) => {
+      if (ok) {
+        setDirty(false);
+        onDirtyChange(false);
+      }
+    });
+  const resetValue = () =>
+    void onReset().then((ok) => {
+      if (ok) {
+        setDirty(false);
+        onDirtyChange(false);
+      }
+    });
+  if (compact)
+    return (
+      <div className="application-value-row">
+        <label
+          className="application-value-key"
+          title={`${label}${defaultValue === undefined ? "" : ` · Default: ${String(defaultValue)}`}`}
+        >
+          <span>{label}</span>
+          <input
+            aria-label={label}
+            value={showResolved ? String(resolvedValue) : text}
+            disabled={disabled}
+            title={`${showResolved ? "Текущий расчёт Core · " : ""}Тип ввода: ${typeLabel} · автоматически · ${explicit ? "Явное значение" : defaultLabel}${defaultValue === undefined ? "" : ` · Default: ${String(defaultValue)}`}`}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            onChange={(event) => {
+              setText(event.target.value);
+              setDirty(true);
+              onDirtyChange(true);
+            }}
+          />
+        </label>
+        <button disabled={disabled || !dirty || !valid} onClick={saveValue}>
+          В черновик
+        </button>
+        <button
+          className="outline"
+          disabled={disabled || !explicit}
+          onClick={resetValue}
+        >
+          Сбросить к default
+        </button>
+      </div>
+    );
+  return (
+    <div className="application-field">
+      <label>
+        {label}
+        <input
+          value={text}
+          disabled={disabled}
+          onChange={(e) => {
+            setText(e.target.value);
+            setDirty(true);
+            onDirtyChange(true);
+          }}
+        />
+      </label>
+      <small>
+        Тип: {typeLabel}
+        {manualType === "auto" ? " · автоматически" : " · задан вручную"}
+      </small>
+      <details className="application-parameter-type">
+        <summary>Дополнительно</summary>
+        <label>
+          Тип · {label}
+          <select
+            value={manualType}
+            disabled={disabled}
+            onChange={(e) => {
+              setManualType(e.target.value);
+              setDirty(true);
+              onDirtyChange(true);
+            }}
+          >
+            <option value="auto">Автоматически</option>
+            <option value="string">Строка</option>
+            <option value="number">Число</option>
+            <option value="boolean">Логическое</option>
+          </select>
+        </label>
+        <div className="row">
+          {[
+            { title: "Создать объект", value: {} },
+            { title: "Создать список", value: [] },
+          ].map((choice) => (
+            <button
+              key={choice.title}
+              className="outline"
+              disabled={disabled}
+              onClick={() => {
+                if (
+                  text &&
+                  !window.confirm("Заменить текущее значение структурой?")
+                )
+                  return;
+                void onSave(choice.value).then((ok) => {
+                  if (ok) onDirtyChange(false);
+                });
+              }}
+            >
+              {choice.title}
+            </button>
+          ))}
+        </div>
+      </details>
+      {!valid && (
+        <small role="alert">Значение не соответствует типу {typeLabel}.</small>
+      )}
+      <small>{explicit ? "Явное значение" : defaultLabel}</small>
+      <div className="row">
+        <button disabled={disabled || !dirty || !valid} onClick={saveValue}>
+          В черновик
+        </button>
+        <button
+          className="outline"
+          disabled={disabled || !explicit}
+          onClick={resetValue}
+        >
+          Сбросить к default
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// UI input conversion only; package validation and Ansible resolution stay in Core.
+export function inferParameterValue(text: string): string | number | boolean {
+  if (text === "true" || text === "false") return text === "true";
+  if (
+    /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(text) &&
+    Number.isFinite(Number(text)) &&
+    Math.abs(Number(text)) <= Number.MAX_SAFE_INTEGER
+  )
+    return Number(text);
+  return text;
+}
+
+@@END
 @@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":78114,"sha256":"1dcdf8a04d2a58ac8bca1d54c4c55da7ba9887f391640edab022cea7faf0182c","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":49860}
 import { ApplicationProvidedConnections } from "./ApplicationProvidedConnections";
 import { type ApplicationSecretSession } from "./ApplicationRuntimeSecretField";
@@ -119427,1605 +120911,4 @@ func (d *Dispatcher) processSecureCallMessage(message string, sender frontend.Fr
 	return "c" + string(messageData), nil
 }
 
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/frontend/dispatcher/systemcalls.go","mode":420,"size":4717,"sha256":"10add178a00da329097b34cd5564b2b91f09919e3e8edf882ccf5b5b0e692e0a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4717}
-package dispatcher
-
-import (
-	"encoding/json"
-	"errors"
-	"fmt"
-	"strings"
-
-	"github.com/wailsapp/wails/v2/pkg/runtime"
-
-	"github.com/wailsapp/wails/v2/internal/frontend"
-)
-
-const systemCallPrefix = ":wails:"
-
-type position struct {
-	X int `json:"x"`
-	Y int `json:"y"`
-}
-
-type size struct {
-	W int `json:"w"`
-	H int `json:"h"`
-}
-
-func (d *Dispatcher) processSystemCall(payload callMessage, sender frontend.Frontend) (interface{}, error) {
-	// Strip prefix
-	name := strings.TrimPrefix(payload.Name, systemCallPrefix)
-
-	switch name {
-	case "WindowGetPos":
-		x, y := sender.WindowGetPosition()
-		return &position{x, y}, nil
-	case "WindowGetSize":
-		w, h := sender.WindowGetSize()
-		return &size{w, h}, nil
-	case "ScreenGetAll":
-		return sender.ScreenGetAll()
-	case "WindowIsMaximised":
-		return sender.WindowIsMaximised(), nil
-	case "WindowIsMinimised":
-		return sender.WindowIsMinimised(), nil
-	case "WindowIsNormal":
-		return sender.WindowIsNormal(), nil
-	case "WindowIsFullscreen":
-		return sender.WindowIsFullscreen(), nil
-	case "Environment":
-		return runtime.Environment(d.ctx), nil
-	case "ClipboardGetText":
-		t, err := sender.ClipboardGetText()
-		return t, err
-	case "ClipboardSetText":
-		if len(payload.Args) < 1 {
-			return false, errors.New("empty argument, cannot set clipboard")
-		}
-		var arg string
-		if err := json.Unmarshal(payload.Args[0], &arg); err != nil {
-			return false, err
-		}
-		if err := sender.ClipboardSetText(arg); err != nil {
-			return false, err
-		}
-		return true, nil
-	case "InitializeNotifications":
-		err := sender.InitializeNotifications()
-		return nil, err
-	case "CleanupNotifications":
-		sender.CleanupNotifications()
-		return nil, nil
-	case "IsNotificationAvailable":
-		return sender.IsNotificationAvailable(), nil
-	case "RequestNotificationAuthorization":
-		authorized, err := sender.RequestNotificationAuthorization()
-		if err != nil {
-			return nil, err
-		}
-		return authorized, nil
-	case "CheckNotificationAuthorization":
-		authorized, err := sender.CheckNotificationAuthorization()
-		if err != nil {
-			return nil, err
-		}
-		return authorized, nil
-	case "SendNotification":
-		if len(payload.Args) < 1 {
-			return nil, errors.New("empty argument, cannot send notification")
-		}
-		var options frontend.NotificationOptions
-		if err := json.Unmarshal(payload.Args[0], &options); err != nil {
-			return nil, err
-		}
-		err := sender.SendNotification(options)
-		return nil, err
-	case "SendNotificationWithActions":
-		if len(payload.Args) < 1 {
-			return nil, errors.New("empty argument, cannot send notification")
-		}
-		var options frontend.NotificationOptions
-		if err := json.Unmarshal(payload.Args[0], &options); err != nil {
-			return nil, err
-		}
-		err := sender.SendNotificationWithActions(options)
-		return nil, err
-	case "RegisterNotificationCategory":
-		if len(payload.Args) < 1 {
-			return nil, errors.New("empty argument, cannot register category")
-		}
-		var category frontend.NotificationCategory
-		if err := json.Unmarshal(payload.Args[0], &category); err != nil {
-			return nil, err
-		}
-		err := sender.RegisterNotificationCategory(category)
-		return nil, err
-	case "RemoveNotificationCategory":
-		if len(payload.Args) < 1 {
-			return nil, errors.New("empty argument, cannot remove category")
-		}
-		var categoryId string
-		if err := json.Unmarshal(payload.Args[0], &categoryId); err != nil {
-			return nil, err
-		}
-		err := sender.RemoveNotificationCategory(categoryId)
-		return nil, err
-	case "RemoveAllPendingNotifications":
-		err := sender.RemoveAllPendingNotifications()
-		return nil, err
-	case "RemovePendingNotification":
-		if len(payload.Args) < 1 {
-			return nil, errors.New("empty argument, cannot remove notification")
-		}
-		var identifier string
-		if err := json.Unmarshal(payload.Args[0], &identifier); err != nil {
-			return nil, err
-		}
-		err := sender.RemovePendingNotification(identifier)
-		return nil, err
-	case "RemoveAllDeliveredNotifications":
-		err := sender.RemoveAllDeliveredNotifications()
-		return nil, err
-	case "RemoveDeliveredNotification":
-		if len(payload.Args) < 1 {
-			return nil, errors.New("empty argument, cannot remove notification")
-		}
-		var identifier string
-		if err := json.Unmarshal(payload.Args[0], &identifier); err != nil {
-			return nil, err
-		}
-		err := sender.RemoveDeliveredNotification(identifier)
-		return nil, err
-	case "RemoveNotification":
-		if len(payload.Args) < 1 {
-			return nil, errors.New("empty argument, cannot remove notification")
-		}
-		var identifier string
-		if err := json.Unmarshal(payload.Args[0], &identifier); err != nil {
-			return nil, err
-		}
-		err := sender.RemoveNotification(identifier)
-		return nil, err
-	default:
-		return nil, fmt.Errorf("unknown systemcall message: %s", payload.Name)
-	}
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/frontend/dispatcher/window.go","mode":420,"size":2284,"sha256":"20b4f513c9ebb175850f8499131c689931bf88d39807acadea1831be25cf72a9","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2284}
-package dispatcher
-
-import (
-	"encoding/json"
-	"errors"
-	"strconv"
-	"strings"
-
-	"github.com/wailsapp/wails/v2/internal/frontend"
-	"github.com/wailsapp/wails/v2/pkg/options"
-)
-
-func (d *Dispatcher) mustAtoI(input string) int {
-	result, err := strconv.Atoi(input)
-	if err != nil {
-		d.log.Error("cannot convert %s to integer!", input)
-	}
-	return result
-}
-
-func (d *Dispatcher) processWindowMessage(message string, sender frontend.Frontend) (string, error) {
-	if len(message) < 2 {
-		return "", errors.New("Invalid Window Message: " + message)
-	}
-
-	switch message[1] {
-	case 'A':
-		switch message[2:] {
-		case "SDT":
-			go sender.WindowSetSystemDefaultTheme()
-		case "LT":
-			go sender.WindowSetLightTheme()
-		case "DT":
-			go sender.WindowSetDarkTheme()
-		case "TP:0", "TP:1":
-			if message[2:] == "TP:0" {
-				go sender.WindowSetAlwaysOnTop(false)
-			} else if message[2:] == "TP:1" {
-				go sender.WindowSetAlwaysOnTop(true)
-			}
-		}
-	case 'c':
-		go sender.WindowCenter()
-	case 'T':
-		title := message[2:]
-		go sender.WindowSetTitle(title)
-	case 'F':
-		go sender.WindowFullscreen()
-	case 'f':
-		go sender.WindowUnfullscreen()
-	case 's':
-		parts := strings.Split(message[3:], ":")
-		w := d.mustAtoI(parts[0])
-		h := d.mustAtoI(parts[1])
-		go sender.WindowSetSize(w, h)
-	case 'p':
-		parts := strings.Split(message[3:], ":")
-		x := d.mustAtoI(parts[0])
-		y := d.mustAtoI(parts[1])
-		go sender.WindowSetPosition(x, y)
-	case 'H':
-		go sender.WindowHide()
-	case 'S':
-		go sender.WindowShow()
-	case 'R':
-		go sender.WindowReloadApp()
-	case 'r':
-		var rgba options.RGBA
-		err := json.Unmarshal([]byte(message[3:]), &rgba)
-		if err != nil {
-			return "", err
-		}
-		go sender.WindowSetBackgroundColour(&rgba)
-	case 'M':
-		go sender.WindowMaximise()
-	case 't':
-		go sender.WindowToggleMaximise()
-	case 'U':
-		go sender.WindowUnmaximise()
-	case 'm':
-		go sender.WindowMinimise()
-	case 'u':
-		go sender.WindowUnminimise()
-	case 'Z':
-		parts := strings.Split(message[3:], ":")
-		w := d.mustAtoI(parts[0])
-		h := d.mustAtoI(parts[1])
-		go sender.WindowSetMaxSize(w, h)
-	case 'z':
-		parts := strings.Split(message[3:], ":")
-		w := d.mustAtoI(parts[0])
-		h := d.mustAtoI(parts[1])
-		go sender.WindowSetMinSize(w, h)
-	default:
-		d.log.Error("unknown Window message: %s", message)
-	}
-
-	return "", nil
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/frontend/events.go","mode":420,"size":384,"sha256":"6774584a5383ea4b63c38f9e90dde22b3622e3167d32174de00c26428f956d39","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":384}
-package frontend
-
-type Events interface {
-	On(eventName string, callback func(...interface{})) func()
-	OnMultiple(eventName string, callback func(...interface{}), counter int) func()
-	Once(eventName string, callback func(...interface{})) func()
-	Emit(eventName string, data ...interface{})
-	Off(eventName string)
-	OffAll()
-	Notify(sender Frontend, name string, data ...interface{})
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/frontend/frontend.go","mode":420,"size":6582,"sha256":"5dbef3bc3e5fd4a6b59330b9153e7eb358e05aa0b78a8b936794198cea6ac682","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":6582}
-package frontend
-
-import (
-	"context"
-
-	"github.com/wailsapp/wails/v2/pkg/menu"
-	"github.com/wailsapp/wails/v2/pkg/options"
-)
-
-// FileFilter defines a filter for dialog boxes
-type FileFilter struct {
-	DisplayName string // Filter information EG: "Image Files (*.jpg, *.png)"
-	Pattern     string // semicolon separated list of extensions, EG: "*.jpg;*.png"
-}
-
-// OpenDialogOptions contains the options for the OpenDialogOptions runtime method
-type OpenDialogOptions struct {
-	DefaultDirectory           string
-	DefaultFilename            string
-	Title                      string
-	Filters                    []FileFilter
-	ShowHiddenFiles            bool
-	CanCreateDirectories       bool
-	ResolvesAliases            bool
-	TreatPackagesAsDirectories bool
-}
-
-// SaveDialogOptions contains the options for the SaveDialog runtime method
-type SaveDialogOptions struct {
-	DefaultDirectory           string
-	DefaultFilename            string
-	Title                      string
-	Filters                    []FileFilter
-	ShowHiddenFiles            bool
-	CanCreateDirectories       bool
-	TreatPackagesAsDirectories bool
-}
-
-type DialogType string
-
-const (
-	InfoDialog     DialogType = "info"
-	WarningDialog  DialogType = "warning"
-	ErrorDialog    DialogType = "error"
-	QuestionDialog DialogType = "question"
-)
-
-type Screen struct {
-	IsCurrent bool `json:"isCurrent"`
-	IsPrimary bool `json:"isPrimary"`
-
-	// Deprecated: Please use Size and PhysicalSize
-	Width int `json:"width"`
-	// Deprecated: Please use Size and PhysicalSize
-	Height int `json:"height"`
-
-	// Size is the size of the screen in logical pixel space, used when setting sizes in Wails
-	Size ScreenSize `json:"size"`
-	// PhysicalSize is the physical size of the screen in pixels
-	PhysicalSize ScreenSize `json:"physicalSize"`
-}
-
-type ScreenSize struct {
-	Width  int `json:"width"`
-	Height int `json:"height"`
-}
-
-// MessageDialogOptions contains the options for the Message dialogs, EG Info, Warning, etc runtime methods
-type MessageDialogOptions struct {
-	Type          DialogType
-	Title         string
-	Message       string
-	Buttons       []string
-	DefaultButton string
-	CancelButton  string
-	Icon          []byte
-}
-
-// NotificationOptions contains configuration for a notification.
-type NotificationOptions struct {
-	ID         string                 `json:"id"`
-	Title      string                 `json:"title"`
-	Subtitle   string                 `json:"subtitle,omitempty"` // (macOS and Linux only)
-	Body       string                 `json:"body,omitempty"`
-	CategoryID string                 `json:"categoryId,omitempty"`
-	Data       map[string]interface{} `json:"data,omitempty"`
-}
-
-// NotificationAction represents an action button for a notification.
-type NotificationAction struct {
-	ID          string `json:"id,omitempty"`
-	Title       string `json:"title,omitempty"`
-	Destructive bool   `json:"destructive,omitempty"` // (macOS-specific)
-}
-
-// NotificationCategory groups actions for notifications.
-type NotificationCategory struct {
-	ID               string               `json:"id,omitempty"`
-	Actions          []NotificationAction `json:"actions,omitempty"`
-	HasReplyField    bool                 `json:"hasReplyField,omitempty"`
-	ReplyPlaceholder string               `json:"replyPlaceholder,omitempty"`
-	ReplyButtonTitle string               `json:"replyButtonTitle,omitempty"`
-}
-
-// NotificationResponse represents the response sent by interacting with a notification.
-type NotificationResponse struct {
-	ID               string                 `json:"id,omitempty"`
-	ActionIdentifier string                 `json:"actionIdentifier,omitempty"`
-	CategoryID       string                 `json:"categoryId,omitempty"` // Consistent with NotificationOptions
-	Title            string                 `json:"title,omitempty"`
-	Subtitle         string                 `json:"subtitle,omitempty"` // (macOS and Linux only)
-	Body             string                 `json:"body,omitempty"`
-	UserText         string                 `json:"userText,omitempty"`
-	UserInfo         map[string]interface{} `json:"userInfo,omitempty"`
-}
-
-// NotificationResult represents the result of a notification response,
-// returning the response or any errors that occurred.
-type NotificationResult struct {
-	Response NotificationResponse
-	Error    error
-}
-
-type Frontend interface {
-	Run(ctx context.Context) error
-	RunMainLoop()
-	ExecJS(js string)
-	Hide()
-	Show()
-	Quit()
-
-	// Dialog
-	OpenFileDialog(dialogOptions OpenDialogOptions) (string, error)
-	OpenMultipleFilesDialog(dialogOptions OpenDialogOptions) ([]string, error)
-	OpenDirectoryDialog(dialogOptions OpenDialogOptions) (string, error)
-	SaveFileDialog(dialogOptions SaveDialogOptions) (string, error)
-	MessageDialog(dialogOptions MessageDialogOptions) (string, error)
-
-	// Window
-	WindowSetTitle(title string)
-	WindowShow()
-	WindowHide()
-	WindowCenter()
-	WindowToggleMaximise()
-	WindowMaximise()
-	WindowUnmaximise()
-	WindowMinimise()
-	WindowUnminimise()
-	WindowSetAlwaysOnTop(b bool)
-	WindowSetPosition(x int, y int)
-	WindowGetPosition() (int, int)
-	WindowSetSize(width int, height int)
-	WindowGetSize() (int, int)
-	WindowSetMinSize(width int, height int)
-	WindowSetMaxSize(width int, height int)
-	WindowFullscreen()
-	WindowUnfullscreen()
-	WindowSetBackgroundColour(col *options.RGBA)
-	WindowReload()
-	WindowReloadApp()
-	WindowSetSystemDefaultTheme()
-	WindowSetLightTheme()
-	WindowSetDarkTheme()
-	WindowIsMaximised() bool
-	WindowIsMinimised() bool
-	WindowIsNormal() bool
-	WindowIsFullscreen() bool
-	WindowClose()
-	WindowPrint()
-
-	// Screen
-	ScreenGetAll() ([]Screen, error)
-
-	// Menus
-	MenuSetApplicationMenu(menu *menu.Menu)
-	MenuUpdateApplicationMenu()
-
-	// Events
-	Notify(name string, data ...interface{})
-
-	// Browser
-	BrowserOpenURL(url string)
-
-	// Clipboard
-	ClipboardGetText() (string, error)
-	ClipboardSetText(text string) error
-
-	// Notifications
-	InitializeNotifications() error
-	CleanupNotifications()
-	IsNotificationAvailable() bool
-	RequestNotificationAuthorization() (bool, error)
-	CheckNotificationAuthorization() (bool, error)
-	OnNotificationResponse(callback func(result NotificationResult))
-	SendNotification(options NotificationOptions) error
-	SendNotificationWithActions(options NotificationOptions) error
-	RegisterNotificationCategory(category NotificationCategory) error
-	RemoveNotificationCategory(categoryId string) error
-	RemoveAllPendingNotifications() error
-	RemovePendingNotification(identifier string) error
-	RemoveAllDeliveredNotifications() error
-	RemoveDeliveredNotification(identifier string) error
-	RemoveNotification(identifier string) error
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/frontend/originvalidator/originValidator.go","mode":420,"size":4618,"sha256":"9934140bbebbb998350379874f6b12f86c037e6a7ab43c77dce4c31bf42c5ed1","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4618}
-package originvalidator
-
-import (
-	"fmt"
-	"net/url"
-	"regexp"
-	"strings"
-)
-
-type OriginValidator struct {
-	allowedOrigins []string
-}
-
-// NewOriginValidator creates a new validator from a comma-separated string of allowed origins
-func NewOriginValidator(startUrl *url.URL, allowedOriginsString string) *OriginValidator {
-	allowedOrigins := startUrl.Scheme + "://" + startUrl.Host
-	if allowedOriginsString != "" {
-		allowedOrigins += "," + allowedOriginsString
-	}
-	validator := &OriginValidator{}
-	validator.parseAllowedOrigins(allowedOrigins)
-	return validator
-}
-
-// parseAllowedOrigins parses the comma-separated origins string
-func (v *OriginValidator) parseAllowedOrigins(originsString string) {
-	if originsString == "" {
-		v.allowedOrigins = []string{}
-		return
-	}
-
-	origins := strings.Split(originsString, ",")
-	var trimmedOrigins []string
-
-	for _, origin := range origins {
-		trimmed := strings.TrimSuffix(strings.TrimSpace(origin), "/")
-		if trimmed != "" {
-			trimmedOrigins = append(trimmedOrigins, trimmed)
-		}
-	}
-
-	v.allowedOrigins = trimmedOrigins
-}
-
-// IsOriginAllowed checks if the given origin is allowed
-func (v *OriginValidator) IsOriginAllowed(origin string) bool {
-	if origin == "" {
-		return false
-	}
-
-	for _, allowedOrigin := range v.allowedOrigins {
-		if v.matchesOriginPattern(allowedOrigin, origin) {
-			return true
-		}
-	}
-
-	return false
-}
-
-// matchesOriginPattern checks if origin matches the pattern (supports wildcards)
-func (v *OriginValidator) matchesOriginPattern(pattern, origin string) bool {
-	// Exact match
-	if pattern == origin {
-		return true
-	}
-
-	// Wildcard pattern matching
-	if strings.Contains(pattern, "*") {
-		regexPattern := v.wildcardPatternToRegex(pattern)
-		matched, err := regexp.MatchString(regexPattern, origin)
-		if err != nil {
-			return false
-		}
-		return matched
-	}
-
-	return false
-}
-
-// wildcardPatternToRegex converts a wildcard pattern to an anchored regex.
-//
-// A '*' is treated as a wildcard only when it spans a COMPLETE origin
-// component — bounded on the left by "://", "." or ":" AND on the right by
-// ".", ":", "/" or the end of the pattern. Such a wildcard expands to a single
-// non-empty component matcher ([^.:/@]+) that cannot cross a scheme/host/port
-// or userinfo boundary. Any other '*' (a partial-label wildcard such as "myapp.com*",
-// "*myapp.com" or "myapp.*com") is treated as a literal character, so it
-// cannot widen the match — a misused trailing/partial wildcard simply fails
-// closed instead of allowing suffix or cross-boundary bypasses
-// (GHSA-47hv-j4px-h3c9). \A and \z anchor the whole string with no
-// trailing-newline leniency (unlike ^...$).
-func (v *OriginValidator) wildcardPatternToRegex(wildcardPattern string) string {
-	runes := []rune(wildcardPattern)
-	var b strings.Builder
-	b.WriteString(`\A`)
-	for i, c := range runes {
-		if c == '*' && isComponentWildcard(runes, i) {
-			// One non-empty component. '@' is excluded alongside the . : /
-			// separators so a wildcard component can never absorb a userinfo
-			// delimiter (e.g. "myapp.com:*" must not match
-			// "myapp.com:x@evilcom", whose real host is "evilcom").
-			b.WriteString(`[^.:/@]+`)
-			continue
-		}
-		b.WriteString(regexp.QuoteMeta(string(c)))
-	}
-	b.WriteString(`\z`)
-	return b.String()
-}
-
-// isComponentWildcard reports whether the '*' at index i spans a complete
-// origin component: a separator boundary ("://", "." or ":") immediately to its
-// left, and a separator boundary (".", ":", "/" or end of pattern) immediately
-// to its right. Only such wildcards are safe to expand; any other '*' would let
-// the wildcard bleed across a host/port boundary and is left literal.
-func isComponentWildcard(runes []rune, i int) bool {
-	// Left boundary.
-	leftOK := false
-	switch {
-	case i == 0:
-		leftOK = false
-	case runes[i-1] == '.' || runes[i-1] == ':':
-		leftOK = true
-	case runes[i-1] == '/' && i >= 3 && string(runes[i-3:i]) == "://":
-		leftOK = true
-	}
-	if !leftOK {
-		return false
-	}
-	// Right boundary.
-	if i == len(runes)-1 {
-		return true
-	}
-	switch runes[i+1] {
-	case '.', ':', '/':
-		return true
-	}
-	return false
-}
-
-// GetOriginFromURL extracts origin from URL string
-func (v *OriginValidator) GetOriginFromURL(urlString string) (string, error) {
-	if urlString == "" {
-		return "", fmt.Errorf("empty URL")
-	}
-
-	parsedURL, err := url.Parse(urlString)
-	if err != nil {
-		return "", fmt.Errorf("invalid URL: %v", err)
-	}
-
-	if parsedURL.Scheme == "" || parsedURL.Host == "" {
-		return "", fmt.Errorf("URL missing scheme or host")
-	}
-
-	// Build origin (scheme + host)
-	origin := parsedURL.Scheme + "://" + parsedURL.Host
-
-	return origin, nil
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/frontend/runtime/assets.go","mode":420,"size":478,"sha256":"3e7f489ce809911c9f482b99639f7ce5eaa73a2cb589014f8236a2963c3b1b2b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":478}
-//go:build !dev
-
-package runtime
-
-var RuntimeAssetsBundle = &RuntimeAssets{
-	desktopIPC:       DesktopIPC,
-	runtimeDesktopJS: RuntimeDesktopJS,
-}
-
-type RuntimeAssets struct {
-	desktopIPC       []byte
-	websocketIPC     []byte
-	runtimeDesktopJS []byte
-}
-
-func (r *RuntimeAssets) DesktopIPC() []byte {
-	return r.desktopIPC
-}
-
-func (r *RuntimeAssets) WebsocketIPC() []byte {
-	return r.websocketIPC
-}
-
-func (r *RuntimeAssets) RuntimeDesktopJS() []byte {
-	return r.runtimeDesktopJS
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/frontend/runtime/assets_dev.go","mode":420,"size":510,"sha256":"2fea94d03080e28b9e21d7463b7645b95c2995d7380a7d5c5d861eb214cba060","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":510}
-//go:build dev
-
-package runtime
-
-var RuntimeAssetsBundle = &RuntimeAssets{
-	desktopIPC:       DesktopIPC,
-	websocketIPC:     WebsocketIPC,
-	runtimeDesktopJS: RuntimeDesktopJS,
-}
-
-type RuntimeAssets struct {
-	desktopIPC       []byte
-	websocketIPC     []byte
-	runtimeDesktopJS []byte
-}
-
-func (r *RuntimeAssets) DesktopIPC() []byte {
-	return r.desktopIPC
-}
-
-func (r *RuntimeAssets) WebsocketIPC() []byte {
-	return r.websocketIPC
-}
-
-func (r *RuntimeAssets) RuntimeDesktopJS() []byte {
-	return r.runtimeDesktopJS
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/frontend/runtime/desktop/bindings.js","mode":420,"size":1587,"sha256":"656ea20f1663c556db1f3d493adbeeee546ecf3652197a157a18df6a870d583f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1587}
-/*
- _       __      _ __    
-| |     / /___ _(_) /____
-| | /| / / __ `/ / / ___/
-| |/ |/ / /_/ / / (__  ) 
-|__/|__/\__,_/_/_/____/  
-The electron alternative for Go
-(c) Lea Anthony 2019-present
-*/
-/* jshint esversion: 6 */
-
-import {Call} from './calls';
-
-// This is where we bind go method wrappers
-window.go = {};
-
-export function SetBindings(bindingsMap) {
-	try {
-		bindingsMap = JSON.parse(bindingsMap);
-	} catch (e) {
-		console.error(e);
-	}
-
-	// Initialise the bindings map
-	window.go = window.go || {};
-
-	// Iterate package names
-	Object.keys(bindingsMap).forEach((packageName) => {
-
-		// Create inner map if it doesn't exist
-		window.go[packageName] = window.go[packageName] || {};
-
-		// Iterate struct names
-		Object.keys(bindingsMap[packageName]).forEach((structName) => {
-
-			// Create inner map if it doesn't exist
-			window.go[packageName][structName] = window.go[packageName][structName] || {};
-
-			Object.keys(bindingsMap[packageName][structName]).forEach((methodName) => {
-
-				window.go[packageName][structName][methodName] = function () {
-
-					// No timeout by default
-					let timeout = 0;
-
-					// Actual function
-					function dynamic() {
-						const args = [].slice.call(arguments);
-						return Call([packageName, structName, methodName].join('.'), args, timeout);
-					}
-
-					// Allow setting timeout to function
-					dynamic.setTimeout = function (newTimeout) {
-						timeout = newTimeout;
-					};
-
-					// Allow getting timeout to function
-					dynamic.getTimeout = function () {
-						return timeout;
-					};
-
-					return dynamic;
-				}();
-			});
-		});
-	});
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/frontend/runtime/desktop/browser.js","mode":420,"size":188,"sha256":"c50cc6e4f3e21e60ba638c3f1ad7e9c3bf0c4ad6c3d92a48893f9337047a354f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":188}
-/**
- * @description: Use the system default browser to open the url
- * @param {string} url 
- * @return {void}
- */
-export function BrowserOpenURL(url) {
-  window.WailsInvoke('BO:' + url);
-}
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/frontend/runtime/desktop/calls.js","mode":420,"size":4276,"sha256":"811335b883dc6aa68269434933141f7f18cd77a440499118a01c4773ae31cc65","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4276}
-/*
- _       __      _ __
-| |     / /___ _(_) /____
-| | /| / / __ `/ / / ___/
-| |/ |/ / /_/ / / (__  )
-|__/|__/\__,_/_/_/____/
-The electron alternative for Go
-(c) Lea Anthony 2019-present
-*/
-/* jshint esversion: 6 */
-
-export const callbacks = {};
-
-/**
- * Returns a number from the native browser random function
- *
- * @returns number
- */
-function cryptoRandom() {
-	var array = new Uint32Array(1);
-	return window.crypto.getRandomValues(array)[0];
-}
-
-/**
- * Returns a number using da old-skool Math.Random
- * I likes to call it LOLRandom
- *
- * @returns number
- */
-function basicRandom() {
-	return Math.random() * 9007199254740991;
-}
-
-// Pick a random number function based on browser capability
-var randomFunc;
-if (window.crypto) {
-	randomFunc = cryptoRandom;
-} else {
-	randomFunc = basicRandom;
-}
-
-
-/**
- * Call sends a message to the backend to call the binding with the
- * given data. A promise is returned and will be completed when the
- * backend responds. This will be resolved when the call was successful
- * or rejected if an error is passed back.
- * There is a timeout mechanism. If the call doesn't respond in the given
- * time (in milliseconds) then the promise is rejected.
- *
- * @export
- * @param {string} name
- * @param {any=} args
- * @param {number=} timeout
- * @returns
- */
-export function Call(name, args, timeout) {
-
-	// Timeout infinite by default
-	if (timeout == null) {
-		timeout = 0;
-	}
-
-	// Create a promise
-	return new Promise(function (resolve, reject) {
-
-		// Create a unique callbackID
-		var callbackID;
-		do {
-			callbackID = name + '-' + randomFunc();
-		} while (callbacks[callbackID]);
-
-		var timeoutHandle;
-		// Set timeout
-		if (timeout > 0) {
-			timeoutHandle = setTimeout(function () {
-				reject(Error('Call to ' + name + ' timed out. Request ID: ' + callbackID));
-			}, timeout);
-		}
-
-		// Store callback
-		callbacks[callbackID] = {
-			timeoutHandle: timeoutHandle,
-			reject: reject,
-			resolve: resolve
-		};
-
-		try {
-			const payload = {
-				name,
-				args,
-				callbackID,
-			};
-
-            // Make the call
-            window.WailsInvoke('C' + JSON.stringify(payload));
-        } catch (e) {
-            // eslint-disable-next-line
-            console.error(e);
-        }
-    });
-}
-
-window.ObfuscatedCall = (id, args, timeout) => {
-
-    // Timeout infinite by default
-    if (timeout == null) {
-        timeout = 0;
-    }
-
-    // Create a promise
-    return new Promise(function (resolve, reject) {
-
-        // Create a unique callbackID
-        var callbackID;
-        do {
-            callbackID = id + '-' + randomFunc();
-        } while (callbacks[callbackID]);
-
-        var timeoutHandle;
-        // Set timeout
-        if (timeout > 0) {
-            timeoutHandle = setTimeout(function () {
-                reject(Error('Call to method ' + id + ' timed out. Request ID: ' + callbackID));
-            }, timeout);
-        }
-
-        // Store callback
-        callbacks[callbackID] = {
-            timeoutHandle: timeoutHandle,
-            reject: reject,
-            resolve: resolve
-        };
-
-        try {
-            const payload = {
-				id,
-				args,
-				callbackID,
-			};
-
-            // Make the call
-            window.WailsInvoke('c' + JSON.stringify(payload));
-        } catch (e) {
-            // eslint-disable-next-line
-            console.error(e);
-        }
-    });
-};
-
-
-/**
- * Called by the backend to return data to a previously called
- * binding invocation
- *
- * @export
- * @param {string} incomingMessage
- */
-export function Callback(incomingMessage) {
-	// Parse the message
-	let message;
-	try {
-		message = JSON.parse(incomingMessage);
-	} catch (e) {
-		const error = `Invalid JSON passed to callback: ${e.message}. Message: ${incomingMessage}`;
-		runtime.LogDebug(error);
-		throw new Error(error);
-	}
-	let callbackID = message.callbackid;
-	let callbackData = callbacks[callbackID];
-	if (!callbackData) {
-		const error = `Callback '${callbackID}' not registered!!!`;
-		console.error(error); // eslint-disable-line
-		throw new Error(error);
-	}
-	clearTimeout(callbackData.timeoutHandle);
-
-	delete callbacks[callbackID];
-
-	if (message.error) {
-		const err = message.error instanceof Error ? message.error : new Error(message.error);
-		callbackData.reject(err);
-	} else {
-		callbackData.resolve(message.result);
-	}
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/frontend/runtime/desktop/clipboard.js","mode":420,"size":619,"sha256":"47f6f2ac609fd243cb240d466e5f38d62abf249d5babdc08071f9feee0a69d88","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":619}
-/*
- _	   __	  _ __
-| |	 / /___ _(_) /____
-| | /| / / __ `/ / / ___/
-| |/ |/ / /_/ / / (__  )
-|__/|__/\__,_/_/_/____/
-The electron alternative for Go
-(c) Lea Anthony 2019-present
-*/
-
-/* jshint esversion: 9 */
-
-import {Call} from "./calls";
-
-/**
- * Set the Size of the window
- *
- * @export
- * @param {string} text
- */
-export function ClipboardSetText(text) {
-    return Call(":wails:ClipboardSetText", [text]);
-}
-
-/**
- * Get the text content of the clipboard
- *
- * @export
- * @return {Promise<{string}>} Text content of the clipboard
-
- */
-export function ClipboardGetText() {
-    return Call(":wails:ClipboardGetText");
-}
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/frontend/runtime/desktop/contextmenu.js","mode":420,"size":2078,"sha256":"fc639ff4cb5f6905241c4159c753980a5f6d8b73c26d15481b45a6b7536c174c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2078}
-/*
---default-contextmenu: auto; (default) will show the default context menu if contentEditable is true OR text has been selected OR element is input or textarea
---default-contextmenu: show; will always show the default context menu
---default-contextmenu: hide; will always hide the default context menu
-
-This rule is inherited like normal CSS rules, so nesting works as expected
-*/
-export function processDefaultContextMenu(event) {
-    // Process default context menu
-    const element = event.target;
-    const computedStyle = window.getComputedStyle(element);
-    const defaultContextMenuAction = computedStyle.getPropertyValue("--default-contextmenu").trim();
-    switch (defaultContextMenuAction) {
-        case "show":
-            return;
-        case "hide":
-            event.preventDefault();
-            return;
-        default: {
-            // Check if contentEditable is true
-            if (element.isContentEditable) {
-                return;
-            }
-
-            // Check if text has been selected and action is on the selected elements
-            const selection = window.getSelection();
-            const hasSelection = (selection.toString().length > 0)
-            if (hasSelection) {
-                for (let i = 0; i < selection.rangeCount; i++) {
-                    const range = selection.getRangeAt(i);
-                    const rects = range.getClientRects();
-                    for (let j = 0; j < rects.length; j++) {
-                        const rect = rects[j];
-                        if (document.elementFromPoint(rect.left, rect.top) === element) {
-                            return;
-                        }
-                    }
-                }
-            }
-            // Check if tagname is input or textarea
-            if (element.tagName === "INPUT" || element.tagName === "TEXTAREA") {
-                if (hasSelection || (!element.readOnly && !element.disabled)) {
-                    return;
-                }
-            }
-
-            // hide default context menu
-            event.preventDefault();
-        }
-    }
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/frontend/runtime/desktop/draganddrop.js","mode":420,"size":8613,"sha256":"d9091703319b47a48449d184e8382c8ca27a0a4225d0eabd4b6bfe01c3646aac","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":8613}
-/*
- _	   __	  _ __
-| |	 / /___ _(_) /____
-| | /| / / __ `/ / / ___/
-| |/ |/ / /_/ / / (__  )
-|__/|__/\__,_/_/_/____/
-The electron alternative for Go
-(c) Lea Anthony 2019-present
-*/
-
-/* jshint esversion: 9 */
-
-import {EventsOn, EventsOff} from "./events";
-
-const flags = {
-    registered: false,
-    defaultUseDropTarget: true,
-    useDropTarget: true,
-    nextDeactivate: null,
-    nextDeactivateTimeout: null,
-};
-
-const DROP_TARGET_ACTIVE = "wails-drop-target-active";
-
-/**
- * checkStyleDropTarget checks if the style has the drop target attribute
- * 
- * @param {CSSStyleDeclaration} style 
- * @returns 
- */
-function checkStyleDropTarget(style) {
-    const cssDropValue = style.getPropertyValue(window.wails.flags.cssDropProperty).trim();
-    if (cssDropValue) {
-        if (cssDropValue === window.wails.flags.cssDropValue) {
-            return true;
-        }
-        // if the element has the drop target attribute, but 
-        // the value is not correct, terminate finding process.
-        // This can be useful to block some child elements from being drop targets.
-        return false;
-    }
-    return false;
-}
-
-/**
- * onDragOver is called when the dragover event is emitted.
- * @param {DragEvent} e
- * @returns
- */
-function onDragOver(e) {
-    // Check if this is an external file drop or internal HTML drag
-    // External file drops will have "Files" in the types array
-    // Internal HTML drags typically have "text/plain", "text/html" or custom types
-    const isFileDrop = e.dataTransfer.types.includes("Files");
-
-    // Only handle external file drops, let internal HTML5 drag-and-drop work normally
-    if (!isFileDrop) {
-        return;
-    }
-
-    // ALWAYS prevent default for file drops to stop browser navigation
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'copy';
-
-    if (!window.wails.flags.enableWailsDragAndDrop) {
-        return;
-    }
-
-    if (!flags.useDropTarget) {
-        return;
-    }
-
-    const element = e.target;
-
-    // Trigger debounce function to deactivate drop targets
-    if(flags.nextDeactivate) flags.nextDeactivate();
-
-    // if the element is null or element is not child of drop target element
-    if (!element || !checkStyleDropTarget(getComputedStyle(element))) {
-        return;
-    }
-
-    let currentElement = element;
-    while (currentElement) {
-        // check if currentElement is drop target element
-        if (checkStyleDropTarget(getComputedStyle(currentElement))) {
-            currentElement.classList.add(DROP_TARGET_ACTIVE);
-        }
-        currentElement = currentElement.parentElement;
-    }
-}
-
-/**
- * onDragLeave is called when the dragleave event is emitted.
- * @param {DragEvent} e
- * @returns
- */
-function onDragLeave(e) {
-    // Check if this is an external file drop or internal HTML drag
-    const isFileDrop = e.dataTransfer.types.includes("Files");
-
-    // Only handle external file drops, let internal HTML5 drag-and-drop work normally
-    if (!isFileDrop) {
-        return;
-    }
-
-    // ALWAYS prevent default for file drops to stop browser navigation
-    e.preventDefault();
-
-    if (!window.wails.flags.enableWailsDragAndDrop) {
-        return;
-    }
-
-    if (!flags.useDropTarget) {
-        return;
-    }
-
-    // Find the close drop target element
-    if (!e.target || !checkStyleDropTarget(getComputedStyle(e.target))) {
-        return null;
-    }
-
-    // Trigger debounce function to deactivate drop targets
-    if(flags.nextDeactivate) flags.nextDeactivate();
-    
-    // Use debounce technique to tacle dragleave events on overlapping elements and drop target elements
-    flags.nextDeactivate = () => {
-        // Deactivate all drop targets, new drop target will be activated on next dragover event
-        Array.from(document.getElementsByClassName(DROP_TARGET_ACTIVE)).forEach(el => el.classList.remove(DROP_TARGET_ACTIVE));
-        // Reset nextDeactivate
-        flags.nextDeactivate = null;
-        // Clear timeout
-        if (flags.nextDeactivateTimeout) {
-            clearTimeout(flags.nextDeactivateTimeout);
-            flags.nextDeactivateTimeout = null;
-        }
-    }
-
-    // Set timeout to deactivate drop targets if not triggered by next drag event
-    flags.nextDeactivateTimeout = setTimeout(() => {
-        if(flags.nextDeactivate) flags.nextDeactivate();
-    }, 50);
-}
-
-/**
- * onDrop is called when the drop event is emitted.
- * @param {DragEvent} e
- * @returns
- */
-function onDrop(e) {
-    // Check if this is an external file drop or internal HTML drag
-    const isFileDrop = e.dataTransfer.types.includes("Files");
-
-    // Only handle external file drops, let internal HTML5 drag-and-drop work normally
-    if (!isFileDrop) {
-        return;
-    }
-
-    // ALWAYS prevent default for file drops to stop browser navigation
-    e.preventDefault();
-
-    if (!window.wails.flags.enableWailsDragAndDrop) {
-        return;
-    }
-
-    if (CanResolveFilePaths()) {
-        // process files
-        let files = [];
-        if (e.dataTransfer.items) {
-            files = [...e.dataTransfer.items].map((item, i) => {
-                if (item.kind === 'file') {
-                    return item.getAsFile();
-                }
-            });
-        } else {
-            files = [...e.dataTransfer.files];
-        }
-        window.runtime.ResolveFilePaths(e.x, e.y, files);
-    }
-
-    if (!flags.useDropTarget) {
-        return;
-    }
-
-    // Trigger debounce function to deactivate drop targets
-    if(flags.nextDeactivate) flags.nextDeactivate();
-
-    // Deactivate all drop targets
-    Array.from(document.getElementsByClassName(DROP_TARGET_ACTIVE)).forEach(el => el.classList.remove(DROP_TARGET_ACTIVE));
-}
-
-/**
- * postMessageWithAdditionalObjects checks the browser's capability of sending postMessageWithAdditionalObjects
- *
- * @returns {boolean}
- * @constructor
- */
-export function CanResolveFilePaths() {
-    return window.chrome?.webview?.postMessageWithAdditionalObjects != null;
-}
-
-/**
- * ResolveFilePaths sends drop events to the GO side to resolve file paths on windows.
- *
- * @param {number} x
- * @param {number} y
- * @param {any[]} files
- * @constructor
- */
-export function ResolveFilePaths(x, y, files) {
-    // Only for windows webview2 >= 1.0.1774.30
-    // https://learn.microsoft.com/en-us/microsoft-edge/webview2/reference/win32/icorewebview2webmessagereceivedeventargs2?view=webview2-1.0.1823.32#applies-to
-    if (window.chrome?.webview?.postMessageWithAdditionalObjects) {
-        chrome.webview.postMessageWithAdditionalObjects(`file:drop:${x}:${y}`, files);
-    }
-}
-
-/**
- * Callback for OnFileDrop returns a slice of file path strings when a drop is finished.
- *
- * @export
- * @callback OnFileDropCallback
- * @param {number} x - x coordinate of the drop
- * @param {number} y - y coordinate of the drop
- * @param {string[]} paths - A list of file paths.
- */
-
-/**
- * OnFileDrop listens to drag and drop events and calls the callback with the coordinates of the drop and an array of path strings.
- *
- * @export
- * @param {OnFileDropCallback} callback - Callback for OnFileDrop returns a slice of file path strings when a drop is finished.
- * @param {boolean} [useDropTarget=true] - Only call the callback when the drop finished on an element that has the drop target style. (--wails-drop-target)
- */
-export function OnFileDrop(callback, useDropTarget) {
-    if (typeof callback !== "function") {
-        console.error("DragAndDropCallback is not a function");
-        return;
-    }
-
-    if (flags.registered) {
-        return;
-    }
-    flags.registered = true;
-
-    const uDTPT = typeof useDropTarget;
-    flags.useDropTarget = uDTPT === "undefined" || uDTPT !== "boolean" ? flags.defaultUseDropTarget : useDropTarget;
-    window.addEventListener('dragover', onDragOver);
-    window.addEventListener('dragleave', onDragLeave);
-    window.addEventListener('drop', onDrop);
-
-    let cb = callback;
-    if (flags.useDropTarget) {
-        cb = function (x, y, paths) {
-            const element = document.elementFromPoint(x, y)
-            // if the element is null or element is not child of drop target element, return null
-            if (!element || !checkStyleDropTarget(getComputedStyle(element))) {
-                return null;
-            }
-            callback(x, y, paths);
-        }
-    }
-
-    EventsOn("wails:file-drop", cb);
-}
-
-/**
- * OnFileDropOff removes the drag and drop listeners and handlers.
- */
-export function OnFileDropOff() {
-    window.removeEventListener('dragover', onDragOver);
-    window.removeEventListener('dragleave', onDragLeave);
-    window.removeEventListener('drop', onDrop);
-    EventsOff("wails:file-drop");
-    flags.registered = false;
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/frontend/runtime/desktop/events.js","mode":420,"size":5775,"sha256":"1dba922a029d5803863ff5a649636f4cede8be61e5391aa54896d71e4d14879a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5775}
-/*
- _       __      _ __
-| |     / /___ _(_) /____
-| | /| / / __ `/ / / ___/
-| |/ |/ / /_/ / / (__  )
-|__/|__/\__,_/_/_/____/
-The electron alternative for Go
-(c) Lea Anthony 2019-present
-*/
-/* jshint esversion: 6 */
-
-// Defines a single listener with a maximum number of times to callback
-
-/**
- * The Listener class defines a listener! :-)
- *
- * @class Listener
- */
-class Listener {
-    /**
-     * Creates an instance of Listener.
-     * @param {string} eventName
-     * @param {function} callback
-     * @param {number} maxCallbacks
-     * @memberof Listener
-     */
-    constructor(eventName, callback, maxCallbacks) {
-        this.eventName = eventName;
-        // Default of -1 means infinite
-        this.maxCallbacks = maxCallbacks || -1;
-        // Callback invokes the callback with the given data
-        // Returns true if this listener should be destroyed
-        this.Callback = (data) => {
-            callback.apply(null, data);
-            // If maxCallbacks is infinite, return false (do not destroy)
-            if (this.maxCallbacks === -1) {
-                return false;
-            }
-            // Decrement maxCallbacks. Return true if now 0, otherwise false
-            this.maxCallbacks -= 1;
-            return this.maxCallbacks === 0;
-        };
-    }
-}
-
-export const eventListeners = {};
-
-/**
- * Registers an event listener that will be invoked `maxCallbacks` times before being destroyed
- *
- * @export
- * @param {string} eventName
- * @param {function} callback
- * @param {number} maxCallbacks
- * @returns {function} A function to cancel the listener
- */
-export function EventsOnMultiple(eventName, callback, maxCallbacks) {
-    eventListeners[eventName] = eventListeners[eventName] || [];
-    const thisListener = new Listener(eventName, callback, maxCallbacks);
-    eventListeners[eventName].push(thisListener);
-    return () => listenerOff(thisListener);
-}
-
-/**
- * Registers an event listener that will be invoked every time the event is emitted
- *
- * @export
- * @param {string} eventName
- * @param {function} callback
- * @returns {function} A function to cancel the listener
- */
-export function EventsOn(eventName, callback) {
-    return EventsOnMultiple(eventName, callback, -1);
-}
-
-/**
- * Registers an event listener that will be invoked once then destroyed
- *
- * @export
- * @param {string} eventName
- * @param {function} callback
- * @returns {function} A function to cancel the listener
- */
-export function EventsOnce(eventName, callback) {
-    return EventsOnMultiple(eventName, callback, 1);
-}
-
-function notifyListeners(eventData) {
-
-    // Get the event name
-    let eventName = eventData.name;
-
-    // Dispatch to a snapshot: callbacks may add or remove listeners while
-    // we iterate.
-    const snapshot = eventListeners[eventName]?.slice() || [];
-
-    for (let count = snapshot.length - 1; count >= 0; count -= 1) {
-
-        // Get next listener
-        const listener = snapshot[count];
-
-        let data = eventData.data;
-
-        // Do the callback
-        const destroy = listener.Callback(data);
-        if (destroy) {
-            // Remove the expired listener from the live list, not the
-            // snapshot: writing the snapshot back (the old behaviour)
-            // undid any subscription change made inside a callback —
-            // listeners removed via EventsOff during dispatch were
-            // resurrected and listeners added during dispatch were
-            // dropped (#4393).
-            listenerOff(listener);
-        }
-    }
-}
-
-/**
- * Notify informs frontend listeners that an event was emitted with the given data
- *
- * @export
- * @param {string} notifyMessage - encoded notification message
-
- */
-export function EventsNotify(notifyMessage) {
-    // Parse the message
-    let message;
-    try {
-        message = JSON.parse(notifyMessage);
-    } catch (e) {
-        const error = 'Invalid JSON passed to Notify: ' + notifyMessage;
-        throw new Error(error);
-    }
-    notifyListeners(message);
-}
-
-/**
- * Emit an event with the given name and data
- *
- * @export
- * @param {string} eventName
- */
-export function EventsEmit(eventName) {
-
-    const payload = {
-        name: eventName,
-        data: [].slice.apply(arguments).slice(1),
-    };
-
-    // Notify JS listeners
-    notifyListeners(payload);
-
-    // Notify Go listeners
-    window.WailsInvoke('EE' + JSON.stringify(payload));
-}
-
-function removeListener(eventName) {
-    // Remove local listeners
-    delete eventListeners[eventName];
-
-    // Notify Go listeners
-    window.WailsInvoke('EX' + eventName);
-}
-
-/**
- * Off unregisters a listener previously registered with On,
- * optionally multiple listeneres can be unregistered via `additionalEventNames`
- *
- * @param {string} eventName
- * @param  {...string} additionalEventNames
- */
-export function EventsOff(eventName, ...additionalEventNames) {
-    removeListener(eventName)
-
-    if (additionalEventNames.length > 0) {
-        additionalEventNames.forEach(eventName => {
-            removeListener(eventName)
-        })
-    }
-}
-
-/**
- * Off unregisters all event listeners previously registered with On
- */
- export function EventsOffAll() {
-    const eventNames = Object.keys(eventListeners);
-    eventNames.forEach(eventName => {
-        removeListener(eventName)
-    })
-}
-
-/**
- * listenerOff unregisters a listener previously registered with EventsOn
- *
- * @param {Listener} listener
- */
- function listenerOff(listener) {
-    const eventName = listener.eventName;
-    if (eventListeners[eventName] === undefined) return;
-
-    // Remove local listener
-    eventListeners[eventName] = eventListeners[eventName].filter(l => l !== listener);
-
-    // Clean up if there are no event listeners left
-    if (eventListeners[eventName].length === 0) {
-        removeListener(eventName);
-    }
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/frontend/runtime/desktop/ipc.js","mode":420,"size":961,"sha256":"aa5cb22314be503115845c0ac70502b48644962be84e95110085235f3268e16c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":961}
-/*
- _       __      _ __
-| |     / /___ _(_) /____
-| | /| / / __ `/ / / ___/
-| |/ |/ / /_/ / / (__  )
-|__/|__/\__,_/_/_/____/
-The electron alternative for Go
-(c) Lea Anthony 2019-present
-*/
-/* jshint esversion: 6 */
-
-/**
- * WailsInvoke sends the given message to the backend
- *
- * @param {string} message
- */
-
-(function () {
-	// Credit: https://stackoverflow.com/a/2631521
-	let _deeptest = function (s) {
-		var obj = window[s.shift()];
-		while (obj && s.length) obj = obj[s.shift()];
-		return obj;
-	};
-	let windows = _deeptest(["chrome", "webview", "postMessage"]);
-	let mac_linux = _deeptest(["webkit", "messageHandlers", "external", "postMessage"]);
-
-	if (!windows && !mac_linux) {
-		console.error("Unsupported Platform");
-		return;
-	}
-
-	if (windows) {
-		window.WailsInvoke = (message) => window.chrome.webview.postMessage(message);
-	}
-	if (mac_linux) {
-		window.WailsInvoke = (message) => window.webkit.messageHandlers.external.postMessage(message);
-	}
-})();
 @@END
