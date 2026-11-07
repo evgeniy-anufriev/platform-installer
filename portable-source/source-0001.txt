@@ -24471,7 +24471,7 @@ def validate_agent(content, runtime):
     return True
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_scripts.py","mode":420,"size":13868,"sha256":"f345d9868b011c31a521f8557420b240c26b7d1fe01ddb128ff779f656a947f8","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":13868}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_scripts.py","mode":420,"size":14103,"sha256":"376c5baa3520fd04610f267db45a9f6521ea19ce84a5b416c5755f505cf23c58","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":14103}
 """Resolve versioned package scripts from the existing application projection."""
 import json
 import hashlib
@@ -24498,11 +24498,14 @@ def _scalar(value):
 
 
 def _script_metadata(script, path):
+    file_arguments = [index for index, argument in enumerate(script.get('argv', []))
+                      if isinstance(argument, dict) and argument.get('valueFrom') == 'integration_consumers']
+    metadata = {'fileArgumentIndexes': file_arguments} if file_arguments else {}
     if not script.get('batch', False):
-        return {}
+        return metadata
     with open(path, 'rb') as stream:
         digest = hashlib.sha256(stream.read()).hexdigest()
-    return dict(sourceDigest=digest, **({'batch': True} if script.get('batch', False) else {}))
+    return dict(sourceDigest=digest, batch=True)
 
 
 def _instance(library, name):
@@ -33822,7 +33825,7 @@ application_runtime_verify_vault: true
   no_log: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/run_scripts.yml","mode":420,"size":1093,"sha256":"55790c39747c6b61a0e315bd3d7aede3cb17b4bb68bb5157735df12f7ce09a6a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1093}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/run_scripts.yml","mode":420,"size":1181,"sha256":"029f55f790042a8cc862b7c8fcd4edc4fe294f4eb40090a9bbd0518fe9684d2a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1181}
 ---
 - name: Выполнение сценариев пакета для выбранного размещения и этапа приложения
   ansible.builtin.include_role:
@@ -33832,6 +33835,7 @@ application_runtime_verify_vault: true
       id: "{{ application_script.id }}"
       path: "{{ application_script.path }}"
       argv: "{{ application_script.argv }}"
+      fileArgumentIndexes: "{{ application_script.fileArgumentIndexes | default([]) }}"
       secretInputs: "{{ application_script.secretInputs }}"
       workingDirectory: "{{ application_runtime_job.instancePath }}"
       account: "{{ application_runtime_job.account }}"
@@ -34504,7 +34508,7 @@ platform_execution_ssh_key_path: "{{ platform_execution_identity_root }}/id_ed25
     - not (platform_managed_data_root_verify_only | default(false))
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/package_script/tasks/main.yml","mode":420,"size":4426,"sha256":"6b56a50e72c89f05ca5d026fe3ac7d4eabb8d64fa0b5655abe1fb7dd6afd140a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4426}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/package_script/tasks/main.yml","mode":420,"size":4492,"sha256":"d9c20ccf684597c5051d8db953fd766cc5962c0b0e358f57a5a4fa0524fe844c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4492}
 ---
 - name: Проверка защиты входных данных сценария
   ansible.builtin.assert:
@@ -34538,7 +34542,7 @@ platform_execution_ssh_key_path: "{{ platform_execution_identity_root }}/id_ed25
         state: directory
         owner: "{{ platform_script_job.account }}"
         mode: '0700'
-      when: platform_script_job.secretInputs | length > 0 or platform_script_job.invocations | default([]) | length > 0
+      when: platform_script_job.secretInputs | length > 0 or platform_script_job.invocations | default([]) | length > 0 or platform_script_job.fileArgumentIndexes | default([]) | length > 0
       changed_when: false
       no_log: true
 
@@ -34558,7 +34562,7 @@ platform_execution_ssh_key_path: "{{ platform_execution_identity_root }}/id_ed25
 
     - name: Выполнение точного сценария пакета без оболочки или неограниченной среды выполнения
       ansible.builtin.command:
-        argv: "{{ ['timeout', '--kill-after=2s', ((300 * ([1, platform_script_job.invocations | default([]) | length] | max)) | string) ~ 's', platform_script_directory ~ '/' ~ platform_script_job.id] + platform_script_job.argv }}"
+        argv: "{{ ['timeout', '--kill-after=2s', ((300 * ([1, platform_script_job.invocations | default([]) | length] | max)) | string) ~ 's', platform_script_directory ~ '/' ~ platform_script_job.id] + platform_script_argv }}"
         chdir: "{{ platform_script_job.workingDirectory }}"
       become_user: "{{ platform_script_job.account }}"
       environment: "{{ platform_script_environment }}"
@@ -34594,10 +34598,17 @@ platform_execution_ssh_key_path: "{{ platform_execution_identity_root }}/id_ed25
       no_log: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/package_script/vars/main.yml","mode":420,"size":1396,"sha256":"32527d31dfa7a394862ef990875fc86a02e20e707701f2ea857c0cf084584890","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1396}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/package_script/vars/main.yml","mode":420,"size":2021,"sha256":"f460606d9000ba38470a19da4c494300043a57a55c3f1d4495ef622c83a0c5c8","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2021}
 ---
 platform_script_directory: "{{ platform_script_job.workingDirectory }}/.scripts"
 platform_script_secret_directory: "{{ platform_script_directory }}/.secrets/{{ platform_script_job.id }}"
+platform_script_argv: >-
+  {%- set arguments = [] -%}
+  {%- for argument in platform_script_job.argv -%}
+  {%- set _ = arguments.append(platform_script_secret_directory ~ '/.argument-' ~ loop.index0 ~ '.json'
+      if loop.index0 in (platform_script_job.fileArgumentIndexes | default([])) else argument) -%}
+  {%- endfor -%}
+  {{ arguments }}
 platform_script_environment: >-
   {{ dict(platform_script_job.secretInputs.keys() | map('upper') | map('regex_replace', '^', 'PLATFORM_SCRIPT_SECRET_') | map('regex_replace', '$', '_FILE') | zip(platform_script_job.secretInputs.keys() | map('regex_replace', '^', platform_script_secret_directory ~ '/'))) |
      combine({'PLATFORM_SCRIPT_BATCH_FILE': platform_script_secret_directory ~ '/.batch.json'} if platform_script_job.invocations | default([]) | length > 0 else {}) }}
@@ -34605,6 +34616,9 @@ _platform_script_delivery_files: >-
   {%- set files = [{'src': platform_script_job.path, 'dest': platform_script_directory ~ '/' ~ platform_script_job.id, 'mode': '0700', 'temporary': false}] -%}
   {%- for name, ref in platform_script_job.secretInputs.items() -%}
   {%- set _ = files.append({'src': platform_script_secret_files[ref], 'dest': platform_script_secret_directory ~ '/' ~ name, 'mode': '0600', 'temporary': true}) -%}
+  {%- endfor -%}
+  {%- for index in platform_script_job.fileArgumentIndexes | default([]) -%}
+  {%- set _ = files.append({'content': platform_script_job.argv[index], 'dest': platform_script_secret_directory ~ '/.argument-' ~ index ~ '.json', 'mode': '0600', 'temporary': true}) -%}
   {%- endfor -%}
   {%- if platform_script_job.invocations | default([]) | length > 0 -%}
   {%- set _ = files.append({'content': platform_script_job.invocations | to_json, 'dest': platform_script_secret_directory ~ '/.batch.json', 'mode': '0600', 'temporary': true}) -%}
@@ -38928,7 +38942,7 @@ artifactLock:
   no_log: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/applications/tasks/provider-script.yml","mode":420,"size":3196,"sha256":"97b192f3429bcc9c13733e9404423daa04b1a5dd5d42004dc8ce879bc503763e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3196}
+@@PORTABLE {"path":"ansible-core/playbooks/applications/tasks/provider-script.yml","mode":420,"size":3297,"sha256":"397c33205f370c91fdb8219dcb9235e556c9ed3cbe5ee774148f35327140eda4","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3297}
 ---
 - name: Выполнение сценария провайдера с контекстом выбранной цели
   vars:
@@ -38960,6 +38974,7 @@ artifactLock:
           id: "{{ application_provider_script.id }}"
           path: "{{ application_provider_script.path }}"
           argv: "{{ application_provider_script.argv }}"
+          fileArgumentIndexes: "{{ application_provider_script.fileArgumentIndexes | default([]) }}"
           secretInputs: "{{ application_provider_script.secretInputs }}"
           invocations: "{{ application_provider_script.invocations | default([]) }}"
           account: "{{ lookup('ansible.builtin.pipe', 'id -un') if application_provider_script.runOn | default('target') == 'execution_node' else application_script_target_job.account }}"
@@ -85258,7 +85273,7 @@ PERFORMANCE_LOGS="false"
 COMMON_REDIRECT_URL="{{ url('nginx') }}/{{ front_id }}/"
 
 @@END
-@@PORTABLE {"path":"examples/szi/application-packages/nginx/1.0.0/assets/prepare-routes.sh","mode":420,"size":3227,"sha256":"40c462002947319ce6647e6ba73c64aca1c83b56d6479d9d321338addfcac6b9","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3227}
+@@PORTABLE {"path":"examples/szi/application-packages/nginx/1.0.0/assets/prepare-routes.sh","mode":420,"size":3300,"sha256":"38ac2777c4f0c790ed70cbfa37a7ebd97220afb8e7c56d16ae257542894bb68e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3300}
 #!/bin/sh
 set -eu
 umask 077
@@ -85290,7 +85305,11 @@ chmod 0755 "$path/routes"
 stage=$(mktemp -d "$path/.scripts/routes-input-XXXXXX")
 step=10
 if [ "$#" -eq 5 ]; then
-  printf '%s' "$5" > "$stage/consumers.json"
+  if [ -f "$5" ]; then
+    cp "$5" "$stage/consumers.json"
+  else
+    printf '%s' "$5" > "$stage/consumers.json"
+  fi
   jq --arg owner "platform.application.routes/v1:$project:$library:$instance" '
     {owner: $owner, routes: (reduce .[] as $consumer ({};
       ($consumer.placements | to_entries | sort_by(.key) |
