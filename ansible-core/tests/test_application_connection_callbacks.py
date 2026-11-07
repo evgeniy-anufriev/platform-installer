@@ -76,6 +76,7 @@ class ConnectionCallbackTests(unittest.TestCase):
             result = prepare_script_jobs(folder, snapshot, desired, [], jobs)
             script = result[-1]['scripts'][0]
             self.assertEqual('node3', script['argv'][0])
+            self.assertEqual([1], script['fileArgumentIndexes'])
             self.assertEqual(['frontend'], [item['applicationId'] for item in json.loads(script['argv'][1])])
             self.assertEqual('node2', result[1]['scripts'][0]['target']['hostId'])
 

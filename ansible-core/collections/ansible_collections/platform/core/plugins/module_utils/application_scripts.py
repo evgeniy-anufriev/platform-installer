@@ -24,11 +24,14 @@ def _scalar(value):
 
 
 def _script_metadata(script, path):
+    file_arguments = [index for index, argument in enumerate(script.get('argv', []))
+                      if isinstance(argument, dict) and argument.get('valueFrom') == 'integration_consumers']
+    metadata = {'fileArgumentIndexes': file_arguments} if file_arguments else {}
     if not script.get('batch', False):
-        return {}
+        return metadata
     with open(path, 'rb') as stream:
         digest = hashlib.sha256(stream.read()).hexdigest()
-    return dict(sourceDigest=digest, **({'batch': True} if script.get('batch', False) else {}))
+    return dict(sourceDigest=digest, batch=True)
 
 
 def _instance(library, name):

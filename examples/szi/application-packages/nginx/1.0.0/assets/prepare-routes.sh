@@ -29,7 +29,11 @@ chmod 0755 "$path/routes"
 stage=$(mktemp -d "$path/.scripts/routes-input-XXXXXX")
 step=10
 if [ "$#" -eq 5 ]; then
-  printf '%s' "$5" > "$stage/consumers.json"
+  if [ -f "$5" ]; then
+    cp "$5" "$stage/consumers.json"
+  else
+    printf '%s' "$5" > "$stage/consumers.json"
+  fi
   jq --arg owner "platform.application.routes/v1:$project:$library:$instance" '
     {owner: $owner, routes: (reduce .[] as $consumer ({};
       ($consumer.placements | to_entries | sort_by(.key) |
