@@ -47,9 +47,7 @@
         platform_application_connection_rows: >-
           {{ platform_application_connection_rows + [{
             'libraryId': application_job.libraryId, 'slotId': application_job.slotId,
-            'instanceId': (application_job.application.name if
-              application_job.library.definition.instance_id_strategy | default('qualified') == 'application-name'
-              else application_job.application.name ~ '-' ~ application_job.libraryId),
+            'instanceId': application_job.instanceId,
             'hostId': application_job.hostId, 'startupPriority': application_job.slot.start_priority | default(100),
             'providedConnections': application_provided_connection_definitions,
             'settings': {

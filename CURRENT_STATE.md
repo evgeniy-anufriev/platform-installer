@@ -1,12 +1,20 @@
 # Current state
 
-Updated 2026-11-03. This file is the sole current milestone/status source.
+Updated 2026-11-07. This file is the sole current milestone/status source.
 Detailed historical checkpoints are archived under [docs/history](docs/history/si11-state-20261008.md).
 Read the applicable plan and evidence for the task; an implementation or direct
 Ansible PASS does not imply complete UI acceptance. A next gated milestone or
 new destructive operation still requires explicit owner authorization.
 
 ## Active work and acceptance
+
+Owner-requested slot-based application identity (2026-11-07): instance IDs now
+use slot names, allowing multiple slots to reuse one package. Qualified IDs keep
+the library suffix; explicit script slot selection and uniqueness checks remain.
+43 focused RED OS checks pass. Real React/Wails same-package/two-slot/two-host
+Verify VERIFIED in 39.326s; no installation/Start or visual acceptance claimed.
+Existing aliases whose slot differs from the package change IDs without resource
+migration. [Evidence](docs/work/application-libraries/evidence/slot-instance-identity.md).
 
 Owner-requested coherent Verify publication (2026-11-03): manual and automatic
 Verify return current project/snapshot with status in one Go response and share

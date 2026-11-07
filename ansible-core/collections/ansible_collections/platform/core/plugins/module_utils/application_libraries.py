@@ -268,6 +268,10 @@ def library_resources(definition, deployment, applications=()):
     return resources
 
 
+def application_instance_id(slot_id, library_id, strategy='qualified'):
+    return slot_id if strategy == 'application-name' else slot_id + '-' + library_id
+
+
 def prepare(root, desired, memberships, contract, loader, contracts_root):
     schema_version(desired, contract)
     validator = SchemaValidator(contracts_root)
@@ -325,17 +329,15 @@ def prepare(root, desired, memberships, contract, loader, contracts_root):
             placements = [host for host, membership in sorted(memberships.items()) if library_id in membership]
             if not placements:
                 findings.append(finding("APPLICATION_LIBRARY_PLACEMENT_MISSING", field))
-            app_names = set()
             for slot_id in sorted(selected):
                 slot = slots[slot_id]
                 application = package(slot["applicationRef"], "application")
-                if application["name"] in app_names:
-                    raise ValueError("Duplicate application definition")
-                app_names.add(application["name"])
                 for host in placements:
                     if 'connections' in memberships[host][library_id].get('overrides', {}):
                         raise ValueError('Host connection override is not supported')
                     jobs.append({"libraryId": library_id, "slotId": slot_id, "hostId": host,
+                                 "instanceId": application_instance_id(slot_id, library_id,
+                                     library['definition'].get('instance_id_strategy', 'qualified')),
                                  "library": library, "application": application,
                                  "deployment": deployment, "instance": selected[slot_id],
                                  "slot": slot, "hostOverride": memberships[host][library_id].get("overrides", {})})
@@ -564,7 +566,7 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
         instance_owners[app_id] = owner
         settings = row["settings"]
         strategy = row.get("instanceIdStrategy", "qualified")
-        expected_id = row["applicationName"] if strategy == "application-name" else row["applicationName"] + "-" + library_id
+        expected_id = application_instance_id(row['slotId'], library_id, strategy)
         if strategy not in ("qualified", "application-name") or app_id != expected_id or host not in hosts or not ID.fullmatch(app_id) or len(app_id) > 128:
             findings.append(finding("APPLICATION_IDENTITY_INVALID", field))
         for section in ("parameters", "environment", "command"):
@@ -795,7 +797,13 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
                 except (ValueError, KeyError, TypeError):
                     findings.append(finding('APPLICATION_CONNECTION_CALLBACK_INVALID',
                                             'applicationLibraryDeployments.' + library_id + '.provided_connections.' + export_name))
-        named = {instance['applicationName']: instance for instance in library['instances'].values()}
+        named = {instance['slotId']: instance for instance in library['instances'].values()}
+        packages = {}
+        for instance in library['instances'].values():
+            packages.setdefault(instance['applicationName'], []).append(instance)
+        for name, instances in packages.items():
+            if len(instances) == 1:
+                named.setdefault(name, instances[0])
         for consumer in library['instances'].values():
             for alias, connection in consumer.get('connections', {}).items():
                 if not connection.get('connectionProvisioner'):

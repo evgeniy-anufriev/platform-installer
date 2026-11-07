@@ -111,8 +111,8 @@ class NativeApplicationConnectionsTests(unittest.TestCase):
             rows, libraries = resolve()
             self.assertEqual(libraries['sdku']['sharedSecretRequirements']['client']['source'],
                              {'kind': 'runtime_secret_ref', 'ref': 'explicit-client'})
-            instance = libraries['sdku']['instances']['apigateway-sdku']
-            self.assertEqual('https://apigateway-cspa.apps.example.test', instance['connections']['identity']['url'])
+            instance = libraries['sdku']['instances']['gateway-sdku']
+            self.assertEqual('https://gateway-cspa.apps.example.test', instance['connections']['identity']['url'])
             self.assertEqual({'tenant': 'override', 'origin': 'https://cspa.example.test',
                               'override_origin': 'cspa-override',
                               'nested': {'enabled': True, 'ports': [8443]}},
@@ -120,10 +120,10 @@ class NativeApplicationConnectionsTests(unittest.TestCase):
             self.assertEqual({'apply_script': 'integrate'}, instance['connections']['identity']['connectionProvisioner'])
             self.assertIn('identity', instance['credentialRequirements'])
             self.assertTrue(instance['agentRequired'])
-            self.assertEqual('https://apigateway-cspa.apps.example.test', rows[-1]['settings']['environment']['API_ENDPOINT'])
+            self.assertEqual('https://gateway-cspa.apps.example.test', rows[-1]['settings']['environment']['API_ENDPOINT'])
             edit(vars_path, lambda data: data['platform_desired_state']['applicationLibraryDeployments']['sdku']['applications']['gateway']['overrides']['connections']['identity'].update(enabled=False))
             _, libraries = resolve()
-            disabled = libraries['sdku']['instances']['apigateway-sdku']
+            disabled = libraries['sdku']['instances']['gateway-sdku']
             self.assertNotIn('identity', disabled['connections'])
             self.assertEqual({}, disabled['credentialRequirements'])
             self.assertEqual({}, disabled['secretBindings'])
