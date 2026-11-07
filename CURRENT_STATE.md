@@ -1,12 +1,27 @@
 # Current state
 
-Updated 2026-11-03. This file is the sole current milestone/status source.
+Updated 2026-11-07. This file is the sole current milestone/status source.
 Detailed historical checkpoints are archived under [docs/history](docs/history/si11-state-20261008.md).
 Read the applicable plan and evidence for the task; an implementation or direct
 Ansible PASS does not imply complete UI acceptance. A next gated milestone or
 new destructive operation still requires explicit owner authorization.
 
 ## Active work and acceptance
+
+Owner-requested application resolution optimization (2026-11-07): common
+library/host defaults resolve once; runtime preparation reuses earlier image-input
+rows only in the same proved input/runtime/plan context. Fresh final snapshot
+and plan fingerprint checks remain. Same-node 20-placement calculation chain:
+2 -> 1 resolver calls, 791 -> 343 tasks, mean 504.345 -> 69.489 seconds;
+typed rows/public snapshots match. 77 focused Execution Node tests pass.
+Validated for owner-requested branch publication. Real React/Wails SZI5+SDKU5 on node1/node2 (20 placements), EO node3,
+final revision c37f96c9 / bundle aae9d38e: Verify VERIFIED 61.555s; resource stage
+SUCCESS 1575s (26:15), 1746 task starts / zero failed host results, resolver once
+(143s), common defaults4 / rows20. Run installer-10d697fef85c3d261a87bebffb87a12b
+cancelled through UI after resource completion, before container launch; full
+application installation/Verify and visual acceptance remain outside this test.
+Owner-authorized test images and isolated QA names were used; original Jinja/ENV
+retained. Owner authorized scoped commit/push on this branch. [Evidence](docs/work/application-libraries/evidence/resolve-library-context-performance.md).
 
 Owner-requested coherent Verify publication (2026-11-03): manual and automatic
 Verify return current project/snapshot with status in one Go response and share

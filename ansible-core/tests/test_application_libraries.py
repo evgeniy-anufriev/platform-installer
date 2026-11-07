@@ -25,7 +25,7 @@ def load(path):
 
 
 class ApplicationLibrariesTest(unittest.TestCase):
-    def test_only_literal_library_inputs_can_be_reused_across_placements(self):
+    def test_only_literal_connection_inputs_can_skip_native_topology(self):
         self.assertTrue(APP._literal_library_input({'resources': [{'name': 'events', 'partitions': 3}]}))
         for value in (
             {'resources': [{'name': '{{ library_instance_id }}'}]},

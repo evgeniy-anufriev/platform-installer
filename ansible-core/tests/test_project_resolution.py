@@ -49,6 +49,17 @@ class ProjectResolutionTests(unittest.TestCase):
             reuse.write(path, {'revision': 'sha256:revision'}, value)
             self.assertNotIn('synthetic-private-marker', Path(path).read_text())
 
+    def test_role_findings_round_trip_without_becoming_a_public_snapshot_field(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = str(Path(folder, 'result.json'))
+            expected = dict(revision='sha256:revision', runtime={'bundleDigest': 'a'})
+            value = self.result()
+            value['application_rows'] = []
+            value['application_findings'] = [{'code': 'APPLICATION_INPUT_INVALID', 'status': 'BLOCKED'}]
+            reuse.write(path, expected, value)
+            self.assertEqual(value, reuse.read(path, expected))
+            self.assertNotIn('application_findings', value['snapshot'])
+
     def test_enrichment_does_not_mutate_saved_base(self):
         base = self.result()
         before = copy.deepcopy(base)
@@ -119,6 +130,52 @@ class ProjectResolutionTests(unittest.TestCase):
             self.assertTrue(result['failed'])
             self.assertEqual('PROJECT_RESOLUTION_INPUT_CHANGED', result['error_code'])
             self.assertFalse(Path(variables['platform_project_resolution_local_path']).exists())
+
+    def test_image_rows_are_reused_only_in_the_same_invocation_context(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder, 'project')
+            (root / 'inventory').mkdir(parents=True)
+            source = root / 'inventory/hosts.yml'
+            source.write_text('all: {}\n')
+            variables = dict(platform_project_root=str(root),
+                platform_service_catalog_path=str(Path(folder, 'catalog.yml')),
+                platform_project_resolution_runtime={'bundle': 'a'})
+            action = ActionModule.__new__(ActionModule)
+            action._task = SimpleNamespace(args={'operation': 'reuse_application_rows'})
+            self.assertFalse(action.run(task_vars=variables)['hit'])
+            action._task.args = {'operation': 'load'}
+            loaded = action.run(task_vars=variables)
+            result = self.result(loaded['identity']['revision'])
+            result['snapshot']['applicationLibraries'] = {'status': 'PASS'}
+            result['application_rows'] = [{'instanceId': 'probe'}]
+            result['application_findings'] = []
+            variables.update(_application_image_resolution_context=loaded['invocation_context'],
+                             platform_image_snapshot=result)
+            action._task.args = {'operation': 'reuse_application_rows'}
+            reused = action.run(task_vars=variables)
+            self.assertTrue(reused['hit'])
+            self.assertEqual(result['application_rows'], reused['application_rows'])
+            for key, value in (
+                ('platform_project_resolution_runtime', {'bundle': 'b'}),
+                ('platform_service_catalog_path', str(Path(folder, 'other.yml'))),
+                ('platform_plan_resolution_context', 'new-plan'),
+            ):
+                with self.subTest(key=key):
+                    self.assertFalse(action.run(task_vars=dict(variables, **{key: value}))['hit'])
+            blocked = copy.deepcopy(result)
+            blocked['snapshot']['applicationLibraries']['status'] = 'BLOCKED'
+            blocked['application_findings'] = [{'code': 'APPLICATION_INPUT_INVALID', 'status': 'BLOCKED'}]
+            reused = action.run(task_vars=dict(variables, platform_image_snapshot=blocked))
+            self.assertTrue(reused['hit'])
+            self.assertEqual(blocked['application_findings'], reused['application_findings'])
+            for invalid in (None, {}, dict(result, application_rows=[]), dict(result, application_rows=['invalid'])):
+                self.assertFalse(action.run(task_vars=dict(variables, platform_image_snapshot=invalid))['hit'])
+            legacy = dict(result)
+            legacy.pop('application_findings')
+            self.assertFalse(action.run(task_vars=dict(variables, platform_image_snapshot=legacy))['hit'])
+            source.write_text('all: {hosts: {node1: {}}}\n')
+            self.assertFalse(action.run(task_vars=variables)['hit'])
+            self.assertFalse(Path(folder, 'result.json').exists())
 
 
 if __name__ == '__main__':

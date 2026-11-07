@@ -15,6 +15,93 @@ from application_libraries import project
 
 @unittest.skipUnless(shutil.which('ansible-playbook'), 'native Ansible required')
 class NativeApplicationConnectionsTests(unittest.TestCase):
+    def test_templated_library_values_are_reused_only_within_library_and_host(self):
+        with tempfile.TemporaryDirectory(prefix='application-library-context-') as directory:
+            root = Path(directory) / 'project'
+            shutil.copytree(ROOT / 'examples/valid/application-libraries', root)
+            second = root / 'application-packages/second/1.0.0'
+            shutil.copytree(root / 'application-packages/apigateway/1.0.0', second)
+            role = second / 'roles/application_apigateway'
+            role.rename(second / 'roles/application_second')
+            manifest = second / 'application.yml'
+            data = json.loads(manifest.read_text())
+            data['name'] = 'second'
+            data['files'] = [name.replace('application_apigateway/', 'application_second/') for name in data['files']]
+            manifest.write_text(json.dumps(data))
+            defaults = second / 'roles/application_second/defaults/main.yml'
+            data = json.loads(defaults.read_text())
+            data['platform_application_definition']['name'] = 'second'
+            defaults.write_text(json.dumps(data))
+            vars_path = root / 'inventory/group_vars/all/platform-installer.yml'
+            data = json.loads(vars_path.read_text())
+            for library, deployment in data['platform_desired_state']['applicationLibraryDeployments'].items():
+                deployment['applications']['second'] = {'overrides': {'environment': {'QA_SLOT': 'second'}}}
+                deployment['overrides'] = {'environment': {'QA_OVERRIDE': '{{ library_instance_id }}-{{ qa_host_marker }}'}}
+                path = root / f'library-packages/{library}/1.0.0/roles/library_{library}/defaults/main.yml'
+                definition = json.loads(path.read_text())
+                definition['platform_library_definition']['slots']['second'] = {'applicationRef': 'second@1.0.0'}
+                definition['platform_library_definition']['defaults'] = {
+                    'environment': {'QA_HOST': '{{ qa_host_marker }}',
+                                    'QA_RESOURCE': '{{ library_resources.applicationDatabase.parameters.name }}'},
+                    'parameters': {'QA_TYPED': {'enabled': True, 'ports': [8443]},
+                                   'QA_NUMBER': '{{ [1, 2, 3] | sum }}'},
+                }
+                definition['platform_library_definition']['resource_defaults'] = {
+                    'postgresql': {'databases': {'applicationDatabase': {'name': '{{ library_instance_id }}-{{ qa_host_marker }}'}}},
+                }
+                path.write_text(json.dumps(definition))
+            vars_path.write_text(json.dumps(data))
+            for node in ('node1', 'node2'):
+                path = root / f'inventory/host_vars/{node}/platform-installer.yml'
+                data = json.loads(path.read_text())
+                data['platform_application_libraries'] = {'cspa': {}, 'sdku': {}}
+                data['qa_host_marker'] = node
+                path.write_text(json.dumps(data))
+            output = Path(directory) / 'rows.json'
+            play = Path(directory) / 'resolve.yml'
+            app_defaults = root / 'application-packages/apigateway/1.0.0/roles/application_apigateway/defaults/main.yml'
+            broken = json.loads(app_defaults.read_text())
+            broken['platform_application_definition']['defaults']['environment']['QA_BAD'] = (
+                "{{ qa_missing_value if library_instance_id == 'sdku' else 'ok' }}")
+            broken_defaults = Path(directory) / 'broken.yml'
+            broken_defaults.write_text(json.dumps(broken))
+            play.write_text(json.dumps([dict(hosts='localhost', connection='local', gather_facts=False, tasks=[
+                {'ansible.builtin.include_role': {'name': 'platform.core.resolve_application_libraries'}},
+                {'ansible.builtin.assert': {'that': ['platform_application_findings | length == 0'],
+                                          'fail_msg': '{{ platform_application_findings | to_json }}'}},
+                {'ansible.builtin.copy': {'content': '{{ platform_application_rows | to_json }}',
+                                         'dest': str(output), 'mode': '0600'}, 'no_log': True},
+                {'ansible.builtin.copy': {'src': str(broken_defaults), 'dest': str(app_defaults), 'mode': '0600'},
+                 'no_log': True},
+                {'ansible.builtin.include_role': {'name': 'platform.core.resolve_application_libraries'}},
+                {'ansible.builtin.assert': {'that': [
+                    'platform_application_rows | length == 6', 'platform_application_findings | length == 2']}},
+            ])]))
+            env = dict(os.environ, ANSIBLE_CONFIG=str(ROOT / 'ansible-core/ansible.cfg'),
+                       ANSIBLE_COLLECTIONS_PATH=str(ROOT / 'ansible-core/collections'))
+            result = subprocess.run(['ansible-playbook', '-i', str(root / 'inventory/hosts.yml'), str(play),
+                '-e', 'platform_project_root=' + str(root), '-e', 'platform_contracts_root=' + str(ROOT / 'contracts')],
+                env=env, capture_output=True, text=True, timeout=120)
+            self.assertEqual(0, result.returncode, result.stdout[-5000:] + result.stderr[-1000:])
+            shared_task = 'TASK [platform.core.resolve_application_libraries : Вычисление общих значений библиотеки по умолчанию после обработки ресурсов]'
+            row_task = 'TASK [platform.core.resolve_application_libraries : Сбор служебной записи рассчитанных параметров для структурированных операций]'
+            self.assertEqual(8, result.stdout.count(shared_task))
+            self.assertEqual(8, result.stdout.count('TASK [platform.core.resolve_application_libraries : '
+                'Сохранение общих настроек библиотеки в контексте узла]'))
+            self.assertEqual(14, result.stdout.count(row_task))
+            rows = json.loads(output.read_text())
+            self.assertEqual(8, len(rows))
+            for row in rows:
+                expected = row['libraryId'] + '-' + row['hostId']
+                self.assertEqual(row['hostId'], row['settings']['environment']['QA_HOST'])
+                self.assertEqual(row['libraryId'], row['settings']['environment']['QA_RESOURCE'])
+                self.assertEqual(expected, row['resourceDefaults']['postgresql']['databases']['applicationDatabase']['name'])
+                self.assertEqual(expected, row['settings']['environment']['QA_OVERRIDE'])
+                self.assertEqual({'enabled': True, 'ports': [8443]}, row['settings']['parameters']['QA_TYPED'])
+                self.assertEqual(6, row['settings']['parameters']['QA_NUMBER'])
+                if row['slotId'] == 'second':
+                    self.assertEqual('second', row['settings']['environment']['QA_SLOT'])
+
     def test_rows_preserve_placement_order_and_clear_between_role_invocations(self):
         with tempfile.TemporaryDirectory(prefix='application-row-order-') as directory:
             root = Path(directory) / 'project'
@@ -24,6 +111,8 @@ class NativeApplicationConnectionsTests(unittest.TestCase):
             ordered_libraries = "platform_application_rows | map(attribute='libraryId') | list"
             play = Path(directory) / 'rows.yml'
             defaults = root / 'application-packages/apigateway/1.0.0/roles/application_apigateway/defaults/main.yml'
+            restored_defaults = Path(directory) / 'restored-defaults.yml'
+            restored_defaults.write_text(defaults.read_text())
             broken_defaults = Path(directory) / 'broken-defaults.yml'
             definition = json.loads(defaults.read_text())
             definition['platform_application_definition']['defaults']['environment']['QA_UNDEFINED'] = (
@@ -57,6 +146,14 @@ class NativeApplicationConnectionsTests(unittest.TestCase):
                     "'applicationLibraryDeployments.sdku.applications.gateway.placements.node1', "
                     "'applicationLibraryDeployments.sdku.applications.gateway.placements.node2']",
                 ]}},
+                {'ansible.builtin.copy': {'src': str(restored_defaults), 'dest': str(defaults), 'mode': '0600'},
+                 'no_log': True},
+                include,
+                {'ansible.builtin.assert': {'that': [
+                    ordered_hosts + " == ['node1', 'node1', 'node2']",
+                    ordered_libraries + " == ['cspa', 'sdku', 'sdku']",
+                    'platform_application_findings | length == 0',
+                ]}},
                 {'ansible.builtin.set_fact': {'platform_desired_state': (
                     "{{ platform_desired_state | combine({'applicationLibraryDeployments': {}}) }}")}},
                 include,
@@ -71,7 +168,7 @@ class NativeApplicationConnectionsTests(unittest.TestCase):
                 '-e', 'platform_project_root=' + str(root), '-e', 'platform_contracts_root=' + str(ROOT / 'contracts')],
                 capture_output=True, text=True, timeout=90, env=env)
             self.assertEqual(0, result.returncode, result.stdout[-4000:] + result.stderr[-1000:])
-            self.assertEqual(4, result.stdout.count(
+            self.assertEqual(5, result.stdout.count(
                 'TASK [platform.core.resolve_application_libraries : Сбор рассчитанных записей приложений в порядке размещений]'))
             self.assertIn('the output has been hidden', result.stdout)
 

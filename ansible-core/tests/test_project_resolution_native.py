@@ -13,6 +13,52 @@ ROOT = Path(__file__).resolve().parents[2]
 
 @unittest.skipUnless(shutil.which('ansible-playbook'), 'native Ansible required')
 class NativeProjectResolutionTests(unittest.TestCase):
+    def test_image_resolution_rows_are_reused_and_changed_inputs_resolve_again(self):
+        with tempfile.TemporaryDirectory(prefix='image-resolution-context-') as folder:
+            directory = Path(folder)
+            project = directory / 'project'
+            shutil.copytree(ROOT / 'examples/valid/application-libraries', project)
+            resolve = {'ansible.builtin.include_role': {'name': 'platform.core.resolve_application_libraries'},
+                       'when': 'not reused.hit'}
+            check = {'platform.core.project_resolution': {'operation': 'reuse_application_rows'},
+                     'register': 'reused', 'no_log': True}
+            tasks = [
+                check,
+                {'ansible.builtin.assert': {'that': ['not reused.hit']}},
+                {'ansible.builtin.include_role': {'name': 'platform.core.project_resolution'}},
+                {'ansible.builtin.set_fact': {
+                    'platform_image_snapshot': '{{ platform_project_resolution }}',
+                    '_application_image_resolution_context': '{{ _project_resolution_cache.invocation_context }}'},
+                 'no_log': True},
+                check,
+                {'ansible.builtin.assert': {'that': [
+                    'reused.hit', 'reused.application_rows == platform_image_snapshot.application_rows']}},
+                resolve,
+                {'ansible.builtin.lineinfile': {'path': str(project / 'inventory/hosts.yml'),
+                                               'line': '# changed after image resolution'}},
+                check,
+                {'ansible.builtin.assert': {'that': ['not reused.hit']}},
+                resolve,
+                {'ansible.builtin.assert': {'that': [
+                    'platform_application_rows | length == 3', 'platform_application_findings | length == 0']}},
+            ]
+            play = directory / 'reuse.yml'
+            play.write_text(yaml.safe_dump([dict(hosts='localhost', connection='local', gather_facts=False,
+                vars=dict(platform_project_root=str(project),
+                          platform_service_catalog_path=str(ROOT / 'examples/catalog/service-catalog.yml'),
+                          platform_project_resolution_runtime={'bundle': 'native-test'}), tasks=tasks)]))
+            collections = [str(ROOT / 'ansible-core/collections')] + [str(path)
+                for path in sorted((ROOT / 'services').glob('*/ansible_collections'))]
+            environment = dict(os.environ, ANSIBLE_CONFIG=str(ROOT / 'ansible-core/ansible.cfg'),
+                               ANSIBLE_COLLECTIONS_PATH=os.pathsep.join(collections))
+            result = subprocess.run(['ansible-playbook', '-i', str(project / 'inventory/hosts.yml'), str(play)],
+                                    env=environment, capture_output=True, text=True, timeout=120)
+            self.assertEqual(0, result.returncode, result.stdout[-5000:] + result.stderr[-1000:])
+            # One initial calculation, no second calculation for images/runtime,
+            # and one fresh calculation after a real desired-input mutation.
+            self.assertEqual(2, result.stdout.count('TASK [platform.core.resolve_application_libraries : '
+                'Проверка комплектности пакетов библиотек перед загрузкой значений по умолчанию]'))
+
     def test_project_snapshot_with_implicit_localhost_and_explicit_root(self):
         for applications, secret_reference in ((False, None), (True, None), (False, 'invalid-reference')):
             with self.subTest(applications=applications, reference=secret_reference), tempfile.TemporaryDirectory(prefix='snapshot-root-') as folder:

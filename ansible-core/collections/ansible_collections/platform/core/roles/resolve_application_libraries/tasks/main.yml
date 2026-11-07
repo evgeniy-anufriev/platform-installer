@@ -54,12 +54,8 @@
 - name: Вычисление параметров каждого приложения и узла по переменным Ansible
   ansible.builtin.include_tasks: instance.yml
   vars:
-    _library_package: "{{ lookup('vars', '_library_package_' ~ ([application_job.libraryId, application_job.hostId] | to_json | hash('sha256'))) }}"
     _application_package: "{{ lookup('vars', '_application_package_' ~ ((application_job.libraryId ~ application_job.slotId ~ application_job.hostId) | hash('sha256'))) }}"
     _library_resolution_key: "{{ application_job.libraryId ~ '/' ~ application_job.hostId }}"
-    _application_library_inputs: "{{ _library_resolved_defaults.get(_library_resolution_key, {}) }}"
-    _application_resource_defaults: "{{ _application_library_inputs.resourceDefaults if _application_library_inputs else _application_resource_inputs.resource_defaults | default({}) }}"
-    _application_shared: "{{ _application_library_inputs.shared if _application_library_inputs else _application_shared_render }}"
   loop: "{{ _application_inputs.jobs }}"
   loop_control:
     loop_var: application_job

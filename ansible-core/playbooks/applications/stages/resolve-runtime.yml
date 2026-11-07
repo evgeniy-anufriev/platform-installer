@@ -8,9 +8,21 @@
   gather_facts: false
   any_errors_fatal: true
   tasks:
+    - name: Проверка актуальности расчёта приложений, полученного при подготовке образов
+      platform.core.project_resolution:
+        operation: reuse_application_rows
+      register: _application_resolution_reuse
+      no_log: true
+    - name: Использование рассчитанных приложений в том же контексте проекта и runtime
+      ansible.builtin.set_fact:
+        platform_application_rows: "{{ _application_resolution_reuse.application_rows }}"
+        platform_application_findings: "{{ _application_resolution_reuse.application_findings }}"
+      when: _application_resolution_reuse.hit
+      no_log: true
     - name: Определение настроек и размещений приложений по умолчанию
       ansible.builtin.include_role:
         name: platform.core.resolve_application_libraries
+      when: not _application_resolution_reuse.hit
     - name: Формирование снимка текущего проекта без внесения изменений
       platform.core.project_snapshot:
         project_root: "{{ platform_project_root if platform_project_root is defined else (inventory_dir | dirname) }}"

@@ -23,9 +23,14 @@
         application_databases: {}
         _application_connections: "{{ application_job.connections }}"
         application_connections: {}
-        _application_resources: "{{ _application_library_inputs.resources | default({}) }}"
-        library_resources: "{{ _application_library_inputs.resources | default({}) }}"
+        _application_resources: "{{ _application_cached_inputs.resources | default({}) }}"
+        library_resources: "{{ _application_cached_inputs.resources | default({}) }}"
         _application_resource_inputs: {}
+        _application_library_inputs: "{{ _application_cached_inputs }}"
+        _application_resource_defaults: "{{ _application_cached_inputs.resourceDefaults | default({}) }}"
+        _application_shared: "{{ _application_cached_inputs.shared | default({}) }}"
+      vars:
+        _application_cached_inputs: "{{ _library_resolved_defaults.get(_library_resolution_key, {}) }}"
       no_log: true
       become: false
 
@@ -128,68 +133,17 @@
       become: false
 
     - name: Определение наследуемых настроек приложения без явных переопределений
-      ansible.builtin.set_fact:
-        application_inherited: >-
-          {{ (_application_shared.defaults if application_job.slot.inherit_defaults | default(true) else {}) |
-             combine(_application_defaults.defaults, recursive=true, list_merge='replace') |
-             combine(({'endpoint': _application_library_endpoint} if _application_library_endpoint else {}), recursive=true, list_merge='replace') |
-             combine(application_job.slot.overrides | default({}), recursive=true, list_merge='replace') |
-             combine(_application_shared.overrides if application_job.slot.inherit_defaults | default(true) else {}, recursive=true, list_merge='replace') }}
+      platform.core.prepare_application_libraries:
+        resolved_row: true
+        library_namespace: "_library_package_{{ [application_job.libraryId, application_job.hostId] | to_json | hash('sha256') }}"
+      register: _application_resolved
       no_log: true
       become: false
 
     - name: Сбор служебной записи рассчитанных параметров для структурированных операций
       ansible.builtin.set_fact:
-        _library_resolved_defaults: >-
-          {{ (_library_resolved_defaults | combine({_library_resolution_key: {
-             'resourceDefaults': _application_resource_defaults,
-             'resources': _application_resources,
-             'shared': _application_shared}}))
-             if application_job.reuseLibraryDefaults and not _application_library_inputs else omit }}
-        "_application_resolved_row_{{ _application_row_index }}": >-
-          {{ {
-            'libraryId': application_job.libraryId,
-            'libraryRef': application_job.deployment.libraryRef,
-            'slotId': application_job.slotId,
-            'startupPriority': application_job.slot.start_priority | default(100),
-            'instanceId': application_instance_id,
-            'instanceIdStrategy': application_job.library.definition.instance_id_strategy | default('qualified'),
-            'applicationName': application_name,
-            'applicationVersion': application_job.application.version,
-            'hostId': application_job.hostId,
-            'runtimeRef': application_job.deployment.runtimeRef,
-            'runtimeDirectory': application_job.deployment.runtime_directory | default(_library_package.platform_library_definition.runtime_directory | default('~/' ~ application_job.libraryId), true),
-            'libraryConnections': _library_package.platform_library_definition.connections | default({}),
-            'providedConnections': {} if application_job.skipConnectionTopology else
-              (platform_application_connection_rows |
-               selectattr('libraryId', 'equalto', application_job.libraryId) | first).providedConnections,
-            'bindings': application_job.deployment.bindings | default({}),
-            'vaultRef': {'binding': 'secrets'} if application_job.deployment.bindings.secrets is defined else (application_job.deployment.vault_ref | default({})),
-            'registryCredentials': application_job.deployment.registry_credentials | default({}),
-            'resources': _application_resources,
-            'resourceDefaults': _application_resource_defaults,
-            'sharedSecrets': _library_package.platform_library_definition.shared_secrets | default({}) |
-              combine(application_job.deployment.shared_secrets | default({}), recursive=false),
-            'connectionDefaults': _library_package.platform_library_definition.connection_defaults | default({}) |
-              combine(application_job.deployment.connection_defaults | default({}), recursive=true, list_merge='replace'),
-            'connections': _application_connections,
-            'identityNames': _application_package.platform_application_definition.identity_environment | default([]),
-            'packageIdentity': {'application': application_job.application.digest, 'library': application_job.library.digest},
-            'libraryScripts': application_job.library.scripts | default([]),
-            'applicationScripts': application_job.application.scripts | default([]),
-            'commonDefaults': _application_shared.defaults | combine(_application_shared.overrides, recursive=true, list_merge='replace'),
-            'inherited': {'environment': application_inherited.environment | default({}), 'parameters': application_inherited.parameters | default({})},
-            'settings': application_inherited |
-              combine(application_job.instance.overrides | default({}), recursive=true, list_merge='replace') |
-              combine(({'accounts': application_job.instance.accounts} if application_job.instance.accounts is defined else {}), recursive=true, list_merge='replace') |
-              combine(application_job.hostOverride, recursive=true, list_merge='replace') |
-              platform.core.application_account_policies([
-                _application_defaults.defaults,
-                application_job.slot.overrides | default({}),
-                application_job.instance.overrides | default({}),
-                {'accounts': application_job.instance.accounts | default({})},
-                application_job.hostOverride])
-          } }}
+        "_application_resolved_row_{{ _application_row_index }}": "{{ _application_resolved.row }}"
+        application_inherited: "{{ _application_resolved.inherited }}"
       no_log: true
       become: false
   rescue:

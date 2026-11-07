@@ -10,6 +10,7 @@
     - name: Сохранение разрешённых входов подготовки образов
       ansible.builtin.set_fact:
         platform_image_snapshot: "{{ platform_project_resolution }}"
+        _application_image_resolution_context: "{{ _project_resolution_cache.invocation_context | default({}) }}"
       no_log: true
     - name: Сбор параметров выбранных образов для подготовки
       platform.core.prepare_application_images:

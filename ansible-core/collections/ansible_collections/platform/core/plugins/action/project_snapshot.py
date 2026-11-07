@@ -744,6 +744,7 @@ class ActionModule(ActionBase):
             # execution manifest.
             return self._public_result({"changed": False, "snapshot": snapshot, "pki_materialization": pki,
                     "application_rows": task_vars.get('platform_application_rows', []),
+                    "application_findings": task_vars.get('platform_application_findings', []),
                     "application_pki_bindings": pki_bindings,
                     "application_image_lock": private_image_lock if applications_enabled else {},
                     "execution_configuration": configuration,

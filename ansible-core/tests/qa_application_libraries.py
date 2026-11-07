@@ -48,7 +48,9 @@ class StandaloneLibrariesQA(unittest.TestCase):
         path = os.path.join(self.root, 'library-packages/sdku/1.0.0/roles/library_sdku/defaults/main.yml')
         self.edit(path, lambda d: d['platform_library_definition'].update(defaults={
             'environment': {'INVALID': '{{ platform_application_rows[0].instanceId }}'}}))
-        self.snapshot(expected_error='PROJECT_SNAPSHOT_INPUT_INVALID')
+        result = self.snapshot()
+        self.assertEqual('BLOCKED', result['applicationLibraries']['status'])
+        self.assertNotIn('sdku', result['applicationLibraries']['libraries'])
 
     def test_redis_keys_resolve_before_shared_env_and_account_grants(self):
         for library in ('sdku', 'cspa'):
@@ -95,7 +97,7 @@ class StandaloneLibrariesQA(unittest.TestCase):
         self.edit(self.vars, lambda d: d['platform_desired_state']['applicationLibraryDeployments']['sdku']['resources']['dm-meta']['parameters'].pop('name'))
         projected('group_meta')
         self.edit(self.vars, lambda d: d['platform_desired_state']['applicationLibraryDeployments']['sdku']['resources'].pop('dm-meta'))
-        self.snapshot(expected_error='FAILED!')
+        projected('group_meta')
 
     def test_library_connection_keys_and_clickhouse_history_defaults(self):
         with open(self.defaults) as stream:
@@ -588,7 +590,9 @@ done
         library = os.path.join(self.root, 'library-packages/sdku/1.0.0/roles/library_sdku/defaults/main.yml')
         self.edit(library, lambda d: d['platform_library_definition'].update(defaults={'environment': {'INVALID': '{{ indirect_application }}'}}))
         self.edit(self.vars, lambda d: d.update(application_name='stale-application', indirect_application='{{ application_name }}'))
-        self.snapshot(expected_error='PROJECT_SNAPSHOT_INPUT_INVALID')
+        result = self.snapshot()
+        self.assertEqual('BLOCKED', result['applicationLibraries']['status'])
+        self.assertNotIn('sdku', result['applicationLibraries']['libraries'])
 
     def test_dotted_project_id_blocks_compose_projection(self):
         dotted_root = os.path.join(self.tmp.name, "project.test")

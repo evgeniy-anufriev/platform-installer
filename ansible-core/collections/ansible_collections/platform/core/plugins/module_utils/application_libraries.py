@@ -336,13 +336,6 @@ def prepare(root, desired, memberships, contract, loader, contracts_root):
                 raise ValueError("Recipe slots mismatch")
             deployment['resources'] = library_resources(library['definition'], deployment,
                 [package(slots[name]['applicationRef'], 'application')['definition'] for name in selected])
-            reuse_library_defaults = len(selected) > 1 and all(_literal_library_input(value) for value in (
-                library['definition'].get('resource_defaults', {}),
-                library['definition'].get('defaults', {}),
-                deployment.get('resource_defaults', {}),
-                deployment.get('overrides', {}),
-                deployment['resources'],
-            ))
             placements = [host for host, membership in sorted(memberships.items()) if library_id in membership]
             if not placements:
                 findings.append(finding("APPLICATION_LIBRARY_PLACEMENT_MISSING", field))
@@ -377,7 +370,6 @@ def prepare(root, desired, memberships, contract, loader, contracts_root):
                     jobs.append({"libraryId": library_id, "slotId": slot_id, "hostId": host,
                                  "library": library, "application": application,
                                  "connections": connection_maps[connection_pair],
-                                 "reuseLibraryDefaults": reuse_library_defaults,
                                  "skipConnectionTopology": skip_connection_topology,
                                  "deployment": deployment, "instance": selected[slot_id],
                                  "slot": slot, "hostOverride": host_override})
