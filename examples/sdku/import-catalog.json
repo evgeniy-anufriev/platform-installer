@@ -1,20 +1,20 @@
 [
   {
-    "digest": "sha256:51a85d8d0276e47498b98243d47d2a7e17d354d239f7467b4822ed4d64e9f021",
+    "digest": "sha256:63a4a72c9efb74e36be186f6c55c74e791f6ae9b45f5a77a273dc7ba5a2892a3",
     "kind": "application",
     "name": "alarm-service",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:486e5230f95ed62c47f71e3dc9e44cac3c90b847e3146a7e59cba945999135ee",
+    "digest": "sha256:6e577086ab3c767f156d955441cfcdefd1a3fcd5b7f0e6460f86e5e2b9461a4e",
     "kind": "application",
     "name": "alarm-view-service",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:ad92875161929e1fec4f762ad8f10eebf2f993b74c29644e95b69efd573aa40c",
+    "digest": "sha256:0c882f7348ffd07d27061ba8afca66b6f6c49f45202740e3df151aec8f5188bd",
     "kind": "application",
     "name": "data-manager",
     "sourceDirectory": ".",
@@ -35,7 +35,7 @@
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:443dda3ffc2ae3e8fc86be351fe01c2a58a76e1b2a923ea8940d3ac105e8dadb",
+    "digest": "sha256:19e7d71b60c8d9e2d2eee979c6ca1ec4150b880806a89296d816058f67be0e0f",
     "kind": "application",
     "name": "evo-scheduler",
     "sourceDirectory": ".",
@@ -49,42 +49,42 @@
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:974ca11e14e2641851e3cf521e9f9a2a7edf063bf4fe97ca7059548652e5a470",
+    "digest": "sha256:09f5fa852b8c191863289642236cf92b3735fbf28786245a5620ebcd83c25341",
     "kind": "application",
     "name": "hmi-backend",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:2e9831eca122fda377cd961f78df617863d6b1eb5564e82ced7880118abd6737",
+    "digest": "sha256:bd1d46f2aa60bc93a57ad178ff24c3629f02c2108232b8b3c115ce826f653ac5",
     "kind": "application",
     "name": "hmi-frontend-alarms",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:d0d0fe96c7d5da0aff25a7beb2c620ae924b5b3dd0610e3c6c2217e823345a86",
+    "digest": "sha256:46b86d5a69288fc9c4d21d8d8fb4731b4cfa835af299cb5cfd7c0ee955762987",
     "kind": "application",
     "name": "hmi-frontend-para",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:a55c731445e52ef9346d91b6ec5e5703e157b47e69e4e723d466ac1b844074df",
+    "digest": "sha256:bac3e2e4c5a2795abb623ee19f822b1eb6384bf3c27b3bb9d2f66568ab519d90",
     "kind": "application",
     "name": "hmi-frontend-svg-editor",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:7b78537e0f372410074a6e2be5e109be83f36e9c02d5c99073e009015c128446",
+    "digest": "sha256:f75a545607bc8a60f7178d7a1270b2808723b0b550fbab5b681bba7261e98fa9",
     "kind": "application",
     "name": "hmi-frontend-trends",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:269b4f5a9ba0421f855a16840c0ac902e51ad60a16c59be1f29fc4775506f025",
+    "digest": "sha256:7552cfbf89eb59e7375c57a48a0edc1fe8aecc771f65ef2c03a7534afdeec030",
     "kind": "application",
     "name": "hmi-frontend-viewer",
     "sourceDirectory": ".",
@@ -126,14 +126,14 @@
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:7c5ed262b8155d259788fdaec0a11feee231ecb20e6b8c92c8c66a7557f1afb7",
+    "digest": "sha256:2308e39d87bd9dff955cb773d2e829fd92a5e4cd9d6ec27722a2199af0a9d40f",
     "kind": "application",
     "name": "sdku-knp",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:c14392d1d9284830643fef174ced6408c10af7dbab6a15dced8c99b3c25d6f81",
+    "digest": "sha256:0f533e0f230ff115ccbc52df97c11201fbb9fa7e5b2287d003c059a515ab6db7",
     "kind": "application",
     "name": "sdku-knp-ui",
     "sourceDirectory": ".",
@@ -161,21 +161,21 @@
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:296c4188f8cfad17f8cbe9a9a3e23871bd6bbbb3cc25605ef3528cd92c658a9e",
+    "digest": "sha256:338f63f5ba90a456c9f0d1ccabf8819b4dcb6205b73c242426c9d061258a8a09",
     "kind": "application",
     "name": "sdku-vtor",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:9b19f1914a0772e7d47683d7679987eef284672c698ea96820a0e33a6299ed4c",
+    "digest": "sha256:be476b8104758acfe3d9d1171d709829494c0b8d1a21542aa9437f1526eb24ee",
     "kind": "application",
     "name": "sdku-vtor-ui",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:f26a5c291728097e5a7e8d67581d5a72c9738ff02531df06dd389c600eb04bf4",
+    "digest": "sha256:317f6f34af5cb6a5c773e482fd5d3a17a8f0c6204b58af1b786ee8ceafede534",
     "kind": "application",
     "name": "user-preferences",
     "sourceDirectory": ".",

@@ -2,7 +2,8 @@
   "apiVersion": "platform.installer/application-package/v1alpha1",
   "files": [
     "roles/application_sdku-vtor-ui/defaults/main.yml",
-    "roles/application_sdku-vtor-ui/templates/compose.yml.j2"
+    "roles/application_sdku-vtor-ui/templates/compose.yml.j2",
+    "assets/keycloak-client.json.j2"
   ],
   "kind": "ApplicationPackage",
   "name": "sdku-vtor-ui",

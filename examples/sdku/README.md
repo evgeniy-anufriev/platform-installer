@@ -27,6 +27,10 @@ hydro-calculation, hydro-history-and-model, hmi-frontend-hydrocyclone.
 
 ### Подключение к СЗИ
 
+Для 15 приложений подготовлены `assets/keycloak-client.json.j2` из исходной БД
+Keycloak от 14 октября 2026 года. Состав, соответствие клиентов и результаты
+проверки приведены в [SSO clients](sso-clients.md).
+
 В проекте с СЗИ назначьте библиотеке SDKU группу через `bindings.endpoint`
 и подключите `bindings.sso` к предоставляемому подключению `szi/sso`.
 Пример в `configuration/group_vars.yml.example` использует ID экземпляра

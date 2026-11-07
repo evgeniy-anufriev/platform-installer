@@ -3,7 +3,8 @@
   "files": [
     "roles/application_user-preferences/defaults/main.yml",
     "roles/application_user-preferences/templates/compose.yml.j2",
-    "roles/application_user-preferences/templates/agent.hcl.j2"
+    "roles/application_user-preferences/templates/agent.hcl.j2",
+    "assets/keycloak-client.json.j2"
   ],
   "kind": "ApplicationPackage",
   "name": "user-preferences",

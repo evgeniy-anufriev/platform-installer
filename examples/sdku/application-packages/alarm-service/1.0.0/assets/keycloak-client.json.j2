@@ -1,0 +1,166 @@
+{
+  "clientId": "{{ application_instance_id }}",
+  "name": "{{ application_instance_id }}",
+  "rootUrl": "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/",
+  "adminUrl": "",
+  "baseUrl": "",
+  "surrogateAuthRequired": false,
+  "enabled": true,
+  "alwaysDisplayInConsole": false,
+  "bearerOnly": false,
+  "consentRequired": false,
+  "standardFlowEnabled": true,
+  "implicitFlowEnabled": true,
+  "directAccessGrantsEnabled": true,
+  "serviceAccountsEnabled": true,
+  "publicClient": false,
+  "frontchannelLogout": true,
+  "fullScopeAllowed": true,
+  "clientAuthenticatorType": "client-secret",
+  "protocol": "openid-connect",
+  "notBefore": 0,
+  "nodeReRegistrationTimeout": -1,
+  "redirectUris": [
+    "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/*"
+  ],
+  "webOrigins": [
+    "{{ application_connections.sso.parameters.proxy_url }}"
+  ],
+  "attributes": {
+    "backchannel.logout.revoke.offline.tokens": "false",
+    "backchannel.logout.session.required": "true",
+    "oauth2.device.authorization.grant.enabled": "true",
+    "oidc.ciba.grant.enabled": "true"
+  },
+  "authenticationFlowBindingOverrides": {},
+  "protocolMappers": [
+    {
+      "name": "Client Host",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usersessionmodel-note-mapper",
+      "consentRequired": false,
+      "config": {
+        "access.token.claim": "true",
+        "claim.name": "clientHost",
+        "id.token.claim": "true",
+        "introspection.token.claim": "true",
+        "jsonType.label": "String",
+        "user.session.note": "clientHost"
+      }
+    },
+    {
+      "name": "Client ID",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usersessionmodel-note-mapper",
+      "consentRequired": false,
+      "config": {
+        "access.token.claim": "true",
+        "claim.name": "client_id",
+        "id.token.claim": "true",
+        "introspection.token.claim": "true",
+        "jsonType.label": "String",
+        "user.session.note": "client_id"
+      }
+    },
+    {
+      "name": "Client IP Address",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usersessionmodel-note-mapper",
+      "consentRequired": false,
+      "config": {
+        "access.token.claim": "true",
+        "claim.name": "clientAddress",
+        "id.token.claim": "true",
+        "introspection.token.claim": "true",
+        "jsonType.label": "String",
+        "user.session.note": "clientAddress"
+      }
+    }
+  ],
+  "defaultClientScopes": [
+    "acr",
+    "basic",
+    "email",
+    "profile",
+    "roles",
+    "web-origins"
+  ],
+  "optionalClientScopes": [
+    "address",
+    "microprofile-jwt",
+    "phone"
+  ],
+  "clientRoles": [
+    {
+      "name": "alarm-service-access",
+      "description": "",
+      "composite": false,
+      "attributes": {}
+    },
+    {
+      "name": "setControlTU",
+      "description": "",
+      "composite": false,
+      "attributes": {}
+    },
+    {
+      "name": "uma_protection",
+      "description": "",
+      "composite": false,
+      "attributes": {}
+    },
+    {
+      "name": "viewCurrentDataMT",
+      "description": "",
+      "composite": false,
+      "attributes": {}
+    }
+  ],
+  "authorizationServicesEnabled": true,
+  "authorizationSettings": {
+    "allowRemoteResourceManagement": true,
+    "policyEnforcementMode": "ENFORCING",
+    "decisionStrategy": "UNANIMOUS",
+    "resources": [
+      {
+        "name": "Ресурсы alarm-service",
+        "ownerManagedAccess": false,
+        "displayName": "",
+        "attributes": {},
+        "uris": [
+          "/",
+          "/*",
+          "/*/*",
+          "/*/*/*",
+          "/*/*/*/*",
+          "/ack-by-tags"
+        ],
+        "icon_uri": ""
+      }
+    ],
+    "policies": [
+      {
+        "name": "Политика alarm-service",
+        "description": "",
+        "type": "role",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "roles": "[{\"id\":\"{{ application_instance_id }}/alarm-service-access\",\"required\":false}]"
+        }
+      },
+      {
+        "name": "Разрешение_alarm-service",
+        "description": "",
+        "type": "resource",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "applyPolicies": "[\"Политика alarm-service\"]",
+          "resources": "[\"Ресурсы alarm-service\"]"
+        }
+      }
+    ],
+    "scopes": []
+  }
+}

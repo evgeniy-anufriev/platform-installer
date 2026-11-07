@@ -1,0 +1,155 @@
+{
+  "clientId": "{{ application_instance_id }}",
+  "name": "{{ application_instance_id }}",
+  "rootUrl": "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/",
+  "adminUrl": "",
+  "baseUrl": "",
+  "surrogateAuthRequired": false,
+  "enabled": true,
+  "alwaysDisplayInConsole": false,
+  "bearerOnly": false,
+  "consentRequired": false,
+  "standardFlowEnabled": true,
+  "implicitFlowEnabled": true,
+  "directAccessGrantsEnabled": true,
+  "serviceAccountsEnabled": true,
+  "publicClient": false,
+  "frontchannelLogout": true,
+  "fullScopeAllowed": true,
+  "clientAuthenticatorType": "client-secret",
+  "protocol": "openid-connect",
+  "notBefore": 0,
+  "nodeReRegistrationTimeout": -1,
+  "redirectUris": [
+    "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/*"
+  ],
+  "webOrigins": [
+    "{{ application_connections.sso.parameters.proxy_url }}"
+  ],
+  "attributes": {
+    "backchannel.logout.revoke.offline.tokens": "false",
+    "backchannel.logout.session.required": "true",
+    "backend": "true",
+    "display.on.consent.screen": "false",
+    "isOpenId": "false",
+    "oauth2.device.authorization.grant.enabled": "true",
+    "oidc.ciba.grant.enabled": "true",
+    "ui_available": "false"
+  },
+  "authenticationFlowBindingOverrides": {},
+  "protocolMappers": [
+    {
+      "name": "Client Host",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usersessionmodel-note-mapper",
+      "consentRequired": false,
+      "config": {
+        "access.token.claim": "true",
+        "claim.name": "clientHost",
+        "id.token.claim": "true",
+        "introspection.token.claim": "true",
+        "jsonType.label": "String",
+        "user.session.note": "clientHost"
+      }
+    },
+    {
+      "name": "Client ID",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usersessionmodel-note-mapper",
+      "consentRequired": false,
+      "config": {
+        "access.token.claim": "true",
+        "claim.name": "client_id",
+        "id.token.claim": "true",
+        "introspection.token.claim": "true",
+        "jsonType.label": "String",
+        "user.session.note": "client_id"
+      }
+    },
+    {
+      "name": "Client IP Address",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usersessionmodel-note-mapper",
+      "consentRequired": false,
+      "config": {
+        "access.token.claim": "true",
+        "claim.name": "clientAddress",
+        "id.token.claim": "true",
+        "introspection.token.claim": "true",
+        "jsonType.label": "String",
+        "user.session.note": "clientAddress"
+      }
+    }
+  ],
+  "defaultClientScopes": [
+    "acr",
+    "basic",
+    "email",
+    "profile",
+    "roles",
+    "web-origins"
+  ],
+  "optionalClientScopes": [
+    "address",
+    "microprofile-jwt",
+    "phone"
+  ],
+  "clientRoles": [
+    {
+      "name": "uma_protection",
+      "description": "",
+      "composite": false,
+      "attributes": {}
+    },
+    {
+      "name": "user-preferences-access",
+      "description": "",
+      "composite": false,
+      "attributes": {}
+    }
+  ],
+  "authorizationServicesEnabled": true,
+  "authorizationSettings": {
+    "allowRemoteResourceManagement": true,
+    "policyEnforcementMode": "ENFORCING",
+    "decisionStrategy": "UNANIMOUS",
+    "resources": [
+      {
+        "name": "all-resource",
+        "ownerManagedAccess": false,
+        "displayName": "",
+        "attributes": {},
+        "uris": [
+          "/v1/user/*",
+          "/v1/user/preferences",
+          "/v1/user/preferences/*"
+        ],
+        "icon_uri": ""
+      }
+    ],
+    "policies": [
+      {
+        "name": "policy-user-preferences",
+        "description": "",
+        "type": "role",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "roles": "[{\"id\":\"{{ application_instance_id }}/user-preferences-access\",\"required\":true}]"
+        }
+      },
+      {
+        "name": "permission-user-preferences",
+        "description": "",
+        "type": "resource",
+        "logic": "POSITIVE",
+        "decisionStrategy": "AFFIRMATIVE",
+        "config": {
+          "applyPolicies": "[\"policy-user-preferences\"]",
+          "resources": "[\"all-resource\"]"
+        }
+      }
+    ],
+    "scopes": []
+  }
+}

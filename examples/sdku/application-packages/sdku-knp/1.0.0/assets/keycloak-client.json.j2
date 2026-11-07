@@ -1,0 +1,154 @@
+{
+  "clientId": "{{ application_instance_id }}",
+  "name": "{{ application_instance_id }}",
+  "rootUrl": "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/",
+  "adminUrl": "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/",
+  "baseUrl": "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/",
+  "surrogateAuthRequired": false,
+  "enabled": true,
+  "alwaysDisplayInConsole": false,
+  "bearerOnly": false,
+  "consentRequired": false,
+  "standardFlowEnabled": true,
+  "implicitFlowEnabled": true,
+  "directAccessGrantsEnabled": true,
+  "serviceAccountsEnabled": true,
+  "publicClient": false,
+  "frontchannelLogout": true,
+  "fullScopeAllowed": true,
+  "clientAuthenticatorType": "client-secret",
+  "protocol": "openid-connect",
+  "notBefore": 0,
+  "nodeReRegistrationTimeout": -1,
+  "redirectUris": [
+    "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/*"
+  ],
+  "webOrigins": [
+    "{{ application_connections.sso.parameters.proxy_url }}"
+  ],
+  "attributes": {
+    "backchannel.logout.revoke.offline.tokens": "false",
+    "backchannel.logout.session.required": "true",
+    "display.on.consent.screen": "false",
+    "oauth2.device.authorization.grant.enabled": "true",
+    "oidc.ciba.grant.enabled": "true",
+    "post.logout.redirect.uris": "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/"
+  },
+  "authenticationFlowBindingOverrides": {},
+  "protocolMappers": [
+    {
+      "name": "Client Host",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usersessionmodel-note-mapper",
+      "consentRequired": false,
+      "config": {
+        "access.token.claim": "true",
+        "claim.name": "clientHost",
+        "id.token.claim": "true",
+        "introspection.token.claim": "true",
+        "jsonType.label": "String",
+        "user.session.note": "clientHost"
+      }
+    },
+    {
+      "name": "Client ID",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usersessionmodel-note-mapper",
+      "consentRequired": false,
+      "config": {
+        "access.token.claim": "true",
+        "claim.name": "client_id",
+        "id.token.claim": "true",
+        "introspection.token.claim": "true",
+        "jsonType.label": "String",
+        "user.session.note": "client_id"
+      }
+    },
+    {
+      "name": "Client IP Address",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usersessionmodel-note-mapper",
+      "consentRequired": false,
+      "config": {
+        "access.token.claim": "true",
+        "claim.name": "clientAddress",
+        "id.token.claim": "true",
+        "introspection.token.claim": "true",
+        "jsonType.label": "String",
+        "user.session.note": "clientAddress"
+      }
+    }
+  ],
+  "defaultClientScopes": [
+    "acr",
+    "basic",
+    "email",
+    "profile",
+    "roles",
+    "web-origins"
+  ],
+  "optionalClientScopes": [
+    "address",
+    "microprofile-jwt",
+    "phone"
+  ],
+  "clientRoles": [
+    {
+      "name": "sdku-knp-backend-access",
+      "description": "",
+      "composite": false,
+      "attributes": {}
+    },
+    {
+      "name": "uma_protection",
+      "description": "",
+      "composite": false,
+      "attributes": {}
+    }
+  ],
+  "authorizationServicesEnabled": true,
+  "authorizationSettings": {
+    "allowRemoteResourceManagement": true,
+    "policyEnforcementMode": "ENFORCING",
+    "decisionStrategy": "UNANIMOUS",
+    "resources": [
+      {
+        "name": "Ресурсы sdku-knp-backend",
+        "ownerManagedAccess": false,
+        "displayName": "",
+        "attributes": {},
+        "uris": [
+          "/v1/knp/config/load",
+          "/v1/knp/user/download",
+          "/v1/knp/user/export",
+          "/v1/knp/user/import"
+        ],
+        "icon_uri": ""
+      }
+    ],
+    "policies": [
+      {
+        "name": "Политика sdku-knp-backend",
+        "description": "",
+        "type": "role",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "roles": "[{\"id\":\"{{ application_instance_id }}/sdku-knp-backend-access\",\"required\":false}]"
+        }
+      },
+      {
+        "name": "Разрешения_sdku-knp-backend",
+        "description": "",
+        "type": "resource",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "applyPolicies": "[\"Политика sdku-knp-backend\"]",
+          "resources": "[\"Ресурсы sdku-knp-backend\"]"
+        }
+      }
+    ],
+    "scopes": []
+  }
+}
