@@ -1,46 +1,136 @@
 #!/bin/sh
-# Run on the Execution Node: sudo sh scripts/measure_project_verify.sh /absolute/project/path
+# Run on the Execution Node: sudo sh measure_project_verify.sh [project-directory]
 set -eu
+exec python3 - "$@" <<'PY'
+import argparse
+import fcntl
+import json
+import os
+from pathlib import Path, PurePosixPath
+import shutil
+import statistics
+import subprocess
+import sys
+import tarfile
+import tempfile
+import time
 
-if [ "$#" -ne 1 ]; then
-    echo "Использование: sudo sh $0 /абсолютный/путь/к/проекту" >&2
-    exit 2
-fi
-project=$1
-case "$project" in
-    /*) ;;
-    *) echo "Укажите абсолютный путь к проекту на узле исполнения." >&2; exit 2 ;;
-esac
-test -f "$project/inventory/hosts.yml" || {
-    echo "Не найден inventory/hosts.yml в указанном проекте." >&2
-    exit 2
-}
+parser = argparse.ArgumentParser(description="Замер проверки проекта Core")
+parser.add_argument("project", nargs="?", help="Готовая папка проекта (необязательно)")
+parser.add_argument("--archive", help="Конкретный project.tar из кэша Installer")
+parser.add_argument("--repeat", type=int, default=1, help="Количество замеров, по умолчанию 1")
+args = parser.parse_args()
+if not 1 <= args.repeat <= 20 or (args.project and args.archive):
+    parser.error("--repeat: от 1 до 20; укажите либо папку проекта, либо --archive")
 
-runtime=$(readlink -f /var/lib/platform-installer/runtime/current)
-playbook="$runtime/ansible-core/playbooks/project-snapshot-machine.yml"
-test -f "$playbook" || {
-    echo "В активном runtime отсутствует project-snapshot-machine.yml." >&2
-    exit 2
-}
-export ANSIBLE_CONFIG="$runtime/ansible-core/ansible.cfg"
-collections="$runtime/ansible-core/collections"
-for p in "$runtime"/services/*/ansible_collections; do
-    [ ! -d "$p" ] || collections="$collections:$p"
-done
-export ANSIBLE_COLLECTIONS_PATH="$collections"
 
-# JSON preserves paths containing spaces or quote characters.
-variables=$(python3 -c 'import json, sys; print(json.dumps({"platform_project_root": sys.argv[1], "platform_service_catalog_path": sys.argv[2]}))' \
-    "$project" "$runtime/catalog/service-catalog.yml")
+def extract(archive, destination):
+    # Lock the cache slot against replacement while copying its contents.
+    with (archive.parent / "lock").open("rb") as lock:
+        fcntl.flock(lock, fcntl.LOCK_SH)
+        with tarfile.open(archive, "r:*") as source:
+            members = source.getmembers()
+            for item in members:
+                path = PurePosixPath(item.name)
+                if path.is_absolute() or ".." in path.parts or not (item.isdir() or item.isfile()):
+                    raise ValueError("Небезопасный путь или тип файла в архиве")
+            for item in members:
+                target = destination.joinpath(*PurePosixPath(item.name).parts)
+                if item.isdir():
+                    target.mkdir(parents=True, exist_ok=True)
+                else:
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    with source.extractfile(item) as incoming, target.open("wb") as outgoing:
+                        shutil.copyfileobj(incoming, outgoing)
 
-echo "Проверяемый проект: $project"
-echo "Runtime: $runtime"
-started=$(date +%s)
-rc=0
-ansible-playbook \
-    -i "$project/inventory/hosts.yml" \
-    "$playbook" \
-    -e "$variables" || rc=$?
-finished=$(date +%s)
-printf '\nВремя проверки Core: %s сек. Код завершения: %s\n' "$((finished - started))" "$rc"
-exit "$rc"
+
+def measure(project, runtime):
+    env = os.environ.copy()
+    env["ANSIBLE_CONFIG"] = str(runtime / "ansible-core/ansible.cfg")
+    paths = [runtime / "ansible-core/collections"] + sorted(runtime.glob("services/*/ansible_collections"))
+    env["ANSIBLE_COLLECTIONS_PATH"] = ":".join(map(str, paths))
+    env["ANSIBLE_NOCOLOR"] = "1"
+    env["ANSIBLE_STDOUT_CALLBACK"] = "default"
+    variables = {"platform_project_root": str(project),
+                 "platform_service_catalog_path": str(runtime / "catalog/service-catalog.yml")}
+    command = ["ansible-playbook", "-i", str(project / "inventory/hosts.yml"),
+               str(runtime / "ansible-core/playbooks/project-snapshot-machine.yml"),
+               "-e", json.dumps(variables)]
+    started, current, rows = time.monotonic(), None, []
+    with subprocess.Popen(command, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                          text=True, errors="replace", bufsize=1) as process:
+        for raw in process.stdout:
+            line = raw.strip()
+            task = line.startswith(("TASK [", "RUNNING HANDLER ["))
+            if task or line.startswith(("PLAY [", "PLAY RECAP")):
+                now = time.monotonic()
+                if current:
+                    rows.append((now - current[0], current[1]))
+                current = (now, line) if task else None
+                print(line, flush=True)
+            # Do not publish variable values or raw failed task output.
+        rc = process.wait()
+    elapsed = time.monotonic() - started
+    if current:
+        rows.append((time.monotonic() - current[0], current[1]))
+    print(f"\nВремя Core: {elapsed:.2f} сек. Код завершения: {rc}. Задач: {len(rows)}")
+    print("Самые долгие задачи (интервалы между заголовками):")
+    for seconds, name in sorted(rows, reverse=True)[:30]:
+        print(f"{seconds:8.2f} сек  {name}")
+    if rc:
+        print("Проверка завершилась ошибкой. Значения переменных и результаты задач скрыты.")
+    return elapsed, rc
+
+
+def main():
+    runtime = Path("/var/lib/platform-installer/runtime/current").resolve()
+    if not (runtime / "ansible-core/playbooks/project-snapshot-machine.yml").is_file():
+        raise ValueError("В активном runtime отсутствует project-snapshot-machine.yml")
+    archive = None
+    if not args.project:
+        if args.archive:
+            archive = Path(args.archive).resolve()
+        else:
+            archives = sorted(Path("/var/lib/platform-installer/execution/project-archives").glob("*/project.tar"),
+                              key=lambda p: p.stat().st_mtime, reverse=True)
+            if not archives:
+                raise ValueError("Кэш проектов не найден. Выполните проверку в UI либо передайте папку проекта.")
+            for i, path in enumerate(archives, 1):
+                stamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(path.stat().st_mtime))
+                print(f"{i}. {stamp}  {path}")
+            if len(archives) == 1:
+                archive = archives[0]
+            else:
+                print("Номер архива проекта: ", end="", flush=True)
+                # stdin carries this program, so read the selection from the terminal.
+                with open("/dev/tty") as terminal:
+                    choice = int(terminal.readline().strip())
+                if not 1 <= choice <= len(archives):
+                    raise ValueError("Неверный номер архива")
+                archive = archives[choice - 1]
+    with tempfile.TemporaryDirectory(prefix="project-verify-measure-", dir="/var/tmp") as scratch:
+        os.chmod(scratch, 0o700)
+        project = Path(args.project).resolve() if args.project else Path(scratch)
+        if archive:
+            print(f"Архив: {archive}")
+            extract(archive, project)
+        if not (project / "inventory/hosts.yml").is_file():
+            raise ValueError("В проекте отсутствует inventory/hosts.yml")
+        print(f"Проект: {project}\nRuntime: {runtime}", flush=True)
+        timings = []
+        for number in range(1, args.repeat + 1):
+            print(f"\nЗамер {number}/{args.repeat}", flush=True)
+            elapsed, rc = measure(project, runtime)
+            if rc:
+                return rc
+            timings.append(elapsed)
+        print(f"\nМедиана Core: {statistics.median(timings):.2f} сек")
+    return 0
+
+
+try:
+    sys.exit(main())
+except (OSError, ValueError, tarfile.TarError) as error:
+    print(f"Ошибка: {error}", file=sys.stderr)
+    sys.exit(2)
+PY
