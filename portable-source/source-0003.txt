@@ -1,3 +1,392 @@
+@@PORTABLE {"path":"third_party/wails/internal/frontend/dispatcher/browser.go","mode":420,"size":509,"sha256":"e933b930f9abf64cef339190e24d861c4e8054770b3ff7b390fc5ba3ff45ae9e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":509}
+package dispatcher
+
+import (
+	"errors"
+
+	"github.com/wailsapp/wails/v2/internal/frontend"
+)
+
+// processBrowserMessage processing browser messages
+func (d *Dispatcher) processBrowserMessage(message string, sender frontend.Frontend) (string, error) {
+	if len(message) < 2 {
+		return "", errors.New("Invalid Browser Message: " + message)
+	}
+	switch message[1] {
+	case 'O':
+		url := message[3:]
+		go sender.BrowserOpenURL(url)
+	default:
+		d.log.Error("unknown Browser message: %s", message)
+	}
+
+	return "", nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/internal/frontend/dispatcher/calls.go","mode":420,"size":2261,"sha256":"cdc5752a8f78661f00dac1eb98798c7c4349121fa811e54cdfe526169ca05fd9","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2261}
+package dispatcher
+
+import (
+	"encoding/json"
+	"fmt"
+	"strings"
+
+	"github.com/wailsapp/wails/v2/internal/frontend"
+)
+
+type callMessage struct {
+	Name       string            `json:"name"`
+	Args       []json.RawMessage `json:"args"`
+	CallbackID string            `json:"callbackID"`
+}
+
+func (d *Dispatcher) processCallMessage(message string, sender frontend.Frontend) (string, error) {
+	var payload callMessage
+	err := json.Unmarshal([]byte(message[1:]), &payload)
+	if err != nil {
+		return "", err
+	}
+
+	var result interface{}
+
+	// Handle different calls
+	switch true {
+	case strings.HasPrefix(payload.Name, systemCallPrefix):
+		result, err = d.processSystemCall(payload, sender)
+	default:
+		// Lookup method
+		registeredMethod := d.bindingsDB.GetMethod(payload.Name)
+
+		// Check we have it
+		if registeredMethod == nil {
+			return "", fmt.Errorf("method '%s' not registered", payload.Name)
+		}
+
+		args, err2 := registeredMethod.ParseArgs(payload.Args)
+		if err2 != nil {
+			errmsg := fmt.Errorf("error parsing arguments: %s", err2.Error())
+			result, _ := d.NewErrorCallback(errmsg.Error(), payload.CallbackID)
+			return result, errmsg
+		}
+		result, err = registeredMethod.Call(args)
+	}
+
+	callbackMessage := &CallbackMessage{
+		CallbackID: payload.CallbackID,
+	}
+	if err != nil {
+		// Use the error formatter if one was provided
+		if d.errfmt != nil {
+			callbackMessage.Err = d.errfmt(err)
+		} else {
+			callbackMessage.Err = err.Error()
+		}
+	} else {
+		callbackMessage.Result = result
+	}
+	messageData, err := json.Marshal(callbackMessage)
+	d.log.Trace("json call result data: %+v\n", string(messageData))
+	if err != nil {
+		// what now?
+		d.log.Fatal("%s", err.Error())
+	}
+
+	return "c" + string(messageData), nil
+}
+
+// CallbackMessage defines a message that contains the result of a call
+type CallbackMessage struct {
+	Result     interface{} `json:"result"`
+	Err        any         `json:"error"`
+	CallbackID string      `json:"callbackid"`
+}
+
+func (d *Dispatcher) NewErrorCallback(message string, callbackID string) (string, error) {
+	result := &CallbackMessage{
+		CallbackID: callbackID,
+		Err:        message,
+	}
+	messageData, err := json.Marshal(result)
+	d.log.Trace("json call result data: %+v\n", string(messageData))
+	return string(messageData), err
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/internal/frontend/dispatcher/dispatcher.go","mode":420,"size":2118,"sha256":"baa6bc120411c07323e66476bb14a9872088a970449a600a765890012beb3133","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2118}
+package dispatcher
+
+import (
+	"context"
+	"fmt"
+	"github.com/pkg/errors"
+	"github.com/wailsapp/wails/v2/internal/binding"
+	"github.com/wailsapp/wails/v2/internal/frontend"
+	"github.com/wailsapp/wails/v2/internal/logger"
+	"github.com/wailsapp/wails/v2/pkg/options"
+)
+
+type Dispatcher struct {
+	log                  *logger.Logger
+	bindings             *binding.Bindings
+	events               frontend.Events
+	bindingsDB           *binding.DB
+	ctx                  context.Context
+	errfmt               options.ErrorFormatter
+	disablePanicRecovery bool
+}
+
+func NewDispatcher(ctx context.Context, log *logger.Logger, bindings *binding.Bindings, events frontend.Events, errfmt options.ErrorFormatter, disablePanicRecovery bool) *Dispatcher {
+	return &Dispatcher{
+		log:                  log,
+		bindings:             bindings,
+		events:               events,
+		bindingsDB:           bindings.DB(),
+		ctx:                  ctx,
+		errfmt:               errfmt,
+		disablePanicRecovery: disablePanicRecovery,
+	}
+}
+
+func (d *Dispatcher) ProcessMessage(message string, sender frontend.Frontend) (_ string, err error) {
+	if !d.disablePanicRecovery {
+		defer func() {
+			if e := recover(); e != nil {
+				if errPanic, ok := e.(error); ok {
+					err = errPanic
+				} else {
+					err = fmt.Errorf("%v", e)
+				}
+			}
+			if err != nil {
+				d.log.Error("process message error: %s -> %s", message, err)
+			}
+		}()
+	}
+
+	if message == "" {
+		return "", errors.New("No message to process")
+	}
+	switch message[0] {
+	case 'L':
+		return d.processLogMessage(message)
+	case 'E':
+		return d.processEventMessage(message, sender)
+	case 'C':
+		return d.processCallMessage(message, sender)
+	case 'c':
+		return d.processSecureCallMessage(message, sender)
+	case 'W':
+		return d.processWindowMessage(message, sender)
+	case 'B':
+		return d.processBrowserMessage(message, sender)
+	case 'D':
+		return d.processDragAndDropMessage(message)
+	case 'Q':
+		sender.Quit()
+		return "", nil
+	case 'S':
+		sender.Show()
+		return "", nil
+	case 'H':
+		sender.Hide()
+		return "", nil
+	default:
+		return "", errors.New("Unknown message from front end: " + message)
+	}
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/internal/frontend/dispatcher/draganddrop.go","mode":420,"size":887,"sha256":"78285532e55ba30d5b9131b9fb7cfd98415c6d06577085eab59d7e9b1e8d9613","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":887}
+package dispatcher
+
+import (
+	"errors"
+	"strconv"
+	"strings"
+)
+
+func (d *Dispatcher) processDragAndDropMessage(message string) (string, error) {
+	switch message[1] {
+	case 'D':
+		msg := strings.SplitN(message[3:], ":", 3)
+		if len(msg) != 3 {
+			return "", errors.New("Invalid drag and drop Message: " + message)
+		}
+
+		x, err := strconv.Atoi(msg[0])
+		if err != nil {
+			return "", errors.New("Invalid x coordinate in drag and drop Message: " + message)
+		}
+
+		y, err := strconv.Atoi(msg[1])
+		if err != nil {
+			return "", errors.New("Invalid y coordinate in drag and drop Message: " + message)
+		}
+
+		paths := strings.Split(msg[2], "\n")
+		if len(paths) < 1 {
+			return "", errors.New("Invalid drag and drop Message: " + message)
+		}
+
+		d.events.Emit("wails:file-drop", x, y, paths)
+	default:
+		return "", errors.New("Invalid drag and drop Message: " + message)
+	}
+
+	return "", nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/internal/frontend/dispatcher/events.go","mode":420,"size":720,"sha256":"0dff8333c32685c21995849dc5a2d54d242562c69de64004e9e09f2eb44aefdd","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":720}
+package dispatcher
+
+import (
+	"encoding/json"
+	"errors"
+
+	"github.com/wailsapp/wails/v2/internal/frontend"
+)
+
+type EventMessage struct {
+	Name string        `json:"name"`
+	Data []interface{} `json:"data"`
+}
+
+func (d *Dispatcher) processEventMessage(message string, sender frontend.Frontend) (string, error) {
+	if len(message) < 3 {
+		return "", errors.New("Invalid Event Message: " + message)
+	}
+
+	switch message[1] {
+	case 'E':
+		var eventMessage EventMessage
+		err := json.Unmarshal([]byte(message[2:]), &eventMessage)
+		if err != nil {
+			return "", err
+		}
+		go d.events.Notify(sender, eventMessage.Name, eventMessage.Data...)
+	case 'X':
+		eventName := message[2:]
+		go d.events.Off(eventName)
+	}
+
+	return "", nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/internal/frontend/dispatcher/log.go","mode":420,"size":1099,"sha256":"7024703f3d18f0d763138c35f023628b9074de5d5974e92af3e3b11756b3aa0b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1099}
+package dispatcher
+
+import (
+	"github.com/pkg/errors"
+	"github.com/wailsapp/wails/v2/internal/logger"
+	pkgLogger "github.com/wailsapp/wails/v2/pkg/logger"
+)
+
+var logLevelMap = map[byte]logger.LogLevel{
+	'1': pkgLogger.TRACE,
+	'2': pkgLogger.DEBUG,
+	'3': pkgLogger.INFO,
+	'4': pkgLogger.WARNING,
+	'5': pkgLogger.ERROR,
+}
+
+func (d *Dispatcher) processLogMessage(message string) (string, error) {
+	if len(message) < 3 {
+		return "", errors.New("Invalid Log Message: " + message)
+	}
+
+	messageText := message[2:]
+
+	switch message[1] {
+	case 'T':
+		d.log.Trace("%s", messageText)
+	case 'P':
+		d.log.Print(messageText)
+	case 'D':
+		d.log.Debug("%s", messageText)
+	case 'I':
+		d.log.Info("%s", messageText)
+	case 'W':
+		d.log.Warning("%s", messageText)
+	case 'E':
+		d.log.Error("%s", messageText)
+	case 'F':
+		d.log.Fatal("%s", messageText)
+	case 'S':
+		loglevel, exists := logLevelMap[message[2]]
+		if !exists {
+			return "", errors.New("Invalid Set Log Level Message: " + message)
+		}
+		d.log.SetLogLevel(loglevel)
+	default:
+		return "", errors.New("Invalid Log Message: " + message)
+	}
+	return "", nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/internal/frontend/dispatcher/securecalls.go","mode":420,"size":1423,"sha256":"533a0a0741c6126e804eed6c9952dfd4ddfbd88332226c98e30b2188d5ac94f2","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1423}
+package dispatcher
+
+import (
+	"encoding/json"
+	"fmt"
+
+	"github.com/wailsapp/wails/v2/internal/frontend"
+)
+
+type secureCallMessage struct {
+	ID         int               `json:"id"`
+	Args       []json.RawMessage `json:"args"`
+	CallbackID string            `json:"callbackID"`
+}
+
+func (d *Dispatcher) processSecureCallMessage(message string, sender frontend.Frontend) (string, error) {
+	var payload secureCallMessage
+	err := json.Unmarshal([]byte(message[1:]), &payload)
+	if err != nil {
+		return "", err
+	}
+
+	var result interface{}
+
+	// Lookup method
+	registeredMethod := d.bindingsDB.GetObfuscatedMethod(payload.ID)
+
+	// Check we have it
+	if registeredMethod == nil {
+		return "", fmt.Errorf("method '%d' not registered", payload.ID)
+	}
+
+	args, err2 := registeredMethod.ParseArgs(payload.Args)
+	if err2 != nil {
+		errmsg := fmt.Errorf("error parsing arguments: %s", err2.Error())
+		result, _ := d.NewErrorCallback(errmsg.Error(), payload.CallbackID)
+		return result, errmsg
+	}
+	result, err = registeredMethod.Call(args)
+
+	callbackMessage := &CallbackMessage{
+		CallbackID: payload.CallbackID,
+	}
+	if err != nil {
+		callbackMessage.Err = err.Error()
+	} else {
+		callbackMessage.Result = result
+	}
+	messageData, err := json.Marshal(callbackMessage)
+	d.log.Trace("json call result data: %+v\n", string(messageData))
+	if err != nil {
+		// what now?
+		d.log.Fatal("%s", err.Error())
+	}
+
+	return "c" + string(messageData), nil
+}
+
+@@END
 @@PORTABLE {"path":"third_party/wails/internal/frontend/dispatcher/systemcalls.go","mode":420,"size":4717,"sha256":"10add178a00da329097b34cd5564b2b91f09919e3e8edf882ccf5b5b0e692e0a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4717}
 package dispatcher
 
@@ -33122,244 +33511,5 @@ export function Hide() {
 export function Show() {
     window.runtime.Show();
 }
-
-@@END
-@@PORTABLE {"path":"third_party/wails/pkg/templates/generate/assets/lit-ts/frontend/index.tmpl.html","mode":420,"size":300,"sha256":"a24763bf9db7f1db55e2d031e40571d4185d84d974123824e5e68da205319fd1","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":300}
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8"/>
-    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-    <title>{{.ProjectName}}</title>
-    <script src="./src/my-element.ts" type="module"></script>
-</head>
-<body>
-<my-element></my-element>
-</body>
-</html>
-
-
-@@END
-@@PORTABLE {"path":"third_party/wails/pkg/templates/generate/assets/lit-ts/frontend/src/my-element.ts","mode":420,"size":2354,"sha256":"03ba1eb4325077067bdd917bdb63877f70d844b70f200f3d9a1a3389cf7c07e9","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2354}
-import {css, html, LitElement} from 'lit'
-import logo from './assets/images/logo-universal.png'
-import {Greet} from "../wailsjs/go/main/App";
-import {customElement, property} from 'lit/decorators.js'
-
-/**
- * An example element.
- *
- * @slot - This element has a slot
- * @csspart button - The button
- */
-@customElement('my-element')
-export class MyElement extends LitElement {
-    static styles = css`
-  #logo {
-    display: block;
-    width: 50%;
-    height: 50%;
-    margin: auto;
-    padding: 10% 0 0;
-    background-position: center;
-    background-repeat: no-repeat;
-    background-size: 100% 100%;
-    background-origin: content-box;
-  }
-
-  .result {
-    height: 20px;
-    line-height: 20px;
-    margin: 1.5rem auto;
-  }
-
-  .input-box .btn {
-    width: 60px;
-    height: 30px;
-    line-height: 30px;
-    border-radius: 3px;
-    border: none;
-    margin: 0 0 0 20px;
-    padding: 0 8px;
-    cursor: pointer;
-  }
-
-  .input-box .btn:hover {
-    background-image: linear-gradient(to top, #cfd9df 0%, #e2ebf0 100%);
-    color: #333333;
-  }
-
-  .input-box .input {
-    border: none;
-    border-radius: 3px;
-    outline: none;
-    height: 30px;
-    line-height: 30px;
-    padding: 0 10px;
-    background-color: rgba(240, 240, 240, 1);
-    -webkit-font-smoothing: antialiased;
-  }
-
-  .input-box .input:hover {
-    border: none;
-    background-color: rgba(255, 255, 255, 1);
-  }
-
-  .input-box .input:focus {
-    border: none;
-    background-color: rgba(255, 255, 255, 1);
-  }
-
-    `
-
-    @property()
-    resultText = "Please enter your name below 👇"
-
-    greet() {
-        let thisName = (this.shadowRoot?.getElementById('name') as HTMLInputElement)?.value;
-        if (thisName) {
-            Greet(thisName).then(result => {
-                this.resultText = result
-            });
-        }
-    }
-
-    render() {
-        return html`
-            <main>
-                <img id="logo" src=${logo} alt="Wails logo">
-                <div class="result" id="result">${this.resultText}</div>
-                <div class="input-box" id="input">
-                    <input class="input" id="name" type="text" autocomplete="off"/>
-                    <button @click=${this.greet} class="btn">Greet</button>
-                </div>
-            </main>
-        `
-    }
-}
-
-declare global {
-    interface HTMLElementTagNameMap {
-        'my-element': MyElement
-    }
-}
-@@END
-@@PORTABLE {"path":"third_party/wails/pkg/templates/generate/assets/lit-ts/frontend/vite.config.ts","mode":420,"size":97,"sha256":"b03b4aab4003fec66e0b59a9fd0b3c1808257496eab1e57d5bdc8d146de79b97","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":97}
-import {defineConfig} from 'vite'
-
-// https://vitejs.dev/config/
-export default defineConfig({})
-
-@@END
-@@PORTABLE {"path":"third_party/wails/pkg/templates/generate/assets/lit/frontend/index.tmpl.html","mode":420,"size":300,"sha256":"5a7e6558526ef5713e5aebe92a1d808b22fcb681595c85484dbcf0ac0852a256","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":300}
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8"/>
-    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-    <title>{{.ProjectName}}</title>
-    <script src="./src/my-element.js" type="module"></script>
-</head>
-<body>
-<my-element></my-element>
-</body>
-</html>
-
-
-@@END
-@@PORTABLE {"path":"third_party/wails/pkg/templates/generate/assets/lit/frontend/src/assets/fonts/OFL.txt","mode":420,"size":4371,"sha256":"8656c2a27357b3140047a39b27e3cd928256544ad8a004ef77087f761358208c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4371}
-Copyright 2016 The Nunito Project Authors (contact@sansoxygen.com),
-
-This Font Software is licensed under the SIL Open Font License, Version 1.1.
-This license is copied below, and is also available with a FAQ at:
-http://scripts.sil.org/OFL
-
-
------------------------------------------------------------
-SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007
------------------------------------------------------------
-
-PREAMBLE
-The goals of the Open Font License (OFL) are to stimulate worldwide
-development of collaborative font projects, to support the font creation
-efforts of academic and linguistic communities, and to provide a free and
-open framework in which fonts may be shared and improved in partnership
-with others.
-
-The OFL allows the licensed fonts to be used, studied, modified and
-redistributed freely as long as they are not sold by themselves. The
-fonts, including any derivative works, can be bundled, embedded, 
-redistributed and/or sold with any software provided that any reserved
-names are not used by derivative works. The fonts and derivatives,
-however, cannot be released under any other type of license. The
-requirement for fonts to remain under this license does not apply
-to any document created using the fonts or their derivatives.
-
-DEFINITIONS
-"Font Software" refers to the set of files released by the Copyright
-Holder(s) under this license and clearly marked as such. This may
-include source files, build scripts and documentation.
-
-"Reserved Font Name" refers to any names specified as such after the
-copyright statement(s).
-
-"Original Version" refers to the collection of Font Software components as
-distributed by the Copyright Holder(s).
-
-"Modified Version" refers to any derivative made by adding to, deleting,
-or substituting -- in part or in whole -- any of the components of the
-Original Version, by changing formats or by porting the Font Software to a
-new environment.
-
-"Author" refers to any designer, engineer, programmer, technical
-writer or other person who contributed to the Font Software.
-
-PERMISSION & CONDITIONS
-Permission is hereby granted, free of charge, to any person obtaining
-a copy of the Font Software, to use, study, copy, merge, embed, modify,
-redistribute, and sell modified and unmodified copies of the Font
-Software, subject to the following conditions:
-
-1) Neither the Font Software nor any of its individual components,
-in Original or Modified Versions, may be sold by itself.
-
-2) Original or Modified Versions of the Font Software may be bundled,
-redistributed and/or sold with any software, provided that each copy
-contains the above copyright notice and this license. These can be
-included either as stand-alone text files, human-readable headers or
-in the appropriate machine-readable metadata fields within text or
-binary files as long as those fields can be easily viewed by the user.
-
-3) No Modified Version of the Font Software may use the Reserved Font
-Name(s) unless explicit written permission is granted by the corresponding
-Copyright Holder. This restriction only applies to the primary font name as
-presented to the users.
-
-4) The name(s) of the Copyright Holder(s) or the Author(s) of the Font
-Software shall not be used to promote, endorse or advertise any
-Modified Version, except to acknowledge the contribution(s) of the
-Copyright Holder(s) and the Author(s) or with their explicit written
-permission.
-
-5) The Font Software, modified or unmodified, in part or in whole,
-must be distributed entirely under this license, and must not be
-distributed under any other license. The requirement for fonts to
-remain under this license does not apply to any document created
-using the Font Software.
-
-TERMINATION
-This license becomes null and void if any of the above conditions are
-not met.
-
-DISCLAIMER
-THE FONT SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT
-OF COPYRIGHT, PATENT, TRADEMARK, OR OTHER RIGHT. IN NO EVENT SHALL THE
-COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
-INCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL
-DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
-OTHER DEALINGS IN THE FONT SOFTWARE.
 
 @@END

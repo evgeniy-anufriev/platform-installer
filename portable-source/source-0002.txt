@@ -1,3 +1,368 @@
+@@PORTABLE {"path":"frontend/src/ApplicationReadiness.tsx","mode":420,"size":4965,"sha256":"25a6cd03250bb4a341d4d5bbdfb604baeeae372407d747521d40e0351fa0b3f4","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4965}
+import { useState } from "react";
+import type { ObjectValue } from "./application-draft";
+
+export function ApplicationReadiness({
+  value,
+  defaults,
+  disabled,
+  onSave,
+  onReset,
+  onDirtyChange,
+}: {
+  value: ObjectValue;
+  defaults: ObjectValue;
+  disabled: boolean;
+  onSave: (value: ObjectValue) => Promise<boolean>;
+  onReset: () => Promise<boolean>;
+  onDirtyChange: (dirty: boolean) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<Record<string, string>>({});
+  const current = (key: string) =>
+    draft[key] ?? String(value[key] ?? defaults[key] ?? "");
+  const authored = Object.keys(value).length > 0;
+  const dirty = Object.keys(draft).length > 0;
+  const valid =
+    ["container", "healthcheck"].includes(current("mode")) &&
+    [
+      ["retries", 60],
+      ["delay", 30],
+    ].every(([key, max]) => {
+      const text = current(String(key));
+      return (
+        text === "" ||
+        (Number.isInteger(Number(text)) &&
+          Number(text) >= 1 &&
+          Number(text) <= Number(max))
+      );
+    });
+  const change = (key: string, text: string) => {
+    setDraft((previous) => ({ ...previous, [key]: text }));
+    onDirtyChange(true);
+  };
+  const origin = (key: string) =>
+    Object.hasOwn(draft, key)
+      ? "Не сохранено"
+      : Object.hasOwn(value, key)
+        ? "Переопределено"
+        : Object.hasOwn(defaults, key)
+          ? "Из пакета"
+          : "По умолчанию Core";
+  return (
+    <section className="application-section application-readiness">
+      <div className="row">
+        <h3>Проверка готовности</h3>
+        <button
+          type="button"
+          className="application-link"
+          disabled={disabled}
+          onClick={() => setEditing(true)}
+        >
+          Изменить readiness
+        </button>
+        {authored && (
+          <button
+            className="application-link"
+            disabled={disabled}
+            onClick={async () => {
+              if (await onReset()) {
+                setDraft({});
+                setEditing(false);
+                onDirtyChange(false);
+              }
+            }}
+          >
+            Сбросить readiness к пакету
+          </button>
+        )}
+      </div>
+      <div className="application-readiness-fields">
+        <label>
+          Режим проверки
+          <select
+            aria-label="Режим проверки"
+            value={current("mode")}
+            disabled={disabled || !editing}
+            onChange={(e) => change("mode", e.target.value)}
+          >
+            <option value="">По умолчанию Core</option>
+            <option value="container">Контейнер запущен</option>
+            <option value="healthcheck">Docker healthcheck</option>
+          </select>
+          <small>{origin("mode")}</small>
+        </label>
+        {(
+          [
+            ["retries", "Число попыток", 60],
+            ["delay", "Интервал, сек.", 30],
+          ] as const
+        ).map(([key, label, max]) => (
+          <label key={key}>
+            {label}
+            <input
+              aria-label={label}
+              type="number"
+              min={1}
+              max={max}
+              step={1}
+              placeholder="По умолчанию Core"
+              value={current(key)}
+              disabled={disabled || !editing}
+              onChange={(e) => change(key, e.target.value)}
+            />
+            <small>{origin(key)}</small>
+          </label>
+        ))}
+      </div>
+      {current("mode") === "healthcheck" && (
+        <p className="muted">
+          Docker healthcheck должен быть объявлен в пакете. Успешность проверки
+          определяется при выполнении плана.
+        </p>
+      )}
+      {dirty && !valid && (
+        <p role="alert">
+          Выберите режим; попытки — от 1 до 60, интервал — от 1 до 30 секунд.
+        </p>
+      )}
+      {dirty && (
+        <div className="row">
+          {dirty && (
+            <button
+              disabled={disabled || !valid}
+              onClick={async () => {
+                const next: ObjectValue = { ...value, mode: current("mode") };
+                for (const key of ["retries", "delay"]) {
+                  if (Object.hasOwn(draft, key)) {
+                    if (draft[key] === "") delete next[key];
+                    else next[key] = Number(draft[key]);
+                  }
+                }
+                if (await onSave(next)) {
+                  setDraft({});
+                  setEditing(false);
+                  onDirtyChange(false);
+                }
+              }}
+            >
+              В черновик
+            </button>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+@@END
+@@PORTABLE {"path":"frontend/src/ApplicationRegistryCredentials.tsx","mode":420,"size":6682,"sha256":"38ed0a6f29e6bab28561b187a7475dd3b1ac354a47aae3a57e2ba7314a0d0100","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":6682}
+import { useState } from "react";
+import { objectValue, type ObjectValue } from "./application-draft";
+import type { RuntimeSecretValuesInput } from "./backend";
+
+export function ApplicationRegistryCredentials({
+  libraryId,
+  value,
+  registries,
+  disabled,
+  runtimeDisabled,
+  onChange,
+  save,
+  projectRevision = "",
+}: {
+  libraryId: string;
+  value: unknown;
+  registries: string[];
+  disabled: boolean;
+  runtimeDisabled: boolean;
+  onChange: (value: ObjectValue) => void;
+  save?: (input: RuntimeSecretValuesInput) => Promise<void>;
+  projectRevision?: string;
+}) {
+  const entries = objectValue(value);
+  const [registry, setRegistry] = useState("");
+  const [open, setOpen] = useState(false);
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const fields = Object.entries(entries).flatMap(([name, raw]) =>
+    ["username", "password"].flatMap((field) => {
+      const source = objectValue(objectValue(objectValue(raw)[field]).source);
+      return source.kind === "runtime_secret_ref" &&
+        typeof source.ref === "string"
+        ? [
+            {
+              source: source.ref,
+              label: `${field === "username" ? "Логин" : "Пароль"}: ${name}`,
+              password: field === "password",
+            },
+          ]
+        : [];
+    }),
+  );
+  const options = [...new Set([...registries, ...Object.keys(entries)])];
+  return (
+    <section className="application-registry-credentials">
+      <h3>Доступ к registry</h3>
+      <p className="muted">
+        Логин и пароль задаются только в runtime-сессии и применяются на целевых
+        серверах.
+      </p>
+      <label>
+        Registry
+        <input
+          aria-label="Registry"
+          list={`registry-options-${libraryId}`}
+          value={registry}
+          disabled={disabled}
+          onChange={(event) => setRegistry(event.target.value)}
+          placeholder="registry.example:5000"
+        />
+        <datalist id={`registry-options-${libraryId}`}>
+          {options.map((name) => (
+            <option key={name} value={name} />
+          ))}
+        </datalist>
+      </label>
+      <button
+        type="button"
+        disabled={
+          disabled ||
+          !registry.trim() ||
+          Object.hasOwn(entries, registry.trim())
+        }
+        onClick={() => {
+          const reference = `registry-${crypto.randomUUID()}`;
+          onChange({
+            ...entries,
+            [registry.trim()]: {
+              username: {
+                source: {
+                  kind: "runtime_secret_ref",
+                  ref: `${reference}-username`,
+                },
+              },
+              password: {
+                source: {
+                  kind: "runtime_secret_ref",
+                  ref: `${reference}-password`,
+                },
+              },
+            },
+          });
+          setRegistry("");
+        }}
+      >
+        Настроить runtime-доступ
+      </button>
+      {Object.keys(entries).map((name) => (
+        <div className="row" key={name}>
+          <span>{name}</span>
+          <button
+            type="button"
+            className="outline"
+            disabled={disabled}
+            onClick={() => {
+              const next = { ...entries };
+              delete next[name];
+              onChange(next);
+            }}
+          >
+            Убрать назначение
+          </button>
+        </div>
+      ))}
+      {fields.length > 0 && save && (
+        <>
+          {runtimeDisabled && (
+            <p className="muted">
+              Сохраните настройки библиотеки перед вводом логина и пароля.
+            </p>
+          )}
+          <button
+            type="button"
+            disabled={runtimeDisabled || saving}
+            onClick={() => {
+              setOpen(true);
+              setValues({});
+              setMessage("");
+            }}
+          >
+            Логин и пароль registry
+          </button>
+          {message && <p role="status">{message}</p>}
+          {open && (
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (runtimeDisabled || saving || !projectRevision) return;
+                const submitted = values;
+                setValues({});
+                setSaving(true);
+                void save({
+                  projectRevision,
+                  descriptorSetFingerprint: "",
+                  serviceDeployment: "",
+                  applicationLibrary: libraryId,
+                  applicationSourceValues: submitted,
+                  values: {},
+                })
+                  .then(() => {
+                    setOpen(false);
+                    setMessage("Логин и пароль сохранены только в сессии");
+                  })
+                  .catch(() =>
+                    setMessage(
+                      "Не удалось сохранить логин и пароль. Проверьте, что настройки registry сохранены в проекте.",
+                    ),
+                  )
+                  .finally(() => setSaving(false));
+              }}
+            >
+              {fields.map((field) => (
+                <label key={field.source}>
+                  {field.label}
+                  <input
+                    type={field.password ? "password" : "text"}
+                    autoComplete={field.password ? "new-password" : "username"}
+                    required
+                    disabled={runtimeDisabled || saving}
+                    value={values[field.source] || ""}
+                    onChange={(event) =>
+                      setValues((current) => ({
+                        ...current,
+                        [field.source]: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+              ))}
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => {
+                  setOpen(false);
+                  setValues({});
+                }}
+              >
+                Отмена
+              </button>
+              <button
+                type="submit"
+                disabled={runtimeDisabled || saving || !projectRevision}
+              >
+                Сохранить в сессии
+              </button>
+            </form>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+@@END
 @@PORTABLE {"path":"frontend/src/ApplicationRuntimeSecretField.tsx","mode":420,"size":6668,"sha256":"13d06c24738a3ec430137f387186fd3d566300e1f059a37fb5e42674b9e4fded","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":6668}
 import { useState } from "react";
 import type {
@@ -120520,395 +120885,6 @@ package frontend
 
 type Dispatcher interface {
 	ProcessMessage(message string, sender Frontend) (string, error)
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/frontend/dispatcher/browser.go","mode":420,"size":509,"sha256":"e933b930f9abf64cef339190e24d861c4e8054770b3ff7b390fc5ba3ff45ae9e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":509}
-package dispatcher
-
-import (
-	"errors"
-
-	"github.com/wailsapp/wails/v2/internal/frontend"
-)
-
-// processBrowserMessage processing browser messages
-func (d *Dispatcher) processBrowserMessage(message string, sender frontend.Frontend) (string, error) {
-	if len(message) < 2 {
-		return "", errors.New("Invalid Browser Message: " + message)
-	}
-	switch message[1] {
-	case 'O':
-		url := message[3:]
-		go sender.BrowserOpenURL(url)
-	default:
-		d.log.Error("unknown Browser message: %s", message)
-	}
-
-	return "", nil
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/frontend/dispatcher/calls.go","mode":420,"size":2261,"sha256":"cdc5752a8f78661f00dac1eb98798c7c4349121fa811e54cdfe526169ca05fd9","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2261}
-package dispatcher
-
-import (
-	"encoding/json"
-	"fmt"
-	"strings"
-
-	"github.com/wailsapp/wails/v2/internal/frontend"
-)
-
-type callMessage struct {
-	Name       string            `json:"name"`
-	Args       []json.RawMessage `json:"args"`
-	CallbackID string            `json:"callbackID"`
-}
-
-func (d *Dispatcher) processCallMessage(message string, sender frontend.Frontend) (string, error) {
-	var payload callMessage
-	err := json.Unmarshal([]byte(message[1:]), &payload)
-	if err != nil {
-		return "", err
-	}
-
-	var result interface{}
-
-	// Handle different calls
-	switch true {
-	case strings.HasPrefix(payload.Name, systemCallPrefix):
-		result, err = d.processSystemCall(payload, sender)
-	default:
-		// Lookup method
-		registeredMethod := d.bindingsDB.GetMethod(payload.Name)
-
-		// Check we have it
-		if registeredMethod == nil {
-			return "", fmt.Errorf("method '%s' not registered", payload.Name)
-		}
-
-		args, err2 := registeredMethod.ParseArgs(payload.Args)
-		if err2 != nil {
-			errmsg := fmt.Errorf("error parsing arguments: %s", err2.Error())
-			result, _ := d.NewErrorCallback(errmsg.Error(), payload.CallbackID)
-			return result, errmsg
-		}
-		result, err = registeredMethod.Call(args)
-	}
-
-	callbackMessage := &CallbackMessage{
-		CallbackID: payload.CallbackID,
-	}
-	if err != nil {
-		// Use the error formatter if one was provided
-		if d.errfmt != nil {
-			callbackMessage.Err = d.errfmt(err)
-		} else {
-			callbackMessage.Err = err.Error()
-		}
-	} else {
-		callbackMessage.Result = result
-	}
-	messageData, err := json.Marshal(callbackMessage)
-	d.log.Trace("json call result data: %+v\n", string(messageData))
-	if err != nil {
-		// what now?
-		d.log.Fatal("%s", err.Error())
-	}
-
-	return "c" + string(messageData), nil
-}
-
-// CallbackMessage defines a message that contains the result of a call
-type CallbackMessage struct {
-	Result     interface{} `json:"result"`
-	Err        any         `json:"error"`
-	CallbackID string      `json:"callbackid"`
-}
-
-func (d *Dispatcher) NewErrorCallback(message string, callbackID string) (string, error) {
-	result := &CallbackMessage{
-		CallbackID: callbackID,
-		Err:        message,
-	}
-	messageData, err := json.Marshal(result)
-	d.log.Trace("json call result data: %+v\n", string(messageData))
-	return string(messageData), err
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/frontend/dispatcher/dispatcher.go","mode":420,"size":2118,"sha256":"baa6bc120411c07323e66476bb14a9872088a970449a600a765890012beb3133","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2118}
-package dispatcher
-
-import (
-	"context"
-	"fmt"
-	"github.com/pkg/errors"
-	"github.com/wailsapp/wails/v2/internal/binding"
-	"github.com/wailsapp/wails/v2/internal/frontend"
-	"github.com/wailsapp/wails/v2/internal/logger"
-	"github.com/wailsapp/wails/v2/pkg/options"
-)
-
-type Dispatcher struct {
-	log                  *logger.Logger
-	bindings             *binding.Bindings
-	events               frontend.Events
-	bindingsDB           *binding.DB
-	ctx                  context.Context
-	errfmt               options.ErrorFormatter
-	disablePanicRecovery bool
-}
-
-func NewDispatcher(ctx context.Context, log *logger.Logger, bindings *binding.Bindings, events frontend.Events, errfmt options.ErrorFormatter, disablePanicRecovery bool) *Dispatcher {
-	return &Dispatcher{
-		log:                  log,
-		bindings:             bindings,
-		events:               events,
-		bindingsDB:           bindings.DB(),
-		ctx:                  ctx,
-		errfmt:               errfmt,
-		disablePanicRecovery: disablePanicRecovery,
-	}
-}
-
-func (d *Dispatcher) ProcessMessage(message string, sender frontend.Frontend) (_ string, err error) {
-	if !d.disablePanicRecovery {
-		defer func() {
-			if e := recover(); e != nil {
-				if errPanic, ok := e.(error); ok {
-					err = errPanic
-				} else {
-					err = fmt.Errorf("%v", e)
-				}
-			}
-			if err != nil {
-				d.log.Error("process message error: %s -> %s", message, err)
-			}
-		}()
-	}
-
-	if message == "" {
-		return "", errors.New("No message to process")
-	}
-	switch message[0] {
-	case 'L':
-		return d.processLogMessage(message)
-	case 'E':
-		return d.processEventMessage(message, sender)
-	case 'C':
-		return d.processCallMessage(message, sender)
-	case 'c':
-		return d.processSecureCallMessage(message, sender)
-	case 'W':
-		return d.processWindowMessage(message, sender)
-	case 'B':
-		return d.processBrowserMessage(message, sender)
-	case 'D':
-		return d.processDragAndDropMessage(message)
-	case 'Q':
-		sender.Quit()
-		return "", nil
-	case 'S':
-		sender.Show()
-		return "", nil
-	case 'H':
-		sender.Hide()
-		return "", nil
-	default:
-		return "", errors.New("Unknown message from front end: " + message)
-	}
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/frontend/dispatcher/draganddrop.go","mode":420,"size":887,"sha256":"78285532e55ba30d5b9131b9fb7cfd98415c6d06577085eab59d7e9b1e8d9613","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":887}
-package dispatcher
-
-import (
-	"errors"
-	"strconv"
-	"strings"
-)
-
-func (d *Dispatcher) processDragAndDropMessage(message string) (string, error) {
-	switch message[1] {
-	case 'D':
-		msg := strings.SplitN(message[3:], ":", 3)
-		if len(msg) != 3 {
-			return "", errors.New("Invalid drag and drop Message: " + message)
-		}
-
-		x, err := strconv.Atoi(msg[0])
-		if err != nil {
-			return "", errors.New("Invalid x coordinate in drag and drop Message: " + message)
-		}
-
-		y, err := strconv.Atoi(msg[1])
-		if err != nil {
-			return "", errors.New("Invalid y coordinate in drag and drop Message: " + message)
-		}
-
-		paths := strings.Split(msg[2], "\n")
-		if len(paths) < 1 {
-			return "", errors.New("Invalid drag and drop Message: " + message)
-		}
-
-		d.events.Emit("wails:file-drop", x, y, paths)
-	default:
-		return "", errors.New("Invalid drag and drop Message: " + message)
-	}
-
-	return "", nil
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/frontend/dispatcher/events.go","mode":420,"size":720,"sha256":"0dff8333c32685c21995849dc5a2d54d242562c69de64004e9e09f2eb44aefdd","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":720}
-package dispatcher
-
-import (
-	"encoding/json"
-	"errors"
-
-	"github.com/wailsapp/wails/v2/internal/frontend"
-)
-
-type EventMessage struct {
-	Name string        `json:"name"`
-	Data []interface{} `json:"data"`
-}
-
-func (d *Dispatcher) processEventMessage(message string, sender frontend.Frontend) (string, error) {
-	if len(message) < 3 {
-		return "", errors.New("Invalid Event Message: " + message)
-	}
-
-	switch message[1] {
-	case 'E':
-		var eventMessage EventMessage
-		err := json.Unmarshal([]byte(message[2:]), &eventMessage)
-		if err != nil {
-			return "", err
-		}
-		go d.events.Notify(sender, eventMessage.Name, eventMessage.Data...)
-	case 'X':
-		eventName := message[2:]
-		go d.events.Off(eventName)
-	}
-
-	return "", nil
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/frontend/dispatcher/log.go","mode":420,"size":1099,"sha256":"7024703f3d18f0d763138c35f023628b9074de5d5974e92af3e3b11756b3aa0b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1099}
-package dispatcher
-
-import (
-	"github.com/pkg/errors"
-	"github.com/wailsapp/wails/v2/internal/logger"
-	pkgLogger "github.com/wailsapp/wails/v2/pkg/logger"
-)
-
-var logLevelMap = map[byte]logger.LogLevel{
-	'1': pkgLogger.TRACE,
-	'2': pkgLogger.DEBUG,
-	'3': pkgLogger.INFO,
-	'4': pkgLogger.WARNING,
-	'5': pkgLogger.ERROR,
-}
-
-func (d *Dispatcher) processLogMessage(message string) (string, error) {
-	if len(message) < 3 {
-		return "", errors.New("Invalid Log Message: " + message)
-	}
-
-	messageText := message[2:]
-
-	switch message[1] {
-	case 'T':
-		d.log.Trace("%s", messageText)
-	case 'P':
-		d.log.Print(messageText)
-	case 'D':
-		d.log.Debug("%s", messageText)
-	case 'I':
-		d.log.Info("%s", messageText)
-	case 'W':
-		d.log.Warning("%s", messageText)
-	case 'E':
-		d.log.Error("%s", messageText)
-	case 'F':
-		d.log.Fatal("%s", messageText)
-	case 'S':
-		loglevel, exists := logLevelMap[message[2]]
-		if !exists {
-			return "", errors.New("Invalid Set Log Level Message: " + message)
-		}
-		d.log.SetLogLevel(loglevel)
-	default:
-		return "", errors.New("Invalid Log Message: " + message)
-	}
-	return "", nil
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/frontend/dispatcher/securecalls.go","mode":420,"size":1423,"sha256":"533a0a0741c6126e804eed6c9952dfd4ddfbd88332226c98e30b2188d5ac94f2","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1423}
-package dispatcher
-
-import (
-	"encoding/json"
-	"fmt"
-
-	"github.com/wailsapp/wails/v2/internal/frontend"
-)
-
-type secureCallMessage struct {
-	ID         int               `json:"id"`
-	Args       []json.RawMessage `json:"args"`
-	CallbackID string            `json:"callbackID"`
-}
-
-func (d *Dispatcher) processSecureCallMessage(message string, sender frontend.Frontend) (string, error) {
-	var payload secureCallMessage
-	err := json.Unmarshal([]byte(message[1:]), &payload)
-	if err != nil {
-		return "", err
-	}
-
-	var result interface{}
-
-	// Lookup method
-	registeredMethod := d.bindingsDB.GetObfuscatedMethod(payload.ID)
-
-	// Check we have it
-	if registeredMethod == nil {
-		return "", fmt.Errorf("method '%d' not registered", payload.ID)
-	}
-
-	args, err2 := registeredMethod.ParseArgs(payload.Args)
-	if err2 != nil {
-		errmsg := fmt.Errorf("error parsing arguments: %s", err2.Error())
-		result, _ := d.NewErrorCallback(errmsg.Error(), payload.CallbackID)
-		return result, errmsg
-	}
-	result, err = registeredMethod.Call(args)
-
-	callbackMessage := &CallbackMessage{
-		CallbackID: payload.CallbackID,
-	}
-	if err != nil {
-		callbackMessage.Err = err.Error()
-	} else {
-		callbackMessage.Result = result
-	}
-	messageData, err := json.Marshal(callbackMessage)
-	d.log.Trace("json call result data: %+v\n", string(messageData))
-	if err != nil {
-		// what now?
-		d.log.Fatal("%s", err.Error())
-	}
-
-	return "c" + string(messageData), nil
 }
 
 @@END

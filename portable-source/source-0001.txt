@@ -72905,13 +72905,14 @@ services:
               memory: 6G
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/ef-backend/1.0.0/application.yml","mode":420,"size":515,"sha256":"883a034d1b00ad1c6d67d58b035e997c3f3ef0c38ecdc3b1d6c5cd6712ac6f24","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":515}
+@@PORTABLE {"path":"examples/sdku/application-packages/ef-backend/1.0.0/application.yml","mode":420,"size":553,"sha256":"efd1a6521f52529dac5deeb1439171e61931223dc79fb62ea423e7677560eb61","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":553}
 {
   "apiVersion": "platform.installer/application-package/v1alpha1",
   "files": [
     "roles/application_ef-backend/defaults/main.yml",
     "roles/application_ef-backend/templates/compose.yml.j2",
-    "roles/application_ef-backend/templates/agent.hcl.j2"
+    "roles/application_ef-backend/templates/agent.hcl.j2",
+    "assets/keycloak-client.json.j2"
   ],
   "kind": "ApplicationPackage",
   "name": "ef-backend",
@@ -72920,6 +72921,235 @@ services:
     "compose_template": "roles/application_ef-backend/templates/compose.yml.j2"
   },
   "version": "1.0.0"
+}
+
+@@END
+@@PORTABLE {"path":"examples/sdku/application-packages/ef-backend/1.0.0/assets/keycloak-client.json.j2","mode":420,"size":7405,"sha256":"95798d22dfc7ee743882144bbf37654657d8e393f23d8fc7cb75ac9a64f33be3","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7405}
+{
+  "clientId": "{{ application_instance_id }}",
+  "name": "{{ application_instance_id }}",
+  "rootUrl": "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/",
+  "adminUrl": "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/",
+  "baseUrl": "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/",
+  "surrogateAuthRequired": false,
+  "enabled": true,
+  "alwaysDisplayInConsole": false,
+  "bearerOnly": false,
+  "consentRequired": false,
+  "standardFlowEnabled": true,
+  "implicitFlowEnabled": true,
+  "directAccessGrantsEnabled": true,
+  "serviceAccountsEnabled": true,
+  "publicClient": false,
+  "frontchannelLogout": true,
+  "fullScopeAllowed": true,
+  "clientAuthenticatorType": "client-secret",
+  "protocol": "openid-connect",
+  "notBefore": 0,
+  "nodeReRegistrationTimeout": -1,
+  "redirectUris": [
+    "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/*"
+  ],
+  "webOrigins": [
+    "{{ application_connections.sso.parameters.proxy_url }}"
+  ],
+  "attributes": {
+    "backchannel.logout.revoke.offline.tokens": "false",
+    "backchannel.logout.session.required": "true",
+    "backend": "true",
+    "display.on.consent.screen": "false",
+    "isOpenId": "false",
+    "oauth2.device.authorization.grant.enabled": "true",
+    "oidc.ciba.grant.enabled": "true",
+    "post.logout.redirect.uris": "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/",
+    "ui_available": "false"
+  },
+  "authenticationFlowBindingOverrides": {},
+  "protocolMappers": [
+    {
+      "name": "Client Host",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usersessionmodel-note-mapper",
+      "consentRequired": false,
+      "config": {
+        "access.token.claim": "true",
+        "claim.name": "clientHost",
+        "id.token.claim": "true",
+        "introspection.token.claim": "true",
+        "jsonType.label": "String",
+        "user.session.note": "clientHost",
+        "userinfo.token.claim": "true"
+      }
+    },
+    {
+      "name": "Client ID",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usersessionmodel-note-mapper",
+      "consentRequired": false,
+      "config": {
+        "access.token.claim": "true",
+        "claim.name": "client_id",
+        "id.token.claim": "true",
+        "introspection.token.claim": "true",
+        "jsonType.label": "String",
+        "user.session.note": "client_id",
+        "userinfo.token.claim": "true"
+      }
+    },
+    {
+      "name": "Client IP Address",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usersessionmodel-note-mapper",
+      "consentRequired": false,
+      "config": {
+        "access.token.claim": "true",
+        "claim.name": "clientAddress",
+        "id.token.claim": "true",
+        "introspection.token.claim": "true",
+        "jsonType.label": "String",
+        "user.session.note": "clientAddress",
+        "userinfo.token.claim": "true"
+      }
+    }
+  ],
+  "defaultClientScopes": [
+    "acr",
+    "basic",
+    "email",
+    "profile",
+    "roles",
+    "web-origins"
+  ],
+  "optionalClientScopes": [
+    "address",
+    "microprofile-jwt",
+    "phone"
+  ],
+  "clientRoles": [
+    {
+      "name": "Common",
+      "description": "",
+      "composite": false,
+      "attributes": {}
+    },
+    {
+      "name": "uma_protection",
+      "description": "",
+      "composite": false,
+      "attributes": {}
+    },
+    {
+      "name": "viewCurrentDataMT",
+      "description": "",
+      "composite": false,
+      "attributes": {}
+    }
+  ],
+  "authorizationServicesEnabled": true,
+  "authorizationSettings": {
+    "allowRemoteResourceManagement": true,
+    "policyEnforcementMode": "ENFORCING",
+    "decisionStrategy": "UNANIMOUS",
+    "resources": [
+      {
+        "name": "common",
+        "ownerManagedAccess": false,
+        "displayName": "master",
+        "attributes": {},
+        "uris": [
+          "/*/*/*/*/*",
+          "/actuator/*",
+          "/diag/*",
+          "/v1/configurator/categories",
+          "/v1/configurator/categories/",
+          "/v1/configurator/categories/*/categories",
+          "/v1/configurator/categories/category/*/widgets",
+          "/v1/configurator/categories/category/*/widgets-only",
+          "/v1/configurator/category",
+          "/v1/configurator/category/",
+          "/v1/configurator/category/*",
+          "/v1/configurator/category/last/folders",
+          "/v1/configurator/category/name/*",
+          "/v1/configurator/category/widget/*",
+          "/v1/configurator/category/widget/svg/*",
+          "/v1/configurator/category/widgetcount/*",
+          "/v1/configurator/category/widgetcount/all",
+          "/v1/configurator/favorite-widgets",
+          "/v1/configurator/favorite-widgets/",
+          "/v1/configurator/favorite-widgets/*",
+          "/v1/configurator/file/list/content",
+          "/v1/configurator/file/list/names",
+          "/v1/configurator/file/mod/content",
+          "/v1/configurator/file/mod/struct",
+          "/v1/configurator/file/read/content",
+          "/v1/configurator/file/read/struct",
+          "/v1/configurator/screens",
+          "/v1/configurator/screens/*",
+          "/v1/configurator/screens/*/lines",
+          "/v1/configurator/screens/*/node",
+          "/v1/configurator/screens/*/nodes",
+          "/v1/configurator/screens/node/*",
+          "/v1/configurator/svg/*",
+          "/v1/configurator/tag/",
+          "/v1/configurator/tag/*",
+          "/v1/configurator/tag/*/widget/*",
+          "/v1/configurator/tag/ef/widgets-exteded",
+          "/v1/configurator/tag/widget/*/tags",
+          "/v1/configurator/widget",
+          "/v1/configurator/widget-lock/*",
+          "/v1/configurator/widgets",
+          "/v1/configurator/widgets/*",
+          "/v1/configurator/widgets/*/clone",
+          "/v1/configurator/widgets/*/for-edit",
+          "/v1/configurator/widgets/*/history",
+          "/v1/configurator/widgets/*/release",
+          "/v1/configurator/widgets/*/removeRelease",
+          "/v1/configurator/widgets/*/usage/widgets",
+          "/v1/configurator/widgets/*/versions",
+          "/v1/configurator/widgets/ext/",
+          "/v1/configurator/widgets/ext/*",
+          "/v1/configurator/widgets/ext/*/clone",
+          "/v1/configurator/widgets/ext/*/versions",
+          "/v1/configurator/widgets/my/last",
+          "/v1/configurator/widgets/my/temp",
+          "/v1/configurator/widgets/with-content",
+          "/v1/user/ui-parameters",
+          "/v2/branch",
+          "/v2/branch/types",
+          "/v2/editor",
+          "/v2/panel",
+          "/v2/panel/all",
+          "/v2/panel/by-tag/*",
+          "/v2/tree"
+        ],
+        "icon_uri": ""
+      }
+    ],
+    "policies": [
+      {
+        "name": "common",
+        "description": "",
+        "type": "role",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "roles": "[{\"id\":\"{{ application_instance_id }}/Common\",\"required\":false}]"
+        }
+      },
+      {
+        "name": "Разрешение_common",
+        "description": "",
+        "type": "resource",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "applyPolicies": "[\"common\"]",
+          "resources": "[\"common\"]"
+        }
+      }
+    ],
+    "scopes": []
+  }
 }
 
 @@END
@@ -74029,7 +74259,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/hmi-backend/1.0.0/assets/keycloak-client.json.j2","mode":420,"size":7405,"sha256":"95798d22dfc7ee743882144bbf37654657d8e393f23d8fc7cb75ac9a64f33be3","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7405}
+@@PORTABLE {"path":"examples/sdku/application-packages/hmi-backend/1.0.0/assets/keycloak-client.json.j2","mode":420,"size":11960,"sha256":"9ef2becbbbd8794ea2ed09244d932dc8b445b1cf8a9764d625faf36f2a516e81","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":11960}
 {
   "clientId": "{{ application_instance_id }}",
   "name": "{{ application_instance_id }}",
@@ -74067,6 +74297,7 @@ services:
     "oauth2.device.authorization.grant.enabled": "true",
     "oidc.ciba.grant.enabled": "true",
     "post.logout.redirect.uris": "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/",
+    "realm_client": "false",
     "ui_available": "false"
   },
   "authenticationFlowBindingOverrides": {},
@@ -74123,6 +74354,7 @@ services:
     "email",
     "profile",
     "roles",
+    "service_account",
     "web-origins"
   ],
   "optionalClientScopes": [
@@ -74132,19 +74364,37 @@ services:
   ],
   "clientRoles": [
     {
-      "name": "Common",
-      "description": "",
-      "composite": false,
-      "attributes": {}
-    },
-    {
       "name": "uma_protection",
       "description": "",
       "composite": false,
       "attributes": {}
     },
     {
-      "name": "viewCurrentDataMT",
+      "name": "Администратор",
+      "description": "",
+      "composite": false,
+      "attributes": {}
+    },
+    {
+      "name": "Диспетчер",
+      "description": "",
+      "composite": false,
+      "attributes": {}
+    },
+    {
+      "name": "Инженер",
+      "description": "",
+      "composite": false,
+      "attributes": {}
+    },
+    {
+      "name": "КураторИБ",
+      "description": "",
+      "composite": false,
+      "attributes": {}
+    },
+    {
+      "name": "Прочие",
       "description": "",
       "composite": false,
       "attributes": {}
@@ -74157,99 +74407,279 @@ services:
     "decisionStrategy": "UNANIMOUS",
     "resources": [
       {
-        "name": "common",
+        "name": "resourceAdministrator",
         "ownerManagedAccess": false,
         "displayName": "master",
         "attributes": {},
         "uris": [
-          "/*/*/*/*/*",
           "/actuator/*",
           "/diag/*",
-          "/v1/configurator/categories",
-          "/v1/configurator/categories/",
-          "/v1/configurator/categories/*/categories",
-          "/v1/configurator/categories/category/*/widgets",
-          "/v1/configurator/categories/category/*/widgets-only",
-          "/v1/configurator/category",
-          "/v1/configurator/category/",
-          "/v1/configurator/category/*",
-          "/v1/configurator/category/last/folders",
-          "/v1/configurator/category/name/*",
-          "/v1/configurator/category/widget/*",
-          "/v1/configurator/category/widget/svg/*",
-          "/v1/configurator/category/widgetcount/*",
-          "/v1/configurator/category/widgetcount/all",
-          "/v1/configurator/favorite-widgets",
-          "/v1/configurator/favorite-widgets/",
-          "/v1/configurator/favorite-widgets/*",
-          "/v1/configurator/file/list/content",
-          "/v1/configurator/file/list/names",
-          "/v1/configurator/file/mod/content",
-          "/v1/configurator/file/mod/struct",
-          "/v1/configurator/file/read/content",
-          "/v1/configurator/file/read/struct",
-          "/v1/configurator/screens",
-          "/v1/configurator/screens/*",
-          "/v1/configurator/screens/*/lines",
-          "/v1/configurator/screens/*/node",
-          "/v1/configurator/screens/*/nodes",
-          "/v1/configurator/screens/node/*",
-          "/v1/configurator/svg/*",
-          "/v1/configurator/tag/",
-          "/v1/configurator/tag/*",
-          "/v1/configurator/tag/*/widget/*",
-          "/v1/configurator/tag/ef/widgets-exteded",
-          "/v1/configurator/tag/widget/*/tags",
-          "/v1/configurator/widget",
-          "/v1/configurator/widget-lock/*",
-          "/v1/configurator/widgets",
-          "/v1/configurator/widgets/*",
-          "/v1/configurator/widgets/*/clone",
-          "/v1/configurator/widgets/*/for-edit",
-          "/v1/configurator/widgets/*/history",
-          "/v1/configurator/widgets/*/release",
-          "/v1/configurator/widgets/*/removeRelease",
-          "/v1/configurator/widgets/*/usage/widgets",
-          "/v1/configurator/widgets/*/versions",
-          "/v1/configurator/widgets/ext/",
-          "/v1/configurator/widgets/ext/*",
-          "/v1/configurator/widgets/ext/*/clone",
-          "/v1/configurator/widgets/ext/*/versions",
-          "/v1/configurator/widgets/my/last",
-          "/v1/configurator/widgets/my/temp",
-          "/v1/configurator/widgets/with-content",
-          "/v1/user/ui-parameters",
-          "/v2/branch",
-          "/v2/branch/types",
-          "/v2/editor",
-          "/v2/panel",
-          "/v2/panel/all",
-          "/v2/panel/by-tag/*",
-          "/v2/tree"
+          "/get-tags-meta",
+          "/hotlink",
+          "/logout",
+          "/object-labels",
+          "/object-names",
+          "/object-types",
+          "/tag-get",
+          "/tag-labels",
+          "/tag-monitor",
+          "/tag-monitor.html",
+          "/tag-names",
+          "/tag-names-labels",
+          "/tag-set",
+          "/tag-value-type",
+          "/tags-get",
+          "/tags-get-history",
+          "/tags-get-history-flat",
+          "/tags-set",
+          "/v1/configurator/project",
+          "/v2/hotlink",
+          "/v2/tag-get",
+          "/v2/tag-names",
+          "/v2/tag-set",
+          "/v2/tags-get",
+          "/v2/tags-set",
+          "/v2/tags-teg"
+        ],
+        "icon_uri": ""
+      },
+      {
+        "name": "resourceCuratorIB",
+        "ownerManagedAccess": false,
+        "displayName": "",
+        "attributes": {},
+        "uris": [
+          "/",
+          "/get-tags-meta",
+          "/hotlink",
+          "/logout",
+          "/object-labels",
+          "/object-names",
+          "/tag-get",
+          "/tag-labels",
+          "/tag-monitor",
+          "/tag-monitor.html",
+          "/tag-names",
+          "/tag-names-labels",
+          "/tags-get",
+          "/tags-get-history",
+          "/tags-get-history-flat",
+          "/v1/configurator/project",
+          "/v2/hotlink",
+          "/v2/tag-get",
+          "/v2/tag-names",
+          "/v2/tags-get"
+        ],
+        "icon_uri": ""
+      },
+      {
+        "name": "resourceDispatcher",
+        "ownerManagedAccess": false,
+        "displayName": "master",
+        "attributes": {},
+        "uris": [
+          "/",
+          "/actuator/*",
+          "/diag/*",
+          "/get-tags-meta",
+          "/hotlink",
+          "/logout",
+          "/object-labels",
+          "/object-names",
+          "/tag-get",
+          "/tag-labels",
+          "/tag-monitor",
+          "/tag-monitor.html",
+          "/tag-names",
+          "/tag-names-labels",
+          "/tag-set",
+          "/tag-value-type",
+          "/tags-get",
+          "/tags-get-history",
+          "/tags-get-history-flat",
+          "/tags-set",
+          "/v1/configurator/project",
+          "/v2/hotlink",
+          "/v2/tag-get",
+          "/v2/tag-names",
+          "/v2/tag-set",
+          "/v2/tags-get",
+          "/v2/tags-set"
+        ],
+        "icon_uri": ""
+      },
+      {
+        "name": "resourceEngineer",
+        "ownerManagedAccess": false,
+        "displayName": "master",
+        "attributes": {},
+        "uris": [
+          "/",
+          "/actuator/*",
+          "/diag/*",
+          "/get-tags-meta",
+          "/hotlink",
+          "/logout",
+          "/object",
+          "/object-labels",
+          "/object-names",
+          "/object-types",
+          "/object/*",
+          "/tag-get",
+          "/tag-labels",
+          "/tag-monitor",
+          "/tag-monitor.html",
+          "/tag-names",
+          "/tag-names-labels",
+          "/tag-set",
+          "/tag-set-and-wait",
+          "/tag-value-type",
+          "/tags-get",
+          "/tags-get-history",
+          "/tags-get-history-flat",
+          "/tags-set",
+          "/v1/configurator/project",
+          "/v2/hotlink",
+          "/v2/tag-get",
+          "/v2/tag-names",
+          "/v2/tag-set",
+          "/v2/tags-get",
+          "/v2/tags-se",
+          "/v2/tags-set"
+        ],
+        "icon_uri": ""
+      },
+      {
+        "name": "resourceOthers",
+        "ownerManagedAccess": false,
+        "displayName": "",
+        "attributes": {},
+        "uris": [
+          "/",
+          "/get-tags-meta",
+          "/hotlink",
+          "/logout",
+          "/object-labels",
+          "/object-names",
+          "/tag-get",
+          "/tag-labels",
+          "/tag-names",
+          "/tags-get",
+          "/tags-get-history",
+          "/tags-get-history-flat",
+          "/v1/configurator/project",
+          "/v2/hotlink",
+          "/v2/tag-get",
+          "/v2/tag-names",
+          "/v2/tags-get"
         ],
         "icon_uri": ""
       }
     ],
     "policies": [
       {
-        "name": "common",
+        "name": "Политика Куратора ИБ",
         "description": "",
         "type": "role",
         "logic": "POSITIVE",
         "decisionStrategy": "UNANIMOUS",
         "config": {
-          "roles": "[{\"id\":\"{{ application_instance_id }}/Common\",\"required\":false}]"
+          "roles": "[{\"id\":\"{{ application_instance_id }}/КураторИБ\",\"required\":false}]"
         }
       },
       {
-        "name": "Разрешение_common",
+        "name": "Политика администратора",
+        "description": "",
+        "type": "role",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "roles": "[{\"id\":\"{{ application_instance_id }}/Администратор\",\"required\":false}]"
+        }
+      },
+      {
+        "name": "Политика диспетчера",
+        "description": "",
+        "type": "role",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "roles": "[{\"id\":\"{{ application_instance_id }}/Диспетчер\",\"required\":false}]"
+        }
+      },
+      {
+        "name": "Политика инженера",
+        "description": "",
+        "type": "role",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "roles": "[{\"id\":\"{{ application_instance_id }}/Инженер\",\"required\":false}]"
+        }
+      },
+      {
+        "name": "Политика прочие",
+        "description": "",
+        "type": "role",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "roles": "[{\"id\":\"{{ application_instance_id }}/Прочие\",\"required\":false}]"
+        }
+      },
+      {
+        "name": "Разрешения_администратора",
         "description": "",
         "type": "resource",
         "logic": "POSITIVE",
         "decisionStrategy": "UNANIMOUS",
         "config": {
-          "applyPolicies": "[\"common\"]",
-          "resources": "[\"common\"]"
+          "applyPolicies": "[\"Политика администратора\"]",
+          "resources": "[\"resourceAdministrator\"]"
+        }
+      },
+      {
+        "name": "Разрешения_диспетчера",
+        "description": "",
+        "type": "resource",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "applyPolicies": "[\"Политика диспетчера\"]",
+          "resources": "[\"resourceDispatcher\"]"
+        }
+      },
+      {
+        "name": "Разрешения_инженера",
+        "description": "",
+        "type": "resource",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "applyPolicies": "[\"Политика инженера\"]",
+          "resources": "[\"resourceEngineer\"]"
+        }
+      },
+      {
+        "name": "Разрешения_куратора_иб",
+        "description": "",
+        "type": "resource",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "applyPolicies": "[\"Политика Куратора ИБ\"]",
+          "resources": "[\"resourceCuratorIB\"]"
+        }
+      },
+      {
+        "name": "Разрешения_прочие",
+        "description": "",
+        "type": "resource",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "applyPolicies": "[\"Политика прочие\"]",
+          "resources": "[\"resourceOthers\"]"
         }
       }
     ],
@@ -79536,7 +79966,7 @@ platform_application_libraries:
   sdku-main: {}
 
 @@END
-@@PORTABLE {"path":"examples/sdku/import-catalog.json","mode":420,"size":5771,"sha256":"2c4e448eb23650826519215c5183c1709ba361b663924e8a74d7ed2e996091d3","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5771}
+@@PORTABLE {"path":"examples/sdku/import-catalog.json","mode":420,"size":5771,"sha256":"a5e5763dc50667f5467254d33065dbf4a0c9284d85bb0105392101c0b6384984","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5771}
 [
   {
     "digest": "sha256:63a4a72c9efb74e36be186f6c55c74e791f6ae9b45f5a77a273dc7ba5a2892a3",
@@ -79560,7 +79990,7 @@ platform_application_libraries:
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:ae8d10e84c84e2e854d3afb819ac95167bbfd39cfb61b36cf99949a18178f001",
+    "digest": "sha256:b50b98fbf468aa0ffc5468a2d5c258e49d5e968118111279dd114512875d8ec0",
     "kind": "application",
     "name": "ef-backend",
     "sourceDirectory": ".",
@@ -79588,7 +80018,7 @@ platform_application_libraries:
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:09f5fa852b8c191863289642236cf92b3735fbf28786245a5620ebcd83c25341",
+    "digest": "sha256:6462e2e1c0f9a1db1831132aef80862ff957962cf4c37a9dad805c6dd517180b",
     "kind": "application",
     "name": "hmi-backend",
     "sourceDirectory": ".",
@@ -99549,371 +99979,6 @@ export function ApplicationProvidedConnections({
         );
       })}
     </>
-  );
-}
-
-@@END
-@@PORTABLE {"path":"frontend/src/ApplicationReadiness.tsx","mode":420,"size":4965,"sha256":"25a6cd03250bb4a341d4d5bbdfb604baeeae372407d747521d40e0351fa0b3f4","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4965}
-import { useState } from "react";
-import type { ObjectValue } from "./application-draft";
-
-export function ApplicationReadiness({
-  value,
-  defaults,
-  disabled,
-  onSave,
-  onReset,
-  onDirtyChange,
-}: {
-  value: ObjectValue;
-  defaults: ObjectValue;
-  disabled: boolean;
-  onSave: (value: ObjectValue) => Promise<boolean>;
-  onReset: () => Promise<boolean>;
-  onDirtyChange: (dirty: boolean) => void;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState<Record<string, string>>({});
-  const current = (key: string) =>
-    draft[key] ?? String(value[key] ?? defaults[key] ?? "");
-  const authored = Object.keys(value).length > 0;
-  const dirty = Object.keys(draft).length > 0;
-  const valid =
-    ["container", "healthcheck"].includes(current("mode")) &&
-    [
-      ["retries", 60],
-      ["delay", 30],
-    ].every(([key, max]) => {
-      const text = current(String(key));
-      return (
-        text === "" ||
-        (Number.isInteger(Number(text)) &&
-          Number(text) >= 1 &&
-          Number(text) <= Number(max))
-      );
-    });
-  const change = (key: string, text: string) => {
-    setDraft((previous) => ({ ...previous, [key]: text }));
-    onDirtyChange(true);
-  };
-  const origin = (key: string) =>
-    Object.hasOwn(draft, key)
-      ? "Не сохранено"
-      : Object.hasOwn(value, key)
-        ? "Переопределено"
-        : Object.hasOwn(defaults, key)
-          ? "Из пакета"
-          : "По умолчанию Core";
-  return (
-    <section className="application-section application-readiness">
-      <div className="row">
-        <h3>Проверка готовности</h3>
-        <button
-          type="button"
-          className="application-link"
-          disabled={disabled}
-          onClick={() => setEditing(true)}
-        >
-          Изменить readiness
-        </button>
-        {authored && (
-          <button
-            className="application-link"
-            disabled={disabled}
-            onClick={async () => {
-              if (await onReset()) {
-                setDraft({});
-                setEditing(false);
-                onDirtyChange(false);
-              }
-            }}
-          >
-            Сбросить readiness к пакету
-          </button>
-        )}
-      </div>
-      <div className="application-readiness-fields">
-        <label>
-          Режим проверки
-          <select
-            aria-label="Режим проверки"
-            value={current("mode")}
-            disabled={disabled || !editing}
-            onChange={(e) => change("mode", e.target.value)}
-          >
-            <option value="">По умолчанию Core</option>
-            <option value="container">Контейнер запущен</option>
-            <option value="healthcheck">Docker healthcheck</option>
-          </select>
-          <small>{origin("mode")}</small>
-        </label>
-        {(
-          [
-            ["retries", "Число попыток", 60],
-            ["delay", "Интервал, сек.", 30],
-          ] as const
-        ).map(([key, label, max]) => (
-          <label key={key}>
-            {label}
-            <input
-              aria-label={label}
-              type="number"
-              min={1}
-              max={max}
-              step={1}
-              placeholder="По умолчанию Core"
-              value={current(key)}
-              disabled={disabled || !editing}
-              onChange={(e) => change(key, e.target.value)}
-            />
-            <small>{origin(key)}</small>
-          </label>
-        ))}
-      </div>
-      {current("mode") === "healthcheck" && (
-        <p className="muted">
-          Docker healthcheck должен быть объявлен в пакете. Успешность проверки
-          определяется при выполнении плана.
-        </p>
-      )}
-      {dirty && !valid && (
-        <p role="alert">
-          Выберите режим; попытки — от 1 до 60, интервал — от 1 до 30 секунд.
-        </p>
-      )}
-      {dirty && (
-        <div className="row">
-          {dirty && (
-            <button
-              disabled={disabled || !valid}
-              onClick={async () => {
-                const next: ObjectValue = { ...value, mode: current("mode") };
-                for (const key of ["retries", "delay"]) {
-                  if (Object.hasOwn(draft, key)) {
-                    if (draft[key] === "") delete next[key];
-                    else next[key] = Number(draft[key]);
-                  }
-                }
-                if (await onSave(next)) {
-                  setDraft({});
-                  setEditing(false);
-                  onDirtyChange(false);
-                }
-              }}
-            >
-              В черновик
-            </button>
-          )}
-        </div>
-      )}
-    </section>
-  );
-}
-
-@@END
-@@PORTABLE {"path":"frontend/src/ApplicationRegistryCredentials.tsx","mode":420,"size":6682,"sha256":"38ed0a6f29e6bab28561b187a7475dd3b1ac354a47aae3a57e2ba7314a0d0100","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":6682}
-import { useState } from "react";
-import { objectValue, type ObjectValue } from "./application-draft";
-import type { RuntimeSecretValuesInput } from "./backend";
-
-export function ApplicationRegistryCredentials({
-  libraryId,
-  value,
-  registries,
-  disabled,
-  runtimeDisabled,
-  onChange,
-  save,
-  projectRevision = "",
-}: {
-  libraryId: string;
-  value: unknown;
-  registries: string[];
-  disabled: boolean;
-  runtimeDisabled: boolean;
-  onChange: (value: ObjectValue) => void;
-  save?: (input: RuntimeSecretValuesInput) => Promise<void>;
-  projectRevision?: string;
-}) {
-  const entries = objectValue(value);
-  const [registry, setRegistry] = useState("");
-  const [open, setOpen] = useState(false);
-  const [values, setValues] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
-  const fields = Object.entries(entries).flatMap(([name, raw]) =>
-    ["username", "password"].flatMap((field) => {
-      const source = objectValue(objectValue(objectValue(raw)[field]).source);
-      return source.kind === "runtime_secret_ref" &&
-        typeof source.ref === "string"
-        ? [
-            {
-              source: source.ref,
-              label: `${field === "username" ? "Логин" : "Пароль"}: ${name}`,
-              password: field === "password",
-            },
-          ]
-        : [];
-    }),
-  );
-  const options = [...new Set([...registries, ...Object.keys(entries)])];
-  return (
-    <section className="application-registry-credentials">
-      <h3>Доступ к registry</h3>
-      <p className="muted">
-        Логин и пароль задаются только в runtime-сессии и применяются на целевых
-        серверах.
-      </p>
-      <label>
-        Registry
-        <input
-          aria-label="Registry"
-          list={`registry-options-${libraryId}`}
-          value={registry}
-          disabled={disabled}
-          onChange={(event) => setRegistry(event.target.value)}
-          placeholder="registry.example:5000"
-        />
-        <datalist id={`registry-options-${libraryId}`}>
-          {options.map((name) => (
-            <option key={name} value={name} />
-          ))}
-        </datalist>
-      </label>
-      <button
-        type="button"
-        disabled={
-          disabled ||
-          !registry.trim() ||
-          Object.hasOwn(entries, registry.trim())
-        }
-        onClick={() => {
-          const reference = `registry-${crypto.randomUUID()}`;
-          onChange({
-            ...entries,
-            [registry.trim()]: {
-              username: {
-                source: {
-                  kind: "runtime_secret_ref",
-                  ref: `${reference}-username`,
-                },
-              },
-              password: {
-                source: {
-                  kind: "runtime_secret_ref",
-                  ref: `${reference}-password`,
-                },
-              },
-            },
-          });
-          setRegistry("");
-        }}
-      >
-        Настроить runtime-доступ
-      </button>
-      {Object.keys(entries).map((name) => (
-        <div className="row" key={name}>
-          <span>{name}</span>
-          <button
-            type="button"
-            className="outline"
-            disabled={disabled}
-            onClick={() => {
-              const next = { ...entries };
-              delete next[name];
-              onChange(next);
-            }}
-          >
-            Убрать назначение
-          </button>
-        </div>
-      ))}
-      {fields.length > 0 && save && (
-        <>
-          {runtimeDisabled && (
-            <p className="muted">
-              Сохраните настройки библиотеки перед вводом логина и пароля.
-            </p>
-          )}
-          <button
-            type="button"
-            disabled={runtimeDisabled || saving}
-            onClick={() => {
-              setOpen(true);
-              setValues({});
-              setMessage("");
-            }}
-          >
-            Логин и пароль registry
-          </button>
-          {message && <p role="status">{message}</p>}
-          {open && (
-            <form
-              onSubmit={(event) => {
-                event.preventDefault();
-                if (runtimeDisabled || saving || !projectRevision) return;
-                const submitted = values;
-                setValues({});
-                setSaving(true);
-                void save({
-                  projectRevision,
-                  descriptorSetFingerprint: "",
-                  serviceDeployment: "",
-                  applicationLibrary: libraryId,
-                  applicationSourceValues: submitted,
-                  values: {},
-                })
-                  .then(() => {
-                    setOpen(false);
-                    setMessage("Логин и пароль сохранены только в сессии");
-                  })
-                  .catch(() =>
-                    setMessage(
-                      "Не удалось сохранить логин и пароль. Проверьте, что настройки registry сохранены в проекте.",
-                    ),
-                  )
-                  .finally(() => setSaving(false));
-              }}
-            >
-              {fields.map((field) => (
-                <label key={field.source}>
-                  {field.label}
-                  <input
-                    type={field.password ? "password" : "text"}
-                    autoComplete={field.password ? "new-password" : "username"}
-                    required
-                    disabled={runtimeDisabled || saving}
-                    value={values[field.source] || ""}
-                    onChange={(event) =>
-                      setValues((current) => ({
-                        ...current,
-                        [field.source]: event.target.value,
-                      }))
-                    }
-                  />
-                </label>
-              ))}
-              <button
-                type="button"
-                disabled={saving}
-                onClick={() => {
-                  setOpen(false);
-                  setValues({});
-                }}
-              >
-                Отмена
-              </button>
-              <button
-                type="submit"
-                disabled={runtimeDisabled || saving || !projectRevision}
-              >
-                Сохранить в сессии
-              </button>
-            </form>
-          )}
-        </>
-      )}
-    </section>
   );
 }
 
