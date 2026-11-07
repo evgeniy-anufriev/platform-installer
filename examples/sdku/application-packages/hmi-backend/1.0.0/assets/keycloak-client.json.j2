@@ -2,67 +2,72 @@
   "clientId": "{{ application_instance_id }}",
   "name": "{{ application_instance_id }}",
   "rootUrl": "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/",
-  "adminUrl": "",
-  "baseUrl": "",
+  "adminUrl": "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/",
+  "baseUrl": "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/",
   "surrogateAuthRequired": false,
   "enabled": true,
   "alwaysDisplayInConsole": false,
-  "clientAuthenticatorType": "client-secret",
-  "redirectUris": [
-    "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/*"
-  ],
-  "webOrigins": [
-    "{{ application_connections.sso.parameters.proxy_url }}"
-  ],
-  "notBefore": 0,
   "bearerOnly": false,
   "consentRequired": false,
   "standardFlowEnabled": true,
   "implicitFlowEnabled": true,
   "directAccessGrantsEnabled": true,
   "serviceAccountsEnabled": true,
-  "authorizationServicesEnabled": true,
   "publicClient": false,
   "frontchannelLogout": true,
+  "fullScopeAllowed": true,
+  "clientAuthenticatorType": "client-secret",
   "protocol": "openid-connect",
+  "notBefore": 0,
+  "nodeReRegistrationTimeout": -1,
+  "redirectUris": [
+    "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/*"
+  ],
+  "webOrigins": [
+    "{{ application_connections.sso.parameters.proxy_url }}"
+  ],
   "attributes": {
-    "realm_client": "false",
-    "oidc.ciba.grant.enabled": "true",
+    "backchannel.logout.revoke.offline.tokens": "false",
     "backchannel.logout.session.required": "true",
+    "backend": "true",
     "display.on.consent.screen": "false",
+    "isOpenId": "false",
     "oauth2.device.authorization.grant.enabled": "true",
-    "backchannel.logout.revoke.offline.tokens": "false"
+    "oidc.ciba.grant.enabled": "true",
+    "post.logout.redirect.uris": "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/",
+    "realm_client": "false",
+    "ui_available": "false"
   },
   "authenticationFlowBindingOverrides": {},
-  "fullScopeAllowed": true,
-  "nodeReRegistrationTimeout": -1,
   "protocolMappers": [
-    {
-      "name": "Client ID",
-      "protocol": "openid-connect",
-      "protocolMapper": "oidc-usersessionmodel-note-mapper",
-      "consentRequired": false,
-      "config": {
-        "user.session.note": "client_id",
-        "introspection.token.claim": "true",
-        "id.token.claim": "true",
-        "access.token.claim": "true",
-        "claim.name": "client_id",
-        "jsonType.label": "String"
-      }
-    },
     {
       "name": "Client Host",
       "protocol": "openid-connect",
       "protocolMapper": "oidc-usersessionmodel-note-mapper",
       "consentRequired": false,
       "config": {
-        "user.session.note": "clientHost",
-        "introspection.token.claim": "true",
-        "id.token.claim": "true",
         "access.token.claim": "true",
         "claim.name": "clientHost",
-        "jsonType.label": "String"
+        "id.token.claim": "true",
+        "introspection.token.claim": "true",
+        "jsonType.label": "String",
+        "user.session.note": "clientHost",
+        "userinfo.token.claim": "true"
+      }
+    },
+    {
+      "name": "Client ID",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usersessionmodel-note-mapper",
+      "consentRequired": false,
+      "config": {
+        "access.token.claim": "true",
+        "claim.name": "client_id",
+        "id.token.claim": "true",
+        "introspection.token.claim": "true",
+        "jsonType.label": "String",
+        "user.session.note": "client_id",
+        "userinfo.token.claim": "true"
       }
     },
     {
@@ -71,293 +76,52 @@
       "protocolMapper": "oidc-usersessionmodel-note-mapper",
       "consentRequired": false,
       "config": {
-        "user.session.note": "clientAddress",
-        "introspection.token.claim": "true",
-        "id.token.claim": "true",
         "access.token.claim": "true",
         "claim.name": "clientAddress",
-        "jsonType.label": "String"
+        "id.token.claim": "true",
+        "introspection.token.claim": "true",
+        "jsonType.label": "String",
+        "user.session.note": "clientAddress",
+        "userinfo.token.claim": "true"
       }
     }
   ],
   "defaultClientScopes": [
-    "web-origins",
     "acr",
-    "roles",
-    "profile",
     "basic",
-    "email"
+    "email",
+    "profile",
+    "roles",
+    "service_account",
+    "web-origins"
   ],
   "optionalClientScopes": [
     "address",
-    "phone",
-    "microprofile-jwt"
+    "microprofile-jwt",
+    "phone"
   ],
-  "authorizationSettings": {
-    "allowRemoteResourceManagement": true,
-    "policyEnforcementMode": "ENFORCING",
-    "resources": [
-      {
-        "name": "resourceAdministrator",
-        "ownerManagedAccess": false,
-        "displayName": "",
-        "attributes": {},
-        "uris": [
-          "/tags-get-history-flat",
-          "/object-labels",
-          "/v2/tag-names",
-          "/logout",
-          "/tag-get",
-          "/actuator/*",
-          "/hotlink",
-          "/tag-names-labels",
-          "/v1/configurator/project",
-          "/v2/tag-names*",
-          "/actuator/info",
-          "/tags-get-history",
-          "/v2/hotlink",
-          "/tag-names",
-          "/tag-set",
-          "/tag-labels",
-          "/tags-get",
-          "/v2/tag-labels",
-          "/v1/address_attr/*",
-          "/*",
-          "/tag-value-type",
-          "/object-names"
-        ],
-        "icon_uri": ""
-      },
-      {
-        "name": "resourceCuratorIB",
-        "ownerManagedAccess": false,
-        "displayName": "",
-        "attributes": {},
-        "uris": [
-          "/tags-get-history-flat",
-          "/object-labels",
-          "/v2/tag-names",
-          "/logout",
-          "/tag-get",
-          "/actuator/*",
-          "/hotlink",
-          "/tag-names-labels",
-          "/v2/tag-names*",
-          "/actuator/info",
-          "/tags-get-history",
-          "/",
-          "/v2/hotlink",
-          "/tag-names",
-          "/tag-labels",
-          "/tags-get",
-          "/v2/tag-labels",
-          "/v1/address_attr/*",
-          "/*",
-          "/tag-value-type",
-          "/object-names"
-        ],
-        "icon_uri": ""
-      },
-      {
-        "name": "resourceEngineer",
-        "ownerManagedAccess": false,
-        "displayName": "",
-        "attributes": {},
-        "uris": [
-          "/object-labels",
-          "/tag-names-labels",
-          "/v2/tag-names*",
-          "/tags-get-history",
-          "/tag-set",
-          "/tag-labels",
-          "/tags-get",
-          "/object-names",
-          "/tags-set",
-          "/v2/tag-names",
-          "/tag-set-and-wait",
-          "/v2/tags-get",
-          "/logout",
-          "/tag-get",
-          "/hotlink",
-          "/v1/configurator/project",
-          "/actuator/info",
-          "/object",
-          "/tag-value-types",
-          "/v1/address_attr/*/*",
-          "/",
-          "/v2/hotlink",
-          "/tag-names",
-          "/tag-set/*",
-          "/tag-value-type"
-        ],
-        "icon_uri": ""
-      },
-      {
-        "name": "resourceDispatcher",
-        "ownerManagedAccess": false,
-        "displayName": "",
-        "attributes": {},
-        "uris": [
-          "/tag-names",
-          "/object-labels",
-          "/tag-labels",
-          "/tags-get",
-          "/logout",
-          "/tag-get",
-          "/hotlink",
-          "/v1/address_attr/*",
-          "/tags-get-history",
-          "/object-names",
-          "/"
-        ]
-      },
-      {
-        "name": "resourceOthers",
-        "ownerManagedAccess": false,
-        "displayName": "",
-        "attributes": {},
-        "uris": [
-          "/tag-names",
-          "/object-labels",
-          "/tag-labels",
-          "/tags-get",
-          "/logout",
-          "/tag-get",
-          "/hotlink",
-          "/v1/address_attr/*",
-          "/tags-get-history",
-          "/object-names",
-          "/"
-        ]
-      }
-    ],
-    "policies": [
-      {
-        "name": "policyAdministrator",
-        "description": "",
-        "type": "role",
-        "logic": "POSITIVE",
-        "decisionStrategy": "UNANIMOUS",
-        "config": {
-          "fetchRoles": "false",
-          "roles": "[{\"id\":\"{{ application_instance_id }}/Администратор\",\"required\":false}]"
-        }
-      },
-      {
-        "name": "policyDispatcher",
-        "description": "",
-        "type": "role",
-        "logic": "POSITIVE",
-        "decisionStrategy": "UNANIMOUS",
-        "config": {
-          "roles": "[{\"id\":\"{{ application_instance_id }}/Диспетчер\",\"required\":false}]"
-        }
-      },
-      {
-        "name": "policyEngineer",
-        "description": "",
-        "type": "role",
-        "logic": "POSITIVE",
-        "decisionStrategy": "UNANIMOUS",
-        "config": {
-          "roles": "[{\"id\":\"{{ application_instance_id }}/Инженер\",\"required\":false}]"
-        }
-      },
-      {
-        "name": "policyOthers",
-        "description": "",
-        "type": "role",
-        "logic": "POSITIVE",
-        "decisionStrategy": "UNANIMOUS",
-        "config": {
-          "roles": "[{\"id\":\"{{ application_instance_id }}/Прочие\",\"required\":true}]"
-        }
-      },
-      {
-        "name": "policyCuratorIB",
-        "description": "",
-        "type": "role",
-        "logic": "POSITIVE",
-        "decisionStrategy": "UNANIMOUS",
-        "config": {
-          "roles": "[{\"id\":\"{{ application_instance_id }}/КураторИБ\",\"required\":false}]"
-        }
-      },
-      {
-        "name": "permissionsAdministrator",
-        "description": "",
-        "type": "resource",
-        "logic": "POSITIVE",
-        "decisionStrategy": "UNANIMOUS",
-        "config": {
-          "resources": "[\"resourceAdministrator\"]",
-          "applyPolicies": "[\"policyAdministrator\"]"
-        }
-      },
-      {
-        "name": "permissionsEngineer",
-        "description": "",
-        "type": "resource",
-        "logic": "POSITIVE",
-        "decisionStrategy": "UNANIMOUS",
-        "config": {
-          "resources": "[\"resourceEngineer\"]",
-          "applyPolicies": "[\"policyEngineer\"]"
-        }
-      },
-      {
-        "name": "permissionsDispatcher",
-        "description": "",
-        "type": "resource",
-        "logic": "POSITIVE",
-        "decisionStrategy": "UNANIMOUS",
-        "config": {
-          "resources": "[\"resourceDispatcher\"]",
-          "applyPolicies": "[\"policyDispatcher\"]"
-        }
-      },
-      {
-        "name": "permissionsOthers",
-        "description": "",
-        "type": "resource",
-        "logic": "POSITIVE",
-        "decisionStrategy": "UNANIMOUS",
-        "config": {
-          "resources": "[\"resourceOthers\"]",
-          "applyPolicies": "[\"policyOthers\"]"
-        }
-      },
-      {
-        "name": "permissionCuratorIB",
-        "description": "",
-        "type": "resource",
-        "logic": "POSITIVE",
-        "decisionStrategy": "UNANIMOUS",
-        "config": {
-          "resources": "[\"resourceCuratorIB\"]",
-          "applyPolicies": "[\"policyCuratorIB\"]"
-        }
-      }
-    ],
-    "scopes": [],
-    "decisionStrategy": "UNANIMOUS"
-  },
   "clientRoles": [
     {
+      "name": "uma_protection",
+      "description": "",
+      "composite": false,
+      "attributes": {}
+    },
+    {
       "name": "Администратор",
-      "description": "Администратор",
+      "description": "",
       "composite": false,
       "attributes": {}
     },
     {
       "name": "Диспетчер",
-      "description": "Диспетчер",
+      "description": "",
       "composite": false,
       "attributes": {}
     },
     {
       "name": "Инженер",
-      "description": "Инженер",
+      "description": "",
       "composite": false,
       "attributes": {}
     },
@@ -372,23 +136,291 @@
       "description": "",
       "composite": false,
       "attributes": {}
-    },
-    {
-      "name": "Common",
-      "description": "",
-      "composite": false,
-      "attributes": {}
-    },
-    {
-      "name": "uma_protection",
-      "composite": false,
-      "attributes": {}
-    },
-    {
-      "name": "viewCurrentDataMT",
-      "description": "",
-      "composite": false,
-      "attributes": {}
     }
-  ]
+  ],
+  "authorizationServicesEnabled": true,
+  "authorizationSettings": {
+    "allowRemoteResourceManagement": true,
+    "policyEnforcementMode": "ENFORCING",
+    "decisionStrategy": "UNANIMOUS",
+    "resources": [
+      {
+        "name": "resourceAdministrator",
+        "ownerManagedAccess": false,
+        "displayName": "master",
+        "attributes": {},
+        "uris": [
+          "/actuator/*",
+          "/diag/*",
+          "/get-tags-meta",
+          "/hotlink",
+          "/logout",
+          "/object-labels",
+          "/object-names",
+          "/object-types",
+          "/tag-get",
+          "/tag-labels",
+          "/tag-monitor",
+          "/tag-monitor.html",
+          "/tag-names",
+          "/tag-names-labels",
+          "/tag-set",
+          "/tag-value-type",
+          "/tags-get",
+          "/tags-get-history",
+          "/tags-get-history-flat",
+          "/tags-set",
+          "/v1/configurator/project",
+          "/v2/hotlink",
+          "/v2/tag-get",
+          "/v2/tag-names",
+          "/v2/tag-set",
+          "/v2/tags-get",
+          "/v2/tags-set",
+          "/v2/tags-teg"
+        ],
+        "icon_uri": ""
+      },
+      {
+        "name": "resourceCuratorIB",
+        "ownerManagedAccess": false,
+        "displayName": "",
+        "attributes": {},
+        "uris": [
+          "/",
+          "/get-tags-meta",
+          "/hotlink",
+          "/logout",
+          "/object-labels",
+          "/object-names",
+          "/tag-get",
+          "/tag-labels",
+          "/tag-monitor",
+          "/tag-monitor.html",
+          "/tag-names",
+          "/tag-names-labels",
+          "/tags-get",
+          "/tags-get-history",
+          "/tags-get-history-flat",
+          "/v1/configurator/project",
+          "/v2/hotlink",
+          "/v2/tag-get",
+          "/v2/tag-names",
+          "/v2/tags-get"
+        ],
+        "icon_uri": ""
+      },
+      {
+        "name": "resourceDispatcher",
+        "ownerManagedAccess": false,
+        "displayName": "master",
+        "attributes": {},
+        "uris": [
+          "/",
+          "/actuator/*",
+          "/diag/*",
+          "/get-tags-meta",
+          "/hotlink",
+          "/logout",
+          "/object-labels",
+          "/object-names",
+          "/tag-get",
+          "/tag-labels",
+          "/tag-monitor",
+          "/tag-monitor.html",
+          "/tag-names",
+          "/tag-names-labels",
+          "/tag-set",
+          "/tag-value-type",
+          "/tags-get",
+          "/tags-get-history",
+          "/tags-get-history-flat",
+          "/tags-set",
+          "/v1/configurator/project",
+          "/v2/hotlink",
+          "/v2/tag-get",
+          "/v2/tag-names",
+          "/v2/tag-set",
+          "/v2/tags-get",
+          "/v2/tags-set"
+        ],
+        "icon_uri": ""
+      },
+      {
+        "name": "resourceEngineer",
+        "ownerManagedAccess": false,
+        "displayName": "master",
+        "attributes": {},
+        "uris": [
+          "/",
+          "/actuator/*",
+          "/diag/*",
+          "/get-tags-meta",
+          "/hotlink",
+          "/logout",
+          "/object",
+          "/object-labels",
+          "/object-names",
+          "/object-types",
+          "/object/*",
+          "/tag-get",
+          "/tag-labels",
+          "/tag-monitor",
+          "/tag-monitor.html",
+          "/tag-names",
+          "/tag-names-labels",
+          "/tag-set",
+          "/tag-set-and-wait",
+          "/tag-value-type",
+          "/tags-get",
+          "/tags-get-history",
+          "/tags-get-history-flat",
+          "/tags-set",
+          "/v1/configurator/project",
+          "/v2/hotlink",
+          "/v2/tag-get",
+          "/v2/tag-names",
+          "/v2/tag-set",
+          "/v2/tags-get",
+          "/v2/tags-se",
+          "/v2/tags-set"
+        ],
+        "icon_uri": ""
+      },
+      {
+        "name": "resourceOthers",
+        "ownerManagedAccess": false,
+        "displayName": "",
+        "attributes": {},
+        "uris": [
+          "/",
+          "/get-tags-meta",
+          "/hotlink",
+          "/logout",
+          "/object-labels",
+          "/object-names",
+          "/tag-get",
+          "/tag-labels",
+          "/tag-names",
+          "/tags-get",
+          "/tags-get-history",
+          "/tags-get-history-flat",
+          "/v1/configurator/project",
+          "/v2/hotlink",
+          "/v2/tag-get",
+          "/v2/tag-names",
+          "/v2/tags-get"
+        ],
+        "icon_uri": ""
+      }
+    ],
+    "policies": [
+      {
+        "name": "Политика Куратора ИБ",
+        "description": "",
+        "type": "role",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "roles": "[{\"id\":\"{{ application_instance_id }}/КураторИБ\",\"required\":false}]"
+        }
+      },
+      {
+        "name": "Политика администратора",
+        "description": "",
+        "type": "role",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "roles": "[{\"id\":\"{{ application_instance_id }}/Администратор\",\"required\":false}]"
+        }
+      },
+      {
+        "name": "Политика диспетчера",
+        "description": "",
+        "type": "role",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "roles": "[{\"id\":\"{{ application_instance_id }}/Диспетчер\",\"required\":false}]"
+        }
+      },
+      {
+        "name": "Политика инженера",
+        "description": "",
+        "type": "role",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "roles": "[{\"id\":\"{{ application_instance_id }}/Инженер\",\"required\":false}]"
+        }
+      },
+      {
+        "name": "Политика прочие",
+        "description": "",
+        "type": "role",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "roles": "[{\"id\":\"{{ application_instance_id }}/Прочие\",\"required\":false}]"
+        }
+      },
+      {
+        "name": "Разрешения_администратора",
+        "description": "",
+        "type": "resource",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "applyPolicies": "[\"Политика администратора\"]",
+          "resources": "[\"resourceAdministrator\"]"
+        }
+      },
+      {
+        "name": "Разрешения_диспетчера",
+        "description": "",
+        "type": "resource",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "applyPolicies": "[\"Политика диспетчера\"]",
+          "resources": "[\"resourceDispatcher\"]"
+        }
+      },
+      {
+        "name": "Разрешения_инженера",
+        "description": "",
+        "type": "resource",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "applyPolicies": "[\"Политика инженера\"]",
+          "resources": "[\"resourceEngineer\"]"
+        }
+      },
+      {
+        "name": "Разрешения_куратора_иб",
+        "description": "",
+        "type": "resource",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "applyPolicies": "[\"Политика Куратора ИБ\"]",
+          "resources": "[\"resourceCuratorIB\"]"
+        }
+      },
+      {
+        "name": "Разрешения_прочие",
+        "description": "",
+        "type": "resource",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "applyPolicies": "[\"Политика прочие\"]",
+          "resources": "[\"resourceOthers\"]"
+        }
+      }
+    ],
+    "scopes": []
+  }
 }

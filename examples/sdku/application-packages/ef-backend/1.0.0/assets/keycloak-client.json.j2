@@ -1,0 +1,226 @@
+{
+  "clientId": "{{ application_instance_id }}",
+  "name": "{{ application_instance_id }}",
+  "rootUrl": "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/",
+  "adminUrl": "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/",
+  "baseUrl": "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/",
+  "surrogateAuthRequired": false,
+  "enabled": true,
+  "alwaysDisplayInConsole": false,
+  "bearerOnly": false,
+  "consentRequired": false,
+  "standardFlowEnabled": true,
+  "implicitFlowEnabled": true,
+  "directAccessGrantsEnabled": true,
+  "serviceAccountsEnabled": true,
+  "publicClient": false,
+  "frontchannelLogout": true,
+  "fullScopeAllowed": true,
+  "clientAuthenticatorType": "client-secret",
+  "protocol": "openid-connect",
+  "notBefore": 0,
+  "nodeReRegistrationTimeout": -1,
+  "redirectUris": [
+    "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/*"
+  ],
+  "webOrigins": [
+    "{{ application_connections.sso.parameters.proxy_url }}"
+  ],
+  "attributes": {
+    "backchannel.logout.revoke.offline.tokens": "false",
+    "backchannel.logout.session.required": "true",
+    "backend": "true",
+    "display.on.consent.screen": "false",
+    "isOpenId": "false",
+    "oauth2.device.authorization.grant.enabled": "true",
+    "oidc.ciba.grant.enabled": "true",
+    "post.logout.redirect.uris": "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/",
+    "ui_available": "false"
+  },
+  "authenticationFlowBindingOverrides": {},
+  "protocolMappers": [
+    {
+      "name": "Client Host",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usersessionmodel-note-mapper",
+      "consentRequired": false,
+      "config": {
+        "access.token.claim": "true",
+        "claim.name": "clientHost",
+        "id.token.claim": "true",
+        "introspection.token.claim": "true",
+        "jsonType.label": "String",
+        "user.session.note": "clientHost",
+        "userinfo.token.claim": "true"
+      }
+    },
+    {
+      "name": "Client ID",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usersessionmodel-note-mapper",
+      "consentRequired": false,
+      "config": {
+        "access.token.claim": "true",
+        "claim.name": "client_id",
+        "id.token.claim": "true",
+        "introspection.token.claim": "true",
+        "jsonType.label": "String",
+        "user.session.note": "client_id",
+        "userinfo.token.claim": "true"
+      }
+    },
+    {
+      "name": "Client IP Address",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usersessionmodel-note-mapper",
+      "consentRequired": false,
+      "config": {
+        "access.token.claim": "true",
+        "claim.name": "clientAddress",
+        "id.token.claim": "true",
+        "introspection.token.claim": "true",
+        "jsonType.label": "String",
+        "user.session.note": "clientAddress",
+        "userinfo.token.claim": "true"
+      }
+    }
+  ],
+  "defaultClientScopes": [
+    "acr",
+    "basic",
+    "email",
+    "profile",
+    "roles",
+    "web-origins"
+  ],
+  "optionalClientScopes": [
+    "address",
+    "microprofile-jwt",
+    "phone"
+  ],
+  "clientRoles": [
+    {
+      "name": "Common",
+      "description": "",
+      "composite": false,
+      "attributes": {}
+    },
+    {
+      "name": "uma_protection",
+      "description": "",
+      "composite": false,
+      "attributes": {}
+    },
+    {
+      "name": "viewCurrentDataMT",
+      "description": "",
+      "composite": false,
+      "attributes": {}
+    }
+  ],
+  "authorizationServicesEnabled": true,
+  "authorizationSettings": {
+    "allowRemoteResourceManagement": true,
+    "policyEnforcementMode": "ENFORCING",
+    "decisionStrategy": "UNANIMOUS",
+    "resources": [
+      {
+        "name": "common",
+        "ownerManagedAccess": false,
+        "displayName": "master",
+        "attributes": {},
+        "uris": [
+          "/*/*/*/*/*",
+          "/actuator/*",
+          "/diag/*",
+          "/v1/configurator/categories",
+          "/v1/configurator/categories/",
+          "/v1/configurator/categories/*/categories",
+          "/v1/configurator/categories/category/*/widgets",
+          "/v1/configurator/categories/category/*/widgets-only",
+          "/v1/configurator/category",
+          "/v1/configurator/category/",
+          "/v1/configurator/category/*",
+          "/v1/configurator/category/last/folders",
+          "/v1/configurator/category/name/*",
+          "/v1/configurator/category/widget/*",
+          "/v1/configurator/category/widget/svg/*",
+          "/v1/configurator/category/widgetcount/*",
+          "/v1/configurator/category/widgetcount/all",
+          "/v1/configurator/favorite-widgets",
+          "/v1/configurator/favorite-widgets/",
+          "/v1/configurator/favorite-widgets/*",
+          "/v1/configurator/file/list/content",
+          "/v1/configurator/file/list/names",
+          "/v1/configurator/file/mod/content",
+          "/v1/configurator/file/mod/struct",
+          "/v1/configurator/file/read/content",
+          "/v1/configurator/file/read/struct",
+          "/v1/configurator/screens",
+          "/v1/configurator/screens/*",
+          "/v1/configurator/screens/*/lines",
+          "/v1/configurator/screens/*/node",
+          "/v1/configurator/screens/*/nodes",
+          "/v1/configurator/screens/node/*",
+          "/v1/configurator/svg/*",
+          "/v1/configurator/tag/",
+          "/v1/configurator/tag/*",
+          "/v1/configurator/tag/*/widget/*",
+          "/v1/configurator/tag/ef/widgets-exteded",
+          "/v1/configurator/tag/widget/*/tags",
+          "/v1/configurator/widget",
+          "/v1/configurator/widget-lock/*",
+          "/v1/configurator/widgets",
+          "/v1/configurator/widgets/*",
+          "/v1/configurator/widgets/*/clone",
+          "/v1/configurator/widgets/*/for-edit",
+          "/v1/configurator/widgets/*/history",
+          "/v1/configurator/widgets/*/release",
+          "/v1/configurator/widgets/*/removeRelease",
+          "/v1/configurator/widgets/*/usage/widgets",
+          "/v1/configurator/widgets/*/versions",
+          "/v1/configurator/widgets/ext/",
+          "/v1/configurator/widgets/ext/*",
+          "/v1/configurator/widgets/ext/*/clone",
+          "/v1/configurator/widgets/ext/*/versions",
+          "/v1/configurator/widgets/my/last",
+          "/v1/configurator/widgets/my/temp",
+          "/v1/configurator/widgets/with-content",
+          "/v1/user/ui-parameters",
+          "/v2/branch",
+          "/v2/branch/types",
+          "/v2/editor",
+          "/v2/panel",
+          "/v2/panel/all",
+          "/v2/panel/by-tag/*",
+          "/v2/tree"
+        ],
+        "icon_uri": ""
+      }
+    ],
+    "policies": [
+      {
+        "name": "common",
+        "description": "",
+        "type": "role",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "roles": "[{\"id\":\"{{ application_instance_id }}/Common\",\"required\":false}]"
+        }
+      },
+      {
+        "name": "Разрешение_common",
+        "description": "",
+        "type": "resource",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "applyPolicies": "[\"common\"]",
+          "resources": "[\"common\"]"
+        }
+      }
+    ],
+    "scopes": []
+  }
+}

@@ -3,7 +3,8 @@
   "files": [
     "roles/application_alarm-service/defaults/main.yml",
     "roles/application_alarm-service/templates/compose.yml.j2",
-    "roles/application_alarm-service/templates/agent.hcl.j2"
+    "roles/application_alarm-service/templates/agent.hcl.j2",
+    "assets/keycloak-client.json.j2"
   ],
   "kind": "ApplicationPackage",
   "name": "alarm-service",

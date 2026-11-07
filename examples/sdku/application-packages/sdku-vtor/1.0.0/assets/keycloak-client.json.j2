@@ -1,0 +1,265 @@
+{
+  "clientId": "{{ application_instance_id }}",
+  "name": "{{ application_instance_id }}",
+  "rootUrl": "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/",
+  "adminUrl": "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/",
+  "baseUrl": "",
+  "surrogateAuthRequired": false,
+  "enabled": true,
+  "alwaysDisplayInConsole": false,
+  "bearerOnly": false,
+  "consentRequired": false,
+  "standardFlowEnabled": true,
+  "implicitFlowEnabled": true,
+  "directAccessGrantsEnabled": true,
+  "serviceAccountsEnabled": true,
+  "publicClient": false,
+  "frontchannelLogout": true,
+  "fullScopeAllowed": true,
+  "clientAuthenticatorType": "client-secret",
+  "protocol": "openid-connect",
+  "notBefore": 0,
+  "nodeReRegistrationTimeout": -1,
+  "redirectUris": [
+    "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/*"
+  ],
+  "webOrigins": [
+    "{{ application_connections.sso.parameters.proxy_url }}"
+  ],
+  "attributes": {
+    "backchannel.logout.revoke.offline.tokens": "false",
+    "backchannel.logout.session.required": "true",
+    "display.on.consent.screen": "false",
+    "oauth2.device.authorization.grant.enabled": "true",
+    "oidc.ciba.grant.enabled": "true",
+    "post.logout.redirect.uris": "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/"
+  },
+  "authenticationFlowBindingOverrides": {},
+  "protocolMappers": [
+    {
+      "name": "Client Host",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usersessionmodel-note-mapper",
+      "consentRequired": false,
+      "config": {
+        "access.token.claim": "true",
+        "claim.name": "clientHost",
+        "id.token.claim": "true",
+        "introspection.token.claim": "true",
+        "jsonType.label": "String",
+        "user.session.note": "clientHost"
+      }
+    },
+    {
+      "name": "Client ID",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usersessionmodel-note-mapper",
+      "consentRequired": false,
+      "config": {
+        "access.token.claim": "true",
+        "claim.name": "client_id",
+        "id.token.claim": "true",
+        "introspection.token.claim": "true",
+        "jsonType.label": "String",
+        "user.session.note": "client_id"
+      }
+    },
+    {
+      "name": "Client IP Address",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usersessionmodel-note-mapper",
+      "consentRequired": false,
+      "config": {
+        "access.token.claim": "true",
+        "claim.name": "clientAddress",
+        "id.token.claim": "true",
+        "introspection.token.claim": "true",
+        "jsonType.label": "String",
+        "user.session.note": "clientAddress"
+      }
+    }
+  ],
+  "defaultClientScopes": [
+    "acr",
+    "basic",
+    "email",
+    "profile",
+    "roles",
+    "web-origins"
+  ],
+  "optionalClientScopes": [
+    "address",
+    "microprofile-jwt",
+    "phone"
+  ],
+  "clientRoles": [
+    {
+      "name": "uma_protection",
+      "description": "",
+      "composite": false,
+      "attributes": {}
+    },
+    {
+      "name": "Диспетчер неуправляющий (РДП)",
+      "description": "",
+      "composite": false,
+      "attributes": {}
+    },
+    {
+      "name": "Другие пользователи",
+      "description": "Прочие",
+      "composite": false,
+      "attributes": {}
+    },
+    {
+      "name": "Управляющий диспетчер",
+      "description": "Диспетчер ТДП",
+      "composite": false,
+      "attributes": {}
+    }
+  ],
+  "authorizationServicesEnabled": true,
+  "authorizationSettings": {
+    "allowRemoteResourceManagement": true,
+    "policyEnforcementMode": "ENFORCING",
+    "decisionStrategy": "UNANIMOUS",
+    "resources": [
+      {
+        "name": "Общие ресурсы",
+        "ownerManagedAccess": false,
+        "displayName": "",
+        "attributes": {},
+        "uris": [
+          "/static/*",
+          "/static/*/*",
+          "/v1/vtor/branch",
+          "/v1/vtor/children",
+          "/v1/vtor/counters",
+          "/v1/vtor/historical/branch",
+          "/v1/vtor/historical/counters",
+          "/v1/vtor/historical/node",
+          "/v1/vtor/node",
+          "/v1/vtor/report/form-2",
+          "/v1/vtor/report/report",
+          "/v1/vtor/tree",
+          "/v1/vtor/user/favorite",
+          "/v1/vtor/user/settings",
+          "/v1/vtor/user/settings/*",
+          "/ws"
+        ],
+        "icon_uri": ""
+      },
+      {
+        "name": "Ресурсы диспетчера неуправляющего (РДП)",
+        "ownerManagedAccess": false,
+        "displayName": "",
+        "attributes": {},
+        "uris": [
+          "/v1/vtor/action/request/cancel",
+          "/v1/vtor/action/request/to-remont",
+          "/v1/vtor/action/request/to-work",
+          "/v1/vtor/branch",
+          "/v1/vtor/counters",
+          "/v1/vtor/historical/node",
+          "/v1/vtor/node",
+          "/v1/vtor/report/form-2",
+          "/v1/vtor/report/report",
+          "/v1/vtor/tree",
+          "/v1/vtor/user/settings",
+          "/v1/vtor/user/settings/*"
+        ],
+        "icon_uri": ""
+      },
+      {
+        "name": "Ресурсы управляющего диспетчера",
+        "ownerManagedAccess": false,
+        "displayName": "",
+        "attributes": {},
+        "uris": [
+          "/static/pictures/tnMM_icon_DEFAULT_16.png",
+          "/v1/vtor/action/request/cancel",
+          "/v1/vtor/action/request/confirm",
+          "/v1/vtor/action/request/to-remont",
+          "/v1/vtor/action/request/to-work",
+          "/v1/vtor/action/to-remont",
+          "/v1/vtor/action/to-work",
+          "/v1/vtor/branch",
+          "/v1/vtor/counters",
+          "/v1/vtor/historical/node",
+          "/v1/vtor/node",
+          "/v1/vtor/report/report",
+          "/v1/vtor/tree",
+          "/v1/vtor/user/settings",
+          "/v1/vtor/user/settings/*"
+        ],
+        "icon_uri": ""
+      }
+    ],
+    "policies": [
+      {
+        "name": "Политика диспетчера неуправляющего (РДП)",
+        "description": "",
+        "type": "role",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "roles": "[{\"id\":\"{{ application_instance_id }}/Диспетчер неуправляющий (РДП)\",\"required\":false}]"
+        }
+      },
+      {
+        "name": "Политика прочих пользователей",
+        "description": "(Прочие)",
+        "type": "role",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "roles": "[{\"id\":\"{{ application_instance_id }}/Другие пользователи\",\"required\":false}]"
+        }
+      },
+      {
+        "name": "Политика управляющего диспетчера",
+        "description": "",
+        "type": "role",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "roles": "[{\"id\":\"{{ application_instance_id }}/Управляющий диспетчер\",\"required\":false}]"
+        }
+      },
+      {
+        "name": "Ресурсы_диспетчер_неуправляющий",
+        "description": "",
+        "type": "resource",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "applyPolicies": "[\"Политика диспетчера неуправляющего (РДП)\"]",
+          "resources": "[\"Общие ресурсы\",\"Ресурсы диспетчера неуправляющего (РДП)\"]"
+        }
+      },
+      {
+        "name": "Ресурсы_других_пользователей",
+        "description": "",
+        "type": "resource",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "applyPolicies": "[\"Политика прочих пользователей\"]",
+          "resources": "[\"Общие ресурсы\"]"
+        }
+      },
+      {
+        "name": "Ресурсы_управляющий_диспетчер",
+        "description": "",
+        "type": "resource",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "applyPolicies": "[\"Политика управляющего диспетчера\"]",
+          "resources": "[\"Общие ресурсы\",\"Ресурсы управляющего диспетчера\"]"
+        }
+      }
+    ],
+    "scopes": []
+  }
+}

@@ -22,6 +22,8 @@ class PackageScriptRunnerTests(unittest.TestCase):
             script = root / 'callback.sh'
             script.write_text('#!/bin/sh\n'
                               '[ "$(cat "$PLATFORM_SCRIPT_SECRET_TOKEN_FILE")" = private-probe-value ] || exit 1\n'
+                              '[ -f "$1" ] && [ "$(wc -c < "$1")" -eq 300000 ] || exit 2\n'
+                              '[ "$(stat -c %a "$1")" = 600 ] || exit 3\n'
                               'printf \'{"status":"ok","changed":false}\\n\'\n')
             token = root / 'token'
             token.write_text('private-probe-value')
@@ -43,7 +45,8 @@ class PackageScriptRunnerTests(unittest.TestCase):
                          'application_provider_batch': {'providerLibraryId': 'provider', 'providerInstanceId': 'server'},
                          'application_provider_script_host': 'node2',
                          'application_provider_script': {'id': 'controller-probe', 'path': str(script),
-                             'runOn': 'execution_node', 'argv': [], 'secretInputs': {'token': 'token'}}},
+                             'runOn': 'execution_node', 'argv': ['x' * 300000],
+                             'fileArgumentIndexes': [0], 'secretInputs': {'token': 'token'}}},
                 'tasks': [{'ansible.builtin.include_tasks': str(ROOT / 'ansible-core/playbooks/applications/tasks/provider-script.yml')}]}
             ], sort_keys=False))
             env = dict(os.environ, ANSIBLE_COLLECTIONS_PATH=str(ROOT / 'ansible-core/collections'))

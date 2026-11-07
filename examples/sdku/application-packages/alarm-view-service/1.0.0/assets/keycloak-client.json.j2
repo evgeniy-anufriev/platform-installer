@@ -1,0 +1,495 @@
+{
+  "clientId": "{{ application_instance_id }}",
+  "name": "{{ application_instance_id }}",
+  "rootUrl": "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/",
+  "adminUrl": "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/",
+  "baseUrl": "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/",
+  "surrogateAuthRequired": false,
+  "enabled": true,
+  "alwaysDisplayInConsole": false,
+  "bearerOnly": false,
+  "consentRequired": false,
+  "standardFlowEnabled": true,
+  "implicitFlowEnabled": true,
+  "directAccessGrantsEnabled": true,
+  "serviceAccountsEnabled": true,
+  "publicClient": false,
+  "frontchannelLogout": true,
+  "fullScopeAllowed": true,
+  "clientAuthenticatorType": "client-secret",
+  "protocol": "openid-connect",
+  "notBefore": 0,
+  "nodeReRegistrationTimeout": -1,
+  "redirectUris": [
+    "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/*"
+  ],
+  "webOrigins": [
+    "{{ application_connections.sso.parameters.proxy_url }}"
+  ],
+  "attributes": {
+    "backchannel.logout.revoke.offline.tokens": "false",
+    "backchannel.logout.session.required": "true",
+    "backend": "true",
+    "display.on.consent.screen": "false",
+    "isOpenId": "false",
+    "oauth2.device.authorization.grant.enabled": "true",
+    "oidc.ciba.grant.enabled": "true",
+    "post.logout.redirect.uris": "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/",
+    "ui_available": "false"
+  },
+  "authenticationFlowBindingOverrides": {},
+  "protocolMappers": [
+    {
+      "name": "Client Host",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usersessionmodel-note-mapper",
+      "consentRequired": false,
+      "config": {
+        "access.token.claim": "true",
+        "claim.name": "clientHost",
+        "id.token.claim": "true",
+        "introspection.token.claim": "true",
+        "jsonType.label": "String",
+        "user.session.note": "clientHost",
+        "userinfo.token.claim": "true"
+      }
+    },
+    {
+      "name": "Client ID",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usersessionmodel-note-mapper",
+      "consentRequired": false,
+      "config": {
+        "access.token.claim": "true",
+        "claim.name": "client_id",
+        "id.token.claim": "true",
+        "introspection.token.claim": "true",
+        "jsonType.label": "String",
+        "user.session.note": "client_id",
+        "userinfo.token.claim": "true"
+      }
+    },
+    {
+      "name": "Client IP Address",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usersessionmodel-note-mapper",
+      "consentRequired": false,
+      "config": {
+        "access.token.claim": "true",
+        "claim.name": "clientAddress",
+        "id.token.claim": "true",
+        "introspection.token.claim": "true",
+        "jsonType.label": "String",
+        "user.session.note": "clientAddress",
+        "userinfo.token.claim": "true"
+      }
+    }
+  ],
+  "defaultClientScopes": [
+    "acr",
+    "basic",
+    "email",
+    "profile",
+    "roles",
+    "web-origins"
+  ],
+  "optionalClientScopes": [
+    "address",
+    "microprofile-jwt",
+    "phone"
+  ],
+  "clientRoles": [
+    {
+      "name": "uma_protection",
+      "description": "",
+      "composite": false,
+      "attributes": {}
+    },
+    {
+      "name": "viewCurrentDataMT",
+      "description": "",
+      "composite": false,
+      "attributes": {}
+    },
+    {
+      "name": "Администратор",
+      "description": "Администратор",
+      "composite": false,
+      "attributes": {}
+    },
+    {
+      "name": "Диспетчер_не_управляющий",
+      "description": "Диспетчер_не_управляющий",
+      "composite": false,
+      "attributes": {}
+    },
+    {
+      "name": "Диспетчер_управляющий",
+      "description": "Диспетчер_управляющий",
+      "composite": false,
+      "attributes": {}
+    },
+    {
+      "name": "Инженер",
+      "description": "Инженер",
+      "composite": false,
+      "attributes": {}
+    },
+    {
+      "name": "КураторИБ",
+      "description": "Куратор ИБ",
+      "composite": false,
+      "attributes": {}
+    },
+    {
+      "name": "Прочие",
+      "description": "",
+      "composite": false,
+      "attributes": {}
+    }
+  ],
+  "authorizationServicesEnabled": true,
+  "authorizationSettings": {
+    "allowRemoteResourceManagement": true,
+    "policyEnforcementMode": "ENFORCING",
+    "decisionStrategy": "UNANIMOUS",
+    "resources": [
+      {
+        "name": "resourceAdministrator",
+        "ownerManagedAccess": false,
+        "displayName": "",
+        "attributes": {},
+        "uris": [
+          "/",
+          "/ack",
+          "/ack-by-tags",
+          "/ack-group",
+          "/alarm",
+          "/count-paged-filtered",
+          "/filter-signal-time-or-ack-time",
+          "/filter-statistic-signal-time-or-ack-time",
+          "/filter/get",
+          "/filter/get/*",
+          "/filter/save",
+          "/filtered-statistic-2",
+          "/get-alarms-by-ids",
+          "/get-counter",
+          "/get-view-settings",
+          "/get-view-settings/*",
+          "/get-view-settings/disp",
+          "/gs-guide-websocket",
+          "/logout",
+          "/paged-filtered2",
+          "/report/alarm/csv",
+          "/report/alarm/csv/export_by_id_list",
+          "/report/alarm/xls/export_by_id_list",
+          "/set-view-settings",
+          "/set-view-settings/disp",
+          "/setViewSettings",
+          "/v1/voice-message-settings"
+        ],
+        "icon_uri": ""
+      },
+      {
+        "name": "resourceCuratorib",
+        "ownerManagedAccess": false,
+        "displayName": "",
+        "attributes": {},
+        "uris": [
+          "/",
+          "/ack-by-tags",
+          "/ack-group",
+          "/alarm",
+          "/count-paged-filtered",
+          "/filter-signal-time-or-ack-time",
+          "/filter-statistic-signal-time-or-ack-time",
+          "/filter/get/*",
+          "/filter/save",
+          "/filtered-statistic-2",
+          "/get-alarms-by-ids",
+          "/get-counter",
+          "/get-view-settings",
+          "/get-view-settings/*",
+          "/get-view-settings/disp",
+          "/gs-guide-websocket",
+          "/logout",
+          "/paged-filtered2",
+          "/report/alarm/csv",
+          "/report/alarm/csv/export_by_id_list",
+          "/report/alarm/xls/export_by_id_list",
+          "/set-view-settings",
+          "/set-view-settings/disp",
+          "/setViewSettings",
+          "/v1/voice-message-settings"
+        ],
+        "icon_uri": ""
+      },
+      {
+        "name": "resourceDispatcher_no_operation",
+        "ownerManagedAccess": false,
+        "displayName": "",
+        "attributes": {},
+        "uris": [
+          "/",
+          "/ack-by-tags",
+          "/actuator/info",
+          "/alarm",
+          "/alarms-by-tag-name",
+          "/count-paged-filtered",
+          "/filter-signal-time-or-ack-time",
+          "/filter-statistic-signal-time-or-ack-time",
+          "/filter/get",
+          "/filter/get/*",
+          "/filter/save",
+          "/filtered-statistic-2",
+          "/get-alarms-by-ids",
+          "/get-counter",
+          "/get-view-settings",
+          "/get-view-settings/disp",
+          "/gs-guide-websocket",
+          "/logout",
+          "/paged-filtered2",
+          "/report/alarm/csv",
+          "/report/alarm/csv/export_by_id_list",
+          "/report/alarm/xls/export_by_id_list",
+          "/set-view-settings",
+          "/set-view-settings/disp",
+          "/setViewSettings",
+          "/v1/voice-message-settings"
+        ],
+        "icon_uri": ""
+      },
+      {
+        "name": "resourceDispatcher_operation",
+        "ownerManagedAccess": false,
+        "displayName": "",
+        "attributes": {},
+        "uris": [
+          "/",
+          "/ack",
+          "/ack-by-tags",
+          "/ack-group",
+          "/actuator/info",
+          "/alarm",
+          "/alarms-by-tag-name",
+          "/comment",
+          "/count-paged-filtered",
+          "/filter-signal-time-or-ack-time",
+          "/filter-statistic-signal-time-or-ack-time",
+          "/filter/get",
+          "/filter/get/*",
+          "/filter/save",
+          "/filtered-statistic-2",
+          "/get-alarms-by-ids",
+          "/get-counter",
+          "/get-view-settings",
+          "/get-view-settings/disp",
+          "/gs-guide-websocket",
+          "/logout",
+          "/paged-filtered2",
+          "/report/alarm/csv",
+          "/report/alarm/csv/export_by_id_list",
+          "/report/alarm/xls/export_by_id_list",
+          "/set-view-settings",
+          "/set-view-settings/disp",
+          "/setViewSettings",
+          "/v1/voice-message-settings"
+        ],
+        "icon_uri": ""
+      },
+      {
+        "name": "resourceEngineer",
+        "ownerManagedAccess": false,
+        "displayName": "",
+        "attributes": {},
+        "uris": [
+          "/",
+          "/ack-by-tags",
+          "/alarms-by-tag-name",
+          "/count-paged-filtered",
+          "/filter-signal-time-or-ack-time",
+          "/filter-statistic-signal-time-or-ack-time",
+          "/filter/get",
+          "/filter/get/*",
+          "/filter/save",
+          "/filtered-statistic-2",
+          "/get-alarms-by-ids",
+          "/get-counter",
+          "/get-view-settings",
+          "/get-view-settings/disp",
+          "/gs-guide-websocket",
+          "/logout",
+          "/paged-filtered2",
+          "/report/alarm/csv",
+          "/report/alarm/csv/export_by_id_list",
+          "/report/alarm/xls/export_by_id_list",
+          "/set-view-settings",
+          "/set-view-settings/disp",
+          "/setViewSettings",
+          "/v1/voice-message-settings"
+        ],
+        "icon_uri": ""
+      },
+      {
+        "name": "resourceOther",
+        "ownerManagedAccess": false,
+        "displayName": "",
+        "attributes": {},
+        "uris": [
+          "/",
+          "/ack-by-tags",
+          "/alarm",
+          "/count-paged-filtered",
+          "/filter-signal-time-or-ack-time",
+          "/filter-statistic-signal-time-or-ack-time",
+          "/filter/get",
+          "/filter/get/*",
+          "/filtered-statistic-2",
+          "/get-alarms-by-ids",
+          "/get-counter",
+          "/get-view-settings",
+          "/get-view-settings/*",
+          "/get-view-settings/disp",
+          "/gs-guide-websocket",
+          "/logout",
+          "/paged-filtered2",
+          "/report/alarm/csv",
+          "/report/alarm/csv/export_by_id_list",
+          "/report/alarm/xls/export_by_id_list",
+          "/set-view-settings/disp",
+          "/v1/voice-message-settings"
+        ],
+        "icon_uri": ""
+      }
+    ],
+    "policies": [
+      {
+        "name": "admin",
+        "description": "",
+        "type": "role",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "roles": "[{\"id\":\"{{ application_instance_id }}/Администратор\",\"required\":false}]"
+        }
+      },
+      {
+        "name": "policyDispatcher_no_operation",
+        "description": "policyDispatcher_no_operation",
+        "type": "role",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "roles": "[{\"id\":\"{{ application_instance_id }}/Диспетчер_не_управляющий\",\"required\":false}]"
+        }
+      },
+      {
+        "name": "policyDispatcher_operation",
+        "description": "policyDispatcher_operation",
+        "type": "role",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "roles": "[{\"id\":\"{{ application_instance_id }}/Диспетчер_управляющий\",\"required\":false}]"
+        }
+      },
+      {
+        "name": "policyEngineer",
+        "description": "",
+        "type": "role",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "roles": "[{\"id\":\"{{ application_instance_id }}/Инженер\",\"required\":false}]"
+        }
+      },
+      {
+        "name": "policyKuratorIB",
+        "description": "",
+        "type": "role",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "roles": "[{\"id\":\"{{ application_instance_id }}/КураторИБ\",\"required\":false}]"
+        }
+      },
+      {
+        "name": "policyOther",
+        "description": "",
+        "type": "role",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "roles": "[{\"id\":\"{{ application_instance_id }}/Прочие\",\"required\":false}]"
+        }
+      },
+      {
+        "name": "permissionCuratorib",
+        "description": "",
+        "type": "resource",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "applyPolicies": "[\"policyKuratorIB\"]",
+          "resources": "[\"resourceCuratorib\"]"
+        }
+      },
+      {
+        "name": "permissionOther",
+        "description": "",
+        "type": "resource",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "applyPolicies": "[\"policyOther\"]",
+          "resources": "[\"resourceOther\"]"
+        }
+      },
+      {
+        "name": "permissionsDispatcher_no_operation",
+        "description": "permissionsDispatcher_no_operation",
+        "type": "resource",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "applyPolicies": "[\"policyDispatcher_no_operation\"]",
+          "resources": "[\"resourceDispatcher_no_operation\"]"
+        }
+      },
+      {
+        "name": "permissionsDispatcher_operation",
+        "description": "permissionsDispatcher_operation",
+        "type": "resource",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "applyPolicies": "[\"policyDispatcher_operation\"]",
+          "resources": "[\"resourceDispatcher_operation\"]"
+        }
+      },
+      {
+        "name": "permissionsEnginer",
+        "description": "",
+        "type": "resource",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "applyPolicies": "[\"policyEngineer\"]",
+          "resources": "[\"resourceEngineer\"]"
+        }
+      },
+      {
+        "name": "permissionsadmin",
+        "description": "",
+        "type": "resource",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "applyPolicies": "[\"admin\"]",
+          "resources": "[\"resourceAdministrator\"]"
+        }
+      }
+    ],
+    "scopes": []
+  }
+}

@@ -261,7 +261,11 @@ libraryId/applicationId, resolved public endpoint, connection references и
 разрешённые несекретные integration parameters. Не содержит credentials, token
 или private file contents; не публикуется в UI/events как raw payload. На уровне
 Core ключи IDENTITY_ROUTE/realm/nginx не разбираются: пакет выбирает свои параметры
-из обычного resolved consumer context. Existing output/timeout/argv bounds остаются.
+из обычного resolved consumer context. При запуске Core доставляет JSON
+`integration_consumers` в файл `0600` внутри временного каталога входов сценария
+и передаёт путь на прежней позиции argv. Файл удаляется в `always`, включая
+неуспешный запуск. Пакет nginx также принимает прежний inline JSON для ручных
+вызовов. Existing output/timeout/argv bounds остаются.
 
 Пакет nginx:
 1. Сохранить нынешний before_start для первого запуска и прежних пакетов,

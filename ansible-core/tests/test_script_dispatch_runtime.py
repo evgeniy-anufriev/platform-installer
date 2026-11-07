@@ -210,13 +210,16 @@ class ScriptDispatchRuntimeTests(unittest.TestCase):
                 '[ "$(cat "$PLATFORM_SCRIPT_SECRET_SECOND_FILE")" = second-synthetic-value ]\n'
                 '[ "$(stat -c %a "$PLATFORM_SCRIPT_SECRET_FIRST_FILE")" = 600 ]\n'
                 '[ "$(stat -c %a "$PLATFORM_SCRIPT_BATCH_FILE")" = 600 ]\n'
+                '[ "$(stat -c %a "$1")" = 600 ]\n'
+                '[ "$(wc -c < "$1")" -eq 300000 ]\n'
                 '[ ! -e "$PWD/.scripts/.secrets/probe/stale" ]\n'
                 'cp "$PLATFORM_SCRIPT_BATCH_FILE" "$PWD/observed.json"\n'
                 'changed=false\nif [ ! -f "$PWD/created" ]; then touch "$PWD/created"; changed=true; fi\n'
                 'printf \'{"status":"ok","changed":%s}\\n\' "$changed"\n')
             invocations = [['first', '; touch must-not-exist'], ['second', 'line\nbreak']]
             job = dict(id='probe', path=str(script), account=pwd.getpwuid(os.getuid()).pw_name,
-                       workingDirectory=str(root), argv=[], secretInputs={'first': 'one', 'second': 'two'},
+                       workingDirectory=str(root), argv=['x' * 300000], fileArgumentIndexes=[0],
+                       secretInputs={'first': 'one', 'second': 'two'},
                        invocations=invocations)
             call = {'ansible.builtin.include_role': {'name': 'platform.core.package_script'},
                     'vars': dict(platform_script_job=job, platform_script_secret_files={'one': str(one), 'two': str(two)})}
@@ -232,4 +235,8 @@ class ScriptDispatchRuntimeTests(unittest.TestCase):
             bad = copy.deepcopy(call)
             bad['vars']['platform_script_job']['path'] = str(root / 'missing.sh')
             self.run_play(root, [bad], success=False)
+            self.assertFalse(stale.exists())
+            script.write_text('#!/bin/sh\n[ -r "$1" ] || exit 1\nexit 7\n')
+            failed = self.run_play(root, [call], success=False)
+            self.assertIn('APPLICATION_SCRIPT_EXECUTION_FAILED', failed.stdout)
             self.assertFalse(stale.exists())

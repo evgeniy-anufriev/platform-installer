@@ -7,6 +7,7 @@
       id: "{{ application_script.id }}"
       path: "{{ application_script.path }}"
       argv: "{{ application_script.argv }}"
+      fileArgumentIndexes: "{{ application_script.fileArgumentIndexes | default([]) }}"
       secretInputs: "{{ application_script.secretInputs }}"
       workingDirectory: "{{ application_runtime_job.instancePath }}"
       account: "{{ application_runtime_job.account }}"

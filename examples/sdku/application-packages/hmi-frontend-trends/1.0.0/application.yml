@@ -2,7 +2,8 @@
   "apiVersion": "platform.installer/application-package/v1alpha1",
   "files": [
     "roles/application_hmi-frontend-trends/defaults/main.yml",
-    "roles/application_hmi-frontend-trends/templates/compose.yml.j2"
+    "roles/application_hmi-frontend-trends/templates/compose.yml.j2",
+    "assets/keycloak-client.json.j2"
   ],
   "kind": "ApplicationPackage",
   "name": "hmi-frontend-trends",

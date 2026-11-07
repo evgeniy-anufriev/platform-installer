@@ -98,7 +98,8 @@ class ApplicationRoutesNativeTests(unittest.TestCase):
         requested = dict(owner=owner, routes={'retained': retained})
         consumers = [dict(applicationId='selected', placements={
             'node-b': dict(endpointUrl='https://selected.example.test', parameters={'IDENTITY_ROUTE': {'site': 'b'}}),
-            'node-a': dict(endpointUrl='https://selected.example.test', parameters={'IDENTITY_ROUTE': {'site': 'a'}})})]
+            'node-a': dict(endpointUrl='https://selected.example.test', parameters={
+                'IDENTITY_ROUTE': {'site': 'a'}, 'IDENTITY_CLIENT': {'large': 'x' * 300000}})})]
         tasks = [
             {'ansible.builtin.tempfile': {'state': 'directory', 'path': '/var/tmp', 'prefix': 'platform-szi-stage3-routes-'}, 'register': 'qa_root'},
             {'block': [
@@ -113,9 +114,14 @@ class ApplicationRoutesNativeTests(unittest.TestCase):
             body.extend([
                 {'name': 'Run isolated routes ' + phase, 'ansible.builtin.include_role': {'name': 'platform.core.package_script'},
                  'vars': {'platform_script_job': dict(id='routes-' + phase, path=str(SCRIPT),
-                     workingDirectory='{{ qa_root.path }}/nginx', account=ACCOUNT, secretInputs={}, argv=argv),
+                     workingDirectory='{{ qa_root.path }}/nginx', account=ACCOUNT, secretInputs={}, argv=argv,
+                     fileArgumentIndexes=[4] if phase != 'startup' else []),
                      'platform_script_secret_files': {}}},
                 {'ansible.builtin.assert': {'that': ['(platform_script_result.stdout | from_json).changed == ' + str(changed).lower()]}},
+            ])
+            body.extend([
+                {'ansible.builtin.stat': {'path': '{{ qa_root.path }}/nginx/.scripts/.secrets/routes-' + phase}, 'register': 'qa_inputs'},
+                {'ansible.builtin.assert': {'that': ['not qa_inputs.stat.exists']}},
             ])
         body.extend([
             {'ansible.builtin.slurp': {'src': '{{ qa_root.path }}/nginx/routes/routes.effective.json'}, 'register': 'qa_routes'},

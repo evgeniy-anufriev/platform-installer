@@ -31,7 +31,7 @@
         state: directory
         owner: "{{ platform_script_job.account }}"
         mode: '0700'
-      when: platform_script_job.secretInputs | length > 0 or platform_script_job.invocations | default([]) | length > 0
+      when: platform_script_job.secretInputs | length > 0 or platform_script_job.invocations | default([]) | length > 0 or platform_script_job.fileArgumentIndexes | default([]) | length > 0
       changed_when: false
       no_log: true
 
@@ -51,7 +51,7 @@
 
     - name: Выполнение точного сценария пакета без оболочки или неограниченной среды выполнения
       ansible.builtin.command:
-        argv: "{{ ['timeout', '--kill-after=2s', ((300 * ([1, platform_script_job.invocations | default([]) | length] | max)) | string) ~ 's', platform_script_directory ~ '/' ~ platform_script_job.id] + platform_script_job.argv }}"
+        argv: "{{ ['timeout', '--kill-after=2s', ((300 * ([1, platform_script_job.invocations | default([]) | length] | max)) | string) ~ 's', platform_script_directory ~ '/' ~ platform_script_job.id] + platform_script_argv }}"
         chdir: "{{ platform_script_job.workingDirectory }}"
       become_user: "{{ platform_script_job.account }}"
       environment: "{{ platform_script_environment }}"

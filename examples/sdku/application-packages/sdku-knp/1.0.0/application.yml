@@ -3,7 +3,8 @@
   "files": [
     "roles/application_sdku-knp/defaults/main.yml",
     "roles/application_sdku-knp/templates/compose.yml.j2",
-    "roles/application_sdku-knp/templates/agent.hcl.j2"
+    "roles/application_sdku-knp/templates/agent.hcl.j2",
+    "assets/keycloak-client.json.j2"
   ],
   "kind": "ApplicationPackage",
   "name": "sdku-knp",
