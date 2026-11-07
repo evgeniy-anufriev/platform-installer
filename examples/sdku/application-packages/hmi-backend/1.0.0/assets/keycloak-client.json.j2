@@ -35,6 +35,7 @@
     "oauth2.device.authorization.grant.enabled": "true",
     "oidc.ciba.grant.enabled": "true",
     "post.logout.redirect.uris": "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/",
+    "realm_client": "false",
     "ui_available": "false"
   },
   "authenticationFlowBindingOverrides": {},
@@ -91,6 +92,7 @@
     "email",
     "profile",
     "roles",
+    "service_account",
     "web-origins"
   ],
   "optionalClientScopes": [
@@ -100,19 +102,37 @@
   ],
   "clientRoles": [
     {
-      "name": "Common",
-      "description": "",
-      "composite": false,
-      "attributes": {}
-    },
-    {
       "name": "uma_protection",
       "description": "",
       "composite": false,
       "attributes": {}
     },
     {
-      "name": "viewCurrentDataMT",
+      "name": "Администратор",
+      "description": "",
+      "composite": false,
+      "attributes": {}
+    },
+    {
+      "name": "Диспетчер",
+      "description": "",
+      "composite": false,
+      "attributes": {}
+    },
+    {
+      "name": "Инженер",
+      "description": "",
+      "composite": false,
+      "attributes": {}
+    },
+    {
+      "name": "КураторИБ",
+      "description": "",
+      "composite": false,
+      "attributes": {}
+    },
+    {
+      "name": "Прочие",
       "description": "",
       "composite": false,
       "attributes": {}
@@ -125,99 +145,279 @@
     "decisionStrategy": "UNANIMOUS",
     "resources": [
       {
-        "name": "common",
+        "name": "resourceAdministrator",
         "ownerManagedAccess": false,
         "displayName": "master",
         "attributes": {},
         "uris": [
-          "/*/*/*/*/*",
           "/actuator/*",
           "/diag/*",
-          "/v1/configurator/categories",
-          "/v1/configurator/categories/",
-          "/v1/configurator/categories/*/categories",
-          "/v1/configurator/categories/category/*/widgets",
-          "/v1/configurator/categories/category/*/widgets-only",
-          "/v1/configurator/category",
-          "/v1/configurator/category/",
-          "/v1/configurator/category/*",
-          "/v1/configurator/category/last/folders",
-          "/v1/configurator/category/name/*",
-          "/v1/configurator/category/widget/*",
-          "/v1/configurator/category/widget/svg/*",
-          "/v1/configurator/category/widgetcount/*",
-          "/v1/configurator/category/widgetcount/all",
-          "/v1/configurator/favorite-widgets",
-          "/v1/configurator/favorite-widgets/",
-          "/v1/configurator/favorite-widgets/*",
-          "/v1/configurator/file/list/content",
-          "/v1/configurator/file/list/names",
-          "/v1/configurator/file/mod/content",
-          "/v1/configurator/file/mod/struct",
-          "/v1/configurator/file/read/content",
-          "/v1/configurator/file/read/struct",
-          "/v1/configurator/screens",
-          "/v1/configurator/screens/*",
-          "/v1/configurator/screens/*/lines",
-          "/v1/configurator/screens/*/node",
-          "/v1/configurator/screens/*/nodes",
-          "/v1/configurator/screens/node/*",
-          "/v1/configurator/svg/*",
-          "/v1/configurator/tag/",
-          "/v1/configurator/tag/*",
-          "/v1/configurator/tag/*/widget/*",
-          "/v1/configurator/tag/ef/widgets-exteded",
-          "/v1/configurator/tag/widget/*/tags",
-          "/v1/configurator/widget",
-          "/v1/configurator/widget-lock/*",
-          "/v1/configurator/widgets",
-          "/v1/configurator/widgets/*",
-          "/v1/configurator/widgets/*/clone",
-          "/v1/configurator/widgets/*/for-edit",
-          "/v1/configurator/widgets/*/history",
-          "/v1/configurator/widgets/*/release",
-          "/v1/configurator/widgets/*/removeRelease",
-          "/v1/configurator/widgets/*/usage/widgets",
-          "/v1/configurator/widgets/*/versions",
-          "/v1/configurator/widgets/ext/",
-          "/v1/configurator/widgets/ext/*",
-          "/v1/configurator/widgets/ext/*/clone",
-          "/v1/configurator/widgets/ext/*/versions",
-          "/v1/configurator/widgets/my/last",
-          "/v1/configurator/widgets/my/temp",
-          "/v1/configurator/widgets/with-content",
-          "/v1/user/ui-parameters",
-          "/v2/branch",
-          "/v2/branch/types",
-          "/v2/editor",
-          "/v2/panel",
-          "/v2/panel/all",
-          "/v2/panel/by-tag/*",
-          "/v2/tree"
+          "/get-tags-meta",
+          "/hotlink",
+          "/logout",
+          "/object-labels",
+          "/object-names",
+          "/object-types",
+          "/tag-get",
+          "/tag-labels",
+          "/tag-monitor",
+          "/tag-monitor.html",
+          "/tag-names",
+          "/tag-names-labels",
+          "/tag-set",
+          "/tag-value-type",
+          "/tags-get",
+          "/tags-get-history",
+          "/tags-get-history-flat",
+          "/tags-set",
+          "/v1/configurator/project",
+          "/v2/hotlink",
+          "/v2/tag-get",
+          "/v2/tag-names",
+          "/v2/tag-set",
+          "/v2/tags-get",
+          "/v2/tags-set",
+          "/v2/tags-teg"
+        ],
+        "icon_uri": ""
+      },
+      {
+        "name": "resourceCuratorIB",
+        "ownerManagedAccess": false,
+        "displayName": "",
+        "attributes": {},
+        "uris": [
+          "/",
+          "/get-tags-meta",
+          "/hotlink",
+          "/logout",
+          "/object-labels",
+          "/object-names",
+          "/tag-get",
+          "/tag-labels",
+          "/tag-monitor",
+          "/tag-monitor.html",
+          "/tag-names",
+          "/tag-names-labels",
+          "/tags-get",
+          "/tags-get-history",
+          "/tags-get-history-flat",
+          "/v1/configurator/project",
+          "/v2/hotlink",
+          "/v2/tag-get",
+          "/v2/tag-names",
+          "/v2/tags-get"
+        ],
+        "icon_uri": ""
+      },
+      {
+        "name": "resourceDispatcher",
+        "ownerManagedAccess": false,
+        "displayName": "master",
+        "attributes": {},
+        "uris": [
+          "/",
+          "/actuator/*",
+          "/diag/*",
+          "/get-tags-meta",
+          "/hotlink",
+          "/logout",
+          "/object-labels",
+          "/object-names",
+          "/tag-get",
+          "/tag-labels",
+          "/tag-monitor",
+          "/tag-monitor.html",
+          "/tag-names",
+          "/tag-names-labels",
+          "/tag-set",
+          "/tag-value-type",
+          "/tags-get",
+          "/tags-get-history",
+          "/tags-get-history-flat",
+          "/tags-set",
+          "/v1/configurator/project",
+          "/v2/hotlink",
+          "/v2/tag-get",
+          "/v2/tag-names",
+          "/v2/tag-set",
+          "/v2/tags-get",
+          "/v2/tags-set"
+        ],
+        "icon_uri": ""
+      },
+      {
+        "name": "resourceEngineer",
+        "ownerManagedAccess": false,
+        "displayName": "master",
+        "attributes": {},
+        "uris": [
+          "/",
+          "/actuator/*",
+          "/diag/*",
+          "/get-tags-meta",
+          "/hotlink",
+          "/logout",
+          "/object",
+          "/object-labels",
+          "/object-names",
+          "/object-types",
+          "/object/*",
+          "/tag-get",
+          "/tag-labels",
+          "/tag-monitor",
+          "/tag-monitor.html",
+          "/tag-names",
+          "/tag-names-labels",
+          "/tag-set",
+          "/tag-set-and-wait",
+          "/tag-value-type",
+          "/tags-get",
+          "/tags-get-history",
+          "/tags-get-history-flat",
+          "/tags-set",
+          "/v1/configurator/project",
+          "/v2/hotlink",
+          "/v2/tag-get",
+          "/v2/tag-names",
+          "/v2/tag-set",
+          "/v2/tags-get",
+          "/v2/tags-se",
+          "/v2/tags-set"
+        ],
+        "icon_uri": ""
+      },
+      {
+        "name": "resourceOthers",
+        "ownerManagedAccess": false,
+        "displayName": "",
+        "attributes": {},
+        "uris": [
+          "/",
+          "/get-tags-meta",
+          "/hotlink",
+          "/logout",
+          "/object-labels",
+          "/object-names",
+          "/tag-get",
+          "/tag-labels",
+          "/tag-names",
+          "/tags-get",
+          "/tags-get-history",
+          "/tags-get-history-flat",
+          "/v1/configurator/project",
+          "/v2/hotlink",
+          "/v2/tag-get",
+          "/v2/tag-names",
+          "/v2/tags-get"
         ],
         "icon_uri": ""
       }
     ],
     "policies": [
       {
-        "name": "common",
+        "name": "Политика Куратора ИБ",
         "description": "",
         "type": "role",
         "logic": "POSITIVE",
         "decisionStrategy": "UNANIMOUS",
         "config": {
-          "roles": "[{\"id\":\"{{ application_instance_id }}/Common\",\"required\":false}]"
+          "roles": "[{\"id\":\"{{ application_instance_id }}/КураторИБ\",\"required\":false}]"
         }
       },
       {
-        "name": "Разрешение_common",
+        "name": "Политика администратора",
+        "description": "",
+        "type": "role",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "roles": "[{\"id\":\"{{ application_instance_id }}/Администратор\",\"required\":false}]"
+        }
+      },
+      {
+        "name": "Политика диспетчера",
+        "description": "",
+        "type": "role",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "roles": "[{\"id\":\"{{ application_instance_id }}/Диспетчер\",\"required\":false}]"
+        }
+      },
+      {
+        "name": "Политика инженера",
+        "description": "",
+        "type": "role",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "roles": "[{\"id\":\"{{ application_instance_id }}/Инженер\",\"required\":false}]"
+        }
+      },
+      {
+        "name": "Политика прочие",
+        "description": "",
+        "type": "role",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "roles": "[{\"id\":\"{{ application_instance_id }}/Прочие\",\"required\":false}]"
+        }
+      },
+      {
+        "name": "Разрешения_администратора",
         "description": "",
         "type": "resource",
         "logic": "POSITIVE",
         "decisionStrategy": "UNANIMOUS",
         "config": {
-          "applyPolicies": "[\"common\"]",
-          "resources": "[\"common\"]"
+          "applyPolicies": "[\"Политика администратора\"]",
+          "resources": "[\"resourceAdministrator\"]"
+        }
+      },
+      {
+        "name": "Разрешения_диспетчера",
+        "description": "",
+        "type": "resource",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "applyPolicies": "[\"Политика диспетчера\"]",
+          "resources": "[\"resourceDispatcher\"]"
+        }
+      },
+      {
+        "name": "Разрешения_инженера",
+        "description": "",
+        "type": "resource",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "applyPolicies": "[\"Политика инженера\"]",
+          "resources": "[\"resourceEngineer\"]"
+        }
+      },
+      {
+        "name": "Разрешения_куратора_иб",
+        "description": "",
+        "type": "resource",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "applyPolicies": "[\"Политика Куратора ИБ\"]",
+          "resources": "[\"resourceCuratorIB\"]"
+        }
+      },
+      {
+        "name": "Разрешения_прочие",
+        "description": "",
+        "type": "resource",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "applyPolicies": "[\"Политика прочие\"]",
+          "resources": "[\"resourceOthers\"]"
         }
       }
     ],

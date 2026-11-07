@@ -27,7 +27,7 @@ hydro-calculation, hydro-history-and-model, hmi-frontend-hydrocyclone.
 
 ### Подключение к СЗИ
 
-Для 15 приложений подготовлены `assets/keycloak-client.json.j2` из исходной БД
+Для 16 приложений подготовлены `assets/keycloak-client.json.j2` из исходной БД
 Keycloak от 14 октября 2026 года. Состав, соответствие клиентов и результаты
 проверки приведены в [SSO clients](sso-clients.md).
 

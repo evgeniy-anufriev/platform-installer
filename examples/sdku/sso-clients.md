@@ -18,8 +18,9 @@ SHA-256 исходного файла:
 | alarm-service | alarm-service | 4 | 1 | 2 |
 | alarm-view-service | alarm-view-service | 8 | 6 | 12 |
 | data-manager | data-manager | 9 | 7 | 14 |
+| ef-backend | hmi-backend | 3 | 1 | 2 |
 | evo-scheduler | evo-scheduler | 4 | 2 | 4 |
-| hmi-backend | hmi-backend | 3 | 1 | 2 |
+| hmi-backend | cspa_hmi_backend | 6 | 5 | 10 |
 | hmi-frontend-alarms | hmi-frontend-alarms | 3 | 0 | 0 |
 | hmi-frontend-para | hmi-frontend-para | 2 | 0 | 0 |
 | hmi-frontend-svg-editor | hmi-frontend-svg-editor | 2 | 0 | 0 |
@@ -31,9 +32,11 @@ SHA-256 исходного файла:
 | sdku-vtor-ui | sdku-vtor-ui | 2 | 1 | 6 |
 | user-preferences | user-preferences | 2 | 1 | 2 |
 
-Соответствие `sdku-knp-backend` → `sdku-knp` согласовано владельцем.
+Соответствия `hmi-backend` → `ef-backend`, `cspa_hmi_backend` → `hmi-backend`
+и `sdku-knp-backend` → `sdku-knp` согласованы владельцем.
+Имя первого клиента в исходной БД записано через дефис: `hmi-backend`.
 Для остальных приложений использовано точное совпадение имени клиента.
-В дампе нет одноимённых клиентов для `ef-backend`, `evo-manager`, `ham-backend`,
+В дампе нет одноимённых клиентов для `evo-manager`, `ham-backend`,
 `hmi-frontend-viewer-noszi`, `iec60870`, `kafka-ch-replicator`,
 `kafka-history-writer`, `opc-ua-server`, `sdku-status-calculation`,
 `sdku-tank-farm`, `sdku-telemechanics`; шаблоны для них не создавались.
@@ -78,9 +81,9 @@ IDENTITY_CLIENT: "{{ (lookup('ansible.builtin.template', (application_job.applic
 
 - штатная загрузка схем и digest всех 28 пакетов SDKU/CSPA;
 - штатная подготовка обоих примеров, по 2 задания, и 26 синтетических Compose render;
-- 30 рендеров 15 клиентских шаблонов средствами Ansible с двумя разными ID
+- 32 рендера 16 клиентских шаблонов средствами Ansible с двумя разными ID
   экземпляра и адресами прокси;
-- соответствие исходной БД: 51 роль, 24 ресурса, 52 политики, состав scopes
+- соответствие исходной БД: 57 ролей, 29 ресурсов, 62 политики, состав scopes
   и protocol mappers, ссылки политик на роли, ресурсы и другие политики;
 - отсутствие секретов исходных клиентов, исторического адреса и UUID БД в
   сформированных шаблонах.

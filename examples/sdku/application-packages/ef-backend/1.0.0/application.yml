@@ -3,7 +3,8 @@
   "files": [
     "roles/application_ef-backend/defaults/main.yml",
     "roles/application_ef-backend/templates/compose.yml.j2",
-    "roles/application_ef-backend/templates/agent.hcl.j2"
+    "roles/application_ef-backend/templates/agent.hcl.j2",
+    "assets/keycloak-client.json.j2"
   ],
   "kind": "ApplicationPackage",
   "name": "ef-backend",

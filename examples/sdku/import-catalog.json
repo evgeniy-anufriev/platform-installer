@@ -21,7 +21,7 @@
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:ae8d10e84c84e2e854d3afb819ac95167bbfd39cfb61b36cf99949a18178f001",
+    "digest": "sha256:b50b98fbf468aa0ffc5468a2d5c258e49d5e968118111279dd114512875d8ec0",
     "kind": "application",
     "name": "ef-backend",
     "sourceDirectory": ".",
@@ -49,7 +49,7 @@
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:09f5fa852b8c191863289642236cf92b3735fbf28786245a5620ebcd83c25341",
+    "digest": "sha256:6462e2e1c0f9a1db1831132aef80862ff957962cf4c37a9dad805c6dd517180b",
     "kind": "application",
     "name": "hmi-backend",
     "sourceDirectory": ".",
