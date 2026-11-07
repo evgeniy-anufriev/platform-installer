@@ -44,6 +44,18 @@ def extract(archive, destination):
                         shutil.copyfileobj(incoming, outgoing)
 
 
+def summarize_tasks(rows):
+    groups = {}
+    for seconds, name in rows:
+        # Ignore Ansible's decorative padding, which depends on terminal width.
+        name = name[:name.rfind("]") + 1] if "]" in name else name
+        total, count = groups.get(name, (0.0, 0))
+        groups[name] = (total + seconds, count + 1)
+    return sorted(((total, count, total / count, name)
+                   for name, (total, count) in groups.items()),
+                  key=lambda row: (-row[0], row[3]))
+
+
 def measure(project, runtime):
     env = os.environ.copy()
     env["ANSIBLE_CONFIG"] = str(runtime / "ansible-core/ansible.cfg")
@@ -70,10 +82,22 @@ def measure(project, runtime):
                 print(line, flush=True)
             # Do not publish variable values or raw failed task output.
         rc = process.wait()
-    elapsed = time.monotonic() - started
+    finished = time.monotonic()
+    elapsed = finished - started
     if current:
-        rows.append((time.monotonic() - current[0], current[1]))
+        rows.append((finished - current[0], current[1]))
     print(f"\nВремя Core: {elapsed:.2f} сек. Код завершения: {rc}. Задач: {len(rows)}")
+    print("\nСводка по всем задачам, по убыванию суммарного времени:")
+    print(" Сумма, сек | Вызовы | Среднее, сек | Доля Core | Задача")
+    for total, count, average, name in summarize_tasks(rows):
+        share = total / elapsed * 100 if elapsed else 0.0
+        print(f"{total:11.2f} | {count:6d} | {average:12.3f} | {share:8.2f}% | {name}")
+    task_seconds = sum(seconds for seconds, _ in rows)
+    print(f"\nСумма интервалов задач: {task_seconds:.2f} сек")
+    print(f"Вне интервалов задач: {max(0.0, elapsed - task_seconds):.2f} сек")
+    print("Вызовы — число заголовков задач, не число хостов или элементов loop.")
+    print("Интервалы включают накладные расходы Ansible между заголовками.")
+    print()
     print("Самые долгие задачи (интервалы между заголовками):")
     for seconds, name in sorted(rows, reverse=True)[:30]:
         print(f"{seconds:8.2f} сек  {name}")
