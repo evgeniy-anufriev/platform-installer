@@ -194,7 +194,7 @@ class ApplicationRuntimeQA(unittest.TestCase):
             self.assertRegex(output, r"node2\s+:\s+ok=\d+\s+changed=0")
             self.assertTrue(self.containers("node2")["sdku"]["running"])
             response = subprocess.run(self.ssh + ["curl --fail --silent --max-time 15 http://127.0.0.1:28180/status"], capture_output=True, check=True, timeout=30)
-            self.assertEqual("apigateway-sdku:INFO\n", response.stdout.decode())
+            self.assertEqual("gateway-sdku:INFO\n", response.stdout.decode())
         for library, port in (("sdku", 28180), ("cspa", 28181)):
             with urllib.request.urlopen("http://127.0.0.1:%d/status" % port, timeout=30) as response:
                 self.assertEqual("apigateway-%s:INFO\n" % library, response.read().decode())
@@ -207,11 +207,11 @@ class ApplicationRuntimeQA(unittest.TestCase):
         variables["platform_desired_state"]["applicationLibraryDeployments"]["sdku"]["applications"]["gateway"]["overrides"]["parameters"]["log_level"] = "TRACE"
         self.vars_path.write_text(json.dumps(variables))
         # Reproduce the exact post-write/pre-up interrupted state; no production bypass.
-        config_path = self.target_root / "sdku/apigateway-sdku/node1/config/default.conf"
-        content = 'server {\n    listen 8080;\n    location /status {\n        default_type text/plain;\n        return 200 "apigateway-sdku:TRACE\\n";\n    }\n}\n'
+        config_path = self.target_root / "sdku/gateway-sdku/node1/config/default.conf"
+        content = 'server {\n    listen 8080;\n    location /status {\n        default_type text/plain;\n        return 200 "gateway-sdku:TRACE\\n";\n    }\n}\n'
         subprocess.run(["sudo", "-n", "-u", ACCOUNT, "tee", str(config_path)], input=content.encode(), stdout=subprocess.DEVNULL, check=True)
         with urllib.request.urlopen("http://127.0.0.1:28180/status", timeout=30) as response:
-            self.assertEqual("apigateway-sdku:INFO\n", response.read().decode())
+            self.assertEqual("gateway-sdku:INFO\n", response.read().decode())
         # Lightweight Verify checks identity/readiness, not configuration drift.
         self.play("verify")
         self.play("apply")
@@ -220,7 +220,7 @@ class ApplicationRuntimeQA(unittest.TestCase):
         self.assertNotEqual(before["sdku"]["digest"], after["sdku"]["digest"])
         self.assertEqual(before["cspa"], after["cspa"])
         with urllib.request.urlopen("http://127.0.0.1:28180/status", timeout=30) as response:
-            self.assertEqual("apigateway-sdku:TRACE\n", response.read().decode())
+            self.assertEqual("gateway-sdku:TRACE\n", response.read().decode())
         self.play("verify")
         self.assertRegex(self.play("apply"), r"node1\s+:\s+ok=\d+\s+changed=0")
 

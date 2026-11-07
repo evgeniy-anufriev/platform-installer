@@ -21,12 +21,12 @@ class EndpointTaskTest(unittest.TestCase):
                 'excluded': {'ansible_host': '192.0.2.254', 'ansible_connection': 'ssh'}}}},
                 'vars': {'platform_desired_state': {'serviceDeployments': {'bad': {'serviceType': 'not-a-provider'}}}}}}
             (root / 'hosts.yml').write_text(yaml.safe_dump(inventory))
-            source = {'endpointGroup': 'apps', 'endpoint': {'fqdn': 'apigateway-sdku.apps.test'},
+            source = {'endpointGroup': 'apps', 'endpoint': {'fqdn': 'gateway-sdku.apps.test'},
                       'probe': {'path': '/status', 'expected_status': 200, 'timeout': 1, 'validate_certs': True},
                       'targets': [{'hostId': 'node1', 'address': '127.0.0.1', 'port': 8080, 'serverName': 'node1'}]}
             extra = {'platform_desired_state': {'serviceDeployments': {}, 'endpointGroups': {
                 'apps': {'address': {'domain': 'apps.test'}}}},
-                'platform_endpoint_sources': {'apigateway-sdku': source},
+                'platform_endpoint_sources': {'gateway-sdku': source},
                 'platform_service_catalog_path': str(REPO / 'examples/catalog/service-catalog.yml')}
             (root / 'extra.yml').write_text(yaml.safe_dump(extra))
             command = ['ansible-playbook', '-i', str(root / 'hosts.yml'),
@@ -77,8 +77,8 @@ class EndpointTaskTest(unittest.TestCase):
                          {'platform.core.prepare_application_endpoints': {'snapshot': '{{ snapshot.snapshot }}',
                           'service_catalog_path': str(REPO / 'examples/catalog/service-catalog.yml')}, 'register': 'endpoint_input'},
                          {'ansible.builtin.assert': {'that': ["endpoint_input.status == 'PASS'",
-                          "endpoint_input.sources['apigateway-sdku'].targets | length == 2",
-                          "endpoint_input.sources['apigateway-sdku'].endpoint.fqdn == 'apigateway-sdku.apps.example.test'"]}}]}]
+                          "endpoint_input.sources['gateway-sdku'].targets | length == 2",
+                          "endpoint_input.sources['gateway-sdku'].endpoint.fqdn == 'gateway-sdku.apps.example.test'"]}}]}]
             path = Path(directory) / 'qa.yml'
             path.write_text(yaml.safe_dump(play))
             env = dict(os.environ, ANSIBLE_CONFIG=str(REPO / 'ansible-core/ansible.cfg'),
@@ -110,8 +110,8 @@ class EndpointTaskTest(unittest.TestCase):
                          {'platform.core.prepare_application_endpoints': {'snapshot': '{{ snapshot.snapshot }}',
                           'service_catalog_path': str(REPO / 'examples/catalog/service-catalog.yml')}, 'register': 'endpoint_input'},
                          {'ansible.builtin.assert': {'that': ["endpoint_input.status == 'PASS'",
-                          "endpoint_input.sources['apigateway-sdku'].targets | length == 2",
-                          "endpoint_input.sources['apigateway-sdku'].endpoint.fqdn == 'apigateway-sdku.apps.example.test'"]}}]}]
+                          "endpoint_input.sources['gateway-sdku'].targets | length == 2",
+                          "endpoint_input.sources['gateway-sdku'].endpoint.fqdn == 'gateway-sdku.apps.example.test'"]}}]}]
             path = Path(directory) / 'qa.yml'
             path.write_text(yaml.safe_dump(play))
             env = dict(os.environ, ANSIBLE_CONFIG=str(REPO / 'ansible-core/ansible.cfg'),
@@ -138,16 +138,16 @@ class EndpointTaskTest(unittest.TestCase):
             active, candidate = root / 'active', root / 'candidate'
             active.mkdir()
             (candidate / 'conf.d').mkdir(parents=True)
-            selected = '30-backend-apigateway-sdku-child.cfg'
-            neighbor = '30-backend-apigateway-sdku-test-child.cfg'
+            selected = '30-backend-gateway-sdku-child.cfg'
+            neighbor = '30-backend-gateway-sdku-test-child.cfg'
             (active / selected).write_text('selected')
             (active / neighbor).write_text('neighbor preserved')
             for name in ['10-public.cfg', '20-local-stats.cfg', '90-stats-backends.cfg']:
                 (active / name).write_text('# existing provider fragment\n')
             (root / 'haproxy.cfg').write_text('# existing main\n')
-            backend = {'targetDeploymentId': 'apigateway-sdku', 'providerHostIds': ['localhost'],
+            backend = {'targetDeploymentId': 'gateway-sdku', 'providerHostIds': ['localhost'],
                        'configFileName': selected}
-            variables = {'platform_haproxy_partial_deployment_id': 'apigateway-sdku',
+            variables = {'platform_haproxy_partial_deployment_id': 'gateway-sdku',
                          'platform_haproxy_full_reconcile': False,
                          'platform_deployments': {'proxy': {}},
                          'platform_haproxy_runtime_projection': {'backends': {'backends': {'proxy': [backend]}}},

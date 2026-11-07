@@ -278,6 +278,9 @@ def _literal_library_input(value):
         return all(_literal_library_input(item) for item in value)
     return value is None or type(value) in (bool, int, float)
 
+def application_instance_id(slot_id, library_id, strategy='qualified'):
+    return slot_id if strategy == 'application-name' else slot_id + '-' + library_id
+
 
 def prepare(root, desired, memberships, contract, loader, contracts_root):
     schema_version(desired, contract)
@@ -339,13 +342,9 @@ def prepare(root, desired, memberships, contract, loader, contracts_root):
             placements = [host for host, membership in sorted(memberships.items()) if library_id in membership]
             if not placements:
                 findings.append(finding("APPLICATION_LIBRARY_PLACEMENT_MISSING", field))
-            app_names = set()
             for slot_id in sorted(selected):
                 slot = slots[slot_id]
                 application = package(slot["applicationRef"], "application")
-                if application["name"] in app_names:
-                    raise ValueError("Duplicate application definition")
-                app_names.add(application["name"])
                 connection_pair = (deployment["libraryRef"], slot["applicationRef"])
                 if connection_pair not in connection_maps:
                     declarations = application["definition"].get("connections", {})
@@ -356,6 +355,7 @@ def prepare(root, desired, memberships, contract, loader, contracts_root):
                         connection_maps[connection_pair] = {key: library_connections[key] for key in declarations}
                     else:
                         connection_maps[connection_pair] = None
+
                 for host in placements:
                     host_override = memberships[host][library_id].get('overrides', {})
                     if 'connections' in host_override:
@@ -368,6 +368,8 @@ def prepare(root, desired, memberships, contract, loader, contracts_root):
                                        selected[slot_id].get('overrides', {}), host_override)
                         for key in ('endpoint', 'ports'))
                     jobs.append({"libraryId": library_id, "slotId": slot_id, "hostId": host,
+                                 "instanceId": application_instance_id(slot_id, library_id,
+                                     library['definition'].get('instance_id_strategy', 'qualified')),
                                  "library": library, "application": application,
                                  "connections": connection_maps[connection_pair],
                                  "skipConnectionTopology": skip_connection_topology,
@@ -598,7 +600,7 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
         instance_owners[app_id] = owner
         settings = row["settings"]
         strategy = row.get("instanceIdStrategy", "qualified")
-        expected_id = row["applicationName"] if strategy == "application-name" else row["applicationName"] + "-" + library_id
+        expected_id = application_instance_id(row['slotId'], library_id, strategy)
         if strategy not in ("qualified", "application-name") or app_id != expected_id or host not in hosts or not ID.fullmatch(app_id) or len(app_id) > 128:
             findings.append(finding("APPLICATION_IDENTITY_INVALID", field))
         for section in ("parameters", "environment", "command"):
@@ -829,7 +831,13 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
                 except (ValueError, KeyError, TypeError):
                     findings.append(finding('APPLICATION_CONNECTION_CALLBACK_INVALID',
                                             'applicationLibraryDeployments.' + library_id + '.provided_connections.' + export_name))
-        named = {instance['applicationName']: instance for instance in library['instances'].values()}
+        named = {instance['slotId']: instance for instance in library['instances'].values()}
+        packages = {}
+        for instance in library['instances'].values():
+            packages.setdefault(instance['applicationName'], []).append(instance)
+        for name, instances in packages.items():
+            if len(instances) == 1:
+                named.setdefault(name, instances[0])
         for consumer in library['instances'].values():
             for alias, connection in consumer.get('connections', {}).items():
                 if not connection.get('connectionProvisioner'):

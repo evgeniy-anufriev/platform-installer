@@ -33,7 +33,10 @@ def _script_metadata(script, path):
 
 def _instance(library, name):
     matches = [(instance_id, value) for instance_id, value in library['instances'].items()
-               if value['applicationName'] == name]
+               if value.get('slotId') == name]
+    if not matches:
+        matches = [(instance_id, value) for instance_id, value in library['instances'].items()
+                   if value['applicationName'] == name]
     if len(matches) != 1:
         raise ValueError('APPLICATION_SCRIPT_REFERENCE_INVALID')
     return matches[0]

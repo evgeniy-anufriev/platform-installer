@@ -12,6 +12,29 @@ FIXTURE = os.path.join(REPO, "examples/valid/application-libraries")
 
 
 class StandaloneLibrariesQA(unittest.TestCase):
+    def test_same_package_in_two_slots_resolves_independent_contexts_on_two_hosts(self):
+        path = os.path.join(self.root, 'library-packages/sdku/1.0.0/roles/library_sdku/defaults/main.yml')
+        self.edit(path, lambda data: data['platform_library_definition']['slots'].update(
+            replica=dict(applicationRef='apigateway@1.0.0')))
+        def select(data):
+            apps = data['platform_desired_state']['applicationLibraryDeployments']['sdku']['applications']
+            apps['replica'] = {'overrides': {'environment': {'REPLICA': 'second'},
+                                           'ports': {'http': {'container': 10101, 'published': 18083}}}}
+        self.edit(self.vars, select)
+        self.edit(self.defaults, lambda data: data['platform_application_definition']['defaults']['environment'].update(
+            SLOT_CONTEXT='{{ application_instance_id }}@{{ application_job.hostId }}'))
+        result = self.snapshot()
+        self.assertEqual('PASS', result['applicationLibraries']['status'], result['findings'])
+        instances = result['applicationLibraries']['libraries']['sdku']['instances']
+        self.assertEqual({'gateway-sdku', 'replica-sdku'}, set(instances))
+        for name, instance in instances.items():
+            self.assertEqual('apigateway', instance['applicationName'])
+            self.assertEqual({'node1', 'node2'}, set(instance['placements']))
+            for host, placement in instance['placements'].items():
+                self.assertEqual(name+'@'+host, placement['environment']['SLOT_CONTEXT'])
+        self.assertEqual('second', instances['replica-sdku']['placements']['node1']['environment']['REPLICA'])
+        self.assertNotIn('REPLICA', instances['gateway-sdku']['placements']['node1']['environment'])
+
     def test_scram_listener_accounts_and_jaas_bindings_resolve_target_free(self):
         def desired(data):
             state = data['platform_desired_state']
@@ -229,12 +252,12 @@ class StandaloneLibrariesQA(unittest.TestCase):
         snapshot = self.snapshot()
         self.assertEqual('PASS', snapshot['status'], snapshot['findings'])
         sdku = snapshot['applicationLibraries']['libraries']['sdku']
-        self.assertEqual('CLIENT_SSL', sdku['instances']['apigateway-sdku']['connections']['kafka']['connectionRef'])
+        self.assertEqual('CLIENT_SSL', sdku['instances']['gateway-sdku']['connections']['kafka']['connectionRef'])
         self.assertEqual('sdku-events', sdku['topics']['events']['name'])
         self.assertEqual(2, sdku['topics']['events']['partitions'])
         self.assertEqual({'kind': 'redis.key', 'binding': 'cache', 'parameters': {'name': 'sdku-meta'}},
                          sdku['resources']['metadata'])
-        self.assertEqual(8080, sdku['instances']['apigateway-sdku']['placements']['node1']['ports']['http']['container'])
+        self.assertEqual(8080, sdku['instances']['gateway-sdku']['placements']['node1']['ports']['http']['container'])
 
         # An inherited resource default still goes through the strict resolved schema.
         self.edit(library, lambda d: d['platform_library_definition']['resource_defaults']['kafka']['topics'].update(
@@ -273,17 +296,17 @@ class StandaloneLibrariesQA(unittest.TestCase):
         self.assertEqual(('sdku.events', 2, 'compact', '2000'), (lib['topics']['events']['name'], lib['topics']['events']['partitions'],
                          lib['topics']['events']['config']['cleanup.policy'], lib['topics']['events']['config']['retention.ms']))
         self.edit(self.vars, lambda d: d['platform_desired_state']['applicationLibraryDeployments']['sdku']['resources']['events']['parameters'].update(name='resource.events'))
-        self.assertEqual('resource.events', projected()['instances']['apigateway-sdku']['topics']['kafka']['main']['name'])
+        self.assertEqual('resource.events', projected()['instances']['gateway-sdku']['topics']['kafka']['main']['name'])
         self.edit(self.vars, lambda d: d['platform_desired_state']['applicationLibraryDeployments']['sdku']['applications']['gateway'].setdefault('overrides', {}).update(topicBindings={'kafka': {'main': 'alternate'}}))
-        self.assertEqual('sdku.alternate', projected()['instances']['apigateway-sdku']['topics']['kafka']['main']['name'])
+        self.assertEqual('sdku.alternate', projected()['instances']['gateway-sdku']['topics']['kafka']['main']['name'])
         self.edit(self.vars, lambda d: d['platform_desired_state']['applicationLibraryDeployments']['sdku']['applications']['gateway']['overrides'].pop('topicBindings'))
-        self.assertEqual('resource.events', projected()['instances']['apigateway-sdku']['topics']['kafka']['main']['name'])
+        self.assertEqual('resource.events', projected()['instances']['gateway-sdku']['topics']['kafka']['main']['name'])
         self.edit(self.vars, lambda d: d['platform_desired_state']['applicationLibraryDeployments']['sdku']['resources']['events']['parameters'].pop('name'))
         self.assertEqual('sdku.events', projected()['topics']['events']['name'])
         # An ordinary ENV override remains independent; removing it restores the role template.
         self.edit(self.vars, lambda d: d['platform_desired_state']['applicationLibraryDeployments']['sdku']['applications']['gateway'].setdefault('overrides', {}).update(environment={'MAIN_TOPIC': 'explicit.env'}))
         value = self.snapshot()
-        instance = value['applicationLibraries']['libraries']['sdku']['instances']['apigateway-sdku']
+        instance = value['applicationLibraries']['libraries']['sdku']['instances']['gateway-sdku']
         self.assertTrue(all(p['environment']['MAIN_TOPIC'] == 'explicit.env' for p in instance['placements'].values()))
         self.edit(self.vars, lambda d: d['platform_desired_state']['applicationLibraryDeployments']['sdku']['applications']['gateway']['overrides'].pop('environment'))
         projected()
@@ -445,11 +468,11 @@ done
             self.assertEqual('PASS', value['status'], [(f['code'], f.get('field')) for f in value['findings']])
             return value['applicationLibraries']['libraries']['sdku']
         self.assertEqual(1, projected()['topics']['events']['replicationFactor'])
-        self.assertEqual('sdku.events', projected()['instances']['apigateway-sdku']['topics']['kafka'][0]['name'])
+        self.assertEqual('sdku.events', projected()['instances']['gateway-sdku']['topics']['kafka'][0]['name'])
         self.edit(self.vars, lambda d: d['platform_desired_state']['applicationLibraryDeployments']['sdku']['applications']['gateway'].setdefault('overrides', {}).update(topicBindings={'kafka': []}))
-        self.assertEqual([], projected()['instances']['apigateway-sdku']['topics']['kafka'])
+        self.assertEqual([], projected()['instances']['gateway-sdku']['topics']['kafka'])
         self.edit(self.vars, lambda d: d['platform_desired_state']['applicationLibraryDeployments']['sdku']['applications']['gateway']['overrides'].pop('topicBindings'))
-        self.assertEqual(1, len(projected()['instances']['apigateway-sdku']['topics']['kafka']))
+        self.assertEqual(1, len(projected()['instances']['gateway-sdku']['topics']['kafka']))
 
     def test_shared_runtime_paths_with_builtin_tasks_and_no_target_writes(self):
         tasks = os.path.join(REPO, 'ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/resolve_paths.yml')
@@ -480,7 +503,7 @@ done
     def test_library_runtime_directory_default_override_and_reset(self):
         def directory():
             library = self.snapshot()['applicationLibraries']['libraries']['sdku']
-            placements = library['instances']['apigateway-sdku']['placements']
+            placements = library['instances']['gateway-sdku']['placements']
             self.assertTrue(all(p['runtimeDirectory'] == library['runtimeDirectory'] for p in placements.values()))
             return library['runtimeDirectory']
         self.assertEqual('~/sdku', directory())
@@ -537,8 +560,8 @@ done
         snapshot = self.snapshot()
         self.assertEqual("PASS", snapshot["status"], [(f["code"], f.get("field")) for f in snapshot["findings"]])
         libraries = snapshot["applicationLibraries"]["libraries"]
-        sdku = libraries["sdku"]["instances"]["apigateway-sdku"]
-        cspa = libraries["cspa"]["instances"]["apigateway-cspa"]
+        sdku = libraries["sdku"]["instances"]["gateway-sdku"]
+        cspa = libraries["cspa"]["instances"]["gateway-cspa"]
         self.assertEqual({"node1", "node2"}, set(sdku["placements"]))
         self.assertEqual("DEBUG", sdku["placements"]["node1"]["parameters"]["log_level"])
         self.assertEqual("TRACE", sdku["placements"]["node2"]["parameters"]["log_level"])
@@ -548,8 +571,8 @@ done
         self.assertEqual("postgres-sdku", sdku["connections"]["postgres"]["deploymentRef"])
         self.assertEqual("postgres-cspa", cspa["connections"]["postgres"]["deploymentRef"])
         self.assertEqual("node2", sdku["placements"]["node2"]["SERVER_ID"])
-        self.assertEqual("project-sdku-apigateway-sdku-node1", sdku["placements"]["node1"]["composeProject"])
-        self.assertEqual("apigateway-sdku-node1", sdku["placements"]["node1"]["containerName"])
+        self.assertEqual("project-sdku-gateway-sdku-node1", sdku["placements"]["node1"]["composeProject"])
+        self.assertEqual("gateway-sdku-node1", sdku["placements"]["node1"]["containerName"])
         self.assertEqual("CLIENT_SSL", sdku["connections"]["kafka"]["connectionRef"])
         self.assertTrue(sdku["agentRequired"])
         self.assertEqual({"account": "redis", "field": "password"}, sdku["secretBindings"]["REDIS_PASSWORD"]["source"])
@@ -570,7 +593,7 @@ done
         def placement():
             result = self.snapshot()
             self.assertEqual('PASS', result['status'], [(f['code'], f.get('field')) for f in result['findings']])
-            return result['applicationLibraries']['libraries']['sdku']['instances']['apigateway-sdku']['placements']['node1']
+            return result['applicationLibraries']['libraries']['sdku']['instances']['gateway-sdku']['placements']['node1']
         row = placement()
         self.assertEqual('instance', row['environment']['LEVEL'])
         self.assertEqual('library-instance', row['inherited']['environment']['LEVEL'])
@@ -624,7 +647,7 @@ done
         self.edit(self.defaults, no_secrets)
         snapshot = self.snapshot()
         self.assertEqual("PASS", snapshot["status"])
-        instance = snapshot["applicationLibraries"]["libraries"]["sdku"]["instances"]["apigateway-sdku"]
+        instance = snapshot["applicationLibraries"]["libraries"]["sdku"]["instances"]["gateway-sdku"]
         self.assertFalse(instance["agentRequired"])
         self.assertEqual({}, instance["credentialRequirements"])
         self.assertIsNone(instance["approle"])
@@ -677,7 +700,7 @@ done
             defaults.pop("provisioner")
         self.edit(self.defaults, no_accounts)
         self.edit(self.vars, lambda data: data["platform_desired_state"]["applicationLibraryDeployments"]["sdku"]["bindings"].pop("cache"))
-        instance = self.snapshot()["applicationLibraries"]["libraries"]["sdku"]["instances"]["apigateway-sdku"]
+        instance = self.snapshot()["applicationLibraries"]["libraries"]["sdku"]["instances"]["gateway-sdku"]
         self.assertNotIn("redis", instance["connections"])
 
     def test_same_host_port_collision_blocks(self):

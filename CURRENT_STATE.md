@@ -23,6 +23,14 @@ application installation/Verify and visual acceptance remain outside this test.
 Owner-authorized test images and isolated QA names were used; original Jinja/ENV
 retained. Owner authorized scoped commit/push on this branch. [Evidence](docs/work/application-libraries/evidence/resolve-library-context-performance.md).
 
+Owner-requested slot-based application identity (2026-11-07): instance IDs now
+use slot names, allowing multiple slots to reuse one package. Qualified IDs keep
+the library suffix; explicit script slot selection and uniqueness checks remain.
+43 focused RED OS checks pass. Real React/Wails same-package/two-slot/two-host
+Verify VERIFIED in 39.326s; no installation/Start or visual acceptance claimed.
+Existing aliases whose slot differs from the package change IDs without resource
+migration. [Evidence](docs/work/application-libraries/evidence/slot-instance-identity.md).
+
 Owner-requested coherent Verify publication (2026-11-03): manual and automatic
 Verify return current project/snapshot with status in one Go response and share
 one atomic UI publication path. Automatic Keycloak/SSO URL and stale-context

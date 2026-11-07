@@ -11,10 +11,7 @@
     - name: Привязка идентификаторов и контекста параметров размещения приложения
       ansible.builtin.set_fact:
         application_name: "{{ application_job.application.name }}"
-        application_instance_id: >-
-          {{ application_job.application.name if
-             (application_job.library.definition.instance_id_strategy | default('qualified')) == 'application-name'
-             else application_job.application.name ~ '-' ~ application_job.libraryId }}
+        application_instance_id: "{{ application_job.instanceId }}"
         library_instance_id: "{{ application_job.libraryId }}"
         _application_library_endpoint: >-
           {{ {'endpoint_group': application_job.deployment.bindings.endpoint.endpointGroupRef | default(platform_desired_state['x-applicationLibraryEndpointGroups'][application_job.libraryId] | default(''))}

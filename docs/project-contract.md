@@ -393,11 +393,19 @@ Applications produce snapshot v2alpha1. A7/A8 extend the execution planner with
 application-aware planning and the mixed execution barrier; the original A1
 rejection is historical, not a current restriction.
 Library packages may declare `instance_id_strategy: application-name`; Core then
-uses the application's package name as its `instanceId` in the endpoint,
+uses the application's slot ID as its `instanceId` in the endpoint,
 Compose and execution projections. The omitted/default `qualified` strategy
-continues to use `<application-name>-<library-id>`. IDs must be unique across
+uses `<slot-id>-<library-id>`. IDs must be unique across
 selected libraries. SZI selects `application-name` because a project has one
 SZI library deployment.
+Several selected slots may reference the same application package. Core uses
+the slot ID rather than the package name in every instance ID:
+`<slot-id>-<library-id>` for `qualified`, or `<slot-id>` for `application-name`.
+The same slot keeps one identity across its host placements; each slot resolves
+its own overrides, environment, credentials and runtime paths. Single-use package
+IDs remain unchanged when the slot and package names match. Existing slots with
+different names now use the slot-based ID; this does not rename or migrate
+already installed resources. Adding another slot does not change existing IDs.
 See [A1 implementation notes](work/application-libraries/milestones/a1/evidence/a1-test-journal.md).
 
 ### File-only ClickHouse base tables

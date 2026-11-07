@@ -224,6 +224,37 @@ class ApplicationLibrariesTest(unittest.TestCase):
     def prepare(self, root=FIXTURE):
         return APP.prepare(root, self.desired, self.memberships, APP.CONTRACT, load, CONTRACTS)
 
+    def test_repeated_package_slots_have_stable_distinct_ids_without_reloading_package(self):
+        with tempfile.TemporaryDirectory() as directory:
+            shutil.copytree(FIXTURE, directory, dirs_exist_ok=True)
+            path = os.path.join(directory, 'library-packages/sdku/1.0.0/roles/library_sdku/defaults/main.yml')
+            data = load(path)
+            data['platform_library_definition']['slots']['gateway-copy'] = dict(applicationRef='apigateway@1.0.0')
+            with open(path, 'w') as stream:
+                json.dump(data, stream)
+            before = self.prepare(directory)
+            self.desired['applicationLibraryDeployments']['sdku']['applications']['gateway-copy'] = {
+                'overrides': {'environment': {'COPY': 'second'}}}
+            with patch.object(APP, 'load_package', wraps=APP.load_package) as loads:
+                after = self.prepare(directory)
+            self.assertEqual([], after['findings'])
+            self.assertEqual(3, loads.call_count)
+            self.assertEqual(5, len(after['jobs']))
+            self.assertEqual({'gateway-sdku', 'gateway-copy-sdku'},
+                {job['instanceId'] for job in after['jobs'] if job['libraryId'] == 'sdku'})
+            self.assertEqual(next(job['instanceId'] for job in before['jobs'] if job['libraryId'] == 'sdku'),
+                next(job['instanceId'] for job in after['jobs'] if job['libraryId'] == 'sdku' and job['slotId'] == 'gateway'))
+            self.assertEqual('gateway', APP.application_instance_id('gateway', 'sdku', 'application-name'))
+
+    def test_script_application_selector_prefers_slot_and_rejects_ambiguous_package(self):
+        import application_scripts
+        library = {'instances': {
+            'first-lib': {'slotId': 'first', 'applicationName': 'shared'},
+            'second-lib': {'slotId': 'second', 'applicationName': 'shared'}}}
+        self.assertEqual('second-lib', application_scripts._instance(library, 'second')[0])
+        with self.assertRaisesRegex(ValueError, 'APPLICATION_SCRIPT_REFERENCE_INVALID'):
+            application_scripts._instance(library, 'shared')
+
     def test_library_endpoint_selection_rejects_missing_library_or_group(self):
         for selections in ({'missing': 'apps'}, {'sdku': 'missing'}, [], {'sdku': 42}):
             self.desired['x-applicationLibraryEndpointGroups'] = selections
