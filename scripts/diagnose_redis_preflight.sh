@@ -34,6 +34,23 @@ errors=$(jq -c '
 ' "$log")
 
 if [[ -z "$errors" ]]; then
+    failures=$(jq -c '
+        select(.task.role? == "platform.redis.application_provider" and .status == "FAILED")
+        | {
+            error: (if (.error.code? // "" | test("^[A-Z][A-Z0-9_]+$"))
+                    then .error.code else "REDIS_TASK_FAILED" end),
+            diagnostic: (if (.ansibleOutput? // "" | type) == "string" and
+                            (.ansibleOutput? // "" | contains("[truncated]"))
+                         then "ANSIBLE_OUTPUT_TRUNCATED_FAILED_ITEM_UNAVAILABLE"
+                         elif (.ansibleOutput? // "") == ""
+                         then "ANSIBLE_OUTPUT_HIDDEN_OR_MISSING"
+                         else "FAILED_ITEM_NOT_AVAILABLE_IN_OUTPUT" end)
+          }
+    ' "$log")
+    if [[ -n "$failures" ]]; then
+        printf '%s\n' "$failures"
+        exit 1
+    fi
     echo "REDIS_FAILED_ITEM_NOT_FOUND: latest run has no visible failed Redis/Sentinel item."
     exit 1
 fi
