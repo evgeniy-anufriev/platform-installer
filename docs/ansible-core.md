@@ -129,11 +129,18 @@ A service manifest describes capability, not project intent. A project can insta
 
 `platform.core.resolve_application_libraries` is the A1 controller-only library
 resolver. Project snapshot/validate entrypoints call it only when application
-deployments are declared. It loads validated package defaults using ordinary
-Ansible include_vars in independent namespaces and uses built-in recursive combine
-with list replacement for composition; Python does not evaluate Jinja or recreate
-inventory precedence. Package templates are trusted operator-authored executable
-inputs. A1 validates/fingerprints their closure but does not render them or execute
+deployments are declared. It loads validated library defaults into independent
+Ansible namespaces. The existing controller action uses native Ansible Templar
+and merge_hash (recursive dictionaries, list replacement); inventory precedence
+remains Ansible's, without a second template engine. Placements are grouped by
+library/slot, with independent host contexts and scoped failures. Within one
+instance calculation, scalar templates may share a result only for equal,
+fully literal typed resolver-owned inputs. Unknown aliases, unresolved nested
+inputs, filters/tests and lookups keep fresh native rendering. This private
+memo exists only during that calculation; plan freshness/fingerprints and the
+separate qualified resolution cache are unchanged. Package templates are trusted
+operator-authored executable inputs. A1 validates/fingerprints their closure and
+resolves defaults, but does not render runtime Compose/config files or execute
 application tasks. See [standalone fixture](../examples/valid/application-libraries/README.md).
 
 A2 adds explicit standalone `applications/apply.yml` and

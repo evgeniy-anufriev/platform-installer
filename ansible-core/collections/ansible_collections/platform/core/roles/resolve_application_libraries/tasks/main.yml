@@ -51,31 +51,6 @@
   no_log: true
   become: false
 
-- name: Вычисление параметров каждого приложения и узла по переменным Ansible
+- name: Вычисление настроек экземпляров с отдельным контекстом каждого сервера
   ansible.builtin.include_tasks: instance.yml
-  vars:
-    _application_package: "{{ lookup('vars', '_application_package_' ~ ((application_job.libraryId ~ application_job.slotId ~ application_job.hostId) | hash('sha256'))) }}"
-    _library_resolution_key: "{{ application_job.libraryId ~ '/' ~ application_job.hostId }}"
-  loop: "{{ _application_inputs.jobs }}"
-  loop_control:
-    loop_var: application_job
-    index_var: _application_row_index
-    label: "{{ application_job.libraryId }} / {{ application_job.slotId }} / {{ application_job.hostId }}"
-  when: application_job.connections is not none
   no_log: true
-
-- name: Сбор рассчитанных записей приложений в порядке размещений
-  ansible.builtin.set_fact:
-    platform_application_rows: >-
-      {%- set rows = [] -%}
-      {%- for job in _application_inputs.jobs -%}
-        {%- if job.connections is not none -%}
-          {%- set row = lookup('vars', '_application_resolved_row_' ~ loop.index0) -%}
-          {%- if row is not false -%}
-            {%- set _ = rows.append(row) -%}
-          {%- endif -%}
-        {%- endif -%}
-      {%- endfor -%}
-      {{ rows }}
-  no_log: true
-  become: false

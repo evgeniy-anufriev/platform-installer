@@ -1,6 +1,6 @@
 # Current state
 
-Updated 2026-11-07. This file is the sole current milestone/status source.
+Updated 2026-11-08. This file is the sole current milestone/status source.
 Detailed historical checkpoints are archived under [docs/history](docs/history/si11-state-20261008.md).
 Read the applicable plan and evidence for the task; an implementation or direct
 Ansible PASS does not imply complete UI acceptance. A next gated milestone or
@@ -22,6 +22,65 @@ cancelled through UI after resource completion, before container launch; full
 application installation/Verify and visual acceptance remain outside this test.
 Owner-authorized test images and isolated QA names were used; original Jinja/ENV
 retained. Owner authorized scoped commit/push on this branch. [Evidence](docs/work/application-libraries/evidence/resolve-library-context-performance.md).
+Follow-up SZI5+SDKU45 / 100 placements (uncommitted): scoped native Templar,
+parameter-only rendering and reference-based store/publication preserve typed
+results. Compact runtime `application_placements` replaces raw job traversal in
+seven peer templates; no host_vars/group_vars persistence or extra role tasks.
+Same-input native control327.125s ->225.832/219.306s (mean222.569s, -31.96%);
+1298 tasks unchanged, all100 typed rows/public snapshot/fingerprint identical.
+65 focused RED OS tests, full Go tests/vet, and SDKU28-package/26-render check PASS.
+Real React/Wails on the same QA project/runtime b0760698: Verify VERIFIED217.432s,
+saved revision a2ad3881; Plan EXECUTABLE323.646s; combined approval/Start
+STARTED570.973s, run installer-111cc1f2e80eab125dae519e0bc225c1.
+That resource run failed after an overnight VM pause; no completed resource-stage
+timing is accepted. A 4.88MB snapshot exposed the old Go2MiB
+response cap; snapshot transport/decoder now share the existing16MiB protocol
+budget. Five-minute timeout and fingerprint proof unchanged. No new commit or
+completed application installation/visual acceptance claimed. Detailed evidence
+and fixture migration notes are in the same journal.
+Owner-approved follow-up (2026-11-08, uncommitted): remove repeated resolution
+only for proved closed project-local template inputs; truly external inputs stay
+fresh. Existing private cache now recognizes bounded builtin package file/template
+reads and YAML scalar escaping, with transitive/path/identity guards. Existing
+Start rebuild/fingerprint checks are unchanged; no new Go lifecycle. 18 focused
+RED OS tests,7 native connection and8 snapshot tests PASS; two wider-suite fixture
+failures also reproduce with pre-change resolution modules. PSR-P01 targeted
+recheck APPROVE_WITH_CHANGES, zero blockers. Final same-node100-placement chains:
+fresh261.027/256.664s,1298 tasks/1 resolver; shared31.984-36.524s,9 tasks/0 resolver;
+all six snapshots and an independent staged-copy replay match exactly.
+Real React/Wails on node3, revision a9554ca6 / bundle9cc95724: Plan173.424/131.379s,
+combined Start226.548/197.313s; both STARTED then UI-cancelled to CANCELLED. Both
+run manifests match approved fingerprint84702af1. Cold Core304.622s still exceeds
+the existing five-minute limit; explicit warm Verify47.705/38.133s succeeds.
+No full library installation/visual acceptance or commit/push is claimed.
+Owner-approved cold resolver follow-up (2026-11-08, uncommitted): remove unused
+per-placement include_vars and combine parameter/default/row calculation in the
+existing action, preserving native rendering/override order. 34 focused RED OS
+tests PASS; full100-placement snapshots equal the previous implementation.
+Fresh standalone task headers1298 ->898, placement calculation actions300 ->100.
+Repeated cold React/Wails Verify on the same node3/project: old258.228/262.151s,
+new196.121/197.093s, all VERIFIED and resolution hit=false/source=fresh;
+mean260.190 ->196.607s (-24.44%). Core mean255.522 ->191.601s (-25.02%).
+All100 calculated application rows match across bundle bindings; runtime4d5f062f,
+revisiona07b2750. Preparation PREPARED after freeing an inactive, locally preserved
+QA runtime; no timeout increase, Plan/Start change or installation was performed.
+Owner-approved host-context follow-up (2026-11-08, uncommitted): one existing
+Ansible action processes instance groups with isolated host contexts; library
+contexts render once per library/host. A bounded per-instance memo reuses scalar
+templates only for equal fully literal typed inputs; ambiguous/filter/lookup
+expressions stay native and fresh. No package template/Compose/ENV format change,
+new production file, persistent memo or deferred execution calculation.
+37 RED OS tests PASS, including host-only errors, aliases and override/filter
+isolation. Same-input fresh standalone152.042s ->64.209/63.372s;898 ->79 task
+headers;100 placement actions ->1 batch (50 instances/100 placements),4 library
+contexts,667 reused scalar renders. Complete public snapshots match.
+Repeated cold real React/Wails Verify on node3:194.725/190.094s ->90.722/90.289s,
+all VERIFIED/source=fresh/hit=false; mean192.409 ->90.505s (2.126x).
+All100 application rows retain canonical digest5fe38908. Runtimefe648cfb,
+revision43d62b91, preparation PREPARED. HOST-CONTEXT-PLAN-01 review approved with
+bounded clarifications, zero blockers. Owner authorized branch commit/push and
+portable TXT publication on 2026-11-08; full installation remains unclaimed.
+See the same evidence journal.
 
 Owner-requested slot-based application identity (2026-11-07): instance IDs now
 use slot names, allowing multiple slots to reuse one package. Qualified IDs keep

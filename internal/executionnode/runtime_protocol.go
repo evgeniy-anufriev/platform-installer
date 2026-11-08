@@ -250,7 +250,7 @@ const maxObservedExecutionEvents = 32768
 const maxDecodedExecutionEventBytes = 64 * 1024
 const maxExecutionProtocolResponseBytes = 16 * 1024 * 1024
 const maxExecutionEventPageResponseBytes = 2 * 1024 * 1024
-const maxProjectSnapshotResponseBytes = 2 * 1024 * 1024
+const maxProjectSnapshotResponseBytes = coreadapter.MaxSnapshotResponseBytes
 const maxExecutionReleaseProbeBytes = 4 * 1024
 const maxExecutionStateProbeBytes = 64 * 1024
 

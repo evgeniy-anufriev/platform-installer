@@ -126,7 +126,7 @@
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:2308e39d87bd9dff955cb773d2e829fd92a5e4cd9d6ec27722a2199af0a9d40f",
+    "digest": "sha256:a8c15f2167f58bc347b4ffdf99779d17918d8d0915f2234c3404d43598ffb662",
     "kind": "application",
     "name": "sdku-knp",
     "sourceDirectory": ".",
@@ -140,28 +140,28 @@
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:586da0293a54d5f85fb682afa649c32cfb07f01413accc19744301ba7d2c20b4",
+    "digest": "sha256:7d52c57d854c27aff8918ec90e42a83d2aa3c3201b9a7ab8e10d9050f826fa08",
     "kind": "application",
     "name": "sdku-status-calculation",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:6c8697ed5f811b7c8cfe8a5527ce0e211c68189fedf238249b38fa2a47a1e8da",
+    "digest": "sha256:1abce48ecef3fe6f0f6dee5ecbee386eb4267fad81bfb321800aadeb62b513cf",
     "kind": "application",
     "name": "sdku-tank-farm",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:16bc98b6ea2f2e5325e39384ca7419bc4625626e6ebbdc6b646db2fb7f9d1eb1",
+    "digest": "sha256:1323274a22af76ca69b900000e991b76ba625d72ac37b2b651f984c0447a6719",
     "kind": "application",
     "name": "sdku-telemechanics",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:338f63f5ba90a456c9f0d1ccabf8819b4dcb6205b73c242426c9d061258a8a09",
+    "digest": "sha256:789d4d801e57d4d10028067bcc72b03d480a611f99e2a48b0b757a3e2c3e4467",
     "kind": "application",
     "name": "sdku-vtor",
     "sourceDirectory": ".",

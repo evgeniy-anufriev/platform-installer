@@ -962,6 +962,19 @@ published atomically under a per-project lock, and rejected on identity change.
 Unconfirmed external template inputs retain fresh resolution. Independent
 requests verify their actual source bytes; prepared images enrich a copy of the
 base, while mutable PKI/planner evidence is read by the existing planner.
+Owner clarification (2026-11-08): builtin file/template lookups of proved
+project-local package inputs may participate in this existing reuse. Decode
+YAML scalars before inspecting Jinja; verify the literal path against the hashed
+package closure, reject symlinks/escape, and inspect transitive templates. Unknown
+globals, dynamic paths/plugins and external lookups retain fresh resolution.
+Only documented resolver data contexts and proved local literal/list operations
+are eligible; request selectors cannot enter these templates. Path-bearing job
+and hostvars contexts are restricted to their desired-data leaves; path hashes
+or transformed staging paths cannot bypass the guard. Dynamic/executable
+inventory retains fresh resolution, with executable mode bound in identity. Shared
+desired-only results bind the actual closure, runtime and controller; request-local
+results retain their additional plan-context/staged-path binding. Captured staging
+paths never cross requests. No new Start operation or approval semantics is added.
 Standalone Ansible without reuse variables resolves normally. Start still
 rebuilds and compares the authoritative plan; no Go precedence implementation,
 public reference DTO or execution authorization is added. See the

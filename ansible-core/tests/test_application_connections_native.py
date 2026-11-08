@@ -7,14 +7,296 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from types import SimpleNamespace
+from ansible.parsing.dataloader import DataLoader
+from ansible.template import Templar
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'ansible-core/collections/ansible_collections/platform/core/plugins/module_utils'))
 from application_libraries import project
+sys.path.insert(0, str(ROOT / 'ansible-core/collections'))
+from ansible_collections.platform.core.plugins.action.prepare_application_libraries import ActionModule
+from ansible_collections.platform.core.plugins.action.prepare_application_connections import ActionModule as ConnectionsAction
+
+
+class PlacementTemplateTests(unittest.TestCase):
+    def test_common_render_requires_equal_typed_inputs_and_keeps_external_reads_fresh(self):
+        action = object.__new__(ActionModule)
+        action._loader = DataLoader()
+        memo = dict(values={}, expressions={}, rendered=0, reused=0)
+        expression = '{{ application_parameters.node }}'
+        for host in ('one', 'two', 'two'):
+            variables = dict(application_parameters={'node': host})
+            actual = action._render_common(expression, action._native_templar(variables), variables, memo)
+            self.assertEqual(host, actual)
+        self.assertEqual(2, memo['rendered'])
+        self.assertEqual(1, memo['reused'])
+        before = memo['reused']
+        for host in ('one', 'two'):
+            variables = dict(application_job={'hostId': host},
+                application_parameters={'node': '{{ application_job.hostId }}'})
+            self.assertEqual(host, action._render_common(expression, action._native_templar(variables), variables, memo))
+        self.assertEqual(before, memo['reused'])
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory, 'input.txt')
+            source = "{{ lookup('file', source_path) }}"
+            for text in ('first', 'second'):
+                path.write_text(text)
+                variables = dict(source_path=str(path))
+                self.assertEqual(text, action._render_common(source, action._native_templar(variables), variables, memo))
+            self.assertEqual(before, memo['reused'])
+
+    def test_common_render_does_not_reuse_custom_filters_or_unknown_aliases(self):
+        action = object.__new__(ActionModule)
+        action._loader = DataLoader()
+        memo = dict(values={}, expressions={}, rendered=0, reused=0)
+        calls = []
+        for host in ('one', 'two'):
+            variables = dict(qa_alias='{{ application_job.hostId }}', application_job={'hostId': host})
+            templar = action._native_templar(variables)
+            templar.environment.filters['qa_host'] = lambda value: calls.append(value) or value
+            self.assertEqual(host, action._render_common('{{ qa_alias | qa_host }}', templar, variables, memo))
+        self.assertEqual(['one', 'two'], calls)
+        self.assertEqual(0, memo['reused'])
+        for host in ('one', 'two'):
+            variables = dict(application_name='same')
+            templar = action._native_templar(variables)
+            templar.environment.filters['upper'] = lambda value: host
+            self.assertEqual(host, action._render_common('{{ application_name | upper }}', templar, variables, memo))
+        self.assertEqual(0, memo['reused'])
+
+    def test_combined_placement_matches_staged_native_resolution(self):
+        action = object.__new__(ActionModule)
+        action._loader = DataLoader()
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder, 'main.yml')
+            path.write_text(json.dumps({'platform_application_definition': {
+                'identity_environment': ['INSTANCE'], 'defaults': {
+                    'parameters': {'number': '{{ 3 * 2 }}', 'ports': [1], 'typed': True},
+                    'environment': {'INSTANCE': '{{ application_instance_id }}',
+                                    'HOST': '{{ application_job.hostId }}',
+                                    'VALUE': '{{ application_parameters.number + 1 }}',
+                                    'PEERS': '{{ application_placements | map(attribute="hostId") | list }}'}}}}))
+            for host in ('one', 'two'):
+                for inherit in (True, False):
+                    job = dict(libraryId='lib', slotId='alias', hostId=host, instanceId='alias-lib',
+                        skipConnectionTopology=True, connections={},
+                        application=dict(defaultsPath=str(path), version='1.0.0', digest='app', name='package'),
+                        library=dict(digest='library', definition={}),
+                        deployment=dict(libraryRef='lib@1.0.0', runtimeRef='docker', bindings={}),
+                        slot=dict(inherit_defaults=inherit, overrides={'parameters': {'ports': [2]}}),
+                        instance={'overrides': {'environment': {'LEVEL': 'instance'}}},
+                        hostOverride={'parameters': {'host': host}, 'environment': {'LEVEL': host}})
+                    variables = dict(application_job=job, application_instance_id='alias-lib',
+                        application_name='package', library_instance_id='lib',
+                        application_placements=[{'hostId': 'one'}, {'hostId': 'two'}],
+                        _application_shared=dict(defaults={'parameters': {'shared': 9}},
+                                                 overrides={'parameters': {'ports': [3]}}),
+                        _application_library_endpoint={}, _application_resource_defaults={},
+                        _application_resources={}, _application_connections={},
+                        library_namespace={'platform_library_definition': {'runtime_directory': '~/{{ library_instance_id }}'}})
+                    original = json.loads(json.dumps(variables))
+                    action._task = SimpleNamespace(args={'application_parameters': True})
+                    parameters = action.run(task_vars=variables)['parameters']
+                    staged = dict(variables, application_parameters=parameters)
+                    action._task = SimpleNamespace(args={'application_defaults': True})
+                    staged['_application_defaults'] = action.run(task_vars=staged)
+                    action._task = SimpleNamespace(args={'resolved_row': True, 'library_namespace': 'library_namespace'})
+                    expected = action.run(task_vars=staged)
+                    action._task = SimpleNamespace(args={'placement': True, 'library_namespace': 'library_namespace'})
+                    actual = action.run(task_vars=variables)
+                    self.assertNotIn('failed', actual)
+                    self.assertEqual(expected['row'], actual['row'])
+                    self.assertEqual(expected['inherited'], actual['inherited'])
+                    self.assertEqual(parameters, actual['parameters'])
+                    self.assertEqual(7, actual['row']['settings']['environment']['VALUE'])
+                    self.assertEqual(host, actual['row']['settings']['environment']['LEVEL'])
+                    self.assertEqual([3] if inherit else [2], actual['parameters']['ports'])
+                    self.assertEqual(original, variables)
+                    bad = json.loads(path.read_text())
+                    bad['platform_application_definition']['defaults']['environment']['BAD'] = '{{ missing.required }}'
+                    bad_path = Path(folder, 'bad.yml')
+                    bad_path.write_text(json.dumps(bad))
+                    broken = dict(variables, application_job=dict(job, application=dict(job['application'], defaultsPath=str(bad_path))))
+                    failure = action.run(task_vars=broken)
+                    self.assertTrue(failure['failed'])
+                    self.assertNotIn('row', failure)
+                    self.assertEqual('APPLICATION_INPUT_INVALID', failure['finding']['code'])
+
+    def test_peer_templates_share_compact_context_without_internal_jobs(self):
+        action = object.__new__(ActionModule)
+        action._loader = DataLoader()
+        placements = [dict(hostId='one', address='192.0.2.1', ports={'port-2': {'published': 17800}}),
+                      dict(hostId='two', address='192.0.2.2', ports={'port-2': {'published': 17801}})]
+        context = dict(application_placements=placements, application_job={'hostId': 'one'},
+                       groups={'all': ['localhost', 'two', 'one']})
+        for app, field, expected in (
+            ('keycloak', 'KC_INITIAL_HOSTS', '192.0.2.1[17800],192.0.2.2[17801]'),
+            ('grant-access', 'HZ_NETWORK_JOIN_TCPIP_MEMBERS', '192.0.2.1:17800,192.0.2.2:17801'),
+        ):
+            path = ROOT / f'examples/szi/application-packages/{app}/1.0.0/roles/application_{app}/defaults/main.yml'
+            env = action._loader.load_from_file(str(path))['platform_application_definition']['defaults']['environment']
+            self.assertEqual(expected, action._native_templar(context).template(env[field]))
+        for app in ('sdku-telemechanics', 'sdku-vtor', 'sdku-knp', 'sdku-status-calculation', 'sdku-tank-farm'):
+            path = ROOT / f'examples/sdku/application-packages/{app}/1.0.0/roles/application_{app}/defaults/main.yml'
+            env = action._loader.load_from_file(str(path))['platform_application_definition']['defaults']['environment']
+            templar = action._native_templar(context)
+            self.assertEqual('two=$${SERVER_2_IP}:17801', templar.template(env['EVO_SERVICES_CONSENSUS_SERVICE_OTHER_INSTANCES']))
+            self.assertFalse(templar.template(env['EVO_SERVICES_CONSENSUS_SERVICE_MOCK']))
+            single = action._native_templar(dict(context, application_placements=placements[:1]))
+            self.assertEqual('', single.template(env['EVO_SERVICES_CONSENSUS_SERVICE_OTHER_INSTANCES']))
+            self.assertTrue(single.template(env['EVO_SERVICES_CONSENSUS_SERVICE_MOCK']))
+
+    def test_native_lookup_uses_scoped_variables_without_copying_internal_payloads(self):
+        class InternalPayload:
+            def __deepcopy__(self, memo):
+                raise AssertionError('Internal job/result collection traversed')
+
+        action = object.__new__(ActionModule)
+        action._loader = DataLoader()
+        with tempfile.TemporaryDirectory() as folder:
+            template = Path(folder, 'scope.j2')
+            template.write_text('{{ marker }}:{{ values | sum }}')
+            outer = dict(marker='previous-host', values=[99], _application_resolved=InternalPayload(),
+                         _application_inputs=InternalPayload(),
+                         application_placements=[{'hostId': 'one'}, {'hostId': 'two'}],
+                         _application_resolved_row_0=InternalPayload(),
+                         ansible_facts={'_application_resolved': InternalPayload(), 'operator_fact': 7})
+            outer['vars'] = outer
+            action._templar = Templar(loader=action._loader, variables=outer)
+            scoped = action._placement_variables(outer)
+            scoped.update(marker='current-host', values=[1, 2, 3])
+            templar = action._native_templar(scoped)
+            for lookup in ('lookup', 'query', 'q'):
+                templar.available_variables['path'] = str(template)
+                actual = templar.template("{{ " + lookup + "('template', path) }}")
+                self.assertEqual('current-host:6' if lookup == 'lookup' else ['current-host:6'], actual)
+            self.assertEqual(7, scoped['ansible_facts']['operator_fact'])
+            self.assertIs(scoped, scoped['vars'])
+            self.assertNotIn('_application_resolved', scoped['ansible_facts'])
+            self.assertIn('_application_inputs', outer)
+            self.assertNotIn('_application_inputs', scoped)
+            self.assertEqual(['one', 'two'], templar.template(
+                "{{ application_placements | map(attribute='hostId') | list }}"))
+
+    def test_compact_placements_reuse_native_ports_and_preserve_literal_override_order(self):
+        def job(host, slot='gateway', native=False):
+            return dict(libraryId='lib', slotId=slot, hostId=host, connections={},
+                skipConnectionTopology=not native,
+                application={'definition': {'defaults': {'ports': {'tcp': {'container': 7000, 'published': 7100}}}}},
+                slot={'overrides': {'ports': {'tcp': {'published': 7200}}}},
+                instance={'overrides': {'ports': {'tcp': {'published': 7300}}}},
+                hostOverride={'ports': {'tcp': {'published': 7400}}})
+        native_ports = {'tcp': {'container': 9000, 'published': 9900}}
+        values = dict(_application_inputs={'jobs': [job('two'), job('one'), job('one', 'native', True)]},
+            platform_desired_state={}, hostvars={'one': {'ansible_host': '192.0.2.1'}, 'two': {}},
+            platform_application_connection_rows=[dict(libraryId='lib', slotId='native', hostId='one',
+                settings={'ports': native_ports})])
+        result = object.__new__(ConnectionsAction).run(task_vars=values)
+        self.assertNotIn('findings', result)
+        members = result['placements']['lib']['gateway']
+        self.assertEqual(['one', 'two'], [row['hostId'] for row in members])
+        self.assertEqual(['192.0.2.1', 'two'], [row['address'] for row in members])
+        self.assertEqual({'container': 7000, 'published': 7400}, members[0]['ports']['tcp'])
+        self.assertIs(native_ports, result['placements']['lib']['native'][0]['ports'])
+        self.assertNotIn('application', members[0])
+        self.assertEqual(7100, values['_application_inputs']['jobs'][0]['application']['definition']['defaults']['ports']['tcp']['published'])
+
+    def test_parameter_stage_preserves_precedence_types_and_deferred_environment(self):
+        action = object.__new__(ActionModule)
+        action._loader = DataLoader()
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder, 'main.yml')
+            path.write_text(json.dumps({'platform_application_definition': {'defaults': {
+                'parameters': {'client': {'name': '{{ application_instance_id }}', 'roles': ['reader']},
+                               'ports': [1, 2], 'typed': True},
+                'environment': {'DEFER': '{{ intentionally_not_available_yet.required }}'}}}}))
+            action._task = SimpleNamespace(args={'application_parameters': True})
+            for host in ('one', 'two'):
+                job = {'application': {'defaultsPath': str(path)},
+                       'slot': {'overrides': {'parameters': {'ports': [3]}}},
+                       'instance': {'overrides': {'parameters': {'client': {'roles': ['writer']}}}},
+                       'hostOverride': {'parameters': {'host': host}}}
+                variables = {'application_job': job, 'application_instance_id': host,
+                             '_application_shared': {'defaults': {'parameters': {'shared': 7}},
+                                                     'overrides': {'parameters': {'ports': [4]}}}}
+                result = action.run(task_vars=variables)
+                self.assertNotIn('failed', result)
+                self.assertEqual({'client': {'name': host, 'roles': ['writer']}, 'ports': [4],
+                                  'typed': True, 'shared': 7, 'host': host}, result['parameters'])
+                job['slot']['inherit_defaults'] = False
+                result = action.run(task_vars=variables)
+                self.assertNotIn('shared', result['parameters'])
+                self.assertEqual([3], result['parameters']['ports'])
 
 
 @unittest.skipUnless(shutil.which('ansible-playbook'), 'native Ansible required')
 class NativeApplicationConnectionsTests(unittest.TestCase):
+    def test_group_isolates_host_failures_parameters_aliases_and_resource_contexts(self):
+        with tempfile.TemporaryDirectory(prefix='application-group-hosts-') as directory:
+            root = Path(directory, 'project')
+            shutil.copytree(ROOT / 'examples/valid/application-libraries', root)
+            app_path = root / 'application-packages/apigateway/1.0.0/roles/application_apigateway/defaults/main.yml'
+            original = json.loads(app_path.read_text())
+            definition = original['platform_application_definition']
+            definition['defaults'].setdefault('parameters', {})['QA_NODE'] = '{{ application_job.hostId }}'
+            definition['defaults'].setdefault('environment', {}).update(
+                QA_PARAMETER='{{ application_parameters.QA_NODE }}',
+                QA_ALIAS='{{ vars.application_job.hostId }}', QA_CONTROLLER='{{ inventory_hostname }}',
+                QA_PARAMETER_ALIAS='{{ vars.application_parameters.QA_NODE }}',
+                QA_PARAMETER_FACT='{{ ansible_facts.application_parameters.QA_NODE }}')
+            app_path.write_text(json.dumps(original))
+            library_path = root / 'library-packages/sdku/1.0.0/roles/library_sdku/defaults/main.yml'
+            library = json.loads(library_path.read_text())
+            membership = root / 'inventory/host_vars/node2/platform-installer.yml'
+            host = json.loads(membership.read_text())
+            host['platform_application_libraries']['sdku']['overrides']['ports'] = {
+                'http': {'container': 8765, 'published': 18765}}
+            membership.write_text(json.dumps(host))
+            output = Path(directory, 'rows.json')
+            play = Path(directory, 'play.yml')
+            play.write_text(json.dumps([dict(hosts='localhost', connection='local', gather_facts=False, tasks=[
+                {'ansible.builtin.include_role': {'name': 'platform.core.resolve_application_libraries'}},
+                {'ansible.builtin.assert': {'that': [
+                    'platform_application_rows | length == 2',
+                    'platform_application_findings | length == 1',
+                    "platform_application_findings[0].field == 'applicationLibraryDeployments.sdku.applications.gateway.placements.' ~ qa_bad_host",
+                    "_application_group_result.metrics.placements == 3",
+                    "_application_group_result.metrics.instances == 2"]}},
+                {'ansible.builtin.copy': {'content': '{{ platform_application_rows | to_json }}',
+                                         'dest': str(output), 'mode': '0600'}, 'no_log': True},
+            ])]))
+            env = dict(os.environ, ANSIBLE_CONFIG=str(ROOT / 'ansible-core/ansible.cfg'),
+                       ANSIBLE_COLLECTIONS_PATH=str(ROOT / 'ansible-core/collections'))
+            for failure_stage in ('environment', 'library'):
+                if failure_stage == 'environment':
+                    definition['defaults']['environment']['QA_FAIL'] = (
+                        "{{ qa_missing.required if library_instance_id == 'sdku' and application_job.hostId == qa_bad_host else 'ok' }}")
+                else:
+                    definition['defaults']['environment'].pop('QA_FAIL')
+                    library['platform_library_definition'].setdefault('resource_defaults', {}).setdefault(
+                        'postgresql', {}).setdefault('databases', {})['applicationDatabase'] = {
+                            'name': "{{ qa_missing.required if inventory_hostname == qa_bad_host else 'database_' ~ inventory_hostname }}"}
+                app_path.write_text(json.dumps(original))
+                library_path.write_text(json.dumps(library))
+                for bad_host in ('node1', 'node2'):
+                    result = subprocess.run(['ansible-playbook', '-i', str(root / 'inventory/hosts.yml'), str(play),
+                        '-e', json.dumps(dict(platform_project_root=str(root), qa_bad_host=bad_host,
+                                            platform_contracts_root=str(ROOT / 'contracts')))],
+                        env=env, capture_output=True, text=True, timeout=90)
+                    self.assertEqual(0, result.returncode, result.stdout[-2500:] + result.stderr[-500:])
+                    rows = json.loads(output.read_text())
+                    self.assertEqual(['cspa', 'sdku'], [row['libraryId'] for row in rows])
+                    for row in rows:
+                        values = row['settings']['environment']
+                        self.assertEqual(row['hostId'], values['QA_PARAMETER'])
+                        self.assertEqual(row['hostId'], values['QA_ALIAS'])
+                        self.assertEqual(row['hostId'], values['QA_PARAMETER_ALIAS'])
+                        self.assertEqual(row['hostId'], values['QA_PARAMETER_FACT'])
+                        self.assertEqual('localhost', values['QA_CONTROLLER'])
+                        if row['hostId'] == 'node2':
+                            self.assertEqual(18765, row['settings']['ports']['http']['published'])
+
     def test_templated_library_values_are_reused_only_within_library_and_host(self):
         with tempfile.TemporaryDirectory(prefix='application-library-context-') as directory:
             root = Path(directory) / 'project'
@@ -32,6 +314,11 @@ class NativeApplicationConnectionsTests(unittest.TestCase):
             data = json.loads(defaults.read_text())
             data['platform_application_definition']['name'] = 'second'
             defaults.write_text(json.dumps(data))
+            for path in root.glob('application-packages/*/1.0.0/roles/*/defaults/main.yml'):
+                definition = json.loads(path.read_text())
+                definition['platform_application_definition']['defaults'].setdefault('environment', {})['QA_PEERS'] = (
+                    '{{ application_placements | to_json }}')
+                path.write_text(json.dumps(definition))
             vars_path = root / 'inventory/group_vars/all/platform-installer.yml'
             data = json.loads(vars_path.read_text())
             for library, deployment in data['platform_desired_state']['applicationLibraryDeployments'].items():
@@ -83,16 +370,27 @@ class NativeApplicationConnectionsTests(unittest.TestCase):
                 '-e', 'platform_project_root=' + str(root), '-e', 'platform_contracts_root=' + str(ROOT / 'contracts')],
                 env=env, capture_output=True, text=True, timeout=120)
             self.assertEqual(0, result.returncode, result.stdout[-5000:] + result.stderr[-1000:])
-            shared_task = 'TASK [platform.core.resolve_application_libraries : Вычисление общих значений библиотеки по умолчанию после обработки ресурсов]'
-            row_task = 'TASK [platform.core.resolve_application_libraries : Сбор служебной записи рассчитанных параметров для структурированных операций]'
-            self.assertEqual(8, result.stdout.count(shared_task))
-            self.assertEqual(8, result.stdout.count('TASK [platform.core.resolve_application_libraries : '
-                'Сохранение общих настроек библиотеки в контексте узла]'))
-            self.assertEqual(14, result.stdout.count(row_task))
+            self.assertEqual(2, result.stdout.count('TASK [platform.core.resolve_application_libraries : '
+                'Расчёт общих и серверных настроек приложений]'))
+            self.assertEqual(2, result.stdout.count('TASK [platform.core.resolve_application_libraries : '
+                'Сохранение строк размещений и библиотечных контекстов]'))
+            self.assertNotIn('TASK [platform.core.resolve_application_libraries : '
+                'Загрузка проверенных параметров приложения по умолчанию в изолированное пространство имен]', result.stdout)
+            self.assertNotIn('TASK [platform.core.resolve_application_libraries : '
+                'Определение параметров приложения после привязки идентификатора размещения]', result.stdout)
+            self.assertEqual(2, result.stdout.count('TASK [platform.core.resolve_application_libraries : '
+                'Добавление подключений приложений в рассчитанную топологию]'))
             rows = json.loads(output.read_text())
             self.assertEqual(8, len(rows))
             for row in rows:
                 expected = row['libraryId'] + '-' + row['hostId']
+                peers = row['settings']['environment']['QA_PEERS']
+                peers = json.loads(peers) if isinstance(peers, str) else peers
+                self.assertEqual(['node1', 'node2'], [peer['hostId'] for peer in peers])
+                for peer in peers:
+                    actual = next(item for item in rows if item['libraryId'] == row['libraryId']
+                                  and item['slotId'] == row['slotId'] and item['hostId'] == peer['hostId'])
+                    self.assertEqual(actual['settings'].get('ports', {}), peer['ports'])
                 self.assertEqual(row['hostId'], row['settings']['environment']['QA_HOST'])
                 self.assertEqual(row['libraryId'], row['settings']['environment']['QA_RESOURCE'])
                 self.assertEqual(expected, row['resourceDefaults']['postgresql']['databases']['applicationDatabase']['name'])
@@ -169,8 +467,8 @@ class NativeApplicationConnectionsTests(unittest.TestCase):
                 capture_output=True, text=True, timeout=90, env=env)
             self.assertEqual(0, result.returncode, result.stdout[-4000:] + result.stderr[-1000:])
             self.assertEqual(5, result.stdout.count(
-                'TASK [platform.core.resolve_application_libraries : Сбор рассчитанных записей приложений в порядке размещений]'))
-            self.assertIn('the output has been hidden', result.stdout)
+                'TASK [platform.core.resolve_application_libraries : Сохранение строк размещений и библиотечных контекстов]'))
+            self.assertNotIn('QA_UNDEFINED', result.stdout)
 
     def test_exports_parameters_accounts_and_disabled_override_use_native_rows(self):
         with tempfile.TemporaryDirectory(prefix='provided-connections-') as directory:
@@ -258,7 +556,7 @@ class NativeApplicationConnectionsTests(unittest.TestCase):
                 result = subprocess.run(command, capture_output=True, text=True, timeout=90, env=env)
                 self.assertEqual(0, result.returncode, 'Native export resolution failed')
                 self.assertEqual(1, result.stdout.count(
-                    'TASK [platform.core.resolve_application_libraries : Сбор рассчитанных записей приложений в порядке размещений]'))
+                    'TASK [platform.core.resolve_application_libraries : Сохранение строк размещений и библиотечных контекстов]'))
                 self.assertEqual(1, result.stdout.count(
                     'TASK [platform.core.resolve_application_libraries : Определение топологии подключений по параметрам пакета и установки]'))
                 rows = json.loads(output.read_text())

@@ -24,6 +24,8 @@ class ActionModule(ActionBase):
                 'source': os.path.realpath(os.path.join(os.path.dirname(__file__), '../../../../../../..'))}
             expected, documents = resolution.identity(project, runtime,
                 task_vars.get('platform_installer_owned_paths', []))
+            expected['controller'] = task_vars.get('inventory_hostname')
+            shared_expected = dict(expected)
             context = task_vars.get('platform_plan_resolution_context')
             if context:
                 expected.update(planContext=context, stagedProject=project)
@@ -48,12 +50,12 @@ class ActionModule(ActionBase):
                             application_findings=findings if hit else [])
             if not local:
                 return dict(changed=False, hit=False, identity=expected, invocation_context=invocation)
-            shared = os.path.join(directory, resolution.scope_name(project, runtime)) if directory and not context else None
+            shared = os.path.join(directory, resolution.scope_name(project, runtime)) if directory else None
             if args.get('operation') == 'load':
                 result = resolution.read(local, expected)
                 source = 'request' if result is not None else 'fresh'
                 if result is None:
-                    result = resolution.read(shared, expected)
+                    result = resolution.read(shared, shared_expected)
                     if result is not None:
                         source = 'shared'
                         resolution.write(local, expected, result)
@@ -61,7 +63,10 @@ class ActionModule(ActionBase):
                     source=source, readSeconds=round(time.monotonic() - started, 6)))
                 return dict(changed=False, hit=result is not None, result=result or {},
                             identity=expected, started=started, invocation_context=invocation)
-            result = args['result']
+            reference = args.get('result_variable')
+            if reference is not None and (reference != 'platform_project_resolution' or 'result' in args):
+                raise ValueError('PROJECT_RESOLUTION_INVALID')
+            result = task_vars[reference] if reference is not None else args['result']
             previous = task_vars['_project_resolution_cache']
             if (previous['identity'] != expected or
                     result['snapshot']['projectRevision'] != expected['revision']):
@@ -71,7 +76,9 @@ class ActionModule(ActionBase):
             if context or eligible:
                 resolution.write(local, expected, result)
             if eligible and shared:
-                resolution.write(shared, expected, result)
+                # Only a closed desired-only result can cross requests. Local
+                # results keep their stricter planContext/staging-path binding.
+                resolution.write(shared, shared_expected, result)
             resolution.atomic_json(local + '.metrics', dict(hit=False, source='fresh', reusable=eligible,
                 resolveSeconds=round(time.monotonic() - previous['started'], 6)))
             return dict(changed=False, hit=False)

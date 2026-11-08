@@ -494,6 +494,12 @@ class ActionModule(ActionBase):
                 resolved_result = task_vars[reference]
             elif reference is not None:
                 raise ValueError('PROJECT_RESOLUTION_INVALID')
+            if self._task.args.get('summary_only'):
+                from ansible.plugins.filter.core import to_json
+                snapshot = resolved_result['snapshot']
+                return dict(changed=False, summary=dict(
+                    status=snapshot['status'], projectRevision=snapshot['projectRevision'],
+                    snapshotFingerprint=snapshot['snapshotFingerprint'], serializedBytes=len(to_json(snapshot))))
             if resolved_result is not None:
                 stage = 'построение из разрешённой проекции Core'
                 from ansible_collections.platform.core.plugins.module_utils.project_resolution import enrich

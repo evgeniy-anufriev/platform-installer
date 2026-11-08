@@ -44,8 +44,12 @@ type Snapshot struct {
 	Raw                    json.RawMessage                        `json:"-"`
 }
 
+// MaxSnapshotResponseBytes keeps large application projections within the
+// existing bounded execution protocol budget.
+const MaxSnapshotResponseBytes = 16 * 1024 * 1024
+
 func DecodeSnapshot(data []byte) (*Snapshot, error) {
-	if len(data) > 2*1024*1024 {
+	if len(data) > MaxSnapshotResponseBytes {
 		return nil, errors.New("PROJECT_SNAPSHOT_RESPONSE_INVALID")
 	}
 	var snapshot Snapshot
