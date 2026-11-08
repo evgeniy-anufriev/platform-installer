@@ -62603,7 +62603,7 @@ raise SystemExit("Архив указанной ревизии не найден
 PY
 
 @@END
-@@PORTABLE {"path":"scripts/diagnose_redis_preflight.sh","mode":420,"size":1409,"sha256":"6c619091f4c39dd4f560016a673cd77e1ca69669c970deae1696db129c1dce91","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1409}
+@@PORTABLE {"path":"scripts/diagnose_redis_preflight.sh","mode":420,"size":2225,"sha256":"ed97bcdfde34627129db55e75c86fde26db9ded75068b3da48e2af233736a8bf","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2225}
 #!/usr/bin/env bash
 # Run on the Execution Node. Only safe error codes and connection metadata are printed.
 set -euo pipefail
@@ -62640,6 +62640,23 @@ errors=$(jq -c '
 ' "$log")
 
 if [[ -z "$errors" ]]; then
+    failures=$(jq -c '
+        select(.task.role? == "platform.redis.application_provider" and .status == "FAILED")
+        | {
+            error: (if (.error.code? // "" | test("^[A-Z][A-Z0-9_]+$"))
+                    then .error.code else "REDIS_TASK_FAILED" end),
+            diagnostic: (if (.ansibleOutput? // "" | type) == "string" and
+                            (.ansibleOutput? // "" | contains("[truncated]"))
+                         then "ANSIBLE_OUTPUT_TRUNCATED_FAILED_ITEM_UNAVAILABLE"
+                         elif (.ansibleOutput? // "") == ""
+                         then "ANSIBLE_OUTPUT_HIDDEN_OR_MISSING"
+                         else "FAILED_ITEM_NOT_AVAILABLE_IN_OUTPUT" end)
+          }
+    ' "$log")
+    if [[ -n "$failures" ]]; then
+        printf '%s\n' "$failures"
+        exit 1
+    fi
     echo "REDIS_FAILED_ITEM_NOT_FOUND: latest run has no visible failed Redis/Sentinel item."
     exit 1
 fi
