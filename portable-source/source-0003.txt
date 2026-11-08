@@ -1,3 +1,333 @@
+@@PORTABLE {"path":"third_party/wails/internal/frontend/devserver/devserver.go","mode":420,"size":7963,"sha256":"eb63671ffcde1e5acecc059eadccdf8c7d36297db644c26559154b4ba82d7f34","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7963}
+//go:build dev
+// +build dev
+
+// Package devserver provides a web-based frontend so that
+// it is possible to run a Wails app in a browsers.
+package devserver
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"log"
+	"net/http"
+	"net/http/httputil"
+	"net/url"
+	"strings"
+	"sync"
+
+	"github.com/wailsapp/wails/v2/pkg/assetserver"
+
+	"github.com/wailsapp/wails/v2/internal/frontend/runtime"
+
+	"github.com/gorilla/websocket"
+	"github.com/labstack/echo/v4"
+	"github.com/wailsapp/wails/v2/internal/binding"
+	"github.com/wailsapp/wails/v2/internal/frontend"
+	"github.com/wailsapp/wails/v2/internal/logger"
+	"github.com/wailsapp/wails/v2/internal/menumanager"
+	"github.com/wailsapp/wails/v2/pkg/options"
+)
+
+type Screen = frontend.Screen
+
+var upgrader = websocket.Upgrader{
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+	CheckOrigin:     func(r *http.Request) bool { return true },
+}
+
+type DevWebServer struct {
+	server           *echo.Echo
+	ctx              context.Context
+	appoptions       *options.App
+	logger           *logger.Logger
+	appBindings      *binding.Bindings
+	dispatcher       frontend.Dispatcher
+	socketMutex      sync.Mutex
+	websocketClients map[*websocket.Conn]*sync.Mutex
+	menuManager      *menumanager.Manager
+	starttime        string
+
+	// Desktop frontend
+	frontend.Frontend
+
+	devServerAddr string
+}
+
+func (d *DevWebServer) Run(ctx context.Context) error {
+	d.ctx = ctx
+
+	d.server.GET("/wails/reload", d.handleReload)
+	d.server.GET("/wails/ipc", d.handleIPCWebSocket)
+
+	assetServerConfig, err := assetserver.BuildAssetServerConfig(d.appoptions)
+	if err != nil {
+		return err
+	}
+
+	var myLogger assetserver.Logger
+	if _logger := ctx.Value("logger"); _logger != nil {
+		myLogger = _logger.(*logger.Logger)
+	}
+
+	var wsHandler http.Handler
+
+	_fronendDevServerURL, _ := ctx.Value("frontenddevserverurl").(string)
+	if _fronendDevServerURL == "" {
+		assetdir, _ := ctx.Value("assetdir").(string)
+		d.server.GET("/wails/assetdir", func(c echo.Context) error {
+			return c.String(http.StatusOK, assetdir)
+		})
+
+	} else {
+		externalURL, err := url.Parse(_fronendDevServerURL)
+		if err != nil {
+			return err
+		}
+
+		// WebSockets aren't currently supported in prod mode, so a WebSocket connection is the result of the
+		// FrontendDevServer e.g. Vite to support auto reloads.
+		// Therefore we direct WebSockets directly to the FrontendDevServer instead of returning a NotImplementedStatus.
+		wsHandler = httputil.NewSingleHostReverseProxy(externalURL)
+	}
+
+	assetHandler, err := assetserver.NewAssetHandler(assetServerConfig, myLogger)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Setup internal dev server
+	bindingsJSON, err := d.appBindings.ToJSON()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	assetServer, err := assetserver.NewDevAssetServer(assetHandler, bindingsJSON, ctx.Value("assetdir") != nil, myLogger, runtime.RuntimeAssetsBundle)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	d.server.Any("/*", func(c echo.Context) error {
+		if c.IsWebSocket() {
+			wsHandler.ServeHTTP(c.Response(), c.Request())
+		} else {
+			assetServer.ServeHTTP(c.Response(), c.Request())
+		}
+		return nil
+	})
+
+	if devServerAddr := d.devServerAddr; devServerAddr != "" {
+		// Start server
+		go func(server *echo.Echo, log *logger.Logger) {
+			err := server.Start(devServerAddr)
+			if err != nil {
+				log.Error(err.Error())
+			}
+			d.LogDebug("Shutdown completed")
+		}(d.server, d.logger)
+
+		d.LogDebug("Serving DevServer at http://%s", devServerAddr)
+	}
+
+	// Launch desktop app
+	err = d.Frontend.Run(ctx)
+
+	return err
+}
+
+func (d *DevWebServer) WindowReload() {
+	d.broadcast("reload")
+	d.Frontend.WindowReload()
+}
+
+func (d *DevWebServer) WindowReloadApp() {
+	d.broadcast("reloadapp")
+	d.Frontend.WindowReloadApp()
+}
+
+func (d *DevWebServer) Notify(name string, data ...interface{}) {
+	d.notify(name, data...)
+}
+
+func (d *DevWebServer) handleReload(c echo.Context) error {
+	d.WindowReload()
+	return c.NoContent(http.StatusNoContent)
+}
+
+func (d *DevWebServer) handleReloadApp(c echo.Context) error {
+	d.WindowReloadApp()
+	return c.NoContent(http.StatusNoContent)
+}
+
+func (d *DevWebServer) handleIPCWebSocket(c echo.Context) error {
+	conn, err := upgrader.Upgrade(c.Response(), c.Request(), nil)
+	if err != nil {
+		d.logger.Error("WebSocket upgrade failed %v", err)
+		return err
+	}
+	d.LogDebug(fmt.Sprintf("WebSocket client %p connected", conn))
+
+	d.socketMutex.Lock()
+	d.websocketClients[conn] = &sync.Mutex{}
+	locker := d.websocketClients[conn]
+	d.socketMutex.Unlock()
+
+	var wg sync.WaitGroup
+
+	defer func() {
+		wg.Wait()
+		d.socketMutex.Lock()
+		delete(d.websocketClients, conn)
+		d.socketMutex.Unlock()
+		d.LogDebug(fmt.Sprintf("WebSocket client %p disconnected", conn))
+		conn.Close()
+	}()
+
+	for {
+		_, msgBytes, err := conn.ReadMessage()
+		if err != nil {
+			break
+		}
+
+		msg := string(msgBytes)
+		wg.Add(1)
+
+		go func(m string) {
+			defer wg.Done()
+
+			if m == "drag" {
+				return
+			}
+
+			if len(m) > 2 && strings.HasPrefix(m, "EE") {
+				d.notifyExcludingSender([]byte(m), conn)
+			}
+
+			result, err := d.dispatcher.ProcessMessage(m, d)
+			if err != nil {
+				d.logger.Error(err.Error())
+			}
+
+			if result != "" {
+				locker.Lock()
+				defer locker.Unlock()
+				if err := conn.WriteMessage(websocket.TextMessage, []byte(result)); err != nil {
+					d.logger.Error("Websocket write message failed %v", err)
+				}
+			}
+		}(msg)
+	}
+
+	return nil
+}
+
+func (d *DevWebServer) LogDebug(message string, args ...interface{}) {
+	d.logger.Debug("[DevWebServer] "+message, args...)
+}
+
+type EventNotify struct {
+	Name string        `json:"name"`
+	Data []interface{} `json:"data"`
+}
+
+func (d *DevWebServer) broadcast(message string) {
+	d.socketMutex.Lock()
+	defer d.socketMutex.Unlock()
+	for client, locker := range d.websocketClients {
+		go func(client *websocket.Conn, locker *sync.Mutex) {
+			if client == nil {
+				d.logger.Error("Lost connection to websocket server")
+				return
+			}
+			locker.Lock()
+			err := client.WriteMessage(websocket.TextMessage, []byte(message))
+			if err != nil {
+				locker.Unlock()
+				d.logger.Error(err.Error())
+				return
+			}
+			locker.Unlock()
+		}(client, locker)
+	}
+}
+
+func (d *DevWebServer) notify(name string, data ...interface{}) {
+	// Notify
+	notification := EventNotify{
+		Name: name,
+		Data: data,
+	}
+	payload, err := json.Marshal(notification)
+	if err != nil {
+		d.logger.Error(err.Error())
+		return
+	}
+	d.broadcast("n" + string(payload))
+}
+
+func (d *DevWebServer) broadcastExcludingSender(message string, sender *websocket.Conn) {
+	d.socketMutex.Lock()
+	defer d.socketMutex.Unlock()
+	for client, locker := range d.websocketClients {
+		go func(client *websocket.Conn, locker *sync.Mutex) {
+			if client == sender {
+				return
+			}
+			locker.Lock()
+			err := client.WriteMessage(websocket.TextMessage, []byte(message))
+			if err != nil {
+				locker.Unlock()
+				d.logger.Error(err.Error())
+				return
+			}
+			locker.Unlock()
+		}(client, locker)
+	}
+}
+
+func (d *DevWebServer) notifyExcludingSender(eventMessage []byte, sender *websocket.Conn) {
+	message := "n" + string(eventMessage[2:])
+	d.broadcastExcludingSender(message, sender)
+
+	var notifyMessage EventNotify
+	err := json.Unmarshal(eventMessage[2:], &notifyMessage)
+	if err != nil {
+		d.logger.Error(err.Error())
+		return
+	}
+	d.Frontend.Notify(notifyMessage.Name, notifyMessage.Data...)
+}
+
+func NewFrontend(ctx context.Context, appoptions *options.App, myLogger *logger.Logger, appBindings *binding.Bindings, dispatcher frontend.Dispatcher, menuManager *menumanager.Manager, desktopFrontend frontend.Frontend) *DevWebServer {
+	result := &DevWebServer{
+		ctx:              ctx,
+		Frontend:         desktopFrontend,
+		appoptions:       appoptions,
+		logger:           myLogger,
+		appBindings:      appBindings,
+		dispatcher:       dispatcher,
+		server:           echo.New(),
+		menuManager:      menuManager,
+		websocketClients: make(map[*websocket.Conn]*sync.Mutex),
+	}
+
+	result.devServerAddr, _ = ctx.Value("devserver").(string)
+	result.server.HideBanner = true
+	result.server.HidePort = true
+	return result
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/internal/frontend/dispatcher.go","mode":420,"size":113,"sha256":"cae5494725c8a1d2a3bcc512f9e28985177fdf1e9338cb76bd8ca07406bb6023","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":113}
+package frontend
+
+type Dispatcher interface {
+	ProcessMessage(message string, sender Frontend) (string, error)
+}
+
+@@END
 @@PORTABLE {"path":"third_party/wails/internal/frontend/dispatcher/browser.go","mode":420,"size":509,"sha256":"e933b930f9abf64cef339190e24d861c4e8054770b3ff7b390fc5ba3ff45ae9e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":509}
 package dispatcher
 
@@ -33111,405 +33441,6 @@ export function Greet(arg1) {
     "url": "https://github.com/wailsapp/wails/issues"
   },
   "homepage": "https://github.com/wailsapp/wails#readme"
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/pkg/templates/generate/assets/common/frontend/wailsjs/runtime/runtime.d.ts","mode":420,"size":9060,"sha256":"283bbd43e93ac509070e0f7796a98724575c016de026904a0bc74ba572d81c77","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":9060}
-/*
- _       __      _ __
-| |     / /___ _(_) /____
-| | /| / / __ `/ / / ___/
-| |/ |/ / /_/ / / (__  )
-|__/|__/\__,_/_/_/____/
-The electron alternative for Go
-(c) Lea Anthony 2019-present
-*/
-
-export interface Position {
-    x: number;
-    y: number;
-}
-
-export interface Size {
-    w: number;
-    h: number;
-}
-
-export interface Screen {
-    isCurrent: boolean;
-    isPrimary: boolean;
-    width: number
-    height: number
-}
-
-// Environment information such as platform, buildtype, ...
-export interface EnvironmentInfo {
-    buildType: string;
-    platform: string;
-    arch: string;
-}
-
-// [EventsEmit](https://wails.io/docs/reference/runtime/events#eventsemit)
-// emits the given event. Optional data may be passed with the event.
-// This will trigger any event listeners.
-export function EventsEmit(eventName: string, ...data: any): void;
-
-// [EventsOn](https://wails.io/docs/reference/runtime/events#eventson) sets up a listener for the given event name.
-export function EventsOn(eventName: string, callback: (...data: any) => void): void;
-
-// [EventsOnMultiple](https://wails.io/docs/reference/runtime/events#eventsonmultiple)
-// sets up a listener for the given event name, but will only trigger a given number times.
-export function EventsOnMultiple(eventName: string, callback: (...data: any) => void, maxCallbacks: number): void;
-
-// [EventsOnce](https://wails.io/docs/reference/runtime/events#eventsonce)
-// sets up a listener for the given event name, but will only trigger once.
-export function EventsOnce(eventName: string, callback: (...data: any) => void): void;
-
-// [EventsOff](https://wails.io/docs/reference/runtime/events#eventsff)
-// unregisters the listener for the given event name.
-export function EventsOff(eventName: string): void;
-
-// [EventsOffAll](https://wails.io/docs/reference/runtime/events#eventsoffall)
-// unregisters all event listeners.
-export function EventsOffAll(): void;
-
-// [LogPrint](https://wails.io/docs/reference/runtime/log#logprint)
-// logs the given message as a raw message
-export function LogPrint(message: string): void;
-
-// [LogTrace](https://wails.io/docs/reference/runtime/log#logtrace)
-// logs the given message at the `trace` log level.
-export function LogTrace(message: string): void;
-
-// [LogDebug](https://wails.io/docs/reference/runtime/log#logdebug)
-// logs the given message at the `debug` log level.
-export function LogDebug(message: string): void;
-
-// [LogError](https://wails.io/docs/reference/runtime/log#logerror)
-// logs the given message at the `error` log level.
-export function LogError(message: string): void;
-
-// [LogFatal](https://wails.io/docs/reference/runtime/log#logfatal)
-// logs the given message at the `fatal` log level.
-// The application will quit after calling this method.
-export function LogFatal(message: string): void;
-
-// [LogInfo](https://wails.io/docs/reference/runtime/log#loginfo)
-// logs the given message at the `info` log level.
-export function LogInfo(message: string): void;
-
-// [LogWarning](https://wails.io/docs/reference/runtime/log#logwarning)
-// logs the given message at the `warning` log level.
-export function LogWarning(message: string): void;
-
-// [WindowReload](https://wails.io/docs/reference/runtime/window#windowreload)
-// Forces a reload by the main application as well as connected browsers.
-export function WindowReload(): void;
-
-// [WindowReloadApp](https://wails.io/docs/reference/runtime/window#windowreloadapp)
-// Reloads the application frontend.
-export function WindowReloadApp(): void;
-
-// [WindowSetAlwaysOnTop](https://wails.io/docs/reference/runtime/window#windowsetalwaysontop)
-// Sets the window AlwaysOnTop or not on top.
-export function WindowSetAlwaysOnTop(b: boolean): void;
-
-// [WindowSetSystemDefaultTheme](https://wails.io/docs/next/reference/runtime/window#windowsetsystemdefaulttheme)
-// *Windows only*
-// Sets window theme to system default (dark/light).
-export function WindowSetSystemDefaultTheme(): void;
-
-// [WindowSetLightTheme](https://wails.io/docs/next/reference/runtime/window#windowsetlighttheme)
-// *Windows only*
-// Sets window to light theme.
-export function WindowSetLightTheme(): void;
-
-// [WindowSetDarkTheme](https://wails.io/docs/next/reference/runtime/window#windowsetdarktheme)
-// *Windows only*
-// Sets window to dark theme.
-export function WindowSetDarkTheme(): void;
-
-// [WindowCenter](https://wails.io/docs/reference/runtime/window#windowcenter)
-// Centers the window on the monitor the window is currently on.
-export function WindowCenter(): void;
-
-// [WindowSetTitle](https://wails.io/docs/reference/runtime/window#windowsettitle)
-// Sets the text in the window title bar.
-export function WindowSetTitle(title: string): void;
-
-// [WindowFullscreen](https://wails.io/docs/reference/runtime/window#windowfullscreen)
-// Makes the window full screen.
-export function WindowFullscreen(): void;
-
-// [WindowUnfullscreen](https://wails.io/docs/reference/runtime/window#windowunfullscreen)
-// Restores the previous window dimensions and position prior to full screen.
-export function WindowUnfullscreen(): void;
-
-// [WindowSetSize](https://wails.io/docs/reference/runtime/window#windowsetsize)
-// Sets the width and height of the window.
-export function WindowSetSize(width: number, height: number): void;
-
-// [WindowGetSize](https://wails.io/docs/reference/runtime/window#windowgetsize)
-// Gets the width and height of the window.
-export function WindowGetSize(): Promise<Size>;
-
-// [WindowSetMaxSize](https://wails.io/docs/reference/runtime/window#windowsetmaxsize)
-// Sets the maximum window size. Will resize the window if the window is currently larger than the given dimensions.
-// Setting a size of 0,0 will disable this constraint.
-export function WindowSetMaxSize(width: number, height: number): void;
-
-// [WindowSetMinSize](https://wails.io/docs/reference/runtime/window#windowsetminsize)
-// Sets the minimum window size. Will resize the window if the window is currently smaller than the given dimensions.
-// Setting a size of 0,0 will disable this constraint.
-export function WindowSetMinSize(width: number, height: number): void;
-
-// [WindowSetPosition](https://wails.io/docs/reference/runtime/window#windowsetposition)
-// Sets the window position relative to the monitor the window is currently on.
-export function WindowSetPosition(x: number, y: number): void;
-
-// [WindowGetPosition](https://wails.io/docs/reference/runtime/window#windowgetposition)
-// Gets the window position relative to the monitor the window is currently on.
-export function WindowGetPosition(): Promise<Position>;
-
-// [WindowHide](https://wails.io/docs/reference/runtime/window#windowhide)
-// Hides the window.
-export function WindowHide(): void;
-
-// [WindowShow](https://wails.io/docs/reference/runtime/window#windowshow)
-// Shows the window, if it is currently hidden.
-export function WindowShow(): void;
-
-// [WindowMaximise](https://wails.io/docs/reference/runtime/window#windowmaximise)
-// Maximises the window to fill the screen.
-export function WindowMaximise(): void;
-
-// [WindowToggleMaximise](https://wails.io/docs/reference/runtime/window#windowtogglemaximise)
-// Toggles between Maximised and UnMaximised.
-export function WindowToggleMaximise(): void;
-
-// [WindowUnmaximise](https://wails.io/docs/reference/runtime/window#windowunmaximise)
-// Restores the window to the dimensions and position prior to maximising.
-export function WindowUnmaximise(): void;
-
-// [WindowMinimise](https://wails.io/docs/reference/runtime/window#windowminimise)
-// Minimises the window.
-export function WindowMinimise(): void;
-
-// [WindowUnminimise](https://wails.io/docs/reference/runtime/window#windowunminimise)
-// Restores the window to the dimensions and position prior to minimising.
-export function WindowUnminimise(): void;
-
-// [WindowSetBackgroundColour](https://wails.io/docs/reference/runtime/window#windowsetbackgroundcolour)
-// Sets the background colour of the window to the given RGBA colour definition. This colour will show through for all transparent pixels.
-export function WindowSetBackgroundColour(R: number, G: number, B: number, A: number): void;
-
-// [ScreenGetAll](https://wails.io/docs/reference/runtime/window#screengetall)
-// Gets the all screens. Call this anew each time you want to refresh data from the underlying windowing system.
-export function ScreenGetAll(): Promise<Screen[]>;
-
-// [BrowserOpenURL](https://wails.io/docs/reference/runtime/browser#browseropenurl)
-// Opens the given URL in the system browser.
-export function BrowserOpenURL(url: string): void;
-
-// [Environment](https://wails.io/docs/reference/runtime/intro#environment)
-// Returns information about the environment
-export function Environment(): Promise<EnvironmentInfo>;
-
-// [Quit](https://wails.io/docs/reference/runtime/intro#quit)
-// Quits the application.
-export function Quit(): void;
-
-// [Hide](https://wails.io/docs/reference/runtime/intro#hide)
-// Hides the application.
-export function Hide(): void;
-
-// [Show](https://wails.io/docs/reference/runtime/intro#show)
-// Shows the application.
-export function Show(): void;
-
-@@END
-@@PORTABLE {"path":"third_party/wails/pkg/templates/generate/assets/common/frontend/wailsjs/runtime/runtime.js","mode":420,"size":3826,"sha256":"65c58ea7e1987e45ec6e60d90afe3a2cf8703d6d363d5c0209399bc61295443a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3826}
-/*
- _       __      _ __
-| |     / /___ _(_) /____
-| | /| / / __ `/ / / ___/
-| |/ |/ / /_/ / / (__  )
-|__/|__/\__,_/_/_/____/
-The electron alternative for Go
-(c) Lea Anthony 2019-present
-*/
-
-export function LogPrint(message) {
-    window.runtime.LogPrint(message);
-}
-
-export function LogTrace(message) {
-    window.runtime.LogTrace(message);
-}
-
-export function LogDebug(message) {
-    window.runtime.LogDebug(message);
-}
-
-export function LogInfo(message) {
-    window.runtime.LogInfo(message);
-}
-
-export function LogWarning(message) {
-    window.runtime.LogWarning(message);
-}
-
-export function LogError(message) {
-    window.runtime.LogError(message);
-}
-
-export function LogFatal(message) {
-    window.runtime.LogFatal(message);
-}
-
-export function EventsOnMultiple(eventName, callback, maxCallbacks) {
-    window.runtime.EventsOnMultiple(eventName, callback, maxCallbacks);
-}
-
-export function EventsOn(eventName, callback) {
-    EventsOnMultiple(eventName, callback, -1);
-}
-
-export function EventsOff(eventName) {
-    return window.runtime.EventsOff(eventName);
-}
-
-export function EventsOffAll() {
-    return window.runtime.EventsOffAll();
-}
-
-export function EventsOnce(eventName, callback) {
-    EventsOnMultiple(eventName, callback, 1);
-}
-
-export function EventsEmit(eventName) {
-    let args = [eventName].slice.call(arguments);
-    return window.runtime.EventsEmit.apply(null, args);
-}
-
-export function WindowReload() {
-    window.runtime.WindowReload();
-}
-
-export function WindowReloadApp() {
-    window.runtime.WindowReloadApp();
-}
-
-export function WindowSetAlwaysOnTop(b) {
-    window.runtime.WindowSetAlwaysOnTop(b);
-}
-
-export function WindowSetSystemDefaultTheme() {
-    window.runtime.WindowSetSystemDefaultTheme();
-}
-
-export function WindowSetLightTheme() {
-    window.runtime.WindowSetLightTheme();
-}
-
-export function WindowSetDarkTheme() {
-    window.runtime.WindowSetDarkTheme();
-}
-
-export function WindowCenter() {
-    window.runtime.WindowCenter();
-}
-
-export function WindowSetTitle(title) {
-    window.runtime.WindowSetTitle(title);
-}
-
-export function WindowFullscreen() {
-    window.runtime.WindowFullscreen();
-}
-
-export function WindowUnfullscreen() {
-    window.runtime.WindowUnfullscreen();
-}
-
-export function WindowGetSize() {
-    return window.runtime.WindowGetSize();
-}
-
-export function WindowSetSize(width, height) {
-    window.runtime.WindowSetSize(width, height);
-}
-
-export function WindowSetMaxSize(width, height) {
-    window.runtime.WindowSetMaxSize(width, height);
-}
-
-export function WindowSetMinSize(width, height) {
-    window.runtime.WindowSetMinSize(width, height);
-}
-
-export function WindowSetPosition(x, y) {
-    window.runtime.WindowSetPosition(x, y);
-}
-
-export function WindowGetPosition() {
-    return window.runtime.WindowGetPosition();
-}
-
-export function WindowHide() {
-    window.runtime.WindowHide();
-}
-
-export function WindowShow() {
-    window.runtime.WindowShow();
-}
-
-export function WindowMaximise() {
-    window.runtime.WindowMaximise();
-}
-
-export function WindowToggleMaximise() {
-    window.runtime.WindowToggleMaximise();
-}
-
-export function WindowUnmaximise() {
-    window.runtime.WindowUnmaximise();
-}
-
-export function WindowMinimise() {
-    window.runtime.WindowMinimise();
-}
-
-export function WindowUnminimise() {
-    window.runtime.WindowUnminimise();
-}
-
-export function WindowSetBackgroundColour(R, G, B, A) {
-    window.runtime.WindowSetBackgroundColour(R, G, B, A);
-}
-
-export function ScreenGetAll() {
-    return window.runtime.ScreenGetAll();
-}
-
-export function BrowserOpenURL(url) {
-    window.runtime.BrowserOpenURL(url);
-}
-
-export function Environment() {
-    return window.runtime.Environment();
-}
-
-export function Quit() {
-    window.runtime.Quit();
-}
-
-export function Hide() {
-    window.runtime.Hide();
-}
-
-export function Show() {
-    window.runtime.Show();
 }
 
 @@END
