@@ -241,17 +241,15 @@ def ensure_account(client, user_client, directory, username, password, marker, l
                 updates = ['nocommands', *command_tokens]
             if password_mismatch:
                 updates.extend(['resetpass', '#' + expected_hash])
-            for field, prefix, requested in [('keys', '~', grants.get('keys', [])),
-                                              ('channels', '&', grants.get('channels', []))]:
+            for field, prefix, reset, requested in [('keys', '~', 'resetkeys', grants.get('keys', [])),
+                                                    ('channels', '&', 'resetchannels', grants.get('channels', []))]:
                 observed = set(actual.get(field, '').split())
                 expected = {prefix + item for item in requested}
-                if not observed <= expected:
-                    raise ACLFailure('REDIS_APPLICATION_GRANTS_DRIFT')
-                missing = sorted(expected - observed)
-                if missing:
+                if observed != expected:
                     if verify or mode == 'existing':
-                        raise ACLFailure('REDIS_APPLICATION_GRANTS_MISSING')
-                    updates.extend(missing)
+                        raise ACLFailure('REDIS_APPLICATION_GRANTS_DRIFT' if observed - expected else
+                                         'REDIS_APPLICATION_GRANTS_MISSING')
+                    updates.extend([reset, *sorted(expected)])
             if updates and not preflight:
                 if client.command('ACL', 'SETUSER', username, *updates) != 'OK':
                     raise ACLFailure('REDIS_APPLICATION_COMMAND_FAILED')

@@ -130,6 +130,7 @@ class RedisACLRuntimeTests(unittest.TestCase):
                     failed_job = copy.deepcopy(provider_job)
                     failed_account = copy.deepcopy(account)
                     if account['listener'] == 'client':
+                        failed_account['mode'] = 'existing'
                         failed_account['grants']['keys'] = []
                     else:
                         failed_account['grants']['commands'] = ['nonexistentcommand']

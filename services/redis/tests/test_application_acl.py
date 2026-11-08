@@ -18,6 +18,39 @@ from ansible_collections.platform.redis.plugins.module_utils.application_acl imp
 
 
 class ApplicationACLTests(unittest.TestCase):
+    def assert_managed_patterns_can_be_replaced(self, args, acl):
+        admin, user, directory, username, password, marker, listener, grants, mode = args
+        broad = dict(grants, keys=['*'], channels=['*'])
+        self.assertTrue(ensure_account(admin, user, directory, username, password, marker, listener, broad, mode))
+        original_passwords = account_state(admin, username)['passwords']
+        original_witness = read_witness(directory)
+        for desired in [dict(grants, keys=['allowed:*'], channels=['events:*']),
+                        dict(grants, keys=[], channels=[])]:
+            before = acl.read_bytes()
+            actual_before = account_state(admin, username)
+            self.assertFalse(ensure_account(admin, user, directory, username, password, marker,
+                                            listener, desired, mode, preflight=True))
+            self.assertEqual(before, acl.read_bytes())
+            self.assertEqual(actual_before, account_state(admin, username))
+            self.assertEqual(original_witness, read_witness(directory))
+            with self.assertRaisesRegex(ACLFailure, 'REDIS_APPLICATION_GRANTS_DRIFT'):
+                ensure_account(admin, user, directory, username, password, marker, listener, desired, mode, verify=True)
+            with self.assertRaisesRegex(ACLFailure, 'REDIS_APPLICATION_GRANTS_DRIFT'):
+                ensure_account(admin, user, directory, username, password, marker, listener, desired, 'existing')
+            self.assertEqual(before, acl.read_bytes())
+            self.assertTrue(ensure_account(admin, user, directory, username, password, marker, listener, desired, mode))
+            actual = account_state(admin, username)
+            self.assertEqual({'~' + value for value in desired['keys']}, set(actual['keys'].split()))
+            self.assertEqual({'&' + value for value in desired['channels']}, set(actual['channels'].split()))
+            self.assertEqual(original_passwords, actual['passwords'])
+            self.assertEqual(original_witness, read_witness(directory))
+            self.assertFalse(ensure_account(admin, user, directory, username, password, marker, listener, desired, mode))
+            self.assertFalse(ensure_account(admin, user, directory, username, password, marker, listener, desired, mode, verify=True))
+            saved = acl.read_bytes()
+            self.assertIn('user ' + username + ' ', saved.decode())
+            self.assertTrue(password.encode() not in saved, 'plaintext password persisted')
+        self.assertTrue(ensure_account(*args))
+
     def test_ordered_rules_and_future_command_meaning(self):
         commands = {'get': ['@read'], 'config|get': ['@admin'], 'config|set': ['@admin'], 'modulecmd': []}
         categories = ['read', 'admin']
@@ -89,6 +122,7 @@ class ApplicationACLTests(unittest.TestCase):
                 self.assertFalse(ensure_account(*expanded_args))
                 self.assertFalse(ensure_account(*expanded_args, verify=True))
                 self.assertEqual(before, acl.read_bytes())
+                self.assert_managed_patterns_can_be_replaced(expanded_args, acl)
                 all_grants = dict(expanded, commands=['@all', 'ping'])
                 all_args = (*args[:7], all_grants, args[8])
                 with self.assertRaisesRegex(ACLFailure, 'REDIS_APPLICATION_GRANTS_MISSING'):
@@ -156,6 +190,7 @@ class ApplicationACLTests(unittest.TestCase):
                 self.assertFalse(ensure_account(*args))
                 self.assertFalse(ensure_account(*args, verify=True))
                 self.assertEqual(before, acl.read_bytes())
+                self.assert_managed_patterns_can_be_replaced(args, acl)
                 self.assertEqual('OK', args[1].command('SET', 'sdku:probe', 'healthy'))
                 self.assertEqual('healthy', args[1].command('GET', 'sdku:probe'))
                 self.assertEqual(1, args[1].command('DEL', 'sdku:probe'))
