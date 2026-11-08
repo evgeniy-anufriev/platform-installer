@@ -1,4 +1,65 @@
 ---
-- ansible.builtin.import_tasks: account_scope.yml
-  vars:
-    platform_redis_application_phase: preflight
+- name: Проверка параметров операции Redis и защищённых файлов учётных данных
+  ansible.builtin.assert:
+    that:
+      - platform_redis_application_job.serviceType == 'redis'
+      - >-
+        platform_redis_application_credential_files | platform.core.application_protected_secret_files(
+        (platform_redis_application_job.accounts | map(attribute='passwordRef') | list)
+        + (platform_redis_application_job.accounts | map(attribute='adminPasswordRef') | list),
+        platform_application_secret_root)
+    fail_msg: APPLICATION_PROVIDER_SECRET_FILE_INVALID
+  no_log: true
+
+- name: Предварительная проверка пакетных учётных записей Redis и Sentinel
+  block:
+    - name: Предварительная проверка группы учётных записей Redis или Sentinel
+      platform.redis.application_account:
+        address: "{{ redis_batch.target.address }}"
+        port: "{{ redis_batch.target.port }}"
+        directory: "{{ redis_application_directory }}"
+        ca: "{{ redis_application_directory }}/pki/ca-chain.pem"
+        certificate: "{{ redis_application_directory }}/pki/certificate.pem"
+        private_key: "{{ redis_application_directory }}/pki/private-key.pem"
+        admin_password: "{{ lookup('ansible.builtin.file', platform_redis_application_credential_files[redis_batch.adminPasswordRef], rstrip=false) }}"
+        listener: "{{ redis_batch.listener }}"
+        accounts: >-
+          {%- set inputs = [] -%}
+          {%- for account in redis_batch.accounts -%}
+          {%- set _ = inputs.append({'username': account.name, 'marker': account.marker,
+             'mode': account.mode, 'grants': account.grants,
+             'password': lookup('ansible.builtin.file', platform_redis_application_credential_files[account.passwordRef], rstrip=false)}) -%}
+          {%- endfor -%}
+          {{ inputs }}
+        preflight: true
+        timeout: "{{ platform_redis_application_lock_timeout }}"
+      vars:
+        redis_application_directory: "{{ hostvars[redis_batch.target.hostId].platform_redis_config_root | default(platform_redis_config_root) }}/{{ redis_batch.target.memberId }}"
+      delegate_to: "{{ redis_batch.target.hostId }}"
+      connection: ssh
+      become: true
+      become_user: "{{ hostvars[redis_batch.target.hostId].platform_redis_user | default(platform_redis_user) }}"
+      loop: "{{ platform_redis_application_job.accounts | platform.redis.application_preflight_batches }}"
+      loop_control:
+        loop_var: redis_batch
+      register: redis_preflight_result
+      no_log: true
+  rescue:
+    - name: Безопасная диагностика ошибок preflight Redis и Sentinel
+      ansible.builtin.fail:
+        msg: >-
+          {%- set failures = redis_preflight_result.results | default([]) |
+              selectattr('failed', 'defined') | selectattr('failed', 'equalto', true) | list -%}
+          {%- set diagnostics = [] -%}
+          {%- for result in failures[:16] -%}
+          {%- set _ = diagnostics.append({
+              'code': (result.msg | default('') | regex_search('^REDIS_APPLICATION_[A-Z0-9_]+$')) |
+                  default('REDIS_APPLICATION_PREFLIGHT_FAILED', true),
+              'username': (result.username | default('', true) | regex_search('^[a-z_][a-z0-9_-]{0,62}$')) |
+                  default('UNKNOWN', true),
+              'address': result.redis_batch.target.address | default('unknown'),
+              'listener': result.redis_batch.listener | default('unknown')
+            }) -%}
+          {%- endfor -%}
+          {{ {'code': 'REDIS_APPLICATION_PREFLIGHT_FAILED', 'failures': diagnostics,
+              'omittedFailures': ([failures | length - 16, 0] | max)} }}

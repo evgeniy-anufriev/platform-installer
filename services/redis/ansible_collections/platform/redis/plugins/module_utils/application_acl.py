@@ -167,7 +167,22 @@ def command_permissions(rules, commands, categories):
     return result
 
 
-def ensure_account(client, user_client, directory, username, password, marker, listener, grants, mode, verify=False, timeout=15, preflight=False):
+def command_metadata(client):
+    commands, pending = {}, list(client.command('COMMAND'))
+    while pending:
+        row = pending.pop()
+        if not isinstance(row, list) or len(row) < 7:
+            raise ACLFailure('REDIS_APPLICATION_METADATA_INVALID')
+        children = row[9] if len(row) > 9 else []
+        if children:
+            pending.extend(children)
+        else:
+            commands[row[0]] = row[6]
+    categories = client.command('ACL', 'CAT')
+    return commands, categories
+
+
+def ensure_account(client, user_client, directory, username, password, marker, listener, grants, mode, verify=False, timeout=15, preflight=False, preflight_metadata=None):
     """One locked check/reconcile/save/witness for an owned application account."""
     changed = False
     with member_lock(directory, timeout):
@@ -196,17 +211,12 @@ def ensure_account(client, user_client, directory, username, password, marker, l
         expected_hash = hashlib.sha256(password.encode('utf-8')).hexdigest()
         password_mismatch = actual is not None and actual.get('passwords') != [expected_hash]
         command_tokens = [item if item[0] in '+-' else '+' + item for item in grants['commands']]
-        commands, pending = {}, list(client.command('COMMAND'))
-        while pending:
-            row = pending.pop()
-            if not isinstance(row, list) or len(row) < 7:
-                raise ACLFailure('REDIS_APPLICATION_METADATA_INVALID')
-            children = row[9] if len(row) > 9 else []
-            if children:
-                pending.extend(children)
-            else:
-                commands[row[0]] = row[6]
-        categories = client.command('ACL', 'CAT')
+        if preflight_metadata is None:
+            commands, categories = command_metadata(client)
+        else:
+            if not preflight_metadata:
+                preflight_metadata.extend(command_metadata(client))
+            commands, categories = preflight_metadata
         expected_commands = command_permissions(command_tokens, commands, categories)
         if actual is None and preflight:
             return False

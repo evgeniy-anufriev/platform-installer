@@ -59,7 +59,7 @@ class RedisACLRuntimeTests(unittest.TestCase):
 
             def run(tasks, values=variables, expected=0):
                 play = [{'hosts': 'localhost', 'connection': 'local', 'gather_facts': False,
-                         'vars': values, 'tasks': tasks}]
+                         'vars': dict(values, ansible_connection='local'), 'tasks': tasks}]
                 path = root / 'test.yml'
                 path.write_text(yaml.safe_dump(play), encoding='utf-8')
                 result = subprocess.run(['ansible-playbook', '-i', 'localhost,', str(path)],
@@ -125,6 +125,31 @@ class RedisACLRuntimeTests(unittest.TestCase):
                 run(provider_tasks('accounts'), provider_vars)
                 self.assertIn('changed=0', run(provider_tasks('accounts'), provider_vars))
                 self.assertIn('changed=0', run(provider_tasks('verify'), provider_vars))
+                for account, expected_code in zip(provider_job['accounts'],
+                        ['REDIS_APPLICATION_GRANTS_DRIFT', 'REDIS_APPLICATION_GRANTS_INVALID']):
+                    failed_job = copy.deepcopy(provider_job)
+                    failed_account = copy.deepcopy(account)
+                    if account['listener'] == 'client':
+                        failed_account['grants']['keys'] = []
+                    else:
+                        failed_account['grants']['commands'] = ['nonexistentcommand']
+                    fillers = []
+                    for index in range(24):
+                        filler = copy.deepcopy(account)
+                        filler['name'] = 'qa_probe_' + str(index)
+                        fillers.append(filler)
+                    failed_job['accounts'] = fillers + [failed_account]
+                    diagnostic = run(provider_tasks('preflight'),
+                        dict(provider_vars, platform_redis_application_job=failed_job), expected=2)
+                    self.assertIn(expected_code, diagnostic)
+                    self.assertIn('app-qa', diagnostic)
+                    self.assertIn(account['listener'], diagnostic)
+                    self.assertIn('127.0.0.1', diagnostic)
+                    self.assertNotIn('"accounts":', diagnostic)
+                    self.assertNotIn('platform.application/v1:qa:', diagnostic)
+                    self.assertTrue(app_secret.read_text() not in diagnostic, 'application password leaked')
+                    self.assertTrue(all(Path(path).read_text() not in diagnostic for path in secrets.values()),
+                                    'administrator password leaked')
                 run(prepare)
                 run(fixture_runtime)
                 for alias in ['redis', 'sentinel']:
