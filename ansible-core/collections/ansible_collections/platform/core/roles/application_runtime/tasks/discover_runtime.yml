@@ -12,9 +12,13 @@
 - name: Проверка Docker без прав root и плагина Compose без внесения изменений
   ansible.builtin.command:
     argv: "{{ item }}"
-  loop:
-    - [docker, info, --format, json]
-    - [docker, compose, version, --short]
+  loop: "{{ application_runtime_discovery_commands + (application_runtime_container_command if application_runtime_inventory_containers | default(false) | bool else []) }}"
+  vars:
+    application_runtime_discovery_commands:
+      - [docker, info, --format, json]
+      - [docker, compose, version, --short]
+    application_runtime_container_command:
+      - [docker, container, ls, --all, --format, !unsafe '{{.Names}}']
   become_user: "{{ application_runtime_job.account }}"
   environment:
     HOME: "{{ getent_passwd[application_runtime_job.account][4] }}"
@@ -25,11 +29,37 @@
   changed_when: false
   no_log: true
 
+- name: Чтение меток и портов выбранных контейнеров учётной записи Docker
+  ansible.builtin.command:
+    argv: "{{ ['docker', 'container', 'inspect', '--format', _application_container_format] + _application_existing_names }}"
+  vars:
+    _application_container_format: !unsafe '[{{json .Name}},{{json .Config.Labels}},{{json .State.Running}},{{json .HostConfig.PortBindings}}]'
+    _application_existing_names: >-
+      {{ application_host_jobs | selectattr('account', 'equalto', application_runtime_job.account)
+         | map(attribute='placement.containerName') | intersect(application_runtime_probe.results[2].stdout_lines) | sort }}
+  become_user: "{{ application_runtime_job.account }}"
+  environment:
+    HOME: "{{ getent_passwd[application_runtime_job.account][4] }}"
+    XDG_RUNTIME_DIR: "/run/user/{{ getent_passwd[application_runtime_job.account][1] }}"
+    DOCKER_HOST: "unix:///run/user/{{ getent_passwd[application_runtime_job.account][1] }}/docker.sock"
+    DOCKER_CONFIG: "{{ platform_application_registry_config_directory if platform_application_registry_config_directory else getent_passwd[application_runtime_job.account][4] ~ '/.docker' }}"
+  register: _application_container_details
+  when:
+    - application_runtime_inventory_containers | default(false) | bool
+    - application_host_jobs is defined
+    - _application_existing_names | length > 0
+  changed_when: false
+  no_log: true
+
 - name: Сохранение результата обнаружения приложения в контексте операции и целевого узла
   ansible.builtin.set_fact:
     application_runtime_discoveries: >-
       {{ application_runtime_discoveries | combine({application_discovery_key: {
+        'account': application_runtime_job.account,
         'uid': getent_passwd[application_runtime_job.account][1],
         'home': getent_passwd[application_runtime_job.account][4],
-        'info': application_runtime_probe.results[0].stdout | from_json}}) }}
+        'info': application_runtime_probe.results[0].stdout | from_json}
+        | combine({'containerNames': application_runtime_probe.results[2].stdout_lines,
+                   'containerDetails': _application_container_details.stdout_lines | default([])}
+                  if application_runtime_inventory_containers | default(false) | bool else {})}) }}
   no_log: true

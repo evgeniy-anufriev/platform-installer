@@ -680,3 +680,275 @@ before sources, prototype/final profiles/counts, native snapshot, Wails before/
 after records, row digests, bundle checks and summary.json. No credential values.
 No installation, Plan/Approve/Start or visual acceptance was performed.
 No commit/push; unrelated worktree edits preserved.
+
+### Owner-requested installation preflight control, 2026-11-08
+
+This later test exercises real React handlers and Wails Go Plan/combined Start,
+using the same project-50a1100000000001, SZI5+SDKU45 / 100 placements on node1/node2,
+Execution Node node3, artificial test images and retained complex Jinja/ENV.
+The comparison is 4d5f062f (before the last host-context batch, retaining earlier
+optimizations) versus fe648cfb. It is not an entirely unoptimized master baseline.
+All six previously active qa78-static Kafka/Registry units were stopped throughout
+both controls and restored afterward; all six returned active. No Core code changed.
+
+Both runs selected APPLICATION_LIBRARIES_ONLY with infrastructure Verify skipped,
+the same fixed runtime inputs and all 100 placements. The actual React cancellation
+handler stopped each run after exactly 20 successful preflight context records,
+before provider writes/container installation. Both terminal states are CANCELLED;
+zero failed TASK_COMPLETED results. Cancellation diagnostics do not mean a task
+failure. This is a bounded preflight comparison, not completed resource-stage or
+full installation acceptance.
+
+| Measurement | Before 4d5f | After fe648 |
+|---|---:|---:|
+| Warm explicit Project Verify after node preparation |32.434s|33.193s|
+| Plan |117.181s|122.221s|
+| Combined approval/Start to STARTED |181.014s|190.181s|
+| Apply start to Docker preflight boundary |863s (14:23)|542s (9:02)|
+| Task headers before that boundary |938|119|
+| Resolver role task headers |888|69|
+| Docker preflight boundary through 20th context |1155s (19:15)|1054s (17:34)|
+| Task headers within that interval |712|712|
+| Apply start through 20th context |2018s (33:38)|1596s (26:36)|
+
+The observed preflight interval decreased by 101s / 8.74%; total Apply-through-20
+by 422s / 20.91%. The optimized batch calculation is one invocation, 59.390s,
+for all 100 placements. Complete calculated rows retain canonical digest
+5fe38908f7c0ba22d4a53844bf6ad5b9b94296832370e4b2c5a97d5c4328fea7.
+Thus the last batch change reduces calculation/task overhead but does not remove
+the sequential placement preflight; long preflight also reproduces before it.
+
+Limits: one pair, not repeated-timing acceptance. Ansible selected node1 first in
+the baseline and node2 first afterward; the first 20 therefore cover different
+target hosts even though the full desired project, selected scope, inputs and EO
+are unchanged. Host ordering/state and VM load prevent attributing the exact
+8.74% to the code change. Warm Verify results here do not replace the earlier
+repeated cold Verify comparison. Existing runtime preparation/transfer timings
+are excluded from the table's preflight intervals.
+
+Before run installer-ea83ad8ce4701ddac7e790054cd77a23, revision a07b2750:
+Apply18:35:18Z, preflight18:49:41Z, twentieth19:08:56Z.
+After run installer-65bfc9cc56927e21efc1965f7c74e923, revision43d62b91:
+Apply19:21:20Z, preflight19:30:22Z, twentieth19:47:56Z. Times are UTC.
+Authoritative redacted remote events, per-task profiles, input-row digest and
+comparison JSON are under .runtime/qa/full50-1108; browser event duplicates were
+replaced with the execution node's events.jsonl for the final counts.
+Full prior infrastructure service Apply/Verify passed across recovered attempts,
+not one uninterrupted installation; this control does not claim otherwise.
+The final active/bound runtime is fe648cfb. No commit/push was made for these tests.
+
+The 2026-11-09 preflight follow-up resolves the selected job and its compact
+template context from a placement index at role entry. Snapshot-derived template
+inputs and distinct library roots are prepared per target. A checked placement
+publishes only its result fields under its index. One final task combines those
+fields with the original jobs in order for the existing Apply and offline archive
+consumers. Direct role calls still use their existing inputs.
+Focused RED OS Ansible 2.18.15 checks: 11 preflight, 4 path/ownership and 6
+offline archive tests PASS. The new regression runs the production preflight
+tasks with a Docker CLI fixture and checks host selection, placement order,
+rendered template context, offline source and one collection per host.
+Real Wails acceptance and comparable performance timings for this follow-up are pending.
+
+Shared Compose/ENV follow-up (2026-11-09): classify the selected base template
+sources once on the controller. Reuse native rendered content in host-local
+facts only for matching library inputs. Application data, dynamic host fields,
+external lookups and unsupported template constructs use the ordinary per-placement
+lookup. The existing shared-file consistency check consumes the same job fields.
+Focused RED OS results: 12 preflight, 4 path/ownership and 6 offline archive tests
+PASS. Stock SZI and SDKU templates qualify. The native fixture exercises one
+shared base/ENV entry for two placements, distinct base results for differing
+library context, and fresh rendering for application-dependent templates.
+The standalone Apply playbook passes syntax checking.
+
+Real React/Wails follow-up on 2026-11-09 used project-50a1100000000001, the same
+100 placements, fixed session inputs and offline artifacts on EO node3. The
+first bundle e4f500ea, run installer-97b3652a5d41bd15c5c0d577b723dca6, failed
+before the first placement in the library-root lookup. Read-only reproduction
+from the saved project and actual runtime-job preparation isolated that task.
+It now consumes the discovered account and home directly. The corrected task
+passed the reproduction on node1 and node2.
+
+Retry bundle sha256:20280f6defb7068dd1b8f3675ee1f8e5736d31021f6a491248edbf9512775207,
+revision sha256:39fee05d71119d358590d42afb33450af41d863d8983e0931e04ac8908c67a37,
+run installer-d0abb638d8454884314c0bab4c493ab3. Preparation231.783s,
+Verify VERIFIED44.588s, Plan154.861s, combined Start STARTED245.535s.
+Apply09:26:39Z, Docker preflight boundary09:40:55Z, twentieth10:00:50Z.
+Preflight1195s with369 task headers,
+Apply-through20 2051s. The first20 completed 10 on each of node1/node2,
+zero failed task results, one shared-file cache publication and nine skips
+on each host. The reference fe648 run completed its first20 on node2:
+1054s preflight,712 headers,1596s Apply-through20. Timings do not demonstrate
+a speedup under the differing host order and VM load. Compose rendering
+and agent configuration account for203s and136s of retry task intervals.
+All100 rows retain the same canonical digest as fe648.
+
+The browser event stream stalled during the retry. The authoritative remote
+events drove the bounded stop via the real Wails Go cancellation binding.
+Terminal CANCELLED, no provider writes or full installation acceptance.
+All six qa78-static Kafka/Registry units restored active. The corrected bundle
+remains bound and activated. Safe results and remote events are under
+.runtime/qa/full50-1108.
+The corrected source also passed 12 native preflight tests and the discovery
+cache test with the existing platform-automation rootless Docker account.
+
+Compact-context follow-up (2026-11-09): keep original runtime jobs on the
+controller, prepare host descriptors and shared-file keys once, and index the
+registered output before templating each selected job. The existing Apply
+input list is still assembled at the end. Focused native tests:12 preflight,
+4 paths,6 offline archives PASS. Three alternating CPU measurements with
+the same 20 rows and a small probe template yielded identical rendered values.
+The sample scope shrank 4,802,773 ->330,016 bytes per host and median rendering
+CPU14.456s ->0.342s. This measures the context-copy mechanism in isolation.
+
+Actual React/Wails bundle8000aada / revisionf834a319, run
+installer-aa49ee40c74bef63aeca8ed592e0fe42. The manifest differs from20280f6d
+only in the three preflight implementation files. Same artifact/image records,
+project inputs, resolved100-row digest and first10 placements per target.
+Both runs used EO node3 with qa78-static paused. A single pair does not
+control background load. Same20 contexts,369 task headers and zero failed
+task results. Shared-file publication once per host and nine skips per host.
+Wails preparation258.056s, Verify39.639s, Plan146.571s, Start221.886s.
+Apply10:37:15Z, preflight10:52:09Z, twentieth11:13:34Z. Preflight1195s ->1285s
+and Apply-through20 2051s ->2179s. Task intervals: Compose203s ->130s,
+Vault Agent136s ->85s, selection/account74s ->63s, template context76s ->163s,
+ownership markers69s ->124s. The targeted render tasks improved but the
+total regressed in this observation. Wails cancelled after the twentieth
+placement, before provider writes. All six qa78-static units restored active.
+Safe logs and matched CPU probe results are under .runtime/qa/full50-1108.
+
+The next source change used the existing selected job and template context in
+the preflight set_fact. The node3 comparison loaded native jobs from the
+saved run above and alternated both task definitions on the first10 placements
+per target. Three runs matched all output fields, including the direct-role
+fallback check. Template CPU median10.977s ->5.700s for20 placements.
+The existing focused native preflight suite passed12 tests.
+
+On the same node, replay of the saved100-placement snapshot (10,948,009
+serialized bytes) separated Ansible argument templating from Core action
+execution. Selection, Vault, providers and runtime consumed18.682s median CPU
+to prepare arguments before the change and0.006s after. Each action's output
+matched with explicit and implicit snapshot input. Existing endpoint arguments
+and the fresh snapshot construction remain in the play. Apply's task listing
+contains one Vault projection action, previously two, and the redundant
+provider snapshot copy is gone (85 ->83 statically listed tasks, syntax PASS
+for both playbooks). The native localhost stage replay passed with
+all100 jobs, eight task headers including fixture setup and assertions, one
+Vault projection action and102.5s wall time. These probes did not run target
+operations or establish full Apply latency. No replacement bundle was
+activated for Wails. Node3 had1,138,061,312 bytes free against1,280,980,022
+bytes in the existing full bundle.
+
+The subsequent baseline Wails run on8000aada, installer-12a97979e7dadb62cc63fac9590a179c,
+was cancelled at owner request after4:47:46. All100 placements passed preflight.
+PostgreSQL consumed1:31:45 including29 account write tasks with a152.386s
+median callback interval. The staged bundle was not activated. On node3 the
+read-only render replay used a67.2MB reconstructed scope and synthetic
+credentials. The same SQL length took30.19–36.54s with the large scope
+(11.34–13.04s CPU,13.70–21.81s runnable wait) and0.049–0.068s with the
+narrow scope. The historic callbacks do not separately time SSH and SQL.
+Instrumenting the native lookup in one further paired render confirmed equal
+SQL text. The full render took30.790s, including30.387s in deepcopy of the
+template variables (12.676s CPU and14.272s runnable wait).
+
+The next changes reuse deployment grouping for PostgreSQL accounts and validate
+already collected path observations once per target. The isolated RED OS
+comparison used the same fixture per size, native Ansible and a fresh local
+PostgreSQL instance per variant. Account SQL launches5 ->1 and20 ->1;
+preflight+accounts task headers32 ->20 and77 ->20. At5 apps first/repeat
+12.832/17.479s ->9.577/12.791s. At20 apps43.832/54.139s ->19.176/30.658s.
+The20 separate psql write calls totalled1.509s during initial creation and the
+single batched invocation took0.201s. All expected roles and schema grants
+were present and repeat returned changed=0.
+
+The native placement fixture used one target and stubbed Docker discovery.
+Two runs at5 placements yielded29.123/30.699s ->26.649/26.288s and194 ->181
+task headers. At20 placements129.763/132.349s ->102.189/102.509s and734 ->676
+headers. Paths were read once in both variants. All Compose values and output
+placement order matched the fixture. This comparison covers the ownership
+batch, with rendering and remaining placement checks still scoped per app.
+Focused native tests passed for the foreign owner marker and PostgreSQL grant
+parity and repeat. Apply syntax check passed.
+No full Wails run was requested for this slice. Safe metrics are in
+.runtime/qa/full50-1108/pg-preflight-batch-measurements.txt.
+
+### Single-process preflight Wails retry, 2026-11-10
+
+React/Wails on the same SZI5 + SDKU45 QA project, node3 as Execution Node,
+50 placements each on node1 and node2. Both Vault file imports passed in
+a fresh dev-only picker session. Run installer-efbfcea7db5ee23f2dfd2cec648e94ce
+failed at Docker account preparation with no provider writes. The action ran
+outside the role and required an optional registry config variable that the
+direct benchmark had supplied explicitly. On node3 the same native probe
+without this input returned APPLICATION_PREFLIGHT_CONTEXT_INVALID in the
+previous bundle and passed with the fix. The fixture checks both the fallback
+and explicit registry path. 20 focused RED OS tests passed.
+
+Retry installer-18522578b7197413fc0f7089343a2807 used saved revision
+5fadacfa85624e7dabd683b3741a66ec37f3c118bde0fa3df3438b587e8e519c and active
+bundle a6b699730fce6f9de3b50a2da50a4a5fe54d5895ac22a45cf65b99248277be3b.
+All six runtime payload hashes matched the failed run. Node preparation
+306.332s, Verify 49.534s, Core service projection 54.655s, plan 166.395s and
+combined approval/Start 266.248s. Apply to preflight 921s. Preflight to the
+first read-only Vault check 3290s and 1001 Ansible task starts. All 100
+placement records and the selected offline archive barrier succeeded.
+Wails confirmed CANCELLED before provider write tasks. There were zero
+failed Ansible task results. This was one complete boundary measurement.
+The older 5120s Wails measurement is an observed comparison, and the
+1800s preflight target is still unmet.
+
+Largest intervals between task starts were Vault Agent rendering 247s,
+image-source selection 229s, Compose and library rendering 224s, and
+placement result assembly 177s (50 task starts each). Final host result
+publication took 160s with one task start. Safe evidence is in
+.runtime/qa/full50-1108/wails-batched-100-docker-default-results.json and
+.runtime/qa/full50-1108/wails-batched-100-events.jsonl.
+
+### Batched placement preflight Wails comparison, 2026-11-10
+
+PFB-D01 preserves the original phased Ansible path for unproved template
+dependencies and current or cross-host facts. PFB-D02 checks the common
+library path, Compose and ENV bytes before the archive barrier and provider
+stage. The independent targeted recheck approved both corrections. A
+subsequent admission refinement excludes Jinja names that are assigned and
+never read. The focused RED OS fixture covers that case, dynamic hostvars
+and digest, shared-output conflicts, protected source reuse and one registry
+probe for distinct requirements sharing the same approved observation.
+
+Real React/Wails run installer-6f01e840765e41069469086b865ea52f used saved
+revision 0ca6c7da7464d23ffe171c12255cbd51840a38dfb98d413ceb1bdbc8045c59a3 and
+bundle 12aef47864a1dd70bbabe27abe41f5901d4dd2995235881ed838ee06b0be34e3.
+Same QA project, SZI5 + SDKU45, node3 as Execution Node, 50 placements each
+on node1 and node2. All six runtime payload hashes match the baseline.
+Preflight 3290s to 363s, task starts 1001 to 72. Apply to preflight 889s,
+Apply to the stopping boundary 1252s. Prepare 301.418s, Verify 61.970s,
+plan 212.010s, approval and Start 301.843s. Placement rendering and result
+assembly took 140s across 50 task starts. Host publication took 33s.
+
+All 100 placements and the offline archive barrier passed. Zero failed
+Ansible task results. The terminal state was CANCELLED during Vault
+preflight, with no start marker for the provider resource-write stage.
+One matched Wails comparison, no full installation or visual acceptance.
+Safe evidence is in .runtime/qa/full50-1108/wails-pfb-100-results.json,
+.runtime/qa/full50-1108/wails-pfb-baseline-events.jsonl and
+.runtime/qa/full50-1108/wails-pfb-100-events.jsonl.
+
+### Consolidated preflight Wails comparison, 2026-11-12
+
+Execution Node node3, 50 placements each on node1 and node2. Inventory and
+package files were byte-identical across projects. Artifact records, image
+records and target platforms matched between bundles. The candidate changed
+only preflight components and used bundle digest
+a137acb15b021506bccaf242c56ed90525ce6e23f511c6028960d13b70c42eae.
+
+| Run | Preflight seconds | Ansible task starts |
+| --- | ---: | ---: |
+| installer-b3c588298a65b2d14f4c7eef01b6031e | 64 | 72 |
+| installer-ec6dfae2892159e9e3627785f628fd9a | 61 | 72 |
+| installer-da0b1ec0503650abd5f6b0c4cc484bb3 | 53 | 23 |
+| installer-bbed57ca64c88f11292355321e6f389f | 38 | 23 |
+
+The measured interval runs from host preflight initialization to the first
+Vault provider preflight task. Each candidate run had one fast placement
+task start and two successful host results, zero failed tasks and a
+confirmed cancellation before provider writes. Focused tests also cover
+the dynamic-template and registry paths.

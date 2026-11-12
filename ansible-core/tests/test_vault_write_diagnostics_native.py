@@ -142,6 +142,10 @@ class VaultWriteDiagnosticsTests(unittest.TestCase):
                         'platform_application_vault_documents':{key:{'status':200,'json':{'data':{'data':{'_platform_owner':'owner','field':'synthetic-private-value' if status is None else 'old'},'metadata':{'version':1}}}}},
                         'platform_application_vault_values':{key:{'field':'synthetic-private-value'}}}
                     job={'providerId':'provider','documents':[variables['application_vault_document']]}
+                    if status == 403:
+                        job['documents'].append(dict(variables['application_vault_document'], document='second'))
+                        variables['platform_application_vault_documents']['provider:secret/second'] = variables['platform_application_vault_documents'][key]
+                        variables['platform_application_vault_values']['provider:secret/second'] = variables['platform_application_vault_values'][key]
                     play=[{'hosts':'consumer','gather_facts':False,'vars':variables,'tasks':[{
                         'ansible.builtin.include_role':{'name':'platform.vault.application_provider','tasks_from':'library',
                             'apply':{'delegate_to':'localhost','delegate_facts':True,'become':False}},

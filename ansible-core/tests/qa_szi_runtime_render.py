@@ -21,6 +21,8 @@ ROLE = ROOT / 'ansible-core/collections/ansible_collections/platform/core/roles/
 
 def production_tasks(path, names):
     tasks = yaml.safe_load(path.read_text())
+    if path.name == 'preflight.yml':
+        tasks = next(task['block'] for task in tasks if task.get('name') == 'Расчёт и проверка конфигурации размещения')
     selected = [task for task in tasks if task.get('name') in names]
     if len(selected) != len(names):
         raise RuntimeError('QA_PRODUCTION_TASK_SELECTION_INVALID')

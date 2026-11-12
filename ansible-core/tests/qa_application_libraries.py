@@ -60,7 +60,7 @@ class StandaloneLibrariesQA(unittest.TestCase):
         result = self.snapshot()
         self.assertEqual('PASS', result['status'], result['findings'])
         for library in ('sdku', 'cspa'):
-            instance = result['applicationLibraries']['libraries'][library]['instances']['apigateway-' + library]
+            instance = result['applicationLibraries']['libraries'][library]['instances']['gateway-' + library]
             self.assertEqual('SASL_SSL', instance['connections']['kafka']['connectionRef'])
             self.assertTrue(all(target['securityProtocol'] == 'SASL_SSL' and target['port'] == 9096
                                 for target in instance['connections']['kafka']['targets']))
@@ -104,7 +104,7 @@ class StandaloneLibrariesQA(unittest.TestCase):
                 name = expected if key == 'sdku' else 'cspa-dm-meta'
                 self.assertEqual(name, library['resources']['dm-meta']['parameters']['name'])
                 self.assertNotIn('mode', library['resources']['dm-meta'])
-                instance = library['instances']['apigateway-' + key]
+                instance = library['instances']['gateway-' + key]
                 self.assertEqual([name], instance['credentialRequirements']['redis']['grants']['keys'])
                 for placement in instance['placements'].values():
                     self.assertEqual(name, placement['environment']['REDIS_METADATA_TOPIC'])
@@ -156,7 +156,7 @@ class StandaloneLibrariesQA(unittest.TestCase):
                              if resource['kind'] == 'clickhouse.database'}
                 self.assertEqual({'history': name, f'{key}-default': f'{key}_default',
                                   f'{key}-explicit': f'{key}_explicit'}, databases)
-                instance = library['instances']['apigateway-' + key]
+                instance = library['instances']['gateway-' + key]
                 self.assertEqual('clickhouse', instance['connections']['archive']['serviceType'])
                 for placement in instance['placements'].values():
                     self.assertEqual(name, placement['environment']['HISTORY_DB'])
@@ -210,7 +210,7 @@ class StandaloneLibrariesQA(unittest.TestCase):
                 self.assertEqual('not-created', lib['resources']['unused_db']['parameters']['name'])
                 db = database if key == 'sdku' else key + '-db'
                 self.assertEqual(db, lib['resources']['model']['parameters']['name'])
-                for row in lib['instances']['apigateway-' + key]['placements'].values():
+                for row in lib['instances']['gateway-' + key]['placements'].values():
                     self.assertEqual(topic if key == 'sdku' else 'package.events', row['environment']['MAIN_TOPIC'])
                     self.assertEqual(db, row['environment']['DB_NAME'])
                     self.assertEqual(db, row['environment']['DB_ALIAS'])
@@ -288,7 +288,7 @@ class StandaloneLibrariesQA(unittest.TestCase):
                     self.assertEqual('not.created', lib['topics']['unused']['name'])
                 else:
                     self.assertNotIn('unused', lib['topics'])
-                instance = lib['instances']['apigateway-' + key]
+                instance = lib['instances']['gateway-' + key]
                 name = instance['topics']['kafka']['main']['name']
                 self.assertTrue(all(p['environment']['MAIN_TOPIC'] == name for p in instance['placements'].values()))
             return value['applicationLibraries']['libraries']['sdku']
@@ -326,9 +326,9 @@ class StandaloneLibrariesQA(unittest.TestCase):
         result = self.snapshot()
         self.assertEqual('PASS', result['status'], [(f['code'], f.get('field')) for f in result['findings']])
         for library in ('sdku', 'cspa'):
-            instance = result['applicationLibraries']['libraries'][library]['instances']['apigateway-' + library]
+            instance = result['applicationLibraries']['libraries'][library]['instances']['gateway-' + library]
             for row in instance['placements'].values():
-                self.assertEqual('apigateway-' + library, row['environment']['REQUIRED_PARAMETER'])
+                self.assertEqual('gateway-' + library, row['environment']['REQUIRED_PARAMETER'])
 
     def test_table_defaults_merge_reset_and_native_ddl_render_without_execution(self):
         source = os.path.join(REPO, 'examples/sdku/library-packages/sdku/1.0.0/roles/library_sdku/defaults/main.yml')

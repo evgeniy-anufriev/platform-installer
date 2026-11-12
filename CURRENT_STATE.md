@@ -82,6 +82,62 @@ bounded clarifications, zero blockers. Owner authorized branch commit/push and
 portable TXT publication on 2026-11-08; full installation remains unclaimed.
 See the same evidence journal.
 
+Owner-requested bounded installation comparison (2026-11-08): real React/Wails,
+same SZI5+SDKU45 /100-placement project on EO node3, previous4d5f versus fe648.
+Both runs UI-cancelled after exactly20 successful preflight contexts; zero failed
+task results, no completed resource/install acceptance. Apply-through20 decreased
+2018s ->1596s; preflight alone1155s ->1054s with712 task headers unchanged.
+Preflight-before-boundary tasks938 ->119. One pair only; first20 target node1
+before versus node2 afterward limits causal timing claims. All100 calculated rows
+match. qa78-static was stopped for both controls and its six units restored active;
+fe648 remains bound/active. Test evidence recorded in the same journal; no commit.
+The requested preflight follow-up (2026-11-09) prepares template inputs per host,
+loops over placement indices and collects the checked runtime jobs once per host.
+21 focused RED OS tests PASS, including the production preflight task sequence.
+Full installation acceptance remains pending.
+Shared base Compose and ENV now reuse native render results within each target
+host when the library inputs match. Templates with application or dynamic inputs
+retain per-placement rendering. 22 focused RED OS tests PASS.
+The 2026-11-09 Wails retry with bundle20280f6d passed the first20 preflight
+placements (10 per host), then CANCELLED before provider writes. The first
+bundle e4f500ea failed in library-root preparation. The fix uses the Docker
+discovery account and home directly. Preflight1195s versus1054s on fe648;
+task headers369 versus712. Different target order and load limit timing
+attribution. All100 resolved rows match. qa78-static restored active.
+The compact-context follow-up keeps full jobs on the controller and prepares
+shared-file keys once. 22 focused RED OS checks pass. A matched native render
+probe reduced the host payload from 4.80MB to 0.33MB with equal rendered output.
+Wails bundle8000aada reached the same10+10 placements and CANCELLED with zero
+failed tasks. Compose203s ->130s and Vault Agent136s ->85s. End-to-end preflight
+1195s ->1285s, so this run did not show an overall gain. All100 resolved rows
+match, and qa78-static is restored active.
+Follow-up on node3: materialized placement inputs reduced template CPU for the
+same20 placements from10.98s to5.70s (three-run medians, identical outputs).
+Four controller actions read the existing snapshot directly. Their argument
+templating CPU fell from18.68s to0.006s on the saved100-placement inputs.
+Apply prepares the Vault projection once and reuses it. Focused native tests
+and a localhost Ansible replay pass. On node3 the Wails control was cancelled
+after4:47:46 before provider preparation ended. The candidate remained staged.
+PostgreSQL now batches account writes by deployment and host preflight validates
+observed ownership once. At20 inputs, PostgreSQL first/repeat43.83/54.14s
+to19.18/30.66s, preflight131.06s to102.35s. Isolated RED OS comparisons,
+not a full Apply. See the same evidence journal.
+The 2026-11-10 single-process Wails retry on node3 reached 100/100 placement
+checks with bundle a6b69973, then CANCELLED before provider writes. Preflight
+took 54:50 (1001 task starts) and Apply to the boundary took 1:10:11.
+The Docker registry-default failure is fixed and both Vault file imports passed.
+The subsequent same-project Wails run with bundle 12aef478 reached 100/100
+placements and CANCELLED before provider resource writes. Preflight fell from
+54:50 to 6:03 and Ansible task starts from 1001 to 72. Apply to the boundary
+took 20:52. Targeted review resolved the dynamic template and shared projection
+blockers. No commit. [Evidence](docs/work/application-libraries/evidence/resolve-library-context-performance.md#batched-placement-preflight-wails-comparison-2026-11-10).
+
+The 2026-11-12 follow-up consolidated application preflight tasks and moved
+fast rendering to one action per target with placements. On node3, two
+Wails runs with the same 100 placements reduced the preflight interval from
+64/61 seconds to 53/38 seconds and task starts from 72 to 23. Both runs
+stopped before provider writes. See the same evidence journal.
+
 Owner-requested slot-based application identity (2026-11-07): instance IDs now
 use slot names, allowing multiple slots to reuse one package. Qualified IDs keep
 the library suffix; explicit script slot selection and uniqueness checks remain.

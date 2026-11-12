@@ -1,0 +1,51 @@
+---
+- name: Сбор условий проверки путей всех размещений узла
+  ansible.builtin.set_fact:
+    _application_path_checks: "{{ application_host_jobs | platform.core.application_preflight_observation_inputs(application_runtime_discoveries) }}"
+  no_log: true
+
+- name: Чтение уникальных путей размещений на целевом узле
+  platform.core.application_path_observations:
+    paths: >-
+      {{ (_application_path_checks | map(attribute='parents') | flatten)
+         + (_application_path_checks | map(attribute='files') | flatten)
+         + (_application_path_checks | map(attribute='directories') | flatten) }}
+    markers: "{{ _application_path_checks | map(attribute='markers') | flatten }}"
+  register: application_host_path_batch
+  no_log: true
+
+- name: Проверка путей и маркеров всех размещений узла
+  ansible.builtin.assert:
+    that: _application_path_checks | platform.core.application_preflight_validate_observations(inventory_hostname, application_host_path_batch)
+  no_log: true
+
+- name: Проверка UID/GID и закрытых файлов всех размещений узла
+  platform.core.application_identity_files:
+    placements: "{{ _application_identity_checks }}"
+    preflight: true
+  vars:
+    _application_identity_checks: >-
+      {%- set checks = [] -%}
+      {%- for job in hostvars | platform.core.application_preflight_source_jobs(
+          application_host_jobs | map(attribute='index') | list) -%}
+      {%- set plans = job.pkiPlans | default([]) -%}
+      {%- if job.agentTemplate or plans -%}
+      {%- set _ = checks.append({'account': job.account, 'user': job.settings.user | default('0:0'),
+          'instance_path': _application_path_checks[loop.index0].instance_path,
+          'agent_required': true if job.agentTemplate else false,
+          'pki_plans': plans}) -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ checks }}
+  when:
+    - not (application_observe_paths_only | default(false) | bool)
+    - _application_identity_checks | length > 0
+  no_log: true
+
+- name: Проверка владельцев контейнеров и уникальных портов размещений узла
+  platform.core.application_port_observations:
+    ports: >-
+      {{ hostvars | platform.core.application_preflight_source_jobs(
+          application_host_jobs | map(attribute='index') | list)
+         | platform.core.application_preflight_ports(application_runtime_discoveries, inventory_hostname) }}
+  when: not (application_observe_paths_only | default(false) | bool)

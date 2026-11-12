@@ -2,7 +2,7 @@
 - name: Согласование учетных данных управляемого приложения за один сеанс обслуживания
   ansible.builtin.command:
     argv: [psql, -X, -h, "{{ platform_postgresql_application_socket }}", -p, "{{ application_provider_target.port }}", -U, "{{ application_provider_os_user }}", -d, postgres, -At, -v, ON_ERROR_STOP=1, -f, -]
-    stdin: "{{ lookup('ansible.builtin.template', 'accounts.sql.j2') }}"
+    stdin: "{{ lookup('platform.postgresql.application_sql', 'accounts.sql.j2') }}"
   vars:
     application_provider_target: "{{ platform_application_provider_runtime[platform_postgresql_application_job.providerId].candidate }}"
     application_provider_os_user: "{{ hostvars[application_provider_target.hostId].platform_postgresql_user | default(platform_postgresql_user) }}"

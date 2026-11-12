@@ -16,10 +16,10 @@ class ActionModule(ActionBase):
         try:
             args = self._task.args
             root = os.path.realpath(args["project_root"])
+            snapshot = args['snapshot'] if 'snapshot' in args else values['application_snapshot']['snapshot']
             if args.get('scripts_only', False):
                 from ansible_collections.platform.core.plugins.module_utils.application_libraries import invocation_package_loader
                 from ansible_collections.platform.core.plugins.module_utils.application_scripts import prepare_script_jobs
-                snapshot = args['snapshot']
                 loader = invocation_package_loader(root, self._loader.load_from_file, SchemaValidator(args['contracts_root']))
                 contexts = provider_script_contexts(root, snapshot, values['platform_application_rows'], loader, include_selected=True)
                 prepare_script_jobs(root, snapshot, values['platform_desired_state'], values['platform_application_rows'], contexts, phase='post_install')
@@ -33,7 +33,6 @@ class ActionModule(ActionBase):
             if values.get('platform_prepared_application_images') is not None:
                 native_lock = dict(native_lock or manifest_lock or {}, **{
                     'x-container-images': values['platform_prepared_application_images']})
-            snapshot = args["snapshot"]
             contexts = []
             jobs = prepare_runtime(root, snapshot, values["platform_application_rows"],
                                    values["platform_desired_state"], native_lock or manifest_lock or {},

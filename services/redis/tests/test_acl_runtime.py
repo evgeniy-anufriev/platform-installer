@@ -121,10 +121,27 @@ class RedisACLRuntimeTests(unittest.TestCase):
                                      platform_redis_application_credential_files=dict(secrets, **{'app-password': str(app_secret)}))
                 def provider_tasks(stage):
                     return [{'ansible.builtin.include_role': {'name': 'platform.redis.application_provider', 'tasks_from': stage}}]
-                self.assertIn('changed=0', run(provider_tasks('preflight'), provider_vars))
-                run(provider_tasks('accounts'), provider_vars)
-                self.assertIn('changed=0', run(provider_tasks('accounts'), provider_vars))
-                self.assertIn('changed=0', run(provider_tasks('verify'), provider_vars))
+                self.assertIn('changed=0', run(provider_tasks('preflight'),
+                                              dict(provider_vars, redis_application_preflight=False)))
+                batch_job = copy.deepcopy(provider_job)
+                batch_job['accounts'].extend(dict(account, name='batch-qa', marker=account['marker'] + '-batch')
+                                             for account in provider_job['accounts'])
+                batch_vars = dict(provider_vars, platform_redis_application_job=batch_job)
+                run(provider_tasks('accounts'), batch_vars)
+                self.assertIn('changed=0', run(provider_tasks('accounts'), batch_vars))
+                self.assertIn('changed=0', run(provider_tasks('verify'), batch_vars))
+                for alias in ['redis', 'sentinel']:
+                    self.assertIn('user batch-qa ', (root / (alias + '.users.acl')).read_text())
+                client, sentinel = provider_job['accounts']
+                failed_batch = dict(provider_job, accounts=[
+                    dict(client, name='missing-qa', mode='existing'),
+                    dict(sentinel, name='after-failure-qa'),
+                ])
+                diagnostic = run(provider_tasks('accounts'),
+                                 dict(provider_vars, platform_redis_application_job=failed_batch), expected=2)
+                self.assertIn('REDIS_APPLICATION_ACCOUNT_MISSING', diagnostic)
+                self.assertIn('missing-qa', diagnostic)
+                self.assertNotIn('user after-failure-qa ', (root / 'sentinel.users.acl').read_text())
                 for account, expected_code in zip(provider_job['accounts'],
                         ['REDIS_APPLICATION_GRANTS_DRIFT', 'REDIS_APPLICATION_GRANTS_INVALID']):
                     failed_job = copy.deepcopy(provider_job)

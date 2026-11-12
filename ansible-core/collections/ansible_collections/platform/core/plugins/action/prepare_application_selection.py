@@ -10,7 +10,8 @@ class ActionModule(ActionBase):
     def run(self, tmp=None, task_vars=None):
         values = task_vars or {}
         try:
-            prepared = dict(self._task.args['snapshot_result'])
+            args = self._task.args
+            prepared = dict(args['snapshot_result'] if 'snapshot_result' in args else values['application_snapshot'])
             expected = values.get('platform_application_execution_scope')
             scope = execution_scope(prepared['snapshot'],
                                     expected['libraryOrder'] if expected else values.get('platform_application_library_order'),

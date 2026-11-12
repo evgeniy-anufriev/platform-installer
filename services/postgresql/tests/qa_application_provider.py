@@ -111,6 +111,16 @@ class ApplicationProviderQA(unittest.TestCase):
         variables.update(library_jobs=libraries,instance_jobs=instances)
         tasks = []
         for phase in phases:
+            if phase in ('preflight_batch', 'accounts_batch'):
+                stage = yaml.safe_load((ROOT / 'ansible-core/playbooks/applications/stages/provider-stage.yml').read_text())
+                check = next(task for task in stage[0]['tasks'][0]['block']
+                             if task.get('ansible.builtin.include_role', {}).get('tasks_from') == phase.removesuffix('_batch')
+                             and task['ansible.builtin.include_role']['name'] == 'platform.postgresql.application_provider')
+                variables['application_provider_inputs'] = dict(libraryJobs=libraries, instanceJobs=instances)
+                if phase == 'preflight_batch':
+                    tasks.append({'ansible.builtin.include_role':{'name':'platform.postgresql.application_provider','tasks_from':'discover'}})
+                tasks.append(check)
+                continue
             if phase == 'preflight':
                 tasks.append({'ansible.builtin.include_role':{'name':'platform.postgresql.application_provider','tasks_from':'discover'}})
                 scopes=('library_jobs','instance_jobs')
@@ -139,6 +149,29 @@ class ApplicationProviderQA(unittest.TestCase):
         elapsed = time.monotonic()-started
         print('A3_TIMING phases=%s accounts=%d seconds=%.3f' % ('+'.join(phases), len(job['accounts']), elapsed), flush=True)
         return result.stdout.decode(), elapsed
+
+    def test_preflight_batch_checks_existing_accounts_without_writes(self):
+        job = self.make_job('batchqa', 2)
+        self.play(job)
+        catalog = "SELECT rolname || ':' || oid FROM pg_roles WHERE rolname LIKE 'batchqa_%' ORDER BY rolname"
+        before = self.sql(catalog)
+        output, _ = self.play(job, phases=('preflight_batch',))
+        self.assertEqual(output.count('Предварительная проверка ресурса и владения учетной записью'), 1)
+        self.assertRegex(output, r'localhost\s+:\s+ok=\d+\s+changed=0')
+        self.assertEqual(self.sql(catalog), before)
+        self.sql('ALTER ROLE batchqa_user_1 CREATEROLE')
+        self.play(job, phases=('preflight_batch',), success=False)
+
+    def test_accounts_batch_keeps_per_account_grants_and_reuses_deployment_session(self):
+        job = self.make_job('acctbatch', 2)
+        self.play(job, phases=('preflight_batch', 'resources'))
+        for _ in range(2):
+            output, _ = self.play(job, phases=('preflight_batch', 'accounts_batch'))
+            self.assertEqual(1, output.count('Согласование учетных данных управляемого приложения'))
+            for account in job['accounts']:
+                self.assertEqual('t', self.sql("SELECT has_schema_privilege('%s','api','USAGE')" %
+                                               account['name'], job['databases'][0]['name']))
+        self.assertRegex(output, r'localhost\s+:\s+ok=\d+\s+changed=0')
 
     def test_database_access_existing_future_revoke_and_repeat(self):
         job = self.make_job('bulkqa', 1)

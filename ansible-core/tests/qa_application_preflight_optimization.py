@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import pwd
 import subprocess
+import tarfile
 import tempfile
 from types import SimpleNamespace
 import unittest
@@ -94,15 +95,202 @@ class SourceFileTests(unittest.TestCase):
 
 
 class NativePreflightOptimizationTests(unittest.TestCase):
-    def run_play(self, directory, tasks, variables=None, check=False, inventory='localhost,'):
+    def run_play(self, directory, tasks, variables=None, check=False, inventory='localhost,', environment=None):
         play = Path(directory) / 'play.yml'
         play.write_text(yaml.safe_dump([dict(hosts='all', connection='local', gather_facts=False,
-            vars=variables or {}, tasks=tasks)], sort_keys=False), encoding='utf-8')
+            vars=variables or {}, environment=environment or {}, tasks=tasks)], sort_keys=False), encoding='utf-8')
         command = ['ansible-playbook', '-i', str(inventory), str(play)] + (['--check'] if check else [])
         return subprocess.run(command, env=dict(os.environ,
             ANSIBLE_CONFIG=str(ROOT / 'ansible-core/ansible.cfg'),
             ANSIBLE_COLLECTIONS_PATH=str(ROOT / 'ansible-core/collections')),
             capture_output=True, text=True, timeout=90)
+
+    def test_host_preflight_assembles_checked_jobs_once_in_placement_order(self):
+        for mode in ('shared', 'application', 'different-contexts', 'foreign-marker', 'assets-registry', 'dynamic-hostvars'):
+            with self.subTest(mode=mode):
+                self.check_host_preflight(mode)
+
+    def check_host_preflight(self, mode):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            docker = root / 'docker'
+            docker.write_text(
+                '#!/bin/sh\n'
+                'case "$1 $2" in\n'
+                '  "info --format") echo \'{"OSType":"linux","Architecture":"x86_64",'
+                '"SecurityOptions":["rootless"],"Swarm":{"LocalNodeState":"inactive"}}\';;\n'
+                '  "compose version") echo 2.0;;\n'
+                '  "container ls") exit 0;;\n'
+                '  "manifest inspect") echo \'{"config":{"digest":"sha256:approved"}}\';;\n'
+                '  *) exit 2;;\n'
+                'esac\n')
+            docker.chmod(0o700)
+            template = root / 'compose.j2'
+            template.write_text('{{ application_parameters.label }} '
+                                '{{ application_environment.IDENTITY }} '
+                                '{{ application_runtime.connections.database }} '
+                                '{{ library_runtime.connections.database }}')
+            if mode == 'dynamic-hostvars':
+                template.write_text('{{ hostvars[inventory_hostname].application_instance_id }} '
+                                    '{{ hostvars[inventory_hostname].application_config_digest }}\n')
+            base = root / 'base.j2'
+            base.write_text(
+                '{% set peer = hostvars[inventory_hostname] %}'
+                '{{ library_runtime.defaults.label }} {{ peer.ansible_host | default(inventory_hostname) }}'
+                if mode != 'application' else template.read_text())
+            static = root / 'static.conf'
+            static.write_bytes(b'ordinary\x00content')
+            archive = root / 'files.tar.gz'
+            with tarfile.open(archive, 'w:gz') as output:
+                output.add(static, arcname='static.conf')
+            config_template = root / 'dynamic.j2'
+            config_template.write_text('{% set ns = namespace(values={}) %}'
+                                       '{% for value in [application_instance_id] %}'
+                                       '{% if value %}{% set _ = ns.values.update({"instance": value}) %}{% endif %}'
+                                       '{% endfor %}instance={{ ns.values.instance }}\n')
+            account = pwd.getpwuid(os.getuid()).pw_name
+            jobs, instances = [], {}
+            for name in ('second', 'first'):
+                jobs.append(dict(
+                    hostId='localhost', account=account, projectId='p', libraryId='l',
+                    applicationName=name, instanceId=name, inherited=dict(label=name),
+                    commonDefaults=dict(label=name if mode == 'different-contexts' else 'shared'),
+                    placement=dict(runtimeDirectory=str(root / 'library'), runtimePath=name,
+                                   containerName=name, composeProject=name),
+                    settings=dict(image='test', command=[], parameters=dict(label=name),
+                                  environment=dict(IDENTITY='overridden')),
+                    authority=dict(apiVersion='platform.installer/artifact-source-authority/v1alpha2',
+                                   kind='ArtifactSourceAuthority', sourcePolicy='REPOSITORY_THEN_OFFLINE',
+                                   requirement=dict(artifactType='container-image',
+                                                    platform=dict(os='linux', architecture='amd64')),
+                                   repository={}, offlineBundle=dict(ref='runtime/artifacts/test.tar')),
+                    configs=[], directoryConfigs=[], archiveConfigs=[], agentTemplate=None,
+                    appTemplate=str(template), baseTemplate=str(base), baseFilename='base.yml',
+                    baseService='base', envSource=None))
+                instances[name] = dict(identityEnvironment=dict(IDENTITY=name),
+                                       connections=dict(database='instance'))
+                if mode == 'assets-registry':
+                    job = jobs[-1]
+                    job['authority']['requirement'].update(id=name + ':image', imageId='sha256:approved')
+                    job['authority']['repository'] = dict(reference='registry.example/test:1', manifestDigest='sha256:' + 'a' * 64)
+                    job['configs'] = [dict(source='static.conf', path=str(static), destination='static.conf'),
+                                      dict(template='dynamic.j2', path=str(config_template), destination='dynamic.conf')]
+                    job['archiveConfigs'] = [dict(path=str(archive), destination='files')]
+            stage = yaml.safe_load((ROOT / 'ansible-core/playbooks/applications/stages/preflight.yml').read_text())
+            inputs = {'ansible.builtin.set_fact': dict(
+                application_runtime_inputs=dict(jobs=jobs + [dict(jobs[0], hostId='unselected')]),
+                application_snapshot=dict(snapshot=dict(applicationLibraries=dict(
+                    libraries=dict(l=dict(instances=instances, connections=dict(database='shared')))))),
+            )}
+            expected_base = {
+                'shared': ['shared localhost', 'shared localhost'],
+                'application': ['second second instance shared', 'first first instance shared'],
+                'different-contexts': ['second localhost', 'first localhost'],
+                'foreign-marker': [],
+                'assets-registry': ['shared localhost', 'shared localhost'],
+                'dynamic-hostvars': ['shared localhost', 'shared localhost'],
+            }
+            if mode == 'foreign-marker':
+                library = root / 'library'
+                library.mkdir()
+                (library / '.owner.json').write_text('{"project":"other","library":"l","host":"localhost"}')
+            stage_tasks = stage[2]['tasks']
+            if mode in ('application', 'different-contexts'):
+                stage_tasks[-1]['no_log'] = False  # This fixture contains only synthetic values.
+            expected_compose = ['second second instance shared', 'first first instance shared']
+            if mode == 'dynamic-hostvars':
+                digest = hashlib.sha256(b'[]').hexdigest()
+                expected_compose = [f'{name} {digest}\n' for name in ('second', 'first')]
+            tasks = [inputs, stage[1]['tasks'][-1]] + stage_tasks + [{'ansible.builtin.assert': {'that': [
+                'platform_application_preflight_jobs | map(attribute="instanceId") | list == ["second", "first"]',
+                'application_host_jobs | map(attribute="index") | list == [0, 1]',
+                'application_host_jobs | selectattr("settings", "defined") | list | length == 0',
+                'platform_application_preflight_jobs | map(attribute="composeContent") | list == ' +
+                repr(expected_compose),
+                'platform_application_preflight_jobs | map(attribute="source.source") | unique | list == ' +
+                repr(['REPOSITORY' if mode == 'assets-registry' else 'OFFLINE_BUNDLE']),
+                'platform_application_preflight_jobs | map(attribute="baseContent") | list == ' +
+                repr(expected_base[mode]),
+                '_application_shared_base | length == ' + str(
+                    {'application': 0, 'shared': 1, 'different-contexts': 2, 'foreign-marker': 0,
+                     'assets-registry': 1, 'dynamic-hostvars': 1}[mode]),
+                '_application_shared_env | length == 1',
+                'hostvars["localhost"]._application_preflight_native == ' + ('true' if mode == 'dynamic-hostvars' else 'false'),
+                'platform_application_preflight_jobs[0].dockerEnvironment.DOCKER_CONFIG == ' +
+                ('registry_config' if mode == 'application' else 'platform_application_preflight_jobs[0].home ~ "/.docker"'),
+            ]}, 'no_log': True}]
+            variables = dict(ansible_connection='local', ansible_become=False)
+            if mode == 'application':
+                variables['registry_config'] = str(root / 'registry')
+                variables['platform_application_registry_config_directory'] = variables['registry_config']
+            if mode == 'assets-registry':
+                variables['platform_application_approved_registries'] = ['registry.example']
+                tasks[-1]['ansible.builtin.assert']['that'].extend([
+                    'platform_application_preflight_jobs | map(attribute="source.requirement.id") | list == ["second:image", "first:image"]',
+                    'platform_application_preflight_jobs[0].configContents[0].content == "instance=second\n"',
+                    'platform_application_preflight_jobs[1].configContents[0].content == "instance=first\n"',
+                    'platform_application_preflight_jobs[0].configContents[1].content == ' + repr(base64.b64encode(static.read_bytes()).decode()),
+                    'platform_application_preflight_jobs[1].archiveChecksums.files == ' + repr(hashlib.sha256(archive.read_bytes()).hexdigest()),
+                ])
+            result = self.run_play(directory, tasks, variables,
+                                   environment={'PATH': str(root) + ':' + os.environ['PATH']})
+            if mode == 'foreign-marker':
+                self.assertNotEqual(0, result.returncode)
+                self.assertIn('Проверка путей и маркеров всех размещений узла', result.stdout)
+                self.assertNotIn('Запись неизменяемого контекста', result.stdout)
+                return
+            if mode in ('application', 'different-contexts'):
+                self.assertNotEqual(0, result.returncode)
+                self.assertIn('APPLICATION_LIBRARY_HOST_PROJECTION_CONFLICT', result.stdout)
+                return
+            self.assertEqual(0, result.returncode, (result.stdout + result.stderr)[-3500:])
+            self.assertIn('changed=0', result.stdout)
+            self.assertEqual(1, result.stdout.count('Чтение уникальных путей размещений'))
+            self.assertEqual(1, result.stdout.count('Проверка путей и маркеров всех размещений узла'))
+            self.assertEqual(1, result.stdout.count('Подготовка корней библиотек для выбранного узла'))
+            self.assertEqual(1, result.stdout.count('Подготовка окружения Docker один раз'))
+            self.assertEqual(1, result.stdout.count('Чтение уникальных исходных файлов'))
+            self.assertEqual(1, result.stdout.count(
+                'Запись неизменяемого контекста предварительной проверки размещений узла'))
+            self.assertEqual(2 if mode == 'dynamic-hostvars' else int(mode == 'assets-registry'),
+                             result.stdout.count(
+                                 'Запись неизменяемого контекста предварительной проверки размещения приложения'))
+            if mode not in ('dynamic-hostvars', 'assets-registry'):
+                self.assertNotIn('Предварительная проверка выбранного реестра', result.stdout)
+                self.assertNotIn('Чтение объявленных исходных файлов', result.stdout)
+            if mode != 'dynamic-hostvars':
+                self.assertEqual(int(mode == 'assets-registry'),
+                                 result.stdout.count('Проверка только утвержденного неизменяемого манифеста'))
+            if mode not in ('dynamic-hostvars', 'assets-registry'):
+                self.assertNotIn('Проверка точного контейнера, не раскрывая среду', result.stdout)
+                self.assertNotIn('Проверка доступности публикуемых портов до записи файлов', result.stdout)
+            self.assertNotIn('Проверка отсутствия пересечений каталогов библиотек перед записью файлов',
+                             result.stdout)
+            self.assertEqual(1, result.stdout.count('Сбор результатов предварительной проверки размещений узла'))
+
+    def test_shared_template_subset_accepts_stock_bases_and_rejects_dynamic_inputs(self):
+        paths = [ROOT / 'examples' / name / 'library-packages' / name / '1.0.0' /
+                 'roles' / ('library_' + name) / 'templates/.base_compose.yml.j2'
+                 for name in ('szi', 'sdku')]
+        with tempfile.TemporaryDirectory() as directory:
+            for index, source in enumerate((
+                    "{{ lookup('env', 'HOME') }}",
+                    "{% include 'other.j2' %}",
+                    "{{ hostvars[inventory_hostname].application_environment }}",
+                    "{{ application_instance_id | default('shared') }}",
+                    "{% if false %}{% set name = 'shared' %}{% endif %}{{ name }}",
+            )):
+                path = Path(directory) / f'base-{index}.j2'
+                path.write_text(source)
+                paths.append(path)
+            result = self.run_play(directory, [
+                {'ansible.builtin.set_fact': {'shared_templates':
+                    '{{ jobs | platform.core.application_preflight_shared_templates(hostvars) }}'}},
+                {'ansible.builtin.assert': {'that': [
+                    'shared_templates.base[item] == (index < 2)'],
+                }, 'loop': [str(path) for path in paths], 'loop_control': {'index_var': 'index'}},
+            ], dict(jobs=[dict(baseTemplate=str(path)) for path in paths]))
+            self.assertEqual(0, result.returncode, (result.stdout + result.stderr)[-3500:])
 
     def test_production_source_tasks_binary_parity_repeat_check_mode_and_redaction(self):
         with tempfile.TemporaryDirectory() as directory:

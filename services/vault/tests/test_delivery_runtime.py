@@ -21,8 +21,13 @@ DELIVERY = ROOT / 'ansible-core/playbooks/applications/tasks/deliver-ready.yml'
 class VaultDeliveryRuntimeTests(unittest.TestCase):
     def test_network_key_isolates_provider_route_host_and_bridge(self):
         source = ROOT / 'services/vault/ansible_collections/platform/vault/roles/application_provider/tasks/instance.yml'
-        key_task = next(t for t in yaml.safe_load(source.read_text())
-                        if t.get('name') == 'Определение ключа обнаружения сетей выбранных размещений Vault')
+        network = next(task for task in yaml.safe_load(source.read_text())
+                       if 'application_vault_network_key' in task.get('vars', {}))
+        key_task = {'ansible.builtin.set_fact': {'observed_network_key': '{{ application_vault_network_key | string }}'},
+                    'vars': network['vars']}
+        preflight = ROOT / 'ansible-core/playbooks/applications/stages/vault-preflight.yml'
+        prepare = next(task for task in yaml.safe_load(preflight.read_text())[0]['tasks']
+                       if 'platform_application_vault_network_keys' in task.get('ansible.builtin.set_fact', {}))
         with tempfile.TemporaryDirectory(prefix='qa-vault-network-key-') as directory:
             root = Path(directory)
             tasks = [{'ansible.builtin.set_fact': {'keys': []}}]
@@ -32,13 +37,32 @@ class VaultDeliveryRuntimeTests(unittest.TestCase):
                 variables = dict(key_task['vars'], platform_vault_application_job=dict(providerId=provider, hosts=[host]),
                                  platform_application_vault_runtime={provider: {'routeAddress': route}})
                 tasks.extend([dict(key_task, vars=variables),
-                              {'ansible.builtin.set_fact': {'keys': '{{ keys + [application_vault_network_key] }}'}}])
+                              {'ansible.builtin.set_fact': {'keys': '{{ keys + [observed_network_key] }}'}}])
             tasks.append({'ansible.builtin.set_fact': {'platform_docker_lxc_bridge': 'different-bridge'}})
             tasks.extend([dict(key_task, vars=dict(key_task['vars'],
                 platform_vault_application_job=dict(providerId='p', hosts=['localhost']),
                 platform_application_vault_runtime={'p': {'routeAddress': 'first.invalid'}})),
                 {'ansible.builtin.assert': {'that': [
-                    'keys | unique | length == 4', 'application_vault_network_key not in keys']}}])
+                    'keys | unique | length == 4', 'observed_network_key not in keys']}}])
+            jobs = [dict(providerId='p', hosts=['localhost', 'other-host']),
+                    dict(providerId='p', hosts=['other-host', 'localhost']),
+                    dict(providerId='other', hosts=['localhost', 'other-host'])]
+            runtime = {'p': {'routeAddress': 'first.invalid'}, 'other': {'routeAddress': 'other.invalid'}}
+            tasks.append(dict(prepare, vars=dict(application_vault_inputs={'instanceJobs': jobs + jobs},
+                                                 platform_application_vault_runtime=runtime)))
+            tasks.append({'ansible.builtin.assert': {'that': [
+                'platform_application_vault_network_keys | length == 3',
+            ]}})
+            for job in jobs:
+                tasks.extend([
+                    dict(key_task, vars=dict(key_task['vars'], platform_vault_application_job=job,
+                                            platform_application_vault_runtime=runtime)),
+                    {'ansible.builtin.assert': {'that': [
+                        "observed_network_key | from_json == [job.providerId, route, job.hosts, bridges]",
+                    ]}, 'vars': dict(job=job, route=runtime[job['providerId']]['routeAddress'],
+                                     bridges=['different-bridge' if host == 'localhost' else 'lxcbr0'
+                                              for host in job['hosts']])},
+                ])
             play, inventory = root / 'probe.yml', root / 'inventory.yml'
             play.write_text(yaml.safe_dump([dict(hosts='localhost', gather_facts=False, tasks=tasks)], sort_keys=False))
             inventory.write_text(yaml.safe_dump({'all': {'hosts': {
@@ -47,7 +71,8 @@ class VaultDeliveryRuntimeTests(unittest.TestCase):
                                     capture_output=True, text=True, timeout=30)
             self.assertEqual(0, result.returncode, (result.stdout + result.stderr)[-1500:])
 
-    def exercise(self, *, race=False, foreign=False, repeat=True, generated=False, shared_client=False):
+    def exercise(self, *, race=False, foreign=False, repeat=True, generated=False, shared_client=False,
+                 grouped_sources=False, stale_noop=False, batch=False, foreign_identity=None):
         with tempfile.TemporaryDirectory(prefix='qa-vault-delivery-') as directory:
             root = Path(directory)
             secret_root = root / 'secrets'
@@ -61,8 +86,18 @@ class VaultDeliveryRuntimeTests(unittest.TestCase):
                             '-addext', 'subjectAltName=IP:127.0.0.1'], check=True,
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             state = dict(kv={}, policies={}, roles={}, gets=Counter(), writes=0, race=race, conflicts=0)
+            if foreign_identity == 'policy':
+                state['policies']['id-first'] = '# foreign\n'
+            elif foreign_identity == 'role':
+                state['policies']['id-first'] = '# fixture\n'
+                state['roles']['id-first'] = {'token_policies': ['foreign']}
             if foreign:
                 state['kv']['lib/first/accounts/db'] = dict(version=1, data={'_platform_owner': 'foreign'})
+            if grouped_sources:
+                state['kv']['external'] = dict(version=1, data={'username': 'fixture-user', 'password': 'fixture-source'})
+            if stale_noop:
+                state['kv']['lib/first/accounts/db'] = dict(
+                    version=1, data={'_platform_owner': 'fixture', 'password': 'fixture-password'})
 
             class Handler(BaseHTTPRequestHandler):
                 def log_message(self, *args):
@@ -86,6 +121,9 @@ class VaultDeliveryRuntimeTests(unittest.TestCase):
                                     'version': current['version'], 'deletion_time': '', 'destroyed': False}}}
                             else:
                                 status = 404
+                            if stale_noop and name == 'lib/first/accounts/db' and state['gets'][path] == 1:
+                                state['kv'][name] = dict(
+                                    version=2, data={'_platform_owner': 'fixture', 'password': 'intervening-value'})
                         elif state['race']:
                             state['race'] = False
                             state['kv'][name] = dict(version=1, data={'_platform_owner': 'fixture', 'neighbor': 'keep'})
@@ -155,6 +193,11 @@ class VaultDeliveryRuntimeTests(unittest.TestCase):
                                  dict(mount='secret', document='lib/' + name + '/accounts/db', owner='fixture',
                                       fields={'password': {'source': {'kind': 'runtime_secret_ref', 'ref': 'password-input'}}})])
                         for name in ['first', 'second']]
+                if batch:
+                    base_document = jobs[0]['documents'][0]
+                    jobs[0]['documents'] += [
+                        dict(base_document, document=base_document['document'] + str(index))
+                        for index in range(1, 5)]
                 provider = dict(url='https://127.0.0.1:' + str(server.server_port), routeAddress='fixture.invalid',
                                 token='fixture-token', mounts={'secret/': {'type': 'kv', 'options': {'version': '2'}}})
                 facts = dict(platform_application_vault_runtime={'p': provider}, platform_application_vault_values={},
@@ -179,8 +222,23 @@ class VaultDeliveryRuntimeTests(unittest.TestCase):
                         document['fields'] = {'client_secret': {'source': {'kind': 'generated', 'profile': 'client_secret'},
                             'passwordRef': 'pla-generated-' + str(index + 1) * 40}}
                 play = root / 'probe.yml'
+                preflight_play = yaml.safe_load((DELIVERY.parents[1] / 'stages/vault-preflight.yml').read_text())[0]
+                preflight_task = next(task for task in preflight_play['tasks']
+                                      if task.get('ansible.builtin.include_role', {}).get('tasks_from') == 'preflight')
+                initial_tasks = [
+                    {'ansible.builtin.set_fact': facts},
+                    preflight_task,
+                ]
+                if grouped_sources:
+                    sources = [dict(providerId='p', mount='secret', document='external',
+                                    field=field, passwordRef='source-' + field) for field in ('username', 'password')]
+                    initial_tasks.append({
+                        'ansible.builtin.include_role': {'name': 'platform.vault.application_provider', 'tasks_from': 'sources'},
+                        'loop': '{{ probe_sources | platform.vault.application_vault_group_sources }}',
+                        'loop_control': {'loop_var': 'application_vault_source'},
+                        'vars': {'probe_sources': sources}})
                 play.write_text(yaml.safe_dump([
-                    dict(hosts='localhost', gather_facts=False, tasks=[{'ansible.builtin.set_fact': facts}]),
+                    dict(hosts='localhost', gather_facts=False, tasks=initial_tasks),
                     dict(hosts='coordinator', gather_facts=False,
                          environment={'PATH': str(bin_dir) + ':' + os.environ['PATH']},
                          tasks=[{'ansible.builtin.include_tasks': str(DELIVERY)}])], sort_keys=False))
@@ -192,12 +250,32 @@ class VaultDeliveryRuntimeTests(unittest.TestCase):
                                             env=dict(os.environ, ANSIBLE_COLLECTIONS_PATH=(
                                                 str(ROOT / 'ansible-core/collections') + ':' + str(ROOT / 'services/vault'))),
                                             capture_output=True, text=True, timeout=120)
-                    self.assertEqual(not foreign, result.returncode == 0, (result.stdout + result.stderr)[-3000:])
+                    self.assertEqual(not (foreign or foreign_identity), result.returncode == 0,
+                                     (result.stdout + result.stderr)[-3000:])
                     self.assertNotIn('fixture-password', result.stdout + result.stderr)
+                    if batch:
+                        self.assertEqual(2, result.stdout.count(
+                            'TASK [platform.vault.application_provider : Расчёт дельт всех KV-документов Vault]'))
+                        self.assertEqual(2, result.stdout.count(
+                            'TASK [platform.vault.application_provider : Запись только изменённых полей с проверкой версии CAS]'))
                 if foreign:
                     self.assertEqual(0, state['writes'])
                     return
-                self.assertEqual(2, state['writes'])
+                if foreign_identity:
+                    self.assertEqual(0, state['writes'])
+                    self.assertEqual(1, state['gets']['sys/policies/acl/id-first'])
+                    self.assertEqual(1, state['gets']['auth/approle/role/id-first'])
+                    self.assertEqual(0, state['gets']['auth/approle/role/id-first/role-id'])
+                    self.assertIn('fatal: [coordinator', result.stdout)
+                    self.assertEqual('# foreign\n' if foreign_identity == 'policy' else '# fixture\n',
+                                     state['policies']['id-first'])
+                    self.assertEqual({'token_policies': ['foreign']} if foreign_identity == 'role' else None,
+                                     state['roles'].get('id-first'))
+                    return
+                for identity in ('id-first', 'id-second'):
+                    self.assertEqual(2 if repeat else 1, state['gets']['sys/policies/acl/' + identity])
+                    self.assertEqual(2 if repeat else 1, state['gets']['auth/approle/role/' + identity])
+                self.assertEqual(6 if batch else 2, state['writes'])
                 if generated:
                     for document in state['kv'].values():
                         self.assertTrue(document['data']['password'] == password_file.read_text(),
@@ -209,9 +287,15 @@ class VaultDeliveryRuntimeTests(unittest.TestCase):
                         self.assertTrue(value.isascii() and value.isalnum())
                 self.assertEqual(1 if race else 0, state['conflicts'])
                 suffix = 'shared' if shared_client else 'accounts/db'
-                self.assertEqual(2 if repeat else 1, state['gets']['secret/data/lib/second/' + suffix])
-                self.assertEqual((2 if repeat else 1) + (1 if race else 0),
+                self.assertEqual(3 if repeat else 1, state['gets']['secret/data/lib/second/' + suffix])
+                self.assertEqual((3 if repeat else 1) + (1 if race or stale_noop else 0),
                                  state['gets']['secret/data/lib/first/' + suffix])
+                if stale_noop:
+                    self.assertTrue(state['kv']['lib/first/accounts/db']['data']['password'] == 'fixture-password')
+                if grouped_sources:
+                    self.assertEqual(1, state['gets']['secret/data/external'])
+                    self.assertTrue((secret_root / 'source-username').read_text() == 'fixture-user')
+                    self.assertTrue((secret_root / 'source-password').read_text() == 'fixture-source')
                 self.assertEqual(6 if repeat else 3, len((root / 'network-calls').read_text().splitlines()))
                 self.assertEqual(['10.0.3.0/24', '127.0.0.1/32', '192.0.2.0/24'], state['roles']['id-first']['token_bound_cidrs'])
                 if race:
@@ -235,3 +319,17 @@ class VaultDeliveryRuntimeTests(unittest.TestCase):
 
     def test_foreign_document_stops_before_any_write(self):
         self.exercise(foreign=True, repeat=False)
+
+    def test_two_source_fields_share_one_get(self):
+        self.exercise(grouped_sources=True, repeat=False)
+
+    def test_snapshot_noop_is_rechecked_before_skipping_write(self):
+        self.exercise(stale_noop=True, repeat=False)
+
+    def test_five_documents_share_one_write_task_and_retry_only_the_conflict(self):
+        self.exercise(batch=True, race=True, repeat=False)
+
+    def test_foreign_identity_stops_delivery(self):
+        for foreign in ('policy', 'role'):
+            with self.subTest(foreign=foreign):
+                self.exercise(foreign_identity=foreign, repeat=False)

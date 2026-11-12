@@ -29,7 +29,7 @@ options:
   verify: {type: bool, default: false}
   preflight: {type: bool, default: false}
   timeout: {type: int, default: 15}
-  accounts: {type: list, elements: dict, description: 'Read-only batch for one member and listener.'}
+  accounts: {type: list, elements: dict, description: 'Account batch for one member and listener.'}
 author: Platform Installer
 '''
 
@@ -76,7 +76,7 @@ def main():
     try:
         batch = args['accounts']
         if (not 1 <= args['port'] <= 65535 or not 1 <= args['timeout'] <= 120 or
-                (batch is not None and (not args['preflight'] or args['verify'] or not 1 <= len(batch) <= 100))):
+                (batch is not None and (args['verify'] or not 1 <= len(batch) <= 100))):
             raise ACLFailure('REDIS_APPLICATION_INPUT_INVALID')
         accounts = [args] if batch is None else batch
         for account in accounts:

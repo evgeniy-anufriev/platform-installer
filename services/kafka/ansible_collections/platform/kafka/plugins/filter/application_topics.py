@@ -1,4 +1,5 @@
 """Parse existing Kafka CLI batch responses without additional CLI invocations."""
+import json
 import re
 
 
@@ -43,6 +44,49 @@ def validate_topics(topics, description, properties, phase, provider=''):
     return dict(results=results, findings=[finding for value in results.values() for finding in value['findings']])
 
 
+def application_acl_deltas(accounts, stdout):
+    blocks = re.split(r'(?m)^Current ACLs for resource ', stdout)
+    observed = set()
+    for block in blocks[1:]:
+        header = re.match(r'^`([^`\r\n]+)`:[ \t]*\r?\n', block)
+        if header is None:
+            continue
+        for principal, operation in re.findall(
+                r'principal=User:([^\r\n]+?), host=\*, operation=([A-Z_]+), permissionType=ALLOW',
+                block[header.end():]):
+            observed.add((header[1], principal, operation))
+
+    # Account IDs are local to an application and may repeat in a deployment.
+    deltas = []
+    for account in accounts:
+        groups = {}
+        for grant in account['grants']:
+            kind, name, pattern = (grant[key] for key in ('resourceType', 'name', 'patternType'))
+            resource = 'ResourcePattern(resourceType={}, name={}, patternType={})'.format(
+                kind.replace('-', '_').upper(), name, pattern.upper())
+            missing = [operation for operation in grant['operations']
+                       if (resource, account['name'],
+                           re.sub(r'([a-z])([A-Z])', r'\1_\2', operation).upper()) not in observed]
+            if not missing:
+                continue
+            # One CLI call grants every operation to every selector.
+            group_kind = 'data' if kind in ('topic', 'group', 'transactional-id') else kind
+            key = json.dumps([group_kind, pattern, sorted(set(missing))])
+            group = groups.setdefault(key, {
+                'resources': [], 'selectors': [], 'patternType': pattern,
+            })
+            group['operations'] = [part for operation in missing for part in ('--operation', operation)]
+            resource_key = json.dumps([kind, name])
+            if resource_key not in group['resources']:
+                group['selectors'].append('--' + kind)
+                if kind != 'cluster':
+                    group['selectors'].append(name)
+            group['resources'].append(resource_key)
+        deltas.append(groups)
+    return deltas
+
+
 class FilterModule:
     def filters(self):
-        return dict(application_topic_validation=validate_topic, application_topics_validation=validate_topics)
+        return dict(application_topic_validation=validate_topic, application_topics_validation=validate_topics,
+                    application_acl_deltas=application_acl_deltas)

@@ -3,34 +3,40 @@
   ansible.builtin.include_tasks: preflight.yml
   vars:
     application_vault_identity_only: false
+    application_vault_reuse_documents: true
 
 - name: Согласование документов учётных записей экземпляра Vault
   ansible.builtin.include_tasks: library.yml
 
-- name: Определение ключа обнаружения сетей выбранных размещений Vault
-  ansible.builtin.set_fact:
-    application_vault_network_key: "{{ [platform_vault_application_job.providerId, application_vault_provider.routeAddress, platform_vault_application_job.hosts, platform_vault_application_job.hosts | map('extract', hostvars) | map(attribute='platform_docker_lxc_bridge', default='lxcbr0') | list] | to_json }}"
-  delegate_facts: false
+- name: Подготовка сетевых ограничений AppRole Vault
   vars:
     application_vault_provider: "{{ platform_application_vault_runtime[platform_vault_application_job.providerId] }}"
-  no_log: true
+    application_vault_network_scope: "{{ [platform_vault_application_job.providerId, platform_vault_application_job.hosts] | to_json }}"
+    application_vault_network_keys: "{{ platform_application_vault_network_keys | default({}) }}"
+    application_vault_network_key: >-
+      {{ (application_vault_network_keys[application_vault_network_scope]
+          if application_vault_network_scope in application_vault_network_keys
+          else ([platform_vault_application_job.providerId, application_vault_provider.routeAddress,
+                 platform_vault_application_job.hosts,
+                 platform_vault_application_job.hosts | map('extract', hostvars) |
+                   map(attribute='platform_docker_lxc_bridge', default='lxcbr0') | list] | to_json)) | string }}
+  block:
+    - name: Однократное обнаружение сетей для точной группы размещений провайдера
+      ansible.builtin.include_tasks: networks.yml
+      when: application_vault_network_key not in (platform_application_vault_networks | default({}))
 
-- name: Однократное обнаружение сетей для точной группы размещений провайдера
-  ansible.builtin.include_tasks: networks.yml
-  when: application_vault_network_key not in (platform_application_vault_networks | default({}))
-
-- name: Привязка выбранной политики подсети и управляемых настроек AppRole
-  ansible.builtin.set_fact:
-    application_vault_role:
-      bind_secret_id: false
-      token_bound_cidrs: "{{ platform_application_vault_networks[application_vault_network_key].routes | platform.vault.application_vault_cidrs(platform_application_vault_networks[application_vault_network_key].bridges) }}"
-      token_policies: ["{{ platform_vault_application_job.identity }}"]
-      token_no_default_policy: true
-      token_type: service
-      token_ttl: "{{ platform_vault_application_token_ttl }}"
-      token_max_ttl: "{{ platform_vault_application_token_max_ttl }}"
-  delegate_facts: false
-  no_log: true
+    - name: Привязка выбранной политики подсети и управляемых настроек AppRole
+      ansible.builtin.set_fact:
+        application_vault_role:
+          bind_secret_id: false
+          token_bound_cidrs: "{{ platform_application_vault_networks[application_vault_network_key].cidrs }}"
+          token_policies: ["{{ platform_vault_application_job.identity }}"]
+          token_no_default_policy: true
+          token_type: service
+          token_ttl: "{{ platform_vault_application_token_ttl }}"
+          token_max_ttl: "{{ platform_vault_application_token_max_ttl }}"
+      delegate_facts: false
+      no_log: true
 
 - name: Сохранение ранее управляемых путей чтения экземпляра во время дополнительных обновлений
   ansible.builtin.set_fact:

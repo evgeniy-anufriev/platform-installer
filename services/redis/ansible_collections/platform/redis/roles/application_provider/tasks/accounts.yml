@@ -1,4 +1,4 @@
 ---
-- ansible.builtin.import_tasks: account_scope.yml
+- ansible.builtin.import_tasks: account_batches.yml
   vars:
-    platform_redis_application_phase: apply
+    redis_application_preflight: false

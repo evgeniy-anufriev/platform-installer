@@ -35,7 +35,7 @@
           ansible.builtin.include_role:
             name: platform.vault.application_provider
             tasks_from: sources
-          loop: "{{ application_post_install_sources }}"
+          loop: "{{ application_post_install_sources | platform.vault.application_vault_group_sources }}"
           loop_control:
             loop_var: application_vault_source
         - name: Последовательное выполнение заданной очереди сценариев post_install

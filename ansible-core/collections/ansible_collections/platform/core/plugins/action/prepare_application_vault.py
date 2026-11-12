@@ -9,7 +9,10 @@ class ActionModule(ActionBase):
 
     def run(self, tmp=None, task_vars=None):
         try:
-            result = project_vault((task_vars or {})['platform_application_rows'], self._task.args['snapshot_result'])
+            values = task_vars or {}
+            args = self._task.args
+            prepared = args['snapshot_result'] if 'snapshot_result' in args else values['application_snapshot']
+            result = project_vault(values['platform_application_rows'], prepared)
             return dict(result, status='PASS', changed=False)
         except (ValueError, KeyError, TypeError, IndexError) as error:
             code = str(error)

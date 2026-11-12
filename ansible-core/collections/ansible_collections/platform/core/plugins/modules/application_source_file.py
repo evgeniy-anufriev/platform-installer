@@ -27,7 +27,7 @@ def identity(info):
     return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
 
 
-def read_source(path):
+def read_source(path, with_identity=False):
     # Core executes on Linux. NONBLOCK lets us reject FIFOs without waiting for
     # a writer; NOFOLLOW prevents a final symlink swap between check and open.
     descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
@@ -40,8 +40,11 @@ def read_source(path):
         after = os.fstat(descriptor)
         if identity(before) != identity(after) or len(raw) != before.st_size:
             raise ValueError('APPLICATION_CONFIG_SOURCE_INVALID')
-        return dict(content=base64.b64encode(raw).decode('ascii'), encoding='base64',
-                    sha256=hashlib.sha256(raw).hexdigest())
+        result = dict(content=base64.b64encode(raw).decode('ascii'), encoding='base64',
+                      sha256=hashlib.sha256(raw).hexdigest())
+        if with_identity:
+            result['identity'] = list(identity(after))
+        return result
     finally:
         os.close(descriptor)
 

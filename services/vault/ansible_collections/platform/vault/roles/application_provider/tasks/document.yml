@@ -1,22 +1,22 @@
-- name: Вычисление минимальных изменений служебных документов
+- name: Расчёт дельт всех KV-документов Vault
   ansible.builtin.set_fact:
-    application_vault_delta: "{{ platform_application_vault_documents[document_key] | platform.vault.application_kv_delta(platform_application_vault_values[document_key], application_vault_document.owner) }}"
+    application_vault_document_batch: >-
+      {{ platform_vault_application_job.documents | platform.vault.application_vault_plan_documents(
+         platform_application_vault_documents, platform_application_vault_values, platform_vault_application_job.providerId) }}
   delegate_facts: false
-  vars:
-    document_key: "{{ platform_vault_application_job.providerId ~ ':' ~ application_vault_document.mount ~ '/' ~ application_vault_document.document }}"
   no_log: true
 
 - name: Сохранение безопасной диагностики записи документа Vault
   block:
     - name: "Запись только изменённых полей с проверкой версии CAS"
       ansible.builtin.uri:
-        url: "{{ application_vault_provider.url }}/v1/{{ application_vault_document.mount }}/data/{{ application_vault_document.document }}"
-        method: "{{ application_vault_delta.method }}"
+        url: "{{ application_vault_provider.url }}/v1/{{ application_vault_write.document.mount }}/data/{{ application_vault_write.document.document }}"
+        method: "{{ application_vault_write.method }}"
         headers:
           X-Vault-Token: "{{ application_vault_provider.token }}"
-          Content-Type: "{{ 'application/merge-patch+json' if application_vault_delta.method == 'PATCH' else 'application/json' }}"
+          Content-Type: "{{ 'application/merge-patch+json' if application_vault_write.method == 'PATCH' else 'application/json' }}"
         body_format: json
-        body: "{{ application_vault_delta.body }}"
+        body: "{{ application_vault_write.body }}"
         ca_path: "{{ platform_application_secret_root }}/vault-{{ platform_vault_application_job.providerId }}-ca.pem"
         validate_certs: true
         follow_redirects: none
@@ -24,33 +24,33 @@
         status_code: [200, 400]
       vars:
         application_vault_provider: "{{ platform_application_vault_runtime[platform_vault_application_job.providerId] }}"
-      register: application_vault_document_write
-      when: application_vault_delta.changed
-      changed_when: application_vault_document_write.status == 200
+      register: application_vault_document_writes
+      loop: "{{ application_vault_document_batch.writes }}"
+      loop_control:
+        loop_var: application_vault_write
+        break_when: application_vault_document_writes is failed
+      failed_when: >-
+        application_vault_document_writes.status | default(-1) | int != 200 and
+        not (application_vault_document_writes | platform.vault.application_vault_cas_conflict)
+      changed_when: application_vault_document_writes.status | default(-1) | int == 200
       no_log: true
   rescue:
-    - name: "Ошибка записи документа Vault (HTTP {{ ansible_failed_result.status | default(-1) | int }}, {{ application_vault_write_category }})"
+    - name: "Ошибка записи документа Vault (HTTP {{ application_vault_failed_write.status | default(-1) | int }}, {{ application_vault_write_category }})"
       ansible.builtin.fail:
         msg: APPLICATION_VAULT_DOCUMENT_WRITE_FAILED
       vars:
-        application_vault_write_message: "{{ ansible_failed_result.msg | default('') | string }}"
+        application_vault_failed_write: "{{ ansible_failed_result.results | default([]) | selectattr('failed', 'defined') | selectattr('failed') | first | default(ansible_failed_result) }}"
+        application_vault_write_message: "{{ application_vault_failed_write.msg | default('') | string }}"
         application_vault_write_category: >-
           {{ 'template' if ('undefined' in application_vault_write_message | lower or 'recursive' in application_vault_write_message | lower)
              else 'tls' if ('certificate' in application_vault_write_message | lower or 'ssl' in application_vault_write_message | lower)
              else 'timeout' if ('timed out' in application_vault_write_message | lower or 'timeout' in application_vault_write_message | lower)
-             else 'http' if (ansible_failed_result.status | default(-1) | int > 0)
+             else 'http' if (application_vault_failed_write.status | default(-1) | int > 0)
              else 'module' }}
 
-- name: "Однократное повторное чтение документа после конфликта CAS с сохранением чужих изменений"
+- name: Повторное чтение только при конфликте CAS или пропуске записи по снимку
   ansible.builtin.include_tasks: document_retry.yml
-  when: >-
-    application_vault_delta.changed and
-    (application_vault_document_write.status | int == 400) and
-    ('check-and-set' in (application_vault_document_write.json.errors | default([]) | join(' ') | lower))
-  no_log: true
-
-- name: "Прерывание выполнения при ошибке записи или конфликте CAS без перезаписи данных"
-  ansible.builtin.assert:
-    that: not application_vault_delta.changed or application_vault_document_write.status | int == 200
-    fail_msg: APPLICATION_VAULT_DOCUMENT_CAS_CONFLICT
+  loop: "{{ application_vault_document_batch.refresh + (application_vault_document_writes.results | default([]) | platform.vault.application_vault_conflict_documents) }}"
+  loop_control:
+    loop_var: application_vault_document
   no_log: true

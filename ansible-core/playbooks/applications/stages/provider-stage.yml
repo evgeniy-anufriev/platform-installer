@@ -37,10 +37,9 @@
           ansible.builtin.include_role:
             name: platform.vault.application_provider
             tasks_from: sources
-          loop: "{{ application_vault_inputs.sourceJobs | default([]) }}"
+          loop: "{{ application_vault_inputs.sourceJobs | default([]) | platform.vault.application_vault_group_sources(platform_application_credential_files | default({})) }}"
           loop_control:
             loop_var: application_vault_source
-          when: application_vault_source.passwordRef | default('') not in (platform_application_credential_files | default({}))
         - name: "Проверка соответствия ранее подготовленному набору ресурсов PostgreSQL"
           ansible.builtin.assert:
             that: application_provider_inputs.status == 'PASS'
@@ -59,21 +58,24 @@
           ansible.builtin.include_role:
             name: platform.postgresql.application_provider
             tasks_from: preflight
-          loop: "{{ (application_provider_inputs.libraryJobs + application_provider_inputs.instanceJobs) | selectattr('serviceType', 'equalto', 'postgresql') | list }}"
+          loop: >-
+            {{ (application_provider_inputs.libraryJobs + application_provider_inputs.instanceJobs)
+               | selectattr('serviceType', 'equalto', 'postgresql') | list
+               | platform.postgresql.application_preflight_jobs }}
           loop_control:
             loop_var: platform_postgresql_application_job
         - name: Предварительная проверка областей экземпляров Redis и Sentinel перед любыми мутациями провайдера
           ansible.builtin.include_role:
             name: platform.redis.application_provider
             tasks_from: preflight
-          loop: "{{ application_provider_inputs.instanceJobs | selectattr('serviceType', 'equalto', 'redis') | list }}"
+          loop: "{{ application_provider_inputs.jobs | selectattr('serviceType', 'equalto', 'redis') | list }}"
           loop_control:
             loop_var: platform_redis_application_job
-        - name: Предварительная проверка библиотеки ClickHouse и областей экземпляра перед мутациями
+        - name: Предварительная проверка ресурсов и учётных записей по развёртываниям ClickHouse
           ansible.builtin.include_role:
             name: platform.clickhouse.application_provider
             tasks_from: preflight
-          loop: "{{ (application_provider_inputs.libraryJobs + application_provider_inputs.instanceJobs) | selectattr('serviceType', 'equalto', 'clickhouse') | list }}"
+          loop: "{{ application_provider_inputs | platform.clickhouse.application_preflight_jobs }}"
           loop_control:
             loop_var: platform_clickhouse_application_job
         - name: "Создание топиков библиотеки Kafka перед настройкой экземпляров приложения"
@@ -106,18 +108,20 @@
           loop: "{{ application_vault_inputs.libraryJobs | platform.core.application_ready_shared_jobs(application_runtime_inputs.integrations, []) }}"
           loop_control:
             loop_var: platform_vault_application_job
-        - name: Проверка и аутентификация каждого экземпляра учетной записи PostgreSQL
+        - name: Согласование учетных записей PostgreSQL по развёртываниям
           ansible.builtin.include_role:
             name: platform.postgresql.application_provider
             tasks_from: accounts
-          loop: "{{ application_provider_inputs.instanceJobs | selectattr('serviceType', 'equalto', 'postgresql') | list }}"
+          loop: >-
+            {{ application_provider_inputs.instanceJobs | selectattr('serviceType', 'equalto', 'postgresql') |
+               platform.postgresql.application_account_jobs }}
           loop_control:
             loop_var: platform_postgresql_application_job
-        - name: Проверка и аутентификация каждого логического экземпляра Redis и Sentinel
+        - name: Согласование учётных записей Redis и Sentinel по развёртываниям
           ansible.builtin.include_role:
             name: platform.redis.application_provider
             tasks_from: accounts
-          loop: "{{ application_provider_inputs.instanceJobs | selectattr('serviceType', 'equalto', 'redis') | list }}"
+          loop: "{{ application_provider_inputs.jobs | selectattr('serviceType', 'equalto', 'redis') | selectattr('accounts') | list }}"
           loop_control:
             loop_var: platform_redis_application_job
         - name: "Настройка пользователя и прав доступа каждого экземпляра ClickHouse"

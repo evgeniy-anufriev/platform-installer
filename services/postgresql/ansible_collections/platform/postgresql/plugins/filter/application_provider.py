@@ -20,6 +20,27 @@ def sql_identifier(value):
     return '"' + text.replace('"', '""') + '"'
 
 
+def _deployment_job(scopes):
+    databases = {}
+    for scope in scopes:
+        for database in scope['databases']:
+            key = (database['libraryId'], database['resourceId'])
+            combined = databases.setdefault(key, dict(database, accounts=[]))
+            combined['accounts'].extend(database['accounts'])
+    return dict(scopes[0], databases=list(databases.values()),
+                libraries=[owner for scope in scopes for owner in scope['libraries']],
+                accounts=[account for scope in scopes for account in scope['accounts']],
+                loginAccounts=[account for scope in scopes for account in scope.get('loginAccounts', [])])
+
+
+def deployment_jobs(scopes):
+    """Combine job scopes per deployment, retaining each database's grants and login targets."""
+    providers = {}
+    for scope in scopes:
+        providers.setdefault(scope['providerId'], []).append(scope)
+    return [_deployment_job(scopes) for scopes in providers.values()]
+
+
 def validate_job(job):
     """Manual inventory uses the same bounded resolved inputs, never arbitrary SQL."""
     try:
@@ -81,4 +102,6 @@ class FilterModule:
     def filters(self):
         return {'application_sql_literal': sql_literal, 'application_sql_identifier': sql_identifier,
                 'application_protected_secret_files': protected_secret_files,
+                'application_preflight_jobs': deployment_jobs,
+                'application_account_jobs': deployment_jobs,
                 'application_validate_provider_job': validate_job}

@@ -15,7 +15,7 @@ class ActionModule(ActionBase):
         values = task_vars or {}
         try:
             args = self._task.args
-            prepared = args['snapshot_result']
+            prepared = args['snapshot_result'] if 'snapshot_result' in args else values['application_snapshot']
             snapshot, configuration = prepared['snapshot'], prepared['execution_configuration']
             catalog = self._loader.load_from_file(args['service_catalog_path'])
             result = project_providers(values['platform_application_rows'], snapshot, configuration,

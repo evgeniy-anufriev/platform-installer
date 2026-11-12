@@ -57,7 +57,7 @@ def grant(name, operations=('Read',), kind='topic', pattern='literal'):
 
 class KafkaAclWritesTests(unittest.TestCase):
     def probe(self, accounts, bindings=(), *, phase='apply', repeat=False, fail=False, direct=False,
-              success=True, direct_after=None, recover=False, compatibility=False):
+              success=True, direct_after=None, recover=False, compatibility=False, batch=False):
         with tempfile.TemporaryDirectory(prefix='qa-kafka-acl-writes-') as directory:
             root = Path(directory)
             (root / 'bin').mkdir()
@@ -75,6 +75,18 @@ class KafkaAclWritesTests(unittest.TestCase):
                 steps.append({'ansible.builtin.include_tasks': str(TASKS / 'application_acl.yml'),
                               'vars': dict(application_kafka_account=accounts[0],
                                            application_kafka_grant=accounts[0]['grants'][0])})
+            elif batch:
+                scope = yaml.safe_load((TASKS / 'application_accounts_scope.yml').read_text())[1]['block']
+                steps.extend(task for task in scope if set(task.get('ansible.builtin.set_fact', {})) &
+                             {'application_kafka_acl_deltas', 'application_kafka_deployment_acl_groups'})
+                steps.append({'ansible.builtin.include_tasks': str(TASKS / 'application_acls.yml'),
+                              'loop': accounts,
+                              'loop_control': dict(loop_var='application_kafka_account',
+                                                   index_var='application_kafka_account_index'),
+                              'vars': dict(application_kafka_collect_deployment_acls=True)})
+                write = next(task for task in scope
+                             if task.get('ansible.builtin.include_tasks') == 'application_acl_write.yml')
+                steps.append({**write, 'ansible.builtin.include_tasks': str(TASKS / 'application_acl_write.yml')})
             else:
                 steps.append({'ansible.builtin.include_tasks': str(TASKS / 'application_acls.yml'),
                               'loop': accounts, 'loop_control': dict(loop_var='application_kafka_account')})
@@ -86,12 +98,16 @@ class KafkaAclWritesTests(unittest.TestCase):
                              application_topic_candidate=dict(address='127.0.0.1', port='1'),
                              application_kafka_private=dict(path=str(root)),
                              platform_kafka_application_phase=phase)
+            if batch:
+                variables['platform_kafka_application_job'] = {'accounts': accounts}
             play = root / 'probe.yml'
             play.write_text(yaml.safe_dump([dict(hosts='localhost', connection='local', gather_facts=False,
                                                  vars=variables, tasks=steps)], sort_keys=False))
             for iteration in range(2 if repeat or recover else 1):
                 result = subprocess.run(['ansible-playbook', '-i', 'localhost,', str(play)],
-                                        env=dict(os.environ, ANSIBLE_CONFIG=str(ROOT / 'ansible-core/ansible.cfg')),
+                                        env=dict(os.environ, ANSIBLE_CONFIG=str(ROOT / 'ansible-core/ansible.cfg'),
+                                                 ANSIBLE_COLLECTIONS_PATH=os.pathsep.join((
+                                                     str(ROOT / 'services/kafka'), str(ROOT / 'ansible-core/collections')))),
                                         capture_output=True, text=True, timeout=60)
                 expected_success = iteration > 0 if recover else success
                 self.assertEqual(expected_success, result.returncode == 0, (result.stdout + result.stderr)[-2000:])
@@ -170,6 +186,28 @@ class KafkaAclWritesTests(unittest.TestCase):
                     calls, _ = self.probe([dict(name='qa', mode=mode, grants=[grant('one')])], bindings,
                                           phase=phase, success=bool(bindings))
                     self.assertFalse(any('--add' in a for a in calls))
+
+    def test_exact_allow_requires_matching_principal_host_and_resource_pattern(self):
+        bindings = [
+            ['TOPIC', 'one', 'LITERAL', 'User:qa-other', '*', 'READ', 'ALLOW'],
+            ['TOPIC', 'one', 'LITERAL', 'User:qa', '192.0.2.1', 'READ', 'ALLOW'],
+            ['TOPIC', 'one', 'LITERAL', 'User:qa', '*', 'READ', 'DENY'],
+            ['TOPIC', 'one', 'PREFIXED', 'User:qa', '*', 'READ', 'ALLOW'],
+        ]
+        accounts = [dict(name='qa', mode='managed', grants=[grant('one')])]
+        calls, final = self.probe(accounts, bindings, repeat=True)
+        self.assertEqual(1, sum('--add' in args for args in calls))
+        self.assertEqual({tuple(row) for row in bindings} |
+                         {('TOPIC', 'one', 'LITERAL', 'User:qa', '*', 'READ', 'ALLOW')},
+                         {tuple(row) for row in final})
+
+    def test_deployment_delta_keeps_accounts_with_the_same_local_id_separate(self):
+        accounts = [dict(accountId='reader', name=name, mode='managed', grants=[grant(name)])
+                    for name in ['first', 'second']]
+        calls, bindings = self.probe(accounts, batch=True, repeat=True)
+        self.assertEqual(2, sum('--add' in args for args in calls))
+        self.assertEqual({('first', 'User:first'), ('second', 'User:second')},
+                         {(row[1], row[3]) for row in bindings})
 
     def test_write_failure_is_reported(self):
         calls, bindings = self.probe([dict(name='qa', mode='managed', grants=[grant('one')])], fail=True, success=False)

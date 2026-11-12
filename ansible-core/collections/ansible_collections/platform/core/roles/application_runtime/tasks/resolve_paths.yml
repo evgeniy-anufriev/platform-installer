@@ -1,7 +1,7 @@
 ---
 - name: "Определение каталога библиотеки относительно домашнего каталога пользователя Docker"
   ansible.builtin.set_fact:
-    application_root: "{{ application_runtime_job.placement.runtimeDirectory | regex_replace('^~(?=/|$)', application_path_home) }}"
+    application_root: "{{ application_runtime_job.placement.runtimeDirectory | platform.core.application_runtime_root(application_path_home) }}"
   no_log: true
 
 - name: Проверка допустимости пути каталога библиотеки
@@ -21,7 +21,11 @@
       - not application_root.startswith(item + '/')
       - not item.startswith(application_root + '/')
     fail_msg: APPLICATION_LIBRARY_PATH_OVERLAP
-  loop: "{{ platform_application_preflight_jobs | default([]) | rejectattr('libraryId', 'equalto', application_runtime_job.libraryId) | map(attribute='libraryPath') | unique(case_sensitive=true) | list }}"
+  loop: >-
+    {{ (application_host_library_roots if application_preflight_index is defined
+        else platform_application_preflight_jobs | default([])) |
+       rejectattr('libraryId', 'equalto', application_runtime_job.libraryId) |
+       map(attribute='libraryPath') | unique(case_sensitive=true) | list }}
   no_log: true
 
 - name: Привязка общих путей размещения для Apply и Verify

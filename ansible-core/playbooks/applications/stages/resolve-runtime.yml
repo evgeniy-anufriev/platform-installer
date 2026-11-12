@@ -33,9 +33,9 @@
       ansible.builtin.assert:
         that: application_snapshot.snapshot.validation.status == 'PASS'
         fail_msg: "{{ application_snapshot.snapshot.findings | map(attribute='code') | unique | list }}"
+    # Controller actions read the registered snapshot directly to avoid re-templating it as a task argument.
     - name: Привязка выбора вызова без удаления определений провайдера
-      platform.core.prepare_application_selection:
-        snapshot_result: "{{ application_snapshot }}"
+      platform.core.prepare_application_selection: {}
       register: application_selection
       no_log: true
     - name: Проверка выбранного состава операции до подготовки провайдера
@@ -47,8 +47,7 @@
         application_snapshot: "{{ application_selection.prepared }}"
       no_log: true
     - name: "Подготовка обработчиков Vault по общему снимку проекта"
-      platform.core.prepare_application_vault:
-        snapshot_result: "{{ application_snapshot }}"
+      platform.core.prepare_application_vault: {}
       register: application_vault_inputs
       no_log: true
     - name: Определение общих источников конечных точек перед изменением целевых узлов
@@ -66,21 +65,15 @@
         fail_msg: "{{ application_vault_inputs.code | default('APPLICATION_VAULT_INPUT_INVALID') }}"
     - name: Подготовка обработчиков инфраструктурных учётных записей и ресурсов по общему снимку
       platform.core.prepare_application_providers:
-        snapshot_result: "{{ application_snapshot }}"
         service_catalog_path: "{{ platform_service_catalog_path }}"
         project_root: "{{ platform_project_root if platform_project_root is defined else (inventory_dir | dirname) }}"
       register: application_provider_inputs
       when: not platform_application_post_install_only | default(false)
       no_log: true
-    - name: Использование того же снимка для предварительной проверки провайдера
-      ansible.builtin.set_fact:
-        application_provider_snapshot: "{{ application_snapshot }}"
-      no_log: true
     - name: "Подготовка параметров выполнения приложений без планировщика развёртывания"
       platform.core.prepare_application_runtime:
         project_root: "{{ platform_project_root if platform_project_root is defined else (inventory_dir | dirname) }}"
         contracts_root: "{{ platform_contracts_root | default(playbook_dir ~ '/../../../../contracts') }}"
-        snapshot: "{{ application_snapshot.snapshot }}"
         scripts_only: "{{ platform_application_post_install_only | default(false) }}"
       register: application_runtime_inputs
       no_log: true
