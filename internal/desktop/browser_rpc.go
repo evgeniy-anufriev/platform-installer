@@ -143,6 +143,7 @@ func browserOperations() map[string]browserOperation {
 		"setDeploymentRuntimeSecretValues":              oneBrowserError((*App).SetDeploymentRuntimeSecretValues),
 		"getPendingRuntimeSecretDescriptors":            oneBrowserArg((*App).GetPendingRuntimeSecretDescriptors),
 		"getPendingApplicationRuntimeSecretDescriptors": oneBrowserArg((*App).GetPendingApplicationRuntimeSecretDescriptors),
+		"getRuntimeSecretStatuses":                      oneBrowserArg((*App).GetRuntimeSecretStatuses),
 		"setPendingDeploymentRuntimeSecretValues":       oneBrowserError((*App).SetPendingDeploymentRuntimeSecretValues),
 		"choosePendingDeploymentRuntimeSecretFile": twoBrowserArgsError(func(app *App, input PendingRuntimeSecretFileInput, fileBytes []byte) (string, error) {
 			defer clear(fileBytes)

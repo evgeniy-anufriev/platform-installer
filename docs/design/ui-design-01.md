@@ -108,6 +108,13 @@ Show «Секрет задан» / «Секрет не задан» beside the c
 connection heading, based on read-only session presence, and refresh it after
 submission and tab reentry. Unsaved source changes must be saved first.
 
+Owner refinement (2026-11-16): the Services and Applications pickers show a
+green check when all session inputs for the row are present, or an amber
+exclamation mark when at least one is missing. Each icon has a tooltip and an
+accessible status label. On the Applications screen, the library row represents
+its provided connection credentials, and each application row represents its
+own credential inputs. Rows without session inputs have no icon.
+
 Owner refinement (2026-11-03): manual Project Verify and automatic Verify after
 Execution Node preparation update «Проверено» and the corresponding Core
 snapshot together. Applications' provided-connection addresses must refresh from

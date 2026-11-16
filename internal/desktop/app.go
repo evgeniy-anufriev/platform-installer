@@ -961,13 +961,17 @@ func (a *App) GetPendingRuntimeSecretDescriptors(serviceDeployment string) Runti
 	}
 	installed := false
 	if binding, bindingErr := a.credentialBindingLocked(); bindingErr == nil {
-		requirements := make([]runtimesecret.RuntimeSecretInput, 0, len(descriptors))
-		for _, descriptor := range descriptors {
-			requirements = append(requirements, runtimesecret.RuntimeSecretInput{RequirementRef: descriptor.RequirementRef, Purpose: descriptor.Purpose, ServiceDeployment: descriptor.ServiceDeployment})
-		}
-		installed = a.secrets.ServiceSecretsPresent(binding, requirements)
+		installed = a.serviceSecretsPresent(binding, descriptors)
 	}
 	return RuntimeSecretDescriptorOperation{Status: "READY", Descriptors: descriptors, SecretsInstalled: installed}
+}
+
+func (a *App) serviceSecretsPresent(binding runtimesecret.Binding, descriptors []RuntimeSecretDescriptorView) bool {
+	requirements := make([]runtimesecret.RuntimeSecretInput, 0, len(descriptors))
+	for _, descriptor := range descriptors {
+		requirements = append(requirements, runtimesecret.RuntimeSecretInput{RequirementRef: descriptor.RequirementRef, Purpose: descriptor.Purpose, ServiceDeployment: descriptor.ServiceDeployment})
+	}
+	return a.secrets.ServiceSecretsPresent(binding, requirements)
 }
 
 // SetPendingDeploymentRuntimeSecretValues keeps locally catalog-authorized

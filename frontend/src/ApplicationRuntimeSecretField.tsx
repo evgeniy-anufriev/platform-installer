@@ -208,8 +208,7 @@ function RuntimeSecretField({
       )}
       {message && (
         <small role="status" title={message}>
-          <span className="application-credential-label">{message}</span>
-          <span aria-hidden="true">ⓘ</span>
+          {message}
         </small>
       )}
     </div>

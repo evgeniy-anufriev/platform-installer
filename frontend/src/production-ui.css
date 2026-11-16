@@ -1867,6 +1867,7 @@ button:disabled {
   padding-right: 3px;
 }
 .services-picker-list .topology-row {
+  grid-template-columns: minmax(0, 1fr) auto;
   min-height: 56px;
   padding: 7px 9px;
   border: 1px solid #e2e7ef;
@@ -1884,8 +1885,8 @@ button:disabled {
   overflow-wrap: anywhere;
   font-size: 12px;
 }
-.services-picker-list .topology-row span,
-.services-picker-list .topology-row small {
+.services-picker-list .topology-row > span,
+.services-picker-list .topology-row > small:not(.list-secret-status) {
   color: #526987;
   font-size: 10px;
 }
@@ -1894,6 +1895,19 @@ button:disabled {
   justify-self: center;
   padding: 12px;
   text-align: center;
+}
+.services-picker-list .topology-row > :not(.list-secret-status) {
+  grid-column: 1;
+}
+.list-secret-status {
+  grid-area: 1 / 2;
+  align-self: start;
+  justify-content: center;
+  min-width: 20px;
+  padding: 2px 4px;
+}
+.list-secret-status > span[aria-hidden] {
+  color: inherit;
 }
 .services-list {
   min-height: 100%;
