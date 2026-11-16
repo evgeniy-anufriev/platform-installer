@@ -34,6 +34,10 @@ func TestApplicationPendingSecretsDoNotRequireVerificationCoreOrSSH(t *testing.T
 		t.Fatal("local application sources unavailable")
 	}
 	ref := operation.ApplicationInputs[0].RequirementRef
+	status, tracked := app.GetRuntimeSecretStatuses("applications").Applications[scope.ApplicationLibrary][scope.ApplicationSlot]
+	if !tracked || status {
+		t.Fatal("saved slot with a missing secret must be listed as missing")
+	}
 	input := RuntimeSecretValuesInput{PendingApplicationInput: true, ApplicationLibrary: scope.ApplicationLibrary, ApplicationSlot: scope.ApplicationSlot, ProjectRevision: before, ApplicationRequirementRef: ref, Values: map[string]string{ref: "synthetic-local"}}
 	for _, change := range []string{"revision", "library", "slot", "reference", "mixed", "draft"} {
 		t.Run(change, func(t *testing.T) {
@@ -70,6 +74,12 @@ func TestApplicationPendingSecretsDoNotRequireVerificationCoreOrSSH(t *testing.T
 	operation = app.GetPendingApplicationRuntimeSecretDescriptors(scope)
 	if !operation.ApplicationSecretAvailability[ref] {
 		t.Fatal("saved input not present")
+	}
+	app.activeSession = "draft"
+	statuses := app.GetRuntimeSecretStatuses("applications")
+	app.activeSession = ""
+	if statuses.ProjectRevision != before || !statuses.Applications[scope.ApplicationLibrary][scope.ApplicationSlot] {
+		t.Fatal("saved slot status must remain available during a draft")
 	}
 	public, _ := json.Marshal(operation)
 	if strings.Contains(string(public), "synthetic-local") {
@@ -172,12 +182,23 @@ func TestPendingLibraryConnectionSecretUsesTheSameSessionAndCoreMapping(t *testi
 	if local.Status != "READY" || len(local.ApplicationInputs) != 1 {
 		t.Fatal("saved library field unavailable")
 	}
+	statuses := app.GetRuntimeSecretStatuses("applications").Applications[scope.ApplicationLibrary]
+	if present, tracked := statuses[""]; !tracked || present {
+		t.Fatal("the library row must show that its connection secret is missing")
+	}
 	ref := local.ApplicationInputs[0].RequirementRef
 	if err := app.SetDeploymentRuntimeSecretValues(RuntimeSecretValuesInput{PendingApplicationInput: true, ApplicationLibrary: scope.ApplicationLibrary, ProjectRevision: local.ProjectRevision, ApplicationRequirementRef: ref, Values: map[string]string{ref: "synthetic-provider"}}); err != nil {
 		t.Fatal(err)
 	}
 	if !app.GetPendingApplicationRuntimeSecretDescriptors(scope).ApplicationSecretAvailability[ref] {
 		t.Fatal("provider input not present before Core")
+	}
+	statuses = app.GetRuntimeSecretStatuses("applications").Applications[scope.ApplicationLibrary]
+	if present := statuses[""]; !present {
+		t.Fatal("the library row must show that its connection secret is present")
+	}
+	if present, tracked := statuses["gateway"]; !tracked || present {
+		t.Fatal("saving the library connection secret must not satisfy the application slot")
 	}
 	binding, _ := app.credentialBindingLocked()
 	if _, err := app.secrets.Set(binding, runtimesecret.Input{Username: "operator", SSHMode: runtimesecret.SSHPassword, SSHPassword: "synthetic-ssh"}); err != nil {

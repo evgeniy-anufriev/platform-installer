@@ -174,6 +174,10 @@ export function GetRuntimeSecretDescriptors() {
   return window['go']['main']['App']['GetRuntimeSecretDescriptors']();
 }
 
+export function GetRuntimeSecretStatuses(arg1) {
+  return window['go']['main']['App']['GetRuntimeSecretStatuses'](arg1);
+}
+
 export function GetServiceConfigurationPreview() {
   return window['go']['main']['App']['GetServiceConfigurationPreview']();
 }

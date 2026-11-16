@@ -3118,10 +3118,17 @@ describe("UI-01H2 services navigation and safe settings", () => {
         },
       ],
     });
-    const setPendingDeploymentRuntimeSecretValues = vi.fn();
+    let secretsPresent = false;
+    const setPendingDeploymentRuntimeSecretValues = vi.fn(async () => {
+      secretsPresent = true;
+    });
     const value = api({
       getPendingRuntimeSecretDescriptors,
       setPendingDeploymentRuntimeSecretValues,
+      getRuntimeSecretStatuses: vi.fn(async () => ({
+        projectRevision: "sha256:old",
+        services: { "redis-main": secretsPresent },
+      })),
       getServiceConfigurationPreview: vi.fn().mockResolvedValue({ projectRevision: "sha256:old", runtimeDigest: "sha256:runtime-a", services: {
         "redis-main": { configuration: { dataDirectory: { state: "RESOLVED", source: "ROLE_DEFAULT", value: "/data/redis-main" } }, members: {} },
       } }),
@@ -3138,7 +3145,9 @@ describe("UI-01H2 services navigation and safe settings", () => {
       ),
     );
     await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
-    await userEvent.click(screen.getByRole("button", { name: /^redis-main/ }));
+    await userEvent.click(await screen.findByRole("button", {
+      name: /^redis-main.*Секреты не заданы/,
+    }));
     expect(screen.getByRole("textbox", { name: "Каталог данных" })).toHaveProperty("value", "/data/redis-main");
     await userEvent.click(screen.getByRole("button", { name: "Секреты" }));
     await userEvent.type(
@@ -3156,6 +3165,7 @@ describe("UI-01H2 services navigation and safe settings", () => {
       value: { passwordSecretRef: "runtime:redis-password" },
     });
     expect(setPendingDeploymentRuntimeSecretValues).toHaveBeenCalledWith({ serviceDeployment: "redis-main", values: { "redis-password": "not-persisted" } });
+    await screen.findByRole("button", { name: /^redis-main.*Секреты заданы/ });
     expect(screen.queryByRole("dialog", { name: "Секреты сервиса" })).toBeNull();
     expect(screen.queryByText(/Ссылки добавлены в черновик/)).toBeNull();
     expect(screen.queryByText("not-persisted")).toBeNull();

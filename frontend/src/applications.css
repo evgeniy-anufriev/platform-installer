@@ -36,10 +36,15 @@
   padding: 8px 0;
 }
 .application-group button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 5px;
+  align-items: start;
+  overflow-wrap: anywhere;
   text-align: left;
 }
-.application-group small {
-  display: block;
+.application-group button > :not(.list-secret-status) {
+  grid-column: 1;
 }
 .application-slot {
   margin-left: 14px;
@@ -576,6 +581,7 @@
 .application-runtime-secret {
   min-width: 0;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 4px;
 }
@@ -594,6 +600,10 @@
   flex-shrink: 0;
   font-size: 11px;
   color: #65758b;
+}
+.application-runtime-secret > small[role="status"] {
+  flex-basis: 100%;
+  white-space: normal;
 }
 .application-account-card > fieldset {
   display: grid;

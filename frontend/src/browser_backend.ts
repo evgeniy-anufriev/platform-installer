@@ -316,6 +316,8 @@ export const browserBackend: ProjectBackend = {
     invoke("getPendingRuntimeSecretDescriptors", [serviceDeployment]),
   getPendingApplicationRuntimeSecretDescriptors: (context) =>
     invoke("getPendingApplicationRuntimeSecretDescriptors", [context]),
+  getRuntimeSecretStatuses: (section) =>
+    invoke("getRuntimeSecretStatuses", [section]),
   setPendingDeploymentRuntimeSecretValues: (input) =>
     invoke("setPendingDeploymentRuntimeSecretValues", [input]),
   choosePendingDeploymentRuntimeSecretFile: choosePendingRuntimeSecretFile,

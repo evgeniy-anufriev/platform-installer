@@ -2806,6 +2806,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
                 importCompleted={importCompleted}
                 loadSecrets={api.getRuntimeSecretDescriptors}
                 loadPendingSecrets={api.getPendingApplicationRuntimeSecretDescriptors}
+                loadSecretStatuses={api.getRuntimeSecretStatuses}
                 executionContextKey={JSON.stringify([
                   executionNode?.selectionKind,
                   executionNode?.selectedHostId,
@@ -2896,6 +2897,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
                 onGetPendingRuntimeSecretDescriptors={
                   getPendingRuntimeSecretDescriptors
                 }
+                loadSecretStatuses={api.getRuntimeSecretStatuses}
                 onSetPendingDeploymentRuntimeSecretValues={
                   setPendingDeploymentRuntimeSecretValues
                 }

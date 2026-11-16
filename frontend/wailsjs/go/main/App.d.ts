@@ -92,6 +92,8 @@ export function GetPendingRuntimeSecretDescriptors(arg1:string):Promise<desktop.
 
 export function GetRuntimeSecretDescriptors():Promise<desktop.RuntimeSecretDescriptorOperation>;
 
+export function GetRuntimeSecretStatuses(arg1:string):Promise<desktop.RuntimeSecretStatuses>;
+
 export function GetServiceConfigurationPreview():Promise<executionnode.ServiceConfigurationPreview>;
 
 export function GetSessionCredentialStatus():Promise<runtimesecret.Status>;

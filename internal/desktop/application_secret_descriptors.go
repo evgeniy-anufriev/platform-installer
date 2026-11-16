@@ -87,6 +87,11 @@ func (a *App) pendingApplicationSecretsLocked(input PendingApplicationSecretCont
 	if a.current.Status != "OPEN" || a.current.Managed == nil || a.activeSession != "" {
 		return nil, errors.New("PROJECT_CHANGES_UNSAVED")
 	}
+	return a.savedApplicationSecretsLocked(input)
+}
+
+// The list can read the saved configuration while an edit session is active.
+func (a *App) savedApplicationSecretsLocked(input PendingApplicationSecretContext) ([]pendingApplicationSecret, error) {
 	library, ok := a.current.Managed.ApplicationLibraries[input.ApplicationLibrary]
 	if !ok {
 		return nil, errors.New("RUNTIME_SECRET_DESCRIPTOR_NOT_FOUND")
