@@ -76644,7 +76644,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/kafka-history-writer/1.0.0/roles/application_kafka-history-writer/defaults/main.yml","mode":420,"size":8290,"sha256":"fdddbcf39e0c72a4d0f8b9a23038f0275f390141e5dcbb85933ffccf3e97ecf8","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":8290}
+@@PORTABLE {"path":"examples/sdku/application-packages/kafka-history-writer/1.0.0/roles/application_kafka-history-writer/defaults/main.yml","mode":420,"size":8508,"sha256":"deccf1171a494a3073d833c139d5767ec5994d6ea2494de32e863f44c4ef7db6","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":8508}
 platform_application_definition:
     name: kafka-history-writer
     version: 1.0.0
@@ -76744,14 +76744,18 @@ platform_application_definition:
             kafka.producer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-producer'
             server.max-http-request-header-size: 100MB
             SPRING_KAFKA_SCHEMA_REGISTRY_URL: >-
-                {%- set registry = platform_desired_state.serviceDeployments[application_job.deployment.bindings.messaging.deploymentRef] -%}
-                {%- set urls = [] -%}
-                {%- for _, member in registry.members | dictsort if 'broker' in member.roles -%}
-                  {%- set address = hostvars[member.host].ansible_host | default(member.host) -%}
+              {%- set deployment_id = application_job.deployment.bindings.messaging.deploymentRef -%}
+              {%- set urls = [] -%}
+              {%- for host_id in groups['all'] | sort if host_id != 'localhost' -%}
+                {%- set node = hostvars[host_id] -%}
+                {%- set members = (node.platform_deployments | default({})).get(deployment_id, {}).get('members', {}) -%}
+                {%- if 'broker' in (members.values() | sum(attribute='roles', start=[])) -%}
+                  {%- set address = node.ansible_host | default(host_id) -%}
                   {%- set host = '[' ~ address ~ ']' if ':' in address else address -%}
                   {%- set _ = urls.append('http://' ~ host ~ ':8081') -%}
-                {%- endfor -%}
-                {{ urls | join(',') }}
+                {%- endif -%}
+              {%- endfor -%}
+              {{ urls | join(',') }}
         ports:
             port-1:
                 container: 10241
