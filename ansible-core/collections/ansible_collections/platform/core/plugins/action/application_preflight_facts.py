@@ -318,8 +318,7 @@ class ActionModule(ActionBase):
                              application_project_id=job['projectId'], application_name=job['applicationName'],
                              application_instance_id=job['instanceId'], application_parameters=job['settings'].get('parameters', {}),
                              application_root=paths['root'], application_library_path=paths['root'],
-                             application_instance_path=paths['instance_path'], application_config_contents=[],
-                             application_archive_pairs=[], application_archive_checksums={})
+                             application_instance_path=paths['instance_path'])
             elif operation == 'publish':
                 indices = [row['index'] for row in values['application_host_jobs']]
                 jobs = preflight_source_jobs(values['hostvars'], indices)

@@ -60,9 +60,6 @@
         application_image_platform:
           os: "{{ application_runtime_discoveries[application_discovery_key].info.OSType }}"
           architecture: "{{ {'x86_64': 'amd64', 'aarch64': 'arm64'}.get(application_runtime_discoveries[application_discovery_key].info.Architecture, application_runtime_discoveries[application_discovery_key].info.Architecture) }}"
-        application_config_contents: []
-        application_archive_pairs: []
-        application_archive_checksums: {}
       no_log: true
 
     - name: Проверка отображения user namespace и путей защищённых учётных данных до записи провайдером
@@ -134,6 +131,13 @@
 - name: Расчёт и проверка конфигурации размещения
   when: (application_preflight_mode | default('direct')) != 'registry'
   block:
+    - name: Инициализация списков файлов текущего размещения
+      ansible.builtin.set_fact:
+        application_config_contents: []
+        application_archive_pairs: []
+        application_archive_checksums: {}
+      no_log: true
+
     - name: "Выбор источника образа: разрешённый реестр, затем offline-пакет"
       ansible.builtin.set_fact:
         application_image_source: >-
