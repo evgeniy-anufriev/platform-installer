@@ -96,6 +96,16 @@ platform_application_definition:
             kafka.consumer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-consumer'
             kafka.producer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-producer'
             server.max-http-request-header-size: 100MB
+            SPRING_KAFKA_SCHEMA_REGISTRY_URL: >-
+  {%- set registry = platform_desired_state.serviceDeployments[
+    application_job.deployment.bindings.messaging.deploymentRef] -%}
+  {%- set urls = [] -%}
+  {%- for _, member in registry.members | dictsort if 'broker' in member.roles -%}
+    {%- set address = hostvars[member.host].ansible_host | default(member.host) -%}
+    {%- set host = '[' ~ address ~ ']' if ':' in address else address -%}
+    {%- set _ = urls.append('http://' ~ host ~ ':8081') -%}
+  {%- endfor -%}
+  {{ urls | join(',') }}
         ports:
             port-1:
                 container: 10241
