@@ -76644,7 +76644,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/kafka-history-writer/1.0.0/roles/application_kafka-history-writer/defaults/main.yml","mode":420,"size":7634,"sha256":"603b033efcfebb1c264ae65732f02f306c79b5e6ed7e644444a75f3f960ba4c5","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7634}
+@@PORTABLE {"path":"examples/sdku/application-packages/kafka-history-writer/1.0.0/roles/application_kafka-history-writer/defaults/main.yml","mode":420,"size":8183,"sha256":"e84a174227f12c45062bcb5186dc179cf81af7af5b9c4486545d0134cfd57f54","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":8183}
 platform_application_definition:
     name: kafka-history-writer
     version: 1.0.0
@@ -76743,6 +76743,16 @@ platform_application_definition:
             kafka.consumer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-consumer'
             kafka.producer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-producer'
             server.max-http-request-header-size: 100MB
+            SPRING_KAFKA_SCHEMA_REGISTRY_URL: >-
+  {%- set registry = platform_desired_state.serviceDeployments[
+    application_job.deployment.bindings.messaging.deploymentRef] -%}
+  {%- set urls = [] -%}
+  {%- for _, member in registry.members | dictsort if 'broker' in member.roles -%}
+    {%- set address = hostvars[member.host].ansible_host | default(member.host) -%}
+    {%- set host = '[' ~ address ~ ']' if ':' in address else address -%}
+    {%- set _ = urls.append('http://' ~ host ~ ':8081') -%}
+  {%- endfor -%}
+  {{ urls | join(',') }}
         ports:
             port-1:
                 container: 10241
