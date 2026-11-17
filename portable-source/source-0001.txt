@@ -76644,7 +76644,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/kafka-history-writer/1.0.0/roles/application_kafka-history-writer/defaults/main.yml","mode":420,"size":8508,"sha256":"deccf1171a494a3073d833c139d5767ec5994d6ea2494de32e863f44c4ef7db6","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":8508}
+@@PORTABLE {"path":"examples/sdku/application-packages/kafka-history-writer/1.0.0/roles/application_kafka-history-writer/defaults/main.yml","mode":420,"size":8894,"sha256":"4db7c999312ed5f8d8f12a66a8f003a96ed857af07e6e0c53fe2720bfe3d3e33","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":8894}
 platform_application_definition:
     name: kafka-history-writer
     version: 1.0.0
@@ -76744,18 +76744,21 @@ platform_application_definition:
             kafka.producer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-producer'
             server.max-http-request-header-size: 100MB
             SPRING_KAFKA_SCHEMA_REGISTRY_URL: >-
-              {%- set deployment_id = application_job.deployment.bindings.messaging.deploymentRef -%}
-              {%- set urls = [] -%}
-              {%- for host_id in groups['all'] | sort if host_id != 'localhost' -%}
-                {%- set node = hostvars[host_id] -%}
-                {%- set members = (node.platform_deployments | default({})).get(deployment_id, {}).get('members', {}) -%}
-                {%- if 'broker' in (members.values() | sum(attribute='roles', start=[])) -%}
-                  {%- set address = node.ansible_host | default(host_id) -%}
-                  {%- set host = '[' ~ address ~ ']' if ':' in address else address -%}
-                  {%- set _ = urls.append('http://' ~ host ~ ':8081') -%}
-                {%- endif -%}
-              {%- endfor -%}
-              {{ urls | join(',') }}
+                {%- set deployment_id = application_job.deployment.bindings.messaging.deploymentRef -%}
+                {%- set settings = platform_desired_state.serviceDeployments[deployment_id].configuration | default({}) -%}
+                {%- set urls = [] -%}
+                {%- for host_id in groups['all'] | sort if host_id != 'localhost' -%}
+                  {%- set node = hostvars[host_id] -%}
+                  {%- set members = (node.platform_deployments | default({})).get(deployment_id, {}).get('members', {}) -%}
+                  {%- for _, member in members | dictsort if 'broker' in (member.roles | default([])) -%}
+                    {%- set port = (member.configuration | default({})).schemaRegistryHttpPort
+                        | default(settings.schemaRegistryHttpPort | default(node.platform_kafka_schema_registry_http_port)) -%}
+                    {%- set address = node.ansible_host | default(host_id) -%}
+                    {%- set host = '[' ~ address ~ ']' if ':' in address else address -%}
+                    {%- set _ = urls.append('http://' ~ host ~ ':' ~ port) -%}
+                  {%- endfor -%}
+                {%- endfor -%}
+                {{ urls | join(',') }}
         ports:
             port-1:
                 container: 10241
