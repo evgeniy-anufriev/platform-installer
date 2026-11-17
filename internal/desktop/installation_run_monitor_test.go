@@ -20,8 +20,10 @@ import (
 )
 
 type runLifecycleMonitorClient struct {
-	mu  sync.Mutex
-	run executionnode.ExecutionRun
+	mu           sync.Mutex
+	run          executionnode.ExecutionRun
+	finalEvent   *executionnode.ExecutionEvent
+	terminalRead chan struct{}
 }
 
 func (c *runLifecycleMonitorClient) StartExecution(context.Context, executionnode.Node, executionnode.ExecutionStartRequest) (executionnode.ExecutionRun, error) {
@@ -34,6 +36,10 @@ func (c *runLifecycleMonitorClient) GetExecution(_ context.Context, _ executionn
 	if runID != c.run.RunID {
 		return executionnode.ExecutionRun{}, context.Canceled
 	}
+	if c.run.State == "SUCCEEDED" && c.terminalRead != nil {
+		close(c.terminalRead)
+		c.terminalRead = nil
+	}
 	return c.run, nil
 }
 
@@ -42,6 +48,14 @@ func (c *runLifecycleMonitorClient) GetEvents(_ context.Context, _ executionnode
 	defer c.mu.Unlock()
 	if runID != c.run.RunID {
 		return executionnode.ExecutionEventPage{}, context.Canceled
+	}
+	if c.run.State == "SUCCEEDED" && after == 0 {
+		if c.finalEvent == nil {
+			// A malformed page ends the observer subscription. The monitor
+			// must retry even though GetExecution already reports success.
+			return executionnode.ExecutionEventPage{NextSequence: 1}, nil
+		}
+		return executionnode.ExecutionEventPage{Events: []executionnode.ExecutionEvent{*c.finalEvent}, NextSequence: 1}, nil
 	}
 	return executionnode.ExecutionEventPage{Events: []executionnode.ExecutionEvent{}, NextSequence: after}, nil
 }
@@ -54,13 +68,7 @@ func (*runLifecycleMonitorClient) BuildProjectSnapshot(context.Context, executio
 	return nil, nil
 }
 
-func (c *runLifecycleMonitorClient) setState(state string) {
-	c.mu.Lock()
-	c.run.State = state
-	c.mu.Unlock()
-}
-
-func TestActiveRunMonitorReleasesSSHHoldOnlyAfterTerminalAndCachesResult(t *testing.T) {
+func TestActiveRunMonitorReleasesSSHHoldAfterFinalEventAndCachesResult(t *testing.T) {
 	cacheRoot := t.TempDir()
 	t.Setenv("LOCALAPPDATA", cacheRoot)
 	t.Setenv("XDG_CACHE_HOME", cacheRoot)
@@ -107,7 +115,11 @@ func TestActiveRunMonitorReleasesSSHHoldOnlyAfterTerminalAndCachesResult(t *test
 	if err := writeLocalRunRecord(runRoot, record); err != nil {
 		t.Fatal(err)
 	}
-	client := &runLifecycleMonitorClient{run: executionnode.ExecutionRun{RunID: runID, ProjectIdentity: "project-one", State: "RUNNING"}}
+	terminalRead := make(chan struct{})
+	client := &runLifecycleMonitorClient{
+		run:          executionnode.ExecutionRun{RunID: runID, ProjectIdentity: "project-one", State: "RUNNING"},
+		terminalRead: terminalRead,
+	}
 	runtimeRoot, err := installationRuntimeRoot()
 	if err != nil {
 		t.Fatalf("run monitor runtime root: %v", err)
@@ -136,20 +148,35 @@ func TestActiveRunMonitorReleasesSSHHoldOnlyAfterTerminalAndCachesResult(t *test
 		app.clearInstallationRunsLocked()
 		app.editMu.Unlock()
 	}()
-	go app.monitorInstallationRun(ctx, binding, captured, runID)
-
-	deadline := time.Now().Add(3 * time.Second)
-	for time.Now().Before(deadline) && !registry.hasActiveRun() {
-		time.Sleep(10 * time.Millisecond)
-	}
-	if !registry.hasActiveRun() {
-		t.Fatal("run monitor exited before terminal state")
-	}
 	if _, err := secrets.CurrentExecutionIdentity(credentialBinding); err != nil {
 		t.Fatalf("active run did not retain SSH identity: %v", err)
 	}
-	client.setState("SUCCEEDED")
-	deadline = time.Now().Add(4 * time.Second)
+	client.run.State, client.run.Sequence = "SUCCEEDED", 1
+	go app.monitorInstallationRun(ctx, binding, captured, runID)
+	select {
+	case <-terminalRead:
+	case <-time.After(3 * time.Second):
+		t.Fatal("terminal status was not read")
+	}
+	if !secrets.HasRunExecutionIdentityHold(credentialBinding) {
+		t.Fatal("SSH identity released before the final event")
+	}
+	client.mu.Lock()
+	client.finalEvent = &executionnode.ExecutionEvent{
+		APIVersion:  "platform.installer/event/v1alpha1",
+		Kind:        "ExecutionEvent",
+		RunID:       runID,
+		Sequence:    1,
+		Timestamp:   "2026-09-04T12:00:00Z",
+		EventType:   "TASK_COMPLETED",
+		Status:      "SUCCESS",
+		Host:        "node1",
+		Task:        &executionnode.ExecutionEventTask{UUID: "task-1", Role: "platform.core", Name: "Post-install completed"},
+		SafeMessage: "Ansible task completed",
+		Redaction:   executionnode.ExecutionRedaction{Applied: true, Fields: []string{}},
+	}
+	client.mu.Unlock()
+	deadline := time.Now().Add(4 * time.Second)
 	for time.Now().Before(deadline) && registry.hasActiveRun() {
 		time.Sleep(10 * time.Millisecond)
 	}
@@ -164,7 +191,7 @@ func TestActiveRunMonitorReleasesSSHHoldOnlyAfterTerminalAndCachesResult(t *test
 		t.Fatal("SSH identity hold remained after terminal state")
 	}
 	result := app.GetInstallationRun(runID)
-	if result.Status != "READY" || result.Run == nil || result.Run.State != "SUCCEEDED" || result.Result == nil || result.Result.State != "SUCCEEDED" {
+	if result.Status != "READY" || result.Run == nil || result.Run.State != "SUCCEEDED" || result.Run.Sequence != 1 || result.Result == nil || result.Result.State != "SUCCEEDED" {
 		t.Fatalf("cached terminal result unavailable after credential release: %+v", result)
 	}
 }

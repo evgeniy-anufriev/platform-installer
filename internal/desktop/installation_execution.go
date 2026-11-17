@@ -686,13 +686,14 @@ func (a *App) GetInstallationRun(runID string) InstallationRunOperation {
 	if err != nil {
 		return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: projectErrorCode(err), Message: projectErrorMessage(projectErrorCode(err))}}
 	}
-	if run.RunID == runID && run.ProjectIdentity == a.current.Project.ID && rebindTerminalRun(run.State) && !a.recoveredCancelUnconfirmed {
+	// A status response can arrive before the final journal page. When a
+	// monitor exists, it owns terminal persistence and SSH credential release.
+	if !a.installationRuns.hasActiveRun() && run.RunID == runID && run.ProjectIdentity == a.current.Project.ID && rebindTerminalRun(run.State) && !a.recoveredCancelUnconfirmed {
 		record, readErr := readLocalRunRecord(a.localRunRecordRoot, a.current.Root, a.current.Project.ID)
 		if readErr == nil && record != nil && record.RunID == runID && run.ProjectIdentity == record.ProjectID {
 			record.State, record.TerminalState = "TERMINAL", run.State
 			if writeLocalRunRecord(a.localRunRecordRoot, *record) == nil {
 				a.installationRuns.finishMonitor(runID, &run)
-				a.secrets.ReleaseExecutionIdentityForRun(runID)
 			}
 		}
 	}
@@ -757,7 +758,7 @@ func (a *App) monitorInstallationRun(ctx context.Context, binding *executionNode
 		checkCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		run, checkErr := client.GetExecution(checkCtx, binding.node, runID)
 		cancel()
-		if checkErr == nil && run.RunID == runID && run.ProjectIdentity == captured.projectID && rebindTerminalRun(run.State) {
+		if checkErr == nil && run.RunID == runID && run.ProjectIdentity == captured.projectID && rebindTerminalRun(run.State) && after == run.Sequence {
 			a.editMu.Lock()
 			if a.recoveredCancelUnconfirmed && a.recoveredRun != nil && a.recoveredRun.RunID == runID {
 				a.editMu.Unlock()
@@ -780,8 +781,8 @@ func (a *App) monitorInstallationRun(ctx context.Context, binding *executionNode
 				if a.recoveredRun != nil && a.recoveredRun.RunID == runID {
 					a.recoveredRun.State, a.recoveredRun.TerminalState = "TERMINAL", run.State
 				}
-				a.installationRuns.finishMonitor(runID, &run)
 				a.secrets.ReleaseExecutionIdentityForRun(runID)
+				a.installationRuns.finishMonitor(runID, &run)
 			}
 			a.editMu.Unlock()
 			if contextCurrent && terminalSaved {

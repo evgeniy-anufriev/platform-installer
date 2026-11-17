@@ -1131,14 +1131,20 @@ def get(value, state_root):
     journal = Journal(state_root, value["runId"])
     metadata = owned(journal)
     recover(state_root, active)
-    result = {"run": journal.status(), "metadata": metadata}
+    # Read the terminal state and sequence after the corresponding event has
+    # been committed under the journal lock.
+    event_lock = journal.event_lock()
+    try:
+        result = {"run": journal.status(), "metadata": metadata}
+        if os.path.exists(journal.result_path):
+            with open(journal.result_path, "r", encoding="utf-8") as stream:
+                result["result"] = json.load(stream)
+    finally:
+        os.close(event_lock)
     if result["run"].get("state") not in ACTIVE:
         if not active(metadata.get("unit"), metadata):
             journal.cleanup_runtime_secret_inputs()
             execution_secret_lease.cleanup_run(state_root, journal.run_id)
-    if os.path.exists(journal.result_path):
-        with open(journal.result_path, "r", encoding="utf-8") as stream:
-            result["result"] = json.load(stream)
     return result
 
 

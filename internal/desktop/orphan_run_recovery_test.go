@@ -113,6 +113,28 @@ func TestCurrentRunCanRestoreViewWithoutOrphanAttachOrNewPlan(t *testing.T) {
 	}
 }
 
+func TestTerminalStatusLeavesActiveRunMonitorInCharge(t *testing.T) {
+	app, client, record := recoveredObservationFixture(t)
+	app.binding.bundleRoot = t.TempDir()
+	app.installationRuns.rememberRun(record.RunID)
+	if _, ok := app.installationRuns.startMonitor(record.RunID); !ok {
+		t.Fatal("failed to start monitor")
+	}
+	client.run.State, client.run.Sequence = "SUCCEEDED", 2
+
+	got := app.GetInstallationRun(record.RunID)
+	if got.Status != "READY" || got.Run == nil || got.Run.State != "SUCCEEDED" {
+		t.Fatalf("terminal status unavailable: %+v", got)
+	}
+	if !app.installationRuns.hasActiveRun() || app.knownRunsTerminalLocked() {
+		t.Fatal("status lookup ended active journal observation")
+	}
+	saved, err := readLocalRunRecord(app.localRunRecordRoot, app.current.Root, record.ProjectID)
+	if err != nil || saved == nil || saved.State != "RUNNING" {
+		t.Fatalf("status lookup finalized the local run: %+v, %v", saved, err)
+	}
+}
+
 func TestAttachOrphanRejectsChangedCandidate(t *testing.T) {
 	for _, change := range []string{"expired", "node", "project", "run", "record"} {
 		t.Run(change, func(t *testing.T) {
