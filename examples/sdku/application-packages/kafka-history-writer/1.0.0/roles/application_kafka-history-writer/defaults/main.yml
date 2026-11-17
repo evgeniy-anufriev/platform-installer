@@ -97,14 +97,18 @@ platform_application_definition:
             kafka.producer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-producer'
             server.max-http-request-header-size: 100MB
             SPRING_KAFKA_SCHEMA_REGISTRY_URL: >-
-                {%- set registry = platform_desired_state.serviceDeployments[application_job.deployment.bindings.messaging.deploymentRef] -%}
-                {%- set urls = [] -%}
-                {%- for _, member in registry.members | dictsort if 'broker' in member.roles -%}
-                  {%- set address = hostvars[member.host].ansible_host | default(member.host) -%}
+              {%- set deployment_id = application_job.deployment.bindings.messaging.deploymentRef -%}
+              {%- set urls = [] -%}
+              {%- for host_id in groups['all'] | sort if host_id != 'localhost' -%}
+                {%- set node = hostvars[host_id] -%}
+                {%- set members = (node.platform_deployments | default({})).get(deployment_id, {}).get('members', {}) -%}
+                {%- if 'broker' in (members.values() | sum(attribute='roles', start=[])) -%}
+                  {%- set address = node.ansible_host | default(host_id) -%}
                   {%- set host = '[' ~ address ~ ']' if ':' in address else address -%}
                   {%- set _ = urls.append('http://' ~ host ~ ':8081') -%}
-                {%- endfor -%}
-                {{ urls | join(',') }}
+                {%- endif -%}
+              {%- endfor -%}
+              {{ urls | join(',') }}
         ports:
             port-1:
                 container: 10241
