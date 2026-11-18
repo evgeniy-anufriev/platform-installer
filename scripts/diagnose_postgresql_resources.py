@@ -93,10 +93,15 @@ def recorded_runtime(root, manifest,
     """Use immutable run identity, never substitute the current release."""
     expected = manifest.get("runtimeRelease", {})
     metadata = json.loads((root / "metadata.json").read_text(encoding="utf-8"))
-    if metadata.get("runtimeRelease") != expected:
+    digest = expected.get("bundleDigest", "")
+    # Start stores the bundle digest in metadata and the release object in
+    # the manifest. Also accept the object form used by earlier diagnostics.
+    recorded = metadata.get("runtimeRelease")
+    if isinstance(recorded, dict):
+        recorded = recorded.get("bundleDigest")
+    if recorded != digest:
         print("RECORDED RELEASE: metadata/manifest identity mismatch")
         return []
-    digest = expected.get("bundleDigest", "")
     if not isinstance(digest, str) or re.fullmatch(r"sha256:[0-9a-f]{64}", digest) is None:
         print("RECORDED RELEASE: bundle digest unavailable")
         return []
