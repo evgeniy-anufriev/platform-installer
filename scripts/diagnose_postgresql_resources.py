@@ -39,6 +39,13 @@ RESOURCE_NAMES = (
     "восстановление дампа формата custom",
     "маркировка владельца только после успешного восстановления",
 )
+PREPARATION_TIMELINE_NAMES = (
+    "Проверка всех выбранных ресурсов PostgreSQL",
+    "Создание топиков библиотеки Kafka",
+    "Подготовка защищённых PEM-файлов только для Apply",
+    "Создание всех ресурсов библиотеки",
+    "Фиксация завершения подготовки",
+)
 
 
 def report_runtime(run_id, proc_root=Path("/proc"),
@@ -246,6 +253,7 @@ def main():
 
         tasks = Counter()
         boundaries = Counter()
+        timeline = []
         resource_tasks = Counter()
         invalid = 0
         failures = []
@@ -256,6 +264,14 @@ def main():
                     task = event.get("task") or {}
                     name = task.get("name", "?")
                     result = event.get("status", "?")
+                    event_type = event.get("eventType")
+                    if (event_type in ("TASK_STARTED", "TASK_COMPLETED")
+                            and isinstance(name, str)
+                            and any(label in name for label in PREPARATION_TIMELINE_NAMES)):
+                        timeline.append([
+                            event.get("sequence"), event_type, result,
+                            task.get("role") or "-", name,
+                        ])
                     if result == "FAILED":
                         code = (event.get("error") or {}).get("code", "")
                         failures.append({
@@ -287,6 +303,11 @@ def main():
             print(json.dumps([event_type, result, count, name], ensure_ascii=False))
         if not boundaries:
             print("No matching boundary events recorded; this alone does not prove a skipped call.")
+        print("\nKAFKA / POSTGRESQL PREPARATION TIMELINE (journal order):")
+        for row in timeline:
+            print(json.dumps(row, ensure_ascii=False))
+        if not timeline:
+            print("No matching preparation events recorded.")
         print("\nDATABASE RESOURCE TASKS (any role):")
         for (role, result, name), count in resource_tasks.items():
             print(json.dumps([role, result, count, name], ensure_ascii=False))
