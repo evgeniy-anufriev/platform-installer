@@ -15,8 +15,6 @@ const (
 	projectExportAPIVersion   = "platform.installer/project-export/v1alpha1"
 	maxExportFiles            = 4096
 	maxExportDirectoryEntries = maxExportFiles
-	maxExportFileBytes        = int64(4 * 1024 * 1024)
-	maxExportTotalBytes       = int64(64 * 1024 * 1024)
 	maxExportLogicalBytes     = 512
 )
 
@@ -374,22 +372,15 @@ func addExportDocument(root *exportDirectory, logical string, result *exportObse
 	if seen[storedLogical] || caseFolded[strings.ToLower(storedLogical)] {
 		return exportPackagePathError(storedLogical, "EXPORT_SOURCE_UNSAFE", "Повторяющийся путь с учётом регистра")
 	}
-	limit := maxExportFileBytes
-	if safeApplicationPackagePath(storedLogical) {
-		limit = maxApplicationPackageFileBytes
-	}
-	content, identity, err := root.readFile(parts, limit)
+	content, identity, err := root.readFile(parts, 0)
 	if err != nil {
 		if strings.HasPrefix(storedLogical, "application-packages/") || strings.HasPrefix(storedLogical, "library-packages/") {
-			if err.Error() == "EXPORT_LIMIT_EXCEEDED" {
-				return exportPackagePathError(storedLogical, "APPLICATION_PACKAGE_LIMIT", "Файл превышает допустимый размер")
-			}
 			return exportPackagePathError(storedLogical, "APPLICATION_PACKAGE_INVALID", "Не удалось безопасно прочитать файл")
 		}
 		return err
 	}
-	if len(result.documents) >= maxExportFiles || result.total > maxExportTotalBytes-int64(len(content)) {
-		return exportPackagePathError(storedLogical, "EXPORT_LIMIT_EXCEEDED", "Превышен общий лимит файлов или размера проекта при чтении файла")
+	if len(result.documents) >= maxExportFiles {
+		return exportPackagePathError(storedLogical, "EXPORT_LIMIT_EXCEEDED", "Превышен лимит количества файлов проекта")
 	}
 	seen[storedLogical], caseFolded[strings.ToLower(storedLogical)] = true, true
 	record := exportRecord{ProjectExportDocument: ProjectExportDocument{LogicalPath: storedLogical, Size: int64(len(content)), Digest: digestBytes(content)}, identity: identity, content: content}

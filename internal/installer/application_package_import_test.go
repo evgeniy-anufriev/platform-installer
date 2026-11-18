@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-func TestApplicationDirectoryImportPreservesLargeAssetsAndLimits(t *testing.T) {
+func TestApplicationDirectoryImportPreservesAssetsAboveFormerSizeLimits(t *testing.T) {
 	root, b, revision := b2Project(t)
 	source, _ := b2Package(t)
 	manifest := filepath.Join(source, "application.yml")
@@ -24,7 +24,7 @@ func TestApplicationDirectoryImportPreservesLargeAssetsAndLimits(t *testing.T) {
 	if err = os.WriteFile(manifest, data, 0600); err != nil {
 		t.Fatal(err)
 	}
-	payload := bytes.Repeat([]byte{0, 255, 80, 75}, 16*1024*1024/4)
+	payload := bytes.Repeat([]byte{0, 255, 80, 75}, 65*1024*1024/4)
 	if err = os.MkdirAll(filepath.Join(source, "assets/providers"), 0700); err != nil {
 		t.Fatal(err)
 	}
@@ -94,14 +94,14 @@ func TestApplicationDirectoryImportPreservesLargeAssetsAndLimits(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = oversized.Truncate(maxApplicationPackageFileBytes + 1); err != nil {
+	if err = oversized.Truncate(64*1024*1024 + 1); err != nil {
 		t.Fatal(err)
 	}
 	if err = oversized.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if err = collectExportDirectory(directory, "application-packages/gateway/1.0.0", &exportObservation{}, map[string]bool{}, map[string]bool{}); err == nil {
-		t.Fatal("oversized source accepted")
+	if err = collectExportDirectory(directory, "application-packages/gateway/1.0.0", &exportObservation{}, map[string]bool{}, map[string]bool{}); err != nil {
+		t.Fatalf("large package source rejected: %v", err)
 	}
 }
 

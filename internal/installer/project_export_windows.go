@@ -210,10 +210,14 @@ func (directory *exportDirectory) readFile(parts []string, limit int64) ([]byte,
 	if err != nil || identity.links != 1 {
 		return nil, exportFileIdentity{}, errors.New("unsafe export file")
 	}
-	if size > limit {
+	if limit > 0 && size > limit {
 		return nil, exportFileIdentity{}, errors.New("EXPORT_LIMIT_EXCEEDED")
 	}
-	data, err := io.ReadAll(io.LimitReader(file, limit+1))
+	var reader io.Reader = file
+	if limit > 0 {
+		reader = io.LimitReader(file, limit+1)
+	}
+	data, err := io.ReadAll(reader)
 	if err != nil || int64(len(data)) != size {
 		return nil, exportFileIdentity{}, errors.New("unsafe export file")
 	}

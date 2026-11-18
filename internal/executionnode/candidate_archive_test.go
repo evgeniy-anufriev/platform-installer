@@ -153,19 +153,21 @@ func TestCandidateArchiveRejectsCaseCollision(t *testing.T) {
 	}
 }
 
-func TestCandidateArchiveLimitsDoNotChangeProductionArchiveSemantics(t *testing.T) {
+func TestCandidateAndProductionArchivesAcceptLargeFiles(t *testing.T) {
 	root := t.TempDir()
 	writeCandidateFixture(t, root)
-	large := filepath.Join(root, "inventory", "group_vars", "all", "large.yml")
+	large := filepath.Join(root, "library-packages", "sdku", "1.0.0", "assets", "scada_demo.dump")
 	if err := os.MkdirAll(filepath.Dir(large), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(large, bytes.Repeat([]byte("x"), 4*1024*1024+1), 0o600); err != nil {
+	if err := os.WriteFile(large, bytes.Repeat([]byte("x"), 65*1024*1024), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := createCandidateProjectArchive(root); err == nil || !strings.Contains(err.Error(), "LIMIT_EXCEEDED") {
-		t.Fatalf("candidate archive did not enforce its file limit: %v", err)
+	candidatePath, err := createCandidateProjectArchive(root)
+	if err != nil {
+		t.Fatalf("candidate archive rejected large file: %v", err)
 	}
+	os.Remove(candidatePath)
 	archivePath, err := createProjectArchive(root)
 	if err != nil {
 		t.Fatalf("candidate-only limit changed the production archive path: %v", err)

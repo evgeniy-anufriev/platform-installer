@@ -24,9 +24,6 @@ func namedExportObservation(source exportObservation, name string) (exportObserv
 			return exportObservation{}, err
 		}
 		size := int64(len(content))
-		if size > maxExportFileBytes || output.total-record.Size > maxExportTotalBytes-size {
-			return exportObservation{}, errors.New("EXPORT_LIMIT_EXCEEDED")
-		}
 		output.total += size - record.Size
 		record.content, record.Size, record.Digest = content, size, digestBytes(content)
 	}
