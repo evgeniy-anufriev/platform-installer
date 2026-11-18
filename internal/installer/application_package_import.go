@@ -60,12 +60,15 @@ func ApplicationPackagePathAllowed(logical string) bool {
 }
 
 func applicationPackageDocuments(root string) ([]exportRecord, error) {
+	return observeApplicationPackageDocuments(root, false)
+}
+func observeApplicationPackageDocuments(root string, digestOnly bool) ([]exportRecord, error) {
 	directory, err := openExportSourceDirectory(root)
 	if err != nil {
 		return nil, err
 	}
 	defer directory.close()
-	result := exportObservation{}
+	result := exportObservation{digestOnly: digestOnly}
 	seen, folded := map[string]bool{}, map[string]bool{}
 	for _, name := range []string{"application-packages", "library-packages"} {
 		child, err := directory.openDirectory([]string{name})

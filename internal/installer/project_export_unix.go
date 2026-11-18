@@ -169,9 +169,9 @@ func (directory *exportDirectory) entries() ([]exportEntry, error) {
 	return result, nil
 }
 
-func (directory *exportDirectory) readFile(parts []string, limit int64) ([]byte, exportFileIdentity, error) {
+func (directory *exportDirectory) streamFile(parts []string, limit int64, output io.Writer) (int64, exportFileIdentity, error) {
 	if len(parts) == 0 {
-		return nil, exportFileIdentity{}, errors.New("unsafe export file")
+		return 0, exportFileIdentity{}, errors.New("unsafe export file")
 	}
 	parent := directory
 	var owned *exportDirectory
@@ -179,41 +179,41 @@ func (directory *exportDirectory) readFile(parts []string, limit int64) ([]byte,
 		var err error
 		owned, err = directory.openDirectory(parts[:len(parts)-1])
 		if err != nil {
-			return nil, exportFileIdentity{}, err
+			return 0, exportFileIdentity{}, err
 		}
 		defer owned.close()
 		parent = owned
 	}
 	fd, err := unix.Openat(parent.fd, parts[len(parts)-1], unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
 	if err != nil {
-		return nil, exportFileIdentity{}, exportUnixNotExist(err)
+		return 0, exportFileIdentity{}, exportUnixNotExist(err)
 	}
 	file := os.NewFile(uintptr(fd), parts[len(parts)-1])
 	if file == nil {
 		_ = unix.Close(fd)
-		return nil, exportFileIdentity{}, errors.New("unsafe export file")
+		return 0, exportFileIdentity{}, errors.New("unsafe export file")
 	}
 	defer file.Close()
 	identity, size, err := exportUnixFileIdentity(fd)
 	if err != nil || identity.links != 1 {
-		return nil, exportFileIdentity{}, errors.New("unsafe export file")
+		return 0, exportFileIdentity{}, errors.New("unsafe export file")
 	}
 	if limit > 0 && size > limit {
-		return nil, exportFileIdentity{}, errors.New("EXPORT_LIMIT_EXCEEDED")
+		return 0, exportFileIdentity{}, errors.New("EXPORT_LIMIT_EXCEEDED")
 	}
 	var reader io.Reader = file
 	if limit > 0 {
 		reader = io.LimitReader(file, limit+1)
 	}
-	data, err := io.ReadAll(reader)
-	if err != nil || int64(len(data)) != size {
-		return nil, exportFileIdentity{}, errors.New("unsafe export file")
+	count, err := io.Copy(output, reader)
+	if err != nil || count != size {
+		return 0, exportFileIdentity{}, errors.New("unsafe export file")
 	}
 	after, afterSize, afterErr := exportUnixFileIdentity(fd)
 	if afterErr != nil || after != identity || afterSize != size {
-		return nil, exportFileIdentity{}, errors.New("PROJECT_CHANGED")
+		return 0, exportFileIdentity{}, errors.New("PROJECT_CHANGED")
 	}
-	return data, identity, nil
+	return count, identity, nil
 }
 
 func (directory *exportDirectory) exists(name string) (bool, error) {

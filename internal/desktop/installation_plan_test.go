@@ -694,6 +694,50 @@ func TestInstallationPlanRejectsApprovalAfterCanonicalRevisionChanges(t *testing
 	}
 }
 
+func TestStartRejectsPackageAssetChangedAfterApproval(t *testing.T) {
+	app, builder, client := installationPlanApp(t, false)
+	defer app.secrets.Close()
+	dir := filepath.Join(app.current.Root, "library-packages", "demo", "1.0.0", "assets")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "database.dump")
+	if err := os.WriteFile(path, []byte("before"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	revision, err := installer.ProjectRevision(app.current.Root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pin := app.approvedTargetHostKeys["node1"]
+	pin.revision = revision
+	app.current.Managed.ProjectRevision = revision
+	app.approvedTargetHostKeys["node1"] = pin
+
+	created := app.CreateInstallationPlan(nil)
+	if created.Error != nil || created.Plan == nil {
+		t.Fatalf("create=%+v", created)
+	}
+	approved := app.ApproveInstallationPlan(created.Plan.ID, []string{"ACK_RISK"})
+	if approved.Error != nil || approved.Plan == nil || !approved.Plan.Approved {
+		t.Fatalf("approve=%+v error=%+v", approved, approved.Error)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("AFTER!"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(path, info.ModTime(), info.ModTime()); err != nil {
+		t.Fatal(err)
+	}
+	started := app.StartApprovedInstallation(created.Plan.ID)
+	if started.Error == nil || started.Error.Code != executionnode.PlanStale || client.starts != 0 || builder.calls != 1 {
+		t.Fatalf("changed asset admitted: result=%+v starts=%d plans=%d", started, client.starts, builder.calls)
+	}
+}
+
 func TestInstallationPlanRuntimeSecretRequirementsUseOnlyClosedCorePlanEntries(t *testing.T) {
 	plan := executionnode.DeploymentPlan{RequiredCredentials: []executionnode.RequiredCredential{
 		{RequirementRef: "redis-sentinel-password", Purpose: "SERVICE_PASSWORD"},

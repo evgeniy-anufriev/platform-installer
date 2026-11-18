@@ -2,7 +2,10 @@
 
 package installer
 
-import "errors"
+import (
+	"errors"
+	"io"
+)
 
 type exportIdentity struct{}
 
@@ -37,8 +40,8 @@ func (directory *exportDirectory) openDirectory([]string) (*exportDirectory, err
 func (directory *exportDirectory) entries() ([]exportEntry, error) {
 	return nil, errors.New("unsupported")
 }
-func (directory *exportDirectory) readFile([]string, int64) ([]byte, exportFileIdentity, error) {
-	return nil, exportFileIdentity{}, errors.New("unsupported")
+func (directory *exportDirectory) streamFile([]string, int64, io.Writer) (int64, exportFileIdentity, error) {
+	return 0, exportFileIdentity{}, errors.New("unsupported")
 }
 func (directory *exportDirectory) exists(string) (bool, error) {
 	return false, errors.New("unsupported")

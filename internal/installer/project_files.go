@@ -96,14 +96,14 @@ func safeProjectPath(root, logical string, allowMissing bool) (string, error) {
 
 func collectProjectDocuments(root string) ([]projectDocument, string, error) {
 	candidates := []string{"project.yml", "ansible.cfg", "inventory/hosts.yml"}
-	packageDocuments, err := applicationPackageDocuments(root)
+	packageDocuments, err := observeApplicationPackageDocuments(root, true)
 	if err != nil {
 		return nil, "", err
 	}
-	packageContents := map[string][]byte{}
+	packageDigests := map[string]string{}
 	for _, record := range packageDocuments {
 		candidates = append(candidates, record.LogicalPath)
-		packageContents[record.LogicalPath] = record.content
+		packageDigests[record.LogicalPath] = record.Digest
 	}
 	for _, directory := range []string{"inventory/group_vars", "inventory/host_vars"} {
 		base := filepath.Join(root, filepath.FromSlash(directory))
@@ -148,9 +148,13 @@ func collectProjectDocuments(root string) ([]projectDocument, string, error) {
 		if err != nil {
 			return nil, "", err
 		}
-		content, packageFile := packageContents[logical]
+		digest, packageFile := packageDigests[logical]
 		if !packageFile {
+			var content []byte
 			content, err = os.ReadFile(path)
+			if err == nil {
+				digest = digestBytes(content)
+			}
 		} else {
 			err = nil
 		}
@@ -160,7 +164,6 @@ func collectProjectDocuments(root string) ([]projectDocument, string, error) {
 		if err != nil {
 			return nil, "", err
 		}
-		digest := digestBytes(content)
 		documents = append(documents, projectDocument{LogicalPath: logical, Digest: digest})
 		if logical != generatedDocument {
 			revisionInput = append(revisionInput, []byte(logical)...)

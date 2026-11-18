@@ -238,7 +238,11 @@ func (a *App) ApproveInstallationPlan(planID string, acknowledgements []string) 
 		code := projectErrorCode(err)
 		return approvalFailure(&ProjectOpenError{Code: code, Message: projectErrorMessage(code)})
 	}
-	return a.getInstallationPlanLocked(planID)
+	// editMu still protects this operation's checked project/runtime binding.
+	// Return the checked view rather than reading every package asset again.
+	record.Approved = true
+	view.Approved = true
+	return InstallationPlanOperation{Status: installationPlanStateFor(record), Plan: &view}
 }
 
 // missingInstallationSecretsLocked uses only the current Core plan and the

@@ -1,12 +1,18 @@
 # Current state
 
-Updated 2026-11-08. This file is the sole current milestone/status source.
+Updated 2026-11-18. This file is the sole current milestone/status source.
 Detailed historical checkpoints are archived under [docs/history](docs/history/si11-state-20261008.md).
 Read the applicable plan and evidence for the task; an implementation or direct
 Ansible PASS does not imply complete UI acceptance. A next gated milestone or
 new destructive operation still requires explicit owner authorization.
 
 ## Active work and acceptance
+
+Owner-requested 700 MiB dump optimization (2026-11-18) on the same performance
+branch: local revision hashing streams package assets once without retaining
+their contents; approval reuses its checked view. Fresh Start revision and
+authoritative plan checks remain. Real React/Wails acceptance is blocked by
+the standard bridge preflight. [Evidence](docs/work/project-lifecycle/dump-revision-performance.md).
 
 Owner-requested application resolution optimization (2026-11-07): common
 library/host defaults resolve once; runtime preparation reuses earlier image-input

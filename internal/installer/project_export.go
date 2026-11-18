@@ -1,6 +1,7 @@
 package installer
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -222,9 +223,10 @@ type exportRecord struct {
 }
 
 type exportObservation struct {
-	documents []exportRecord
-	revision  string
-	total     int64
+	digestOnly bool
+	documents  []exportRecord
+	revision   string
+	total      int64
 }
 
 func exportObservationMetadata(observation exportObservation) exportObservation {
@@ -372,7 +374,20 @@ func addExportDocument(root *exportDirectory, logical string, result *exportObse
 	if seen[storedLogical] || caseFolded[strings.ToLower(storedLogical)] {
 		return exportPackagePathError(storedLogical, "EXPORT_SOURCE_UNSAFE", "Повторяющийся путь с учётом регистра")
 	}
-	content, identity, err := root.readFile(parts, 0)
+	var content []byte
+	var identity exportFileIdentity
+	var size int64
+	var digest string
+	var err error
+	if result.digestOnly {
+		h := sha256.New()
+		size, identity, err = root.streamFile(parts, 0, h)
+		digest = "sha256:" + hex.EncodeToString(h.Sum(nil))
+	} else {
+		content, identity, err = root.readFile(parts, 0)
+		size = int64(len(content))
+		digest = digestBytes(content)
+	}
 	if err != nil {
 		if strings.HasPrefix(storedLogical, "application-packages/") || strings.HasPrefix(storedLogical, "library-packages/") {
 			return exportPackagePathError(storedLogical, "APPLICATION_PACKAGE_INVALID", "Не удалось безопасно прочитать файл")
@@ -383,9 +398,9 @@ func addExportDocument(root *exportDirectory, logical string, result *exportObse
 		return exportPackagePathError(storedLogical, "EXPORT_LIMIT_EXCEEDED", "Превышен лимит количества файлов проекта")
 	}
 	seen[storedLogical], caseFolded[strings.ToLower(storedLogical)] = true, true
-	record := exportRecord{ProjectExportDocument: ProjectExportDocument{LogicalPath: storedLogical, Size: int64(len(content)), Digest: digestBytes(content)}, identity: identity, content: content}
+	record := exportRecord{ProjectExportDocument: ProjectExportDocument{LogicalPath: storedLogical, Size: size, Digest: digest}, identity: identity, content: content}
 	result.documents = append(result.documents, record)
-	result.total += int64(len(content))
+	result.total += size
 	return nil
 }
 
@@ -536,4 +551,15 @@ func exportErrorCode(err error, fallback string) string {
 		}
 	}
 	return fallback
+}
+
+// Export/import callers still need the bytes. Revision callers use streamFile
+// through the same handle-relative, no-links and before/after identity guards.
+func (directory *exportDirectory) readFile(parts []string, limit int64) ([]byte, exportFileIdentity, error) {
+	var content bytes.Buffer
+	_, identity, err := directory.streamFile(parts, limit, &content)
+	if err != nil {
+		return nil, exportFileIdentity{}, err
+	}
+	return content.Bytes(), identity, nil
 }
