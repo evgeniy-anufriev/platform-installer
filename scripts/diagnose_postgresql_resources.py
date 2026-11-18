@@ -31,6 +31,50 @@ RESOURCE_NAMES = (
 )
 
 
+def report_runtime(run_id, proc_root=Path("/proc"),
+                   current_link=Path("/var/lib/platform-installer/runtime/current")):
+    """Read only the matching controller's release argument, never dump argv."""
+    print("\nRUNTIME SOURCE CHECK:")
+    try:
+        current = current_link.resolve(strict=True)
+        print("CURRENT:", current)
+    except (OSError, RuntimeError):
+        current = None
+        print("CURRENT: unavailable")
+    try:
+        processes = list(proc_root.iterdir())
+    except OSError:
+        print("RUN RELEASE: process information unavailable")
+        return
+    found = False
+    for process in processes:
+        if not process.name.isdigit():
+            continue
+        try:
+            argv = (process / "cmdline").read_bytes().decode("utf-8").split("\0")
+            if not any(Path(arg).name == "execution_controller.py" for arg in argv):
+                continue
+            if argv[argv.index("--run-id") + 1] != run_id:
+                continue
+            release = Path(argv[argv.index("--runtime-release") + 1]).resolve(strict=True)
+        except (OSError, ValueError, IndexError, UnicodeError, RuntimeError):
+            continue
+        found = True
+        print("CONTROLLER PID:", process.name)
+        print("RUN RELEASE:", release)
+        print("MATCH_CURRENT:", release == current if current is not None else "unknown")
+        source = release / "ansible-core/playbooks/applications/stages/provider-stage.yml"
+        try:
+            text = source.read_text(encoding="utf-8")
+            print("RESOURCE_CALL_PRESENT:",
+                  "Создание всех ресурсов библиотеки перед экземплярами" in text)
+        except (OSError, UnicodeError):
+            print("RESOURCE_CALL_PRESENT: unknown (source unavailable)")
+    if not found:
+        print("RUN RELEASE: no matching live controller found or accessible")
+        print("The historical run release cannot be inferred from runtime/current.")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("run_id", help="Existing Installer run ID")
@@ -98,6 +142,7 @@ def main():
         print("\nINCOMPLETE_OR_INVALID_EVENT_ROWS:", invalid)
         print("An active run can append events after this snapshot.")
         print("libraryJobs is transient Ansible state; this report cannot recover it.")
+        report_runtime(args.run_id)
         return 0
     except FileNotFoundError as error:
         print("Required file not found: %s" % error.filename, file=sys.stderr)
