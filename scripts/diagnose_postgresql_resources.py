@@ -4,16 +4,24 @@
 Run on the Execution Node:
   sudo -n python3 scripts/diagnose_postgresql_resources.py installer-<32 hex digits>
 
-Only the standard library is required. This script does not invoke Core,
-Ansible or PostgreSQL, and does not display module output or runtime secrets.
+The default report requires only the standard library and does not invoke Core,
+Ansible or PostgreSQL. Module output and runtime secrets are not displayed.
+
+Optional --resolve-provider-inputs runs target-free Core/Ansible calculation on
+the Execution Node using the saved run project and application projection.
+It creates only private temporary diagnostic files, removed on completion.
 """
 
 import argparse
 from collections import Counter
+import hashlib
 import json
+import os
 from pathlib import Path
 import re
+import subprocess
 import sys
+import tempfile
 
 
 BOUNDARY_NAMES = {
@@ -45,8 +53,9 @@ def report_runtime(run_id, proc_root=Path("/proc"),
         processes = list(proc_root.iterdir())
     except OSError:
         print("RUN RELEASE: process information unavailable")
-        return
+        return []
     found = False
+    releases = []
     for process in processes:
         if not process.name.isdigit():
             continue
@@ -60,6 +69,7 @@ def report_runtime(run_id, proc_root=Path("/proc"),
         except (OSError, ValueError, IndexError, UnicodeError, RuntimeError):
             continue
         found = True
+        releases.append(release)
         print("CONTROLLER PID:", process.name)
         print("RUN RELEASE:", release)
         print("MATCH_CURRENT:", release == current if current is not None else "unknown")
@@ -73,11 +83,94 @@ def report_runtime(run_id, proc_root=Path("/proc"),
     if not found:
         print("RUN RELEASE: no matching live controller found or accessible")
         print("The historical run release cannot be inferred from runtime/current.")
+    return list(dict.fromkeys(releases))
+
+
+def recompute_provider_inputs(root, release):
+    """Opt-in target-free Core calculation; never include provider apply roles."""
+    projection = root / (".runtime-projection-" + hashlib.sha256(b"applications:apply").hexdigest() + ".json")
+    if not projection.is_file():
+        print("RECOMPUTE: application runtime projection is unavailable")
+        return 1
+    print("\nRECOMPUTED PROVIDER INPUTS (not a recording of the original Ansible facts):", flush=True)
+    with tempfile.TemporaryDirectory(prefix="pg-provider-diagnostic-") as directory:
+        temporary = Path(directory)
+        output = temporary / "summary.json"
+        tasks = [
+            {"ansible.builtin.include_role": {"name": "platform.core.project_settings"}},
+            {"ansible.builtin.include_role": {"name": "platform.core.resolve_application_libraries"}},
+            {"platform.core.project_snapshot": {
+                "project_root": "{{ platform_project_root }}",
+                "service_catalog_path": "{{ platform_service_catalog_path }}"},
+             "register": "application_snapshot"},
+            {"platform.core.prepare_application_selection": {}, "register": "application_selection"},
+            {"ansible.builtin.assert": {"that": "application_selection.status == 'PASS'"}},
+            {"ansible.builtin.set_fact": {"application_snapshot": "{{ application_selection.prepared }}"}},
+            {"platform.core.prepare_application_providers": {
+                "project_root": "{{ platform_project_root }}",
+                "service_catalog_path": "{{ platform_service_catalog_path }}"},
+             "register": "application_provider_inputs"},
+            {"ansible.builtin.copy": {"dest": str(output), "mode": "0600", "content": """
+{% set result = {'status': application_provider_inputs.status,
+                 'snapshotRevision': application_snapshot.snapshot.projectRevision,
+                 'findings': application_provider_inputs.findings | default([]) | map(attribute='code') | list} %}
+{% for phase in ['jobs', 'libraryJobs', 'instanceJobs'] %}
+{% set counts = [] %}
+{% for job in application_provider_inputs[phase] | default([]) if job.serviceType == 'postgresql' %}
+{% set _ = counts.append({'providerId': job.providerId, 'libraryId': job.libraryId | default('all'),
+                         'databaseCount': job.databases | length,
+                         'restoreCount': job.databases | selectattr('restoreOnCreate', 'defined') | list | length,
+                         'accountCount': job.accounts | length}) %}
+{% endfor %}
+{% set _ = result.update({phase: counts}) %}
+{% endfor %}
+{{ result | to_json }}"""}},
+        ]
+        playbook = temporary / "diagnostic.json"
+        playbook.write_text(json.dumps([{
+            "hosts": "localhost", "connection": "local", "gather_facts": False,
+            "become": False, "no_log": True, "tasks": tasks,
+        }]), encoding="utf-8")
+        overrides = temporary / "overrides.json"
+        overrides.write_text(json.dumps({
+            "platform_project_root": str(root / "project"),
+            "ansible_connection": "local", "ansible_become": False,
+        }), encoding="utf-8")
+        collections = [release / "ansible-core/collections"]
+        collections.extend(sorted((release / "services").glob("*/ansible_collections")))
+        environment = {key: value for key, value in os.environ.items()
+                       if not key.startswith(("ANSIBLE_", "PLATFORM_EXECUTION_"))}
+        environment.update(
+            ANSIBLE_CONFIG=str(release / "ansible-core/ansible.cfg"),
+            ANSIBLE_COLLECTIONS_PATH=os.pathsep.join(map(str, collections)),
+            ANSIBLE_LOCAL_TEMP=str(temporary / "ansible-tmp"),
+            ANSIBLE_SSH_EXECUTABLE="/usr/bin/false", ANSIBLE_LOG_PATH=os.devnull,
+            ANSIBLE_STDOUT_CALLBACK="default", ANSIBLE_NOCOLOR="1",
+            PYTHONDONTWRITEBYTECODE="1",
+        )
+        try:
+            result = subprocess.run([
+                "ansible-playbook", "-i", str(root / "project/inventory/hosts.yml"),
+                str(playbook), "-e", "@" + str(projection), "-e", "@" + str(overrides),
+                "--limit", "localhost",
+            ], env=environment, cwd=root / "project", capture_output=True, timeout=600)
+        except (OSError, subprocess.TimeoutExpired):
+            print("RECOMPUTE: prerequisite failure or timeout; raw output suppressed")
+            return 1
+        if result.returncode or not output.is_file():
+            print("RECOMPUTE: calculation failed; raw Ansible output suppressed")
+            return 1
+        summary = json.loads(output.read_text(encoding="utf-8"))
+        print(json.dumps(summary, ensure_ascii=False, indent=2))
+        print("Current saved inputs were recalculated; original libraryJobs is still not persisted.")
+        return 0 if summary.get("status") == "PASS" else 1
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("run_id", help="Existing Installer run ID")
+    parser.add_argument("--resolve-provider-inputs", action="store_true",
+                        help="Recalculate provider inputs locally through Core; no database operations")
     parser.add_argument(
         "--runs-root", type=Path,
         default=Path("/var/lib/platform-installer/execution/runs"),
@@ -142,7 +235,12 @@ def main():
         print("\nINCOMPLETE_OR_INVALID_EVENT_ROWS:", invalid)
         print("An active run can append events after this snapshot.")
         print("libraryJobs is transient Ansible state; this report cannot recover it.")
-        report_runtime(args.run_id)
+        releases = report_runtime(args.run_id)
+        if args.resolve_provider_inputs:
+            if len(releases) != 1:
+                print("RECOMPUTE: exactly one accessible live controller release is required")
+                return 1
+            return recompute_provider_inputs(root, releases[0])
         return 0
     except FileNotFoundError as error:
         print("Required file not found: %s" % error.filename, file=sys.stderr)
