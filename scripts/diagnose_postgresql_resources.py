@@ -16,6 +16,21 @@ import re
 import sys
 
 
+BOUNDARY_NAMES = {
+    "Проверка всех выбранных ресурсов PostgreSQL до внесения изменений",
+    "Создание всех ресурсов библиотеки перед экземплярами",
+    "Согласование учетных записей PostgreSQL по развёртываниям",
+    "Подготовка обработчиков инфраструктурных учётных записей и ресурсов по общему снимку",
+    "Фиксация завершения подготовки",
+}
+RESOURCE_NAMES = (
+    "создание только отсутствующей базы данных",
+    "проверка или создание ролей и баз данных",
+    "восстановление дампа формата custom",
+    "маркировка владельца только после успешного восстановления",
+)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("run_id", help="Existing Installer run ID")
@@ -42,12 +57,22 @@ def main():
                     print("APPLY LIBRARIES:", operation.get("applicationLibraries", []))
 
         tasks = Counter()
+        boundaries = Counter()
+        resource_tasks = Counter()
         invalid = 0
         with (root / "events.jsonl").open(encoding="utf-8") as stream:
             for line in stream:
                 try:
                     event = json.loads(line)
                     task = event.get("task") or {}
+                    name = task.get("name", "?")
+                    result = event.get("status", "?")
+                    if name in BOUNDARY_NAMES:
+                        boundaries[(event.get("eventType", "?"), result, name)] += 1
+                    if (event.get("eventType") == "TASK_COMPLETED"
+                            and isinstance(name, str)
+                            and any(label in name.lower() for label in RESOURCE_NAMES)):
+                        resource_tasks[(task.get("role", "<no role>"), result, name)] += 1
                     if (event.get("eventType") == "TASK_COMPLETED"
                             and task.get("role") == "platform.postgresql.application_provider"):
                         tasks[(task.get("name", "?"), event.get("status", "?"))] += 1
@@ -60,6 +85,16 @@ def main():
                                   json.dumps(name, ensure_ascii=False)))
         if not tasks:
             print("No matching completed tasks in the available journal.")
+        print("\nPROVIDER CALL BOUNDARIES (including tasks outside roles):")
+        for (event_type, result, name), count in boundaries.items():
+            print(json.dumps([event_type, result, count, name], ensure_ascii=False))
+        if not boundaries:
+            print("No matching boundary events recorded; this alone does not prove a skipped call.")
+        print("\nDATABASE RESOURCE TASKS (any role):")
+        for (role, result, name), count in resource_tasks.items():
+            print(json.dumps([role, result, count, name], ensure_ascii=False))
+        if not resource_tasks:
+            print("No matching completed resource tasks recorded.")
         print("\nINCOMPLETE_OR_INVALID_EVENT_ROWS:", invalid)
         print("An active run can append events after this snapshot.")
         print("libraryJobs is transient Ansible state; this report cannot recover it.")
