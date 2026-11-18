@@ -10,6 +10,8 @@ Ansible or PostgreSQL. Module output and runtime secrets are not displayed.
 Optional --resolve-provider-inputs runs target-free Core/Ansible calculation on
 the Execution Node using the saved run project and application projection.
 It creates only private temporary diagnostic files, removed on completion.
+Completed runs use their recorded release digest and nonsecret manifest
+parameters when the transient application projection has been cleaned up.
 """
 
 import argparse
@@ -86,15 +88,59 @@ def report_runtime(run_id, proc_root=Path("/proc"),
     return list(dict.fromkeys(releases))
 
 
+def recorded_runtime(root, manifest,
+                     releases_root=Path("/var/lib/platform-installer/runtime/releases")):
+    """Use immutable run identity, never substitute the current release."""
+    expected = manifest.get("runtimeRelease", {})
+    metadata = json.loads((root / "metadata.json").read_text(encoding="utf-8"))
+    if metadata.get("runtimeRelease") != expected:
+        print("RECORDED RELEASE: metadata/manifest identity mismatch")
+        return []
+    digest = expected.get("bundleDigest", "")
+    if not isinstance(digest, str) or re.fullmatch(r"sha256:[0-9a-f]{64}", digest) is None:
+        print("RECORDED RELEASE: bundle digest unavailable")
+        return []
+    release = releases_root / digest[7:]
+    if not release.is_dir() or release.is_symlink():
+        print("RECORDED RELEASE: required directory unavailable:", release)
+        return []
+    print("RECORDED RUN RELEASE:", release)
+    return [release]
+
+
 def recompute_provider_inputs(root, release):
     """Opt-in target-free Core calculation; never include provider apply roles."""
     projection = root / (".runtime-projection-" + hashlib.sha256(b"applications:apply").hexdigest() + ".json")
-    if not projection.is_file():
-        print("RECOMPUTE: application runtime projection is unavailable")
-        return 1
     print("\nRECOMPUTED PROVIDER INPUTS (not a recording of the original Ansible facts):", flush=True)
     with tempfile.TemporaryDirectory(prefix="pg-provider-diagnostic-") as directory:
         temporary = Path(directory)
+        if not projection.is_file():
+            manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+            operations = [item for item in manifest.get("operations", [])
+                          if item.get("operation") == "APPLICATION_LIBRARIES_APPLY"]
+            if len(operations) != 1:
+                print("RECOMPUTE: one recorded application Apply operation is required")
+                return 1
+            catalog = release / "catalog/service-catalog.yml"
+            if not catalog.is_file():
+                print("RECOMPUTE: required runtime catalog unavailable:", catalog)
+                return 1
+            safe_projection = {
+                "platform_project_root": str(root / "project"),
+                "platform_project_id": manifest.get("projectIdentity"),
+                "platform_service_catalog_path": str(catalog),
+                "platform_contracts_root": str(release / "contracts"),
+                "platform_execution_bundle_root": str(release),
+                "platform_application_library_order": operations[0]["applicationLibraries"],
+                "platform_application_pki_bindings": manifest.get("applicationPkiBindings", []),
+            }
+            if manifest.get("applicationExecutionScope"):
+                safe_projection["platform_application_execution_scope"] = manifest["applicationExecutionScope"]
+            projection = temporary / "diagnostic-projection.json"
+            projection.write_text(json.dumps(safe_projection), encoding="utf-8")
+            print("PROJECTION SOURCE: recorded manifest; runtime credentials are not reconstructed")
+        else:
+            print("PROJECTION SOURCE: existing application projection")
         output = temporary / "summary.json"
         tasks = [
             {"ansible.builtin.include_role": {"name": "platform.core.project_settings"}},
@@ -197,6 +243,7 @@ def main():
         boundaries = Counter()
         resource_tasks = Counter()
         invalid = 0
+        failures = []
         with (root / "events.jsonl").open(encoding="utf-8") as stream:
             for line in stream:
                 try:
@@ -204,6 +251,14 @@ def main():
                     task = event.get("task") or {}
                     name = task.get("name", "?")
                     result = event.get("status", "?")
+                    if result == "FAILED":
+                        code = (event.get("error") or {}).get("code", "")
+                        failures.append({
+                            "eventType": event.get("eventType"),
+                            "actionId": event.get("actionId"),
+                            "task": name,
+                            "code": code if isinstance(code, str) and re.fullmatch(r"[A-Z][A-Z0-9_]{0,127}", code) else "",
+                        })
                     if name in BOUNDARY_NAMES:
                         boundaries[(event.get("eventType", "?"), result, name)] += 1
                     if (event.get("eventType") == "TASK_COMPLETED"
@@ -233,12 +288,17 @@ def main():
         if not resource_tasks:
             print("No matching completed resource tasks recorded.")
         print("\nINCOMPLETE_OR_INVALID_EVENT_ROWS:", invalid)
+        print("\nLAST FAILURE IDENTITIES (no module output):")
+        for failure in failures[-5:]:
+            print(json.dumps(failure, ensure_ascii=False))
         print("An active run can append events after this snapshot.")
         print("libraryJobs is transient Ansible state; this report cannot recover it.")
         releases = report_runtime(args.run_id)
         if args.resolve_provider_inputs:
+            if not releases:
+                releases = recorded_runtime(root, manifest)
             if len(releases) != 1:
-                print("RECOMPUTE: exactly one accessible live controller release is required")
+                print("RECOMPUTE: exactly one accessible recorded or live run release is required")
                 return 1
             return recompute_provider_inputs(root, releases[0])
         return 0
