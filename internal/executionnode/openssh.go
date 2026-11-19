@@ -620,6 +620,12 @@ func createProjectArchive(root string) (string, error) {
 			return "", errors.New("SERVICE_PROJECT_INVALID")
 		}
 	}
+	return writeTemporaryProjectArchive(func(writer *tar.Writer) error {
+		return writeProjectArchive(writer, absolute)
+	})
+}
+
+func writeTemporaryProjectArchive(write func(*tar.Writer) error) (string, error) {
 	file, err := os.CreateTemp("", "platform-service-project-*.tar")
 	if err != nil {
 		return "", err
@@ -632,7 +638,7 @@ func createProjectArchive(root string) (string, error) {
 		_ = os.Remove(name)
 		return "", e
 	}
-	if err := writeProjectArchive(writer, absolute); err != nil {
+	if err := write(writer); err != nil {
 		return cleanup(err)
 	}
 	if err := writer.Close(); err != nil {
@@ -850,6 +856,28 @@ func readStableCandidateFile(root, logical string) ([]byte, error) {
 type projectArchiveLimits struct{ files int64 }
 
 func appendTarPath(writer *tar.Writer, root, source string) error {
+	return visitTarPath(root, source, func(current string, info os.FileInfo, header *tar.Header) error {
+		return appendTarEntry(writer, current, info, header)
+	})
+}
+
+func appendTarEntry(writer *tar.Writer, current string, info os.FileInfo, header *tar.Header) error {
+	if err := writer.WriteHeader(header); err != nil || info.IsDir() {
+		return err
+	}
+	input, err := os.Open(current)
+	if err != nil {
+		return err
+	}
+	_, copyErr := io.Copy(writer, input)
+	closeErr := input.Close()
+	if copyErr != nil {
+		return copyErr
+	}
+	return closeErr
+}
+
+func visitTarPath(root, source string, visit func(string, os.FileInfo, *tar.Header) error) error {
 	return filepath.WalkDir(source, func(current string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -873,25 +901,10 @@ func appendTarPath(writer *tar.Writer, root, source string) error {
 			return err
 		}
 		header.Name = filepath.ToSlash(relative)
-		if err := writer.WriteHeader(header); err != nil {
-			return err
-		}
-		if entry.IsDir() {
-			return nil
-		}
-		if !entry.Type().IsRegular() {
+		if !info.IsDir() && !info.Mode().IsRegular() {
 			return errors.New("SERVICE_PROJECT_FILE_UNSAFE")
 		}
-		input, err := os.Open(current)
-		if err != nil {
-			return err
-		}
-		_, copyErr := io.Copy(writer, input)
-		closeErr := input.Close()
-		if copyErr != nil {
-			return copyErr
-		}
-		return closeErr
+		return visit(current, info, header)
 	})
 }
 

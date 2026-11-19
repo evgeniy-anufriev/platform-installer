@@ -40,7 +40,7 @@ func (directory *exportDirectory) openDirectory([]string) (*exportDirectory, err
 func (directory *exportDirectory) entries() ([]exportEntry, error) {
 	return nil, errors.New("unsupported")
 }
-func (directory *exportDirectory) streamFile([]string, int64, io.Writer) (int64, exportFileIdentity, error) {
+func (directory *exportDirectory) streamFile([]string, int64, io.Writer, ...*previewAssetRead) (int64, exportFileIdentity, error) {
 	return 0, exportFileIdentity{}, errors.New("unsupported")
 }
 func (directory *exportDirectory) exists(string) (bool, error) {

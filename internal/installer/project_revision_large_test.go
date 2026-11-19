@@ -36,6 +36,14 @@ func TestRevisionStreamsPackageAndDetectsSameSizeSameTimeChange(t *testing.T) {
 	if before != expected {
 		t.Fatal("canonical revision changed")
 	}
+	preview, err := PreviewProjectRevision(root)
+	if err != nil || preview != before {
+		t.Fatalf("initial preview: %q, %v", preview, err)
+	}
+	preview, err = PreviewProjectRevision(root)
+	if err != nil || preview != before {
+		t.Fatalf("cached preview: %q, %v", preview, err)
+	}
 	info, err := os.Stat(path)
 	if err != nil {
 		t.Fatal(err)
@@ -50,6 +58,10 @@ func TestRevisionStreamsPackageAndDetectsSameSizeSameTimeChange(t *testing.T) {
 	after, err := ProjectRevision(root)
 	if err != nil || after == before {
 		t.Fatal("same-size, same-time byte change escaped fresh revision")
+	}
+	preview, err = PreviewProjectRevision(root)
+	if err != nil || preview != after {
+		t.Fatalf("changed preview: %q, %v", preview, err)
 	}
 }
 
@@ -91,6 +103,70 @@ func TestStreamLargeRevisionAssetBoundedAndGuarded(t *testing.T) {
 	}
 	if _, _, err := dir.streamFile([]string{"large.dump"}, size-1, io.Discard); err == nil || !strings.Contains(err.Error(), "EXPORT_LIMIT_EXCEEDED") {
 		t.Fatal("size guard lost")
+	}
+}
+
+func TestPreviewDigestHitReadsNoAssetBytes(t *testing.T) {
+	root := t.TempDir()
+	name := "arbitrary.bin"
+	if err := os.WriteFile(filepath.Join(root, name), []byte("sample data"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	dir, err := openExportSourceDirectory(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dir.close()
+	first := &boundedRevisionSink{}
+	read := &previewAssetRead{}
+	size, _, err := dir.streamFile([]string{name}, 0, first, read)
+	if err != nil || size != 11 || first.bytes != size || !read.cacheable {
+		t.Fatalf("first observation: size=%d reads=%d stamp=%t err=%v", size, first.bytes, read.cacheable, err)
+	}
+	read.remember(digestBytes([]byte("sample data")))
+	second := &boundedRevisionSink{}
+	next := &previewAssetRead{}
+	if _, _, err := dir.streamFile([]string{name}, 0, second, next); err != nil || second.bytes != 0 || next.digest == "" {
+		t.Fatalf("cached observation read %d bytes: %v", second.bytes, err)
+	}
+	fresh := &boundedRevisionSink{}
+	if _, _, err := dir.streamFile([]string{name}, 0, fresh); err != nil || fresh.bytes != size {
+		t.Fatalf("fresh verification read %d bytes: %v", fresh.bytes, err)
+	}
+}
+
+func BenchmarkPreviewProjectTwoAssets(b *testing.B) {
+	root := b.TempDir()
+	dir := filepath.Join(root, "library-packages", "demo", "1.0.0", "assets")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		b.Fatal(err)
+	}
+	for _, name := range []string{"database.dump", "arbitrary.bin"} {
+		f, err := os.Create(filepath.Join(dir, name))
+		if err != nil {
+			b.Fatal(err)
+		}
+		if _, err := io.CopyN(f, zeroRevisionReader{}, 512<<20); err != nil {
+			b.Fatal(err)
+		}
+		if err := f.Close(); err != nil {
+			b.Fatal(err)
+		}
+	}
+	if _, err := PreviewProjectRevision(root); err != nil {
+		b.Fatal(err)
+	}
+	for _, item := range []struct {
+		name string
+		read func(string) (string, error)
+	}{{"fresh", ProjectRevision}, {"cached", PreviewProjectRevision}} {
+		b.Run(item.name, func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				if _, err := item.read(root); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
 	}
 }
 

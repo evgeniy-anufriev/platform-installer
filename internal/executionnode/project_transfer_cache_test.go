@@ -21,7 +21,7 @@ func TestProjectTransferIdentityMatchesArchiveAndChangesWithAssets(t *testing.T)
 	if err := os.WriteFile(asset, []byte("original"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	slot, digest, err := projectTransferIdentity(root)
+	slot, digest, err := previewTransferIdentity(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,12 +37,52 @@ func TestProjectTransferIdentityMatchesArchiveAndChangesWithAssets(t *testing.T)
 	if got := fmt.Sprintf("sha256:%x", sha256.Sum256(data)); got != digest {
 		t.Fatalf("fingerprint mismatch: %s != %s", got, digest)
 	}
-	if err := os.WriteFile(asset, []byte("changed"), 0600); err != nil {
+	info, err := os.Stat(asset)
+	if err != nil {
 		t.Fatal(err)
 	}
-	nextSlot, next, err := projectTransferIdentity(root)
+	_, reused, err := previewTransferIdentity(root)
+	if err != nil || reused != digest {
+		t.Fatalf("warm preview hash: %s, %v", reused, err)
+	}
+	if err := os.WriteFile(asset, []byte("changed!"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(asset, info.ModTime(), info.ModTime()); err != nil {
+		t.Fatal(err)
+	}
+	nextSlot, next, err := previewTransferIdentity(root)
 	if err != nil || nextSlot != slot || next == digest {
 		t.Fatalf("asset change not detected: %v", err)
+	}
+	_, fresh, err := projectTransferIdentity(root)
+	if err != nil || fresh != next {
+		t.Fatalf("changed preview hash differs from fresh archive: %s %s %v", next, fresh, err)
+	}
+	packageAsset := filepath.Join(root, "library-packages", "demo", "1.0.0", "assets", "sample.bin")
+	if err := os.MkdirAll(filepath.Dir(packageAsset), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(packageAsset, []byte("sample"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	_, added, err := previewTransferIdentity(root)
+	if err != nil || added == next {
+		t.Fatalf("new package asset not detected: %v", err)
+	}
+	_, warmAdded, err := previewTransferIdentity(root)
+	if err != nil || warmAdded != added {
+		t.Fatalf("warm package asset digest: %v", err)
+	}
+	stamp, err := previewArchiveStamp(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	previewArchiveIdentity.Lock()
+	recorded := previewArchiveIdentity.stamp == stamp && previewArchiveIdentity.digest == added
+	previewArchiveIdentity.Unlock()
+	if !recorded {
+		t.Fatal("the metadata-only path did not cache the complete archive identity")
 	}
 }
 

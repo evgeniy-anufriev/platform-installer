@@ -223,10 +223,11 @@ type exportRecord struct {
 }
 
 type exportObservation struct {
-	digestOnly bool
-	documents  []exportRecord
-	revision   string
-	total      int64
+	reusePreviewAssets bool
+	digestOnly         bool
+	documents          []exportRecord
+	revision           string
+	total              int64
 }
 
 func exportObservationMetadata(observation exportObservation) exportObservation {
@@ -381,8 +382,18 @@ func addExportDocument(root *exportDirectory, logical string, result *exportObse
 	var err error
 	if result.digestOnly {
 		h := sha256.New()
-		size, identity, err = root.streamFile(parts, 0, h)
-		digest = "sha256:" + hex.EncodeToString(h.Sum(nil))
+		if result.reusePreviewAssets && packageAssetPath(storedLogical) {
+			var read previewAssetRead
+			size, identity, err = root.streamFile(parts, 0, h, &read)
+			digest = read.digest
+			if err == nil && digest == "" {
+				digest = "sha256:" + hex.EncodeToString(h.Sum(nil))
+				read.remember(digest)
+			}
+		} else {
+			size, identity, err = root.streamFile(parts, 0, h)
+			digest = "sha256:" + hex.EncodeToString(h.Sum(nil))
+		}
 	} else {
 		content, identity, err = root.readFile(parts, 0)
 		size = int64(len(content))

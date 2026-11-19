@@ -2055,7 +2055,7 @@ func (a *App) GetServiceConfigurationPreview() (result executionnode.ServiceConf
 		return executionnode.ServiceConfigurationPreview{}, errors.New("SERVICE_CONFIGURATION_PREVIEW_UNSUPPORTED")
 	}
 	root := a.current.Root
-	revision, err := installer.ProjectRevision(root)
+	revision, err := installer.PreviewProjectRevision(root)
 	if err != nil || revision != a.current.Managed.ProjectRevision {
 		a.editMu.Unlock()
 		return executionnode.ServiceConfigurationPreview{}, errors.New("PROJECT_REVISION_CHANGED")
@@ -2069,7 +2069,7 @@ func (a *App) GetServiceConfigurationPreview() (result executionnode.ServiceConf
 	}
 	a.editMu.Lock()
 	defer a.editMu.Unlock()
-	after, err := installer.ProjectRevision(root)
+	after, err := installer.PreviewProjectRevision(root)
 	if err != nil || a.current.Status != "OPEN" || a.current.Root != root || a.current.Managed == nil || a.current.Catalog == nil || a.current.Catalog.Status != "READY" || a.current.Managed.ProjectRevision != revision || after != revision || preview.ProjectRevision != revision || !runtimeEvidenceMatchesExpected(preview.Runtime, binding.reader.runtimeRelease) || a.revalidateSavedPreviewBindingLocked(binding) != nil {
 		return executionnode.ServiceConfigurationPreview{}, errors.New("SERVICE_CONFIGURATION_PREVIEW_STALE")
 	}

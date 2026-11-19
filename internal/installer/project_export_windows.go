@@ -181,7 +181,7 @@ func (directory *exportDirectory) entries() ([]exportEntry, error) {
 	return result, nil
 }
 
-func (directory *exportDirectory) streamFile(parts []string, limit int64, output io.Writer) (int64, exportFileIdentity, error) {
+func (directory *exportDirectory) streamFile(parts []string, limit int64, output io.Writer, preview ...*previewAssetRead) (int64, exportFileIdentity, error) {
 	if len(parts) == 0 {
 		return 0, exportFileIdentity{}, errors.New("unsafe export file")
 	}
@@ -213,6 +213,9 @@ func (directory *exportDirectory) streamFile(parts []string, limit int64, output
 	if limit > 0 && size > limit {
 		return 0, exportFileIdentity{}, errors.New("EXPORT_LIMIT_EXCEEDED")
 	}
+	if len(preview) != 0 && preview[0].lookup(file) {
+		return size, identity, nil
+	}
 	var reader io.Reader = file
 	if limit > 0 {
 		reader = io.LimitReader(file, limit+1)
@@ -222,7 +225,8 @@ func (directory *exportDirectory) streamFile(parts []string, limit int64, output
 		return 0, exportFileIdentity{}, errors.New("unsafe export file")
 	}
 	after, afterSize, afterErr := exportWindowsFileIdentity(handle)
-	if afterErr != nil || after != identity || afterSize != size {
+	if afterErr != nil || after != identity || afterSize != size ||
+		(len(preview) != 0 && !preview[0].unchanged(file)) {
 		return 0, exportFileIdentity{}, errors.New("PROJECT_CHANGED")
 	}
 	return count, identity, nil
