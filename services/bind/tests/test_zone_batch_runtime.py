@@ -22,7 +22,10 @@ class ZoneBatchRuntimeTests(unittest.TestCase):
             root = Path(directory)
             dig = root / 'dig'
             dig.write_text('#!/bin/sh\nprintf "REAL_DIG_STUB\\n" >> "$BIND_TEST_CALLS"\n'
-                           'printf ";; status: NOERROR\\n;; flags: qr aa;\\n%s 60 IN A 192.0.2.2\\n" "$2"\n')
+                           'while read -r owner type; do\n'
+                           '  printf ";; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 1\\n'
+                           ';; flags: qr aa;\\n;%s IN A\\n%s 60 IN A 192.0.2.2\\n" "$owner" "$owner"\n'
+                           'done\n')
             dig.chmod(0o755)
             resolved = resolve_dns_zones(
                 dict(serviceDeployments={
@@ -50,6 +53,7 @@ class ZoneBatchRuntimeTests(unittest.TestCase):
             calls = root / 'calls'
             result = subprocess.run([executable, '-i', 'localhost,', str(source)],
                                     env=dict(os.environ, PATH=str(root) + os.pathsep + os.environ['PATH'],
+                                             ANSIBLE_COLLECTIONS_PATH=str(ROLE.parents[4]),
                                              BIND_TEST_CALLS=str(calls)),
                                     capture_output=True, text=True, timeout=90)
             self.assertEqual(0, result.returncode, result.stdout + result.stderr)
@@ -78,7 +82,7 @@ class ZoneBatchRuntimeTests(unittest.TestCase):
     def test_invalid_wildcard_owners_fail_before_dns_commands(self):
         if not shutil.which('ansible-playbook'):
             self.skipTest('Ansible runtime required')
-        guard = yaml.safe_load((ROLE / 'tasks/prepare_a_record.yml').read_text())[0]
+        guard = {'platform.bind.a_record_observations': {'records': ['{{ platform_bind_a_record }}']}}
         for owner in ('foo.*.example.test.', '**.example.test.', '*.*.example.test.',
                       '*.other.test.', '*.Example.test.', '*.example.test',
                       '*-node.example.test.', '*.example.test.\nupdate delete other.example.test. A'):
@@ -89,6 +93,7 @@ class ZoneBatchRuntimeTests(unittest.TestCase):
                 source = Path(directory) / 'guard.yml'
                 source.write_text(yaml.safe_dump(play))
                 result = subprocess.run(['ansible-playbook', '-i', 'localhost,', str(source)],
+                                        env=dict(os.environ, ANSIBLE_COLLECTIONS_PATH=str(ROLE.parents[4])),
                                         capture_output=True, text=True, timeout=40)
                 self.assertNotEqual(0, result.returncode, result.stdout + result.stderr)
                 self.assertIn('BIND_DNS_A_RECORD_UPDATE_INPUT_INVALID', result.stdout)

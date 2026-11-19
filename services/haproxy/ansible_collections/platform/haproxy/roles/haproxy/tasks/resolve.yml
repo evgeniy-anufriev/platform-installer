@@ -17,7 +17,9 @@
     file: "{{ platform_service_catalog_path }}"
     name: _platform_haproxy_catalog_file
   run_once: true
-  when: platform_haproxy_full_reconcile | bool or (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined)
+  when:
+    - _platform_haproxy_publication_inputs is not defined
+    - platform_haproxy_full_reconcile | bool or (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined)
 
 - name: Выбор одного локального развёртывания HAProxy из канонического желаемого состояния
   ansible.builtin.set_fact:
@@ -44,16 +46,22 @@
   loop: "{{ groups['platform_targets'] | default([]) | sort }}"
   run_once: true
   no_log: true
-  when: platform_haproxy_full_reconcile | bool or (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined)
+  when:
+    - _platform_haproxy_publication_inputs is not defined
+    - platform_haproxy_full_reconcile | bool or (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined)
 
 - name: Расчёт общей проекции конечных точек для HAProxy
   platform.core.resolve_service_endpoints:
     endpoint_sources: "{{ hostvars['localhost'].platform_endpoint_sources | default({}) }}"
     desired_state: "{{ platform_desired_state }}"
-    service_catalog: "{{ _platform_haproxy_catalog_file.platform_service_catalog | default(_platform_haproxy_catalog_file, true) }}"
-    inventory_deployments: "{{ _platform_haproxy_placements }}"
+    service_catalog: "{{ _platform_haproxy_resolve_catalog }}"
+    inventory_deployments: "{{ _platform_haproxy_resolve_inventory.deployments }}"
     deployment_ids: "{{ _platform_haproxy_partial_ids if (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined) and not (platform_haproxy_full_reconcile | bool) else omit }}"
   register: _platform_haproxy_endpoints
+  vars:
+    _platform_haproxy_catalog: "{{ _platform_haproxy_publication_inputs.catalog | default(_platform_haproxy_catalog_file) }}"
+    _platform_haproxy_resolve_catalog: "{{ _platform_haproxy_catalog.platform_service_catalog | default(_platform_haproxy_catalog, true) }}"
+    _platform_haproxy_resolve_inventory: "{{ _platform_haproxy_publication_inputs.inventory | default({'hosts': _platform_haproxy_hosts, 'deployments': _platform_haproxy_placements}) }}"
   run_once: true
   when: platform_haproxy_full_reconcile | bool or (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined)
 
@@ -61,13 +69,17 @@
   platform.core.resolve_haproxy_backends:
     endpoint_sources: "{{ hostvars['localhost'].platform_endpoint_sources | default({}) }}"
     desired_state: "{{ platform_desired_state }}"
-    service_catalog: "{{ _platform_haproxy_catalog_file.platform_service_catalog | default(_platform_haproxy_catalog_file, true) }}"
-    inventory_hosts: "{{ _platform_haproxy_hosts }}"
-    inventory_deployments: "{{ _platform_haproxy_placements }}"
+    service_catalog: "{{ _platform_haproxy_resolve_catalog }}"
+    inventory_hosts: "{{ _platform_haproxy_resolve_inventory.hosts }}"
+    inventory_deployments: "{{ _platform_haproxy_resolve_inventory.deployments }}"
     resolved_service_endpoints: "{{ _platform_haproxy_endpoints.resolved_service_endpoints }}"
     backend_defaults: {}
     target_deployment_ids: "{{ _platform_haproxy_partial_ids if (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined) and not (platform_haproxy_full_reconcile | bool) else omit }}"
   register: _platform_haproxy_backends
+  vars:
+    _platform_haproxy_catalog: "{{ _platform_haproxy_publication_inputs.catalog | default(_platform_haproxy_catalog_file) }}"
+    _platform_haproxy_resolve_catalog: "{{ _platform_haproxy_catalog.platform_service_catalog | default(_platform_haproxy_catalog, true) }}"
+    _platform_haproxy_resolve_inventory: "{{ _platform_haproxy_publication_inputs.inventory | default({'hosts': _platform_haproxy_hosts, 'deployments': _platform_haproxy_placements}) }}"
   run_once: true
   when: platform_haproxy_full_reconcile | bool or (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined)
 

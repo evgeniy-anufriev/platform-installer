@@ -35,10 +35,12 @@
     inventory_hosts: "{{ _platform_integration_inventory.hosts }}"
     inventory_deployments: "{{ _platform_integration_inventory.deployments }}"
   register: _platform_integration_batch
+  no_log: true
 
 - name: Привязка проекций источников к общей публикации и проверкам
   ansible.builtin.set_fact:
     _platform_integration_selected_sources: "{{ _platform_integration_batch.sources }}"
+  no_log: true
 
 - name: Публикация выбранных участников провайдера и записей DNS
   ansible.builtin.set_fact:
