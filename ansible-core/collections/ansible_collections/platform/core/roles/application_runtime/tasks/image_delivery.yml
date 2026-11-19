@@ -7,10 +7,16 @@
   register: application_local_image
   changed_when: false
   failed_when: false
+  when: application_runtime_job.observedLocalImage is not defined
   no_log: true
 
 - name: Доставка образа с зафиксированным digest при отсутствии на целевом узле
-  when: application_local_image.rc != 0 or (application_local_image.stdout | from_json)[0].Id != application_runtime_job.authority.requirement.imageId
+  when: >-
+    (application_runtime_job.observedLocalImage is defined and
+     application_runtime_job.observedLocalImage is none) or
+    (application_runtime_job.observedLocalImage is not defined and
+     (application_local_image.rc != 0 or
+      (application_local_image.stdout | from_json)[0].Id != application_runtime_job.authority.requirement.imageId))
   block:
     - name: Загрузка образа из разрешённого реестра с сеансовой аутентификацией
       ansible.builtin.include_tasks: pull_registry.yml

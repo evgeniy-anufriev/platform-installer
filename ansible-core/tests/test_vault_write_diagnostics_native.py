@@ -99,7 +99,11 @@ class VaultWriteDiagnosticsTests(unittest.TestCase):
                 tasks=[t for t in preflight if t['name'] in (
                     'Чтение текущих политики и роли перед изменением Vault',
                     'Отклонение неуправляемой политики или неожиданных политик роли')]
-                tasks+=yaml.safe_load((TASKS.parent/'instance.yml').read_text())[5:]
+                variables['application_vault_retained_policy'] = '# owner\n'
+                variables['application_vault_role'] = {'token_policies': ['identity'], 'token_type': 'service'}
+                tasks += [task for task in yaml.safe_load((TASKS.parent/'instance.yml').read_text())
+                          if 'platform.vault.application_document' in task or
+                          task['name'] == 'Сохранение результатов доставки учётных данных провайдера Vault в контексте операции']
                 task_path=Path(folder)/'tasks.yml';task_path.write_text(yaml.safe_dump(tasks))
                 play=[{'hosts':'consumer','gather_facts':False,'vars':variables,'tasks':[{
                     'ansible.builtin.include_tasks':{'file':str(task_path),'apply':{'delegate_to':'localhost','delegate_facts':True,'become':False}},

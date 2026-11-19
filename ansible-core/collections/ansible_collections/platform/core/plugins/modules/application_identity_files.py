@@ -1,8 +1,11 @@
 #!/usr/bin/python
 """Private bind files for the actual rootless container UID, without secret output."""
 import os
+import base64
+import hashlib
 import pwd
 import re
+import secrets
 import stat
 import tempfile
 from ansible.module_utils.basic import AnsibleModule
@@ -54,6 +57,96 @@ def write(path, content, uid, gid):
         if os.path.exists(temporary):
             os.unlink(temporary)
     return True
+
+
+def write_configs(account_name, root, files, check_mode=False):
+    """Install the preflight bytes in one module call, with guarded atomic writes."""
+    account = pwd.getpwnam(account_name)
+    if not os.path.isabs(root) or root == '/' or os.path.realpath(root) != root:
+        raise ValueError()
+    current = root
+    boundary = account.pw_dir if root.startswith(account.pw_dir + '/') else '/'
+    while current != boundary:
+        if os.path.lexists(current):
+            if current == root or boundary == account.pw_dir:
+                custody(current, {account.pw_uid}, directory=True)
+            else:
+                info = os.lstat(current)
+                if not stat.S_ISDIR(info.st_mode) or stat.S_ISLNK(info.st_mode):
+                    raise ValueError()
+        elif not check_mode:
+            raise ValueError()
+        current = os.path.dirname(current)
+    prepared, destinations = [], set()
+    for item in files:
+        relative = item['destination']
+        if (not isinstance(relative, str) or '\x00' in relative or
+                any(part in ('', '.', '..') for part in relative.split('/'))):
+            raise ValueError()
+        if relative in destinations:
+            raise ValueError()
+        destinations.add(relative)
+        raw = (base64.b64decode(item['content'], validate=True) if item.get('encoding') == 'base64'
+               else item['content'].encode('utf-8'))
+        if hashlib.sha256(raw).hexdigest() != item['sha256']:
+            raise ValueError()
+        mode = int(item.get('mode', '0644'), 8)
+        if mode & ~0o777 or mode & 0o022:
+            raise ValueError()
+        prepared.append((relative, raw, mode))
+    changed = []
+    for relative, raw, mode in prepared:
+        path = root + '/config/' + relative
+        if check_mode and not os.path.exists(os.path.dirname(path)):
+            if os.path.realpath(os.path.dirname(path)) != os.path.dirname(path):
+                raise ValueError()
+            changed.append(path)
+            continue
+        parts = (root + '/config/' + relative).split('/')[1:]
+        parent = os.open('/', os.O_DIRECTORY | os.O_NOFOLLOW)
+        gid = account.pw_gid
+        try:
+            for part in parts[:-1]:
+                child = os.open(part, os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent)
+                os.close(parent)
+                parent = child
+            if os.fstat(parent).st_uid != account.pw_uid:
+                raise ValueError()
+            try:
+                fd = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent)
+            except FileNotFoundError:
+                same = False
+            else:
+                with os.fdopen(fd, 'rb') as stream:
+                    info = os.fstat(stream.fileno())
+                    if not stat.S_ISREG(info.st_mode) or info.st_uid != account.pw_uid:
+                        raise ValueError()
+                    gid = info.st_gid
+                    same = (stat.S_IMODE(info.st_mode) == mode and stream.read() == raw)
+            if same:
+                continue
+            changed.append(root + '/config/' + relative)
+            if check_mode:
+                continue
+            temporary = '.platform-config-' + secrets.token_hex(16)
+            try:
+                fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                             0o600, dir_fd=parent)
+                with os.fdopen(fd, 'wb') as stream:
+                    os.fchown(stream.fileno(), account.pw_uid, gid)
+                    stream.write(raw)
+                    stream.flush()
+                    os.fchmod(stream.fileno(), mode)
+                    os.fsync(stream.fileno())
+                os.replace(temporary, parts[-1], src_dir_fd=parent, dst_dir_fd=parent)
+            finally:
+                try:
+                    os.unlink(temporary, dir_fd=parent)
+                except FileNotFoundError:
+                    pass
+        finally:
+            os.close(parent)
+    return changed
 
 
 def inspect_identity(args, accounts):
@@ -119,9 +212,13 @@ def main():
         instance_path=dict(), role_id=dict(default='', no_log=True), ca=dict(default=''),
         agent=dict(default=''), agent_required=dict(type='bool', default=False),
         pki_plans=dict(type='list', elements='dict', default=[]), preflight=dict(type='bool', default=False),
-        placements=dict(type='list', elements='dict')), supports_check_mode=True)
+        placements=dict(type='list', elements='dict'), config_files=dict(type='list', elements='dict')),
+        supports_check_mode=True)
     try:
         args = module.params
+        if args['config_files'] is not None:
+            changed = write_configs(args['account'], args['instance_path'], args['config_files'], module.check_mode)
+            module.exit_json(changed=bool(changed), changed_paths=changed)
         if args['placements'] is not None:
             if not args['preflight']:
                 raise ValueError()

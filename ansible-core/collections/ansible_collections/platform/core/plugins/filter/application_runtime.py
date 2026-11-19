@@ -16,6 +16,41 @@ def selected_archive_path(root, source, offline):
     return selected_archive(root, source, offline, DataLoader().load_from_file)
 
 
+def image_delivery_jobs(jobs, observations):
+    """Use only this library call's Docker observations, scoped by account."""
+    inventories = {}
+    for result in observations:
+        if result.get('rc') not in (0, 1):
+            raise AnsibleFilterError('APPLICATION_IMAGE_IDENTITY_INVALID')
+        images = json.loads(result.get('stdout') or '[]')
+        if not isinstance(images, list):
+            raise AnsibleFilterError('APPLICATION_IMAGE_IDENTITY_INVALID')
+        inventories[result['item'][0]] = images
+    pending, selected, scheduled = [], set(), {}
+    for job in jobs:
+        images = inventories[job['account']]
+        requirement = job['authority']['requirement']
+        key = (job['account'], requirement['imageId'], job['settings']['image'],
+               requirement['platform']['os'], requirement['platform']['architecture'])
+        if key in selected:
+            continue
+        selected.add(key)
+        observed = next((image for image in images if image['Id'] == requirement['imageId']), None)
+        observed = observed or scheduled.get(key[:2])
+        if observed is not None:
+            if (observed['Os'] != requirement['platform']['os'] or
+                    observed['Architecture'] != requirement['platform']['architecture']):
+                raise AnsibleFilterError('APPLICATION_IMAGE_IDENTITY_INVALID')
+            if job['settings']['image'] in (observed.get('RepoTags') or []):
+                continue
+        compact = ({field: observed[field] for field in ('Id', 'Os', 'Architecture')}
+                   if observed is not None else None)
+        pending.append(dict(job, observedLocalImage=compact))
+        scheduled[key[:2]] = dict(Id=requirement['imageId'], Os=requirement['platform']['os'],
+                                  Architecture=requirement['platform']['architecture'])
+    return pending
+
+
 def parent_paths(paths):
     result = set()
     for path in paths:
@@ -354,5 +389,6 @@ class FilterModule(object):
                 "application_bind_sources_changed": bind_sources_changed,
                 "application_validate_configs": validate_config_contents, "application_account_policies": account_policies,
                 "application_selected_archive": selected_archive_path,
+                "application_image_delivery_jobs": image_delivery_jobs,
                 "application_pinned_registry_reference": pinned_registry_reference,
                 "application_owned_container": application_owned_container}

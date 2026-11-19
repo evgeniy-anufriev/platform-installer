@@ -57,7 +57,7 @@ printf '{"status":"ok","changed":false}\n'
             for count, expected in [(0, '300s'), (1, '300s'), (3, '900s')]:
                 tasks.extend([
                     {'ansible.builtin.set_fact': {'rendered_argv': command['ansible.builtin.command']['argv']},
-                     'vars': dict(platform_script_directory='/unused', platform_script_job=dict(
+                     'vars': dict(platform_script_directory='/unused', platform_script_argv=[], platform_script_job=dict(
                          id='probe', argv=[], invocations=[['input']] * count))},
                     {'ansible.builtin.assert': {'that': "rendered_argv[2] == '" + expected + "'"}}])
             self.run_play(root, tasks)
@@ -115,6 +115,45 @@ printf '{"status":"ok","changed":false}\n'
             self.assertEqual(['A', 'B', 'A', 'A'], (root / 'seen').read_text().splitlines())
             self.assertEqual(['A'], (other / 'seen').read_text().splitlines())
 
+    def test_controller_delivery_reuses_only_matching_executable(self):
+        with tempfile.TemporaryDirectory(prefix='qa-controller-script-reuse-') as directory:
+            root = Path(directory)
+            scripts = []
+            for name in ['A', 'B']:
+                script = root / (name + '.sh')
+                script.write_text(
+                    '#!/bin/sh\n'
+                    'printf "' + name + ' %s\\n" "$(stat -c %i "$0")" >> "$PWD/seen"\n'
+                    'printf \'{"status":"ok","changed":false}\\n\'\n')
+                scripts.append(script)
+            jobs = [self.job(root, scripts[index]) for index in [0, 0, 1, 0]]
+            self.run_play(root, [self.call(job, platform_script_on_controller=True) for job in jobs])
+            rows = (root / 'seen').read_text().splitlines()
+            self.assertEqual(['A', 'A', 'B', 'A'], [row.split()[0] for row in rows])
+            self.assertEqual(rows[0], rows[1])
+            copied = root / '.scripts/probe'
+            self.assertEqual(scripts[0].read_bytes(), copied.read_bytes())
+            self.assertEqual(0o700, copied.stat().st_mode & 0o777)
+            self.assertFalse((root / '.scripts/.secrets/probe').exists())
+
+    def test_provider_script_rebinds_arguments_for_each_callback(self):
+        with tempfile.TemporaryDirectory(prefix='qa-provider-script-context-') as directory:
+            root = Path(directory)
+            script = root / 'probe.sh'
+            script.write_text('#!/bin/sh\nprintf "%s\\n" "$1" >> "$PWD/seen"\n'
+                              'printf \'{"status":"ok","changed":false}\\n\'\n')
+            tasks = [{'ansible.builtin.set_fact': dict(platform_application_secret_files={},
+                platform_application_secret_root=str(root), application_runtime_inputs=dict(scriptContexts=[]))}]
+            for argument in ('first', 'second', 'first'):
+                tasks.append({'ansible.builtin.include_tasks': str(ROOT / 'ansible-core/playbooks/applications/tasks/provider-script.yml'),
+                    'vars': dict(platform_project_root=str(root), application_provider_batch=dict(
+                        providerLibraryId='library', providerInstanceId='provider'), application_provider_script_host='node1',
+                        application_provider_script=dict(id='probe', path=str(script), argv=[argument],
+                            secretInputs={}, runOn='execution_node'))})
+            result = self.run_play(root, tasks)
+            self.assertEqual(['first', 'second', 'first'], (root / 'seen').read_text().splitlines())
+            self.assertEqual(3, result.stdout.count('Однократная фиксация контекста текущего сценария провайдера'))
+
     def test_missing_source_fails_before_script_execution(self):
         with tempfile.TemporaryDirectory(prefix='qa-script-copy-fail-') as directory:
             root = Path(directory)
@@ -127,6 +166,29 @@ printf '{"status":"ok","changed":false}\n'
                 {'ansible.builtin.assert': {'that': [
                     "'COPY_FAILURE_EXPECTED' not in (ansible_failed_result.msg | default(''))"]}}]}]
             self.run_play(root, tasks)
+
+    def test_controller_private_inputs_are_batched_and_cleaned_after_failure(self):
+        with tempfile.TemporaryDirectory(prefix='qa-controller-private-inputs-') as directory:
+            root = Path(directory)
+            script = root / 'fail.sh'
+            script.write_text('#!/bin/sh\nset -eu\n'
+                '[ "$(stat -c %a "$PLATFORM_SCRIPT_SECRET_TOKEN_FILE")" = 600 ]\n'
+                '[ "$(stat -c %a "$1")" = 600 ]\n'
+                'cmp "$PLATFORM_SCRIPT_SECRET_TOKEN_FILE" "$PWD/token"\n'
+                'cat "$1" > "$PWD/seen"\n'
+                'cat "$PLATFORM_SCRIPT_SECRET_TOKEN_FILE" >&2\n'
+                'printf \'{"status":"error","step":3,"http_status":409}\\n\'\nexit 1\n')
+            token = root / 'token'
+            token.write_text('private-probe-value')
+            job = self.job(root, script)
+            job.update(argv=['{"literal":"preserved"}'], fileArgumentIndexes=[0], secretInputs={'token': 'ref'})
+            call = self.call(job, platform_script_on_controller=True)
+            link = root / 'token-link'
+            link.symlink_to(token)
+            call['vars']['platform_script_secret_files'] = {'ref': str(link)}
+            self.run_play(root, [call], success=False)
+            self.assertEqual('{"literal":"preserved"}', (root / 'seen').read_text())
+            self.assertFalse((root / '.scripts/.secrets/probe').exists())
 
     def test_failed_batch_hides_secret_and_removes_inputs(self):
         with tempfile.TemporaryDirectory(prefix='qa-script-batch-fail-') as directory:

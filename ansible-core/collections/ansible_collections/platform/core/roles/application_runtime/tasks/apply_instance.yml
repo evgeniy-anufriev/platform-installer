@@ -47,14 +47,11 @@
     mode: '0600'
 
 - name: "Запись файлов конфигурации экземпляра"
-  ansible.builtin.copy:
-    src: "{{ item.path | default(omit) }}"
-    content: "{{ item.content if item.path is not defined else omit }}"
-    dest: "{{ application_runtime_job.instancePath }}/config/{{ item.destination }}"
-    owner: "{{ application_runtime_job.account }}"
-    mode: "{{ item.mode }}"
+  platform.core.application_identity_files:
+    account: "{{ application_runtime_job.account }}"
+    instance_path: "{{ application_runtime_job.instancePath }}"
+    config_files: "{{ application_runtime_job.configContents }}"
   register: application_config_files
-  loop: "{{ application_runtime_job.configContents }}"
   no_log: true
 
 - name: Подготовка и замена объявленных архивов конфигурации
@@ -113,7 +110,7 @@
          (application_created_config_dirs.results | selectattr('changed') | map(attribute='path') | list) +
          (application_config_dirs.results | selectattr('changed') | map(attribute='path') | list) +
          (application_config_subdirs.results | selectattr('changed') | map(attribute='path') | list) +
-         (application_config_files.results | selectattr('changed') | map(attribute='dest') | list) }}
+         (application_config_files.changed_paths | default([])) }}
     application_bind_sources: >-
       {{ (application_compose_config.stdout | from_json).services[application_runtime_job.instanceId].volumes |
          default([]) | selectattr('type', 'equalto', 'bind') | map(attribute='source') | list }}

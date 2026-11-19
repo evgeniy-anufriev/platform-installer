@@ -110,6 +110,7 @@ admin_token() {
 }
 identity_step=1
 admin_token
+realm_scopes_loaded=false
 realm_path=$(printf '%s' "$realm" | jq -sRr @uri)
 kc() {
   method=$1; resource=$2; shift 2
@@ -293,10 +294,12 @@ case "$operation" in
     fi
     new_authorization=false
     id=$(get_exact clients clientId "$instance")
+    client_updated=false
     if [ -z "$id" ]; then
       new_authorization=$(jq -r '.authorizationServicesEnabled // false' "$work/client.json")
       kc create clients -r "$realm" -f "$work/client.json" >/dev/null || fail
       changed=true
+      client_updated=true
     else
       kc get "clients/$id" -r "$realm" > "$work/current.json" || fail
       if [ "$(jq -r '.authorizationServicesEnabled // false' "$work/client.json")" = true ] &&
@@ -314,9 +317,10 @@ case "$operation" in
       if ! jq -e --slurpfile desired "$work/client.json" "$model_matches" "$work/current.json" >/dev/null; then
         kc update "clients/$id" -r "$realm" -f "$work/client.json" >/dev/null || fail
         changed=true
+        client_updated=true
       fi
     fi
-    id=$(get_exact clients clientId "$instance")
+    if [ -z "$id" ]; then id=$(get_exact clients clientId "$instance"); fi
     [ -n "$id" ] || fail
     identity_step=22
     for scope_kind in default optional; do
@@ -330,7 +334,10 @@ case "$operation" in
           kc delete "clients/$id/$scope_kind-client-scopes/$scope_id" -r "$realm" >/dev/null || fail
           changed=true
         done < "$work/remove-scopes"
-        kc get client-scopes -r "$realm" > "$work/realm-scopes.json" || fail
+        if [ "$realm_scopes_loaded" = false ]; then
+          kc get client-scopes -r "$realm" > "$work/realm-scopes.json" || fail
+          realm_scopes_loaded=true
+        fi
         jq -r --slurpfile current "$work/current-scopes.json" '.[]|select(. as $name|[$current[0][].name]|index($name)|not)' \
           "$work/desired-scopes.json" > "$work/add-scopes"
         while IFS= read -r scope_name; do
@@ -343,18 +350,24 @@ case "$operation" in
     done
     # Client roles must exist before authorization policies resolve their named references.
     jq -c '.clientRoles[]?' "$work/client-model.json" > "$work/client-roles"
+    if [ -s "$work/client-roles" ]; then
+      kc get "clients/$id/roles" -r "$realm" -q briefRepresentation=false > "$work/current-roles.json" || fail
+    fi
     while IFS= read -r role; do
       printf '%s' "$role" > "$work/client-role.json"
       role_name=$(jq -r .name "$work/client-role.json")
-      kc get "clients/$id/roles" -r "$realm" -q briefRepresentation=false > "$work/current-roles.json" || fail
       jq --arg name "$role_name" '.[] | select(.name==$name)' "$work/current-roles.json" > "$work/current-role.json"
       if [ ! -s "$work/current-role.json" ]; then
         kc create "clients/$id/roles" -r "$realm" -f "$work/client-role.json" >/dev/null || fail
         changed=true
+        jq --slurpfile role "$work/client-role.json" '. + [$role[0]]' "$work/current-roles.json" > "$work/next.json" || fail
+        mv "$work/next.json" "$work/current-roles.json"
       elif ! jq -e --slurpfile desired "$work/client-role.json" "$model_matches" "$work/current-role.json" >/dev/null; then
         role_path=$(printf '%s' "$role_name" | jq -sRr @uri)
         kc update "clients/$id/roles/$role_path" -r "$realm" -f "$work/client-role.json" >/dev/null || fail
         changed=true
+        jq --slurpfile role "$work/client-role.json" 'map(if .name == $role[0].name then . + $role[0] else . end)' "$work/current-roles.json" > "$work/next.json" || fail
+        mv "$work/next.json" "$work/current-roles.json"
       fi
     done < "$work/client-roles"
     if jq -e '.authorizationSettings != null' "$work/client-model.json" >/dev/null; then
@@ -375,11 +388,13 @@ case "$operation" in
       if ! jq -e --slurpfile desired "$work/authorization.json" "$model_matches" "$work/current-authorization.json" >/dev/null; then
         kc create "clients/$id/authz/resource-server/import" -r "$realm" -f "$work/authorization.json" >/dev/null || fail
         changed=true
+        kc get "clients/$id/authz/resource-server/settings" -r "$realm" > "$work/current-authorization.json" || fail
       fi
-      kc get "clients/$id/authz/resource-server/settings" -r "$realm" > "$work/current-authorization.json" || fail
       jq -e --slurpfile desired "$work/authorization.json" "$model_matches" "$work/current-authorization.json" >/dev/null || fail
     fi
-    kc get "clients/$id" -r "$realm" > "$work/current.json" || fail
+    if [ "$client_updated" = true ]; then
+      kc get "clients/$id" -r "$realm" > "$work/current.json" || fail
+    fi
     # Secrets are checked independently of the normal client representation.
     jq 'del(.secret)' "$work/client.json" > "$work/check.json"
     jq -e --slurpfile desired "$work/check.json" "$model_matches" "$work/current.json" >/dev/null || fail
@@ -425,8 +440,8 @@ case "$operation" in
         jq '{type:"password",value:.password,temporary:false}' "$work/account.json" > "$work/credential.json"
         kc update "users/$id/reset-password" -r "$realm" -f "$work/credential.json" >/dev/null || fail
         changed=true
+        token "$realm" "$username" "$work/user-password" || fail
       fi
-      token "$realm" "$username" "$work/user-password" || fail
       if [ "$mode" = managed ]; then
         jq -r '.parameters.groups[]? ' "$work/account.json" > "$work/groups"
         while IFS= read -r name; do

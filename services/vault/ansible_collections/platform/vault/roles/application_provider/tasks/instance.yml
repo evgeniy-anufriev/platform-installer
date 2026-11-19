@@ -49,58 +49,21 @@
   delegate_facts: false
   no_log: true
 
-- name: "Обновление управляемой политики Vault только при изменении содержимого"
-  ansible.builtin.uri:
-    url: "{{ application_vault_provider.url }}/v1/sys/policies/acl/{{ platform_vault_application_job.identity }}"
-    method: PUT
-    headers: {X-Vault-Token: "{{ application_vault_provider.token }}"}
-    body_format: json
-    body: {policy: "{{ application_vault_retained_policy }}"}
-    ca_path: "{{ platform_application_secret_root }}/vault-{{ platform_vault_application_job.providerId }}-ca.pem"
-    validate_certs: true
-    follow_redirects: none
-    timeout: 10
-    status_code: [200, 204]
-  vars:
-    application_vault_provider: "{{ platform_application_vault_runtime[platform_vault_application_job.providerId] }}"
-  when: application_vault_identity_before.results[0].status == 404 or application_vault_identity_before.results[0].json.data.policy != application_vault_retained_policy
-  changed_when: true
-  no_log: true
-
-- name: Обновление управляемой роли AppRole без создания SecretID
-  ansible.builtin.uri:
-    url: "{{ application_vault_provider.url }}/v1/auth/approle/role/{{ platform_vault_application_job.identity }}"
-    method: POST
-    headers: {X-Vault-Token: "{{ application_vault_provider.token }}"}
-    body_format: json
-    body: "{{ application_vault_role }}"
-    ca_path: "{{ platform_application_secret_root }}/vault-{{ platform_vault_application_job.providerId }}-ca.pem"
-    validate_certs: true
-    follow_redirects: none
-    timeout: 10
-    status_code: [200, 204]
-  vars:
-    application_vault_provider: "{{ platform_application_vault_runtime[platform_vault_application_job.providerId] }}"
-  when: "{{ application_vault_identity_before.results[1] | platform.vault.application_vault_role_changed(application_vault_role) }}"
-  changed_when: true
-  no_log: true
-
-- name: Чтение стабильного RoleID через то же разрешенное соединение
-  ansible.builtin.uri:
-    url: "{{ application_vault_provider.url }}/v1/auth/approle/role/{{ platform_vault_application_job.identity }}/role-id"
-    headers: {X-Vault-Token: "{{ application_vault_provider.token }}"}
-    ca_path: "{{ platform_application_secret_root }}/vault-{{ platform_vault_application_job.providerId }}-ca.pem"
-    validate_certs: true
-    follow_redirects: none
-    timeout: 10
-    return_content: true
-    status_code: [200]
-  vars:
-    application_vault_provider: "{{ platform_application_vault_runtime[platform_vault_application_job.providerId] }}"
+- name: Согласование политики, AppRole и чтение RoleID через разрешённое соединение
+  platform.vault.application_document:
+    operation: identity
+    provider_id: "{{ platform_vault_application_job.providerId }}"
+    provider: "{{ platform_application_vault_runtime[platform_vault_application_job.providerId] }}"
+    secret_root: "{{ platform_application_secret_root }}"
+    identity: "{{ platform_vault_application_job.identity }}"
+    owner: "{{ platform_vault_application_job.owner }}"
+    policy: "{{ application_vault_retained_policy }}"
+    role: "{{ application_vault_role }}"
+    current: "{{ application_vault_identity_before.results }}"
   register: application_vault_role_id
   no_log: true
 
 - name: Сохранение результатов доставки учётных данных провайдера Vault в контексте операции
   ansible.builtin.set_fact:
-    platform_application_vault_identities: "{{ platform_application_vault_identities | combine({(platform_vault_application_job.libraryId ~ '/' ~ platform_vault_application_job.instanceId): {'roleId': application_vault_role_id.json.data.role_id, 'providerId': platform_vault_application_job.providerId}}) }}"
+    platform_application_vault_identities: "{{ platform_application_vault_identities | combine({(platform_vault_application_job.libraryId ~ '/' ~ platform_vault_application_job.instanceId): {'roleId': application_vault_role_id.role_id, 'providerId': platform_vault_application_job.providerId}}) }}"
   no_log: true

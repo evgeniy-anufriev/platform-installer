@@ -952,3 +952,319 @@ Vault provider preflight task. Each candidate run had one fast placement
 task start and two successful host results, zero failed tasks and a
 confirmed cancellation before provider writes. Focused tests also cover
 the dynamic-template and registry paths.
+
+### Image, file, integration and Vault batching, 2026-11-18 (uncommitted)
+
+Owner scope: remove the QA nginx `#jinja2: trim_blocks: True` directive and
+implement the four proposed Apply optimizations. The directive existed only in
+the isolated imported QA package, not in the repository's nginx template. No
+production preflight tasks were changed. Unrelated Go/frontend edits remain
+outside this work.
+
+The bounded Wails fixture uses project `project-50a1100000000001`, libraries
+`qc7-szi` and `qc7-sdku`, Keycloak/nginx/grant-access on node1/node2 and five
+SDKU consumers on node1 (11 placements). Infrastructure is skipped. Keycloak
+is real; the previously authorized artificial SDKU images are retained.
+
+Changes and invocation bounds:
+
+- Image discovery is one Docker inspection per account/library/node. Only
+  missing image IDs or tags enter delivery; identical placements share delivery.
+  Image digest, platform and account isolation remain checked. A native
+  100-placement regression asserts one Docker call.
+- Configuration bytes already calculated by preflight are written in one
+  existing identity-module invocation per placement. Binary contents, digest,
+  owner, mode, path guards and changed bind-source restart tracking are retained.
+- Local script executables use conditional GNU install; private inputs are
+  staged together with the existing always-cleanup path. Source substitutions
+  A-B-A are rechecked. Callback context is frozen once per callback rather than
+  recursively expanding source metadata for every role task. A native test
+  asserts exactly three context tasks for three A-B-A callbacks.
+- Keycloak reads client roles once per client, reuses the client lookup and
+  realm-scope inventory, and avoids unchanged-state verification rereads.
+- Vault document writes reuse the existing delta/CAS functions in one action;
+  policy/AppRole reconciliation and RoleID retrieval share one action. Fresh
+  owner checks, one CAS conflict retry and preservation of foreign fields remain.
+  No new external executable or dependency was added.
+
+Initial Wails runtime `2a408f54`, saved revision `d28306cb`, run
+`installer-95946f539cae040b00e946c1dd29d710`:
+
+| Interval | Earlier control | Initial candidate |
+| --- | ---: | ---: |
+| Resource preparation | 914s / 707 task starts | 544s / 345 starts |
+| Preflight | 427s / 373 starts | 68s / 23 starts |
+| Configuration file delivery, six SZI host results (sum) | 82.660s | 5.695s |
+| SSO callbacks | 410s | 516s |
+| Post-SSO Vault | 207s | 144s |
+| Combined SSO and Vault | 617s / 258 starts | 660s / 182 starts |
+
+The earlier control had the diagnostic directive and failed before nginx;
+restored batched preflight explains much of the preparation reduction. This
+is not a clean same-input proof of an overall twofold improvement. The SSO
+regression exposed repeated argument templating, including 45.936s in five
+fully skipped delivery tasks, and prompted the callback-context correction.
+
+The initial candidate also failed grant-access readiness: the container had
+APIPROVIDER_CLIENT_ID=grant-access-qc7-szi and Keycloak had that client, but the
+application still reported a missing client named grant-access. This is a
+separate image/application contract blocker; nginx/full-library acceptance is
+not claimed. The QA grant-access restart loop was stopped before the repeat.
+
+Final focused native run on the current node2 QA workspace: 35 tests, 34 pass;
+the sole failure is the pre-existing SDKU hmi-frontend-viewer scalar
+parameters.szi_proxy_url in an otherwise untouched package. Seventeen focused
+batch/context/secret-cleanup tests pass, including check mode, owned absolute
+runtime paths, source symlinks, CAS retry and repeated conflict. The two endpoint
+projection tests also pass after restoring the unrelated grant-access source
+default and keeping its diagnostic override only in the isolated QA package.
+
+Runtime `9a5f47eb` was validated and published with the standard bundle commands
+and rebound through real React/Wails. A bounded repeat stops through normal
+UI cancellation after SSO and Vault delivery, before grant-access startup.
+The repeat run `installer-b48d09896023994fd5f54d91df988339`, saved revision
+`af315062`, reached the requested SSO/Vault boundary and was CANCELLED through
+the ordinary React cancel handler before grant-access startup. Zero failed
+task results. Verify VERIFIED; node preparation388.006s, Plan29.515s and combined
+approval/Start58.840s. Resource preparation SUCCESS526s /345 task starts;
+preflight76s /23 starts.
+
+| Integration interval | Earlier control | Corrected candidate |
+| --- | ---: | ---: |
+| Five SSO callbacks and their entire Ansible wrapper | 410s | 171s /86 task starts |
+| Subsequent Vault delivery | 207s | 150s /102 starts |
+| Whole block (shared boundary counted once) | 617s /258 starts | 321s /187 starts |
+
+The corrected candidate freezes context five times for five callbacks; it
+does not repeat the SDKU batch once per client or per placement. Whole-block
+time fell48.0%, or1.92x against the available earlier control. The pure script
+processes and the wrapper are not conflated. This is a warm repeat on existing
+provider resources and images. Native fixtures cover cold delivery/write/CAS
+paths; a clean cold Wails install, nginx integration and whole-library Verify
+remain unaccepted. The diagnostic directive and cold-start difference in the
+earlier control prevent claiming a causal twofold improvement for the whole
+39:52 failed reference run.
+
+Safe result/event artifacts:
+`.runtime/qa/full50-1108/keycloak-nginx-optimized-apply-repeat-1118.json` and
+`.runtime/qa/full50-1108/keycloak-nginx-optimized-apply-repeat-1118-events.jsonl`.
+The ten changed Core/task source files and imported Keycloak script were
+hash-matched to the tested bundle/project. The Vault action differs only by
+its explanatory module docstring. No commit, merge or visual acceptance.
+
+Apply start to the same completed SSO/Vault boundary: control2161s (36:01),
+candidate1365s (22:45). This comparison shares the cold/preflight caveats above.
+The repeat stopped before grant-access, so only four configuration host results
+were reached (4.120s sum); these must not be compared to six control results.
+No temporary script input files remained after cancellation. Both isolated
+node2 test workspaces were removed through qa-sync cleanup; only their
+directories required ownership repair after sudo-run tests, with runtime
+hardlinked files left unchanged.
+
+### Complete SZI/nginx rerun after QA identity correction, 2026-11-18
+
+The first grant-access identity mismatch came from an artificial QA modification,
+not from the source SZI package: imported library defaults had changed instance_id_strategy
+from application-name to qualified. The existing application image expects
+client grant-access, while that fixture created grant-access-qc7-szi. The source
+package already declares application-name and Core implements it using slot ID.
+Restored the imported strategy, APIPROVIDER_CLIENT_ID default and QA role maps.
+No product identity algorithm or client-template fallback was introduced.
+
+The subsequent identical-looking error in run installer-e3b521f41cec0f33551c936848353433
+had a different cause. A secret-safe probe inside the real grant-access container,
+using its actual Java process credentials, obtained a token and found exactly one
+grant-access client through the admin API (HTTP200); name and redirectUris were
+correct. Read-only inspection of the shipped image showed that NativeKeycloakClient
+initializes administrative group sets only from groups actually present in the realm.
+Its client search hides internal clients when the supplied root group is absent.
+The QA override had replaced canonical SZI groups with a single QA group; actual
+startup warnings confirmed missing ROOT_GROUP_LEVEL_0 (Администратор ЭВО СЗИ),
+level1 and level2 groups. Restored those three source-defined groups and their
+role mappings in the QA desired state, excluding only mappings to omitted
+grant-access-audit/front apps. No Java/image/filter or product authorization
+change. Added a source regression asserting administrative role/group consistency;
+both this and the identity projection test pass on node2 (2 tests,6.999s).
+The final complete Wails result is recorded below.
+
+Run installer-a441c0015ebf1b3c3cb0464f2b75a74b (revision3e61cf13,
+plan2d467ff1, unchanged runtime9a5f47eb) confirmed the original client lookup
+error gone after canonical groups appeared in Keycloak. Resource preparation
+SUCCESS883s /345 task starts; preflight188s /23 headers included. The real image
+then failed its next startup dependency: GrantAccessAuditConfig requires the
+grant-access-audit client URL, absent from this deliberately reduced fixture.
+The owner explicitly selected adding the real Audit app rather than a metadata-only
+client. Cancelled the run through the public Wails CancelInstallationRun method
+to CANCELLED before changing its inputs. A new plan/runtime must include Audit
+on both SZI hosts (13 total placements); its actual approved image was found
+in existing QA artifacts, without any internet acquisition. Runtime credentials
+for the two newly required Audit accounts remain only under .runtime/secrets.
+
+The real Audit image requires a complete QA endpoint (HTTP,port-1,probe
+/actuator/health) when enabled; added it as desired-state overrides. Published
+and bound runtime2d8bd26d through the standard publisher/React flow; node3
+Prepare PREPARED324.838s. That VM currently exposes1vCPU. Run
+installer-2965bc925f4869e95be1ed0e8275910e, revision9676d2f2,
+plan3bebc229: Plan34.752s, combined Start57.986s, preflight69s /23 task headers,
+resources SUCCESS660s /363 headers. It exposed the previously untested cold
+image path: image_delivery.yml's bare conditional expression failed Ansible
+parsing when Audit was absent locally. Replaced it with equivalent guarded
+and/or clauses, adding no role/task/subprocess/I/O. A native test reproduces the
+failure on the previous task for missing, observed and unobserved image cases;
+after the fix all16 batch optimization tests pass (30.347s), load calls1 for
+cold/unobserved and0 for an observed image, transient image stages cleaned.
+The existing100-placement test still proves one batch inspect and no delivery
+for already loaded/tagged images. A new immutable bundle and Wails rerun are
+required; the failed run is not a completed library timing.
+
+Published replacement runtime d5939ef0 using the standard native builder and
+publisher; the complete local bundle validates, with the changed task matching
+the working tree. Prepare PREPARED347.207s. Run
+installer-18674db0acf81875f0ac573352b00e61, revisioncbebf5a0,
+plan81e8568c: Verify12.011s, Plan32.156s, combined Start60.283s;
+resources SUCCESS591s /363 headers, preflight66s /23 headers included.
+The formerly failing cold delivery succeeded on both nodes: actual Docker load
+task host durations108.414s (node1),52.235s (node2); final image/platform guards
+and temporary stage cleanup passed. grant-access-node1 became healthy after
+the real Audit client appeared. A subsequent ensure-user failedHTTP400 at step30:
+the newly supplied QA Audit user password lacked a special character, required
+by the existing realm's tuz/admin password policy. Replaced only that runtime
+input with a unique strong QA value; no secret values or product generator/
+password policy changes. A final fresh Wails plan/run on the same runtime,
+project and13 placements follows; images are now warm.
+
+That repeat, installer-5857444ba69571bd3283aaa951759fc9, completed resources
+SUCCESS900s /363 headers (preflight165s /23 included) but failed create-admin172.
+The protected, already-redacted native diagnostic showed HTTP401, not a profile
+validation error. A focused main-admin token probe reproduced HTTP200 immediately
+then HTTP401 after20s although the token lifetime is300s. Keycloak audit metadata
+identified admin-grant-access deleting those sessions. The interrupted fixture
+had created canonical groups but had never assigned admin to its desired
+Администратор ЭВО СЗИ group (confirmed zero memberships). Restored only that
+explicitly desired membership through the real admin API; no session-monitor
+or password-policy disabling. The actual unchanged create-admin.sh, Compose
+container and private runtime password file then pass rc0 in53.013s. Separately
+the corrected Audit password is acceptedHTTP204 and token login succeedsHTTP200.
+All extra focused password/script files were removed from protected staging.
+These are focused prerequisite repairs, not substitutes for the final complete
+Wails run. No commit or additional product behavior was introduced for them.
+
+The root-group-only repair was insufficient: installer-76a5b58ab9bb40e547cdf4abe4800235
+completed resources SUCCESS884s /363 headers (preflight280s /23 included), then
+create-admin60 again saw HTTP401. The earlier53s focused pass had not established
+stable session behavior. Read-only inspection of the shipped UserSessionMonitor
+implementation clarified that administrative users remain subject to monitoring;
+technical-group users are exempt. The QA Installer account admin was configured
+as an ordinary administrative user despite being used for machine CLI operations.
+Added admin to ТУЗ in this QA project's desired IDENTITY_GROUPS and applied that
+membership, then restarted only the ownership-checked grant-access-node1 to
+refresh cached membership. No product package, monitor, timeout or authentication
+guard was changed for this fixture repair. Two consecutive actual create-admin
+runs now pass rc0,86.214s and54.012s, with grant-access healthy and its monitor
+enabled. Protected focused files were removed. A complete Wails rerun follows
+on the same runtime/images and13 placements with the corrected QA group input.
+
+Run installer-4418f1e42b38a484085750a7040dcb76 (revisionc40fa41c,
+plan678629ec, runtime d5939ef0) passed create-admin, SSO client/accounts,
+real grant-access and real Audit on both hosts, nginx activation and HTTPS/DNS.
+Resources SUCCESS646s /363 headers, preflight143s /23 included. The final
+nginx integrate-routes callback failed rc5/step10: the imported QA prepare-routes.sh
+was an older copy, printing its file argument as JSON. Its protected diagnostic
+contained a parse error at the input path's end; the transient argument file
+was correctly removed. The repository source already supports a readable file
+argument. Synced only that QA script to the current source and hash-verified it;
+no further Core/source change. All5 routes tests pass on node2, including the
+explicit platform-automation native package_script test with a300KB file argument,
+repeat/noop, retained routes, ownership rejection and cleanup (52.082s).
+The failed action has no successful complete-library duration. Its startup
+marker was17:42:40Z and failure18:21:27Z (38:47 to the callback error), on the
+1vCPU execution node under high system CPU load. Final full rerun remains
+recorded separately below; the failed run is not a comparable baseline.
+
+Final React/Wails run installer-ffaee5aeeda1f4b10e4a14126bde1ef7 finished
+SUCCEEDED. GetInstallationRun independently returned READY/SUCCEEDED and the
+Execution Node journal recorded zero failed host task results. Saved revision
+50c3fa50, plan740cc850, runtime d5939ef0. Project Verify27.111s, Plan31.200s,
+combined approval/Start62.977s. Resource preparation SUCCESS679s /363 task
+starts. Install and verify SZI SUCCESS1910s (31:50) /791 starts, from
+18:43:37Z through 19:15:27Z on 2026-11-18, including nginx route reconciliation.
+Keycloak, grant-access and grant-access-audit were healthy on both hosts.
+Both nginx containers were running and each effective route file had seven
+routes. Both libraries and the 77s post-install action passed.
+
+The SDKU result covers five QA stand-ins, with infrastructure installation
+and verification excluded. Its wall time contains a 38437s overnight gap
+between journal entries for Compose preparation. The gap is excluded from
+performance conclusions. It occurred after the successful SZI action and
+does not affect the 31:50 SZI measurement. Node3 had one vCPU and images
+were already present. The safely scoped node2 source workspace was cleaned
+with qa-sync. No commit or visual inspection was performed.
+
+The expanded five-test projection module has four passes and one unrelated
+failure: test_application_parameters_only_contain_structured_settings rejects
+the existing szi_proxy_url parameter in SDKU hmi-frontend-viewer. This test
+does not exercise the QA-selected five data-manager slots; its failure is
+recorded rather than silently changing that package in this task.
+
+Removed only three obsolete qualified QA containers after checking project,
+library and instance ownership labels; kept their host data. First attempt
+installer-faacbacd7bc715b6dec881486581349f then failed PostgreSQL ownership
+preflight because role qc7_szi_keycloak retained the former instance marker.
+Verified the exact old project/provider/library marker and renamed only its
+account component from keycloak-qc7-szi/postgres to keycloak/postgres. Existing
+database, data, password and role privileges were preserved.
+
+Five artificial SDKU apps previously slept indefinitely despite declared HTTP
+health checks. The full-run fixture now uses the existing image's native Vault
+executable as an ephemeral HTTP stand-in, supervised by the real Vault Agent.
+Its dev credentials are neither specified nor logged/stored; native output is
+discarded. Health probes use /v1/sys/health. No new software or product SDKU
+template changes. An isolated UID1000 Docker probe confirmed HTTP readiness.
+These stand-ins do not establish acceptance of real SDKU application logic.
+
+Three focused tests pass on node2 from the current qa-sync workspace, including
+the new regression checking Core's actual identity function against the rendered
+Keycloak client ID and APIPROVIDER_CLIENT_ID for a nondefault SZI library ID.
+All three existing Vault nodes were confirmed unsealed with verified TLS.
+
+Real React/Wails complete-run attempt:
+installer-3f0467a57a9bf3d77a8698f7dc8423a2, revision b9d45986,
+runtime9a5f47eb, 11 placements, infrastructure Apply/Verify skipped as before.
+Authoritative Plan27.416s; combined approval/Start56.924s. Preflight54s /23
+task starts; resource preparation SUCCESS503s /345 starts. This attempt failed
+at Compose activation before grant-access: RootlessKit could not bind57800.
+Compose config validation passed; State.Error identified that exact host port.
+Subsequent host socket and RootlessKit port-table inspection found no permanent
+listener, and a native bind test succeeded. No unknown service was stopped.
+
+Repeat installer-fe1682954744283395ba63a33099d113 uses the same revision,
+runtime, selected operations and deterministic plan fingerprint, with a fresh
+authoritative BuildDeploymentPlan/approval/Start through React/Wails. Start
+returned STARTED55.285s. Final action timings are recorded after terminal;
+no commit is authorized.
+
+That repeat exposed the residual Docker state after the earlier bind failure:
+keycloak-node1 was Running with an empty NetworkSettings.Networks map and no
+routes. Vault Agent reported network-unreachable DNS requests, so Keycloak
+never launched and the normal health wait failed. Verified project/library/
+instance and Compose-network ownership, connected that exact existing container
+to its declared default network and restarted only it. The passive socket
+observer then recorded both RootlessKit57800 listeners at11:13:11Z. Vault Agent
+renewed its token and Keycloak startup was recorded at11:15:37Z. No Core health
+guard or TLS check was disabled. That repaired attempt is not a clean timing.
+
+New complete Wails measurement after repair:
+installer-234217636128e849e4f51a41e3b95830, unchanged revision/runtime/input,
+combined approval/Start54.619s. Its elapsed stage times are recorded below at
+terminal; no further manual intervention is planned during this measurement.
+
+Before library startup that attempt was cancelled with the supported Wails
+CancelInstallationRun method: the artificial SDKU manifest still declared the
+real create-project post_install business API script, which its HTTP stand-in
+cannot implement. Removed that script declaration only from the QA package;
+all real SZI/Keycloak/nginx scripts remain selected. This excludes SDKU business
+seeding acceptance, rather than replacing it with a synthetic success result.
+
+Complete fixture run installer-3443b4dbe9dae93de4ce9a2661308779, revision
+fd9c0728, runtime9a5f47eb, fresh authoritative plan48c447c4faaf81273911a2a4,
+combined approval/Start53.840s. Final timings follow at terminal.

@@ -14,6 +14,26 @@
     state: directory
     owner: "{{ platform_script_job.account }}"
     mode: '0700'
+  when: not (platform_script_on_controller | default(false) | bool)
+  no_log: true
+
+- name: Подготовка исполняемого файла сценария на контроллере
+  ansible.builtin.shell: |
+    set -eu
+    uid="$(id -u)"
+    test ! -L "$SCRIPT_DIRECTORY"
+    if [ ! -d "$SCRIPT_DIRECTORY" ] || [ "$(stat -c '%u:%a' -- "$SCRIPT_DIRECTORY")" != "$uid:700" ]; then
+      install -v -d -o "$uid" -m 0700 -- "$SCRIPT_DIRECTORY"
+    fi
+    # Recompare the source on every call: consecutive jobs may share an ID.
+    install -v -C -T -o "$uid" -m 0700 -- "$SCRIPT_SOURCE" "$SCRIPT_DESTINATION"
+  environment:
+    SCRIPT_DIRECTORY: "{{ platform_script_directory }}"
+    SCRIPT_SOURCE: "{{ platform_script_job.path }}"
+    SCRIPT_DESTINATION: "{{ platform_script_directory }}/{{ platform_script_job.id }}"
+  register: _platform_script_local_delivery
+  changed_when: _platform_script_local_delivery.stdout | length > 0
+  when: platform_script_on_controller | default(false) | bool
   no_log: true
 
 - name: Удаление временных входных файлов прерванного сценария пакета перед повторным запуском
@@ -31,7 +51,9 @@
         state: directory
         owner: "{{ platform_script_job.account }}"
         mode: '0700'
-      when: platform_script_job.secretInputs | length > 0 or platform_script_job.invocations | default([]) | length > 0 or platform_script_job.fileArgumentIndexes | default([]) | length > 0
+      when:
+        - not (platform_script_on_controller | default(false) | bool)
+        - platform_script_job.secretInputs | length > 0 or platform_script_job.invocations | default([]) | length > 0 or platform_script_job.fileArgumentIndexes | default([]) | length > 0
       changed_when: false
       no_log: true
 
@@ -39,14 +61,25 @@
       ansible.builtin.copy:
         src: "{{ _platform_script_delivery_file.src | default(omit) }}"
         content: "{{ _platform_script_delivery_file.content | default(omit) }}"
+        remote_src: "{{ (platform_script_on_controller | default(false) | bool) and _platform_script_delivery_file.src is defined }}"
         dest: "{{ _platform_script_delivery_file.dest }}"
         owner: "{{ platform_script_job.account }}"
         mode: "{{ _platform_script_delivery_file.mode }}"
-      loop: "{{ _platform_script_delivery_files }}"
+      loop: >-
+        {{ (_platform_script_delivery_files | selectattr('temporary') | list)
+           if (platform_script_on_controller | default(false) | bool) else _platform_script_delivery_files }}
       loop_control:
         loop_var: _platform_script_delivery_file
       register: _platform_script_copied_file
       changed_when: not _platform_script_delivery_file.temporary and _platform_script_copied_file.changed
+      when: not (platform_script_on_controller | default(false) | bool)
+      no_log: true
+
+    - name: Пакетная подготовка временных входов сценария на узле исполнения
+      platform.core.package_script_inputs:
+        directory: "{{ platform_script_secret_directory }}"
+        files: "{{ _platform_script_delivery_files | selectattr('temporary') | list }}"
+      when: platform_script_on_controller | default(false) | bool
       no_log: true
 
     - name: Выполнение точного сценария пакета без оболочки или неограниченной среды выполнения

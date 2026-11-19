@@ -17,15 +17,9 @@
       when: application_provider_script.runOn | default('target') != 'execution_node'
       no_log: true
 
-    - name: Вызов универсального средства запуска с явными входными данными сценария для выбранной цели
-      ansible.builtin.include_role:
-        name: platform.core.package_script
-        apply:
-          delegate_to: "{{ 'localhost' if application_provider_script.runOn | default('target') == 'execution_node' else application_provider_script_host }}"
-          connection: "{{ 'local' if application_provider_script.runOn | default('target') == 'execution_node' else 'ssh' }}"
-          become: "{{ application_provider_script.runOn | default('target') != 'execution_node' }}"
-      vars:
-        platform_script_job:
+    - name: Однократная фиксация контекста текущего сценария провайдера
+      ansible.builtin.set_fact:
+        _application_provider_script_job:
           id: "{{ application_provider_script.id }}"
           path: "{{ application_provider_script.path }}"
           argv: "{{ application_provider_script.argv }}"
@@ -39,8 +33,21 @@
                (application_script_target_job.placement.runtimeDirectory | regex_replace('^~(?=/|$)',
                  application_script_identity.ansible_facts.getent_passwd[application_script_target_job.account][4])) ~
                '/' ~ application_script_target_job.placement.runtimePath }}
-        platform_script_secret_files: >-
+        _application_provider_script_files: >-
           {{ hostvars['localhost'].platform_application_secret_files |
              combine(hostvars['localhost'].platform_application_credential_files | default({})) |
              combine(application_provider_private_files | default({})) }}
+      no_log: true
+
+    - name: Вызов универсального средства запуска с явными входными данными сценария для выбранной цели
+      ansible.builtin.include_role:
+        name: platform.core.package_script
+        apply:
+          delegate_to: "{{ 'localhost' if application_provider_script.runOn | default('target') == 'execution_node' else application_provider_script_host }}"
+          connection: "{{ 'local' if application_provider_script.runOn | default('target') == 'execution_node' else 'ssh' }}"
+          become: "{{ application_provider_script.runOn | default('target') != 'execution_node' }}"
+      vars:
+        platform_script_on_controller: "{{ application_provider_script.runOn | default('target') == 'execution_node' }}"
+        platform_script_job: "{{ _application_provider_script_job }}"
+        platform_script_secret_files: "{{ _application_provider_script_files }}"
         platform_script_secret_root: "{{ hostvars['localhost'].platform_application_secret_root }}"
