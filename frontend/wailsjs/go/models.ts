@@ -1924,6 +1924,22 @@ export namespace desktop {
     }
   }
 
+  export class RuntimeSecretStatuses {
+    projectRevision?: string;
+    services?: Record<string, boolean>;
+    applications?: Record<string, any>;
+
+    static createFrom(source: any = {}) {
+      return new RuntimeSecretStatuses(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.projectRevision = source["projectRevision"];
+      this.services = source["services"];
+      this.applications = source["applications"];
+    }
+  }
   export class RuntimeSecretValuesInput {
     pendingApplicationInput?: boolean;
     applicationSlot?: string;

@@ -213,8 +213,14 @@ func TestPendingServiceSecretsUseSavedCatalogAndRequireNoExecutionNode(t *testin
 	if operation.Status != "READY" || len(operation.Descriptors) != 2 || app.execution.context.Status == "READY" {
 		t.Fatalf("operation=%#v execution=%#v", operation, app.execution.context)
 	}
+	if present, tracked := app.GetRuntimeSecretStatuses("services").Services["redis-main"]; !tracked || present {
+		t.Fatal("service must be listed as missing before session input")
+	}
 	if err := app.SetPendingDeploymentRuntimeSecretValues(PendingRuntimeSecretValuesInput{ServiceDeployment: "redis-main", Values: map[string]string{"redis-password": "not-reported", "redis-sentinel-password": "also-not-reported"}}); err != nil {
 		t.Fatal(err)
+	}
+	if !app.GetRuntimeSecretStatuses("services").Services["redis-main"] {
+		t.Fatal("service status did not reflect saved session inputs")
 	}
 	if _, err := app.SetSessionCredential(runtimesecret.Input{Username: "installer", SSHMode: runtimesecret.SSHPassword, SSHPassword: "transport-only", ElevationMode: runtimesecret.ElevationNone}); err != nil {
 		t.Fatal(err)

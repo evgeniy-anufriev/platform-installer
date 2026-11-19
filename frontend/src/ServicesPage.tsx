@@ -3,11 +3,16 @@ import type {
   OpenResult,
   PendingRuntimeSecretFileInput,
   PendingRuntimeSecretValuesInput,
+  ProjectBackend,
   RuntimeSecretDescriptorOperation,
   ServiceConfigurationPreview,
 } from "./backend";
 import type { CertificateIntent } from "./CertificatesPage";
 import type { DeploymentIntent, PlacementIntent } from "./TopologyPage";
+import {
+  RuntimeSecretStatus,
+  useRuntimeSecretStatuses,
+} from "./RuntimeSecretStatus";
 
 export type ConfigurationIntent =
   | {
@@ -405,6 +410,7 @@ export function ServicesPage({
   onReview,
   onDiscard,
   onGetPendingRuntimeSecretDescriptors,
+  loadSecretStatuses,
   onSetPendingDeploymentRuntimeSecretValues,
   onChoosePendingDeploymentRuntimeSecretFile,
 }: {
@@ -439,6 +445,7 @@ export function ServicesPage({
   onGetPendingRuntimeSecretDescriptors?: (
     serviceDeployment: string,
   ) => Promise<RuntimeSecretDescriptorOperation>;
+  loadSecretStatuses?: ProjectBackend["getRuntimeSecretStatuses"];
   onSetPendingDeploymentRuntimeSecretValues?: (
     input: PendingRuntimeSecretValuesInput,
   ) => Promise<void>;
@@ -456,8 +463,13 @@ export function ServicesPage({
     Record<string, string>
   >({});
   const [secretBusy, setSecretBusy] = useState(false);
-  const [installedSecrets, setInstalledSecrets] = useState<Record<string, boolean>>({});
   const [secretStatusVersion, setSecretStatusVersion] = useState(0);
+  const installedSecrets = useRuntimeSecretStatuses(
+    loadSecretStatuses,
+    "services",
+    managed,
+    secretStatusVersion,
+  )?.services;
   const [secretError, setSecretError] = useState("");
   const [inputEncryptionPassword, setInputEncryptionPassword] = useState("");
   const [secretFileStates, setSecretFileStates] = useState<
@@ -495,24 +507,6 @@ export function ServicesPage({
   const hasConfigurableSecrets =
     settings.some((setting) => !!setting.runtimeSecretRequirementRef) ||
     !!service?.secretInputs?.length;
-  useEffect(() => {
-    if (view !== "detail" || !selectedDeploymentId || !hasConfigurableSecrets || !onGetPendingRuntimeSecretDescriptors) return;
-    let cancelled = false;
-    const refresh = async () => {
-      try {
-        const operation = await onGetPendingRuntimeSecretDescriptors(selectedDeploymentId);
-        if (!cancelled) setInstalledSecrets((current) => ({
-          ...current,
-          [selectedDeploymentId]: operation.status === "READY" && operation.secretsInstalled === true,
-        }));
-      } catch {
-        if (!cancelled) setInstalledSecrets((current) => ({ ...current, [selectedDeploymentId]: false }));
-      }
-    };
-    void refresh();
-    const timer = window.setInterval(() => void refresh(), 30000);
-    return () => { cancelled = true; window.clearInterval(timer); };
-  }, [view, selectedDeploymentId, hasConfigurableSecrets, onGetPendingRuntimeSecretDescriptors, secretStatusVersion, managed]);
   const members = selected
     ? finalMembers(managed, placementIntents, selected.deploymentId)
     : [];
@@ -761,6 +755,12 @@ export function ServicesPage({
                   ? "Будет удалён"
                   : "Сохранён"}
             </small>
+            {!row.state && (
+              <RuntimeSecretStatus
+                compact
+                present={installedSecrets?.[row.deploymentId]}
+              />
+            )}
           </button>
         ))}
         {!filteredRows.length && (
@@ -815,10 +815,17 @@ export function ServicesPage({
         {hasConfigurableSecrets && <section className="card service-secrets-action">
           <div>
             <h2>Секреты</h2>
-            <span className={`status-chip status-chip--${installedSecrets[selected.deploymentId] ? "success" : "warning"}`} role="status">
-              <span className="status-chip-symbol" aria-hidden="true">{installedSecrets[selected.deploymentId] ? "✓" : "!"}</span>
-              {installedSecrets[selected.deploymentId] ? "Установлены" : "Не установлены"}
+            <span role="status">
+              <RuntimeSecretStatus present={installedSecrets?.[selected.deploymentId]} />
             </span>
+            {selected.serviceType === "vault" && (
+              <p className="muted">
+                Добавьте bootstrap-секреты, если Vault уже установлен и
+                инициализирован. При первой установке оставьте поля пустыми.
+                Токен администратора и ключи распечатывания появятся после
+                инициализации Vault.
+              </p>
+            )}
             <p className="muted">
               Для выбранного режима показаны только разрешённые каталогом поля.
               Значения остаются в памяти приложения, не сохраняются в проекте и

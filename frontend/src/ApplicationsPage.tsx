@@ -17,9 +17,14 @@ import { ApplicationFileSettings } from "./ApplicationFileSettings";
 import { ApplicationPackageImport } from "./ApplicationPackageImport";
 import type {
   OpenResult,
+  ProjectBackend,
   RuntimeSecretDescriptorOperation,
   RuntimeSecretValuesInput,
 } from "./backend";
+import {
+  RuntimeSecretStatus,
+  useRuntimeSecretStatuses,
+} from "./RuntimeSecretStatus";
 import "./applications.css";
 
 import {
@@ -47,6 +52,7 @@ export function ApplicationsPage({
   loadPendingSecrets,
   saveSecrets,
   loadSecretAvailability,
+  loadSecretStatuses,
   executionContextKey = "",
   choosePackage,
   onImport,
@@ -73,6 +79,7 @@ export function ApplicationsPage({
   }) => Promise<RuntimeSecretDescriptorOperation>;
   saveSecrets?: (input: RuntimeSecretValuesInput) => Promise<void>;
   loadSecretAvailability?: () => Promise<RuntimeSecretDescriptorOperation>;
+  loadSecretStatuses?: ProjectBackend["getRuntimeSecretStatuses"];
   executionContextKey?: string;
   managed: OpenResult["managed"];
   snapshot: OpenResult["snapshot"];
@@ -110,6 +117,14 @@ export function ApplicationsPage({
   const [local, setLocal] = useState<Record<string, string>>({});
   const [editing, setEditing] = useState<Set<string>>(new Set());
   const [error, setError] = useState("");
+  const [secretStatusVersion, setSecretStatusVersion] = useState(0);
+  const listSecretStatuses = useRuntimeSecretStatuses(
+    loadSecretStatuses,
+    "applications",
+    managed,
+    secretStatusVersion,
+    executionContextKey,
+  )?.applications;
   // One public descriptor query per saved revision and execution context.
   // A fresh query intentionally invalidates attached service inputs on the backend.
   const secretDescriptors = useRef<
@@ -215,6 +230,7 @@ export function ApplicationsPage({
     setSecretAvailability(undefined);
     try {
       await saveSecrets!(input);
+      setSecretStatusVersion((version) => version + 1);
       if (loadSecretAvailability) await refreshSecretAvailability();
     } catch (error) {
       secretDescriptors.current = undefined;
@@ -670,6 +686,7 @@ export function ApplicationsPage({
           save: loadPendingSecrets
             ? async (input) => {
                 await saveSecrets(input);
+                setSecretStatusVersion((version) => version + 1);
                 await loadPendingApplicationSecrets();
               }
             : saveApplicationSecrets,
@@ -840,6 +857,10 @@ export function ApplicationsPage({
                 >
                   <strong>{key}</strong>
                   <small>{String(row.libraryRef)}</small>
+                  <RuntimeSecretStatus
+                    compact
+                    present={listSecretStatuses?.[key]?.[""]}
+                  />
                 </button>
                 {Object.keys(objectValue(row.applications)).map((name) => (
                   <button
@@ -856,7 +877,11 @@ export function ApplicationsPage({
                       })
                     }
                   >
-                    ↳ {name}
+                    <span>↳ {name}</span>
+                    <RuntimeSecretStatus
+                      compact
+                      present={listSecretStatuses?.[key]?.[name]}
+                    />
                   </button>
                 ))}
               </div>

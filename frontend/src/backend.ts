@@ -23,6 +23,7 @@ import {
   GetApplicationRuntimeSecretAvailability,
   GetPendingRuntimeSecretDescriptors,
   GetPendingApplicationRuntimeSecretDescriptors,
+  GetRuntimeSecretStatuses,
   ListPendingSecretOutputs,
   SetSecretOutputEncryptionPassword,
   DeliverPendingSecretOutput,
@@ -425,6 +426,11 @@ export type ProjectExportOperationResult = {
   result?: ProjectExportResult;
   error?: { code: string; message: string };
 };
+export type RuntimeSecretStatuses = {
+  projectRevision?: string;
+  services?: Record<string, boolean>;
+  applications?: Record<string, Record<string, boolean>>;
+};
 export type RuntimeSecretDescriptor = {
   requirementRef: string;
   purpose:
@@ -619,6 +625,9 @@ export interface ProjectBackend {
     applicationSlot?: string;
   }): Promise<RuntimeSecretDescriptorOperation>;
   getApplicationRuntimeSecretAvailability?(): Promise<RuntimeSecretDescriptorOperation>;
+  getRuntimeSecretStatuses?(
+    section: "services" | "applications",
+  ): Promise<RuntimeSecretStatuses>;
   setDeploymentRuntimeSecretValues?(
     input: RuntimeSecretValuesInput,
   ): Promise<void>;
@@ -753,6 +762,7 @@ export const backend: ProjectBackend = {
     ) as unknown as Promise<RuntimeSecretDescriptorOperation>,
   getApplicationRuntimeSecretAvailability: () =>
     GetApplicationRuntimeSecretAvailability() as unknown as Promise<RuntimeSecretDescriptorOperation>,
+  getRuntimeSecretStatuses: (section) => GetRuntimeSecretStatuses(section),
   setDeploymentRuntimeSecretValues: (input) =>
     SetDeploymentRuntimeSecretValues(input as never),
   getPendingRuntimeSecretDescriptors: (serviceDeployment) =>

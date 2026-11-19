@@ -201,9 +201,22 @@ describe("application editor", () => {
       loadSecrets: loadCore,
       loadPendingSecrets: loadPending,
       saveSecrets: save,
+      loadSecretStatuses: vi.fn(async () => ({
+        projectRevision: "revision",
+        applications: { sdku: { "": false, gateway: present } },
+      })),
     };
     const view = render(<ApplicationsPage {...props} />);
-    await selectSlot();
+    const libraryRow = await screen.findByRole("button", {
+      name: /^sdku.*Секреты не заданы/,
+    });
+    expect(within(libraryRow).getByTitle("Секреты не заданы").textContent).toBe(
+      "!Секреты не заданы",
+    );
+    const row = await screen.findByRole("button", {
+      name: /↳ gateway.*Секреты не заданы/,
+    });
+    await userEvent.click(row);
     await userEvent.click(screen.getByRole("button", { name: "Секреты" }));
     const password = screen.getByLabelText(
       "postgres: Пароль",
@@ -228,6 +241,8 @@ describe("application editor", () => {
       ),
     );
     await screen.findByText("Секрет задан");
+    await screen.findByRole("button", { name: /↳ gateway.*Секреты заданы/ });
+    expect(within(libraryRow).getByTitle("Секреты не заданы")).toBeTruthy();
     expect(loadCore).not.toHaveBeenCalled();
     expect(structural).not.toHaveBeenCalled();
     view.rerender(<ApplicationsPage {...props} draftActive={true} />);
