@@ -116,6 +116,35 @@ def _has_template_key(value):
     return False
 
 
+def package_user_scenarios(manifest, definition, checksums):
+    """Validate scenario metadata using the hashes already computed by the package loader."""
+    scenarios = manifest.get("user_scenarios", {})
+    settings, scripts, resources = set(), set(), set()
+    defaults = definition.get("defaults", {}).get("parameters", {})
+    for scenario in scenarios.values():
+        setting = scenario["setting"]
+        if setting in settings or setting in defaults:
+            raise ValueError("APPLICATION_SCENARIO_SETTING_CONFLICT")
+        settings.add(setting)
+        action = scenario["action"]
+        if action["kind"] == "package_script":
+            slot = action["slot_ref"]
+            target = (slot, action["script_ref"])
+            if slot not in definition["slots"] or target in scripts:
+                raise ValueError("APPLICATION_SCENARIO_SCRIPT_TARGET_INVALID")
+            scripts.add(target)
+        else:
+            target = action["resource_ref"]
+            if target in resources:
+                raise ValueError("APPLICATION_SCENARIO_RESOURCE_TARGET_CONFLICT")
+            resources.add(target)
+            restore = action["restore_on_create"]
+            source = restore["source"]
+            if source == "library.yml" or checksums.get(source) != restore["sha256"]:
+                raise ValueError("APPLICATION_SCENARIO_RESTORE_ASSET_INVALID")
+    return scenarios
+
+
 def load_package(root, reference, kind, loader, validator, inputs=None):
     match = REF.fullmatch(reference or "")
     if not match:
@@ -127,7 +156,8 @@ def load_package(root, reference, kind, loader, validator, inputs=None):
     package_version = {'platform.installer/application-package/v1alpha1': 'v1alpha1',
                        'platform.installer/application-package/v1alpha2': 'v1alpha2',
                        'platform.installer/application-package/v1alpha3': 'v1alpha3',
-                       'platform.installer/application-package/v1alpha4': 'v1alpha4'}.get(manifest.get('apiVersion'))
+                       'platform.installer/application-package/v1alpha4': 'v1alpha4',
+                       'platform.installer/application-package/v1alpha5': 'v1alpha5'}.get(manifest.get('apiVersion'))
     if package_version is None:
         raise ValueError('APPLICATION_PACKAGE_VERSION_UNSUPPORTED')
     schema = os.path.join(validator.schema_root, "application-libraries", package_version, "package.schema.json")
@@ -206,7 +236,11 @@ def load_package(root, reference, kind, loader, validator, inputs=None):
                 if not match_env or match_env[1] in env_keys or match_env[1] == "SERVER_ID":
                     raise ValueError("Library dotenv contract invalid")
                 env_keys.add(match_env[1])
+    user_scenarios = manifest.get("user_scenarios")
+    if user_scenarios:
+        user_scenarios = package_user_scenarios(manifest, definition, dict(digest))
     return {"name": name, "version": version, "defaultsPath": os.path.join(root, folder, defaults_path),
+            **({"userScenarios": user_scenarios} if user_scenarios else {}),
             "definition": definition, "digest": canonical_digest(sorted(digest)), "logicalPath": folder,
             "render": manifest.get("render", {}), "scripts": scripts, "files": sorted(listed - {kind + ".yml"}),
             "directoryEntries": [entry for entry in manifest["files"] if entry.endswith("/")]}
@@ -282,6 +316,41 @@ def application_instance_id(slot_id, library_id, strategy='qualified'):
     return slot_id if strategy == 'application-name' else slot_id + '-' + library_id
 
 
+def resolve_user_scenarios(library, deployment, applications, package, field):
+    """Resolve a library selection once before expanding host placements."""
+    scripts, restores, findings = {}, {}, []
+    slots = library['definition']['slots']
+    parameters = deployment.get('overrides', {}).get('parameters', {})
+    for scenario_id, scenario in library.get('userScenarios', {}).items():
+        scenario_field = field + '.user_scenarios.' + scenario_id
+        enabled = parameters.get(scenario['setting'], False)
+        if type(enabled) is not bool:
+            findings.append(finding('APPLICATION_SCENARIO_SETTING_INVALID',
+                                    field + '.overrides.parameters.' + scenario['setting']))
+            continue
+        action = scenario['action']
+        if action['kind'] == 'package_script':
+            slot_id = action['slot_ref']
+            app = applications.get(slot_id) or package(slots[slot_id]['applicationRef'], 'application')
+            script_id = action['script_ref']
+            script = next((item for item in app['scripts'] if item['id'] == script_id), None)
+            if (script is None or script['phase'] != 'post_install' or script.get('execution') != 'once'
+                    or (enabled and slot_id not in applications)):
+                findings.append(finding('APPLICATION_SCENARIO_SCRIPT_TARGET_INVALID', scenario_field))
+                continue
+            scripts.setdefault(slot_id, {})[script_id] = scenario_id if enabled else None
+        elif enabled:
+            resource_id = action['resource_ref']
+            resource = deployment['resources'].get(resource_id)
+            if (not resource or resource['kind'] != 'postgresql.database'
+                    or resource.get('mode', 'managed') != 'managed'
+                    or resource['binding'] not in deployment.get('bindings', {})):
+                findings.append(finding('APPLICATION_SCENARIO_RESOURCE_TARGET_INVALID', scenario_field))
+                continue
+            restores[resource_id] = action['restore_on_create']
+    return scripts, restores, findings
+
+
 def prepare(root, desired, memberships, contract, loader, contracts_root):
     schema_version(desired, contract)
     validator = SchemaValidator(contracts_root)
@@ -337,14 +406,26 @@ def prepare(root, desired, memberships, contract, loader, contracts_root):
             slots = library["definition"]["slots"]
             if set(selected) - set(slots) or any(slot.get("required", False) and name not in selected for name, slot in slots.items()):
                 raise ValueError("Recipe slots mismatch")
+            applications = {name: package(slots[name]['applicationRef'], 'application') for name in selected}
             deployment['resources'] = library_resources(library['definition'], deployment,
-                [package(slots[name]['applicationRef'], 'application')['definition'] for name in selected])
+                [application['definition'] for application in applications.values()])
+            scenario_scripts, scenario_restores, scenario_findings = resolve_user_scenarios(
+                library, deployment, applications, package, field)
+            if scenario_findings:
+                findings.extend(scenario_findings)
+                continue
             placements = [host for host, membership in sorted(memberships.items()) if library_id in membership]
             if not placements:
                 findings.append(finding("APPLICATION_LIBRARY_PLACEMENT_MISSING", field))
             for slot_id in sorted(selected):
                 slot = slots[slot_id]
-                application = package(slot["applicationRef"], "application")
+                application = applications[slot_id]
+                script_selection = scenario_scripts.get(slot_id, {})
+                if script_selection:
+                    application = dict(application, scripts=[
+                        dict(script, scenarioId=script_selection[script['id']]) if script['id'] in script_selection else script
+                        for script in application['scripts']
+                        if script['id'] not in script_selection or script_selection[script['id']] is not None])
                 connection_pair = (deployment["libraryRef"], slot["applicationRef"])
                 if connection_pair not in connection_maps:
                     declarations = application["definition"].get("connections", {})
@@ -374,6 +455,7 @@ def prepare(root, desired, memberships, contract, loader, contracts_root):
                                  "connections": connection_maps[connection_pair],
                                  "skipConnectionTopology": skip_connection_topology,
                                  "deployment": deployment, "instance": selected[slot_id],
+                                 **({"scenarioRestores": scenario_restores} if scenario_restores else {}),
                                  "slot": slot, "hostOverride": host_override})
         except (ValueError, OSError, KeyError, TypeError):
             findings.append(finding("APPLICATION_PACKAGE_INVALID", field))
@@ -871,6 +953,10 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
                 if script['phase'] == 'connection_apply':
                     continue
                 if script['phase'] != 'account_apply' and not active_script(script, instance):
+                    if script.get('scenarioId'):
+                        findings.append(finding('APPLICATION_SCENARIO_SCRIPT_TARGET_INVALID',
+                                                'applicationLibraryDeployments.' + library_id
+                                                + '.user_scenarios.' + script['scenarioId']))
                     continue
                 for source in script.get('secretInputs', {}).values():
                     try:

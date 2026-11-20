@@ -1,4 +1,5 @@
 import copy
+import hashlib
 import json
 import os
 import shutil
@@ -13,7 +14,7 @@ UTILS = os.path.join(REPO, "ansible-core/collections/ansible_collections/platfor
 sys.path.insert(0, UTILS)
 import application_libraries as APP
 import project_snapshot as SNAPSHOT
-from schema_validation import SchemaValidator
+from schema_validation import SchemaValidator, jsonschema
 
 FIXTURE = os.path.join(REPO, "examples/valid/application-libraries")
 CONTRACTS = os.path.join(REPO, "contracts")
@@ -25,6 +26,89 @@ def load(path):
 
 
 class ApplicationLibrariesTest(unittest.TestCase):
+    def test_scenario_resolves_per_slot_and_only_for_managed_bound_database(self):
+        library = {
+            'definition': {'slots': {'data-manager': {'applicationRef': 'data-manager@1.0.0'}}},
+            'userScenarios': {
+                'create': {'setting': 'create_demo', 'action': {
+                    'kind': 'package_script', 'slot_ref': 'data-manager', 'script_ref': 'create-project'}},
+                'restore': {'setting': 'restore_demo', 'action': {
+                    'kind': 'resource_initialization', 'resource_ref': 'model',
+                    'restore_on_create': {'source': 'assets/demo.dump'}}},
+            },
+        }
+        application = {'scripts': [{'id': 'create-project', 'phase': 'post_install', 'execution': 'once'}]}
+        deployment = {
+            'resources': {'model': {'kind': 'postgresql.database', 'mode': 'managed', 'binding': 'database'}},
+            'bindings': {'database': {'deploymentRef': 'postgres'}},
+        }
+        apps = {'data-manager': application, 'another-slot': application}
+        def resolve(applications=apps):
+            return APP.resolve_user_scenarios(library, deployment, applications,
+                                              lambda *_: application, 'applicationLibraryDeployments.demo')
+        self.assertEqual(resolve(), ({'data-manager': {'create-project': None}}, {}, []))
+        deployment['overrides'] = {'parameters': {'create_demo': True, 'restore_demo': True}}
+        scripts, restores, errors = resolve()
+        self.assertEqual(scripts, {'data-manager': {'create-project': 'create'}})
+        self.assertEqual(restores, {'model': {'source': 'assets/demo.dump'}})
+        self.assertEqual(errors, [])
+        deployment['resources']['model']['mode'] = 'existing'
+        self.assertEqual([item['code'] for item in resolve({})[2]], [
+            'APPLICATION_SCENARIO_SCRIPT_TARGET_INVALID', 'APPLICATION_SCENARIO_RESOURCE_TARGET_INVALID'])
+        deployment['overrides']['parameters']['create_demo'] = 'true'
+        self.assertEqual(resolve()[2][0]['code'], 'APPLICATION_SCENARIO_SETTING_INVALID')
+
+    def test_library_package_scenarios_validate_metadata_and_asset_digest(self):
+        manifest = load(os.path.join(FIXTURE, "library-packages/sdku/1.0.0/library.yml"))
+        restore = {
+            "source": "assets/demo.dump",
+            "sha256": hashlib.sha256(b"fixture only").hexdigest(),
+            "format": "pg_custom",
+        }
+        manifest.update(
+            apiVersion="platform.installer/application-package/v1alpha5",
+            files=manifest["files"] + [restore["source"]],
+            user_scenarios={
+                "demo": {
+                    "title": "Demo project",
+                    "description": "Fill a new database",
+                    "setting": "demo_enabled",
+                    "action": {
+                        "kind": "resource_initialization",
+                        "resource_ref": "model",
+                        "restore_on_create": restore,
+                    },
+                },
+            },
+        )
+        validator = SchemaValidator(CONTRACTS)
+        schema = os.path.join(CONTRACTS, "application-libraries/v1alpha5/package.schema.json")
+        jsonschema.Draft202012Validator.check_schema(load(schema))
+        self.assertEqual(validator.validate(manifest, schema), [])
+        with tempfile.TemporaryDirectory() as temp:
+            root = os.path.join(temp, "project")
+            shutil.copytree(FIXTURE, root)
+            lib = os.path.join(root, "library-packages/sdku/1.0.0")
+            os.makedirs(os.path.join(lib, "assets"), exist_ok=True)
+            dump = os.path.join(lib, restore["source"])
+            with open(dump, "wb") as stream:
+                stream.write(b"fixture only")
+            with open(os.path.join(lib, "library.yml"), "w", encoding="utf-8") as stream:
+                json.dump(manifest, stream)
+            package = APP.load_package(root, "sdku@1.0.0", "library", load, validator)
+            self.assertEqual(package["userScenarios"], manifest["user_scenarios"])
+            with open(dump, "ab") as stream:
+                stream.write(b"tampered")
+            with self.assertRaisesRegex(ValueError, "APPLICATION_SCENARIO_RESTORE_ASSET_INVALID"):
+                APP.load_package(root, "sdku@1.0.0", "library", load, validator)
+        scenario = manifest["user_scenarios"]["demo"]
+        scenario["$id"] = "https://example.invalid/extra"
+        self.assertTrue(validator.validate(manifest, schema))
+        del scenario["$id"]
+        scenario["action"]["command"] = "unexpected"
+        self.assertTrue(validator.validate(manifest, schema))
+
+
     def test_only_literal_connection_inputs_can_skip_native_topology(self):
         self.assertTrue(APP._literal_library_input({'resources': [{'name': 'events', 'partitions': 3}]}))
         for value in (

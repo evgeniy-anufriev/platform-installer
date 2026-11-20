@@ -2,6 +2,8 @@ package installer
 
 import (
 	"encoding/json"
+	"errors"
+	"io/fs"
 	"regexp"
 	"sort"
 	"strings"
@@ -149,7 +151,8 @@ func validateApplicationEdit(c EditCommand) error {
 			return invalid
 		}
 		// Empty slot/host addresses the common library environment/parameters only.
-		if c.EntityID == "" && c.HostID == "" && (c.Property != "" || c.Setting != "environment" && c.Setting != "parameters") {
+		if c.EntityID == "" && c.HostID == "" && c.Property != "parameters" &&
+			(c.Property != "" || c.Setting != "environment" && c.Setting != "parameters") {
 			return invalid
 		}
 		if c.HostID != "" && c.Property != "parameters" && c.Property != "ports" {
@@ -468,6 +471,44 @@ func (c *structuralCandidate) includeImportedApplicationSlots(packages map[strin
 	return changes, nil
 }
 
+func libraryPackageManifestForTransition(root, ref string) (applicationPackageManifest, error) {
+	if !exactLibraryRef.MatchString(ref) {
+		return applicationPackageManifest{}, referenceNotFound("libraryRef")
+	}
+	name, version, _ := strings.Cut(ref, "@")
+	parts := []string{"library-packages", name, version, "library.yml"}
+	logical := strings.Join(parts, "/")
+	content, err := readF1OwnedFile(root, parts, maxManagedDocumentBytes)
+	if errors.Is(err, fs.ErrNotExist) {
+		return applicationPackageManifest{}, nil
+	}
+	if err != nil {
+		return applicationPackageManifest{}, packageImportError(logical, "Не удалось безопасно прочитать описание библиотеки.")
+	}
+	return decodeApplicationPackageManifest(content, logical)
+}
+
+func checkLibraryScenarioTransition(id string, library map[string]any, previous, next applicationPackageManifest) error {
+	parameters := asMap(asMap(library["overrides"])["parameters"])
+	retained := make(map[string]bool, len(next.UserScenarios))
+	for _, scenario := range next.UserScenarios {
+		retained[scenario.Setting] = true
+	}
+	var removed []string
+	for _, scenario := range previous.UserScenarios {
+		if _, authored := parameters[scenario.Setting]; authored && !retained[scenario.Setting] {
+			removed = append(removed, scenario.Setting)
+		}
+	}
+	if len(removed) == 0 {
+		return nil
+	}
+	sort.Strings(removed)
+	return blocked("APPLICATION_SCENARIO_RESET_REQUIRED",
+		"Новый пакет не объявляет настройку сценария «"+removed[0]+"» библиотеки «"+id+"». Сбросьте настройку в общих параметрах и повторите изменение.",
+		"applicationLibraryDeployments."+id+".overrides.parameters."+removed[0])
+}
+
 func (c *structuralCandidate) reduceApplicationEdit(cmd EditCommand) error {
 	state, _, _, err := c.desired()
 	if err != nil {
@@ -529,6 +570,23 @@ func (c *structuralCandidate) reduceApplicationEdit(cmd EditCommand) error {
 	case "UpdateApplicationLibraryDeployment":
 		if owner == nil {
 			return referenceNotFound("deploymentId")
+		}
+		previousRef, _ := owner["libraryRef"].(string)
+		nextRef, _ := cmd.Entity["libraryRef"].(string)
+		if nextRef != "" && previousRef != nextRef && len(asMap(asMap(owner["overrides"])["parameters"])) > 0 {
+			previous, err := libraryPackageManifestForTransition(c.root, previousRef)
+			if err != nil {
+				return err
+			}
+			if len(previous.UserScenarios) > 0 {
+				next, err := libraryPackageManifestForTransition(c.root, nextRef)
+				if err != nil {
+					return err
+				}
+				if err := checkLibraryScenarioTransition(cmd.DeploymentID, owner, previous, next); err != nil {
+					return err
+				}
+			}
 		}
 		for key, value := range cmd.Entity {
 			owner[key] = deepCopy(value)
