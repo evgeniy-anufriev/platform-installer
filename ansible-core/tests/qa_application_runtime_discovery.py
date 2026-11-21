@@ -12,7 +12,7 @@ import yaml
 
 REPO = Path(__file__).resolve().parents[2]
 TASKS = REPO / "ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks"
-ACCOUNT = "platform-docker"
+ACCOUNT = os.environ.get("PLATFORM_QA_DOCKER_ACCOUNT", "platform-docker")
 HOSTS = ("discovery_target_a", "discovery_target_b")
 ROUTING_NAMES = (
     "Привязка учётной записи операции приложения и ключа обнаружения конфигурации Docker",
@@ -31,9 +31,10 @@ class ApplicationRuntimeDiscoveryQA(unittest.TestCase):
         self.fail("%s; private evidence: %s" % (message, path))
 
     def test_configuration_keys_are_cached_per_target_and_per_invocation(self):
-        routing = yaml.safe_load((TASKS / "preflight.yml").read_text())[:2]
+        routing = yaml.safe_load((TASKS / "preflight.yml").read_text())[0]['block'][:2]
         self.assertEqual(list(ROUTING_NAMES), [task.get("name") for task in routing])
-        self.assertEqual("discover_runtime.yml", routing[1].get("ansible.builtin.include_tasks"))
+        discovery_route = routing[1]['block'][0]
+        self.assertEqual("discover_runtime.yml", discovery_route.get("ansible.builtin.include_tasks"))
         with tempfile.TemporaryDirectory(prefix="a2-discovery-qa-") as directory:
             root = Path(directory)
             # Resolve the unchanged production relative include to the actual role file.
@@ -43,12 +44,13 @@ class ApplicationRuntimeDiscoveryQA(unittest.TestCase):
             config_a, config_b = str(root) + "-absent-config-a", str(root) + "-absent-config-b"
             expected_key_a = "([application_runtime_job.account, discovery_config_a] | to_json)"
             expected_key_b = "([application_runtime_job.account, discovery_config_b] | to_json)"
-            routed = copy.deepcopy(routing) + [{
+            routed = copy.deepcopy([routing[0], discovery_route]) + [{
                 "name": "Require exactly the successful discovery keys so far",
                 "ansible.builtin.assert": {"that": [
                     "application_runtime_discoveries | length == discovery_step.count",
                     expected_key_a + " in application_runtime_discoveries",
                     "discovery_step.count == 1 or " + expected_key_b + " in application_runtime_discoveries",
+                    "application_runtime_discoveries.values() | map(attribute='account') | unique | list == [application_runtime_job.account]",
                 ]},
                 "no_log": True,
             }]

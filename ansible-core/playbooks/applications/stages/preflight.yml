@@ -27,6 +27,12 @@
           {{ application_snapshot.snapshot.applicationLibraries.libraries | dict2items |
              selectattr('key', 'in', application_selection.scope.installLibraries) | items2dict |
              platform.core.application_connection_order_findings(application_preflight_library_order) }}
+    - name: Определение общих шаблонов библиотек
+      ansible.builtin.set_fact:
+        _application_preflight_inputs: >-
+          {{ application_runtime_inputs.jobs | platform.core.application_preflight_host_inputs(
+             application_snapshot.snapshot.applicationLibraries.libraries, hostvars) }}
+      no_log: true
 
 - name: Предварительная проверка каждой выбранной цели только для чтения перед мутациями приложения
   hosts: platform_targets
@@ -36,20 +42,81 @@
   tasks:
     - name: Инициализация защищённых записей предварительной проверки приложений
       ansible.builtin.set_fact:
-        platform_application_preflight_jobs: []
+        application_host_jobs: "{{ hostvars['localhost']._application_preflight_inputs.get(inventory_hostname, []) }}"
         application_runtime_discoveries: {}
-        application_preflight_path_observations: {}
+        _application_shared_base: {}
+        _application_shared_env: {}
       no_log: true
-    - name: Проверка и формирование проекции каждого выбранного размещения в памяти
+    - name: Чтение уникальных исходных файлов и архивов конфигурации
+      platform.core.application_preflight_facts:
+        operation: assets
+      delegate_to: localhost
+      delegate_facts: true
+      run_once: true
+      become: false
+      no_log: true
+    - name: Однократная проверка Docker для каждой выбранной учётной записи
+      ansible.builtin.include_role:
+        name: platform.core.application_runtime
+        tasks_from: discover_runtime
+      vars:
+        application_runtime_job: "{{ {'account': application_docker_account} }}"
+        application_discovery_key: "{{ [application_docker_account, platform_application_registry_config_directory] | to_json }}"
+        application_runtime_inventory_containers: true
+      loop: "{{ application_host_jobs | map(attribute='account') | unique(case_sensitive=true) | list }}"
+      loop_control:
+        loop_var: application_docker_account
+      no_log: true
+    - name: Сбор наблюдений путей всех выбранных размещений узла
+      ansible.builtin.include_role:
+        name: platform.core.application_runtime
+        tasks_from: observe_paths
+      when: application_host_jobs | length > 0
+    - name: Подготовка корней библиотек для выбранного узла
+      ansible.builtin.set_fact:
+        application_host_library_roots: >-
+          {{ application_host_jobs | platform.core.application_preflight_library_roots(
+             application_runtime_discoveries) }}
+      when: application_host_jobs | length > 0
+      no_log: true
+    - name: Подготовка окружения Docker один раз для каждой учётной записи узла
+      platform.core.application_preflight_facts:
+        operation: accounts
+      no_log: true
+    - name: Проверка утверждённых манифестов по общему контексту реестра
       ansible.builtin.include_role:
         name: platform.core.application_runtime
         tasks_from: preflight
       vars:
-        application_runtime_defer_archive_verification: true
-        application_runtime_reuse_preflight_paths: true
-      loop: "{{ hostvars['localhost'].application_runtime_inputs.jobs | selectattr('hostId', 'equalto', inventory_hostname) | list }}"
+        application_preflight_mode: registry
+        application_runtime_job: "{{ application_registry_group.job }}"
+        application_docker_environment: "{{ _application_preflight_accounts[application_registry_group.job.account].application_docker_environment }}"
+      loop: "{{ _application_preflight_registry_groups }}"
       loop_control:
-        loop_var: application_runtime_job
+        loop_var: application_registry_group
+      no_log: true
+    - name: Запись неизменяемого контекста предварительной проверки размещений узла
+      platform.core.application_preflight_facts:
+        operation: placements
+      when:
+        - application_host_jobs | length > 0
+        - not hostvars['localhost']._application_preflight_native
+      no_log: true
+    - name: Проверка размещений с динамическими шаблонами
+      ansible.builtin.include_role:
+        name: platform.core.application_runtime
+        tasks_from: preflight
+      vars:
+        application_preflight_mode: native
+        application_runtime_defer_archive_verification: true
+        application_runtime_job: "{{ _application_preflight_job }}"
+      loop: "{{ range(application_host_jobs | length) | list if hostvars['localhost']._application_preflight_native else [] }}"
+      loop_control:
+        loop_var: application_preflight_index
+    - name: Сбор результатов предварительной проверки размещений узла
+      platform.core.application_preflight_facts:
+        operation: publish
+      no_log: true
 
 - name: Проверка выбранных автономных архивов один раз перед изменением провайдера
   hosts: localhost

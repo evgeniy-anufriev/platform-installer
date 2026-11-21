@@ -90,7 +90,8 @@ class EndpointProbeTests(unittest.TestCase):
         if hasattr(cls, "temp_dir"):
             cls.temp_dir.cleanup()
 
-    def run_probe(self, hostname="localhost", port=None, expected_addresses=None, policy=None, environment=None):
+    def run_probe(self, hostname="localhost", port=None, expected_addresses=None, policy=None, environment=None,
+                  batch=False):
         if port is None:
             port = self.port
         if expected_addresses is None:
@@ -116,6 +117,17 @@ class EndpointProbeTests(unittest.TestCase):
         if policy is not None:
             play = yaml.safe_load(playbook)
             play[0]['vars']['_platform_integration_probe'] = policy
+            playbook = yaml.safe_dump(play)
+        if batch:
+            play = yaml.safe_load(playbook)
+            play[0]['vars']['platform_endpoint_ca_path'] = self.ca_path
+            play[0]['tasks'].insert(0, {'ansible.builtin.set_fact': {
+                '_platform_integration_selected_sources': [
+                    dict(fqdns=[hostname], expectedAddresses=expected_addresses, probe=policy or {}),
+                    dict(fqdns=[hostname], expectedAddresses=expected_addresses,
+                         probe=dict(expected_status=200, timeout=7, validate_certs=False))]}, 'no_log': True})
+            play[0]['tasks'][-1]['ansible.builtin.include_tasks'] = os.path.join(
+                os.path.dirname(TASK_FILE), 'probe-selected-sources.yml')
             playbook = yaml.safe_dump(play)
         playbook_path = os.path.join(self.temp_dir.name, "probe.yml")
         with open(playbook_path, "w", encoding="utf-8") as handle:
@@ -176,13 +188,14 @@ class EndpointProbeTests(unittest.TestCase):
             ANSIBLE_COLLECTIONS_PATHS=os.path.join(ROOT, 'ansible-core', 'collections'),
             ANSIBLE_CALLBACKS_ENABLED='platform.core.execution_events_json',
             PLATFORM_EXECUTION_STATE_ROOT=root, PLATFORM_EXECUTION_RUN_ID='run-probe')
-        result = self.run_probe(policy={'expected_status': 200, 'timeout': 3,
-            'path': '/health?token=endpoint-query-secret'}, environment=environment)
+        result = self.run_probe(policy={'expected_status': 200, 'timeout': 3, 'validate_certs': True,
+            'path': '/health?token=endpoint-query-secret'}, environment=environment, batch=True)
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
         events = journal.events()
         diagnostics = [e for e in events if e['eventType'] == 'DIAGNOSTIC' and e['safeMessage'].startswith('HTTP backend ')]
-        self.assertEqual(1, len(diagnostics), result.stdout + result.stderr)
+        self.assertEqual(2, len(diagnostics), result.stdout + result.stderr)
         self.assertIn('expected=200; actual=200; timeout=3s; reason=OK', diagnostics[0]['safeMessage'])
+        self.assertIn('expected=200; actual=200; timeout=7s; reason=OK', diagnostics[1]['safeMessage'])
         for secret in ('endpoint-query-secret', 'endpoint-cookie-secret', 'endpoint-response-body-secret'):
             self.assertNotIn(secret, json.dumps(events) + result.stdout + result.stderr)
 
@@ -203,6 +216,29 @@ class EndpointProbeTests(unittest.TestCase):
         result = self.run_probe(expected_addresses=['127.0.0.2'])
         self.assertNotEqual(0, result.returncode)
         self.assertIn('SERVICE_ENDPOINT_DNS_UNRESOLVED', result.stdout + result.stderr)
+
+    def test_batch_retries_only_the_unready_route(self):
+        _StatusHandler.status_code = 200
+        _StatusHandler.statuses = [503]
+        _StatusHandler.requests = 0
+        result = self.run_probe(batch=True)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertEqual(3, _StatusHandler.requests)
+
+    def test_batch_preserves_name_for_unexpected_dns(self):
+        result = self.run_probe(expected_addresses=['127.0.0.2'], batch=True)
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn('SERVICE_ENDPOINT_DNS_UNRESOLVED', result.stdout)
+        self.assertIn('"localhost"', result.stdout)
+
+    def test_batch_keeps_certificate_checks_independent(self):
+        _StatusHandler.status_code = 200
+        result = self.run_probe(hostname='127.0.0.1', batch=True,
+                                policy=dict(expected_status=200, timeout=3, validate_certs=True))
+        self.assertNotEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertIn('SERVICE_ENDPOINT_UNAVAILABLE', result.stdout)
+        self.assertIn('"reason": "CERTIFICATE_VERIFY_FAILED"', result.stdout)
+        self.assertIn('"status": 200', result.stdout)
 
 
 if __name__ == "__main__":

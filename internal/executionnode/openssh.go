@@ -620,6 +620,12 @@ func createProjectArchive(root string) (string, error) {
 			return "", errors.New("SERVICE_PROJECT_INVALID")
 		}
 	}
+	return writeTemporaryProjectArchive(func(writer *tar.Writer) error {
+		return writeProjectArchive(writer, absolute)
+	})
+}
+
+func writeTemporaryProjectArchive(write func(*tar.Writer) error) (string, error) {
 	file, err := os.CreateTemp("", "platform-service-project-*.tar")
 	if err != nil {
 		return "", err
@@ -632,7 +638,7 @@ func createProjectArchive(root string) (string, error) {
 		_ = os.Remove(name)
 		return "", e
 	}
-	if err := writeProjectArchive(writer, absolute); err != nil {
+	if err := write(writer); err != nil {
 		return cleanup(err)
 	}
 	if err := writer.Close(); err != nil {
@@ -751,8 +757,7 @@ func createCandidateProjectArchive(root string) (string, error) {
 			return cleanup(errors.New("PROJECT_CANDIDATE_ANSIBLE_CONFIG_INVALID"))
 		}
 		limits.files++
-		limits.bytes += int64(len(content))
-		if limits.files > 4096 || limits.bytes > 64*1024*1024 {
+		if limits.files > 4096 {
 			return cleanup(errors.New("PROJECT_CANDIDATE_LIMIT_EXCEEDED"))
 		}
 		header := &tar.Header{Name: logical, Mode: 0o600, Size: int64(len(content)), Typeflag: tar.TypeReg, Format: tar.FormatPAX}
@@ -771,10 +776,6 @@ func createCandidateProjectArchive(root string) (string, error) {
 	if err := file.Close(); err != nil {
 		_ = os.Remove(name)
 		return "", err
-	}
-	if info, statErr := os.Stat(name); statErr != nil || info.Size() > 32*1024*1024 {
-		_ = os.Remove(name)
-		return "", errors.New("PROJECT_CANDIDATE_LIMIT_EXCEEDED")
 	}
 	return name, nil
 }
@@ -804,13 +805,6 @@ func readStableCandidateFile(root, logical string) ([]byte, error) {
 	before, err := os.Lstat(absolute)
 	if err != nil || !before.Mode().IsRegular() || isUnsafeFilesystemLink(before) {
 		return nil, errors.New("PROJECT_CANDIDATE_FILE_UNSAFE")
-	}
-	fileLimit := int64(4 * 1024 * 1024)
-	if installer.ApplicationPackagePathAllowed(logical) {
-		fileLimit = 64 * 1024 * 1024
-	}
-	if before.Size() > fileLimit {
-		return nil, errors.New("PROJECT_CANDIDATE_LIMIT_EXCEEDED")
 	}
 	input, err := os.Open(absolute)
 	if err != nil {
@@ -847,9 +841,9 @@ func readStableCandidateFile(root, logical string) ([]byte, error) {
 			}
 		}
 	}
-	content, err := io.ReadAll(io.LimitReader(input, fileLimit+1))
-	if err != nil || int64(len(content)) > fileLimit {
-		return nil, errors.New("PROJECT_CANDIDATE_LIMIT_EXCEEDED")
+	content, err := io.ReadAll(input)
+	if err != nil {
+		return nil, err
 	}
 	after, err := input.Stat()
 	pathAfter, pathErr := os.Lstat(absolute)
@@ -859,9 +853,31 @@ func readStableCandidateFile(root, logical string) ([]byte, error) {
 	return content, nil
 }
 
-type projectArchiveLimits struct{ files, bytes int64 }
+type projectArchiveLimits struct{ files int64 }
 
 func appendTarPath(writer *tar.Writer, root, source string) error {
+	return visitTarPath(root, source, func(current string, info os.FileInfo, header *tar.Header) error {
+		return appendTarEntry(writer, current, info, header)
+	})
+}
+
+func appendTarEntry(writer *tar.Writer, current string, info os.FileInfo, header *tar.Header) error {
+	if err := writer.WriteHeader(header); err != nil || info.IsDir() {
+		return err
+	}
+	input, err := os.Open(current)
+	if err != nil {
+		return err
+	}
+	_, copyErr := io.Copy(writer, input)
+	closeErr := input.Close()
+	if copyErr != nil {
+		return copyErr
+	}
+	return closeErr
+}
+
+func visitTarPath(root, source string, visit func(string, os.FileInfo, *tar.Header) error) error {
 	return filepath.WalkDir(source, func(current string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -885,25 +901,10 @@ func appendTarPath(writer *tar.Writer, root, source string) error {
 			return err
 		}
 		header.Name = filepath.ToSlash(relative)
-		if err := writer.WriteHeader(header); err != nil {
-			return err
-		}
-		if entry.IsDir() {
-			return nil
-		}
-		if !entry.Type().IsRegular() {
+		if !info.IsDir() && !info.Mode().IsRegular() {
 			return errors.New("SERVICE_PROJECT_FILE_UNSAFE")
 		}
-		input, err := os.Open(current)
-		if err != nil {
-			return err
-		}
-		_, copyErr := io.Copy(writer, input)
-		closeErr := input.Close()
-		if copyErr != nil {
-			return copyErr
-		}
-		return closeErr
+		return visit(current, info, header)
 	})
 }
 

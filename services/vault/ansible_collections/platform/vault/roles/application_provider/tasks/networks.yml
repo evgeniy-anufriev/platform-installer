@@ -34,7 +34,9 @@
   ansible.builtin.set_fact:
     platform_application_vault_networks: >-
       {{ platform_application_vault_networks | default({}) | combine({application_vault_network_key: {
-        'routes': application_vault_routes.results | map(attribute='stdout') | map('from_json') | list,
-        'bridges': application_vault_lxc_addresses.results | map(attribute='stdout') | map('from_json') | list
+        'cidrs': routes | platform.vault.application_vault_cidrs(bridges)
       }}) }}
+  vars:
+    routes: "{{ application_vault_routes.results | map(attribute='stdout') | map('from_json') | list }}"
+    bridges: "{{ application_vault_lxc_addresses.results | map(attribute='stdout') | map('from_json') | list }}"
   no_log: true

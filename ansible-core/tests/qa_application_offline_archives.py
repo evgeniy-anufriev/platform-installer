@@ -14,7 +14,7 @@ TASKS = ROOT / 'ansible-core/playbooks/applications/tasks/offline-archives.yml'
 
 
 class ApplicationOfflineArchivesTests(unittest.TestCase):
-    def probe(self, *, distinct=False, corrupt=False, registry=False, repeat=False, symlink=False):
+    def probe(self, *, distinct=False, corrupt=False, registry=False, repeat=False, symlink=False, compact=False):
         with tempfile.TemporaryDirectory(prefix='qa-common-archive-') as directory:
             root = Path(directory)
             components, records = [], []
@@ -43,6 +43,10 @@ class ApplicationOfflineArchivesTests(unittest.TestCase):
                 hosts['node' + str(index)] = dict(platform_application_preflight_jobs=[dict(
                     source=dict(source='REPOSITORY' if registry else 'OFFLINE_BUNDLE'),
                     authority=dict(offlineBundle=records[n % len(records)])) for n in range(2)])
+                if compact:
+                    host = hosts['node' + str(index)]
+                    host['application_host_offline_archives'] = [] if registry else records + records
+                    host['platform_application_preflight_jobs'] = [{'unused': True}]
             inventory = root / 'inventory.yml'
             inventory.write_text(yaml.safe_dump(dict(all=dict(children=dict(platform_targets=dict(hosts=hosts))))))
             steps = [{'ansible.builtin.import_tasks': str(TASKS)},
@@ -62,6 +66,10 @@ class ApplicationOfflineArchivesTests(unittest.TestCase):
 
     def test_six_placements_select_one_archive(self):
         self.probe()
+
+    def test_compact_archive_inputs_take_precedence_and_deduplicate(self):
+        self.probe(compact=True, distinct=True)
+        self.probe(compact=True, registry=True)
 
     def test_different_locked_paths_are_not_merged_even_with_identical_bytes(self):
         self.probe(distinct=True)

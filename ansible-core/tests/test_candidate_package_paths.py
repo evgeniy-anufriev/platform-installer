@@ -27,17 +27,18 @@ class CandidatePackagePathsTests(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertTrue(execution_protocol._candidate_logical_path(name))
 
-    def test_package_member_uses_aggregate_candidate_limit(self):
+    def test_project_members_have_no_size_ceiling(self):
         required = [tarfile.TarInfo(name) for name in ('project.yml', 'ansible.cfg', 'inventory/hosts.yml')]
         source = tarfile.TarInfo('application-packages/gateway/1.0.0/assets/mock.jar')
         source.size = 16 * 1024 * 1024
         archive = SimpleNamespace(getmembers=lambda: required + [source])
         self.assertEqual(required + [source], execution_protocol._candidate_members(archive))
-        source.size = execution_protocol.MAX_CANDIDATE_TOTAL_BYTES + 1
-        with self.assertRaises(execution_protocol.LifecycleError):
-            execution_protocol._candidate_members(archive)
+        source.size = 5 * 1024 * 1024 * 1024
+        self.assertEqual(required + [source], execution_protocol._candidate_members(archive))
         source.name = 'inventory/group_vars/all/large.yml'
         source.size = 4 * 1024 * 1024 + 1
+        self.assertEqual(required + [source], execution_protocol._candidate_members(archive))
+        source.size = -1
         with self.assertRaises(execution_protocol.LifecycleError):
             execution_protocol._candidate_members(archive)
 

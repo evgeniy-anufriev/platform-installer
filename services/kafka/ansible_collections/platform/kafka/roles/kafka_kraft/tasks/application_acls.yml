@@ -1,17 +1,40 @@
 ---
-- name: Инициализация групп записи ACL текущей учётной записи
+- name: Получение рассчитанной дельты ACL текущей учётной записи
   ansible.builtin.set_fact:
-    application_kafka_acl_groups: {}
+    application_kafka_acl_groups: >-
+      {{ (application_kafka_acl_deltas[application_kafka_account_index] if application_kafka_collect_deployment_acls | default(false) | bool
+          else ([application_kafka_account] | platform.kafka.application_acl_deltas(application_kafka_acl_inventory.stdout))[0]) }}
   changed_when: false
   no_log: true
 
-- name: Вычисление недостающих прав каждого ресурса Kafka
-  ansible.builtin.include_tasks: application_acl.yml
-  loop: "{{ application_kafka_account.grants }}"
+- name: Проверка наличия требуемых ACL у существующей учётной записи и в режиме Verify
+  ansible.builtin.assert:
+    that: application_kafka_acl_groups | length == 0
+    fail_msg: APPLICATION_KAFKA_ACL_MISSING
+  when: platform_kafka_application_phase == 'verify' or application_kafka_account.mode == 'existing'
+
+- name: Объединение учётных записей с одинаковой дельтой ACL
+  ansible.builtin.set_fact:
+    application_kafka_deployment_acl_groups: >-
+      {{ application_kafka_deployment_acl_groups | combine({
+        application_kafka_acl_batch_key: application_kafka_acl_group.value | combine({
+          'principals': (application_kafka_acl_previous.principals | default([]) + [application_kafka_account.name]) | unique(case_sensitive=true) | list
+        })
+      }) }}
+  loop: "{{ application_kafka_acl_groups | dict2items }}"
   loop_control:
-    loop_var: application_kafka_grant
+    loop_var: application_kafka_acl_group
   vars:
-    application_kafka_acl_defer_write: true
+    # The CLI grants every operation on every selector to every principal.
+    # Share a command only when the complete resource and operation sets match.
+    application_kafka_acl_batch_key: >-
+      {{ [application_kafka_acl_group.key, application_kafka_acl_group.value.resources | sort(case_sensitive=true)] | to_json }}
+    application_kafka_acl_previous: "{{ application_kafka_deployment_acl_groups.get(application_kafka_acl_batch_key, {}) }}"
+  when:
+    - application_kafka_collect_deployment_acls | default(false) | bool
+    - platform_kafka_application_phase == 'apply'
+    - application_kafka_account.mode == 'managed'
+  no_log: true
 
 - name: Применение совместимых групп ACL текущей учётной записи
   ansible.builtin.include_tasks: application_acl_write.yml
@@ -21,3 +44,7 @@
   vars:
     application_kafka_acl_args: "{{ application_kafka_acl_group.value.selectors + ['--resource-pattern-type', application_kafka_acl_group.value.patternType] }}"
     application_kafka_acl_operations: "{{ application_kafka_acl_group.value.operations }}"
+  when:
+    - not (application_kafka_collect_deployment_acls | default(false) | bool)
+    - platform_kafka_application_phase == 'apply'
+    - application_kafka_account.mode == 'managed'

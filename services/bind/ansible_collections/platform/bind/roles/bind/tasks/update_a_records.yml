@@ -9,17 +9,15 @@
       - platform_bind_a_records | map(attribute='owner') | unique | list | length == platform_bind_a_records | length
     fail_msg: BIND_DNS_A_RECORD_UPDATE_INPUT_INVALID
 
-- name: Инициализация результатов проверки зоны BIND без изменений
-  ansible.builtin.set_fact:
-    _platform_bind_zone_observations: []
+- name: Пакетная сверка авторитетных записей зоны перед изменением DNS
+  platform.bind.a_record_observations:
+    records: "{{ platform_bind_a_records }}"
+    force: "{{ platform_bind_force_dynamic_update_probe | default(false) }}"
+  register: _platform_bind_zone_read
 
-- name: Проверка и чтение записей каждого выбранного владельца перед изменением DNS
-  ansible.builtin.include_tasks: prepare_a_record.yml
-  vars:
-    platform_bind_a_record: "{{ _platform_bind_record }}"
-  loop: "{{ platform_bind_a_records | sort(attribute='owner') }}"
-  loop_control:
-    loop_var: _platform_bind_record
+- name: Сохранение результатов сверки зоны BIND
+  ansible.builtin.set_fact:
+    _platform_bind_zone_observations: "{{ _platform_bind_zone_read.observations }}"
 
 - name: Создание одного обновления зоны с проверками наличия записей и исходных RDATA
   ansible.builtin.set_fact:
@@ -62,11 +60,8 @@
   changed_when: true
   when: _platform_bind_zone_observations | selectattr('changed') | list | length > 0
 
-- name: Проверка каждого измененного авторитетного набора RRset после обновления зоны
-  ansible.builtin.include_tasks: verify_a_record.yml
-  vars:
-    platform_bind_a_record: "{{ _platform_bind_observation.record }}"
-    _platform_bind_a_record_desired_addresses: "{{ _platform_bind_observation.record.addresses | sort | map('regex_replace', '^', (_platform_bind_observation.record.ttl | string) ~ ' IN A ') | list }}"
-  loop: "{{ _platform_bind_zone_observations | selectattr('changed') | list }}"
-  loop_control:
-    loop_var: _platform_bind_observation
+- name: Пакетная проверка измененных авторитетных записей после обновления зоны
+  platform.bind.a_record_observations:
+    records: "{{ _platform_bind_zone_observations | selectattr('changed') | map(attribute='record') | list }}"
+    verify: true
+  when: _platform_bind_a_record_update is not skipped

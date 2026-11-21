@@ -12,6 +12,7 @@
     platform_application_rows: []
     platform_application_connection_rows: []
     platform_application_findings: "{{ _application_inputs.findings }}"
+    _library_resolved_defaults: {}
   no_log: true
   become: false
 
@@ -32,7 +33,7 @@
 
 - name: "Определение топологии подключений перед формированием окружения потребителя"
   ansible.builtin.include_tasks: connection_topology.yml
-  loop: "{{ _application_inputs.jobs }}"
+  loop: "{{ _application_inputs.jobs | rejectattr('skipConnectionTopology') | list }}"
   loop_control:
     loop_var: application_job
   no_log: true
@@ -50,13 +51,6 @@
   no_log: true
   become: false
 
-- name: Вычисление параметров каждого приложения и узла по переменным Ansible
+- name: Вычисление настроек экземпляров с отдельным контекстом каждого сервера
   ansible.builtin.include_tasks: instance.yml
-  vars:
-    _library_package: "{{ lookup('vars', '_library_package_' ~ ([application_job.libraryId, application_job.hostId] | to_json | hash('sha256'))) }}"
-    _application_package: "{{ lookup('vars', '_application_package_' ~ ((application_job.libraryId ~ application_job.slotId ~ application_job.hostId) | hash('sha256'))) }}"
-  loop: "{{ _application_inputs.jobs }}"
-  loop_control:
-    loop_var: application_job
-    label: "{{ application_job.libraryId }} / {{ application_job.slotId }} / {{ application_job.hostId }}"
   no_log: true

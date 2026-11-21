@@ -95,15 +95,19 @@ func safeProjectPath(root, logical string, allowMissing bool) (string, error) {
 }
 
 func collectProjectDocuments(root string) ([]projectDocument, string, error) {
+	return collectRevisionDocuments(root, false)
+}
+
+func collectRevisionDocuments(root string, reusePreviewAssets bool) ([]projectDocument, string, error) {
 	candidates := []string{"project.yml", "ansible.cfg", "inventory/hosts.yml"}
-	packageDocuments, err := applicationPackageDocuments(root)
+	packageDocuments, err := observeApplicationPackageDocuments(root, true, reusePreviewAssets)
 	if err != nil {
 		return nil, "", err
 	}
-	packageContents := map[string][]byte{}
+	packageDigests := map[string]string{}
 	for _, record := range packageDocuments {
 		candidates = append(candidates, record.LogicalPath)
-		packageContents[record.LogicalPath] = record.content
+		packageDigests[record.LogicalPath] = record.Digest
 	}
 	for _, directory := range []string{"inventory/group_vars", "inventory/host_vars"} {
 		base := filepath.Join(root, filepath.FromSlash(directory))
@@ -148,9 +152,13 @@ func collectProjectDocuments(root string) ([]projectDocument, string, error) {
 		if err != nil {
 			return nil, "", err
 		}
-		content, packageFile := packageContents[logical]
+		digest, packageFile := packageDigests[logical]
 		if !packageFile {
+			var content []byte
 			content, err = os.ReadFile(path)
+			if err == nil {
+				digest = digestBytes(content)
+			}
 		} else {
 			err = nil
 		}
@@ -160,13 +168,9 @@ func collectProjectDocuments(root string) ([]projectDocument, string, error) {
 		if err != nil {
 			return nil, "", err
 		}
-		digest := digestBytes(content)
 		documents = append(documents, projectDocument{LogicalPath: logical, Digest: digest})
 		if logical != generatedDocument {
-			revisionInput = append(revisionInput, []byte(logical)...)
-			revisionInput = append(revisionInput, 0)
-			revisionInput = append(revisionInput, []byte(digest)...)
-			revisionInput = append(revisionInput, 0)
+			revisionInput = appendRevisionDocument(revisionInput, logical, digest)
 		}
 	}
 	return documents, digestBytes(revisionInput), nil
@@ -175,11 +179,48 @@ func collectProjectDocuments(root string) ([]projectDocument, string, error) {
 // ProjectRevision returns the canonical raw-byte revision used to bind an edit
 // session. It does not parse or mutate project content.
 func ProjectRevision(root string) (string, error) {
+	return projectRevision(root, false)
+}
+
+// PreviewProjectRevision can reuse asset digests for an unchanged open file.
+// Plans, writes, and execution still use ProjectRevision's fresh content read.
+func PreviewProjectRevision(root string) (string, error) {
+	return projectRevision(root, true)
+}
+
+// PreviewProjectRevisions binds a read-only transport projection to the saved
+// project. Both revisions use the same observed document digests.
+func PreviewProjectRevisions(root string, omitted map[string]bool) (full, projected string, err error) {
+	clean, err := cleanRoot(root)
+	if err != nil {
+		return "", "", err
+	}
+	documents, full, err := collectRevisionDocuments(clean, true)
+	if err != nil {
+		return "", "", err
+	}
+	var input []byte
+	for _, document := range documents {
+		if document.LogicalPath != generatedDocument && !omitted[document.LogicalPath] {
+			input = appendRevisionDocument(input, document.LogicalPath, document.Digest)
+		}
+	}
+	return full, digestBytes(input), nil
+}
+
+func appendRevisionDocument(input []byte, logical, digest string) []byte {
+	input = append(input, logical...)
+	input = append(input, 0)
+	input = append(input, digest...)
+	return append(input, 0)
+}
+
+func projectRevision(root string, reusePreviewAssets bool) (string, error) {
 	clean, err := cleanRoot(root)
 	if err != nil {
 		return "", err
 	}
-	_, revision, err := collectProjectDocuments(clean)
+	_, revision, err := collectRevisionDocuments(clean, reusePreviewAssets)
 	return revision, err
 }
 

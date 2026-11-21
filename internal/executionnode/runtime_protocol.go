@@ -250,7 +250,7 @@ const maxObservedExecutionEvents = 32768
 const maxDecodedExecutionEventBytes = 64 * 1024
 const maxExecutionProtocolResponseBytes = 16 * 1024 * 1024
 const maxExecutionEventPageResponseBytes = 2 * 1024 * 1024
-const maxProjectSnapshotResponseBytes = 2 * 1024 * 1024
+const maxProjectSnapshotResponseBytes = coreadapter.MaxSnapshotResponseBytes
 const maxExecutionReleaseProbeBytes = 4 * 1024
 const maxExecutionStateProbeBytes = 64 * 1024
 
@@ -448,7 +448,8 @@ func (t OpenSSHTransport) BuildServiceConfigurationPreview(ctx context.Context, 
 	if err != nil {
 		return ServiceConfigurationPreview{}, err
 	}
-	if err := t.stagePlanProject(ctx, node, projectRoot, runID, "snapshot"); err != nil {
+	fullRevision, projectedRevision, err := t.stageServicePreviewProject(ctx, node, projectRoot, runID)
+	if err != nil {
 		return ServiceConfigurationPreview{}, err
 	}
 	response, err := t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": "platform.installer/execution-runtime/v1alpha1", "operation": "BuildServiceConfigurationPreview", "runId": runID, "runtimeRelease": runtimeRelease})
@@ -478,6 +479,12 @@ func (t OpenSSHTransport) BuildServiceConfigurationPreview(ctx context.Context, 
 	runtime, ok := decodeRuntimeEvidence(response["runtimeEvidence"])
 	if !ok || runtime.BundleDigest != runtimeRelease["bundleDigest"] {
 		return ServiceConfigurationPreview{}, errors.New("EXECUTION_RUNTIME_IDENTITY_UNCONFIRMED")
+	}
+	if projectedRevision != "" {
+		if result.ProjectRevision != projectedRevision {
+			return ServiceConfigurationPreview{}, errors.New("SERVICE_CONFIGURATION_PREVIEW_STALE")
+		}
+		result.ProjectRevision = fullRevision
 	}
 	result.Runtime = runtime
 	result.RuntimeDigest = runtime.BundleDigest
@@ -785,7 +792,11 @@ mkdir -- "$1"
 `
 
 func (t OpenSSHTransport) stagePlanProject(ctx context.Context, node Node, projectRoot, runID, purpose string) error {
-	slot, expected, err := projectTransferIdentity(projectRoot)
+	return t.stageProjectWithIdentity(ctx, node, projectRoot, runID, purpose, projectTransferIdentity)
+}
+
+func (t OpenSSHTransport) stageProjectWithIdentity(ctx context.Context, node Node, projectRoot, runID, purpose string, transferIdentity func(string) (string, string, error)) error {
+	slot, expected, err := transferIdentity(projectRoot)
 	if err != nil {
 		return err
 	}

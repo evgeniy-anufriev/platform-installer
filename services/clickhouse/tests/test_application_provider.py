@@ -21,11 +21,23 @@ import xml.etree.ElementTree as ET
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from ansible_collections.platform.clickhouse.plugins.filter.member_projection import application_preflight_jobs
 from ansible_collections.platform.clickhouse.plugins.module_utils.application_sql import NativeClient, user_batch, ProviderFailure, managed_grant_delta, table_matches
 from ansible_collections.platform.clickhouse.plugins.modules import application_scope as scope
 
 
 class ApplicationProviderTests(unittest.TestCase):
+    def test_preflight_groups_only_clickhouse_and_preserves_oversized_scopes(self):
+        batched = dict(serviceType='clickhouse', providerId='analytics', databases=[{}], accounts=[{}] * 50)
+        oversized = dict(serviceType='clickhouse', providerId='large', databases=[{}], accounts=[{}] * 129)
+        redis = dict(serviceType='redis', providerId='cache')
+        library_scope = dict(oversized, accounts=[])
+        instance_scope = dict(oversized, accounts=[{}])
+        inputs = dict(jobs=[batched, oversized, redis], libraryJobs=[library_scope],
+                      instanceJobs=[dict(batched, accounts=[{}]), instance_scope, redis])
+
+        self.assertEqual(application_preflight_jobs(inputs), [batched, library_scope, instance_scope])
+
     def test_table_metadata_drift_and_replication_identity_without_mutations(self):
         table = dict(name='records', engine='MergeTree', columns=[dict(name='systemId', type='UInt32', codec='T64, LZ4')], order_by='systemId',
                      settings={'index_granularity': 8192, 'columns_to_prewarm_mark_cache': 'systemId,ts'})

@@ -176,6 +176,9 @@ func (a *App) switchPublishedBundleLocked(root string) {
 }
 
 func (a *App) knownRunsTerminalLocked() bool {
+	if a.installationRuns.hasActiveRun() {
+		return false
+	}
 	if a.recoveredCancelUnconfirmed && a.recoveredRun != nil {
 		return false
 	}
@@ -214,7 +217,6 @@ func (a *App) knownRunsTerminalLocked() bool {
 		return false
 	}
 	a.installationRuns.finishMonitor(record.RunID, &run)
-	a.secrets.ReleaseExecutionIdentityForRun(record.RunID)
 	return true
 }
 

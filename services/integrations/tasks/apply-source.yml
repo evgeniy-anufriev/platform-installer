@@ -16,17 +16,21 @@
     platform_service_integration_projection: "{{ platform_service_integration_projection }}"
     platform_bind_source_dns_records: "{{ platform_bind_source_dns_records }}"
     _platform_integration_selected_sources: "{{ _platform_integration_selected_sources }}"
+    _platform_integration_haproxy_inputs:
+      inventory: "{{ _platform_integration_inventory }}"
+      catalog: "{{ _platform_integration_catalog_file }}"
   delegate_to: localhost
   delegate_facts: true
   run_once: true
+  no_log: true
 
 - name: Проверка полноты информации о провайдере и размещении перед публикацией
   ansible.builtin.assert:
     that:
       - hostvars['localhost'].platform_service_integration_projection.haproxyHosts | difference(ansible_play_hosts_all) | length == 0
-      - hostvars['localhost'].platform_endpoint_sources[item.sourceId].targets | map(attribute='hostId') | difference(ansible_play_hosts_all) | length == 0
+      - hostvars['localhost'].platform_endpoint_sources[item].targets | map(attribute='hostId') | difference(ansible_play_hosts_all) | length == 0
     fail_msg: APPLICATION_ENDPOINT_HOST_SCOPE_INCOMPLETE
-  loop: "{{ hostvars['localhost']._platform_integration_selected_sources }}"
+  loop: "{{ hostvars['localhost']._platform_integration_selected_sources | map(attribute='sourceId') | list }}"
   run_once: true
 
 - name: Подготовка исходных кандидатов перед активацией любого провайдера
@@ -36,6 +40,7 @@
     apply: {become: true}
   vars:
     platform_haproxy_phase: prepare
+    _platform_haproxy_publication_inputs: "{{ hostvars['localhost']._platform_integration_haproxy_inputs }}"
     platform_haproxy_partial_deployment_ids: "{{ hostvars['localhost']._platform_integration_selected_sources | map(attribute='sourceId') | list }}"
   when: inventory_hostname in hostvars['localhost'].platform_service_integration_projection.haproxyHosts and not (platform_endpoint_verify_only | default(false) | bool)
 
@@ -65,6 +70,7 @@
     tasks_from: endpoint_verify
     apply: {become: true}
   vars:
+    _platform_haproxy_publication_inputs: "{{ hostvars['localhost']._platform_integration_haproxy_inputs }}"
     platform_haproxy_partial_deployment_ids: "{{ hostvars['localhost']._platform_integration_selected_sources | map(attribute='sourceId') | list }}"
   when: inventory_hostname in hostvars['localhost'].platform_service_integration_projection.haproxyHosts and (platform_endpoint_verify_only | default(false) | bool)
 
@@ -83,11 +89,8 @@
     fail_msg: APPLICATION_ENDPOINT_NOT_PUBLISHED
   run_once: true
 
-- name: Последовательная проверка источников по заданной политике DNS и HTTPS
+- name: Пакетная проверка источников по заданной политике DNS и HTTPS
   ansible.builtin.include_tasks:
-    file: probe-selected-source.yml
+    file: probe-selected-sources.yml
     apply: {delegate_to: localhost, become: false}
-  loop: "{{ hostvars['localhost']._platform_integration_selected_sources }}"
-  loop_control:
-    loop_var: _platform_selected_probe
   run_once: true

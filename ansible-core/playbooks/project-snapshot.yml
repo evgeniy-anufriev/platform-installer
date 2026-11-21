@@ -9,15 +9,13 @@
         name: platform.core.project_resolution
 
     - name: Сохранение публичного результата снимка
-      ansible.builtin.set_fact:
-        platform_project_snapshot: "{{ platform_project_resolution }}"
+      platform.core.project_snapshot:
+        resolved_result_variable: platform_project_resolution
+        summary_only: true
+      register: platform_project_snapshot
       no_log: true
 
     - name: "Вывод идентификатора снимка без секретных данных"
       ansible.builtin.debug:
-        msg:
-          status: "{{ platform_project_snapshot.snapshot.status }}"
-          projectRevision: "{{ platform_project_snapshot.snapshot.projectRevision }}"
-          snapshotFingerprint: "{{ platform_project_snapshot.snapshot.snapshotFingerprint }}"
-          serializedBytes: "{{ platform_project_snapshot.snapshot | to_json | length }}"
+        msg: "{{ platform_project_snapshot.summary }}"
       run_once: true

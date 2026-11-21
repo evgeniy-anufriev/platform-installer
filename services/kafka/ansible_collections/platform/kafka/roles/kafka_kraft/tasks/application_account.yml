@@ -28,6 +28,7 @@
     src: application-account-client.properties.j2
     dest: "{{ application_kafka_private.path }}/account.properties"
     mode: '0600'
+  when: "'SCRAM-SHA-512' in application_kafka_description.stdout"
   no_log: true
   changed_when: false
 
@@ -96,26 +97,6 @@
       ansible.builtin.assert:
         that: application_kafka_creation.rc == 0
         fail_msg: APPLICATION_KAFKA_ACCOUNT_CREATE_FAILED
-
-- name: Подтверждение вновь установленных учетных данных приложения перед предоставлением доступа
-  when: "platform_kafka_application_phase == 'apply' and application_kafka_account.mode == 'managed' and ('SCRAM-SHA-512' not in application_kafka_description.stdout or application_kafka_password_mismatch)"
-  block:
-    - name: Выполнение аутентификации приложения через SCRAM listener Kafka
-      ansible.builtin.command:
-        argv:
-          - "{{ application_topic_cli_directory }}/bin/kafka-broker-api-versions{{ platform_kafka_script_extension }}"
-          - --bootstrap-server
-          - "{{ application_kafka_account.candidates[0].address }}:{{ application_kafka_account.candidates[0].port }}"
-          - --command-config
-          - "{{ application_kafka_private.path }}/account.properties"
-      register: application_kafka_login
-      changed_when: false
-      failed_when: false
-      no_log: true
-    - name: "Проверка входа приложения с выбранным паролем после настройки учётной записи"
-      ansible.builtin.assert:
-        that: application_kafka_login.rc == 0
-        fail_msg: APPLICATION_KAFKA_ACCOUNT_AUTHENTICATION_FAILED
 
 - name: Проверка или обеспечение заявленных ресурсов ACL
   ansible.builtin.include_tasks: application_acls.yml

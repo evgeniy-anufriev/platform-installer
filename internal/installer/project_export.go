@@ -1,6 +1,7 @@
 package installer
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -15,8 +16,6 @@ const (
 	projectExportAPIVersion   = "platform.installer/project-export/v1alpha1"
 	maxExportFiles            = 4096
 	maxExportDirectoryEntries = maxExportFiles
-	maxExportFileBytes        = int64(4 * 1024 * 1024)
-	maxExportTotalBytes       = int64(64 * 1024 * 1024)
 	maxExportLogicalBytes     = 512
 )
 
@@ -224,9 +223,11 @@ type exportRecord struct {
 }
 
 type exportObservation struct {
-	documents []exportRecord
-	revision  string
-	total     int64
+	reusePreviewAssets bool
+	digestOnly         bool
+	documents          []exportRecord
+	revision           string
+	total              int64
 }
 
 func exportObservationMetadata(observation exportObservation) exportObservation {
@@ -374,27 +375,43 @@ func addExportDocument(root *exportDirectory, logical string, result *exportObse
 	if seen[storedLogical] || caseFolded[strings.ToLower(storedLogical)] {
 		return exportPackagePathError(storedLogical, "EXPORT_SOURCE_UNSAFE", "Повторяющийся путь с учётом регистра")
 	}
-	limit := maxExportFileBytes
-	if safeApplicationPackagePath(storedLogical) {
-		limit = maxApplicationPackageFileBytes
+	var content []byte
+	var identity exportFileIdentity
+	var size int64
+	var digest string
+	var err error
+	if result.digestOnly {
+		h := sha256.New()
+		if result.reusePreviewAssets && packageAssetPath(storedLogical) {
+			var read previewAssetRead
+			size, identity, err = root.streamFile(parts, 0, h, &read)
+			digest = read.digest
+			if err == nil && digest == "" {
+				digest = "sha256:" + hex.EncodeToString(h.Sum(nil))
+				read.remember(digest)
+			}
+		} else {
+			size, identity, err = root.streamFile(parts, 0, h)
+			digest = "sha256:" + hex.EncodeToString(h.Sum(nil))
+		}
+	} else {
+		content, identity, err = root.readFile(parts, 0)
+		size = int64(len(content))
+		digest = digestBytes(content)
 	}
-	content, identity, err := root.readFile(parts, limit)
 	if err != nil {
 		if strings.HasPrefix(storedLogical, "application-packages/") || strings.HasPrefix(storedLogical, "library-packages/") {
-			if err.Error() == "EXPORT_LIMIT_EXCEEDED" {
-				return exportPackagePathError(storedLogical, "APPLICATION_PACKAGE_LIMIT", "Файл превышает допустимый размер")
-			}
 			return exportPackagePathError(storedLogical, "APPLICATION_PACKAGE_INVALID", "Не удалось безопасно прочитать файл")
 		}
 		return err
 	}
-	if len(result.documents) >= maxExportFiles || result.total > maxExportTotalBytes-int64(len(content)) {
-		return exportPackagePathError(storedLogical, "EXPORT_LIMIT_EXCEEDED", "Превышен общий лимит файлов или размера проекта при чтении файла")
+	if len(result.documents) >= maxExportFiles {
+		return exportPackagePathError(storedLogical, "EXPORT_LIMIT_EXCEEDED", "Превышен лимит количества файлов проекта")
 	}
 	seen[storedLogical], caseFolded[strings.ToLower(storedLogical)] = true, true
-	record := exportRecord{ProjectExportDocument: ProjectExportDocument{LogicalPath: storedLogical, Size: int64(len(content)), Digest: digestBytes(content)}, identity: identity, content: content}
+	record := exportRecord{ProjectExportDocument: ProjectExportDocument{LogicalPath: storedLogical, Size: size, Digest: digest}, identity: identity, content: content}
 	result.documents = append(result.documents, record)
-	result.total += int64(len(content))
+	result.total += size
 	return nil
 }
 
@@ -545,4 +562,15 @@ func exportErrorCode(err error, fallback string) string {
 		}
 	}
 	return fallback
+}
+
+// Export/import callers still need the bytes. Revision callers use streamFile
+// through the same handle-relative, no-links and before/after identity guards.
+func (directory *exportDirectory) readFile(parts []string, limit int64) ([]byte, exportFileIdentity, error) {
+	var content bytes.Buffer
+	_, identity, err := directory.streamFile(parts, limit, &content)
+	if err != nil {
+		return nil, exportFileIdentity{}, err
+	}
+	return content.Bytes(), identity, nil
 }

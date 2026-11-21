@@ -20,14 +20,14 @@
       ansible.builtin.include_role:
         name: platform.redis.application_provider
         tasks_from: preflight
-      loop: "{{ application_provider_inputs.instanceJobs | selectattr('serviceType', 'equalto', 'redis') | list }}"
+      loop: "{{ application_provider_inputs.jobs | selectattr('serviceType', 'equalto', 'redis') | list }}"
       loop_control:
         loop_var: platform_redis_application_job
-    - name: Предварительная проверка библиотеки ClickHouse и областей логического экземпляра
+    - name: Предварительная проверка ресурсов и учётных записей по развёртываниям ClickHouse
       ansible.builtin.include_role:
         name: platform.clickhouse.application_provider
         tasks_from: preflight
-      loop: "{{ (application_provider_inputs.libraryJobs + application_provider_inputs.instanceJobs) | selectattr('serviceType', 'equalto', 'clickhouse') | list }}"
+      loop: "{{ application_provider_inputs | platform.clickhouse.application_preflight_jobs }}"
       loop_control:
         loop_var: platform_clickhouse_application_job
     - name: Предварительная проверка ресурсов библиотеки отдельно

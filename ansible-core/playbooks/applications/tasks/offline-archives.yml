@@ -7,9 +7,10 @@
   ansible.builtin.set_fact:
     application_selected_offline_archives: >-
       {{ (application_selected_offline_archives +
-          (hostvars[item].platform_application_preflight_jobs | default([])
+          (hostvars[item].application_host_offline_archives if hostvars[item].application_host_offline_archives is defined
+           else (hostvars[item].platform_application_preflight_jobs | default([])
            | selectattr('source.source', 'equalto', 'OFFLINE_BUNDLE')
-           | map(attribute='authority.offlineBundle') | list)) | unique | list }}
+           | map(attribute='authority.offlineBundle') | list))) | unique | list }}
   loop: "{{ groups['platform_targets'] | default([]) }}"
   no_log: true
 

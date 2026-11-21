@@ -425,6 +425,10 @@ class ApplicationVaultQA(a3.ApplicationProviderQA):
             application_command=['/opt/application/run'])
         wrapper=self.secret_root/'generated-apply.yml'
         wrapper.write_text(yaml.safe_dump([
+            dict(hosts='localhost',connection='local',gather_facts=False,tasks=[
+                {'platform.core.prepare_application_vault': {
+                    'snapshot_result': '{{ application_provider_snapshot }}'},
+                 'register': 'application_vault_inputs', 'no_log': True}]),
             {'import_playbook':str(ROOT/'ansible-core/playbooks/applications/stages/vault-preflight.yml')},
             {'import_playbook':str(ROOT/'ansible-core/playbooks/applications/stages/provider-stage.yml')},
             dict(hosts='localhost',connection='local',gather_facts=False,vars={'application_runtime':runtime},tasks=[

@@ -181,9 +181,9 @@ func (directory *exportDirectory) entries() ([]exportEntry, error) {
 	return result, nil
 }
 
-func (directory *exportDirectory) readFile(parts []string, limit int64) ([]byte, exportFileIdentity, error) {
+func (directory *exportDirectory) streamFile(parts []string, limit int64, output io.Writer, preview ...*previewAssetRead) (int64, exportFileIdentity, error) {
 	if len(parts) == 0 {
-		return nil, exportFileIdentity{}, errors.New("unsafe export file")
+		return 0, exportFileIdentity{}, errors.New("unsafe export file")
 	}
 	parent := directory
 	var owned *exportDirectory
@@ -191,37 +191,45 @@ func (directory *exportDirectory) readFile(parts []string, limit int64) ([]byte,
 		var err error
 		owned, err = directory.openDirectory(parts[:len(parts)-1])
 		if err != nil {
-			return nil, exportFileIdentity{}, err
+			return 0, exportFileIdentity{}, err
 		}
 		defer owned.close()
 		parent = owned
 	}
 	handle, err := openExportWindowsRelative(parent.handle, parts[len(parts)-1], false, windows.FILE_GENERIC_READ, windows.FILE_OPEN)
 	if err != nil {
-		return nil, exportFileIdentity{}, exportWindowsNotExist(err)
+		return 0, exportFileIdentity{}, exportWindowsNotExist(err)
 	}
 	file := os.NewFile(uintptr(handle), parts[len(parts)-1])
 	if file == nil {
 		_ = windows.CloseHandle(handle)
-		return nil, exportFileIdentity{}, errors.New("unsafe export file")
+		return 0, exportFileIdentity{}, errors.New("unsafe export file")
 	}
 	defer file.Close()
 	identity, size, err := exportWindowsFileIdentity(handle)
 	if err != nil || identity.links != 1 {
-		return nil, exportFileIdentity{}, errors.New("unsafe export file")
+		return 0, exportFileIdentity{}, errors.New("unsafe export file")
 	}
-	if size > limit {
-		return nil, exportFileIdentity{}, errors.New("EXPORT_LIMIT_EXCEEDED")
+	if limit > 0 && size > limit {
+		return 0, exportFileIdentity{}, errors.New("EXPORT_LIMIT_EXCEEDED")
 	}
-	data, err := io.ReadAll(io.LimitReader(file, limit+1))
-	if err != nil || int64(len(data)) != size {
-		return nil, exportFileIdentity{}, errors.New("unsafe export file")
+	if len(preview) != 0 && preview[0].lookup(file) {
+		return size, identity, nil
+	}
+	var reader io.Reader = file
+	if limit > 0 {
+		reader = io.LimitReader(file, limit+1)
+	}
+	count, err := io.Copy(output, reader)
+	if err != nil || count != size {
+		return 0, exportFileIdentity{}, errors.New("unsafe export file")
 	}
 	after, afterSize, afterErr := exportWindowsFileIdentity(handle)
-	if afterErr != nil || after != identity || afterSize != size {
-		return nil, exportFileIdentity{}, errors.New("PROJECT_CHANGED")
+	if afterErr != nil || after != identity || afterSize != size ||
+		(len(preview) != 0 && !preview[0].unchanged(file)) {
+		return 0, exportFileIdentity{}, errors.New("PROJECT_CHANGED")
 	}
-	return data, identity, nil
+	return count, identity, nil
 }
 
 func (directory *exportDirectory) exists(name string) (bool, error) {

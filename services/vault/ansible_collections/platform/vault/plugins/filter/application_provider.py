@@ -17,6 +17,29 @@ def delta(response, fields, owner):
     return dict(method='PATCH', changed=bool(changed), body={'options': {'cas': data['metadata']['version']}, 'data': changed})
 
 
+def plan_documents(documents, states, values, provider):
+    writes, refresh = [], []
+    for document in documents:
+        key = provider + ':' + document['mount'] + '/' + document['document']
+        state = states[key]
+        change = delta(state, values[key], document['owner'])
+        if change['changed']:
+            writes.append(dict(document=document, method=change['method'], body=change['body']))
+        elif state.get('reused'):
+            refresh.append(document)
+    return dict(writes=writes, refresh=refresh)
+
+
+def cas_conflict(result):
+    return result.get('status') == 400 and any(
+        isinstance(error, str) and 'check-and-set' in error.lower()
+        for error in ((result.get('json') or {}).get('errors') or []))
+
+
+def conflict_documents(results):
+    return [result['application_vault_write']['document'] for result in results if cas_conflict(result)]
+
+
 def retained_policy(response, desired, owner):
     """Retain only canonical instance KV reads, never arbitrary HCL/capabilities."""
     if response.get('status') == 404:
@@ -90,6 +113,27 @@ def document_cache(results, values, provider):
     return states
 
 
+def group_sources(sources, credential_files=None):
+    groups = {}
+    for source in sources:
+        if source.get('passwordRef', '') in (credential_files or {}):
+            continue
+        key = (source['providerId'], source['mount'], source['document'])
+        groups.setdefault(key, dict(providerId=key[0], mount=key[1], document=key[2], fields=[]))
+        groups[key]['fields'].append(source)
+    return list(groups.values())
+
+
+def document_state(result, cached, provider):
+    if not result.get('skipped'):
+        return result
+    document = result['item']
+    key = provider + ':' + document['mount'] + '/' + document['document']
+    previous = cached[key]
+    return dict(status=previous['status'], json=previous.get('json', {}),
+                item=document, reused=True)
+
+
 def role_changed(response, desired):
     if response.get('status') == 404:
         return True
@@ -123,4 +167,9 @@ def verify_fields(results, expected):
 
 class FilterModule:
     def filters(self):
-        return {'application_vault_retained_policy': retained_policy, 'application_vault_document_cache': document_cache, 'application_vault_verify_fields': verify_fields, 'application_vault_role_changed': role_changed, 'application_vault_source_cache': source_cache, 'application_kv_delta': delta, 'application_vault_cidrs': cidrs}
+        return {'application_vault_retained_policy': retained_policy, 'application_vault_document_cache': document_cache, 'application_vault_verify_fields': verify_fields, 'application_vault_role_changed': role_changed, 'application_vault_source_cache': source_cache, 'application_kv_delta': delta, 'application_vault_cidrs': cidrs,
+                'application_vault_group_sources': group_sources,
+                'application_vault_document_state': document_state,
+                'application_vault_plan_documents': plan_documents,
+                'application_vault_cas_conflict': cas_conflict,
+                'application_vault_conflict_documents': conflict_documents}

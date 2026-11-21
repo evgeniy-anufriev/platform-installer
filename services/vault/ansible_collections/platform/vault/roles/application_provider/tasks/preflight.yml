@@ -11,8 +11,11 @@
     return_content: true
   vars:
     application_vault_provider: "{{ platform_application_vault_runtime[platform_vault_application_job.providerId] }}"
+    document_key: "{{ platform_vault_application_job.providerId ~ ':' ~ item.mount ~ '/' ~ item.document }}"
   loop: "{{ platform_vault_application_job.documents }}"
-  when: not application_vault_identity_only | default(false)
+  when:
+    - not application_vault_identity_only | default(false)
+    - not application_vault_reuse_documents | default(false) or document_key not in platform_application_vault_documents | default({})
   register: application_vault_document_states
   no_log: true
 
@@ -20,14 +23,14 @@
   ansible.builtin.assert:
     that: item | platform.vault.application_kv_delta({}, item.item.owner) is mapping
     fail_msg: APPLICATION_VAULT_DOCUMENT_OWNERSHIP_INVALID
-  loop: "{{ application_vault_document_states.results | default([]) }}"
+  loop: "{{ application_vault_document_states.results | default([]) | rejectattr('skipped', 'defined') | list }}"
   when: not application_vault_identity_only | default(false)
   no_log: true
 
 - name: Предварительная проверка значений документов и создание недостающих паролей приложений
   platform.vault.application_document:
     document: "{{ item }}"
-    current: "{{ application_vault_document_states.results[application_vault_document_index] }}"
+    current: "{{ application_vault_document_states.results[application_vault_document_index] | platform.vault.application_vault_document_state(platform_application_vault_documents | default({}), platform_vault_application_job.providerId) }}"
     provider: "{{ platform_application_vault_runtime[platform_vault_application_job.providerId] }}"
     secret_root: "{{ platform_application_secret_root }}"
     secret_files: "{{ platform_application_secret_files | combine(platform_application_credential_files | default({})) }}"
@@ -42,9 +45,11 @@
 - name: Подтверждение владельца и однократное сохранение исходного содержимого и версий CAS
   ansible.builtin.set_fact:
     platform_application_vault_values: "{{ platform_application_vault_values | default({}) | combine(application_vault_document_sources.results | platform.vault.application_vault_source_cache(platform_vault_application_job.providerId)) }}"
-    platform_application_vault_documents: "{{ platform_application_vault_documents | default({}) | combine(application_vault_document_states.results | platform.vault.application_vault_document_cache(application_vault_document_sources.results | platform.vault.application_vault_source_cache(platform_vault_application_job.providerId), platform_vault_application_job.providerId)) }}"
+    platform_application_vault_documents: "{{ platform_application_vault_documents | default({}) | combine(resolved_document_states | platform.vault.application_vault_document_cache(application_vault_document_sources.results | platform.vault.application_vault_source_cache(platform_vault_application_job.providerId), platform_vault_application_job.providerId)) }}"
     platform_application_generated_values: "{{ platform_application_generated_values | default({}) | combine(application_vault_document_sources.results | map(attribute='generated') | list | combine) }}"
   when: not application_vault_identity_only | default(false)
+  vars:
+    resolved_document_states: "{{ application_vault_document_states.results | map('platform.vault.application_vault_document_state', platform_application_vault_documents | default({}), platform_vault_application_job.providerId) | list }}"
   no_log: true
 
 - name: Чтение текущих политики и роли перед изменением Vault
@@ -63,7 +68,9 @@
     - "sys/policies/acl/{{ platform_vault_application_job.identity }}"
     - "auth/approle/role/{{ platform_vault_application_job.identity }}"
   register: application_vault_identity_before
-  when: platform_vault_application_job.identity is defined
+  when:
+    - application_vault_check_identity | default(true)
+    - platform_vault_application_job.identity is defined
   no_log: true
 
 - name: Отклонение неуправляемой политики или неожиданных политик роли
@@ -72,5 +79,7 @@
       - application_vault_identity_before.results[0].status == 404 or application_vault_identity_before.results[0].json.data.policy.startswith('# ' ~ platform_vault_application_job.owner ~ '\n')
       - application_vault_identity_before.results[1].status == 404 or (application_vault_identity_before.results[0].status == 200 and application_vault_identity_before.results[1].json.data.token_policies == [platform_vault_application_job.identity])
     fail_msg: APPLICATION_VAULT_IDENTITY_OWNERSHIP_INVALID
-  when: platform_vault_application_job.identity is defined
+  when:
+    - application_vault_check_identity | default(true)
+    - platform_vault_application_job.identity is defined
   no_log: true

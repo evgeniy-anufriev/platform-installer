@@ -84,14 +84,8 @@ platform_application_definition:
             combine(application_job.hostOverride.ports | default({}), recursive=true))['port-2'].container }}
       HZ_NETWORK_JOIN_TCPIP_MEMBERS: >-
         {%- set members = [] -%}
-        {%- for placement in _application_inputs.jobs |
-            selectattr('libraryId', 'equalto', library_instance_id) |
-            selectattr('slotId', 'equalto', application_job.slotId) | sort(attribute='hostId') -%}
-        {%- set ports = (placement.application.definition.defaults.ports | default({})) |
-            combine(placement.slot.overrides.ports | default({}), recursive=true) |
-            combine(placement.instance.overrides.ports | default({}), recursive=true) |
-            combine(placement.hostOverride.ports | default({}), recursive=true) -%}
-        {%- set _ = members.append((hostvars[placement.hostId].ansible_host | default(placement.hostId)) ~ ':' ~ (ports['port-2'].published | string)) -%}
+        {%- for placement in application_placements -%}
+        {%- set _ = members.append(placement.address ~ ':' ~ (placement.ports['port-2'].published | string)) -%}
         {%- endfor -%}
         {{- members | join(',') -}}
       KILL_EXPIRED_USER_SESSIONS_JOB_RATE: "60000"

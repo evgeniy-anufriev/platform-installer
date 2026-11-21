@@ -24,7 +24,7 @@
 
 - name: Сохранение безопасной диагностики записи документа Vault
   block:
-    - name: "Повторение записи изменённых полей с актуальной версией CAS"
+    - name: "Запись изменённых полей с актуальной версией CAS"
       ansible.builtin.uri:
         url: "{{ application_vault_provider.url }}/v1/{{ application_vault_document.mount }}/data/{{ application_vault_document.document }}"
         method: "{{ application_vault_delta.method }}"
@@ -56,3 +56,9 @@
              else 'timeout' if ('timed out' in application_vault_write_message | lower or 'timeout' in application_vault_write_message | lower)
              else 'http' if (ansible_failed_result.status | default(-1) | int > 0)
              else 'module' }}
+
+- name: Прерывание выполнения при повторном конфликте CAS или отклонении записи
+  ansible.builtin.assert:
+    that: not application_vault_delta.changed or application_vault_document_write.status | int == 200
+    fail_msg: APPLICATION_VAULT_DOCUMENT_CAS_CONFLICT
+  no_log: true

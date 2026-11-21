@@ -63,14 +63,10 @@ class BatchScopeRuntimeTests(unittest.TestCase):
         rows[1]['dnsRecords'][0]['owner'] = 'app.test.'
         self.run_tasks(tasks, {'_platform_integration_selected_sources': rows}, False)
 
-    def test_each_sequential_probe_retains_its_own_policy(self):
-        bind = yaml.safe_load((TASKS / 'probe-selected-source.yml').read_text())[0]
-        first = dict(fqdns=['one.test'], probe=dict(timeout=2, expected_status=200, validate_certs=True), expectedAddresses=['192.0.2.1'])
-        second = dict(fqdns=['two.test'], probe=dict(timeout=7, expected_status=204, validate_certs=False), expectedAddresses=['192.0.2.2'])
-        checks = [{'ansible.builtin.assert': {'that': ['_platform_integration_probe == _platform_selected_probe.probe',
-                                                      'platform_endpoint_probe_expected_addresses == _platform_selected_probe.expectedAddresses',
-                                                      '_platform_integration_source_fqdns == _platform_selected_probe.fqdns']}}]
-        tasks = []
-        for row in (first, second):
-            tasks.extend([{'ansible.builtin.set_fact': {'_platform_selected_probe': row}}, bind, checks[-1]])
-        self.run_tasks(tasks, {})
+    def test_publication_uses_one_probe_task_for_all_selected_sources(self):
+        tasks = yaml.safe_load((TASKS / 'probe-selected-sources.yml').read_text(encoding='utf-8'))
+        calls = [task for task in tasks if 'platform.core.probe_public_endpoints' in task]
+        self.assertEqual(1, len(calls))
+        self.assertNotIn('loop', calls[0])
+        self.assertTrue(calls[0]['no_log'])
+        self.assertIn('_platform_integration_selected_sources', calls[0]['platform.core.probe_public_endpoints']['sources'])

@@ -5,11 +5,6 @@
   gather_facts: false
   any_errors_fatal: true
   tasks:
-    - name: "Подготовка параметров Vault по снимку провайдера без обращения к целевым узлам"
-      platform.core.prepare_application_vault:
-        snapshot_result: "{{ application_provider_snapshot }}"
-      register: application_vault_inputs
-      no_log: true
     - name: Проверка поддерживаемого набора ресурсов Vault до записи
       ansible.builtin.assert:
         that: application_vault_inputs.status == 'PASS'
@@ -32,10 +27,29 @@
       loop: "{{ application_vault_inputs.providers }}"
       loop_control:
         loop_var: platform_vault_application_provider
+    - name: Подготовка ключей сетей Vault для уникальных групп размещений
+      ansible.builtin.set_fact:
+        platform_application_vault_network_keys: >-
+          {%- set bridges = {} -%}
+          {%- for host in application_vault_inputs.instanceJobs | map(attribute='hosts') | flatten | unique(case_sensitive=true) -%}
+          {%- set _ = bridges.update({host: hostvars[host].platform_docker_lxc_bridge | default('lxcbr0')}) -%}
+          {%- endfor -%}
+          {%- set keys = {} -%}
+          {%- for job in application_vault_inputs.instanceJobs -%}
+          {%- set scope = [job.providerId, job.hosts] | to_json -%}
+          {%- if scope not in keys -%}
+          {%- set _ = keys.update({scope: [job.providerId, platform_application_vault_runtime[job.providerId].routeAddress,
+              job.hosts, job.hosts | map('extract', bridges) | list] | to_json}) -%}
+          {%- endif -%}
+          {%- endfor -%}
+          {{ keys }}
+      no_log: true
     - name: "Проверка секретов библиотеки и экземпляров приложения до внесения изменений"
       ansible.builtin.include_role:
         name: platform.vault.application_provider
         tasks_from: preflight
+      vars:
+        application_vault_check_identity: false
       loop: "{{ application_vault_inputs.libraryJobs + application_vault_inputs.instanceJobs }}"
       loop_control:
         loop_var: platform_vault_application_job

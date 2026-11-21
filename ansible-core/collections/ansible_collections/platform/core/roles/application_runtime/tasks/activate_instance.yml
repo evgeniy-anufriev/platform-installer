@@ -6,7 +6,9 @@
   environment: "{{ application_runtime_job.dockerEnvironment }}"
   register: application_container_before
   changed_when: false
-  failed_when: false
+  failed_when: >-
+    application_container_before.rc == 0 and
+    not (application_container_before.stdout | platform.core.application_owned_container(application_runtime_job, inventory_hostname))
   no_log: true
 
 - name: Запуск точного экземпляра с одной попыткой восстановления в случае неудачи

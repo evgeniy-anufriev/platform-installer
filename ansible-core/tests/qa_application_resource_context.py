@@ -1,5 +1,4 @@
 """Native, target-free resource context checks on the Execution Node."""
-import copy
 import os
 from pathlib import Path
 import subprocess
@@ -48,10 +47,8 @@ class ResourceContextBatchQA(unittest.TestCase):
                   {'db': {'kept': {'resourceId': 'kept', 'name': 'kept'}}},
                   dict(expected_topics, kept=entry('events')),
                   dict(expected_databases, db=dict(entry('main'), kept={'resourceId': 'kept', 'name': 'kept'})))]
-        include = next(task for task in yaml.safe_load((TASKS / 'instance.yml').read_text())[0]['block']
-                       if task.get('ansible.builtin.include_tasks') == 'resource_context.yml')
-        include = copy.deepcopy(include)
-        include['ansible.builtin.include_tasks'] = str(TASKS / 'resource_context.yml')
+        context_task = next(task for task in yaml.safe_load((TASKS / 'instance.yml').read_text())[0]['block']
+                            if '_application_resource_context' in task.get('vars', {}))
         steps = []
         for conns, res, topics, databases, want_topics, want_databases in cases:
             steps.extend([
@@ -60,7 +57,7 @@ class ResourceContextBatchQA(unittest.TestCase):
                     'application_job': {'deployment': {'bindings': bindings}},
                     'application_topics': topics, 'application_databases': databases,
                     'expected_topics': want_topics, 'expected_databases': want_databases}},
-                include,
+                context_task,
                 {'ansible.builtin.assert': {'that': [
                     'application_topics == expected_topics',
                     'application_databases == expected_databases']}}])

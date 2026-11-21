@@ -307,6 +307,39 @@ func TestBuildProjectSnapshotUsesFixedSemanticRequestAndBoundedResponse(t *testi
 	}
 }
 
+func TestProjectVerificationAcceptsLargeSnapshotWithinProtocolBudget(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, "inventory"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for _, size := range []int{5 * 1024 * 1024, maxExecutionProtocolResponseBytes} {
+		runner := &snapshotProtocolRunner{}
+		base, _ := runner.Run(context.Background(), "", nil, []byte(`{"operation":"BuildProjectSnapshot"}`))
+		var envelope map[string]any
+		if err := json.Unmarshal(base, &envelope); err != nil {
+			t.Fatal(err)
+		}
+		projection := envelope["projectSnapshot"].(map[string]any)
+		projection["project"] = map[string]any{"padding": strings.Repeat("x", size)}
+		projection["snapshotFingerprint"] = "sha256:" + strings.Repeat("d", 64)
+		runner.protocolResponse, _ = json.Marshal(envelope)
+		transport := OpenSSHTransport{Identity: fixedIdentity{}, Runner: runner}
+		result, err := transport.BuildProjectVerificationSnapshot(context.Background(), testNode(), root, map[string]any{"bundleDigest": "sha256:" + strings.Repeat("b", 64)})
+		if len(runner.protocolResponse) > maxExecutionProtocolResponseBytes {
+			if err == nil {
+				t.Fatal("oversized protocol response accepted")
+			}
+			continue
+		}
+		if err != nil || result.Snapshot == nil || result.Snapshot.SnapshotFingerprint != projection["snapshotFingerprint"] {
+			t.Fatalf("valid large snapshot rejected: %v", err)
+		}
+		if got := runner.limits[len(runner.limits)-1]; got != maxExecutionProtocolResponseBytes {
+			t.Fatalf("snapshot limit=%d, want existing protocol budget", got)
+		}
+	}
+}
+
 func TestBuildCandidateProjectSnapshotNegotiatesAndSendsClosedRequest(t *testing.T) {
 	root := t.TempDir()
 	if err := os.Mkdir(filepath.Join(root, "inventory"), 0o700); err != nil {
@@ -602,12 +635,16 @@ func (r *candidateSnapshotRunner) RunBounded(ctx context.Context, name string, a
 
 type snapshotProtocolRunner struct {
 	protocolRunner
-	protocolRequest string
+	protocolRequest  string
+	protocolResponse []byte
 }
 
 func (r *snapshotProtocolRunner) Run(ctx context.Context, name string, args []string, input []byte) ([]byte, error) {
 	if strings.Contains(string(input), `"operation":"BuildProjectSnapshot"`) {
 		r.protocolRequest = string(input)
+		if r.protocolResponse != nil {
+			return r.protocolResponse, nil
+		}
 		return []byte(`{"projectSnapshot":{"projectRevision":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","status":"PASS"},"runtimeEvidence":{"bundleDigest":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","coreVersion":"test-core","catalogDigest":"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","protocol":"v1alpha1"}}`), nil
 	}
 	return r.protocolRunner.Run(ctx, name, args, input)
@@ -615,7 +652,11 @@ func (r *snapshotProtocolRunner) Run(ctx context.Context, name string, args []st
 
 func (r *snapshotProtocolRunner) RunBounded(ctx context.Context, name string, args []string, input []byte, limit int) ([]byte, error) {
 	r.limits = append(r.limits, limit)
-	return r.Run(ctx, name, args, input)
+	output, err := r.Run(ctx, name, args, input)
+	if len(output) > limit {
+		return output[:limit], errors.New("response exceeds configured bound")
+	}
+	return output, err
 }
 
 func TestGetEventsSendsBoundedPaginationRequest(t *testing.T) {

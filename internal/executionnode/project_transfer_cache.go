@@ -74,6 +74,12 @@ func (t OpenSSHTransport) projectArchiveCache(ctx context.Context, node Node, sl
 }
 
 func writeProjectArchive(writer *tar.Writer, absolute string) error {
+	return visitProjectArchive(absolute, func(candidate string) error {
+		return appendTarPath(writer, absolute, candidate)
+	})
+}
+
+func visitProjectArchive(absolute string, visit func(string) error) error {
 	info, err := os.Lstat(absolute)
 	if err != nil || !info.IsDir() || isUnsafeFilesystemLink(info) {
 		return errors.New("SERVICE_PROJECT_INVALID")
@@ -86,7 +92,7 @@ func writeProjectArchive(writer *tar.Writer, absolute string) error {
 			}
 			return errors.New("SERVICE_PROJECT_INVALID")
 		}
-		if err := appendTarPath(writer, absolute, candidate); err != nil {
+		if err := visit(candidate); err != nil {
 			return err
 		}
 	}

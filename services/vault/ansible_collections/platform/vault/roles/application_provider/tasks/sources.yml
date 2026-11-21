@@ -27,23 +27,32 @@
 - name: Проверка наличия и допустимости объявленного поля учётных данных
   ansible.builtin.assert:
     that:
-      - application_vault_source_value.json.data.data[application_vault_source.field] is string
-      - application_vault_source_value.json.data.data[application_vault_source.field] | length > 0
-      - application_vault_source_value.json.data.data[application_vault_source.field] | length <= 4096
+      - application_vault_source_value.json.data.data[vault_source_field.field] is string
+      - application_vault_source_value.json.data.data[vault_source_field.field] | length > 0
+      - application_vault_source_value.json.data.data[vault_source_field.field] | length <= 4096
     fail_msg: APPLICATION_VAULT_SOURCE_FIELD_INVALID
+  loop: "{{ application_vault_source.fields | default([application_vault_source]) }}"
+  loop_control:
+    loop_var: vault_source_field
   no_log: true
 
 - name: Подготовка входных данных провайдера только в защищенной среде выполнения
   ansible.builtin.copy:
-    content: "{{ application_vault_source_value.json.data.data[application_vault_source.field] }}"
-    dest: "{{ platform_application_secret_root }}/{{ application_vault_source.passwordRef }}"
+    content: "{{ application_vault_source_value.json.data.data[vault_source_field.field] }}"
+    dest: "{{ platform_application_secret_root }}/{{ vault_source_field.passwordRef }}"
     mode: '0600'
+  loop: "{{ application_vault_source.fields | default([application_vault_source]) }}"
+  loop_control:
+    loop_var: vault_source_field
   changed_when: false
-  when: application_vault_source.passwordRef is defined
+  when: vault_source_field.passwordRef is defined
   no_log: true
 
 - name: Привязка защищённых производных входных данных без замены желаемого источника
   ansible.builtin.set_fact:
-    platform_application_credential_files: "{{ platform_application_credential_files | default({}) | combine({application_vault_source.passwordRef: platform_application_secret_root ~ '/' ~ application_vault_source.passwordRef}) }}"
-  when: application_vault_source.passwordRef is defined
+    platform_application_credential_files: "{{ platform_application_credential_files | default({}) | combine({vault_source_field.passwordRef: platform_application_secret_root ~ '/' ~ vault_source_field.passwordRef}) }}"
+  loop: "{{ application_vault_source.fields | default([application_vault_source]) }}"
+  loop_control:
+    loop_var: vault_source_field
+  when: vault_source_field.passwordRef is defined
   no_log: true

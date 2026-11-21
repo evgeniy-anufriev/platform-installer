@@ -19,6 +19,25 @@ from ansible.errors import AnsibleError
 
 
 class SnapshotOutputTests(unittest.TestCase):
+    def test_summary_uses_ready_snapshot_without_reexpanding_or_publishing_private_rows(self):
+        from ansible.plugins.filter.core import to_json
+        action = object.__new__(ActionModule)
+        action._task = SimpleNamespace(args={'resolved_result_variable': 'platform_project_resolution',
+                                            'summary_only': True})
+        public = dict(status='PASS', projectRevision='sha256:revision', snapshotFingerprint='sha256:proof',
+                      literal='{{ must_remain_literal }}')
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder, 'snapshot.json')
+            path.write_text('previous-publication')
+            with patch.dict(os.environ, PLATFORM_PROJECT_SNAPSHOT_OUTPUT=str(path)):
+                result = action.run(task_vars={'platform_project_resolution': {
+                    'snapshot': public, 'application_rows': [{'private': 'PRIVATE_TEST_SENTINEL'}]}})
+            self.assertEqual(dict(status='PASS', projectRevision='sha256:revision',
+                                  snapshotFingerprint='sha256:proof', serializedBytes=len(to_json(public))),
+                             result['summary'])
+            self.assertNotIn('PRIVATE_TEST_SENTINEL', json.dumps(result))
+            self.assertEqual('previous-publication', path.read_text())
+
     def test_success_keeps_private_result_censored_and_publishes_public_snapshot(self):
         action = object.__new__(ActionModule)
         action._task = SimpleNamespace(args={'resolved_result_variable': 'platform_project_resolution'})

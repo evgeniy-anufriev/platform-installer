@@ -36,10 +36,7 @@ SKIP_PLAN_REQUEST_VERSION = 'platform.installer/execution-runtime/v1alpha5'
 MAX_DEPLOYMENT_ORDER = 256
 SNAPSHOT_REQUEST_VERSION = "platform.installer/project-snapshot-request/v1alpha1"
 SNAPSHOT_OWNER_FILE = ".snapshot-owner.json"
-MAX_CANDIDATE_ARCHIVE_BYTES = 32 * 1024 * 1024
 MAX_CANDIDATE_FILES = 4096
-MAX_CANDIDATE_FILE_BYTES = 4 * 1024 * 1024
-MAX_CANDIDATE_TOTAL_BYTES = 64 * 1024 * 1024
 MAX_CANDIDATE_PATH_BYTES = 512
 APPROVED_CANDIDATE_ANSIBLE_CONFIG = (
     b"# Managed by Platform Installer.\n"
@@ -522,18 +519,13 @@ def _candidate_members(archive):
     members = archive.getmembers()
     if len(members) > MAX_CANDIDATE_FILES:
         raise LifecycleError("PROJECT_CANDIDATE_LIMIT_EXCEEDED")
-    total = 0
     names = set()
     folded = set()
     for member in members:
         if not member.isreg() or member.linkname or member.sparse is not None or not _candidate_logical_path(member.name):
             raise LifecycleError("PROJECT_CANDIDATE_ARCHIVE_UNSAFE")
-        limit = MAX_CANDIDATE_TOTAL_BYTES if member.name.startswith(('application-packages/', 'library-packages/')) else MAX_CANDIDATE_FILE_BYTES
-        if member.size < 0 or member.size > limit:
-            raise LifecycleError("PROJECT_CANDIDATE_LIMIT_EXCEEDED")
-        total += member.size
-        if total > MAX_CANDIDATE_TOTAL_BYTES:
-            raise LifecycleError("PROJECT_CANDIDATE_LIMIT_EXCEEDED")
+        if member.size < 0:
+            raise LifecycleError("PROJECT_CANDIDATE_ARCHIVE_UNSAFE")
         folded_name = member.name.casefold()
         if member.name in names or folded_name in folded:
             raise LifecycleError("PROJECT_CANDIDATE_CASE_COLLISION")
@@ -638,12 +630,10 @@ def _copy_verified_candidate_archive(source_path, destination_path, expected_dig
         archive_digest = hashlib.sha256()
         copied = 0
         while True:
-            block = os.read(source, min(1024 * 1024, MAX_CANDIDATE_ARCHIVE_BYTES + 1 - copied))
+            block = os.read(source, 1024 * 1024)
             if not block:
                 break
             copied += len(block)
-            if copied > MAX_CANDIDATE_ARCHIVE_BYTES:
-                raise LifecycleError("PROJECT_CANDIDATE_ARCHIVE_UNSAFE")
             archive_digest.update(block)
             _write_all(destination, block)
         final_info = os.fstat(source)
@@ -664,7 +654,7 @@ def stage_candidate_archive(archive_path, run_id, request_id, expected_digest, s
     if os.path.abspath(archive_path) != expected_archive or not re.fullmatch(r"[0-9a-f]{32}", request_id or "") or not re.fullmatch(r"sha256:[0-9a-f]{64}", expected_digest or ""):
         raise LifecycleError("PROJECT_CANDIDATE_STAGING_INVALID")
     archive_info = os.lstat(archive_path)
-    if not os.path.isfile(archive_path) or os.path.islink(archive_path) or archive_info.st_size > MAX_CANDIDATE_ARCHIVE_BYTES:
+    if not os.path.isfile(archive_path) or os.path.islink(archive_path):
         raise LifecycleError("PROJECT_CANDIDATE_ARCHIVE_UNSAFE")
     if os.path.lexists(journal.directory):
         raise LifecycleError("PROJECT_CANDIDATE_STAGING_EXISTS")
@@ -685,7 +675,7 @@ def stage_candidate_archive(archive_path, run_id, request_id, expected_digest, s
             members = _candidate_members(archive)
             config_member = next(member for member in members if member.name == "ansible.cfg")
             config_stream = archive.extractfile(config_member)
-            if config_stream is None or config_stream.read(MAX_CANDIDATE_FILE_BYTES + 1) != APPROVED_CANDIDATE_ANSIBLE_CONFIG:
+            if config_stream is None or config_stream.read(len(APPROVED_CANDIDATE_ANSIBLE_CONFIG) + 1) != APPROVED_CANDIDATE_ANSIBLE_CONFIG:
                 raise LifecycleError("PROJECT_CANDIDATE_ANSIBLE_CONFIG_UNSAFE")
             for member in members:
                 source = archive.extractfile(member)
@@ -1131,14 +1121,20 @@ def get(value, state_root):
     journal = Journal(state_root, value["runId"])
     metadata = owned(journal)
     recover(state_root, active)
-    result = {"run": journal.status(), "metadata": metadata}
+    # Read the terminal state and sequence after the corresponding event has
+    # been committed under the journal lock.
+    event_lock = journal.event_lock()
+    try:
+        result = {"run": journal.status(), "metadata": metadata}
+        if os.path.exists(journal.result_path):
+            with open(journal.result_path, "r", encoding="utf-8") as stream:
+                result["result"] = json.load(stream)
+    finally:
+        os.close(event_lock)
     if result["run"].get("state") not in ACTIVE:
         if not active(metadata.get("unit"), metadata):
             journal.cleanup_runtime_secret_inputs()
             execution_secret_lease.cleanup_run(state_root, journal.run_id)
-    if os.path.exists(journal.result_path):
-        with open(journal.result_path, "r", encoding="utf-8") as stream:
-            result["result"] = json.load(stream)
     return result
 
 

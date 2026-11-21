@@ -24,11 +24,25 @@
     tasks_from: apply_library
   when: application_library_runtime_jobs | length > 0
 
+- name: Пакетная проверка образов библиотеки для каждой учётной записи узла
+  ansible.builtin.command:
+    argv: >-
+      {{ ['docker', 'image', 'inspect'] +
+         ((item.1 | map(attribute='authority.requirement.imageId') | list) +
+          (item.1 | map(attribute='settings.image') | list) | unique(case_sensitive=true) | list) }}
+  become_user: "{{ item.0 }}"
+  environment: "{{ item.1[0].dockerEnvironment }}"
+  loop: "{{ application_library_runtime_jobs | groupby('account') }}"
+  register: application_library_image_inventory
+  changed_when: false
+  failed_when: application_library_image_inventory.rc not in [0, 1]
+  no_log: true
+
 - name: Доставка выбранных образов библиотеки перед выполнением сценариев pre_start
   ansible.builtin.include_role:
     name: platform.core.application_runtime
     tasks_from: image_delivery
-  loop: "{{ application_library_runtime_jobs }}"
+  loop: "{{ application_library_runtime_jobs | platform.core.application_image_delivery_jobs(application_library_image_inventory.results | default([])) }}"
   loop_control:
     loop_var: application_runtime_job
 

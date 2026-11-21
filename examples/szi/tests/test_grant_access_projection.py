@@ -26,6 +26,34 @@ def combine(left, right, recursive=False):
 
 
 class GrantAccessProjectionTest(unittest.TestCase):
+    def test_grant_access_administrative_groups_are_provisioned(self):
+        library = yaml.safe_load(LIBRARY.read_text(encoding='utf-8'))['platform_library_definition']
+        app = yaml.safe_load(APP.read_text(encoding='utf-8'))['platform_application_definition']
+        groups = {group['name']: group for group in library['defaults']['parameters']['IDENTITY_GROUPS']}
+        environment = app['defaults']['environment']
+        for level in (0, 1, 2):
+            role = environment[f'ROOT_GROUP_LEVEL_{level}_ROLE']
+            self.assertIn(role, environment[f'ROOT_GROUP_LEVEL_{level}'].split(','))
+            self.assertIn(role, groups)
+        self.assertIn('admin', groups[environment['ROOT_GROUP_LEVEL_0']]['members'])
+
+    def test_grant_access_client_id_matches_package_identity_strategy(self):
+        import sys
+        sys.path.insert(0, str(ROOT.parents[1] / 'ansible-core/collections'))
+        from ansible_collections.platform.core.plugins.module_utils.application_libraries import application_instance_id
+        library = yaml.safe_load(LIBRARY.read_text())['platform_library_definition']
+        app = yaml.safe_load(APP.read_text())['platform_application_definition']
+        instance = application_instance_id('grant-access', 'another-szi-library', library['instance_id_strategy'])
+        context = dict(application_instance_id=instance,
+                       application_job={'application': {'name': app['name']}},
+                       application_connections={'sso': {'parameters': {'proxy_url': 'https://nginx.example'}}})
+        env = jinja2.Environment(undefined=jinja2.StrictUndefined)
+        client = json.loads(env.from_string((ROOT / 'application-packages/grant-access/1.0.0/assets/keycloak-client.json.j2').read_text()).render(context))
+        client_env = env.from_string(app['defaults']['environment']['APIPROVIDER_CLIENT_ID']).render(context)
+        self.assertEqual('grant-access', instance)
+        self.assertEqual(instance, client['clientId'])
+        self.assertEqual(instance, client_env)
+
     def test_keycloak_env_uses_own_placements_and_published_ports(self):
         env = jinja2.Environment(undefined=jinja2.StrictUndefined)
         env.filters['combine'] = combine
@@ -40,6 +68,10 @@ class GrantAccessProjectionTest(unittest.TestCase):
         jobs = [placement('szi', 'app2', 17800), placement('other', 'node1', 27800), placement('szi', 'app1', 7800)]
         context = dict(application_job=jobs[0], library_instance_id='szi', _application_inputs={'jobs': jobs},
                        hostvars={'app1': {'ansible_host': '10.0.0.11'}, 'app2': {'ansible_host': '10.0.0.12'}})
+        context['application_placements'] = [
+            dict(address=context['hostvars'][job['hostId']]['ansible_host'],
+                 ports=combine(defaults['ports'], job['hostOverride']['ports']))
+            for job in sorted(jobs, key=lambda job: job['hostId']) if job['libraryId'] == 'szi']
         values = {key: env.from_string(str(defaults['environment'][key])).render(context)
                   for key in ('KC_INITIAL_HOSTS', 'KC_EXTERNAL_ADDR', 'JGROUPS_DISCOVERY_EXTERNAL_IP',
                               'KC_SPI_STICKY_SESSION_ENCODER_INFINISPAN_NODE_NAME', 'KEYCLOAK_MEMORY_LIMIT')}
@@ -102,6 +134,10 @@ class GrantAccessProjectionTest(unittest.TestCase):
                 },
             },
         }
+        context['application_placements'] = [
+            dict(address=context['hostvars'][job['hostId']]['ansible_host'],
+                 ports=combine(ports, job['hostOverride']['ports']))
+            for job in sorted(jobs, key=lambda job: job['hostId'])]
         rendered = {
             key: env.from_string(str(value)).render(context)
             for key, value in app["defaults"]["environment"].items()

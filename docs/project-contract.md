@@ -386,6 +386,15 @@ allowlisted custom-format dump and exact digest. The provider restores it only
 when first creating that managed database; a partially restored, unmarked
 database blocks automatic retry rather than being silently overwritten.
 Host membership is `platform_application_libraries.<library-id>` in host_vars.
+Application templates receive `application_placements`: the current library/slot's
+placements sorted by host ID, each containing `hostId`, `address` (inventory
+`ansible_host`, falling back to host ID) and `ports` from the existing native
+topology projection/defaults and slot, instance and host overrides. Core prepares
+this compact, runtime-only context once per resolution invocation; it adds no
+host_vars/group_vars block or persistent desired state. Peer-discovery templates
+consume it instead of the internal `_application_inputs.jobs` payload. Existing
+imported package copies must be updated when adopting these templates; changing
+repository examples does not rewrite a saved project's package files.
 Ansible resolves namespaces/defaults/overrides before Core validates the derived
 rows. No project.yml is required. Infrastructure-only projects retain v2alpha1
 desired-state validation and v1alpha1 snapshots without application packages.
@@ -671,8 +680,9 @@ after Ansible renders them. This applies to application `defaults` and library
 declarations static. For example, a Kafka topic default can use
 `name: '{{ library_instance_id }}-alarms'`.
 
-Standard Ansible tasks merge library package resource_defaults, instance
-resource_defaults and explicit selected resource.parameters, in that order.
+The Core Ansible action merges library package resource_defaults, instance
+resource_defaults and explicit selected resource.parameters, in that order,
+using native Ansible merge_hash (recursive dictionaries, list replacement).
 Database, Kafka topic and Redis key defaults select effective resources when
 the library and selected applications declare one unambiguous provider binding
 for that kind. Explicit resources override the corresponding IDs. Names and
@@ -700,8 +710,9 @@ second desired-state store is introduced.
 Applications may select a unique list of library connection keys, e.g.
 connections: [clickhouse, kafka, redis, vault]. Library connections remains a map
 of full library_binding/protocol/purpose declarations. Old application declaration
-maps remain supported. Standard Ansible tasks validate keys and resolve one map
-before resource contexts and parameters/ENV; providers and accounts reuse it.
+maps remain supported. Core validates keys and normalizes declarations once per
+library and application package pair. Ansible resolves the placement-specific
+connection values before resource contexts and parameters/ENV.
 Accounts, usernames, privileges and ENV remain application-owned. No per-app
 connection inference from credentials/ENV or independent UI/Go resolver is added.
 

@@ -24,6 +24,7 @@ if 'openid-connect/token' in url.path:
     state['tokens'] += 1; result = {'access_token': 'stub-token'}
 else:
     path = url.path.split('/admin/realms/master/')[-1]; parts = path.split('/')
+    state.setdefault('requests', []).append([method, path])
     kind = parts[0]
     if kind not in ['clients', 'groups']:
         raise RuntimeError('UNEXPECTED_RESOURCE')
@@ -41,6 +42,13 @@ else:
         if method == 'GET': result = state[kind][parts[1]]
         else:
             state[kind][parts[1]].update(json.loads(raw)); state['writes'] += 1; status = 204
+    elif kind == 'clients' and len(parts) >= 3 and parts[2] == 'roles':
+        roles = state.setdefault('roles', {}).setdefault(parts[1], {})
+        if method == 'GET': result = list(roles.values())
+        else:
+            body = json.loads(raw); name = body['name']
+            roles[name] = dict(body, id=parts[1]+'-'+name)
+            state['writes'] += 1; status = 204 if method == 'PUT' else 201
     else:
         raise RuntimeError('UNEXPECTED_PATH')
 p.write_text(json.dumps(state)); pathlib.Path(a[a.index('--output')+1]).write_text(json.dumps(result))
@@ -50,7 +58,7 @@ print(status, end='')
 
 @unittest.skipUnless(shutil.which('jq'), 'native jq required')
 class SziHookBatchNativeTests(unittest.TestCase):
-    def exercise(self, *, ansible=False, fail=False, mismatch=False):
+    def exercise(self, *, ansible=False, fail=False, mismatch=False, roles=False):
         with tempfile.TemporaryDirectory(prefix='qa-szi-hook-batch-') as directory:
             root = Path(directory)
             curl = root / 'curl'
@@ -61,8 +69,9 @@ class SziHookBatchNativeTests(unittest.TestCase):
             def invocation(operation, instance, payload, realm='master'):
                 return [operation, 'https://stub.invalid', realm, 'admin', instance,
                         'https://' + instance + '.internal', 'https://nginx.internal', json.dumps(payload)]
+            model = dict(clientRoles=[dict(name='role-'+str(i)) for i in range(9)]) if roles else {}
             invocations = [invocation('groups', 'library', ['operators']),
-                           invocation('client', 'first', {}), invocation('client', 'second', {}),
+                           invocation('client', 'first', model), invocation('client', 'second', model),
                            invocation('groups', 'library', ['after-clients'])]
             if mismatch:
                 invocations[1][2] = 'other-realm'
@@ -102,6 +111,10 @@ class SziHookBatchNativeTests(unittest.TestCase):
                     self.assertEqual({'first'}, set(state['clients']))
                     continue
                 self.assertEqual({'first', 'second'}, set(state['clients']))
+                if roles:
+                    reads = [request for request in state['requests'] if request[0] == 'GET' and request[1].endswith('/roles')]
+                    self.assertEqual(2 * (iteration + 1), len(reads))
+                    self.assertEqual(9, len(state['roles']['first']))
                 self.assertEqual('https://second.internal', state['clients']['second']['description'])
                 self.assertEqual(['https://nginx.internal/second/*'], state['clients']['second']['redirectUris'])
                 if ansible:
@@ -113,6 +126,9 @@ class SziHookBatchNativeTests(unittest.TestCase):
 
     def test_direct_fresh_repeat_uses_one_admin_authentication(self):
         self.exercise()
+
+    def test_role_inventory_is_read_once_per_client_on_create_and_repeat(self):
+        self.exercise(roles=True)
 
     def test_ansible_fresh_repeat_uses_same_generic_path(self):
         self.exercise(ansible=True)

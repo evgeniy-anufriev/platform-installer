@@ -1,0 +1,41 @@
+---
+- name: Проверка DNS и HTTPS выбранных публичных адресов
+  platform.core.probe_public_endpoints:
+    sources: "{{ hostvars['localhost']._platform_integration_selected_sources }}"
+    port: "{{ _platform_integration_probe_port_override | default(443) }}"
+    ca_path: "{{ platform_endpoint_ca_path | default(omit) }}"
+  register: _platform_public_probes
+  no_log: true
+  failed_when: false
+
+- name: Вывод безопасных результатов проверок публичных адресов
+  ansible.builtin.debug:
+    msg: "{{ _platform_public_probes.names | default(_platform_public_probes.probes | default([])) }}"
+  when: _platform_public_probes is not skipped
+
+- name: Проверка разрешения имён публичных адресов
+  ansible.builtin.assert:
+    that: _platform_public_probes.probes is defined
+    fail_msg: >-
+      {{ 'SERVICE_ENDPOINT_DNS_UNRESOLVED'
+         if _platform_public_probes.names is defined else 'SERVICE_ENDPOINT_PROBE_INPUT_INVALID' }}
+  when: _platform_public_probes is not skipped
+
+- name: Публикация результатов проверки публичных адресов
+  ansible.builtin.assert:
+    that: true
+    quiet: true
+    success_msg: >-
+      HTTP backend {{ item.name }}:{{ item.port }};
+      expected={{ item.expected }}; actual={{ item.status }};
+      timeout={{ item.timeout }}s; reason={{ item.reason }}
+  loop: "{{ _platform_public_probes.probes | default([]) | rejectattr('expected', 'none') | list }}"
+  loop_control:
+    label: "{{ item.name }}"
+  tags: [platform_http_backend_diagnostic]
+
+- name: Подтверждение доступности выбранных публичных адресов
+  ansible.builtin.assert:
+    that: _platform_public_probes.probes | rejectattr('ok') | list | length == 0
+    fail_msg: SERVICE_ENDPOINT_UNAVAILABLE
+  when: _platform_public_probes is not skipped

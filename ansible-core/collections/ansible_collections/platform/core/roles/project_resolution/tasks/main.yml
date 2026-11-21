@@ -29,7 +29,7 @@
 - name: Сохранение результата разрешения проекта
   platform.core.project_resolution:
     operation: store
-    result: "{{ platform_project_resolution }}"
+    result_variable: platform_project_resolution
   when: not _project_resolution_cache.hit
   no_log: true
 

@@ -1,12 +1,148 @@
 # Current state
 
-Updated 2026-11-07. This file is the sole current milestone/status source.
+Updated 2026-11-18. This file is the sole current milestone/status source.
 Detailed historical checkpoints are archived under [docs/history](docs/history/si11-state-20261008.md).
 Read the applicable plan and evidence for the task; an implementation or direct
 Ansible PASS does not imply complete UI acceptance. A next gated milestone or
 new destructive operation still requires explicit owner authorization.
 
 ## Active work and acceptance
+
+Owner-requested 700 MiB dump optimization (2026-11-18) on the same performance
+branch: local revision hashing streams package assets once without retaining
+their contents; approval reuses its checked view. Fresh Start revision and
+authoritative plan checks remain. Real React/Wails acceptance is blocked by
+the standard bridge preflight. [Evidence](docs/work/project-lifecycle/dump-revision-performance.md).
+
+Owner-requested application resolution optimization (2026-11-07): common
+library/host defaults resolve once; runtime preparation reuses earlier image-input
+rows only in the same proved input/runtime/plan context. Fresh final snapshot
+and plan fingerprint checks remain. Same-node 20-placement calculation chain:
+2 -> 1 resolver calls, 791 -> 343 tasks, mean 504.345 -> 69.489 seconds;
+typed rows/public snapshots match. 77 focused Execution Node tests pass.
+Validated for owner-requested branch publication. Real React/Wails SZI5+SDKU5 on node1/node2 (20 placements), EO node3,
+final revision c37f96c9 / bundle aae9d38e: Verify VERIFIED 61.555s; resource stage
+SUCCESS 1575s (26:15), 1746 task starts / zero failed host results, resolver once
+(143s), common defaults4 / rows20. Run installer-10d697fef85c3d261a87bebffb87a12b
+cancelled through UI after resource completion, before container launch; full
+application installation/Verify and visual acceptance remain outside this test.
+Owner-authorized test images and isolated QA names were used; original Jinja/ENV
+retained. Owner authorized scoped commit/push on this branch. [Evidence](docs/work/application-libraries/evidence/resolve-library-context-performance.md).
+Follow-up SZI5+SDKU45 / 100 placements (uncommitted): scoped native Templar,
+parameter-only rendering and reference-based store/publication preserve typed
+results. Compact runtime `application_placements` replaces raw job traversal in
+seven peer templates; no host_vars/group_vars persistence or extra role tasks.
+Same-input native control327.125s ->225.832/219.306s (mean222.569s, -31.96%);
+1298 tasks unchanged, all100 typed rows/public snapshot/fingerprint identical.
+65 focused RED OS tests, full Go tests/vet, and SDKU28-package/26-render check PASS.
+Real React/Wails on the same QA project/runtime b0760698: Verify VERIFIED217.432s,
+saved revision a2ad3881; Plan EXECUTABLE323.646s; combined approval/Start
+STARTED570.973s, run installer-111cc1f2e80eab125dae519e0bc225c1.
+That resource run failed after an overnight VM pause; no completed resource-stage
+timing is accepted. A 4.88MB snapshot exposed the old Go2MiB
+response cap; snapshot transport/decoder now share the existing16MiB protocol
+budget. Five-minute timeout and fingerprint proof unchanged. No new commit or
+completed application installation/visual acceptance claimed. Detailed evidence
+and fixture migration notes are in the same journal.
+Owner-approved follow-up (2026-11-08, uncommitted): remove repeated resolution
+only for proved closed project-local template inputs; truly external inputs stay
+fresh. Existing private cache now recognizes bounded builtin package file/template
+reads and YAML scalar escaping, with transitive/path/identity guards. Existing
+Start rebuild/fingerprint checks are unchanged; no new Go lifecycle. 18 focused
+RED OS tests,7 native connection and8 snapshot tests PASS; two wider-suite fixture
+failures also reproduce with pre-change resolution modules. PSR-P01 targeted
+recheck APPROVE_WITH_CHANGES, zero blockers. Final same-node100-placement chains:
+fresh261.027/256.664s,1298 tasks/1 resolver; shared31.984-36.524s,9 tasks/0 resolver;
+all six snapshots and an independent staged-copy replay match exactly.
+Real React/Wails on node3, revision a9554ca6 / bundle9cc95724: Plan173.424/131.379s,
+combined Start226.548/197.313s; both STARTED then UI-cancelled to CANCELLED. Both
+run manifests match approved fingerprint84702af1. Cold Core304.622s still exceeds
+the existing five-minute limit; explicit warm Verify47.705/38.133s succeeds.
+No full library installation/visual acceptance or commit/push is claimed.
+Owner-approved cold resolver follow-up (2026-11-08, uncommitted): remove unused
+per-placement include_vars and combine parameter/default/row calculation in the
+existing action, preserving native rendering/override order. 34 focused RED OS
+tests PASS; full100-placement snapshots equal the previous implementation.
+Fresh standalone task headers1298 ->898, placement calculation actions300 ->100.
+Repeated cold React/Wails Verify on the same node3/project: old258.228/262.151s,
+new196.121/197.093s, all VERIFIED and resolution hit=false/source=fresh;
+mean260.190 ->196.607s (-24.44%). Core mean255.522 ->191.601s (-25.02%).
+All100 calculated application rows match across bundle bindings; runtime4d5f062f,
+revisiona07b2750. Preparation PREPARED after freeing an inactive, locally preserved
+QA runtime; no timeout increase, Plan/Start change or installation was performed.
+Owner-approved host-context follow-up (2026-11-08, uncommitted): one existing
+Ansible action processes instance groups with isolated host contexts; library
+contexts render once per library/host. A bounded per-instance memo reuses scalar
+templates only for equal fully literal typed inputs; ambiguous/filter/lookup
+expressions stay native and fresh. No package template/Compose/ENV format change,
+new production file, persistent memo or deferred execution calculation.
+37 RED OS tests PASS, including host-only errors, aliases and override/filter
+isolation. Same-input fresh standalone152.042s ->64.209/63.372s;898 ->79 task
+headers;100 placement actions ->1 batch (50 instances/100 placements),4 library
+contexts,667 reused scalar renders. Complete public snapshots match.
+Repeated cold real React/Wails Verify on node3:194.725/190.094s ->90.722/90.289s,
+all VERIFIED/source=fresh/hit=false; mean192.409 ->90.505s (2.126x).
+All100 application rows retain canonical digest5fe38908. Runtimefe648cfb,
+revision43d62b91, preparation PREPARED. HOST-CONTEXT-PLAN-01 review approved with
+bounded clarifications, zero blockers. Owner authorized branch commit/push and
+portable TXT publication on 2026-11-08; full installation remains unclaimed.
+See the same evidence journal.
+
+Owner-requested bounded installation comparison (2026-11-08): real React/Wails,
+same SZI5+SDKU45 /100-placement project on EO node3, previous4d5f versus fe648.
+Both runs UI-cancelled after exactly20 successful preflight contexts; zero failed
+task results, no completed resource/install acceptance. Apply-through20 decreased
+2018s ->1596s; preflight alone1155s ->1054s with712 task headers unchanged.
+Preflight-before-boundary tasks938 ->119. One pair only; first20 target node1
+before versus node2 afterward limits causal timing claims. All100 calculated rows
+match. qa78-static was stopped for both controls and its six units restored active;
+fe648 remains bound/active. Test evidence recorded in the same journal; no commit.
+The requested preflight follow-up (2026-11-09) prepares template inputs per host,
+loops over placement indices and collects the checked runtime jobs once per host.
+21 focused RED OS tests PASS, including the production preflight task sequence.
+Full installation acceptance remains pending.
+Shared base Compose and ENV now reuse native render results within each target
+host when the library inputs match. Templates with application or dynamic inputs
+retain per-placement rendering. 22 focused RED OS tests PASS.
+The 2026-11-09 Wails retry with bundle20280f6d passed the first20 preflight
+placements (10 per host), then CANCELLED before provider writes. The first
+bundle e4f500ea failed in library-root preparation. The fix uses the Docker
+discovery account and home directly. Preflight1195s versus1054s on fe648;
+task headers369 versus712. Different target order and load limit timing
+attribution. All100 resolved rows match. qa78-static restored active.
+The compact-context follow-up keeps full jobs on the controller and prepares
+shared-file keys once. 22 focused RED OS checks pass. A matched native render
+probe reduced the host payload from 4.80MB to 0.33MB with equal rendered output.
+Wails bundle8000aada reached the same10+10 placements and CANCELLED with zero
+failed tasks. Compose203s ->130s and Vault Agent136s ->85s. End-to-end preflight
+1195s ->1285s, so this run did not show an overall gain. All100 resolved rows
+match, and qa78-static is restored active.
+Follow-up on node3: materialized placement inputs reduced template CPU for the
+same20 placements from10.98s to5.70s (three-run medians, identical outputs).
+Four controller actions read the existing snapshot directly. Their argument
+templating CPU fell from18.68s to0.006s on the saved100-placement inputs.
+Apply prepares the Vault projection once and reuses it. Focused native tests
+and a localhost Ansible replay pass. On node3 the Wails control was cancelled
+after4:47:46 before provider preparation ended. The candidate remained staged.
+PostgreSQL now batches account writes by deployment and host preflight validates
+observed ownership once. At20 inputs, PostgreSQL first/repeat43.83/54.14s
+to19.18/30.66s, preflight131.06s to102.35s. Isolated RED OS comparisons,
+not a full Apply. See the same evidence journal.
+The 2026-11-10 single-process Wails retry on node3 reached 100/100 placement
+checks with bundle a6b69973, then CANCELLED before provider writes. Preflight
+took 54:50 (1001 task starts) and Apply to the boundary took 1:10:11.
+The Docker registry-default failure is fixed and both Vault file imports passed.
+The subsequent same-project Wails run with bundle 12aef478 reached 100/100
+placements and CANCELLED before provider resource writes. Preflight fell from
+54:50 to 6:03 and Ansible task starts from 1001 to 72. Apply to the boundary
+took 20:52. Targeted review resolved the dynamic template and shared projection
+blockers. No commit. [Evidence](docs/work/application-libraries/evidence/resolve-library-context-performance.md#batched-placement-preflight-wails-comparison-2026-11-10).
+
+The 2026-11-12 follow-up consolidated application preflight tasks and moved
+fast rendering to one action per target with placements. On node3, two
+Wails runs with the same 100 placements reduced the preflight interval from
+64/61 seconds to 53/38 seconds and task starts from 72 to 23. Both runs
+stopped before provider writes. See the same evidence journal.
 
 Owner-requested slot-based application identity (2026-11-07): instance IDs now
 use slot names, allowing multiple slots to reuse one package. Qualified IDs keep

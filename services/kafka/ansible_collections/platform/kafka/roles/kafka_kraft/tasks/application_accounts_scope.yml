@@ -20,12 +20,35 @@
       changed_when: false
     - name: Однократное чтение метаданных SCRAM и списка ACL перед обработкой учётных записей
       ansible.builtin.include_tasks: application_accounts_read.yml
+    - name: Расчёт дельты ACL для всех учётных записей Kafka
+      ansible.builtin.set_fact:
+        application_kafka_acl_deltas: >-
+          {{ platform_kafka_application_job.accounts |
+             platform.kafka.application_acl_deltas(application_kafka_acl_inventory.stdout) }}
+      no_log: true
+    - name: Инициализация групп записи ACL развёртывания Kafka
+      ansible.builtin.set_fact:
+        application_kafka_deployment_acl_groups: {}
+      when: platform_kafka_application_phase == 'apply'
     - name: "Проверка или настройка каждой логической учётной записи Kafka"
       ansible.builtin.include_tasks: application_account.yml
       loop: "{{ platform_kafka_application_job.accounts }}"
       loop_control:
         loop_var: application_kafka_account
+        index_var: application_kafka_account_index
         label: "{{ application_kafka_account.accountId }}"
+      vars:
+        application_kafka_collect_deployment_acls: true
+    - name: Применение одинаковых ACL для нескольких учётных записей Kafka
+      ansible.builtin.include_tasks: application_acl_write.yml
+      loop: "{{ application_kafka_deployment_acl_groups | default({}) | dict2items }}"
+      loop_control:
+        loop_var: application_kafka_acl_batch
+      vars:
+        application_kafka_acl_principals: "{{ application_kafka_acl_batch.value.principals }}"
+        application_kafka_acl_args: "{{ application_kafka_acl_batch.value.selectors + ['--resource-pattern-type', application_kafka_acl_batch.value.patternType] }}"
+        application_kafka_acl_operations: "{{ application_kafka_acl_batch.value.operations }}"
+      when: platform_kafka_application_phase == 'apply'
   always:
     - name: "Удаление временного каталога учётных данных Kafka"
       ansible.builtin.file:

@@ -1,7 +1,4 @@
 ---
 - name: Согласование документов один раз для каждой логической библиотеки или экземпляра
-  ansible.builtin.include_tasks: document.yml
-  loop: "{{ platform_vault_application_job.documents }}"
-  loop_control:
-    loop_var: application_vault_document
-  no_log: true
+  ansible.builtin.import_tasks: document.yml
+  when: platform_vault_application_job.documents | length > 0

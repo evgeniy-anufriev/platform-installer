@@ -155,15 +155,15 @@ func TestProjectExportRejectsLinkedPortableDocument(t *testing.T) {
 	}
 }
 
-func TestProjectExportBoundsAreFailClosed(t *testing.T) {
+func TestProjectExportAcceptsLargeFile(t *testing.T) {
 	root, parent := t.TempDir(), t.TempDir()
 	writeExportFixture(t, root, "project.yml", "apiVersion: platform.installer/v2alpha1\n")
-	oversized := make([]byte, maxExportFileBytes+1)
+	oversized := make([]byte, 4*1024*1024+1)
 	if err := os.WriteFile(filepath.Join(root, "ansible.cfg"), oversized, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := PlanProjectExport(root, parent, "portable-copy"); err == nil || err.Error() != "EXPORT_LIMIT_EXCEEDED" {
-		t.Fatalf("oversized source err=%v", err)
+	if _, _, err := PlanProjectExport(root, parent, "portable-copy"); err != nil {
+		t.Fatalf("large source err=%v", err)
 	}
 }
 

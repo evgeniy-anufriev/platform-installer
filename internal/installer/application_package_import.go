@@ -15,10 +15,6 @@ import (
 
 const maxApplicationPackageFiles = 512
 
-// Package assets may consume the existing aggregate project budget. There is
-// no separate per-file ceiling for declared configuration archives.
-const maxApplicationPackageFileBytes = 64 * 1024 * 1024
-
 var packageVersion = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+$`)
 var packageComponent = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
 var packageEnvName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
@@ -64,12 +60,16 @@ func ApplicationPackagePathAllowed(logical string) bool {
 }
 
 func applicationPackageDocuments(root string) ([]exportRecord, error) {
+	return observeApplicationPackageDocuments(root, false)
+}
+func observeApplicationPackageDocuments(root string, digestOnly bool, reusePreviewAssets ...bool) ([]exportRecord, error) {
 	directory, err := openExportSourceDirectory(root)
 	if err != nil {
 		return nil, err
 	}
 	defer directory.close()
-	result := exportObservation{}
+	result := exportObservation{digestOnly: digestOnly,
+		reusePreviewAssets: len(reusePreviewAssets) == 1 && reusePreviewAssets[0]}
 	seen, folded := map[string]bool{}, map[string]bool{}
 	for _, name := range []string{"application-packages", "library-packages"} {
 		child, err := directory.openDirectory([]string{name})
@@ -87,11 +87,6 @@ func applicationPackageDocuments(root string) ([]exportRecord, error) {
 	}
 	if len(result.documents) > maxApplicationPackageFiles {
 		return nil, errors.New("APPLICATION_PACKAGE_LIMIT")
-	}
-	for _, r := range result.documents {
-		if r.Size > maxApplicationPackageFileBytes {
-			return nil, errors.New("APPLICATION_PACKAGE_LIMIT")
-		}
 	}
 	return result.documents, nil
 }
@@ -221,9 +216,6 @@ func checkPackageManifest(records []exportRecord, kind, name, version string) (s
 	rows := make([][]string, 0, len(paths))
 	for _, p := range paths {
 		content := byPath[p]
-		if len(content) > maxApplicationPackageFileBytes {
-			return "", packageImportError(prefix+p, "Файл превышает допустимый размер.")
-		}
 		if strings.Contains(string(content), "PRIVATE KEY-----") {
 			return "", packageImportError(prefix+p, "Файл содержит приватный ключ; импорт запрещён.")
 		}
@@ -305,7 +297,7 @@ func (b *Backend) PlanApplicationPackageImport(ctx context.Context, projectRoot,
 	prefix := "application-packages"
 	var manifest []byte
 	if !batch {
-		manifest, _, err = source.readFile([]string{kind + ".yml"}, maxApplicationPackageFileBytes)
+		manifest, _, err = source.readFile([]string{kind + ".yml"}, 0)
 		if err != nil {
 			return blockedStructuralPlan(revision, packageImportError(kind+".yml", "Не удалось прочитать описание пакета в выбранной папке.")), nil
 		}
@@ -357,23 +349,18 @@ func (b *Backend) PlanApplicationPackageImport(ctx context.Context, projectRoot,
 	}
 	existingByPath := map[string]exportRecord{}
 	retained := []exportRecord{}
-	total := observation.total
 	documents := []storedDocument{}
 	for _, record := range existing {
 		existingByPath[record.LogicalPath] = record
 		versionPath := strings.Join(strings.Split(record.LogicalPath, "/")[:3], "/")
 		if !versions[versionPath] {
 			retained = append(retained, record)
-			total += record.Size
 		} else if _, present := incoming[record.LogicalPath]; !present {
 			documents = append(documents, storedDocument{LogicalPath: record.LogicalPath, Before: record.content, Existed: true, Deleted: true})
 		}
 	}
 	if len(retained)+len(observation.documents) > maxApplicationPackageFiles {
 		return blockedStructuralPlan(revision, blocked("APPLICATION_PACKAGE_LIMIT", "После импорта будет превышен лимит 512 файлов пакетов в проекте.", "package")), nil
-	}
-	if total > maxExportTotalBytes {
-		return blockedStructuralPlan(revision, blocked("APPLICATION_PACKAGE_LIMIT", "После импорта будет превышен общий размер пакетов проекта: 64 МиБ.", "package")), nil
 	}
 	for _, record := range observation.documents {
 		if err := ctx.Err(); err != nil {

@@ -102,20 +102,13 @@ platform_application_definition:
             EVO_SERVICES_CONSENSUS_SERVICE_INSTANCE_NAME: '{{ application_job.hostId }}'
             EVO_SERVICES_CONSENSUS_SERVICE_LISTEN_PORT: *consensus_tcp_port
             EVO_SERVICES_CONSENSUS_SERVICE_MOCK: >-
-                {{ (_application_inputs.jobs | selectattr('libraryId', 'equalto', library_instance_id) |
-                    selectattr('slotId', 'equalto', application_job.slotId) | list | length) < 2 }}
+                {{ (application_placements | length) < 2 }}
             EVO_SERVICES_CONSENSUS_SERVICE_MODE: DYNAMIC
             EVO_SERVICES_CONSENSUS_SERVICE_OTHER_INSTANCES: >-
                 {%- set peers = [] -%}
                 {%- set server_ids = groups['all'] | reject('equalto', 'localhost') | sort | list -%}
-                {%- for placement in _application_inputs.jobs |
-                    selectattr('libraryId', 'equalto', library_instance_id) |
-                    selectattr('slotId', 'equalto', application_job.slotId) | sort(attribute='hostId') if placement.hostId != application_job.hostId -%}
-                {%- set ports = (placement.application.definition.defaults.ports | default({})) |
-                    combine(placement.slot.overrides.ports | default({}), recursive=true) |
-                    combine(placement.instance.overrides.ports | default({}), recursive=true) |
-                    combine(placement.hostOverride.ports | default({}), recursive=true) -%}
-                {%- set _ = peers.append(placement.hostId ~ '=$${SERVER_' ~ (server_ids.index(placement.hostId) + 1) ~ '_IP}:' ~ (ports['port-2'].published | string)) -%}
+                {%- for placement in application_placements if placement.hostId != application_job.hostId -%}
+                {%- set _ = peers.append(placement.hostId ~ '=$${SERVER_' ~ (server_ids.index(placement.hostId) + 1) ~ '_IP}:' ~ (placement.ports['port-2'].published | string)) -%}
                 {%- endfor -%}
                 {{- peers | join(',') -}}
             EVO_SERVICES_CONSENSUS_SERVICE_TERM_LIFESPAN: 2000
