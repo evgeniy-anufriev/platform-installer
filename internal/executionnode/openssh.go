@@ -139,6 +139,7 @@ type OpenSSHTransport struct {
 func (t OpenSSHTransport) InspectExecutionNode(ctx context.Context, node Node) (Inspection, error) {
 	root := t.runtimeRoot()
 	script := "set -eu\nroot=$1\ncase \"$root\" in /var/lib/platform-installer/runtime) ;; *) exit 64;; esac\n. /etc/os-release\nruntime=''; bundle=''; digest=''; core=''; protocol=''; ansible='no'; capabilities='no'\nif sudo -n test -r \"$root/state/active\" && sudo -n test -L \"$root/current\"; then\n  runtime='yes'\n  bundle=$(sudo -n awk -F= '$1 == \"BUNDLE_VERSION\" {print $2}' \"$root/state/active\")\n  digest=$(sudo -n awk -F= '$1 == \"BUNDLE_DIGEST\" {print $2}' \"$root/state/active\")\n  core=$(sudo -n awk -F= '$1 == \"CORE_VERSION\" {print $2}' \"$root/state/active\")\n  protocol=$(sudo -n awk -F= '$1 == \"PROTOCOL\" {print $2}' \"$root/state/active\")\n  ansible=$(sudo -n awk -F= '$1 == \"ANSIBLE\" {print $2}' \"$root/state/active\")\n  capabilities=$(sudo -n awk -F= '$1 == \"CAPABILITIES\" {print $2}' \"$root/state/active\")\nfi\nprintf '%s\\n' \"OS=$ID\" \"VERSION=$VERSION_ID\" \"ARCH=$(uname -m)\" \"ELEVATION=$(sudo -n true >/dev/null 2>&1 && echo yes || echo no)\" \"FREE=$(df -Pk /var/tmp | awk 'NR==2 {print $4 * 1024}')\" \"RUNTIME=$runtime\" \"BUNDLE_VERSION=$bundle\" \"BUNDLE_DIGEST=$digest\" \"CORE_VERSION=$core\" \"PROTOCOL=$protocol\" \"ANSIBLE=$ansible\" \"CAPABILITIES=$capabilities\"\n"
+	script += "if command -v tar >/dev/null 2>&1; then printf 'ARCHIVE_STAGE=yes\\n'; fi\n"
 	output, err := t.ssh(ctx, node, "sh", []string{"-s", "--", root}, []byte(script))
 	if err != nil {
 		return Inspection{State: Unreachable}, err
@@ -149,7 +150,7 @@ func (t OpenSSHTransport) InspectExecutionNode(ctx context.Context, node Node) (
 	if values["RUNTIME"] == "yes" {
 		state = Ready
 	}
-	return Inspection{State: state, OS: values["OS"], OSVersion: values["VERSION"], Architecture: values["ARCH"], Elevation: values["ELEVATION"] == "yes", FreeBytes: parseInt64(values["FREE"]), Runtime: runtime}, nil
+	return Inspection{State: state, OS: values["OS"], OSVersion: values["VERSION"], Architecture: values["ARCH"], Elevation: values["ELEVATION"] == "yes", FreeBytes: parseInt64(values["FREE"]), Runtime: runtime, archiveStaging: values["ARCHIVE_STAGE"] == "yes"}, nil
 }
 
 // ReconcileWorkspaceOwnership keeps the fixed candidate staging path writable
@@ -279,16 +280,30 @@ func (t OpenSSHTransport) AcquireRuntimeClosure(ctx context.Context, node Node, 
 }
 
 func (t OpenSSHTransport) StageVerifiedBundle(ctx context.Context, node Node, bundle executionbundle.Verified) (string, error) {
+	stage, _, err := t.stageBundle(ctx, node, bundle, "")
+	return stage, err
+}
+
+func (t OpenSSHTransport) stagePlannedBundle(ctx context.Context, node Node, bundle executionbundle.Verified, archive string) (string, bool, error) {
+	return t.stageBundle(ctx, node, bundle, archive)
+}
+
+func (t OpenSSHTransport) stageBundle(ctx context.Context, node Node, bundle executionbundle.Verified, archivePath string) (string, bool, error) {
 	var nonce [16]byte
 	if _, err := rand.Read(nonce[:]); err != nil {
-		return "", err
+		return "", false, err
 	}
 	stage := t.stageRoot() + "-" + hex.EncodeToString(nonce[:])
 	if !validBundleStage(stage) {
-		return "", errors.New("EXECUTION_BUNDLE_STAGE_INVALID")
+		return "", false, errors.New("EXECUTION_BUNDLE_STAGE_INVALID")
 	}
-	if _, err := t.ssh(ctx, node, "sh", []string{"-s", "--", stage}, []byte(prepareBundleStageScript)); err != nil {
-		return "", err
+	probe, err := t.ssh(ctx, node, "sh", []string{"-s", "--", stage}, []byte(prepareBundleStageScript+runtimeInstalledProbe+`
+if ! command -v tar >/dev/null 2>&1; then printf 'TAR=0\n'
+elif runtime_prerequisites_installed; then printf 'TAR=1 READY=1\n'
+else printf 'TAR=1\n'; fi
+`))
+	if err != nil {
+		return "", false, err
 	}
 	complete := false
 	defer func() {
@@ -300,44 +315,54 @@ func (t OpenSSHTransport) StageVerifiedBundle(ctx context.Context, node Node, bu
 	}()
 	identity, err := t.identityFile(node.CredentialRef)
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
-	probe, err := t.ssh(ctx, node, "sh", []string{"-s"}, []byte("if command -v tar >/dev/null 2>&1; then printf 'TAR=1\\n'; else printf 'TAR=0\\n'; fi\n"))
-	if err != nil {
-		return "", err
-	}
-	if strings.TrimSpace(string(probe)) == "TAR=0" {
+	archiveMode := strings.TrimSpace(string(probe))
+	if archiveMode == "TAR=0" {
+		if archivePath != "" {
+			verified, err := executionbundle.ValidateRoot(bundle.Root)
+			if err != nil || verified.Digest != bundle.Digest {
+				return "", false, errors.New("EXECUTION_NODE_BUNDLE_CHANGED")
+			}
+		}
 		if err := t.transferBundle(ctx, node, identity, stage, bundle.Root); err != nil {
-			return "", err
+			return "", false, err
 		}
 		if _, err := t.ssh(ctx, node, "sh", []string{"-s", "--", stage}, []byte(remoteChecks(bundle))); err != nil {
-			return "", err
+			return "", false, err
 		}
 		complete = true
-		return stage, nil
+		return stage, false, nil
 	}
-	if strings.TrimSpace(string(probe)) != "TAR=1" {
-		return "", errors.New("EXECUTION_BUNDLE_TRANSFER_PREREQUISITE_INVALID")
+	if archiveMode != "TAR=1" && archiveMode != "TAR=1 READY=1" {
+		return "", false, errors.New("EXECUTION_BUNDLE_TRANSFER_PREREQUISITE_INVALID")
 	}
-	archivePath, err := createBundleArchive(bundle)
-	if err != nil {
-		return "", err
+	fast := archiveMode == "TAR=1 READY=1" && runtimeBootstrapMode(bundle) == "2"
+	if archivePath == "" {
+		archivePath, err = createBundleArchive(bundle, false)
+		if err != nil {
+			return "", false, err
+		}
+		defer os.Remove(archivePath)
 	}
-	defer os.Remove(archivePath)
 	archiveRemote := path.Join(stage, "bundle.tar")
 	args := append(t.scpBase(node, identity), "-O", "--", archivePath, t.destination(node, archiveRemote))
 	if _, err := t.run(ctx, "scp", args, nil); err != nil {
-		return "", err
+		return "", false, err
+	}
+	if fast {
+		complete = true
+		return stage, true, nil
 	}
 	if _, err := t.ssh(ctx, node, "sh", []string{"-s", "--", stage, archiveRemote}, []byte("set -eu\nstage=$1; archive=$2\ncase \"$stage\" in /var/tmp/platform-installer-bootstrap-*) ;; *) exit 64;; esac\n[ \"$archive\" = \"$stage/bundle.tar\" ] || exit 64\ntar -xf \"$archive\" -C \"$stage\"\nrm -f -- \"$archive\"\nmkdir -p -- \"$stage/runtime/packages\" \"$stage/runtime/python\"\n")); err != nil {
-		return "", err
+		return "", false, err
 	}
 	script := remoteChecks(bundle)
 	if _, err := t.ssh(ctx, node, "sh", []string{"-s", "--", stage}, []byte(script)); err != nil {
-		return "", err
+		return "", false, err
 	}
 	complete = true
-	return stage, nil
+	return stage, false, nil
 }
 
 // Root-owned sticky /var/tmp protects the private stage from other SSH users.
@@ -354,7 +379,12 @@ umask 077
 mkdir -m 0700 -- "$stage"
 `
 
-func createBundleArchive(bundle executionbundle.Verified) (string, error) {
+func createBundleArchive(bundle executionbundle.Verified, verify bool) (string, error) {
+	root, err := os.OpenRoot(bundle.Root)
+	if err != nil {
+		return "", err
+	}
+	defer root.Close()
 	file, err := os.CreateTemp("", "platform-execution-bundle-*.tar")
 	if err != nil {
 		return "", err
@@ -366,35 +396,10 @@ func createBundleArchive(bundle executionbundle.Verified) (string, error) {
 		return "", e
 	}
 	writer := tar.NewWriter(file)
-	paths := append([]string{"manifest.yaml"}, make([]string, 0, len(bundle.Manifest.Components))...)
-	for _, component := range bundle.Manifest.Components {
-		paths = append(paths, component.Path)
-	}
-	for _, relative := range paths {
-		absolute := filepath.Join(bundle.Root, filepath.FromSlash(relative))
-		info, err := os.Stat(absolute)
-		if err != nil || !info.Mode().IsRegular() {
-			return cleanup(errors.New("EXECUTION_BUNDLE_COMPONENT_INVALID"))
-		}
-		header, err := tar.FileInfoHeader(info, "")
-		if err != nil {
+	files := append([]executionbundle.Component{{Path: "manifest.yaml", SHA256: bundle.Digest, Size: -1}}, bundle.Manifest.Components...)
+	for _, component := range files {
+		if err := writeBundleComponent(writer, root, component, verify); err != nil {
 			return cleanup(err)
-		}
-		header.Name = relative
-		if err := writer.WriteHeader(header); err != nil {
-			return cleanup(err)
-		}
-		input, err := os.Open(absolute)
-		if err != nil {
-			return cleanup(err)
-		}
-		_, copyErr := io.Copy(writer, input)
-		closeErr := input.Close()
-		if copyErr != nil {
-			return cleanup(copyErr)
-		}
-		if closeErr != nil {
-			return cleanup(closeErr)
 		}
 	}
 	if err := writer.Close(); err != nil {
@@ -405,6 +410,41 @@ func createBundleArchive(bundle executionbundle.Verified) (string, error) {
 		return "", err
 	}
 	return name, nil
+}
+
+func writeBundleComponent(writer *tar.Writer, root *os.Root, component executionbundle.Component, verify bool) error {
+	name := filepath.FromSlash(component.Path)
+	before, err := root.Lstat(name)
+	if err != nil || !before.Mode().IsRegular() || isUnsafeFilesystemLink(before) {
+		return errors.New("EXECUTION_BUNDLE_COMPONENT_INVALID")
+	}
+	input, err := root.Open(name)
+	if err != nil {
+		return err
+	}
+	defer input.Close()
+	info, err := input.Stat()
+	if err != nil || !info.Mode().IsRegular() || !os.SameFile(before, info) || (verify && component.Size >= 0 && component.Size != info.Size()) {
+		return errors.New("EXECUTION_BUNDLE_COMPONENT_INVALID")
+	}
+	header, err := tar.FileInfoHeader(info, "")
+	if err != nil {
+		return err
+	}
+	header.Name = component.Path
+	if err := writer.WriteHeader(header); err != nil {
+		return err
+	}
+	if !verify {
+		_, err := io.Copy(writer, input)
+		return err
+	}
+	hash := sha256.New()
+	count, err := io.Copy(io.MultiWriter(writer, hash), input)
+	if err != nil || count != info.Size() || !strings.EqualFold("sha256:"+hex.EncodeToString(hash.Sum(nil)), component.SHA256) {
+		return errors.New("EXECUTION_BUNDLE_COMPONENT_CHECKSUM_MISMATCH")
+	}
+	return nil
 }
 
 func (t OpenSSHTransport) transferBundle(ctx context.Context, node Node, identity, stage, root string) error {
@@ -425,6 +465,10 @@ func (t OpenSSHTransport) transferBundle(ctx context.Context, node Node, identit
 }
 
 func (t OpenSSHTransport) ActivateStagedRuntime(ctx context.Context, node Node, stage string, bundle executionbundle.Verified) (Runtime, error) {
+	return t.activateRuntime(ctx, node, stage, bundle, false)
+}
+
+func (t OpenSSHTransport) activateRuntime(ctx context.Context, node Node, stage string, bundle executionbundle.Verified, skipBootstrap bool) (Runtime, error) {
 	if !validBundleStage(stage) {
 		return Runtime{}, errors.New("EXECUTION_BUNDLE_STAGE_INVALID")
 	}
@@ -433,12 +477,7 @@ func (t OpenSSHTransport) ActivateStagedRuntime(ctx context.Context, node Node, 
 	for _, platform := range bundle.Manifest.Platforms {
 		platforms = append(platforms, platform.OS+":"+platform.Version+":"+platform.Architecture)
 	}
-	bootstrap := "0"
-	for _, component := range bundle.Manifest.Components {
-		if component.Path == runtimeBootstrapComponent {
-			bootstrap = "1"
-		}
-	}
+	bootstrap := runtimeBootstrapMode(bundle)
 	args := []string{"-n", "sh", "-s", "--"}
 	// OpenSSH joins remote argv into a shell command. Keep the platform list
 	// as one positional argument, including when sudo password wrapping is used.
@@ -453,11 +492,13 @@ func (t OpenSSHTransport) ActivateStagedRuntime(ctx context.Context, node Node, 
 			_, _ = t.ssh(cleanupCtx, node, "sudo", []string{"-n", "sh", "-s", "--", stage}, []byte(runtimeCandidateCleanupScript))
 		}
 	}()
-	if output, err := t.sshBounded(ctx, node, "sudo", args, []byte(bootstrapScript), 16384); err != nil {
-		if ctx.Err() != nil {
-			err = ctx.Err()
+	if !skipBootstrap {
+		if output, err := t.sshBounded(ctx, node, "sudo", args, []byte(bootstrapScript), 16384); err != nil {
+			if ctx.Err() != nil {
+				err = ctx.Err()
+			}
+			return Runtime{}, runtimePreparationFailure("bootstrap", output, err)
 		}
-		return Runtime{}, runtimePreparationFailure("bootstrap", output, err)
 	}
 	if err := ctx.Err(); err != nil {
 		return Runtime{}, err
@@ -739,32 +780,32 @@ func createCandidateProjectArchive(root string) (string, error) {
 			return cleanup(errors.New("PROJECT_CANDIDATE_PATH_COLLISION"))
 		}
 		seen[folded] = true
-		content, readErr := readStableCandidateFile(absolute, logical)
-		if readErr != nil {
-			return cleanup(readErr)
-		}
-		identity, identityErr := os.Lstat(filepath.Join(absolute, filepath.FromSlash(logical)))
-		if identityErr != nil {
-			return cleanup(errors.New("PROJECT_CANDIDATE_FILE_REPLACED"))
-		}
-		for _, previous := range identities {
-			if os.SameFile(previous, identity) {
-				return cleanup(errors.New("PROJECT_CANDIDATE_HARDLINK_UNSAFE"))
-			}
-		}
-		identities = append(identities, identity)
-		if logical == "ansible.cfg" && string(content) != managedCandidateAnsibleConfig {
-			return cleanup(errors.New("PROJECT_CANDIDATE_ANSIBLE_CONFIG_INVALID"))
-		}
 		limits.files++
 		if limits.files > 4096 {
 			return cleanup(errors.New("PROJECT_CANDIDATE_LIMIT_EXCEEDED"))
 		}
-		header := &tar.Header{Name: logical, Mode: 0o600, Size: int64(len(content)), Typeflag: tar.TypeReg, Format: tar.FormatPAX}
-		if err := writer.WriteHeader(header); err != nil {
-			return cleanup(err)
-		}
-		if _, err := writer.Write(content); err != nil {
+		err := streamStableCandidateFile(absolute, logical, func(input io.Reader, identity os.FileInfo) error {
+			for _, previous := range identities {
+				if os.SameFile(previous, identity) {
+					return errors.New("PROJECT_CANDIDATE_HARDLINK_UNSAFE")
+				}
+			}
+			identities = append(identities, identity)
+			if logical == "ansible.cfg" {
+				content, err := io.ReadAll(io.LimitReader(input, int64(len(managedCandidateAnsibleConfig))+1))
+				if err != nil || string(content) != managedCandidateAnsibleConfig {
+					return errors.New("PROJECT_CANDIDATE_ANSIBLE_CONFIG_INVALID")
+				}
+				input = bytes.NewReader(content)
+			}
+			header := &tar.Header{Name: logical, Mode: 0o600, Size: identity.Size(), Typeflag: tar.TypeReg, Format: tar.FormatPAX}
+			if err := writer.WriteHeader(header); err != nil {
+				return err
+			}
+			_, err := io.CopyN(writer, input, identity.Size())
+			return err
+		})
+		if err != nil {
 			return cleanup(err)
 		}
 	}
@@ -797,29 +838,29 @@ func candidateArchiveLogicalPathAllowed(logical string) bool {
 	return strings.HasPrefix(logical, "inventory/group_vars/") || strings.HasPrefix(logical, "inventory/host_vars/")
 }
 
-func readStableCandidateFile(root, logical string) ([]byte, error) {
+func streamStableCandidateFile(root, logical string, consume func(io.Reader, os.FileInfo) error) error {
 	absolute := filepath.Join(root, filepath.FromSlash(logical))
 	if !containedLocal(root, absolute) {
-		return nil, errors.New("PROJECT_CANDIDATE_PATH_INVALID")
+		return errors.New("PROJECT_CANDIDATE_PATH_INVALID")
 	}
 	before, err := os.Lstat(absolute)
 	if err != nil || !before.Mode().IsRegular() || isUnsafeFilesystemLink(before) {
-		return nil, errors.New("PROJECT_CANDIDATE_FILE_UNSAFE")
+		return errors.New("PROJECT_CANDIDATE_FILE_UNSAFE")
 	}
 	input, err := os.Open(absolute)
 	if err != nil {
-		return nil, errors.New("PROJECT_CANDIDATE_FILE_UNSAFE")
+		return errors.New("PROJECT_CANDIDATE_FILE_UNSAFE")
 	}
 	defer input.Close()
 	opened, err := input.Stat()
 	if err != nil || !opened.Mode().IsRegular() || !os.SameFile(before, opened) {
-		return nil, errors.New("PROJECT_CANDIDATE_FILE_REPLACED")
+		return errors.New("PROJECT_CANDIDATE_FILE_REPLACED")
 	}
 	system := reflect.ValueOf(opened.Sys())
 	if system.IsValid() && system.Kind() == reflect.Ptr && !system.IsNil() {
 		links := system.Elem().FieldByName("Nlink")
 		if links.IsValid() && links.CanUint() && links.Uint() > 1 {
-			return nil, errors.New("PROJECT_CANDIDATE_FILE_UNSAFE")
+			return errors.New("PROJECT_CANDIDATE_FILE_UNSAFE")
 		}
 	}
 	if runtime.GOOS == "windows" {
@@ -832,25 +873,24 @@ func readStableCandidateFile(root, logical string) ([]byte, error) {
 			// fsutil localizes the label when launched without a console;
 			// the numeric Win32 error code remains the same.
 			if !bytes.Contains(output, []byte(" 50:")) {
-				return nil, errors.New("PROJECT_CANDIDATE_FILE_UNSAFE")
+				return errors.New("PROJECT_CANDIDATE_FILE_UNSAFE")
 			}
 		} else {
 			lines := strings.Split(strings.TrimSpace(strings.ReplaceAll(string(output), "\r\n", "\n")), "\n")
 			if len(lines) != 1 || strings.TrimSpace(lines[0]) == "" {
-				return nil, errors.New("PROJECT_CANDIDATE_FILE_UNSAFE")
+				return errors.New("PROJECT_CANDIDATE_FILE_UNSAFE")
 			}
 		}
 	}
-	content, err := io.ReadAll(input)
-	if err != nil {
-		return nil, err
+	if err := consume(input, opened); err != nil {
+		return err
 	}
 	after, err := input.Stat()
 	pathAfter, pathErr := os.Lstat(absolute)
 	if err != nil || pathErr != nil || !os.SameFile(opened, after) || !os.SameFile(after, pathAfter) || opened.Size() != after.Size() || !opened.ModTime().Equal(after.ModTime()) {
-		return nil, errors.New("PROJECT_CANDIDATE_FILE_REPLACED")
+		return errors.New("PROJECT_CANDIDATE_FILE_REPLACED")
 	}
-	return content, nil
+	return nil
 }
 
 type projectArchiveLimits struct{ files int64 }

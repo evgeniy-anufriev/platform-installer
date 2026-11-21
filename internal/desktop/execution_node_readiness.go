@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"platform-installer/internal/executionbundle"
 	"platform-installer/internal/executionnode"
 	"platform-installer/internal/installer"
 	"platform-installer/internal/sshpassword"
@@ -118,6 +119,27 @@ func (a *App) validateSelectedExecutionBundleLocked(binding *executionNodeBindin
 		if err != nil || verified.Digest != binding.reader.runtimeRelease["bundleDigest"] {
 			return nil, errors.New("BINDING_REQUIRED")
 		}
+	}
+	return binding, nil
+}
+
+// Prepare's service checks component bytes when it consumes them. Confirm the
+// connection and locked manifest here without rereading the payload each time
+// the same binding is checked inside the operation.
+func (a *App) resolvePreparingExecutionNodeBindingLocked() (*executionNodeBinding, error) {
+	binding, err := a.resolveTrustedExecutionConnectionLocked()
+	if err != nil || binding == nil {
+		return nil, errors.New("BINDING_REQUIRED")
+	}
+	if _, ok := binding.service.(*executionnode.Service); !binding.dynamic || !ok {
+		return a.validateSelectedExecutionBundleLocked(binding, nil)
+	}
+	if a.current.Project == nil || binding.bundleRoot == "" || binding.bundleRoot != a.availableBundleRoot {
+		return a.validateSelectedExecutionBundleLocked(binding, nil)
+	}
+	locked := a.current.Project.Source
+	if locked.BundleDigest != binding.reader.runtimeRelease["bundleDigest"] || !executionbundle.DeclaresManifestIdentity(binding.bundleRoot, locked.BundleDigest, locked.CatalogDigest) {
+		return a.validateSelectedExecutionBundleLocked(binding, nil)
 	}
 	return binding, nil
 }
@@ -340,7 +362,7 @@ func (a *App) PrepareExecutionNode(planID string) ExecutionNodePreparation {
 		}
 		return preparationFailure(err)
 	}
-	binding, err := a.resolveSelectedExecutionNodeBindingLocked()
+	binding, err := a.resolvePreparingExecutionNodeBindingLocked()
 	if err != nil || binding.node.ID != continuation.bindingID {
 		if err == nil {
 			err = errors.New("BINDING_REQUIRED")
@@ -355,12 +377,16 @@ func (a *App) PrepareExecutionNode(planID string) ExecutionNodePreparation {
 		a.execution.setStatus(executionNodeNotPrepared)
 		return preparationFailure(err)
 	}
-	if err := a.revalidateBindingBeforePublicationLocked(binding); err != nil {
-		return preparationFailure(err)
+	if current, err := a.resolvePreparingExecutionNodeBindingLocked(); err != nil || current != binding {
+		return preparationFailure(errors.New("BINDING_REQUIRED"))
 	}
 	a.execution.setStatus(string(result.State))
 	if result.State != executionnode.Ready {
 		return ExecutionNodePreparation{Status: string(result.State), Findings: safeNodeFindings(result.Findings)}
+	}
+	if result.Activated {
+		verification := a.verifyProjectWithBindingLocked(binding, continuation.revision, false)
+		return ExecutionNodePreparation{Status: "PREPARED", Verification: &verification}
 	}
 	inspection, err := binding.service.InspectExecutionNode(ctx, binding.node)
 	if err != nil {

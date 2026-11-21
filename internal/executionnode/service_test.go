@@ -44,6 +44,21 @@ func (f *fakeTransport) StageVerifiedBundle(context.Context, Node, executionbund
 	return "stage", nil
 }
 
+type plannedPreparationRecorder struct {
+	fakeTransport
+	staged, activated int
+}
+
+func (r *plannedPreparationRecorder) stagePlannedBundle(context.Context, Node, executionbundle.Verified, string) (string, bool, error) {
+	r.staged++
+	return "stage", true, nil
+}
+
+func (r *plannedPreparationRecorder) activateRuntime(context.Context, Node, string, executionbundle.Verified, bool) (Runtime, error) {
+	r.activated++
+	return Runtime{}, nil
+}
+
 func TestPreparationPlanIncludesWorkspaceOwnershipReconciliation(t *testing.T) {
 	for _, state := range []State{Ready, Unprepared, UpdateRequired} {
 		steps := preparationSteps(state)
@@ -92,6 +107,53 @@ func TestPrepareReconcilesWorkspaceEvenWhenRuntimeIsAlreadyReady(t *testing.T) {
 	incompatible, err := service.PlanExecutionNodePreparation(context.Background(), testNode(), root)
 	if err != nil || incompatible.State != Incompatible || len(incompatible.Findings) != 1 || incompatible.Findings[0].Code != "EXECUTION_NODE_PLATFORM_INCOMPATIBLE" {
 		t.Fatalf("incompatible plan missing finding: plan=%+v err=%v", incompatible, err)
+	}
+}
+
+func TestPlannedPreparationRejectsChangedBytesBeforeRemoteMutations(t *testing.T) {
+	root := t.TempDir()
+	file := filepath.Join(root, "capabilities.yml")
+	if err := os.WriteFile(file, []byte("---\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	const manifest = `apiVersion: platform.installer/execution-bundle/v1alpha1
+kind: ExecutionRuntimeBundle
+bundleVersion: '1'
+bootstrapProtocol: v1alpha1
+coreVersion: '0.1.0'
+catalogDigest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+schemaDigest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+platforms:
+  - os: redos
+    version: '8'
+    architecture: x86_64
+components:
+  - path: capabilities.yml
+    sha256: sha256:f52d711103d50a437830c6fbcd04fb4bab49a0f82f6d26d1c791c6e8488dd090
+    size: 4
+`
+	if err := os.WriteFile(filepath.Join(root, "manifest.yaml"), []byte(manifest), 0600); err != nil {
+		t.Fatal(err)
+	}
+	transport := &plannedPreparationRecorder{fakeTransport: fakeTransport{inspection: Inspection{
+		State: PreparationRequired, OS: "redos", OSVersion: "8", Architecture: "x86_64", Elevation: true, FreeBytes: 1, archiveStaging: true,
+	}}}
+	service := NewService(transport)
+	ctx := context.Background()
+	plan, err := service.PlanExecutionNodePreparation(ctx, testNode(), root)
+	if err != nil || plan.ID == "" {
+		t.Fatalf("plan=%+v err=%v", plan, err)
+	}
+	if err := os.WriteFile(file, []byte("xxx\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	_, err = service.Prepare(ctx, testNode(), root, plan.ID)
+	var step *PreparationStepError
+	if !errors.As(err, &step) || step.Code != "EXECUTION_NODE_PREPARE_STAGE_FAILED" || step.Unwrap().Error() != "EXECUTION_BUNDLE_COMPONENT_CHECKSUM_MISMATCH" {
+		t.Fatalf("expected checksum rejection, got %v", err)
+	}
+	if transport.workspaceCalls != 0 || transport.staged != 0 || transport.activated != 0 {
+		t.Fatal("changed bytes caused a remote mutation")
 	}
 }
 func (f *fakeTransport) ActivateStagedRuntime(context.Context, Node, string, executionbundle.Verified) (Runtime, error) {

@@ -2,10 +2,29 @@ package executionbundle
 
 import (
 	"errors"
+	"path/filepath"
 	"strings"
 
 	"gopkg.in/yaml.v3"
 )
+
+// RecheckManifest binds a planned bundle to the same directory and manifest.
+// Callers still need to verify every component when they consume its bytes.
+func (v Verified) RecheckManifest(root string) error {
+	absolute, err := filepath.Abs(root)
+	if err != nil || absolute != v.Root || v.rootIdentity == "" {
+		return errors.New("EXECUTION_NODE_BUNDLE_CHANGED")
+	}
+	identity, err := verifiedRootIdentity(absolute)
+	if err != nil || identity != v.rootIdentity {
+		return errors.New("EXECUTION_NODE_BUNDLE_CHANGED")
+	}
+	data, err := readBundleManifest(absolute)
+	if err != nil || !strings.EqualFold(bytesDigest(data), v.Digest) {
+		return errors.New("EXECUTION_NODE_BUNDLE_CHANGED")
+	}
+	return nil
+}
 
 const maxCatalogComponentBytes int64 = 8 * 1024 * 1024
 

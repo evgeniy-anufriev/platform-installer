@@ -1,18 +1,55 @@
 package executionnode
 
 import (
+	_ "embed"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"platform-installer/internal/executionbundle"
 )
 
 const runtimeBootstrapComponent = "ansible-core/tools/bootstrap_execution_runtime.sh"
+const installedOnlyBootstrapDigest = "sha256:37d88a70b2c97cd6c35f52da73e1fb90c8698d0476d3f2e0e8d77ccca31d0a32"
+
+//go:embed runtime_unpack.py
+var runtimeUnpack string
+
+func runtimeBootstrapMode(bundle executionbundle.Verified) string {
+	for _, component := range bundle.Manifest.Components {
+		if component.Path == runtimeBootstrapComponent {
+			// Only skip the known script's INSTALLED branch. Other versions
+			// may perform required work even with these packages installed.
+			if component.SHA256 == installedOnlyBootstrapDigest {
+				return "2"
+			}
+			return "1"
+		}
+	}
+	return "0"
+}
+
+// Keep this read-only check in step with the fixed prerequisite set in
+// bootstrap_execution_runtime.sh. The package transaction remains in Core.
+const runtimeInstalledProbe = `
+runtime_prerequisites_installed() {
+    command -v dnf >/dev/null 2>&1 &&
+    rpm -q python3 ansible-core openssl ca-certificates tar gzip >/dev/null 2>&1 &&
+    command -v python3 >/dev/null 2>&1 &&
+    command -v ansible-playbook >/dev/null 2>&1 &&
+    command -v openssl >/dev/null 2>&1 &&
+    command -v tar >/dev/null 2>&1 &&
+    command -v gzip >/dev/null 2>&1
+}
+`
 
 func shellLiteral(value string) string { return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'" }
 
-// Both phases recheck immutable bytes under root ownership. Bootstrap has no
-// activation side effects: cancelling its SSH call cannot later switch current.
+// Bootstrap has no activation side effects. With installed prerequisites the
+// activation phase verifies bytes as it writes a private root-owned candidate.
 func runtimePreparationScripts(bundle executionbundle.Verified) (string, string) {
 	var checks strings.Builder
 	fmt.Fprintf(&checks, "[ \"$actual_files\" = %d ]\n", len(bundle.Manifest.Components)+1)
@@ -23,7 +60,17 @@ func runtimePreparationScripts(bundle executionbundle.Verified) (string, string)
 		fmt.Fprintf(&checks, "[ \"$(wc -c < %s)\" = %d ]\nprintf '%%s  %%s\\n' %s %s | sha256sum -c - >/dev/null\n", file, component.Size, shellLiteral(strings.TrimPrefix(component.SHA256, "sha256:")), file)
 	}
 	common := strings.Replace(runtimePreparationCommon, "__COMPONENT_CHECKS__", checks.String(), 1)
-	return common + runtimeBootstrapPhase, common + runtimeActivationPhase
+	manifestSize := int64(-1)
+	if info, err := os.Stat(filepath.Join(bundle.Root, "manifest.yaml")); err == nil {
+		manifestSize = info.Size()
+	}
+	files := append([]executionbundle.Component{{Path: "manifest.yaml", SHA256: bundle.Digest, Size: manifestSize}}, bundle.Manifest.Components...)
+	// Component contains only strings and integers, which JSON always encodes.
+	expected, _ := json.Marshal(files)
+	activation := strings.Replace(runtimeActivationPhase, "__VERIFIED_UNPACK__",
+		"python3 -I - \"$stage\" \"$candidate\" <<'PLATFORM_BUNDLE_UNPACK'\n"+
+			"verified_manifest = '"+base64.StdEncoding.EncodeToString(expected)+"'\n"+runtimeUnpack+"\nPLATFORM_BUNDLE_UNPACK", 1)
+	return common + runtimeBootstrapPhase, common + runtimeInstalledProbe + activation
 }
 
 const runtimePreparationCommon = `set -eu
@@ -78,6 +125,9 @@ verify_bundle() (
 const runtimeBootstrapPhase = `
 [ -d "$stage" ] && [ ! -L "$stage" ] || fail EXECUTION_BUNDLE_STAGE_INVALID
 [ ! -e "$candidate" ] && [ ! -L "$candidate" ] || fail EXECUTION_RUNTIME_CANDIDATE_EXISTS
+# There is no package transaction on this path. The independent activation
+# call rechecks installed prerequisites before it materializes the candidate.
+if [ "$bootstrap" = 2 ] && [ -f "$stage/bundle.tar" ]; then exit 0; fi
 success=0
 diagnostic_code=EXECUTION_RUNTIME_CANDIDATE_COPY_FAILED
 cleanup() { if [ "$success" = 0 ]; then printf '%s\n' "$diagnostic_code" >&2; rm -rf -- "$candidate"; fi; }
@@ -90,7 +140,7 @@ chown -R root:root -- "$candidate"
 find "$candidate" -type d -exec chmod 0750 {} +
 find "$candidate" -type f -exec chmod 0640 {} +
 verify_bundle "$candidate" || fail EXECUTION_RUNTIME_CANDIDATE_INVALID
-if [ "$bootstrap" = 1 ]; then
+if [ "$bootstrap" != 0 ]; then
     diagnostic_code=EXECUTION_BOOTSTRAP_COMMAND_FAILED
     sh "$candidate/ansible-core/tools/bootstrap_execution_runtime.sh" "$candidate" "$platforms"
 else
@@ -101,7 +151,9 @@ success=1
 `
 
 const runtimeActivationPhase = `
-verify_bundle "$candidate" || fail EXECUTION_RUNTIME_CANDIDATE_INVALID
+if [ -e "$candidate" ] || [ -L "$candidate" ]; then
+    verify_bundle "$candidate" || fail EXECUTION_RUNTIME_CANDIDATE_INVALID
+fi
 created=0; switching=0; success=0
 diagnostic_code=EXECUTION_RUNTIME_STATE_INITIALIZATION_FAILED
 backup=$root/state/.prepare-$nonce
@@ -118,6 +170,18 @@ cleanup() {
 }
 trap cleanup EXIT
 trap 'exit 130' HUP INT TERM
+if [ ! -e "$candidate" ]; then
+    [ "$bootstrap" = 2 ] && runtime_prerequisites_installed || fail EXECUTION_BOOTSTRAP_PREREQUISITES_CHANGED
+    [ -r /etc/os-release ] || fail EXECUTION_BOOTSTRAP_OS_RELEASE_MISSING
+    . /etc/os-release
+    architecture=$(uname -m)
+    case "${ID-}:${VERSION_ID-}:$architecture" in *[!A-Za-z0-9._:-]*|::*|*:..:*|*:.:*) fail EXECUTION_BOOTSTRAP_PLATFORM_INVALID ;; esac
+    [ "${ID-}:$architecture" = redos:x86_64 ] || fail EXECUTION_BOOTSTRAP_OS_UNSUPPORTED
+    case " $platforms " in *" $ID:$VERSION_ID:$architecture "*) ;; *) fail EXECUTION_BOOTSTRAP_PLATFORM_MISMATCH ;; esac
+    diagnostic_code=EXECUTION_RUNTIME_CANDIDATE_INVALID
+    install -d -m 0750 "$candidate"
+    __VERIFIED_UNPACK__
+fi
 if [ -e "$root/current" ] || [ -L "$root/current" ]; then
     [ -L "$root/current" ] || fail EXECUTION_RUNTIME_CURRENT_UNSAFE
     previous=$(readlink "$root/current")

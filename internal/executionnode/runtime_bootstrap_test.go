@@ -3,6 +3,7 @@ package executionnode
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"os"
@@ -14,6 +15,62 @@ import (
 
 	"platform-installer/internal/executionbundle"
 )
+
+func TestNativeVerifiedRuntimeUnpack(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("requires the Execution Node Python runtime")
+	}
+	python, err := exec.LookPath("python3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := `import base64, hashlib, io, tarfile, tempfile
+from pathlib import Path
+
+namespace = {"__name__": "runtime_unpack_test"}
+exec(base64.b64decode("` + base64.StdEncoding.EncodeToString([]byte(runtimeUnpack)) + `"), namespace)
+` + runtimeUnpackCases
+	command := exec.Command(python, "-I", "-")
+	command.Stdin = strings.NewReader(script)
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("verified unpack: %v\n%s", err, output)
+	}
+}
+
+const runtimeUnpackCases = `
+value = b"component"
+files = [{"path": "runtime/file", "sha256": "sha256:" + hashlib.sha256(value).hexdigest(), "size": len(value)}]
+
+def entry(archive, name, data, kind=tarfile.REGTYPE):
+    member = tarfile.TarInfo(name)
+    member.type = kind
+    member.size = len(data)
+    archive.addfile(member, io.BytesIO(data))
+
+for case in ("valid", "corrupt", "extra", "unsafe", "extension"):
+    with tempfile.TemporaryDirectory() as directory:
+        stage = Path(directory)
+        candidate = stage / "candidate"
+        candidate.mkdir()
+        with tarfile.open(stage / "bundle.tar", "w") as archive:
+            entry(archive, "runtime/file", b"corrupted" if case == "corrupt" else value)
+            if case == "extra":
+                entry(archive, "unexpected", value)
+            if case == "unsafe":
+                entry(archive, "../escape", value)
+            if case == "extension":
+                entry(archive, "pax", b"0" * 65537, tarfile.XHDTYPE)
+        try:
+            namespace["verified_unpack"](stage, candidate, files)
+        except (KeyError, ValueError):
+            assert case != "valid", case
+        else:
+            assert case == "valid", case
+            assert (candidate / "runtime/file").read_bytes() == value
+            assert (candidate / "runtime/packages").is_dir()
+            assert (candidate / "runtime/python").is_dir()
+        assert not (stage / "escape").exists()
+`
 
 type bootstrapCancelRunner struct {
 	calls  []recordedCommand
@@ -41,6 +98,24 @@ func TestCancelledBootstrapNeverDispatchesActivation(t *testing.T) {
 		if strings.Contains(call.input, "switching=1") {
 			t.Fatal("cancelled request activated runtime")
 		}
+	}
+}
+
+func TestPlannedInstalledRuntimeActivatesWithOnePrivilegedCall(t *testing.T) {
+	runner := &recordingRunner{}
+	transport := OpenSSHTransport{Identity: fixedIdentity{}, Runner: runner}
+	bundle := executionbundle.Verified{
+		Digest: "sha256:" + strings.Repeat("a", 64),
+		Manifest: executionbundle.Manifest{Components: []executionbundle.Component{
+			{Path: runtimeBootstrapComponent, SHA256: installedOnlyBootstrapDigest},
+		}},
+	}
+	_, err := transport.activateRuntime(context.Background(), testNode(), "/var/tmp/platform-installer-bootstrap-"+strings.Repeat("b", 32), bundle, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(runner.calls) != 1 || !strings.Contains(runner.calls[0].input, "runtime_prerequisites_installed || fail") || !strings.Contains(runner.calls[0].input, "execution-capabilities.yml") {
+		t.Fatal("expected one activation call with fresh prerequisite and capability checks")
 	}
 }
 

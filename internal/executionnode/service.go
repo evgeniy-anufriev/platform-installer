@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -54,6 +55,7 @@ type Inspection struct {
 	FreeBytes                   int64
 	Runtime                     Runtime
 	Findings                    []Finding
+	archiveStaging              bool
 }
 type Step struct {
 	ID, Action string
@@ -66,6 +68,7 @@ type Plan struct {
 	Steps                                []Step
 	Findings                             []Finding
 	ExpiresAt                            time.Time
+	bundle                               executionbundle.Verified
 }
 type Result struct {
 	APIVersion, Kind, PlanID string
@@ -73,6 +76,7 @@ type Result struct {
 	Changed                  bool
 	Findings                 []Finding
 	Runtime                  Runtime
+	Activated                bool `json:"-"`
 }
 
 // PreparationStepError exposes only the failed preparation boundary to the UI.
@@ -245,8 +249,16 @@ func (s *Service) PlanExecutionNodePreparation(ctx context.Context, node Node, b
 		findings = append(findings, platformMismatchFinding(inspection, bundle.Manifest.Platforms))
 	}
 	plan := Plan{APIVersion: APIVersion, Kind: "ExecutionNodePreparationPlan", NodeID: node.ID, State: state, BundleDigest: bundle.Digest, Steps: preparationSteps(state), Findings: findings, ExpiresAt: s.now().UTC().Add(s.ttl)}
+	if bundleRoot != "" && (state == PreparationRequired || state == UpdateRequired || state == Unprepared) {
+		plan.bundle = bundle
+	}
 	plan.Digest, plan.ID = planDigest(plan), planDigest(plan)
 	s.mu.Lock()
+	for id, previous := range s.plans {
+		if !s.now().Before(previous.ExpiresAt) {
+			delete(s.plans, id)
+		}
+	}
 	s.plans[plan.ID] = plan
 	s.mu.Unlock()
 	return plan, nil
@@ -310,7 +322,18 @@ func (s *Service) Prepare(ctx context.Context, node Node, bundleRoot, planID str
 	if err != nil {
 		return Result{}, &PreparationStepError{Code: "EXECUTION_NODE_PREPARE_INSPECT_FAILED", cause: err}
 	}
-	bundle, err := s.resolveBundle(bundleRoot, inspection)
+	bundle := plan.bundle
+	plannedTransport, planned := s.transport.(interface {
+		stagePlannedBundle(context.Context, Node, executionbundle.Verified, string) (string, bool, error)
+		activateRuntime(context.Context, Node, string, executionbundle.Verified, bool) (Runtime, error)
+	})
+	planned = planned && inspection.archiveStaging && bundle.Root != "" && bundleRoot != "" && requiredState(inspection, bundle) != Ready
+	if planned && bundle.RecheckManifest(bundleRoot) != nil {
+		planned = false
+	}
+	if !planned {
+		bundle, err = s.resolveBundle(bundleRoot, inspection)
+	}
 	if err != nil || bundle.Digest != plan.BundleDigest {
 		result.State = Broken
 		result.Findings = []Finding{{Code: "EXECUTION_NODE_BUNDLE_CHANGED", SafeMessage: "Offline runtime bundle changed after planning"}}
@@ -321,6 +344,16 @@ func (s *Service) Prepare(ctx context.Context, node Node, bundleRoot, planID str
 		result.State, result.Findings = state, inspection.Findings
 		return result, nil
 	}
+	var archive string
+	if planned {
+		// Establish a proof of the bytes before any privileged workspace change.
+		// The closed archive created here is the exact input to SCP below.
+		archive, err = createBundleArchive(bundle, true)
+		if err != nil {
+			return Result{}, &PreparationStepError{Code: "EXECUTION_NODE_PREPARE_STAGE_FAILED", cause: err}
+		}
+		defer os.Remove(archive)
+	}
 	workspaceChanged, err := s.transport.ReconcileWorkspaceOwnership(ctx, node)
 	if err != nil {
 		return Result{}, &PreparationStepError{Code: "EXECUTION_NODE_PREPARE_WORKSPACE_FAILED", cause: err}
@@ -329,11 +362,22 @@ func (s *Service) Prepare(ctx context.Context, node Node, bundleRoot, planID str
 		result.State, result.Runtime, result.Changed = Ready, inspection.Runtime, workspaceChanged
 		return result, nil
 	}
-	stage, err := s.transport.StageVerifiedBundle(ctx, node, bundle)
+	var stage string
+	var fast bool
+	if planned {
+		stage, fast, err = plannedTransport.stagePlannedBundle(ctx, node, bundle, archive)
+	} else {
+		stage, err = s.transport.StageVerifiedBundle(ctx, node, bundle)
+	}
 	if err != nil {
 		return Result{}, &PreparationStepError{Code: "EXECUTION_NODE_PREPARE_STAGE_FAILED", cause: err}
 	}
-	runtime, err := s.transport.ActivateStagedRuntime(ctx, node, stage, bundle)
+	var runtime Runtime
+	if fast {
+		runtime, err = plannedTransport.activateRuntime(ctx, node, stage, bundle, true)
+	} else {
+		runtime, err = s.transport.ActivateStagedRuntime(ctx, node, stage, bundle)
+	}
 	if err != nil {
 		_ = s.transport.DiscardStagedRuntime(context.Background(), node, stage)
 		return Result{}, &PreparationStepError{Code: "EXECUTION_NODE_PREPARE_ACTIVATE_FAILED", cause: err}
@@ -346,6 +390,7 @@ func (s *Service) Prepare(ctx context.Context, node Node, bundleRoot, planID str
 		return result, nil
 	}
 	result.State = Ready
+	result.Activated = fast
 	return result, nil
 }
 
