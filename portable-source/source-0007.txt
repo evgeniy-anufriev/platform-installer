@@ -1,3 +1,2420 @@
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/jackmordaunt/icns/icns.go","mode":420,"size":3573,"sha256":"fa7397f2e4b4f87b78aaf28eadbd31873f36b85ff26a11ef4bf1ade9a28d131a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3573}
+package icns
+
+import (
+	"errors"
+	"image"
+	"io"
+
+	"github.com/nfnt/resize"
+)
+
+// Encoder encodes ICNS files from a source image.
+type Encoder struct {
+	Wr        io.Writer
+	Algorithm InterpolationFunction
+}
+
+// NewEncoder initialises an encoder.
+func NewEncoder(wr io.Writer) *Encoder {
+	return &Encoder{
+		Wr: wr,
+	}
+}
+
+// WithAlgorithm applies the interpolation function used to resize the image.
+func (enc *Encoder) WithAlgorithm(a InterpolationFunction) *Encoder {
+	enc.Algorithm = a
+	return enc
+}
+
+// Encode icns with the given configuration.
+func (enc *Encoder) Encode(img image.Image) error {
+	if enc.Wr == nil {
+		return errors.New("cannot write to nil writer")
+	}
+	if img == nil {
+		return errors.New("cannot encode nil image")
+	}
+	iconset, err := NewIconSet(img, enc.Algorithm)
+	if err != nil {
+		return err
+	}
+	if _, err := iconset.WriteTo(enc.Wr); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Encode writes img to wr in ICNS format.
+// img is assumed to be a rectangle; non-square dimensions will be squared
+// without preserving the aspect ratio.
+// Uses nearest neighbor as interpolation algorithm.
+func Encode(wr io.Writer, img image.Image) error {
+	return NewEncoder(wr).Encode(img)
+}
+
+// NewIconSet uses the source image to create an IconSet.
+// If width != height, the image will be resized using the largest side without
+// preserving the aspect ratio.
+func NewIconSet(img image.Image, interp InterpolationFunction) (*IconSet, error) {
+	biggest := findNearestSize(img)
+	if biggest == 0 {
+		return nil, ErrImageTooSmall{image: img, need: 16}
+	}
+	icons := []*Icon{}
+	for _, size := range sizesFrom(biggest) {
+		t, ok := getTypeFromSize(size)
+		if !ok {
+			continue
+		}
+		iconImg := resize.Resize(size, size, img, interp)
+		icon := &Icon{
+			Type:  t,
+			Image: iconImg,
+		}
+		icons = append(icons, icon)
+	}
+	iconset := &IconSet{
+		Icons: icons,
+	}
+	return iconset, nil
+}
+
+// Big-endian.
+// https://golang.org/src/image/png/writer.go
+func writeUint32(b []uint8, u uint32) {
+	b[0] = uint8(u >> 24)
+	b[1] = uint8(u >> 16)
+	b[2] = uint8(u >> 8)
+	b[3] = uint8(u >> 0)
+}
+
+var sizes = []uint{
+	1024,
+	512,
+	256,
+	64,
+	32,
+}
+
+// findNearestSize finds the biggest icon size we can use for this image.
+func findNearestSize(img image.Image) uint {
+	size := biggestSide(img)
+	for _, s := range sizes {
+		if size >= s {
+			return s
+		}
+	}
+	return 0
+}
+
+func biggestSide(img image.Image) uint {
+	var size uint
+	b := img.Bounds()
+	w, h := uint(b.Max.X), uint(b.Max.Y)
+	size = w
+	if h > size {
+		size = h
+	}
+	return size
+}
+
+// sizesFrom returns a slice containing the sizes less than and including max.
+func sizesFrom(max uint) []uint {
+	for ii, s := range sizes {
+		if s <= max {
+			return sizes[ii:len(sizes)]
+		}
+	}
+	return []uint{}
+}
+
+// OsType is a 4 character identifier used to differentiate icon types.
+type OsType struct {
+	ID   string
+	Size uint
+}
+
+var osTypes = []OsType{
+	{ID: "ic10", Size: uint(1024)},
+	{ID: "ic14", Size: uint(512)},
+	{ID: "ic13", Size: uint(256)},
+	{ID: "ic07", Size: uint(128)},
+	{ID: "ic12", Size: uint(64)},
+	{ID: "ic11", Size: uint(32)},
+}
+
+// getTypeFromSize returns the type for the given icon size (in px).
+// The boolean indicates whether the type exists.
+func getTypeFromSize(size uint) (OsType, bool) {
+	for _, t := range osTypes {
+		if t.Size == size {
+			return t, true
+		}
+	}
+	return OsType{}, false
+}
+
+func getTypeFromID(ID string) (OsType, bool) {
+	for _, t := range osTypes {
+		if t.ID == ID {
+			return t, true
+		}
+	}
+	return OsType{}, false
+}
+
+func osTypeFromID(ID string) OsType {
+	t, _ := getTypeFromID(ID)
+	return t
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/jackmordaunt/icns/interpolation.go","mode":420,"size":546,"sha256":"e555c99eae27a9a45ce2e58fa663234d82ca88e7e35082d5a568aa5afab66c8e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":546}
+package icns
+
+import (
+	"github.com/nfnt/resize"
+)
+
+// InterpolationFunction is the algorithm used to resize the image.
+type InterpolationFunction = resize.InterpolationFunction
+
+// InterpolationFunction constants.
+const (
+	// Nearest-neighbor interpolation
+	NearestNeighbor InterpolationFunction = iota
+	// Bilinear interpolation
+	Bilinear
+	// Bicubic interpolation (with cubic hermite spline)
+	Bicubic
+	// Mitchell-Netravali interpolation
+	MitchellNetravali
+	// Lanczos interpolation (a=2)
+	Lanczos2
+	// Lanczos interpolation (a=3)
+	Lanczos3
+)
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/jackmordaunt/icns/reader.go","mode":420,"size":1601,"sha256":"60ca156e1fc93ab385d95f547624569d794ab058bcee86ee3ad1d1e52021cab7","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1601}
+package icns
+
+import (
+	"bytes"
+	"encoding/binary"
+	"fmt"
+	"image"
+	"io"
+	"io/ioutil"
+
+	"github.com/pkg/errors"
+)
+
+// Decode finds the largest icon listed in the icns file and returns it,
+// ignoring all other sizes. The format returned will be whatever the icon data
+// is, typically jpeg or png.
+func Decode(r io.Reader) (image.Image, error) {
+	data, err := ioutil.ReadAll(r)
+	if err != nil {
+		return nil, err
+	}
+	icnsHeader := data[0:4]
+	if string(icnsHeader) != "icns" {
+		return nil, fmt.Errorf("invalid header for icns file")
+	}
+	fileSize := binary.BigEndian.Uint32(data[4:8])
+	icons := []iconReader{}
+	read := uint32(8)
+	for read < fileSize {
+		next := data[read : read+4]
+		read += 4
+		switch string(next) {
+		case "TOC ":
+			read += 4
+			continue
+		case "icnV":
+			read += 4
+			continue
+		}
+		if isOsType(string(next)) {
+			iconSize := binary.BigEndian.Uint32(data[read : read+4])
+			read += 4
+			iconData := data[read : read+iconSize]
+			read += iconSize
+			icons = append(icons, iconReader{
+				OsType: osTypeFromID(string(next)),
+				r:      bytes.NewBuffer(iconData),
+			})
+		}
+	}
+	if len(icons) == 0 {
+		return nil, fmt.Errorf("no icons found")
+	}
+	var biggest iconReader
+	for _, icon := range icons {
+		if icon.Size > biggest.Size {
+			biggest = icon
+		}
+	}
+	img, _, err := image.Decode(biggest.r)
+	if err != nil {
+		return nil, errors.Wrap(err, "decoding largest image")
+	}
+	return img, nil
+}
+
+type iconReader struct {
+	OsType
+	r io.Reader
+}
+
+func isOsType(ID string) bool {
+	_, ok := getTypeFromID(ID)
+	return ok
+}
+
+func init() {
+	image.RegisterFormat("icns", "icns", Decode, nil)
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/jackmordaunt/icns/readme.md","mode":420,"size":2180,"sha256":"b855554cad88a2c61c2516ae958f2d9026e1266340550c386abccbeed9019dac","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2180}
+# icns
+
+Easily convert `.jpg` and `.png` to `.icns` with the command line tool `icnsify`, or use the library to convert from any `image.Image` to `.icns`.
+
+`go get github.com/jackmordaunt/icns`
+
+`icns` files allow for high resolution icons to make your apps look sexy. The most common ways to generate icns files are:
+
+1. `iconutil`, which is a Mac native cli utility.
+2. `ImageMagick` which adds a large dependency to your project for such a simple use case.
+
+With this library you can use pure Go to create `icns` files from any source image, given that you can decode it into an `image.Image`, without any heavyweight dependencies or subprocessing required. You can also use it to create icns files on windows and linux (thanks Go).
+
+A small CLI app `icnsify` is provided allowing you to create icns files using this library from the command line. It supports piping, which is something `iconutil` does not do, making it substantially easier to wrap or chuck into a shell pipeline.
+
+Note: All icons within the `icns` are sized for high dpi retina screens, using the appropriate `icns` OSTypes.
+
+## Command Line
+
+Pipe it
+
+`cat icon.png | icnsify | cat > icon.icns`
+
+`cat icon.icns | icnsify | cat > icon.png`
+
+Standard
+
+`icnsify -i icon.png -o icon.icns`
+
+`icnsify -i icon.icns -o icon.png`
+
+## Library Usage
+
+```go
+func main() {
+        pngf, err := os.Open("path/to/icon.png")
+        if err != nil {
+                log.Fatalf("opening source image: %v", err)
+        }
+        defer pngf.Close()
+        srcImg, _, err := image.Decode(pngf)
+        if err != nil {
+                log.Fatalf("decoding source image: %v", err)
+        }
+        dest, err := os.Create("path/to/icon.icns")
+        if err != nil {
+                log.Fatalf("opening destination file: %v", err)
+        }
+        defer dest.Close()
+        if err := icns.Encode(dest, srcImg); err != nil {
+                log.Fatalf("encoding icns: %v", err)
+        }
+}
+```
+
+## Roadmap
+
+* [x] Encoder: `image.Image -> .icns`
+* [x] Command Line Interface
+  * [x] Encoding
+  * [x] Pipe support
+  * [x] Decoding
+* [x] Implement Decoder: `.icns -> image.Image`
+* [ ] Symmetric test: `decode(encode(img)) == img`
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/jackmordaunt/icns/writer.go","mode":420,"size":2676,"sha256":"3fd3e43c1266353ef0fd2bbf1cbc048d65ef5de32f4b213444dd0323f530863f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2676}
+package icns
+
+import (
+	"bytes"
+	"image"
+	"image/png"
+	"io"
+)
+
+// Icon encodes an icns icon.
+type Icon struct {
+	Type  OsType
+	Image image.Image
+
+	header    [8]byte
+	headerSet bool
+	data      []byte
+}
+
+// WriteTo encodes the icon into wr.
+func (i *Icon) WriteTo(wr io.Writer) (int64, error) {
+	var written int64
+	if err := i.encodeImage(); err != nil {
+		return written, err
+	}
+	size, err := i.writeHeader(wr)
+	written += size
+	if err != nil {
+		return written, err
+	}
+	size, err = i.writeData(wr)
+	written += size
+	if err != nil {
+		return written, err
+	}
+	return written, nil
+}
+
+func (i *Icon) encodeImage() error {
+	if len(i.data) > 0 {
+		return nil
+	}
+	data, err := encodeImage(i.Image)
+	if err != nil {
+		return err
+	}
+	i.data = data
+	return nil
+}
+
+func encodeImage(img image.Image) ([]byte, error) {
+	buf := bytes.NewBuffer(nil)
+	if err := png.Encode(buf, img); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func (i *Icon) writeHeader(wr io.Writer) (int64, error) {
+	if !i.headerSet {
+		defer func() { i.headerSet = true }()
+		i.header[0] = i.Type.ID[0]
+		i.header[1] = i.Type.ID[1]
+		i.header[2] = i.Type.ID[2]
+		i.header[3] = i.Type.ID[3]
+		length := uint32(len(i.data) + 8)
+		writeUint32(i.header[4:8], length)
+	}
+	written, err := wr.Write(i.header[:8])
+	return int64(written), err
+}
+
+func (i *Icon) writeData(wr io.Writer) (int64, error) {
+	written, err := wr.Write(i.data)
+	return int64(written), err
+}
+
+// IconSet encodes a set of icons into an ICNS file.
+type IconSet struct {
+	Icons []*Icon
+
+	header    [8]byte
+	headerSet bool
+	data      []byte
+}
+
+// WriteTo writes the ICNS file to wr.
+func (s *IconSet) WriteTo(wr io.Writer) (int64, error) {
+	var written int64
+	if err := s.encodeIcons(); err != nil {
+		return written, err
+	}
+	size, err := s.writeHeader(wr)
+	written += size
+	if err != nil {
+		return written, err
+	}
+	size, err = s.writeData(wr)
+	written += size
+	if err != nil {
+		return written, err
+	}
+	return written, nil
+}
+
+func (s *IconSet) encodeIcons() error {
+	if len(s.data) > 0 {
+		return nil
+	}
+	buf := bytes.NewBuffer(nil)
+	for _, icon := range s.Icons {
+		if _, err := icon.WriteTo(buf); err != nil {
+			return err
+		}
+	}
+	s.data = buf.Bytes()
+	return nil
+}
+
+func (s *IconSet) writeHeader(wr io.Writer) (int64, error) {
+	if !s.headerSet {
+		defer func() { s.headerSet = true }()
+		s.header[0] = 'i'
+		s.header[1] = 'c'
+		s.header[2] = 'n'
+		s.header[3] = 's'
+		length := uint32(len(s.data) + 8)
+		writeUint32(s.header[4:8], length)
+	}
+	written, err := wr.Write(s.header[:8])
+	return int64(written), err
+}
+
+func (s *IconSet) writeData(wr io.Writer) (int64, error) {
+	written, err := wr.Write(s.data)
+	return int64(written), err
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/jaypipes/ghw/.gitignore","mode":420,"size":28,"sha256":"75142b11635706946c017546989213fbe62f2f0505e8ffa5016d490b376ef691","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":28}
+vendor/
+coverage*.*
+*~
+bin/
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/jaypipes/ghw/CODE_OF_CONDUCT.md","mode":420,"size":5491,"sha256":"5401d6dc967ed69158888149b18deab551ffd4aea13bacc130381692da5e244d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5491}
+
+# Contributor Covenant Code of Conduct
+
+## Our Pledge
+
+We as members, contributors, and leaders pledge to make participation in our
+community a harassment-free experience for everyone, regardless of age, body
+size, visible or invisible disability, ethnicity, sex characteristics, gender
+identity and expression, level of experience, education, socio-economic status,
+nationality, personal appearance, race, caste, color, religion, or sexual identity
+and orientation.
+
+We pledge to act and interact in ways that contribute to an open, welcoming,
+diverse, inclusive, and healthy community.
+
+## Our Standards
+
+Examples of behavior that contributes to a positive environment for our
+community include:
+
+* Demonstrating empathy and kindness toward other people
+* Being respectful of differing opinions, viewpoints, and experiences
+* Giving and gracefully accepting constructive feedback
+* Accepting responsibility and apologizing to those affected by our mistakes,
+  and learning from the experience
+* Focusing on what is best not just for us as individuals, but for the
+  overall community
+
+Examples of unacceptable behavior include:
+
+* The use of sexualized language or imagery, and sexual attention or
+  advances of any kind
+* Trolling, insulting or derogatory comments, and personal or political attacks
+* Public or private harassment
+* Publishing others' private information, such as a physical or email
+  address, without their explicit permission
+* Other conduct which could reasonably be considered inappropriate in a
+  professional setting
+
+## Enforcement Responsibilities
+
+Community leaders are responsible for clarifying and enforcing our standards of
+acceptable behavior and will take appropriate and fair corrective action in
+response to any behavior that they deem inappropriate, threatening, offensive,
+or harmful.
+
+Community leaders have the right and responsibility to remove, edit, or reject
+comments, commits, code, wiki edits, issues, and other contributions that are
+not aligned to this Code of Conduct, and will communicate reasons for moderation
+decisions when appropriate.
+
+## Scope
+
+This Code of Conduct applies within all community spaces, and also applies when
+an individual is officially representing the community in public spaces.
+Examples of representing our community include using an official e-mail address,
+posting via an official social media account, or acting as an appointed
+representative at an online or offline event.
+
+## Enforcement
+
+Instances of abusive, harassing, or otherwise unacceptable behavior may be
+reported to the community leaders responsible for enforcement at
+[INSERT CONTACT METHOD].
+All complaints will be reviewed and investigated promptly and fairly.
+
+All community leaders are obligated to respect the privacy and security of the
+reporter of any incident.
+
+## Enforcement Guidelines
+
+Community leaders will follow these Community Impact Guidelines in determining
+the consequences for any action they deem in violation of this Code of Conduct:
+
+### 1. Correction
+
+**Community Impact**: Use of inappropriate language or other behavior deemed
+unprofessional or unwelcome in the community.
+
+**Consequence**: A private, written warning from community leaders, providing
+clarity around the nature of the violation and an explanation of why the
+behavior was inappropriate. A public apology may be requested.
+
+### 2. Warning
+
+**Community Impact**: A violation through a single incident or series
+of actions.
+
+**Consequence**: A warning with consequences for continued behavior. No
+interaction with the people involved, including unsolicited interaction with
+those enforcing the Code of Conduct, for a specified period of time. This
+includes avoiding interactions in community spaces as well as external channels
+like social media. Violating these terms may lead to a temporary or
+permanent ban.
+
+### 3. Temporary Ban
+
+**Community Impact**: A serious violation of community standards, including
+sustained inappropriate behavior.
+
+**Consequence**: A temporary ban from any sort of interaction or public
+communication with the community for a specified period of time. No public or
+private interaction with the people involved, including unsolicited interaction
+with those enforcing the Code of Conduct, is allowed during this period.
+Violating these terms may lead to a permanent ban.
+
+### 4. Permanent Ban
+
+**Community Impact**: Demonstrating a pattern of violation of community
+standards, including sustained inappropriate behavior,  harassment of an
+individual, or aggression toward or disparagement of classes of individuals.
+
+**Consequence**: A permanent ban from any sort of public interaction within
+the community.
+
+## Attribution
+
+This Code of Conduct is adapted from the [Contributor Covenant][homepage],
+version 2.1, available at
+[https://www.contributor-covenant.org/version/2/1/code_of_conduct.html][v2.1].
+
+Community Impact Guidelines were inspired by
+[Mozilla's code of conduct enforcement ladder][Mozilla CoC].
+
+For answers to common questions about this code of conduct, see the FAQ at
+[https://www.contributor-covenant.org/faq][FAQ]. Translations are available
+at [https://www.contributor-covenant.org/translations][translations].
+
+[homepage]: https://www.contributor-covenant.org
+[v2.1]: https://www.contributor-covenant.org/version/2/1/code_of_conduct.html
+[Mozilla CoC]: https://github.com/mozilla/diversity
+[FAQ]: https://www.contributor-covenant.org/faq
+[translations]: https://www.contributor-covenant.org/translations
+
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/jaypipes/ghw/CONTRIBUTING.md","mode":420,"size":2137,"sha256":"7d6ea3a270c4b768752feaaa78e32f9585298b5bac27837402d3deb33f11f742","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2137}
+# How to Contribute
+
+We welcome any and all contributions to `ghw`! Filing [bug reports][gh-issues],
+asking questions and submitting patches are all encouraged.
+
+[gh-issues]: https://github.com/jaypipes/ghw/issues
+
+## Submitting patches via pull requests
+
+We use GitHub pull requests to review code submissions.
+
+Consult [GitHub Help][pr-help] for more information on using pull requests.
+
+[pr-help]: https://help.github.com/articles/about-pull-requests/
+
+We ask that contributors submitting a pull request sign their commits and
+attest to the Developer Certificate of Origin (DCO).
+
+## Developer Certificate of Origin
+
+The DCO is a lightweight way for contributors to certify that they wrote or
+otherwise have the right to submit the code they are contributing to the
+project. Here is the [full text of the DCO][dco], reformatted for readability:
+
+> By making a contribution to this project, I certify that:
+> 
+> a. The contribution was created in whole or in part by me and I have the
+> right to submit it under the open source license indicated in the file; or
+> 
+> b. The contribution is based upon previous work that, to the best of my
+> knowledge, is covered under an appropriate open source license and I have the
+> right under that license to submit that work with modifications, whether
+> created in whole or in part by me, under the same open source license (unless
+> I am permitted to submit under a different license), as indicated in the
+> file; or
+> 
+> c. The contribution was provided directly to me by some other person who
+> certified (a), (b) or (c) and I have not modified it.
+> 
+> d. I understand and agree that this project and the contribution are public
+> and that a record of the contribution (including all personal information I
+> submit with it, including my sign-off) is maintained indefinitely and may be
+> redistributed consistent with this project or the open source license(s)
+> involved.
+
+[dco]: https://developercertificate.org/
+
+You can sign your commits using `git commit -s` before pushing commits to
+Github and creating a pull request.
+
+## Community Guidelines
+
+1. Be kind.
+2. Seriously, that's it.
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/jaypipes/ghw/COPYING","mode":420,"size":10143,"sha256":"5df2a0d87d6c562f0ea11c688ac52532aa28d744cabc7994ff0537f64b3b3320","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":10143}
+
+                                 Apache License
+                           Version 2.0, January 2004
+                        http://www.apache.org/licenses/
+
+   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+
+   1. Definitions.
+
+      "License" shall mean the terms and conditions for use, reproduction,
+      and distribution as defined by Sections 1 through 9 of this document.
+
+      "Licensor" shall mean the copyright owner or entity authorized by
+      the copyright owner that is granting the License.
+
+      "Legal Entity" shall mean the union of the acting entity and all
+      other entities that control, are controlled by, or are under common
+      control with that entity. For the purposes of this definition,
+      "control" means (i) the power, direct or indirect, to cause the
+      direction or management of such entity, whether by contract or
+      otherwise, or (ii) ownership of fifty percent (50%) or more of the
+      outstanding shares, or (iii) beneficial ownership of such entity.
+
+      "You" (or "Your") shall mean an individual or Legal Entity
+      exercising permissions granted by this License.
+
+      "Source" form shall mean the preferred form for making modifications,
+      including but not limited to software source code, documentation
+      source, and configuration files.
+
+      "Object" form shall mean any form resulting from mechanical
+      transformation or translation of a Source form, including but
+      not limited to compiled object code, generated documentation,
+      and conversions to other media types.
+
+      "Work" shall mean the work of authorship, whether in Source or
+      Object form, made available under the License, as indicated by a
+      copyright notice that is included in or attached to the work
+      (an example is provided in the Appendix below).
+
+      "Derivative Works" shall mean any work, whether in Source or Object
+      form, that is based on (or derived from) the Work and for which the
+      editorial revisions, annotations, elaborations, or other modifications
+      represent, as a whole, an original work of authorship. For the purposes
+      of this License, Derivative Works shall not include works that remain
+      separable from, or merely link (or bind by name) to the interfaces of,
+      the Work and Derivative Works thereof.
+
+      "Contribution" shall mean any work of authorship, including
+      the original version of the Work and any modifications or additions
+      to that Work or Derivative Works thereof, that is intentionally
+      submitted to Licensor for inclusion in the Work by the copyright owner
+      or by an individual or Legal Entity authorized to submit on behalf of
+      the copyright owner. For the purposes of this definition, "submitted"
+      means any form of electronic, verbal, or written communication sent
+      to the Licensor or its representatives, including but not limited to
+      communication on electronic mailing lists, source code control systems,
+      and issue tracking systems that are managed by, or on behalf of, the
+      Licensor for the purpose of discussing and improving the Work, but
+      excluding communication that is conspicuously marked or otherwise
+      designated in writing by the copyright owner as "Not a Contribution."
+
+      "Contributor" shall mean Licensor and any individual or Legal Entity
+      on behalf of whom a Contribution has been received by Licensor and
+      subsequently incorporated within the Work.
+
+   2. Grant of Copyright License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      copyright license to reproduce, prepare Derivative Works of,
+      publicly display, publicly perform, sublicense, and distribute the
+      Work and such Derivative Works in Source or Object form.
+
+   3. Grant of Patent License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      (except as stated in this section) patent license to make, have made,
+      use, offer to sell, sell, import, and otherwise transfer the Work,
+      where such license applies only to those patent claims licensable
+      by such Contributor that are necessarily infringed by their
+      Contribution(s) alone or by combination of their Contribution(s)
+      with the Work to which such Contribution(s) was submitted. If You
+      institute patent litigation against any entity (including a
+      cross-claim or counterclaim in a lawsuit) alleging that the Work
+      or a Contribution incorporated within the Work constitutes direct
+      or contributory patent infringement, then any patent licenses
+      granted to You under this License for that Work shall terminate
+      as of the date such litigation is filed.
+
+   4. Redistribution. You may reproduce and distribute copies of the
+      Work or Derivative Works thereof in any medium, with or without
+      modifications, and in Source or Object form, provided that You
+      meet the following conditions:
+
+      (a) You must give any other recipients of the Work or
+          Derivative Works a copy of this License; and
+
+      (b) You must cause any modified files to carry prominent notices
+          stating that You changed the files; and
+
+      (c) You must retain, in the Source form of any Derivative Works
+          that You distribute, all copyright, patent, trademark, and
+          attribution notices from the Source form of the Work,
+          excluding those notices that do not pertain to any part of
+          the Derivative Works; and
+
+      (d) If the Work includes a "NOTICE" text file as part of its
+          distribution, then any Derivative Works that You distribute must
+          include a readable copy of the attribution notices contained
+          within such NOTICE file, excluding those notices that do not
+          pertain to any part of the Derivative Works, in at least one
+          of the following places: within a NOTICE text file distributed
+          as part of the Derivative Works; within the Source form or
+          documentation, if provided along with the Derivative Works; or,
+          within a display generated by the Derivative Works, if and
+          wherever such third-party notices normally appear. The contents
+          of the NOTICE file are for informational purposes only and
+          do not modify the License. You may add Your own attribution
+          notices within Derivative Works that You distribute, alongside
+          or as an addendum to the NOTICE text from the Work, provided
+          that such additional attribution notices cannot be construed
+          as modifying the License.
+
+      You may add Your own copyright statement to Your modifications and
+      may provide additional or different license terms and conditions
+      for use, reproduction, or distribution of Your modifications, or
+      for any such Derivative Works as a whole, provided Your use,
+      reproduction, and distribution of the Work otherwise complies with
+      the conditions stated in this License.
+
+   5. Submission of Contributions. Unless You explicitly state otherwise,
+      any Contribution intentionally submitted for inclusion in the Work
+      by You to the Licensor shall be under the terms and conditions of
+      this License, without any additional terms or conditions.
+      Notwithstanding the above, nothing herein shall supersede or modify
+      the terms of any separate license agreement you may have executed
+      with Licensor regarding such Contributions.
+
+   6. Trademarks. This License does not grant permission to use the trade
+      names, trademarks, service marks, or product names of the Licensor,
+      except as required for reasonable and customary use in describing the
+      origin of the Work and reproducing the content of the NOTICE file.
+
+   7. Disclaimer of Warranty. Unless required by applicable law or
+      agreed to in writing, Licensor provides the Work (and each
+      Contributor provides its Contributions) on an "AS IS" BASIS,
+      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+      implied, including, without limitation, any warranties or conditions
+      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
+      PARTICULAR PURPOSE. You are solely responsible for determining the
+      appropriateness of using or redistributing the Work and assume any
+      risks associated with Your exercise of permissions under this License.
+
+   8. Limitation of Liability. In no event and under no legal theory,
+      whether in tort (including negligence), contract, or otherwise,
+      unless required by applicable law (such as deliberate and grossly
+      negligent acts) or agreed to in writing, shall any Contributor be
+      liable to You for damages, including any direct, indirect, special,
+      incidental, or consequential damages of any character arising as a
+      result of this License or out of the use or inability to use the
+      Work (including but not limited to damages for loss of goodwill,
+      work stoppage, computer failure or malfunction, or any and all
+      other commercial damages or losses), even if such Contributor
+      has been advised of the possibility of such damages.
+
+   9. Accepting Warranty or Additional Liability. While redistributing
+      the Work or Derivative Works thereof, You may choose to offer,
+      and charge a fee for, acceptance of support, warranty, indemnity,
+      or other liability obligations and/or rights consistent with this
+      License. However, in accepting such obligations, You may act only
+      on Your own behalf and on Your sole responsibility, not on behalf
+      of any other Contributor, and only if You agree to indemnify,
+      defend, and hold each Contributor harmless for any liability
+      incurred by, or claims asserted against, such Contributor by reason
+      of your accepting any such warranty or additional liability.
+
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/jaypipes/ghw/Dockerfile","mode":420,"size":533,"sha256":"55be11ad30c12c55e6746022f23fbd6a96948da65423ecf378aa4a6fb5287398","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":533}
+FROM golang:1.21-buster as builder
+WORKDIR /go/src/github.com/jaypipes/ghw
+
+ENV GOPROXY=direct
+
+# go.mod and go.sum go into their own layers.
+COPY go.mod .
+COPY go.sum .
+
+# This ensures `go mod download` happens only when go.mod and go.sum change.
+RUN go mod download
+
+COPY . .
+
+RUN CGO_ENABLED=0 go build -o ghwc ./cmd/ghwc/
+
+FROM alpine:3.7@sha256:8421d9a84432575381bfabd248f1eb56f3aa21d9d7cd2511583c68c9b7511d10
+RUN apk add --no-cache ethtool
+
+WORKDIR /bin
+
+COPY --from=builder /go/src/github.com/jaypipes/ghw/ghwc /bin
+
+CMD ghwc
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/jaypipes/ghw/Makefile","mode":420,"size":697,"sha256":"640144060140ad7af98800a379482b16a14271a934cb8d6e9e9c25ac6d04b69b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":697}
+VERSION ?= $(shell git describe --tags --always --dirty)
+
+.PHONY: test clean vet fmt fmtcheck build run
+
+bin/ghwc:
+	@cd cmd/ghwc && go build -o ../../bin/ghwc main.go && cd ../../
+
+# If the first argument is "run"...
+ifeq (run,$(firstword $(MAKECMDGOALS)))
+  # use the rest as arguments for "run"
+  RUN_ARGS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
+  # ...and turn them into do-nothing targets
+  $(eval $(RUN_ARGS):;@:)
+endif
+
+build: clean bin/ghwc
+
+run: build
+	@bin/ghwc $(RUN_ARGS)
+
+test: vet
+	go test -v ./...
+
+fmt:
+	@echo "Running gofmt on all sources..."
+	@gofmt -s -l -w .
+
+fmtcheck:
+	@bash -c "diff -u <(echo -n) <(gofmt -d .)"
+
+vet:
+	go vet ./...
+
+clean:
+	@rm -f bin/ghwc
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/jaypipes/ghw/README.md","mode":420,"size":53068,"sha256":"0c7216cc2759e027356d8e6c2dfbb88418cfcb00d5b70107899cd0cfa877f879","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
+# `ghw` - Go HardWare discovery/inspection library
+
+[![Go Reference](https://pkg.go.dev/badge/github.com/jaypipes/ghw.svg)](https://pkg.go.dev/github.com/jaypipes/ghw)
+[![Go Report Card](https://goreportcard.com/badge/github.com/jaypipes/ghw)](https://goreportcard.com/report/github.com/jaypipes/ghw)
+[![Build Status](https://github.com/jaypipes/ghw/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/jaypipes/ghw/actions)
+[![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](CODE_OF_CONDUCT.md)
+
+![ghw mascot](images/ghw-gopher.png)
+
+`ghw` is a Go library providing hardware inspection and discovery for Linux and
+Windows. There currently exists partial support for MacOSX.
+
+## Design Principles
+
+* No root privileges needed for discovery
+
+  `ghw` goes the extra mile to be useful without root privileges. We query for
+  host hardware information as directly as possible without relying on shellouts
+  to programs like `dmidecode` that require root privileges to execute.
+
+  Elevated privileges are indeed required to query for some information, but
+  `ghw` will never error out if blocked from reading that information. Instead,
+  `ghw` will print a warning message about the information that could not be
+  retrieved. You may disable these warning messages with the
+  `GHW_DISABLE_WARNINGS` environment variable.
+
+* Well-documented code and plenty of example code
+
+  The code itself should be well-documented with lots of usage examples.
+
+* Interfaces should be consistent across modules
+
+  Each module in the library should be structured in a consistent fashion, and
+  the structs returned by various library functions should have consistent
+  attribute and method names.
+
+## Inspecting != Monitoring
+
+`ghw` is a tool for gathering information about your hardware's **capacity**
+and **capabilities**.
+
+It is important to point out that `ghw` does **NOT** report information that is
+temporary or variable. It is **NOT** a system monitor nor is it an appropriate
+tool for gathering data points for metrics that change over time.  If you are
+looking for a system that tracks **usage** of CPU, memory, network I/O or disk
+I/O, there are plenty of great open source tools that do this! Check out the
+[Prometheus project](https://prometheus.io/) for a great example.
+
+## Usage
+
+`ghw` has functions that return an `Info` object about a particular hardware
+domain (e.g. CPU, Memory, Block storage, etc).
+
+Use the following functions in `ghw` to inspect information about the host
+hardware:
+
+* [`ghw.CPU()`](#cpu)
+* [`ghw.Memory()`](#memory)
+* [`ghw.Block()`](#block-storage) (block storage)
+* [`ghw.Topology()`](#topology) (processor architecture, NUMA topology and
+  memory cache hierarchy)
+* [`ghw.Network()`](#network)
+* [`ghw.PCI()`](#pci)
+* [`ghw.GPU()`](#gpu) (graphical processing unit)
+* [`ghw.Accelerator()`](#accelerator) (processing accelerators, AI)
+* [`ghw.Chassis()`](#chassis)
+* [`ghw.BIOS()`](#bios)
+* [`ghw.Baseboard()`](#baseboard)
+* [`ghw.Product()`](#product)
+
+### CPU
+
+The `ghw.CPU()` function returns a `ghw.CPUInfo` struct that contains
+information about the CPUs on the host system.
+
+`ghw.CPUInfo` contains the following fields:
+
+* `ghw.CPUInfo.TotalCores` has the total number of physical cores the host
+  system contains
+* `ghw.CPUInfo.TotalHardwareThreads` has the total number of hardware threads
+  the host system contains
+* `ghw.CPUInfo.Processors` is an array of `ghw.Processor` structs, one for each
+  physical processor package contained in the host
+
+Each `ghw.Processor` struct contains a number of fields:
+
+* `ghw.Processor.ID` is the physical processor `uint32` ID according to the
+  system
+* `ghw.Processor.TotalCores` is the number of physical cores in the processor
+  package
+* `ghw.Processor.TotalHardwareThreads` is the number of hardware threads in the
+  processor package
+* `ghw.Processor.Vendor` is a string containing the vendor name
+* `ghw.Processor.Model` is a string containing the vendor's model name
+* `ghw.Processor.Capabilities` (Linux only) is an array of strings indicating
+  the features the processor has enabled
+* `ghw.Processor.Cores` (Linux only) is an array of `ghw.ProcessorCore` structs
+  that are packed onto this physical processor
+
+A `ghw.ProcessorCore` has the following fields:
+
+* `ghw.ProcessorCore.ID` is the `uint32` identifier that the host gave this
+  core. Note that this does *not* necessarily equate to a zero-based index of
+  the core within a physical package. For example, the core IDs for an Intel Core
+  i7 are 0, 1, 2, 8, 9, and 10
+* `ghw.ProcessorCore.TotalHardwareThreads` is the number of hardware threads
+  associated with the core
+* `ghw.ProcessorCore.LogicalProcessors` is an array of ints representing the
+  logical processor IDs assigned to any processing unit for the core. These are
+  sometimes called the "thread siblings". Logical processor IDs are the
+  *zero-based* index of the processor on the host and are *not* related to the
+  core ID.
+
+```go
+package main
+
+import (
+	"fmt"
+	"math"
+	"strings"
+
+	"github.com/jaypipes/ghw"
+)
+
+func main() {
+	cpu, err := ghw.CPU()
+	if err != nil {
+		fmt.Printf("Error getting CPU info: %v", err)
+	}
+
+	fmt.Printf("%v\n", cpu)
+
+	for _, proc := range cpu.Processors {
+		fmt.Printf(" %v\n", proc)
+		for _, core := range proc.Cores {
+			fmt.Printf("  %v\n", core)
+		}
+		if len(proc.Capabilities) > 0 {
+			// pretty-print the (large) block of capability strings into rows
+			// of 6 capability strings
+			rows := int(math.Ceil(float64(len(proc.Capabilities)) / float64(6)))
+			for row := 1; row < rows; row = row + 1 {
+				rowStart := (row * 6) - 1
+				rowEnd := int(math.Min(float64(rowStart+6), float64(len(proc.Capabilities))))
+				rowElems := proc.Capabilities[rowStart:rowEnd]
+				capStr := strings.Join(rowElems, " ")
+				if row == 1 {
+					fmt.Printf("  capabilities: [%s\n", capStr)
+				} else if rowEnd < len(proc.Capabilities) {
+					fmt.Printf("                 %s\n", capStr)
+				} else {
+					fmt.Printf("                 %s]\n", capStr)
+				}
+			}
+		}
+	}
+}
+```
+
+Example output from my personal workstation:
+
+```
+cpu (1 physical package, 6 cores, 12 hardware threads)
+ physical package #0 (6 cores, 12 hardware threads)
+  processor core #0 (2 threads), logical processors [0 6]
+  processor core #1 (2 threads), logical processors [1 7]
+  processor core #2 (2 threads), logical processors [2 8]
+  processor core #3 (2 threads), logical processors [3 9]
+  processor core #4 (2 threads), logical processors [4 10]
+  processor core #5 (2 threads), logical processors [5 11]
+  capabilities: [msr pae mce cx8 apic sep
+                 mtrr pge mca cmov pat pse36
+                 clflush dts acpi mmx fxsr sse
+                 sse2 ss ht tm pbe syscall
+                 nx pdpe1gb rdtscp lm constant_tsc arch_perfmon
+                 pebs bts rep_good nopl xtopology nonstop_tsc
+                 cpuid aperfmperf pni pclmulqdq dtes64 monitor
+                 ds_cpl vmx est tm2 ssse3 cx16
+                 xtpr pdcm pcid sse4_1 sse4_2 popcnt
+                 aes lahf_lm pti retpoline tpr_shadow vnmi
+                 flexpriority ept vpid dtherm ida arat]
+```
+
+### Memory
+
+The `ghw.Memory()` function returns a `ghw.MemoryInfo` struct that contains
+information about the RAM on the host system.
+
+`ghw.MemoryInfo` contains the following fields:
+
+* `ghw.MemoryInfo.TotalPhysicalBytes` contains the amount of physical memory on
+  the host
+* `ghw.MemoryInfo.TotalUsableBytes` contains the amount of memory the
+  system can actually use. Usable memory accounts for things like the kernel's
+  resident memory size and some reserved system bits. Please note this value is
+  **NOT** the amount of memory currently in use by processes in the system. See
+  [the discussion][#physical-versus-usage-memory] about the difference.
+* `ghw.MemoryInfo.SupportedPageSizes` is an array of integers representing the
+  size, in bytes, of memory pages the system supports
+* `ghw.MemoryInfo.Modules` is an array of pointers to `ghw.MemoryModule`
+  structs, one for each physical [DIMM](https://en.wikipedia.org/wiki/DIMM).
+  Currently, this information is only included on Windows, with Linux support
+  [planned](https://github.com/jaypipes/ghw/pull/171#issuecomment-597082409).
+
+```go
+package main
+
+import (
+	"fmt"
+
+	"github.com/jaypipes/ghw"
+)
+
+func main() {
+	memory, err := ghw.Memory()
+	if err != nil {
+		fmt.Printf("Error getting memory info: %v", err)
+	}
+
+	fmt.Println(memory.String())
+}
+```
+
+Example output from my personal workstation:
+
+```
+memory (24GB physical, 24GB usable)
+```
+
+#### Physical versus Usable Memory
+
+There has been [some](https://github.com/jaypipes/ghw/pull/171)
+[confusion](https://github.com/jaypipes/ghw/issues/183) regarding the
+difference between the total physical bytes versus total usable bytes of
+memory.
+
+Some of this confusion has been due to a misunderstanding of the term "usable".
+As mentioned [above](#inspection!=monitoring), `ghw` does inspection of the
+system's capacity.
+
+A host computer has two capacities when it comes to RAM. The first capacity is
+the amount of RAM that is contained in all memory banks (DIMMs) that are
+attached to the motherboard. `ghw.MemoryInfo.TotalPhysicalBytes` refers to this
+first capacity.
+
+There is a (usually small) amount of RAM that is consumed by the bootloader
+before the operating system is started (booted). Once the bootloader has booted
+the operating system, the amount of RAM that may be used by the operating
+system and its applications is fixed. `ghw.MemoryInfo.TotalUsableBytes` refers
+to this second capacity.
+
+You can determine the amount of RAM that the bootloader used (that is not made
+available to the operating system) by subtracting
+`ghw.MemoryInfo.TotalUsableBytes` from `ghw.MemoryInfo.TotalPhysicalBytes`:
+
+```go
+package main
+
+import (
+	"fmt"
+
+	"github.com/jaypipes/ghw"
+)
+
+func main() {
+	memory, err := ghw.Memory()
+	if err != nil {
+		fmt.Printf("Error getting memory info: %v", err)
+	}
+
+        phys := memory.TotalPhysicalBytes
+        usable := memory.TotalUsableBytes
+
+	fmt.Printf("The bootloader consumes %d bytes of RAM\n", phys - usable)
+}
+```
+
+Example output from my personal workstation booted into a Windows10 operating
+system with a Linux GRUB bootloader:
+
+```
+The bootloader consumes 3832720 bytes of RAM
+```
+
+### Block storage
+
+The `ghw.Block()` function returns a `ghw.BlockInfo` struct that contains
+information about the block storage on the host system.
+
+`ghw.BlockInfo` contains the following fields:
+
+* `ghw.BlockInfo.TotalSizeBytes` contains the amount of physical block storage
+  on the host.
+* `ghw.BlockInfo.Disks` is an array of pointers to `ghw.Disk` structs, one for
+  each disk found by the system
+
+Each `ghw.Disk` struct contains the following fields:
+
+* `ghw.Disk.Name` contains a string with the short name of the disk, e.g. "sda"
+* `ghw.Disk.SizeBytes` contains the amount of storage the disk provides
+* `ghw.Disk.PhysicalBlockSizeBytes` contains the size of the physical blocks
+  used on the disk, in bytes. This is typically the minimum amount of data that
+  will be written in a single write operation for the disk.
+* `ghw.Disk.IsRemovable` contains a boolean indicating if the disk drive is
+  removable
+* `ghw.Disk.DriveType` is the type of drive. It is of type `ghw.DriveType`
+  which has a `ghw.DriveType.String()` method that can be called to return a
+  string representation of the bus. This string will be `HDD`, `FDD`, `ODD`,
+  or `SSD`, which correspond to a hard disk drive (rotational), floppy drive,
+  optical (CD/DVD) drive and solid-state drive.
+* `ghw.Disk.StorageController` is the type of storage controller. It is of type
+  `ghw.StorageController` which has a `ghw.StorageController.String()` method
+  that can be called to return a string representation of the bus. This string
+  will be `SCSI`, `IDE`, `virtio`, `MMC`, or `NVMe`
+* `ghw.Disk.BusPath` (Linux, Darwin only) is the filepath to the bus used by
+  the disk.
+* `ghw.Disk.NUMANodeID` (Linux only) is the numeric index of the NUMA node this
+  disk is local to, or -1 if the host system is not a NUMA system or is not
+  Linux.
+* `ghw.Disk.Vendor` contains a string with the name of the hardware vendor for
+  the disk
+* `ghw.Disk.Model` contains a string with the vendor-assigned disk model name
+* `ghw.Disk.SerialNumber` contains a string with the disk's serial number
+* `ghw.Disk.WWN` contains a string with the disk's
+  [World Wide Name](https://en.wikipedia.org/wiki/World_Wide_Name)
+* `ghw.Disk.Partitions` contains an array of pointers to `ghw.Partition`
+  structs, one for each partition on the disk
+
+Each `ghw.Partition` struct contains these fields:
+
+* `ghw.Partition.Name` contains a string with the short name of the partition,
+  e.g. `sda1`
+* `ghw.Partition.Label` contains the label for the partition itself. On Linux
+  systems, this is derived from the `ID_PART_ENTRY_NAME` [udev][udev] entry for
+  the partition.
+* `ghw.Partition.FilesystemLabel` contains the label for the filesystem housed
+  on the partition. On Linux systems, this is derived from the `ID_FS_NAME`
+  [udev][udev] entry for the partition.
+* `ghw.Partition.SizeBytes` contains the amount of storage the partition
+  provides
+* `ghw.Partition.MountPoint` contains a string with the partition's mount
+  point, or `""` if no mount point was discovered
+* `ghw.Partition.Type` contains a string indicated the filesystem type for the
+  partition, or `""` if the system could not determine the type
+* `ghw.Partition.IsReadOnly` is a bool indicating the partition is read-only
+* `ghw.Partition.Disk` is a pointer to the `ghw.Disk` object associated with
+  the partition.
+* `ghw.Partition.UUID` is a string containing the partition UUID on Linux and MacOS,
+  and the `VolumeSerialNumber` on Windows (e.g. "A8C3D032"). On Linux systems, this is
+  derived from the `ID_PART_ENTRY_UUID` [udev][udev] entry for the partition.
+
+[udev]: https://en.wikipedia.org/wiki/Udev
+
+```go
+package main
+
+import (
+	"fmt"
+
+	"github.com/jaypipes/ghw"
+)
+
+func main() {
+	block, err := ghw.Block()
+	if err != nil {
+		fmt.Printf("Error getting block storage info: %v", err)
+	}
+
+	fmt.Printf("%v\n", block)
+
+	for _, disk := range block.Disks {
+		fmt.Printf(" %v\n", disk)
+		for _, part := range disk.Partitions {
+			fmt.Printf("  %v\n", part)
+		}
+	}
+}
+```
+
+Example output from my personal workstation:
+
+```
+block storage (1 disk, 2TB physical storage)
+ sda HDD (2TB) SCSI [@pci-0000:04:00.0-scsi-0:1:0:0 (node #0)] vendor=LSI model=Logical_Volume serial=600508e000000000f8253aac9a1abd0c WWN=0x600508e000000000f8253aac9a1abd0c
+  /dev/sda1 (100MB)
+  /dev/sda2 (187GB)
+  /dev/sda3 (449MB)
+  /dev/sda4 (1KB)
+  /dev/sda5 (15GB)
+  /dev/sda6 (2TB) [ext4] mounted@/
+```
+
+> **NOTE**: `ghw` looks in the udev runtime database for some information. If
+> you are using `ghw` in a container, remember to bind mount `/dev/disk` and
+> `/run` into your container, otherwise `ghw` won't be able to query the udev
+> DB or sysfs paths for information.
+
+### Topology
+
+> **NOTE**: Topology support is currently Linux-only. Windows support is
+> [planned](https://github.com/jaypipes/ghw/issues/166).
+
+The `ghw.Topology()` function returns a `ghw.TopologyInfo` struct that contains
+information about the host computer's architecture (NUMA vs. SMP), the host's
+NUMA node layout and processor-specific memory caches.
+
+The `ghw.TopologyInfo` struct contains two fields:
+
+* `ghw.TopologyInfo.Architecture` contains an enum with the value `ghw.NUMA` or
+  `ghw.SMP` depending on what the topology of the system is
+* `ghw.TopologyInfo.Nodes` is an array of pointers to `ghw.TopologyNode`
+  structs, one for each topology node (typically physical processor package)
+  found by the system
+
+Each `ghw.TopologyNode` struct contains the following fields:
+
+* `ghw.TopologyNode.ID` is the system's `uint32` identifier for the node
+* `ghw.TopologyNode.Memory` is a `ghw.MemoryArea` struct describing the memory
+  attached to this node.
+* `ghw.TopologyNode.Cores` is an array of pointers to `ghw.ProcessorCore` structs that
+  are contained in this node
+* `ghw.TopologyNode.Caches` is an array of pointers to `ghw.MemoryCache` structs that
+  represent the low-level caches associated with processors and cores on the
+  system
+* `ghw.TopologyNode.Distance` is an array of distances between NUMA nodes as reported
+  by the system.
+
+`ghw.MemoryArea` describes a collection of *physical* RAM on the host.
+
+In the simplest and most common case, all system memory fits in a single memory
+area. In more complex host systems, like [NUMA systems][numa], many memory
+areas may be present in the host system (e.g. one for each NUMA cell).
+
+[numa]: https://en.wikipedia.org/wiki/Non-uniform_memory_access
+
+The `ghw.MemoryArea` struct contains the following fields:
+
+* `ghw.MemoryArea.TotalPhysicalBytes` contains the amount of physical memory
+  associated with this memory area.
+* `ghw.MemoryArea.TotalUsableBytes` contains the amount of memory of this
+  memory area the system can actually use. Usable memory accounts for things
+  like the kernel's resident memory size and some reserved system bits. Please
+  note this value is **NOT** the amount of memory currently in use by processes
+  in the system. See [the discussion][#physical-versus-usage-memory] about
+  the difference.
+
+See above in the [CPU](#cpu) section for information about the
+`ghw.ProcessorCore` struct and how to use and query it.
+
+Each `ghw.MemoryCache` struct contains the following fields:
+
+* `ghw.MemoryCache.Type` is an enum that contains one of `ghw.DATA`,
+  `ghw.INSTRUCTION` or `ghw.UNIFIED` depending on whether the cache stores CPU
+  instructions, program data, or both
+* `ghw.MemoryCache.Level` is a positive integer indicating how close the cache
+  is to the processor. The lower the number, the closer the cache is to the
+  processor and the faster the processor can access its contents
+* `ghw.MemoryCache.SizeBytes` is an integer containing the number of bytes the
+  cache can contain
+* `ghw.MemoryCache.LogicalProcessors` is an array of integers representing the
+  logical processors that use the cache
+
+```go
+package main
+
+import (
+	"fmt"
+
+	"github.com/jaypipes/ghw"
+)
+
+func main() {
+	topology, err := ghw.Topology()
+	if err != nil {
+		fmt.Printf("Error getting topology info: %v", err)
+	}
+
+	fmt.Printf("%v\n", topology)
+
+	for _, node := range topology.Nodes {
+		fmt.Printf(" %v\n", node)
+		for _, cache := range node.Caches {
+			fmt.Printf("  %v\n", cache)
+		}
+	}
+}
+```
+
+Example output from my personal workstation:
+
+```
+topology SMP (1 nodes)
+ node #0 (6 cores)
+  L1i cache (32 KB) shared with logical processors: 3,9
+  L1i cache (32 KB) shared with logical processors: 2,8
+  L1i cache (32 KB) shared with logical processors: 11,5
+  L1i cache (32 KB) shared with logical processors: 10,4
+  L1i cache (32 KB) shared with logical processors: 0,6
+  L1i cache (32 KB) shared with logical processors: 1,7
+  L1d cache (32 KB) shared with logical processors: 11,5
+  L1d cache (32 KB) shared with logical processors: 10,4
+  L1d cache (32 KB) shared with logical processors: 3,9
+  L1d cache (32 KB) shared with logical processors: 1,7
+  L1d cache (32 KB) shared with logical processors: 0,6
+  L1d cache (32 KB) shared with logical processors: 2,8
+  L2 cache (256 KB) shared with logical processors: 2,8
+  L2 cache (256 KB) shared with logical processors: 3,9
+  L2 cache (256 KB) shared with logical processors: 0,6
+  L2 cache (256 KB) shared with logical processors: 10,4
+  L2 cache (256 KB) shared with logical processors: 1,7
+  L2 cache (256 KB) shared with logical processors: 11,5
+  L3 cache (12288 KB) shared with logical processors: 0,1,10,11,2,3,4,5,6,7,8,9
+```
+
+### Network
+
+The `ghw.Network()` function returns a `ghw.NetworkInfo` struct that contains
+information about the host computer's networking hardware.
+
+The `ghw.NetworkInfo` struct contains one field:
+
+* `ghw.NetworkInfo.NICs` is an array of pointers to `ghw.NIC` structs, one
+  for each network interface controller found for the system
+
+Each `ghw.NIC` struct contains the following fields:
+
+* `ghw.NIC.Name` is the system's identifier for the NIC
+* `ghw.NIC.MACAddress` is the Media Access Control (MAC) address for the NIC,
+  if any
+* `ghw.NIC.IsVirtual` is a boolean indicating if the NIC is a virtualized
+  device
+* `ghw.NIC.Capabilities` (Linux only) is an array of pointers to
+  `ghw.NICCapability` structs that can describe the things the NIC supports.
+  These capabilities match the returned values from the `ethtool -k <DEVICE>`
+  call on Linux as well as the AutoNegotiation and PauseFrameUse capabilities
+  from `ethtool`.
+* `ghw.NIC.PCIAddress` (Linux only) is the PCI device address of the device
+  backing the NIC.  this is not-nil only if the backing device is indeed a PCI
+  device; more backing devices (e.g. USB) will be added in future versions.
+* `ghw.NIC.Speed` (Linux only) is a string showing the current link speed.  On
+  Linux, this field will be present even if `ethtool` is not available.
+* `ghw.NIC.Duplex` (Linux only) is a string showing the current link duplex. On
+  Linux, this field will be present even if `ethtool` is not available.
+* `ghw.NIC.SupportedLinkModes` (Linux only) is a string slice containing a list
+  of supported link modes, e.g. "10baseT/Half", "1000baseT/Full".
+* `ghw.NIC.SupportedPorts` (Linux only) is a string slice containing the list
+  of supported port types, e.g. "MII", "TP", "FIBRE", "Twisted Pair".
+* `ghw.NIC.SupportedFECModes` (Linux only) is a string slice containing a list
+  of supported Forward Error Correction (FEC) Modes.
+* `ghw.NIC.AdvertisedLinkModes` (Linux only) is a string slice containing the
+  link modes being advertised during auto negotiation.
+* `ghw.NIC.AdvertisedFECModes` (Linux only) is a string slice containing the
+  Forward Error Correction (FEC) modes advertised during auto negotiation.
+
+The `ghw.NICCapability` struct contains the following fields:
+
+* `ghw.NICCapability.Name` is the string name of the capability (e.g.
+  "tcp-segmentation-offload")
+* `ghw.NICCapability.IsEnabled` is a boolean indicating whether the capability
+  is currently enabled/active on the NIC
+* `ghw.NICCapability.CanEnable` is a boolean indicating whether the capability
+  may be enabled
+
+```go
+package main
+
+import (
+    "fmt"
+
+    "github.com/jaypipes/ghw"
+)
+
+func main() {
+    net, err := ghw.Network()
+    if err != nil {
+        fmt.Printf("Error getting network info: %v", err)
+    }
+
+    fmt.Printf("%v\n", net)
+
+    for _, nic := range net.NICs {
+        fmt.Printf(" %v\n", nic)
+
+        enabledCaps := make([]int, 0)
+        for x, cap := range nic.Capabilities {
+            if cap.IsEnabled {
+                enabledCaps = append(enabledCaps, x)
+            }
+        }
+        if len(enabledCaps) > 0 {
+            fmt.Printf("  enabled capabilities:\n")
+            for _, x := range enabledCaps {
+                fmt.Printf("   - %s\n", nic.Capabilities[x].Name)
+            }
+        }
+    }
+}
+```
+
+Example output from my personal laptop:
+
+```
+net (3 NICs)
+ docker0
+  enabled capabilities:
+   - tx-checksumming
+   - tx-checksum-ip-generic
+   - scatter-gather
+   - tx-scatter-gather
+   - tx-scatter-gather-fraglist
+   - tcp-segmentation-offload
+   - tx-tcp-segmentation
+   - tx-tcp-ecn-segmentation
+   - tx-tcp-mangleid-segmentation
+   - tx-tcp6-segmentation
+   - udp-fragmentation-offload
+   - generic-segmentation-offload
+   - generic-receive-offload
+   - tx-vlan-offload
+   - highdma
+   - tx-lockless
+   - netns-local
+   - tx-gso-robust
+   - tx-fcoe-segmentation
+   - tx-gre-segmentation
+   - tx-gre-csum-segmentation
+   - tx-ipxip4-segmentation
+   - tx-ipxip6-segmentation
+   - tx-udp_tnl-segmentation
+   - tx-udp_tnl-csum-segmentation
+   - tx-gso-partial
+   - tx-sctp-segmentation
+   - tx-esp-segmentation
+   - tx-vlan-stag-hw-insert
+ enp58s0f1
+  enabled capabilities:
+   - rx-checksumming
+   - generic-receive-offload
+   - rx-vlan-offload
+   - tx-vlan-offload
+   - highdma
+   - auto-negotiation
+ wlp59s0
+  enabled capabilities:
+   - scatter-gather
+   - tx-scatter-gather
+   - generic-segmentation-offload
+   - generic-receive-offload
+   - highdma
+   - netns-local
+```
+
+### PCI
+
+`ghw` contains a PCI database inspection and querying facility that allows
+developers to not only gather information about devices on a local PCI bus but
+also query for information about hardware device classes, vendor and product
+information.
+
+> **NOTE**: Parsing of the PCI-IDS file database is provided by the separate
+> [github.com/jaypipes/pcidb library](http://github.com/jaypipes/pcidb). You
+> can read that library's README for more information about the various structs
+> that are exposed on the `ghw.PCIInfo` struct.
+
+The `ghw.PCI()` function returns a `ghw.PCIInfo` struct that contains
+information about the host computer's PCI devices.
+
+The `ghw.PCIInfo` struct contains one field:
+
+* `ghw.PCIInfo.Devices` is a slice of pointers to `ghw.PCIDevice` structs that
+  describe the PCI devices on the host system
+
+> **NOTE**: PCI products are often referred to by their "device ID". We use the
+> term "product ID" in `ghw` because it more accurately reflects what the
+> identifier is for: a specific product line produced by the vendor.
+
+The `ghw.PCIDevice` struct has the following fields:
+
+* `ghw.PCIDevice.Vendor` is a pointer to a `pcidb.Vendor` struct that
+  describes the device's primary vendor. This will always be non-nil.
+* `ghw.PCIDevice.Product` is a pointer to a `pcidb.Product` struct that
+  describes the device's primary product. This will always be non-nil.
+* `ghw.PCIDevice.Subsystem` is a pointer to a `pcidb.Product` struct that
+  describes the device's secondary/sub-product. This will always be non-nil.
+* `ghw.PCIDevice.Class` is a pointer to a `pcidb.Class` struct that
+  describes the device's class. This will always be non-nil.
+* `ghw.PCIDevice.Subclass` is a pointer to a `pcidb.Subclass` struct
+  that describes the device's subclass. This will always be non-nil.
+* `ghw.PCIDevice.ProgrammingInterface` is a pointer to a
+  `pcidb.ProgrammingInterface` struct that describes the device subclass'
+  programming interface. This will always be non-nil.
+* `ghw.PCIDevice.Driver` is a string representing the device driver the
+  system is using to handle this device. Can be empty string if this
+  information is not available. If the information is not available, this does
+  not mean the device is not functioning, but rather that `ghw` was not able to
+  retrieve driver information.
+
+The `ghw.PCIAddress` (which is an alias for the `ghw.pci.address.Address`
+struct) contains the PCI address fields. It has a `ghw.PCIAddress.String()`
+method that returns the canonical Domain:Bus:Device.Function ([D]BDF)
+representation of this Address.
+
+The `ghw.PCIAddress` struct has the following fields:
+
+* `ghw.PCIAddress.Domain` is a string representing the PCI domain component of
+  the address.
+* `ghw.PCIAddress.Bus` is a string representing the PCI bus component of
+  the address.
+* `ghw.PCIAddress.Device` is a string representing the PCI device component of
+  the address.
+* `ghw.PCIAddress.Function` is a string representing the PCI function component of
+  the address.
+
+> **NOTE**: Older versions (pre-`v0.9.0`) erroneously referred to the `Device`
+> field as the `Slot` field. As noted by [@pearsonk](https://github.com/pearsonk)
+> in [#220](https://github.com/jaypipes/ghw/issues/220), this was a misnomer.
+
+The following code snippet shows how to list the PCI devices on the host system
+and output a simple list of PCI address and vendor/product information:
+
+```go
+package main
+
+import (
+	"fmt"
+
+	"github.com/jaypipes/ghw"
+)
+
+func main() {
+	pci, err := ghw.PCI()
+	if err != nil {
+		fmt.Printf("Error getting PCI info: %v", err)
+	}
+	fmt.Printf("host PCI devices:\n")
+	fmt.Println("====================================================")
+
+	for _, device := range pci.Devices {
+		vendor := device.Vendor
+		vendorName := vendor.Name
+		if len(vendor.Name) > 20 {
+			vendorName = string([]byte(vendorName)[0:17]) + "..."
+		}
+		product := device.Product
+		productName := product.Name
+		if len(product.Name) > 40 {
+			productName = string([]byte(productName)[0:37]) + "..."
+		}
+		fmt.Printf("%-12s\t%-20s\t%-40s\n", device.Address, vendorName, productName)
+	}
+}
+```
+
+on my local workstation the output of the above looks like the following:
+
+```
+host PCI devices:
+====================================================
+0000:00:00.0	Intel Corporation   	5520/5500/X58 I/O Hub to ESI Port
+0000:00:01.0	Intel Corporation   	5520/5500/X58 I/O Hub PCI Express Roo...
+0000:00:02.0	Intel Corporation   	5520/5500/X58 I/O Hub PCI Express Roo...
+0000:00:03.0	Intel Corporation   	5520/5500/X58 I/O Hub PCI Express Roo...
+0000:00:07.0	Intel Corporation   	5520/5500/X58 I/O Hub PCI Express Roo...
+0000:00:10.0	Intel Corporation   	7500/5520/5500/X58 Physical and Link ...
+0000:00:10.1	Intel Corporation   	7500/5520/5500/X58 Routing and Protoc...
+0000:00:14.0	Intel Corporation   	7500/5520/5500/X58 I/O Hub System Man...
+0000:00:14.1	Intel Corporation   	7500/5520/5500/X58 I/O Hub GPIO and S...
+0000:00:14.2	Intel Corporation   	7500/5520/5500/X58 I/O Hub Control St...
+0000:00:14.3	Intel Corporation   	7500/5520/5500/X58 I/O Hub Throttle R...
+0000:00:19.0	Intel Corporation   	82567LF-2 Gigabit Network Connection
+0000:00:1a.0	Intel Corporation   	82801JI (ICH10 Family) USB UHCI Contr...
+0000:00:1a.1	Intel Corporation   	82801JI (ICH10 Family) USB UHCI Contr...
+0000:00:1a.2	Intel Corporation   	82801JI (ICH10 Family) USB UHCI Contr...
+0000:00:1a.7	Intel Corporation   	82801JI (ICH10 Family) USB2 EHCI Cont...
+0000:00:1b.0	Intel Corporation   	82801JI (ICH10 Family) HD Audio Contr...
+0000:00:1c.0	Intel Corporation   	82801JI (ICH10 Family) PCI Express Ro...
+0000:00:1c.1	Intel Corporation   	82801JI (ICH10 Family) PCI Express Po...
+0000:00:1c.4	Intel Corporation   	82801JI (ICH10 Family) PCI Express Ro...
+0000:00:1d.0	Intel Corporation   	82801JI (ICH10 Family) USB UHCI Contr...
+0000:00:1d.1	Intel Corporation   	82801JI (ICH10 Family) USB UHCI Contr...
+0000:00:1d.2	Intel Corporation   	82801JI (ICH10 Family) USB UHCI Contr...
+0000:00:1d.7	Intel Corporation   	82801JI (ICH10 Family) USB2 EHCI Cont...
+0000:00:1e.0	Intel Corporation   	82801 PCI Bridge
+0000:00:1f.0	Intel Corporation   	82801JIR (ICH10R) LPC Interface Contr...
+0000:00:1f.2	Intel Corporation   	82801JI (ICH10 Family) SATA AHCI Cont...
+0000:00:1f.3	Intel Corporation   	82801JI (ICH10 Family) SMBus Controller
+0000:01:00.0	NEC Corporation     	uPD720200 USB 3.0 Host Controller
+0000:02:00.0	Marvell Technolog...	88SE9123 PCIe SATA 6.0 Gb/s controller
+0000:02:00.1	Marvell Technolog...	88SE912x IDE Controller
+0000:03:00.0	NVIDIA Corporation  	GP107 [GeForce GTX 1050 Ti]
+0000:03:00.1	NVIDIA Corporation  	UNKNOWN
+0000:04:00.0	LSI Logic / Symbi...	SAS2004 PCI-Express Fusion-MPT SAS-2 ...
+0000:06:00.0	Qualcomm Atheros    	AR5418 Wireless Network Adapter [AR50...
+0000:08:03.0	LSI Corporation     	FW322/323 [TrueFire] 1394a Controller
+0000:3f:00.0	Intel Corporation   	UNKNOWN
+0000:3f:00.1	Intel Corporation   	Xeon 5600 Series QuickPath Architectu...
+0000:3f:02.0	Intel Corporation   	Xeon 5600 Series QPI Link 0
+0000:3f:02.1	Intel Corporation   	Xeon 5600 Series QPI Physical 0
+0000:3f:02.2	Intel Corporation   	Xeon 5600 Series Mirror Port Link 0
+0000:3f:02.3	Intel Corporation   	Xeon 5600 Series Mirror Port Link 1
+0000:3f:03.0	Intel Corporation   	Xeon 5600 Series Integrated Memory Co...
+0000:3f:03.1	Intel Corporation   	Xeon 5600 Series Integrated Memory Co...
+0000:3f:03.4	Intel Corporation   	Xeon 5600 Series Integrated Memory Co...
+0000:3f:04.0	Intel Corporation   	Xeon 5600 Series Integrated Memory Co...
+0000:3f:04.1	Intel Corporation   	Xeon 5600 Series Integrated Memory Co...
+0000:3f:04.2	Intel Corporation   	Xeon 5600 Series Integrated Memory Co...
+0000:3f:04.3	Intel Corporation   	Xeon 5600 Series Integrated Memory Co...
+0000:3f:05.0	Intel Corporation   	Xeon 5600 Series Integrated Memory Co...
+0000:3f:05.1	Intel Corporation   	Xeon 5600 Series Integrated Memory Co...
+0000:3f:05.2	Intel Corporation   	Xeon 5600 Series Integrated Memory Co...
+0000:3f:05.3	Intel Corporation   	Xeon 5600 Series Integrated Memory Co...
+0000:3f:06.0	Intel Corporation   	Xeon 5600 Series Integrated Memory Co...
+0000:3f:06.1	Intel Corporation   	Xeon 5600 Series Integrated Memory Co...
+0000:3f:06.2	Intel Corporation   	Xeon 5600 Series Integrated Memory Co...
+0000:3f:06.3	Intel Corporation   	Xeon 5600 Series Integrated Memory Co...
+```
+
+#### Finding a PCI device by PCI address
+
+In addition to the above information, the `ghw.PCIInfo` struct has the
+following method:
+
+* `ghw.PCIInfo.GetDevice(address string)`
+
+The following code snippet shows how to call the `ghw.PCIInfo.GetDevice()`
+method and use its returned `ghw.PCIDevice` struct pointer:
+
+```go
+package main
+
+import (
+	"fmt"
+	"os"
+
+	"github.com/jaypipes/ghw"
+)
+
+func main() {
+	pci, err := ghw.PCI()
+	if err != nil {
+		fmt.Printf("Error getting PCI info: %v", err)
+	}
+
+	addr := "0000:00:00.0"
+	if len(os.Args) == 2 {
+		addr = os.Args[1]
+	}
+	fmt.Printf("PCI device information for %s\n", addr)
+	fmt.Println("====================================================")
+	deviceInfo := pci.GetDevice(addr)
+	if deviceInfo == nil {
+		fmt.Printf("could not retrieve PCI device information for %s\n", addr)
+		return
+	}
+
+	vendor := deviceInfo.Vendor
+	fmt.Printf("Vendor: %s [%s]\n", vendor.Name, vendor.ID)
+	product := deviceInfo.Product
+	fmt.Printf("Product: %s [%s]\n", product.Name, product.ID)
+	subsystem := deviceInfo.Subsystem
+	subvendor := pci.Vendors[subsystem.VendorID]
+	subvendorName := "UNKNOWN"
+	if subvendor != nil {
+		subvendorName = subvendor.Name
+	}
+	fmt.Printf("Subsystem: %s [%s] (Subvendor: %s)\n", subsystem.Name, subsystem.ID, subvendorName)
+	class := deviceInfo.Class
+	fmt.Printf("Class: %s [%s]\n", class.Name, class.ID)
+	subclass := deviceInfo.Subclass
+	fmt.Printf("Subclass: %s [%s]\n", subclass.Name, subclass.ID)
+	progIface := deviceInfo.ProgrammingInterface
+	fmt.Printf("Programming Interface: %s [%s]\n", progIface.Name, progIface.ID)
+}
+```
+
+Here's a sample output from my local workstation:
+
+```
+PCI device information for 0000:03:00.0
+====================================================
+Vendor: NVIDIA Corporation [10de]
+Product: GP107 [GeForce GTX 1050 Ti] [1c82]
+Subsystem: UNKNOWN [8613] (Subvendor: ASUSTeK Computer Inc.)
+Class: Display controller [03]
+Subclass: VGA compatible controller [00]
+Programming Interface: VGA controller [00]
+```
+
+### GPU
+
+The `ghw.GPU()` function returns a `ghw.GPUInfo` struct that contains
+information about the host computer's graphics hardware.
+
+The `ghw.GPUInfo` struct contains one field:
+
+* `ghw.GPUInfo.GraphicCards` is an array of pointers to `ghw.GraphicsCard`
+  structs, one for each graphics card found for the system
+
+Each `ghw.GraphicsCard` struct contains the following fields:
+
+* `ghw.GraphicsCard.Index` is the system's numeric zero-based index for the
+  card on the bus
+* `ghw.GraphicsCard.Address` is the PCI address for the graphics card
+* `ghw.GraphicsCard.DeviceInfo` is a pointer to a `ghw.PCIDevice` struct
+  describing the graphics card. This may be `nil` if no PCI device information
+  could be determined for the card.
+* `ghw.GraphicsCard.Node` is an pointer to a `ghw.TopologyNode` struct that the
+  GPU/graphics card is affined to. On non-NUMA systems, this will always be
+  `nil`.
+
+```go
+package main
+
+import (
+	"fmt"
+
+	"github.com/jaypipes/ghw"
+)
+
+func main() {
+	gpu, err := ghw.GPU()
+	if err != nil {
+		fmt.Printf("Error getting GPU info: %v", err)
+	}
+
+	fmt.Printf("%v\n", gpu)
+
+	for _, card := range gpu.GraphicsCards {
+		fmt.Printf(" %v\n", card)
+	}
+}
+```
+
+Example output from my personal workstation:
+
+```
+gpu (1 graphics card)
+ card #0 @0000:03:00.0 -> class: 'Display controller' vendor: 'NVIDIA Corporation' product: 'GP107 [GeForce GTX 1050 Ti]'
+```
+
+**NOTE**: You can [read more](#pci) about the fields of the `ghw.PCIDevice`
+struct if you'd like to dig deeper into PCI subsystem and programming interface
+information
+
+**NOTE**: You can [read more](#topology) about the fields of the
+`ghw.TopologyNode` struct if you'd like to dig deeper into the NUMA/topology
+subsystem
+
+### Accelerator
+
+The `ghw.Accelerator()` function returns a `ghw.AcceleratorInfo` struct that contains
+information about the host computer's processing accelerator hardware. In this category
+we can find used hardware for AI. The hardware detected in this category will be
+processing accelerators (PCI class `1200`), 3D controllers (`0302`) and Display
+controllers (`0380`).
+
+The `ghw.AcceleratorInfo` struct contains one field:
+
+* `ghw.AcceleratorInfo.Devices` is an array of pointers to `ghw.AcceleratorDevice`
+  structs, one for each processing accelerator card found for the system.
+
+Each `ghw.AcceleratorDevice` struct contains the following fields:
+
+* `ghw.AcceleratorDevice.Address` is the PCI address for the processing accelerator card.
+* `ghw.AcceleratorDevice.PCIDevice` is a pointer to a `ghw.PCIDevice` struct.
+  describing the processing accelerator card. This may be `nil` if no PCI device
+  information could be determined for the card.
+
+```go
+package main
+
+import (
+	"fmt"
+
+	"github.com/jaypipes/ghw"
+)
+
+func main() {
+	accel, err := ghw.Accelerator()
+	if err != nil {
+		fmt.Printf("Error getting processing accelerator info: %v", err)
+	}
+
+	fmt.Printf("%v\n", accel)
+
+	for _, card := range accel.Devices {
+		fmt.Printf(" %v\n", device)
+	}
+}
+```
+
+Example output from a testing machine:
+
+```
+processing accelerators (1 device)
+ device @0000:00:04.0 -> driver: 'fake_pci_driver' class: 'Processing accelerators' vendor: 'Red Hat, Inc.' product: 'QEMU PCI Test Device'
+```
+
+**NOTE**: You can [read more](#pci) about the fields of the `ghw.PCIDevice`
+struct if you'd like to dig deeper into PCI subsystem and programming interface
+information
+
+### Chassis
+
+The `ghw.Chassis()` function returns a `ghw.ChassisInfo` struct that contains
+information about the host computer's hardware chassis.
+
+The `ghw.ChassisInfo` struct contains multiple fields:
+
+* `ghw.ChassisInfo.AssetTag` is a string with the chassis asset tag
+* `ghw.ChassisInfo.SerialNumber` is a string with the chassis serial number
+* `ghw.ChassisInfo.Type` is a string with the chassis type *code*
+* `ghw.ChassisInfo.TypeDescription` is a string with a description of the
+  chassis type
+* `ghw.ChassisInfo.Vendor` is a string with the chassis vendor
+* `ghw.ChassisInfo.Version` is a string with the chassis version
+
+> **NOTE**: These fields are often missing for non-server hardware. Don't be
+> surprised to see empty string or "None" values.
+
+```go
+package main
+
+import (
+	"fmt"
+
+	"github.com/jaypipes/ghw"
+)
+
+func main() {
+	chassis, err := ghw.Chassis()
+	if err != nil {
+		fmt.Printf("Error getting chassis info: %v", err)
+	}
+
+	fmt.Printf("%v\n", chassis)
+}
+```
+
+Example output from my personal workstation:
+
+```
+chassis type=Desktop vendor=System76 version=thelio-r1
+```
+
+> **NOTE**: Some of the values such as serial numbers are shown as unknown
+> because the Linux kernel by default disallows access to those fields if
+> you're not running as root. They will be populated if it runs as root or
+> otherwise you may see warnings like the following:
+
+```
+WARNING: Unable to read chassis_serial: open /sys/class/dmi/id/chassis_serial: permission denied
+```
+
+You can ignore them or use the [Disabling warning messages](#disabling-warning-messages)
+feature to quiet things down.
+
+### BIOS
+
+The `ghw.BIOS()` function returns a `ghw.BIOSInfo` struct that contains
+information about the host computer's basis input/output system (BIOS).
+
+The `ghw.BIOSInfo` struct contains multiple fields:
+
+* `ghw.BIOSInfo.Vendor` is a string with the BIOS vendor
+* `ghw.BIOSInfo.Version` is a string with the BIOS version
+* `ghw.BIOSInfo.Date` is a string with the date the BIOS was flashed/created
+
+```go
+package main
+
+import (
+	"fmt"
+
+	"github.com/jaypipes/ghw"
+)
+
+func main() {
+	bios, err := ghw.BIOS()
+	if err != nil {
+		fmt.Printf("Error getting BIOS info: %v", err)
+	}
+
+	fmt.Printf("%v\n", bios)
+}
+```
+
+Example output from my personal workstation:
+
+```
+bios vendor=System76 version=F2 Z5 date=11/14/2018
+```
+
+### Baseboard
+
+The `ghw.Baseboard()` function returns a `ghw.BaseboardInfo` struct that
+contains information about the host computer's hardware baseboard.
+
+The `ghw.BaseboardInfo` struct contains multiple fields:
+
+* `ghw.BaseboardInfo.AssetTag` is a string with the baseboard asset tag
+* `ghw.BaseboardInfo.SerialNumber` is a string with the baseboard serial number
+* `ghw.BaseboardInfo.Vendor` is a string with the baseboard vendor
+* `ghw.BaseboardInfo.Product` is a string with the baseboard name on Linux and
+  Product on Windows
+* `ghw.BaseboardInfo.Version` is a string with the baseboard version
+
+> **NOTE**: These fields are often missing for non-server hardware. Don't be
+> surprised to see empty string or "None" values.
+
+```go
+package main
+
+import (
+	"fmt"
+
+	"github.com/jaypipes/ghw"
+)
+
+func main() {
+	baseboard, err := ghw.Baseboard()
+	if err != nil {
+		fmt.Printf("Error getting baseboard info: %v", err)
+	}
+
+	fmt.Printf("%v\n", baseboard)
+}
+```
+
+Example output from my personal workstation:
+
+```
+baseboard vendor=System76 version=thelio-r1
+```
+
+> **NOTE**: Some of the values such as serial numbers are shown as unknown
+> because the Linux kernel by default disallows access to those fields if
+> you're not running as root. They will be populated if it runs as root or
+> otherwise you may see warnings like the following:
+
+```
+WARNING: Unable to read board_serial: open /sys/class/dmi/id/board_serial: permission denied
+```
+
+You can ignore them or use the [Disabling warning messages](#disabling-warning-messages)
+feature to quiet things down.
+
+### Product
+
+The `ghw.Product()` function returns a `ghw.ProductInfo` struct that
+contains information about the host computer's hardware product line.
+
+The `ghw.ProductInfo` struct contains multiple fields:
+
+* `ghw.ProductInfo.Family` is a string describing the product family
+* `ghw.ProductInfo.Name` is a string with the product name
+* `ghw.ProductInfo.SerialNumber` is a string with the product serial number
+* `ghw.ProductInfo.UUID` is a string with the product UUID
+* `ghw.ProductInfo.SKU` is a string with the product stock unit identifier
+  (SKU)
+* `ghw.ProductInfo.Vendor` is a string with the product vendor
+* `ghw.ProductInfo.Version` is a string with the product version
+
+> **NOTE**: These fields are often missing for non-server hardware. Don't be
+> surprised to see empty string, "Default string" or "None" values.
+
+```go
+package main
+
+import (
+	"fmt"
+
+	"github.com/jaypipes/ghw"
+)
+
+func main() {
+	product, err := ghw.Product()
+	if err != nil {
+		fmt.Printf("Error getting product info: %v", err)
+	}
+
+	fmt.Printf("%v\n", product)
+}
+```
+
+Example output from my personal workstation:
+
+```
+product family=Default string name=Thelio vendor=System76 sku=Default string version=thelio-r1
+```
+
+> **NOTE**: Some of the values such as serial numbers are shown as unknown
+> because the Linux kernel by default disallows access to those fields if
+> you're not running as root.  They will be populated if it runs as root or
+> otherwise you may see warnings like the following:
+
+```
+WARNING: Unable to read product_serial: open /sys/class/dmi/id/product_serial: permission denied
+```
+
+You can ignore them or use the [Disabling warning messages](#disabling-warning-messages)
+feature to quiet things down.
+
+## Advanced Usage
+
+### Disabling warning messages
+
+When `ghw` isn't able to retrieve some information, it may print certain
+warning messages to `stderr`. To disable these warnings, simply set the
+`GHW_DISABLE_WARNINGS` environs variable:
+
+```
+$ ghwc memory
+WARNING:
+Could not determine total physical bytes of memory. This may
+be due to the host being a virtual machine or container with no
+/var/log/syslog file, or the current user may not have necessary
+privileges to read the syslog. We are falling back to setting the
+total physical amount of memory to the total usable amount of memory
+memory (24GB physical, 24GB usable)
+```
+
+```
+$ GHW_DISABLE_WARNINGS=1 ghwc memory
+memory (24GB physical, 24GB usable)
+```
+
+You can disable warning programmatically using the `WithDisableWarnings` option:
+
+```go
+
+import (
+	"github.com/jaypipes/ghw"
+)
+
+mem, err := ghw.Memory(ghw.WithDisableWarnings())
+```
+
+`WithDisableWarnings` is a alias for the `WithNullAlerter` option, which in turn
+leverages the more general `Alerter` feature of ghw.
+
+You may supply a `Alerter` to ghw to redirect all the warnings there, like
+logger objects (see for example golang's stdlib `log.Logger`).
+`Alerter` is in fact the minimal logging interface `ghw needs.
+To learn more, please check the `option.Alerter` interface and the `ghw.WithAlerter()`
+function.
+
+### Overriding the root mountpoint `ghw` uses
+
+When `ghw` looks for information about the host system, it considers `/` as its
+root mountpoint. So, for example, when looking up CPU information on a Linux
+system, `ghw.CPU()` will use the path `/proc/cpuinfo`.
+
+If you are calling `ghw` from a system that has an alternate root mountpoint,
+you can either set the `GHW_CHROOT` environment variable to that alternate
+path, or call one of the functions like `ghw.CPU()` or `ghw.Memory()` with the
+`ghw.WithChroot()` modifier.
+
+For example, if you are executing from within an application container that has
+bind-mounted the root host filesystem to the mount point `/host`, you would set
+`GHW_CHROOT` to `/host` so that `ghw` can find `/proc/cpuinfo` at
+`/host/proc/cpuinfo`.
+
+Alternately, you can use the `ghw.WithChroot()` function like so:
+
+```go
+cpu, err := ghw.CPU(ghw.WithChroot("/host"))
+```
+
+### Serialization to JSON or YAML
+
+All of the `ghw` `XXXInfo` structs -- e.g. `ghw.CPUInfo` -- have two methods
+for producing a serialized JSON or YAML string representation of the contained
+information:
+
+* `JSONString()` returns a string containing the information serialized into
+  JSON. It accepts a single boolean parameter indicating whether to use
+  indentation when outputting the string
+* `YAMLString()` returns a string containing the information serialized into
+  YAML
+
+```go
+package main
+
+import (
+	"fmt"
+
+	"github.com/jaypipes/ghw"
+)
+
+func main() {
+	mem, err := ghw.Memory()
+	if err != nil {
+		fmt.Printf("Error getting memory info: %v", err)
+	}
+
+	fmt.Printf("%s", mem.YAMLString())
+}
+```
+
+the above example code prints the following out on my local workstation:
+
+```
+memory:
+  supported_page_sizes:
+  - 1073741824
+  - 2097152
+  total_physical_bytes: 25263415296
+  total_usable_bytes: 25263415296
+```
+
+### Overriding a specific mountpoint (Linux only)
+
+When running inside containers, it can be cumbersome to only override the root
+mountpoint. Inside containers, when granting access to the host file systems,
+it is common to bind-mount them to a non-standard location, like `/sys` on
+`/host-sys` or `/proc` to `/host-proc`.  It is rarer to mount them to a common
+subtree (e.g. `/sys` to `/host/sys` and `/proc` to `/host/proc`...)
+
+To better cover this use case, `ghw.WithPathOverrides()` can be used to supply
+a mapping of directories to mountpoints, like this example shows:
+
+```go
+cpu, err := ghw.CPU(ghw.WithPathOverrides(ghw.PathOverrides{
+	"/proc": "/host-proc",
+	"/sys": "/host-sys",
+}))
+```
+
+**NOTE**: This feature works in addition and is composable with the
+`ghw.WithChroot()` function and `GHW_CHROOT` environment variable.
+
+### Reading hardware information from a `ghw` snapshot (Linux only)
+
+The `ghwc snapshot` command creates a snapshot of a host's hardware information.
+
+Use the `ghwc -s` flag to supply a path to a snapshot to read with the `ghwc`
+command-line program.
+
+```
+$ ghwc -s testdata/snapshots/linux-amd64-amd-ryzen-1600.tar.gz
+block storage (8 disks, 3TB physical storage)
+ dm-0 SSD (90GB) Unknown [@unknown (node #0)] vendor=unknown
+ dm-1 Unknown (16GB) Unknown [@unknown (node #0)] vendor=unknown
+ dm-2 SSD (60GB) Unknown [@unknown (node #0)] vendor=unknown
+ dm-3 SSD (13GB) Unknown [@unknown (node #0)] vendor=unknown
+ dm-4 SSD (436GB) Unknown [@unknown (node #0)] vendor=unknown
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/jaypipes/ghw/README.md","mode":420,"size":53068,"sha256":"0c7216cc2759e027356d8e6c2dfbb88418cfcb00d5b70107899cd0cfa877f879","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":5068}
+ sda SSD (239GB) SCSI [@unknown (node #0)] vendor=unknown
+  sda1 (128MB) [unknown]
+  sda2 (384MB) [unknown]
+  sda3 (238GB) [unknown]
+ sdb HDD (932GB) SCSI [@unknown (node #0)] vendor=unknown
+  sdb1 (2GB) [unknown]
+  sdb2 (930GB) [unknown]
+ sdc SSD (466GB) SCSI [@unknown (node #0)] vendor=unknown
+  sdc1 (32GB) [unknown]
+  sdc2 (434GB) [unknown]
+cpu (1 physical package, 6 cores, 12 hardware threads)
+ physical package #0 (6 cores, 12 hardware threads)
+  processor core #0 (2 threads), logical processors [0 6]
+  processor core #1 (2 threads), logical processors [1 7]
+  processor core #5 (2 threads), logical processors [4 10]
+  processor core #6 (2 threads), logical processors [5 11]
+  processor core #2 (2 threads), logical processors [2 8]
+  processor core #4 (2 threads), logical processors [3 9]
+  capabilities: [msr pae mce cx8 apic sep
+                 mtrr pge mca cmov pat pse36
+                 clflush mmx fxsr sse sse2 ht
+                 syscall nx mmxext fxsr_opt pdpe1gb rdtscp
+                 lm constant_tsc art rep_good nopl nonstop_tsc
+                 extd_apicid aperfmperf eagerfpu pni pclmulqdq monitor
+                 ssse3 fma cx16 sse4_1 sse4_2 movbe
+                 popcnt aes xsave avx f16c rdrand
+                 lahf_lm cmp_legacy svm extapic cr8_legacy abm
+                 sse4a misalignsse 3dnowprefetch osvw skinit wdt
+                 tce topoext perfctr_core perfctr_nb bpext perfctr_l2
+                 hw_pstate sme retpoline_amd ssbd ibpb vmmcall
+                 fsgsbase bmi1 avx2 smep bmi2 rdseed
+                 adx smap clflushopt sha_ni xsaveopt xsavec
+                 xgetbv1 clzero irperf xsaveerptr arat npt
+                 lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid
+                 decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif
+                 overflow_recov succor smca]
+gpu (1 graphics card)
+ card #0 @0000:0a:00.0 -> driver: '' class: 'Display controller' vendor: 'Advanced Micro Devices, Inc. [AMD/ATI]' product: 'Turks XT [Radeon HD 6670/7670]'
+processing accelerators (0 devices)
+memory (32GB physical, 32GB usable)
+net (4 NICs)
+ enp3s0
+ enp6s0f0
+ enp6s0f1
+ enp8s0
+topology NUMA (0 nodes)
+chassis type=unknown vendor=unknown version=unknown
+bios vendor=unknown version=unknown
+baseboard vendor=unknown version=unknown product=unknown
+product family=unknown name=unknown vendor=unknown sku=unknown version=unknown
+PCI (43 devices)
+```
+
+### Creating snapshots
+
+You can create `ghw` snapshots using the `ghwc snapshot` command or
+programmatically using the `pkg/snapshot` package.
+
+Below is an example of creating a `ghw` snapshot using the `pkg/snapshot`
+package.
+
+```go
+
+import (
+	"fmt"
+	"os"
+
+	"github.com/jaypipes/ghw/pkg/snapshot"
+)
+
+// ...
+
+scratchDir, err := os.MkdirTemp("", "ghw-snapshot-*")
+if err != nil {
+	fmt.Printf("Error creating clone directory: %v", err)
+}
+defer os.RemoveAll(scratchDir)
+
+// this step clones all the files and directories ghw cares about
+if err := snapshot.CloneTreeInto(scratchDir); err != nil {
+	fmt.Printf("error cloning into %q: %v", scratchDir, err)
+}
+
+// optionally, you may add extra content into your snapshot.
+// ghw will ignore the extra content.
+// Glob patterns like `filepath.Glob` are supported.
+fileSpecs := []string{
+	"/proc/cmdline",
+}
+
+// options allows the client code to optionally deference symlinks, or copy
+// them into the cloned tree as symlinks
+var opts *snapshot.CopyFileOptions
+if err := snapshot.CopyFilesInto(fileSpecs, scratchDir, opts); err != nil {
+	fmt.Printf("error cloning extra files into %q: %v", scratchDir, err)
+}
+
+// automates the creation of the gzipped tarball out of the given tree.
+if err := snapshot.PackFrom("my-snapshot.tgz", scratchDir); err != nil {
+	fmt.Printf("error packing %q into %q: %v", scratchDir, *output, err)
+}
+```
+
+## Calling external programs
+
+By default `ghw` may call external programs, for example `ethtool`, to learn
+about hardware capabilities.  In some rare circumstances it may be useful to
+opt out from this behaviour and rely only on the data provided by
+pseudo-filesystems, like sysfs.
+
+The most common use case is when we want to read a snapshot from `ghw`. In
+these cases the information provided by tools will be inconsistent with the
+data from the snapshot - since they will be run on a different host than the
+host the snapshot was created for.
+
+To prevent `ghw` from calling external tools, set the `GHW_DISABLE_TOOLS`
+environment variable to any value, or, programmatically, use the
+`ghw.WithDisableTools()` function.  The default behaviour of ghw is to call
+external tools when available.
+
+> **WARNING**: on all platforms, disabling external tools make ghw return less
+> data.  Unless noted otherwise, there is _no fallback flow_ if external tools
+> are disabled. On MacOSX/Darwin, disabling external tools disables block
+> support entirely
+
+## Developers
+
+[Contributions](CONTRIBUTING.md) to `ghw` are welcomed! Fork the repo on GitHub
+and submit a pull request with your proposed changes. Or, feel free to log an
+issue for a feature request or bug report.
+
+@@END
 @@PORTABLE {"path":"third_party/wails/vendor/github.com/jaypipes/ghw/SECURITY.md","mode":420,"size":1246,"sha256":"9b3c82c38d640bd217c41b6fbea7162ff0a74c67c9653e5b701937623c44fe13","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1246}
 # Security Policy
 
@@ -78243,1242 +80660,4 @@ DESCENDER
 	{0x10781, 0x10782, prOLetter}, // Lm   [2] MODIFIER LETTER SUPERSCRIPT TRIANGULAR COLON..MODIFIER LETTER SUPERSCRIPT HALF TRIANGULAR COLON
 	{0x10783, 0x10785, prLower},   // Lm   [3] MODIFIER LETTER SMALL AE..MODIFIER LETTER SMALL B WITH HOOK
 	{0x10787, 0x107B0, prLower},   // Lm  [42] MODIFIER LETTER SMALL DZ DIGRAPH..MODIFIER LETT
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/rivo/uniseg/sentenceproperties.go","mode":420,"size":241800,"sha256":"272502600803b8e99721cb9d76002a6546ea2350056bf66bb7860c39a2032bd9","index":4,"count":6,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
-ER SMALL V WITH RIGHT HOOK
-	{0x107B2, 0x107BA, prLower},   // Lm   [9] MODIFIER LETTER SMALL CAPITAL Y..MODIFIER LETTER SMALL S WITH CURL
-	{0x10800, 0x10805, prOLetter}, // Lo   [6] CYPRIOT SYLLABLE A..CYPRIOT SYLLABLE JA
-	{0x10808, 0x10808, prOLetter}, // Lo       CYPRIOT SYLLABLE JO
-	{0x1080A, 0x10835, prOLetter}, // Lo  [44] CYPRIOT SYLLABLE KA..CYPRIOT SYLLABLE WO
-	{0x10837, 0x10838, prOLetter}, // Lo   [2] CYPRIOT SYLLABLE XA..CYPRIOT SYLLABLE XE
-	{0x1083C, 0x1083C, prOLetter}, // Lo       CYPRIOT SYLLABLE ZA
-	{0x1083F, 0x10855, prOLetter}, // Lo  [23] CYPRIOT SYLLABLE ZO..IMPERIAL ARAMAIC LETTER TAW
-	{0x10860, 0x10876, prOLetter}, // Lo  [23] PALMYRENE LETTER ALEPH..PALMYRENE LETTER TAW
-	{0x10880, 0x1089E, prOLetter}, // Lo  [31] NABATAEAN LETTER FINAL ALEPH..NABATAEAN LETTER TAW
-	{0x108E0, 0x108F2, prOLetter}, // Lo  [19] HATRAN LETTER ALEPH..HATRAN LETTER QOPH
-	{0x108F4, 0x108F5, prOLetter}, // Lo   [2] HATRAN LETTER SHIN..HATRAN LETTER TAW
-	{0x10900, 0x10915, prOLetter}, // Lo  [22] PHOENICIAN LETTER ALF..PHOENICIAN LETTER TAU
-	{0x10920, 0x10939, prOLetter}, // Lo  [26] LYDIAN LETTER A..LYDIAN LETTER C
-	{0x10980, 0x109B7, prOLetter}, // Lo  [56] MEROITIC HIEROGLYPHIC LETTER A..MEROITIC CURSIVE LETTER DA
-	{0x109BE, 0x109BF, prOLetter}, // Lo   [2] MEROITIC CURSIVE LOGOGRAM RMT..MEROITIC CURSIVE LOGOGRAM IMN
-	{0x10A00, 0x10A00, prOLetter}, // Lo       KHAROSHTHI LETTER A
-	{0x10A01, 0x10A03, prExtend},  // Mn   [3] KHAROSHTHI VOWEL SIGN I..KHAROSHTHI VOWEL SIGN VOCALIC R
-	{0x10A05, 0x10A06, prExtend},  // Mn   [2] KHAROSHTHI VOWEL SIGN E..KHAROSHTHI VOWEL SIGN O
-	{0x10A0C, 0x10A0F, prExtend},  // Mn   [4] KHAROSHTHI VOWEL LENGTH MARK..KHAROSHTHI SIGN VISARGA
-	{0x10A10, 0x10A13, prOLetter}, // Lo   [4] KHAROSHTHI LETTER KA..KHAROSHTHI LETTER GHA
-	{0x10A15, 0x10A17, prOLetter}, // Lo   [3] KHAROSHTHI LETTER CA..KHAROSHTHI LETTER JA
-	{0x10A19, 0x10A35, prOLetter}, // Lo  [29] KHAROSHTHI LETTER NYA..KHAROSHTHI LETTER VHA
-	{0x10A38, 0x10A3A, prExtend},  // Mn   [3] KHAROSHTHI SIGN BAR ABOVE..KHAROSHTHI SIGN DOT BELOW
-	{0x10A3F, 0x10A3F, prExtend},  // Mn       KHAROSHTHI VIRAMA
-	{0x10A56, 0x10A57, prSTerm},   // Po   [2] KHAROSHTHI PUNCTUATION DANDA..KHAROSHTHI PUNCTUATION DOUBLE DANDA
-	{0x10A60, 0x10A7C, prOLetter}, // Lo  [29] OLD SOUTH ARABIAN LETTER HE..OLD SOUTH ARABIAN LETTER THETH
-	{0x10A80, 0x10A9C, prOLetter}, // Lo  [29] OLD NORTH ARABIAN LETTER HEH..OLD NORTH ARABIAN LETTER ZAH
-	{0x10AC0, 0x10AC7, prOLetter}, // Lo   [8] MANICHAEAN LETTER ALEPH..MANICHAEAN LETTER WAW
-	{0x10AC9, 0x10AE4, prOLetter}, // Lo  [28] MANICHAEAN LETTER ZAYIN..MANICHAEAN LETTER TAW
-	{0x10AE5, 0x10AE6, prExtend},  // Mn   [2] MANICHAEAN ABBREVIATION MARK ABOVE..MANICHAEAN ABBREVIATION MARK BELOW
-	{0x10B00, 0x10B35, prOLetter}, // Lo  [54] AVESTAN LETTER A..AVESTAN LETTER HE
-	{0x10B40, 0x10B55, prOLetter}, // Lo  [22] INSCRIPTIONAL PARTHIAN LETTER ALEPH..INSCRIPTIONAL PARTHIAN LETTER TAW
-	{0x10B60, 0x10B72, prOLetter}, // Lo  [19] INSCRIPTIONAL PAHLAVI LETTER ALEPH..INSCRIPTIONAL PAHLAVI LETTER TAW
-	{0x10B80, 0x10B91, prOLetter}, // Lo  [18] PSALTER PAHLAVI LETTER ALEPH..PSALTER PAHLAVI LETTER TAW
-	{0x10C00, 0x10C48, prOLetter}, // Lo  [73] OLD TURKIC LETTER ORKHON A..OLD TURKIC LETTER ORKHON BASH
-	{0x10C80, 0x10CB2, prUpper},   // L&  [51] OLD HUNGARIAN CAPITAL LETTER A..OLD HUNGARIAN CAPITAL LETTER US
-	{0x10CC0, 0x10CF2, prLower},   // L&  [51] OLD HUNGARIAN SMALL LETTER A..OLD HUNGARIAN SMALL LETTER US
-	{0x10D00, 0x10D23, prOLetter}, // Lo  [36] HANIFI ROHINGYA LETTER A..HANIFI ROHINGYA MARK NA KHONNA
-	{0x10D24, 0x10D27, prExtend},  // Mn   [4] HANIFI ROHINGYA SIGN HARBAHAY..HANIFI ROHINGYA SIGN TASSI
-	{0x10D30, 0x10D39, prNumeric}, // Nd  [10] HANIFI ROHINGYA DIGIT ZERO..HANIFI ROHINGYA DIGIT NINE
-	{0x10E80, 0x10EA9, prOLetter}, // Lo  [42] YEZIDI LETTER ELIF..YEZIDI LETTER ET
-	{0x10EAB, 0x10EAC, prExtend},  // Mn   [2] YEZIDI COMBINING HAMZA MARK..YEZIDI COMBINING MADDA MARK
-	{0x10EB0, 0x10EB1, prOLetter}, // Lo   [2] YEZIDI LETTER LAM WITH DOT ABOVE..YEZIDI LETTER YOT WITH CIRCUMFLEX ABOVE
-	{0x10EFD, 0x10EFF, prExtend},  // Mn   [3] ARABIC SMALL LOW WORD SAKTA..ARABIC SMALL LOW WORD MADDA
-	{0x10F00, 0x10F1C, prOLetter}, // Lo  [29] OLD SOGDIAN LETTER ALEPH..OLD SOGDIAN LETTER FINAL TAW WITH VERTICAL TAIL
-	{0x10F27, 0x10F27, prOLetter}, // Lo       OLD SOGDIAN LIGATURE AYIN-DALETH
-	{0x10F30, 0x10F45, prOLetter}, // Lo  [22] SOGDIAN LETTER ALEPH..SOGDIAN INDEPENDENT SHIN
-	{0x10F46, 0x10F50, prExtend},  // Mn  [11] SOGDIAN COMBINING DOT BELOW..SOGDIAN COMBINING STROKE BELOW
-	{0x10F55, 0x10F59, prSTerm},   // Po   [5] SOGDIAN PUNCTUATION TWO VERTICAL BARS..SOGDIAN PUNCTUATION HALF CIRCLE WITH DOT
-	{0x10F70, 0x10F81, prOLetter}, // Lo  [18] OLD UYGHUR LETTER ALEPH..OLD UYGHUR LETTER LESH
-	{0x10F82, 0x10F85, prExtend},  // Mn   [4] OLD UYGHUR COMBINING DOT ABOVE..OLD UYGHUR COMBINING TWO DOTS BELOW
-	{0x10F86, 0x10F89, prSTerm},   // Po   [4] OLD UYGHUR PUNCTUATION BAR..OLD UYGHUR PUNCTUATION FOUR DOTS
-	{0x10FB0, 0x10FC4, prOLetter}, // Lo  [21] CHORASMIAN LETTER ALEPH..CHORASMIAN LETTER TAW
-	{0x10FE0, 0x10FF6, prOLetter}, // Lo  [23] ELYMAIC LETTER ALEPH..ELYMAIC LIGATURE ZAYIN-YODH
-	{0x11000, 0x11000, prExtend},  // Mc       BRAHMI SIGN CANDRABINDU
-	{0x11001, 0x11001, prExtend},  // Mn       BRAHMI SIGN ANUSVARA
-	{0x11002, 0x11002, prExtend},  // Mc       BRAHMI SIGN VISARGA
-	{0x11003, 0x11037, prOLetter}, // Lo  [53] BRAHMI SIGN JIHVAMULIYA..BRAHMI LETTER OLD TAMIL NNNA
-	{0x11038, 0x11046, prExtend},  // Mn  [15] BRAHMI VOWEL SIGN AA..BRAHMI VIRAMA
-	{0x11047, 0x11048, prSTerm},   // Po   [2] BRAHMI DANDA..BRAHMI DOUBLE DANDA
-	{0x11066, 0x1106F, prNumeric}, // Nd  [10] BRAHMI DIGIT ZERO..BRAHMI DIGIT NINE
-	{0x11070, 0x11070, prExtend},  // Mn       BRAHMI SIGN OLD TAMIL VIRAMA
-	{0x11071, 0x11072, prOLetter}, // Lo   [2] BRAHMI LETTER OLD TAMIL SHORT E..BRAHMI LETTER OLD TAMIL SHORT O
-	{0x11073, 0x11074, prExtend},  // Mn   [2] BRAHMI VOWEL SIGN OLD TAMIL SHORT E..BRAHMI VOWEL SIGN OLD TAMIL SHORT O
-	{0x11075, 0x11075, prOLetter}, // Lo       BRAHMI LETTER OLD TAMIL LLA
-	{0x1107F, 0x11081, prExtend},  // Mn   [3] BRAHMI NUMBER JOINER..KAITHI SIGN ANUSVARA
-	{0x11082, 0x11082, prExtend},  // Mc       KAITHI SIGN VISARGA
-	{0x11083, 0x110AF, prOLetter}, // Lo  [45] KAITHI LETTER A..KAITHI LETTER HA
-	{0x110B0, 0x110B2, prExtend},  // Mc   [3] KAITHI VOWEL SIGN AA..KAITHI VOWEL SIGN II
-	{0x110B3, 0x110B6, prExtend},  // Mn   [4] KAITHI VOWEL SIGN U..KAITHI VOWEL SIGN AI
-	{0x110B7, 0x110B8, prExtend},  // Mc   [2] KAITHI VOWEL SIGN O..KAITHI VOWEL SIGN AU
-	{0x110B9, 0x110BA, prExtend},  // Mn   [2] KAITHI SIGN VIRAMA..KAITHI SIGN NUKTA
-	{0x110BD, 0x110BD, prFormat},  // Cf       KAITHI NUMBER SIGN
-	{0x110BE, 0x110C1, prSTerm},   // Po   [4] KAITHI SECTION MARK..KAITHI DOUBLE DANDA
-	{0x110C2, 0x110C2, prExtend},  // Mn       KAITHI VOWEL SIGN VOCALIC R
-	{0x110CD, 0x110CD, prFormat},  // Cf       KAITHI NUMBER SIGN ABOVE
-	{0x110D0, 0x110E8, prOLetter}, // Lo  [25] SORA SOMPENG LETTER SAH..SORA SOMPENG LETTER MAE
-	{0x110F0, 0x110F9, prNumeric}, // Nd  [10] SORA SOMPENG DIGIT ZERO..SORA SOMPENG DIGIT NINE
-	{0x11100, 0x11102, prExtend},  // Mn   [3] CHAKMA SIGN CANDRABINDU..CHAKMA SIGN VISARGA
-	{0x11103, 0x11126, prOLetter}, // Lo  [36] CHAKMA LETTER AA..CHAKMA LETTER HAA
-	{0x11127, 0x1112B, prExtend},  // Mn   [5] CHAKMA VOWEL SIGN A..CHAKMA VOWEL SIGN UU
-	{0x1112C, 0x1112C, prExtend},  // Mc       CHAKMA VOWEL SIGN E
-	{0x1112D, 0x11134, prExtend},  // Mn   [8] CHAKMA VOWEL SIGN AI..CHAKMA MAAYYAA
-	{0x11136, 0x1113F, prNumeric}, // Nd  [10] CHAKMA DIGIT ZERO..CHAKMA DIGIT NINE
-	{0x11141, 0x11143, prSTerm},   // Po   [3] CHAKMA DANDA..CHAKMA QUESTION MARK
-	{0x11144, 0x11144, prOLetter}, // Lo       CHAKMA LETTER LHAA
-	{0x11145, 0x11146, prExtend},  // Mc   [2] CHAKMA VOWEL SIGN AA..CHAKMA VOWEL SIGN EI
-	{0x11147, 0x11147, prOLetter}, // Lo       CHAKMA LETTER VAA
-	{0x11150, 0x11172, prOLetter}, // Lo  [35] MAHAJANI LETTER A..MAHAJANI LETTER RRA
-	{0x11173, 0x11173, prExtend},  // Mn       MAHAJANI SIGN NUKTA
-	{0x11176, 0x11176, prOLetter}, // Lo       MAHAJANI LIGATURE SHRI
-	{0x11180, 0x11181, prExtend},  // Mn   [2] SHARADA SIGN CANDRABINDU..SHARADA SIGN ANUSVARA
-	{0x11182, 0x11182, prExtend},  // Mc       SHARADA SIGN VISARGA
-	{0x11183, 0x111B2, prOLetter}, // Lo  [48] SHARADA LETTER A..SHARADA LETTER HA
-	{0x111B3, 0x111B5, prExtend},  // Mc   [3] SHARADA VOWEL SIGN AA..SHARADA VOWEL SIGN II
-	{0x111B6, 0x111BE, prExtend},  // Mn   [9] SHARADA VOWEL SIGN U..SHARADA VOWEL SIGN O
-	{0x111BF, 0x111C0, prExtend},  // Mc   [2] SHARADA VOWEL SIGN AU..SHARADA SIGN VIRAMA
-	{0x111C1, 0x111C4, prOLetter}, // Lo   [4] SHARADA SIGN AVAGRAHA..SHARADA OM
-	{0x111C5, 0x111C6, prSTerm},   // Po   [2] SHARADA DANDA..SHARADA DOUBLE DANDA
-	{0x111C9, 0x111CC, prExtend},  // Mn   [4] SHARADA SANDHI MARK..SHARADA EXTRA SHORT VOWEL MARK
-	{0x111CD, 0x111CD, prSTerm},   // Po       SHARADA SUTRA MARK
-	{0x111CE, 0x111CE, prExtend},  // Mc       SHARADA VOWEL SIGN PRISHTHAMATRA E
-	{0x111CF, 0x111CF, prExtend},  // Mn       SHARADA SIGN INVERTED CANDRABINDU
-	{0x111D0, 0x111D9, prNumeric}, // Nd  [10] SHARADA DIGIT ZERO..SHARADA DIGIT NINE
-	{0x111DA, 0x111DA, prOLetter}, // Lo       SHARADA EKAM
-	{0x111DC, 0x111DC, prOLetter}, // Lo       SHARADA HEADSTROKE
-	{0x111DE, 0x111DF, prSTerm},   // Po   [2] SHARADA SECTION MARK-1..SHARADA SECTION MARK-2
-	{0x11200, 0x11211, prOLetter}, // Lo  [18] KHOJKI LETTER A..KHOJKI LETTER JJA
-	{0x11213, 0x1122B, prOLetter}, // Lo  [25] KHOJKI LETTER NYA..KHOJKI LETTER LLA
-	{0x1122C, 0x1122E, prExtend},  // Mc   [3] KHOJKI VOWEL SIGN AA..KHOJKI VOWEL SIGN II
-	{0x1122F, 0x11231, prExtend},  // Mn   [3] KHOJKI VOWEL SIGN U..KHOJKI VOWEL SIGN AI
-	{0x11232, 0x11233, prExtend},  // Mc   [2] KHOJKI VOWEL SIGN O..KHOJKI VOWEL SIGN AU
-	{0x11234, 0x11234, prExtend},  // Mn       KHOJKI SIGN ANUSVARA
-	{0x11235, 0x11235, prExtend},  // Mc       KHOJKI SIGN VIRAMA
-	{0x11236, 0x11237, prExtend},  // Mn   [2] KHOJKI SIGN NUKTA..KHOJKI SIGN SHADDA
-	{0x11238, 0x11239, prSTerm},   // Po   [2] KHOJKI DANDA..KHOJKI DOUBLE DANDA
-	{0x1123B, 0x1123C, prSTerm},   // Po   [2] KHOJKI SECTION MARK..KHOJKI DOUBLE SECTION MARK
-	{0x1123E, 0x1123E, prExtend},  // Mn       KHOJKI SIGN SUKUN
-	{0x1123F, 0x11240, prOLetter}, // Lo   [2] KHOJKI LETTER QA..KHOJKI LETTER SHORT I
-	{0x11241, 0x11241, prExtend},  // Mn       KHOJKI VOWEL SIGN VOCALIC R
-	{0x11280, 0x11286, prOLetter}, // Lo   [7] MULTANI LETTER A..MULTANI LETTER GA
-	{0x11288, 0x11288, prOLetter}, // Lo       MULTANI LETTER GHA
-	{0x1128A, 0x1128D, prOLetter}, // Lo   [4] MULTANI LETTER CA..MULTANI LETTER JJA
-	{0x1128F, 0x1129D, prOLetter}, // Lo  [15] MULTANI LETTER NYA..MULTANI LETTER BA
-	{0x1129F, 0x112A8, prOLetter}, // Lo  [10] MULTANI LETTER BHA..MULTANI LETTER RHA
-	{0x112A9, 0x112A9, prSTerm},   // Po       MULTANI SECTION MARK
-	{0x112B0, 0x112DE, prOLetter}, // Lo  [47] KHUDAWADI LETTER A..KHUDAWADI LETTER HA
-	{0x112DF, 0x112DF, prExtend},  // Mn       KHUDAWADI SIGN ANUSVARA
-	{0x112E0, 0x112E2, prExtend},  // Mc   [3] KHUDAWADI VOWEL SIGN AA..KHUDAWADI VOWEL SIGN II
-	{0x112E3, 0x112EA, prExtend},  // Mn   [8] KHUDAWADI VOWEL SIGN U..KHUDAWADI SIGN VIRAMA
-	{0x112F0, 0x112F9, prNumeric}, // Nd  [10] KHUDAWADI DIGIT ZERO..KHUDAWADI DIGIT NINE
-	{0x11300, 0x11301, prExtend},  // Mn   [2] GRANTHA SIGN COMBINING ANUSVARA ABOVE..GRANTHA SIGN CANDRABINDU
-	{0x11302, 0x11303, prExtend},  // Mc   [2] GRANTHA SIGN ANUSVARA..GRANTHA SIGN VISARGA
-	{0x11305, 0x1130C, prOLetter}, // Lo   [8] GRANTHA LETTER A..GRANTHA LETTER VOCALIC L
-	{0x1130F, 0x11310, prOLetter}, // Lo   [2] GRANTHA LETTER EE..GRANTHA LETTER AI
-	{0x11313, 0x11328, prOLetter}, // Lo  [22] GRANTHA LETTER OO..GRANTHA LETTER NA
-	{0x1132A, 0x11330, prOLetter}, // Lo   [7] GRANTHA LETTER PA..GRANTHA LETTER RA
-	{0x11332, 0x11333, prOLetter}, // Lo   [2] GRANTHA LETTER LA..GRANTHA LETTER LLA
-	{0x11335, 0x11339, prOLetter}, // Lo   [5] GRANTHA LETTER VA..GRANTHA LETTER HA
-	{0x1133B, 0x1133C, prExtend},  // Mn   [2] COMBINING BINDU BELOW..GRANTHA SIGN NUKTA
-	{0x1133D, 0x1133D, prOLetter}, // Lo       GRANTHA SIGN AVAGRAHA
-	{0x1133E, 0x1133F, prExtend},  // Mc   [2] GRANTHA VOWEL SIGN AA..GRANTHA VOWEL SIGN I
-	{0x11340, 0x11340, prExtend},  // Mn       GRANTHA VOWEL SIGN II
-	{0x11341, 0x11344, prExtend},  // Mc   [4] GRANTHA VOWEL SIGN U..GRANTHA VOWEL SIGN VOCALIC RR
-	{0x11347, 0x11348, prExtend},  // Mc   [2] GRANTHA VOWEL SIGN EE..GRANTHA VOWEL SIGN AI
-	{0x1134B, 0x1134D, prExtend},  // Mc   [3] GRANTHA VOWEL SIGN OO..GRANTHA SIGN VIRAMA
-	{0x11350, 0x11350, prOLetter}, // Lo       GRANTHA OM
-	{0x11357, 0x11357, prExtend},  // Mc       GRANTHA AU LENGTH MARK
-	{0x1135D, 0x11361, prOLetter}, // Lo   [5] GRANTHA SIGN PLUTA..GRANTHA LETTER VOCALIC LL
-	{0x11362, 0x11363, prExtend},  // Mc   [2] GRANTHA VOWEL SIGN VOCALIC L..GRANTHA VOWEL SIGN VOCALIC LL
-	{0x11366, 0x1136C, prExtend},  // Mn   [7] COMBINING GRANTHA DIGIT ZERO..COMBINING GRANTHA DIGIT SIX
-	{0x11370, 0x11374, prExtend},  // Mn   [5] COMBINING GRANTHA LETTER A..COMBINING GRANTHA LETTER PA
-	{0x11400, 0x11434, prOLetter}, // Lo  [53] NEWA LETTER A..NEWA LETTER HA
-	{0x11435, 0x11437, prExtend},  // Mc   [3] NEWA VOWEL SIGN AA..NEWA VOWEL SIGN II
-	{0x11438, 0x1143F, prExtend},  // Mn   [8] NEWA VOWEL SIGN U..NEWA VOWEL SIGN AI
-	{0x11440, 0x11441, prExtend},  // Mc   [2] NEWA VOWEL SIGN O..NEWA VOWEL SIGN AU
-	{0x11442, 0x11444, prExtend},  // Mn   [3] NEWA SIGN VIRAMA..NEWA SIGN ANUSVARA
-	{0x11445, 0x11445, prExtend},  // Mc       NEWA SIGN VISARGA
-	{0x11446, 0x11446, prExtend},  // Mn       NEWA SIGN NUKTA
-	{0x11447, 0x1144A, prOLetter}, // Lo   [4] NEWA SIGN AVAGRAHA..NEWA SIDDHI
-	{0x1144B, 0x1144C, prSTerm},   // Po   [2] NEWA DANDA..NEWA DOUBLE DANDA
-	{0x11450, 0x11459, prNumeric}, // Nd  [10] NEWA DIGIT ZERO..NEWA DIGIT NINE
-	{0x1145E, 0x1145E, prExtend},  // Mn       NEWA SANDHI MARK
-	{0x1145F, 0x11461, prOLetter}, // Lo   [3] NEWA LETTER VEDIC ANUSVARA..NEWA SIGN UPADHMANIYA
-	{0x11480, 0x114AF, prOLetter}, // Lo  [48] TIRHUTA ANJI..TIRHUTA LETTER HA
-	{0x114B0, 0x114B2, prExtend},  // Mc   [3] TIRHUTA VOWEL SIGN AA..TIRHUTA VOWEL SIGN II
-	{0x114B3, 0x114B8, prExtend},  // Mn   [6] TIRHUTA VOWEL SIGN U..TIRHUTA VOWEL SIGN VOCALIC LL
-	{0x114B9, 0x114B9, prExtend},  // Mc       TIRHUTA VOWEL SIGN E
-	{0x114BA, 0x114BA, prExtend},  // Mn       TIRHUTA VOWEL SIGN SHORT E
-	{0x114BB, 0x114BE, prExtend},  // Mc   [4] TIRHUTA VOWEL SIGN AI..TIRHUTA VOWEL SIGN AU
-	{0x114BF, 0x114C0, prExtend},  // Mn   [2] TIRHUTA SIGN CANDRABINDU..TIRHUTA SIGN ANUSVARA
-	{0x114C1, 0x114C1, prExtend},  // Mc       TIRHUTA SIGN VISARGA
-	{0x114C2, 0x114C3, prExtend},  // Mn   [2] TIRHUTA SIGN VIRAMA..TIRHUTA SIGN NUKTA
-	{0x114C4, 0x114C5, prOLetter}, // Lo   [2] TIRHUTA SIGN AVAGRAHA..TIRHUTA GVANG
-	{0x114C7, 0x114C7, prOLetter}, // Lo       TIRHUTA OM
-	{0x114D0, 0x114D9, prNumeric}, // Nd  [10] TIRHUTA DIGIT ZERO..TIRHUTA DIGIT NINE
-	{0x11580, 0x115AE, prOLetter}, // Lo  [47] SIDDHAM LETTER A..SIDDHAM LETTER HA
-	{0x115AF, 0x115B1, prExtend},  // Mc   [3] SIDDHAM VOWEL SIGN AA..SIDDHAM VOWEL SIGN II
-	{0x115B2, 0x115B5, prExtend},  // Mn   [4] SIDDHAM VOWEL SIGN U..SIDDHAM VOWEL SIGN VOCALIC RR
-	{0x115B8, 0x115BB, prExtend},  // Mc   [4] SIDDHAM VOWEL SIGN E..SIDDHAM VOWEL SIGN AU
-	{0x115BC, 0x115BD, prExtend},  // Mn   [2] SIDDHAM SIGN CANDRABINDU..SIDDHAM SIGN ANUSVARA
-	{0x115BE, 0x115BE, prExtend},  // Mc       SIDDHAM SIGN VISARGA
-	{0x115BF, 0x115C0, prExtend},  // Mn   [2] SIDDHAM SIGN VIRAMA..SIDDHAM SIGN NUKTA
-	{0x115C2, 0x115C3, prSTerm},   // Po   [2] SIDDHAM DANDA..SIDDHAM DOUBLE DANDA
-	{0x115C9, 0x115D7, prSTerm},   // Po  [15] SIDDHAM END OF TEXT MARK..SIDDHAM SECTION MARK WITH CIRCLES AND FOUR ENCLOSURES
-	{0x115D8, 0x115DB, prOLetter}, // Lo   [4] SIDDHAM LETTER THREE-CIRCLE ALTERNATE I..SIDDHAM LETTER ALTERNATE U
-	{0x115DC, 0x115DD, prExtend},  // Mn   [2] SIDDHAM VOWEL SIGN ALTERNATE U..SIDDHAM VOWEL SIGN ALTERNATE UU
-	{0x11600, 0x1162F, prOLetter}, // Lo  [48] MODI LETTER A..MODI LETTER LLA
-	{0x11630, 0x11632, prExtend},  // Mc   [3] MODI VOWEL SIGN AA..MODI VOWEL SIGN II
-	{0x11633, 0x1163A, prExtend},  // Mn   [8] MODI VOWEL SIGN U..MODI VOWEL SIGN AI
-	{0x1163B, 0x1163C, prExtend},  // Mc   [2] MODI VOWEL SIGN O..MODI VOWEL SIGN AU
-	{0x1163D, 0x1163D, prExtend},  // Mn       MODI SIGN ANUSVARA
-	{0x1163E, 0x1163E, prExtend},  // Mc       MODI SIGN VISARGA
-	{0x1163F, 0x11640, prExtend},  // Mn   [2] MODI SIGN VIRAMA..MODI SIGN ARDHACANDRA
-	{0x11641, 0x11642, prSTerm},   // Po   [2] MODI DANDA..MODI DOUBLE DANDA
-	{0x11644, 0x11644, prOLetter}, // Lo       MODI SIGN HUVA
-	{0x11650, 0x11659, prNumeric}, // Nd  [10] MODI DIGIT ZERO..MODI DIGIT NINE
-	{0x11680, 0x116AA, prOLetter}, // Lo  [43] TAKRI LETTER A..TAKRI LETTER RRA
-	{0x116AB, 0x116AB, prExtend},  // Mn       TAKRI SIGN ANUSVARA
-	{0x116AC, 0x116AC, prExtend},  // Mc       TAKRI SIGN VISARGA
-	{0x116AD, 0x116AD, prExtend},  // Mn       TAKRI VOWEL SIGN AA
-	{0x116AE, 0x116AF, prExtend},  // Mc   [2] TAKRI VOWEL SIGN I..TAKRI VOWEL SIGN II
-	{0x116B0, 0x116B5, prExtend},  // Mn   [6] TAKRI VOWEL SIGN U..TAKRI VOWEL SIGN AU
-	{0x116B6, 0x116B6, prExtend},  // Mc       TAKRI SIGN VIRAMA
-	{0x116B7, 0x116B7, prExtend},  // Mn       TAKRI SIGN NUKTA
-	{0x116B8, 0x116B8, prOLetter}, // Lo       TAKRI LETTER ARCHAIC KHA
-	{0x116C0, 0x116C9, prNumeric}, // Nd  [10] TAKRI DIGIT ZERO..TAKRI DIGIT NINE
-	{0x11700, 0x1171A, prOLetter}, // Lo  [27] AHOM LETTER KA..AHOM LETTER ALTERNATE BA
-	{0x1171D, 0x1171F, prExtend},  // Mn   [3] AHOM CONSONANT SIGN MEDIAL LA..AHOM CONSONANT SIGN MEDIAL LIGATING RA
-	{0x11720, 0x11721, prExtend},  // Mc   [2] AHOM VOWEL SIGN A..AHOM VOWEL SIGN AA
-	{0x11722, 0x11725, prExtend},  // Mn   [4] AHOM VOWEL SIGN I..AHOM VOWEL SIGN UU
-	{0x11726, 0x11726, prExtend},  // Mc       AHOM VOWEL SIGN E
-	{0x11727, 0x1172B, prExtend},  // Mn   [5] AHOM VOWEL SIGN AW..AHOM SIGN KILLER
-	{0x11730, 0x11739, prNumeric}, // Nd  [10] AHOM DIGIT ZERO..AHOM DIGIT NINE
-	{0x1173C, 0x1173E, prSTerm},   // Po   [3] AHOM SIGN SMALL SECTION..AHOM SIGN RULAI
-	{0x11740, 0x11746, prOLetter}, // Lo   [7] AHOM LETTER CA..AHOM LETTER LLA
-	{0x11800, 0x1182B, prOLetter}, // Lo  [44] DOGRA LETTER A..DOGRA LETTER RRA
-	{0x1182C, 0x1182E, prExtend},  // Mc   [3] DOGRA VOWEL SIGN AA..DOGRA VOWEL SIGN II
-	{0x1182F, 0x11837, prExtend},  // Mn   [9] DOGRA VOWEL SIGN U..DOGRA SIGN ANUSVARA
-	{0x11838, 0x11838, prExtend},  // Mc       DOGRA SIGN VISARGA
-	{0x11839, 0x1183A, prExtend},  // Mn   [2] DOGRA SIGN VIRAMA..DOGRA SIGN NUKTA
-	{0x118A0, 0x118BF, prUpper},   // L&  [32] WARANG CITI CAPITAL LETTER NGAA..WARANG CITI CAPITAL LETTER VIYO
-	{0x118C0, 0x118DF, prLower},   // L&  [32] WARANG CITI SMALL LETTER NGAA..WARANG CITI SMALL LETTER VIYO
-	{0x118E0, 0x118E9, prNumeric}, // Nd  [10] WARANG CITI DIGIT ZERO..WARANG CITI DIGIT NINE
-	{0x118FF, 0x11906, prOLetter}, // Lo   [8] WARANG CITI OM..DIVES AKURU LETTER E
-	{0x11909, 0x11909, prOLetter}, // Lo       DIVES AKURU LETTER O
-	{0x1190C, 0x11913, prOLetter}, // Lo   [8] DIVES AKURU LETTER KA..DIVES AKURU LETTER JA
-	{0x11915, 0x11916, prOLetter}, // Lo   [2] DIVES AKURU LETTER NYA..DIVES AKURU LETTER TTA
-	{0x11918, 0x1192F, prOLetter}, // Lo  [24] DIVES AKURU LETTER DDA..DIVES AKURU LETTER ZA
-	{0x11930, 0x11935, prExtend},  // Mc   [6] DIVES AKURU VOWEL SIGN AA..DIVES AKURU VOWEL SIGN E
-	{0x11937, 0x11938, prExtend},  // Mc   [2] DIVES AKURU VOWEL SIGN AI..DIVES AKURU VOWEL SIGN O
-	{0x1193B, 0x1193C, prExtend},  // Mn   [2] DIVES AKURU SIGN ANUSVARA..DIVES AKURU SIGN CANDRABINDU
-	{0x1193D, 0x1193D, prExtend},  // Mc       DIVES AKURU SIGN HALANTA
-	{0x1193E, 0x1193E, prExtend},  // Mn       DIVES AKURU VIRAMA
-	{0x1193F, 0x1193F, prOLetter}, // Lo       DIVES AKURU PREFIXED NASAL SIGN
-	{0x11940, 0x11940, prExtend},  // Mc       DIVES AKURU MEDIAL YA
-	{0x11941, 0x11941, prOLetter}, // Lo       DIVES AKURU INITIAL RA
-	{0x11942, 0x11942, prExtend},  // Mc       DIVES AKURU MEDIAL RA
-	{0x11943, 0x11943, prExtend},  // Mn       DIVES AKURU SIGN NUKTA
-	{0x11944, 0x11944, prSTerm},   // Po       DIVES AKURU DOUBLE DANDA
-	{0x11946, 0x11946, prSTerm},   // Po       DIVES AKURU END OF TEXT MARK
-	{0x11950, 0x11959, prNumeric}, // Nd  [10] DIVES AKURU DIGIT ZERO..DIVES AKURU DIGIT NINE
-	{0x119A0, 0x119A7, prOLetter}, // Lo   [8] NANDINAGARI LETTER A..NANDINAGARI LETTER VOCALIC RR
-	{0x119AA, 0x119D0, prOLetter}, // Lo  [39] NANDINAGARI LETTER E..NANDINAGARI LETTER RRA
-	{0x119D1, 0x119D3, prExtend},  // Mc   [3] NANDINAGARI VOWEL SIGN AA..NANDINAGARI VOWEL SIGN II
-	{0x119D4, 0x119D7, prExtend},  // Mn   [4] NANDINAGARI VOWEL SIGN U..NANDINAGARI VOWEL SIGN VOCALIC RR
-	{0x119DA, 0x119DB, prExtend},  // Mn   [2] NANDINAGARI VOWEL SIGN E..NANDINAGARI VOWEL SIGN AI
-	{0x119DC, 0x119DF, prExtend},  // Mc   [4] NANDINAGARI VOWEL SIGN O..NANDINAGARI SIGN VISARGA
-	{0x119E0, 0x119E0, prExtend},  // Mn       NANDINAGARI SIGN VIRAMA
-	{0x119E1, 0x119E1, prOLetter}, // Lo       NANDINAGARI SIGN AVAGRAHA
-	{0x119E3, 0x119E3, prOLetter}, // Lo       NANDINAGARI HEADSTROKE
-	{0x119E4, 0x119E4, prExtend},  // Mc       NANDINAGARI VOWEL SIGN PRISHTHAMATRA E
-	{0x11A00, 0x11A00, prOLetter}, // Lo       ZANABAZAR SQUARE LETTER A
-	{0x11A01, 0x11A0A, prExtend},  // Mn  [10] ZANABAZAR SQUARE VOWEL SIGN I..ZANABAZAR SQUARE VOWEL LENGTH MARK
-	{0x11A0B, 0x11A32, prOLetter}, // Lo  [40] ZANABAZAR SQUARE LETTER KA..ZANABAZAR SQUARE LETTER KSSA
-	{0x11A33, 0x11A38, prExtend},  // Mn   [6] ZANABAZAR SQUARE FINAL CONSONANT MARK..ZANABAZAR SQUARE SIGN ANUSVARA
-	{0x11A39, 0x11A39, prExtend},  // Mc       ZANABAZAR SQUARE SIGN VISARGA
-	{0x11A3A, 0x11A3A, prOLetter}, // Lo       ZANABAZAR SQUARE CLUSTER-INITIAL LETTER RA
-	{0x11A3B, 0x11A3E, prExtend},  // Mn   [4] ZANABAZAR SQUARE CLUSTER-FINAL LETTER YA..ZANABAZAR SQUARE CLUSTER-FINAL LETTER VA
-	{0x11A42, 0x11A43, prSTerm},   // Po   [2] ZANABAZAR SQUARE MARK SHAD..ZANABAZAR SQUARE MARK DOUBLE SHAD
-	{0x11A47, 0x11A47, prExtend},  // Mn       ZANABAZAR SQUARE SUBJOINER
-	{0x11A50, 0x11A50, prOLetter}, // Lo       SOYOMBO LETTER A
-	{0x11A51, 0x11A56, prExtend},  // Mn   [6] SOYOMBO VOWEL SIGN I..SOYOMBO VOWEL SIGN OE
-	{0x11A57, 0x11A58, prExtend},  // Mc   [2] SOYOMBO VOWEL SIGN AI..SOYOMBO VOWEL SIGN AU
-	{0x11A59, 0x11A5B, prExtend},  // Mn   [3] SOYOMBO VOWEL SIGN VOCALIC R..SOYOMBO VOWEL LENGTH MARK
-	{0x11A5C, 0x11A89, prOLetter}, // Lo  [46] SOYOMBO LETTER KA..SOYOMBO CLUSTER-INITIAL LETTER SA
-	{0x11A8A, 0x11A96, prExtend},  // Mn  [13] SOYOMBO FINAL CONSONANT SIGN G..SOYOMBO SIGN ANUSVARA
-	{0x11A97, 0x11A97, prExtend},  // Mc       SOYOMBO SIGN VISARGA
-	{0x11A98, 0x11A99, prExtend},  // Mn   [2] SOYOMBO GEMINATION MARK..SOYOMBO SUBJOINER
-	{0x11A9B, 0x11A9C, prSTerm},   // Po   [2] SOYOMBO MARK SHAD..SOYOMBO MARK DOUBLE SHAD
-	{0x11A9D, 0x11A9D, prOLetter}, // Lo       SOYOMBO MARK PLUTA
-	{0x11AB0, 0x11AF8, prOLetter}, // Lo  [73] CANADIAN SYLLABICS NATTILIK HI..PAU CIN HAU GLOTTAL STOP FINAL
-	{0x11C00, 0x11C08, prOLetter}, // Lo   [9] BHAIKSUKI LETTER A..BHAIKSUKI LETTER VOCALIC L
-	{0x11C0A, 0x11C2E, prOLetter}, // Lo  [37] BHAIKSUKI LETTER E..BHAIKSUKI LETTER HA
-	{0x11C2F, 0x11C2F, prExtend},  // Mc       BHAIKSUKI VOWEL SIGN AA
-	{0x11C30, 0x11C36, prExtend},  // Mn   [7] BHAIKSUKI VOWEL SIGN I..BHAIKSUKI VOWEL SIGN VOCALIC L
-	{0x11C38, 0x11C3D, prExtend},  // Mn   [6] BHAIKSUKI VOWEL SIGN E..BHAIKSUKI SIGN ANUSVARA
-	{0x11C3E, 0x11C3E, prExtend},  // Mc       BHAIKSUKI SIGN VISARGA
-	{0x11C3F, 0x11C3F, prExtend},  // Mn       BHAIKSUKI SIGN VIRAMA
-	{0x11C40, 0x11C40, prOLetter}, // Lo       BHAIKSUKI SIGN AVAGRAHA
-	{0x11C41, 0x11C42, prSTerm},   // Po   [2] BHAIKSUKI DANDA..BHAIKSUKI DOUBLE DANDA
-	{0x11C50, 0x11C59, prNumeric}, // Nd  [10] BHAIKSUKI DIGIT ZERO..BHAIKSUKI DIGIT NINE
-	{0x11C72, 0x11C8F, prOLetter}, // Lo  [30] MARCHEN LETTER KA..MARCHEN LETTER A
-	{0x11C92, 0x11CA7, prExtend},  // Mn  [22] MARCHEN SUBJOINED LETTER KA..MARCHEN SUBJOINED LETTER ZA
-	{0x11CA9, 0x11CA9, prExtend},  // Mc       MARCHEN SUBJOINED LETTER YA
-	{0x11CAA, 0x11CB0, prExtend},  // Mn   [7] MARCHEN SUBJOINED LETTER RA..MARCHEN VOWEL SIGN AA
-	{0x11CB1, 0x11CB1, prExtend},  // Mc       MARCHEN VOWEL SIGN I
-	{0x11CB2, 0x11CB3, prExtend},  // Mn   [2] MARCHEN VOWEL SIGN U..MARCHEN VOWEL SIGN E
-	{0x11CB4, 0x11CB4, prExtend},  // Mc       MARCHEN VOWEL SIGN O
-	{0x11CB5, 0x11CB6, prExtend},  // Mn   [2] MARCHEN SIGN ANUSVARA..MARCHEN SIGN CANDRABINDU
-	{0x11D00, 0x11D06, prOLetter}, // Lo   [7] MASARAM GONDI LETTER A..MASARAM GONDI LETTER E
-	{0x11D08, 0x11D09, prOLetter}, // Lo   [2] MASARAM GONDI LETTER AI..MASARAM GONDI LETTER O
-	{0x11D0B, 0x11D30, prOLetter}, // Lo  [38] MASARAM GONDI LETTER AU..MASARAM GONDI LETTER TRA
-	{0x11D31, 0x11D36, prExtend},  // Mn   [6] MASARAM GONDI VOWEL SIGN AA..MASARAM GONDI VOWEL SIGN VOCALIC R
-	{0x11D3A, 0x11D3A, prExtend},  // Mn       MASARAM GONDI VOWEL SIGN E
-	{0x11D3C, 0x11D3D, prExtend},  // Mn   [2] MASARAM GONDI VOWEL SIGN AI..MASARAM GONDI VOWEL SIGN O
-	{0x11D3F, 0x11D45, prExtend},  // Mn   [7] MASARAM GONDI VOWEL SIGN AU..MASARAM GONDI VIRAMA
-	{0x11D46, 0x11D46, prOLetter}, // Lo       MASARAM GONDI REPHA
-	{0x11D47, 0x11D47, prExtend},  // Mn       MASARAM GONDI RA-KARA
-	{0x11D50, 0x11D59, prNumeric}, // Nd  [10] MASARAM GONDI DIGIT ZERO..MASARAM GONDI DIGIT NINE
-	{0x11D60, 0x11D65, prOLetter}, // Lo   [6] GUNJALA GONDI LETTER A..GUNJALA GONDI LETTER UU
-	{0x11D67, 0x11D68, prOLetter}, // Lo   [2] GUNJALA GONDI LETTER EE..GUNJALA GONDI LETTER AI
-	{0x11D6A, 0x11D89, prOLetter}, // Lo  [32] GUNJALA GONDI LETTER OO..GUNJALA GONDI LETTER SA
-	{0x11D8A, 0x11D8E, prExtend},  // Mc   [5] GUNJALA GONDI VOWEL SIGN AA..GUNJALA GONDI VOWEL SIGN UU
-	{0x11D90, 0x11D91, prExtend},  // Mn   [2] GUNJALA GONDI VOWEL SIGN EE..GUNJALA GONDI VOWEL SIGN AI
-	{0x11D93, 0x11D94, prExtend},  // Mc   [2] GUNJALA GONDI VOWEL SIGN OO..GUNJALA GONDI VOWEL SIGN AU
-	{0x11D95, 0x11D95, prExtend},  // Mn       GUNJALA GONDI SIGN ANUSVARA
-	{0x11D96, 0x11D96, prExtend},  // Mc       GUNJALA GONDI SIGN VISARGA
-	{0x11D97, 0x11D97, prExtend},  // Mn       GUNJALA GONDI VIRAMA
-	{0x11D98, 0x11D98, prOLetter}, // Lo       GUNJALA GONDI OM
-	{0x11DA0, 0x11DA9, prNumeric}, // Nd  [10] GUNJALA GONDI DIGIT ZERO..GUNJALA GONDI DIGIT NINE
-	{0x11EE0, 0x11EF2, prOLetter}, // Lo  [19] MAKASAR LETTER KA..MAKASAR ANGKA
-	{0x11EF3, 0x11EF4, prExtend},  // Mn   [2] MAKASAR VOWEL SIGN I..MAKASAR VOWEL SIGN U
-	{0x11EF5, 0x11EF6, prExtend},  // Mc   [2] MAKASAR VOWEL SIGN E..MAKASAR VOWEL SIGN O
-	{0x11EF7, 0x11EF8, prSTerm},   // Po   [2] MAKASAR PASSIMBANG..MAKASAR END OF SECTION
-	{0x11F00, 0x11F01, prExtend},  // Mn   [2] KAWI SIGN CANDRABINDU..KAWI SIGN ANUSVARA
-	{0x11F02, 0x11F02, prOLetter}, // Lo       KAWI SIGN REPHA
-	{0x11F03, 0x11F03, prExtend},  // Mc       KAWI SIGN VISARGA
-	{0x11F04, 0x11F10, prOLetter}, // Lo  [13] KAWI LETTER A..KAWI LETTER O
-	{0x11F12, 0x11F33, prOLetter}, // Lo  [34] KAWI LETTER KA..KAWI LETTER JNYA
-	{0x11F34, 0x11F35, prExtend},  // Mc   [2] KAWI VOWEL SIGN AA..KAWI VOWEL SIGN ALTERNATE AA
-	{0x11F36, 0x11F3A, prExtend},  // Mn   [5] KAWI VOWEL SIGN I..KAWI VOWEL SIGN VOCALIC R
-	{0x11F3E, 0x11F3F, prExtend},  // Mc   [2] KAWI VOWEL SIGN E..KAWI VOWEL SIGN AI
-	{0x11F40, 0x11F40, prExtend},  // Mn       KAWI VOWEL SIGN EU
-	{0x11F41, 0x11F41, prExtend},  // Mc       KAWI SIGN KILLER
-	{0x11F42, 0x11F42, prExtend},  // Mn       KAWI CONJOINER
-	{0x11F43, 0x11F44, prSTerm},   // Po   [2] KAWI DANDA..KAWI DOUBLE DANDA
-	{0x11F50, 0x11F59, prNumeric}, // Nd  [10] KAWI DIGIT ZERO..KAWI DIGIT NINE
-	{0x11FB0, 0x11FB0, prOLetter}, // Lo       LISU LETTER YHA
-	{0x12000, 0x12399, prOLetter}, // Lo [922] CUNEIFORM SIGN A..CUNEIFORM SIGN U U
-	{0x12400, 0x1246E, prOLetter}, // Nl [111] CUNEIFORM NUMERIC SIGN TWO ASH..CUNEIFORM NUMERIC SIGN NINE U VARIANT FORM
-	{0x12480, 0x12543, prOLetter}, // Lo [196] CUNEIFORM SIGN AB TIMES NUN TENU..CUNEIFORM SIGN ZU5 TIMES THREE DISH TENU
-	{0x12F90, 0x12FF0, prOLetter}, // Lo  [97] CYPRO-MINOAN SIGN CM001..CYPRO-MINOAN SIGN CM114
-	{0x13000, 0x1342F, prOLetter}, // Lo [1072] EGYPTIAN HIEROGLYPH A001..EGYPTIAN HIEROGLYPH V011D
-	{0x13430, 0x1343F, prFormat},  // Cf  [16] EGYPTIAN HIEROGLYPH VERTICAL JOINER..EGYPTIAN HIEROGLYPH END WALLED ENCLOSURE
-	{0x13440, 0x13440, prExtend},  // Mn       EGYPTIAN HIEROGLYPH MIRROR HORIZONTALLY
-	{0x13441, 0x13446, prOLetter}, // Lo   [6] EGYPTIAN HIEROGLYPH FULL BLANK..EGYPTIAN HIEROGLYPH WIDE LOST SIGN
-	{0x13447, 0x13455, prExtend},  // Mn  [15] EGYPTIAN HIEROGLYPH MODIFIER DAMAGED AT TOP START..EGYPTIAN HIEROGLYPH MODIFIER DAMAGED
-	{0x14400, 0x14646, prOLetter}, // Lo [583] ANATOLIAN HIEROGLYPH A001..ANATOLIAN HIEROGLYPH A530
-	{0x16800, 0x16A38, prOLetter}, // Lo [569] BAMUM LETTER PHASE-A NGKUE MFON..BAMUM LETTER PHASE-F VUEQ
-	{0x16A40, 0x16A5E, prOLetter}, // Lo  [31] MRO LETTER TA..MRO LETTER TEK
-	{0x16A60, 0x16A69, prNumeric}, // Nd  [10] MRO DIGIT ZERO..MRO DIGIT NINE
-	{0x16A6E, 0x16A6F, prSTerm},   // Po   [2] MRO DANDA..MRO DOUBLE DANDA
-	{0x16A70, 0x16ABE, prOLetter}, // Lo  [79] TANGSA LETTER OZ..TANGSA LETTER ZA
-	{0x16AC0, 0x16AC9, prNumeric}, // Nd  [10] TANGSA DIGIT ZERO..TANGSA DIGIT NINE
-	{0x16AD0, 0x16AED, prOLetter}, // Lo  [30] BASSA VAH LETTER ENNI..BASSA VAH LETTER I
-	{0x16AF0, 0x16AF4, prExtend},  // Mn   [5] BASSA VAH COMBINING HIGH TONE..BASSA VAH COMBINING HIGH-LOW TONE
-	{0x16AF5, 0x16AF5, prSTerm},   // Po       BASSA VAH FULL STOP
-	{0x16B00, 0x16B2F, prOLetter}, // Lo  [48] PAHAWH HMONG VOWEL KEEB..PAHAWH HMONG CONSONANT CAU
-	{0x16B30, 0x16B36, prExtend},  // Mn   [7] PAHAWH HMONG MARK CIM TUB..PAHAWH HMONG MARK CIM TAUM
-	{0x16B37, 0x16B38, prSTerm},   // Po   [2] PAHAWH HMONG SIGN VOS THOM..PAHAWH HMONG SIGN VOS TSHAB CEEB
-	{0x16B40, 0x16B43, prOLetter}, // Lm   [4] PAHAWH HMONG SIGN VOS SEEV..PAHAWH HMONG SIGN IB YAM
-	{0x16B44, 0x16B44, prSTerm},   // Po       PAHAWH HMONG SIGN XAUS
-	{0x16B50, 0x16B59, prNumeric}, // Nd  [10] PAHAWH HMONG DIGIT ZERO..PAHAWH HMONG DIGIT NINE
-	{0x16B63, 0x16B77, prOLetter}, // Lo  [21] PAHAWH HMONG SIGN VOS LUB..PAHAWH HMONG SIGN CIM NRES TOS
-	{0x16B7D, 0x16B8F, prOLetter}, // Lo  [19] PAHAWH HMONG CLAN SIGN TSHEEJ..PAHAWH HMONG CLAN SIGN VWJ
-	{0x16E40, 0x16E5F, prUpper},   // L&  [32] MEDEFAIDRIN CAPITAL LETTER M..MEDEFAIDRIN CAPITAL LETTER Y
-	{0x16E60, 0x16E7F, prLower},   // L&  [32] MEDEFAIDRIN SMALL LETTER M..MEDEFAIDRIN SMALL LETTER Y
-	{0x16E98, 0x16E98, prSTerm},   // Po       MEDEFAIDRIN FULL STOP
-	{0x16F00, 0x16F4A, prOLetter}, // Lo  [75] MIAO LETTER PA..MIAO LETTER RTE
-	{0x16F4F, 0x16F4F, prExtend},  // Mn       MIAO SIGN CONSONANT MODIFIER BAR
-	{0x16F50, 0x16F50, prOLetter}, // Lo       MIAO LETTER NASALIZATION
-	{0x16F51, 0x16F87, prExtend},  // Mc  [55] MIAO SIGN ASPIRATION..MIAO VOWEL SIGN UI
-	{0x16F8F, 0x16F92, prExtend},  // Mn   [4] MIAO TONE RIGHT..MIAO TONE BELOW
-	{0x16F93, 0x16F9F, prOLetter}, // Lm  [13] MIAO LETTER TONE-2..MIAO LETTER REFORMED TONE-8
-	{0x16FE0, 0x16FE1, prOLetter}, // Lm   [2] TANGUT ITERATION MARK..NUSHU ITERATION MARK
-	{0x16FE3, 0x16FE3, prOLetter}, // Lm       OLD CHINESE ITERATION MARK
-	{0x16FE4, 0x16FE4, prExtend},  // Mn       KHITAN SMALL SCRIPT FILLER
-	{0x16FF0, 0x16FF1, prExtend},  // Mc   [2] VIETNAMESE ALTERNATE READING MARK CA..VIETNAMESE ALTERNATE READING MARK NHAY
-	{0x17000, 0x187F7, prOLetter}, // Lo [6136] TANGUT IDEOGRAPH-17000..TANGUT IDEOGRAPH-187F7
-	{0x18800, 0x18CD5, prOLetter}, // Lo [1238] TANGUT COMPONENT-001..KHITAN SMALL SCRIPT CHARACTER-18CD5
-	{0x18D00, 0x18D08, prOLetter}, // Lo   [9] TANGUT IDEOGRAPH-18D00..TANGUT IDEOGRAPH-18D08
-	{0x1AFF0, 0x1AFF3, prOLetter}, // Lm   [4] KATAKANA LETTER MINNAN TONE-2..KATAKANA LETTER MINNAN TONE-5
-	{0x1AFF5, 0x1AFFB, prOLetter}, // Lm   [7] KATAKANA LETTER MINNAN TONE-7..KATAKANA LETTER MINNAN NASALIZED TONE-5
-	{0x1AFFD, 0x1AFFE, prOLetter}, // Lm   [2] KATAKANA LETTER MINNAN NASALIZED TONE-7..KATAKANA LETTER MINNAN NASALIZED TONE-8
-	{0x1B000, 0x1B122, prOLetter}, // Lo [291] KATAKANA LETTER ARCHAIC E..KATAKANA LETTER ARCHAIC WU
-	{0x1B132, 0x1B132, prOLetter}, // Lo       HIRAGANA LETTER SMALL KO
-	{0x1B150, 0x1B152, prOLetter}, // Lo   [3] HIRAGANA LETTER SMALL WI..HIRAGANA LETTER SMALL WO
-	{0x1B155, 0x1B155, prOLetter}, // Lo       KATAKANA LETTER SMALL KO
-	{0x1B164, 0x1B167, prOLetter}, // Lo   [4] KATAKANA LETTER SMALL WI..KATAKANA LETTER SMALL N
-	{0x1B170, 0x1B2FB, prOLetter}, // Lo [396] NUSHU CHARACTER-1B170..NUSHU CHARACTER-1B2FB
-	{0x1BC00, 0x1BC6A, prOLetter}, // Lo [107] DUPLOYAN LETTER H..DUPLOYAN LETTER VOCALIC M
-	{0x1BC70, 0x1BC7C, prOLetter}, // Lo  [13] DUPLOYAN AFFIX LEFT HORIZONTAL SECANT..DUPLOYAN AFFIX ATTACHED TANGENT HOOK
-	{0x1BC80, 0x1BC88, prOLetter}, // Lo   [9] DUPLOYAN AFFIX HIGH ACUTE..DUPLOYAN AFFIX HIGH VERTICAL
-	{0x1BC90, 0x1BC99, prOLetter}, // Lo  [10] DUPLOYAN AFFIX LOW ACUTE..DUPLOYAN AFFIX LOW ARROW
-	{0x1BC9D, 0x1BC9E, prExtend},  // Mn   [2] DUPLOYAN THICK LETTER SELECTOR..DUPLOYAN DOUBLE MARK
-	{0x1BC9F, 0x1BC9F, prSTerm},   // Po       DUPLOYAN PUNCTUATION CHINOOK FULL STOP
-	{0x1BCA0, 0x1BCA3, prFormat},  // Cf   [4] SHORTHAND FORMAT LETTER OVERLAP..SHORTHAND FORMAT UP STEP
-	{0x1CF00, 0x1CF2D, prExtend},  // Mn  [46] ZNAMENNY COMBINING MARK GORAZDO NIZKO S KRYZHEM ON LEFT..ZNAMENNY COMBINING MARK KRYZH ON LEFT
-	{0x1CF30, 0x1CF46, prExtend},  // Mn  [23] ZNAMENNY COMBINING TONAL RANGE MARK MRACHNO..ZNAMENNY PRIZNAK MODIFIER ROG
-	{0x1D165, 0x1D166, prExtend},  // Mc   [2] MUSICAL SYMBOL COMBINING STEM..MUSICAL SYMBOL COMBINING SPRECHGESANG STEM
-	{0x1D167, 0x1D169, prExtend},  // Mn   [3] MUSICAL SYMBOL COMBINING TREMOLO-1..MUSICAL SYMBOL COMBINING TREMOLO-3
-	{0x1D16D, 0x1D172, prExtend},  // Mc   [6] MUSICAL SYMBOL COMBINING AUGMENTATION DOT..MUSICAL SYMBOL COMBINING FLAG-5
-	{0x1D173, 0x1D17A, prFormat},  // Cf   [8] MUSICAL SYMBOL BEGIN BEAM..MUSICAL SYMBOL END PHRASE
-	{0x1D17B, 0x1D182, prExtend},  // Mn   [8] MUSICAL SYMBOL COMBINING ACCENT..MUSICAL SYMBOL COMBINING LOURE
-	{0x1D185, 0x1D18B, prExtend},  // Mn   [7] MUSICAL SYMBOL COMBINING DOIT..MUSICAL SYMBOL COMBINING TRIPLE TONGUE
-	{0x1D1AA, 0x1D1AD, prExtend},  // Mn   [4] MUSICAL SYMBOL COMBINING DOWN BOW..MUSICAL SYMBOL COMBINING SNAP PIZZICATO
-	{0x1D242, 0x1D244, prExtend},  // Mn   [3] COMBINING GREEK MUSICAL TRISEME..COMBINING GREEK MUSICAL PENTASEME
-	{0x1D400, 0x1D419, prUpper},   // L&  [26] MATHEMATICAL BOLD CAPITAL A..MATHEMATICAL BOLD CAPITAL Z
-	{0x1D41A, 0x1D433, prLower},   // L&  [26] MATHEMATICAL BOLD SMALL A..MATHEMATICAL BOLD SMALL Z
-	{0x1D434, 0x1D44D, prUpper},   // L&  [26] MATHEMATICAL ITALIC CAPITAL A..MATHEMATICAL ITALIC CAPITAL Z
-	{0x1D44E, 0x1D454, prLower},   // L&   [7] MATHEMATICAL ITALIC SMALL A..MATHEMATICAL ITALIC SMALL G
-	{0x1D456, 0x1D467, prLower},   // L&  [18] MATHEMATICAL ITALIC SMALL I..MATHEMATICAL ITALIC SMALL Z
-	{0x1D468, 0x1D481, prUpper},   // L&  [26] MATHEMATICAL BOLD ITALIC CAPITAL A..MATHEMATICAL BOLD ITALIC CAPITAL Z
-	{0x1D482, 0x1D49B, prLower},   // L&  [26] MATHEMATICAL BOLD ITALIC SMALL A..MATHEMATICAL BOLD ITALIC SMALL Z
-	{0x1D49C, 0x1D49C, prUpper},   // L&       MATHEMATICAL SCRIPT CAPITAL A
-	{0x1D49E, 0x1D49F, prUpper},   // L&   [2] MATHEMATICAL SCRIPT CAPITAL C..MATHEMATICAL SCRIPT CAPITAL D
-	{0x1D4A2, 0x1D4A2, prUpper},   // L&       MATHEMATICAL SCRIPT CAPITAL G
-	{0x1D4A5, 0x1D4A6, prUpper},   // L&   [2] MATHEMATICAL SCRIPT CAPITAL J..MATHEMATICAL SCRIPT CAPITAL K
-	{0x1D4A9, 0x1D4AC, prUpper},   // L&   [4] MATHEMATICAL SCRIPT CAPITAL N..MATHEMATICAL SCRIPT CAPITAL Q
-	{0x1D4AE, 0x1D4B5, prUpper},   // L&   [8] MATHEMATICAL SCRIPT CAPITAL S..MATHEMATICAL SCRIPT CAPITAL Z
-	{0x1D4B6, 0x1D4B9, prLower},   // L&   [4] MATHEMATICAL SCRIPT SMALL A..MATHEMATICAL SCRIPT SMALL D
-	{0x1D4BB, 0x1D4BB, prLower},   // L&       MATHEMATICAL SCRIPT SMALL F
-	{0x1D4BD, 0x1D4C3, prLower},   // L&   [7] MATHEMATICAL SCRIPT SMALL H..MATHEMATICAL SCRIPT SMALL N
-	{0x1D4C5, 0x1D4CF, prLower},   // L&  [11] MATHEMATICAL SCRIPT SMALL P..MATHEMATICAL SCRIPT SMALL Z
-	{0x1D4D0, 0x1D4E9, prUpper},   // L&  [26] MATHEMATICAL BOLD SCRIPT CAPITAL A..MATHEMATICAL BOLD SCRIPT CAPITAL Z
-	{0x1D4EA, 0x1D503, prLower},   // L&  [26] MATHEMATICAL BOLD SCRIPT SMALL A..MATHEMATICAL BOLD SCRIPT SMALL Z
-	{0x1D504, 0x1D505, prUpper},   // L&   [2] MATHEMATICAL FRAKTUR CAPITAL A..MATHEMATICAL FRAKTUR CAPITAL B
-	{0x1D507, 0x1D50A, prUpper},   // L&   [4] MATHEMATICAL FRAKTUR CAPITAL D..MATHEMATICAL FRAKTUR CAPITAL G
-	{0x1D50D, 0x1D514, prUpper},   // L&   [8] MATHEMATICAL FRAKTUR CAPITAL J..MATHEMATICAL FRAKTUR CAPITAL Q
-	{0x1D516, 0x1D51C, prUpper},   // L&   [7] MATHEMATICAL FRAKTUR CAPITAL S..MATHEMATICAL FRAKTUR CAPITAL Y
-	{0x1D51E, 0x1D537, prLower},   // L&  [26] MATHEMATICAL FRAKTUR SMALL A..MATHEMATICAL FRAKTUR SMALL Z
-	{0x1D538, 0x1D539, prUpper},   // L&   [2] MATHEMATICAL DOUBLE-STRUCK CAPITAL A..MATHEMATICAL DOUBLE-STRUCK CAPITAL B
-	{0x1D53B, 0x1D53E, prUpper},   // L&   [4] MATHEMATICAL DOUBLE-STRUCK CAPITAL D..MATHEMATICAL DOUBLE-STRUCK CAPITAL G
-	{0x1D540, 0x1D544, prUpper},   // L&   [5] MATHEMATICAL DOUBLE-STRUCK CAPITAL I..MATHEMATICAL DOUBLE-STRUCK CAPITAL M
-	{0x1D546, 0x1D546, prUpper},   // L&       MATHEMATICAL DOUBLE-STRUCK CAPITAL O
-	{0x1D54A, 0x1D550, prUpper},   // L&   [7] MATHEMATICAL DOUBLE-STRUCK CAPITAL S..MATHEMATICAL DOUBLE-STRUCK CAPITAL Y
-	{0x1D552, 0x1D56B, prLower},   // L&  [26] MATHEMATICAL DOUBLE-STRUCK SMALL A..MATHEMATICAL DOUBLE-STRUCK SMALL Z
-	{0x1D56C, 0x1D585, prUpper},   // L&  [26] MATHEMATICAL BOLD FRAKTUR CAPITAL A..MATHEMATICAL BOLD FRAKTUR CAPITAL Z
-	{0x1D586, 0x1D59F, prLower},   // L&  [26] MATHEMATICAL BOLD FRAKTUR SMALL A..MATHEMATICAL BOLD FRAKTUR SMALL Z
-	{0x1D5A0, 0x1D5B9, prUpper},   // L&  [26] MATHEMATICAL SANS-SERIF CAPITAL A..MATHEMATICAL SANS-SERIF CAPITAL Z
-	{0x1D5BA, 0x1D5D3, prLower},   // L&  [26] MATHEMATICAL SANS-SERIF SMALL A..MATHEMATICAL SANS-SERIF SMALL Z
-	{0x1D5D4, 0x1D5ED, prUpper},   // L&  [26] MATHEMATICAL SANS-SERIF BOLD CAPITAL A..MATHEMATICAL SANS-SERIF BOLD CAPITAL Z
-	{0x1D5EE, 0x1D607, prLower},   // L&  [26] MATHEMATICAL SANS-SERIF BOLD SMALL A..MATHEMATICAL SANS-SERIF BOLD SMALL Z
-	{0x1D608, 0x1D621, prUpper},   // L&  [26] MATHEMATICAL SANS-SERIF ITALIC CAPITAL A..MATHEMATICAL SANS-SERIF ITALIC CAPITAL Z
-	{0x1D622, 0x1D63B, prLower},   // L&  [26] MATHEMATICAL SANS-SERIF ITALIC SMALL A..MATHEMATICAL SANS-SERIF ITALIC SMALL Z
-	{0x1D63C, 0x1D655, prUpper},   // L&  [26] MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL A..MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL Z
-	{0x1D656, 0x1D66F, prLower},   // L&  [26] MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL A..MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL Z
-	{0x1D670, 0x1D689, prUpper},   // L&  [26] MATHEMATICAL MONOSPACE CAPITAL A..MATHEMATICAL MONOSPACE CAPITAL Z
-	{0x1D68A, 0x1D6A5, prLower},   // L&  [28] MATHEMATICAL MONOSPACE SMALL A..MATHEMATICAL ITALIC SMALL DOTLESS J
-	{0x1D6A8, 0x1D6C0, prUpper},   // L&  [25] MATHEMATICAL BOLD CAPITAL ALPHA..MATHEMATICAL BOLD CAPITAL OMEGA
-	{0x1D6C2, 0x1D6DA, prLower},   // L&  [25] MATHEMATICAL BOLD SMALL ALPHA..MATHEMATICAL BOLD SMALL OMEGA
-	{0x1D6DC, 0x1D6E1, prLower},   // L&   [6] MATHEMATICAL BOLD EPSILON SYMBOL..MATHEMATICAL BOLD PI SYMBOL
-	{0x1D6E2, 0x1D6FA, prUpper},   // L&  [25] MATHEMATICAL ITALIC CAPITAL ALPHA..MATHEMATICAL ITALIC CAPITAL OMEGA
-	{0x1D6FC, 0x1D714, prLower},   // L&  [25] MATHEMATICAL ITALIC SMALL ALPHA..MATHEMATICAL ITALIC SMALL OMEGA
-	{0x1D716, 0x1D71B, prLower},   // L&   [6] MATHEMATICAL ITALIC EPSILON SYMBOL..MATHEMATICAL ITALIC PI SYMBOL
-	{0x1D71C, 0x1D734, prUpper},   // L&  [25] MATHEMATICAL BOLD ITALIC CAPITAL ALPHA..MATHEMATICAL BOLD ITALIC CAPITAL OMEGA
-	{0x1D736, 0x1D74E, prLower},   // L&  [25] MATHEMATICAL BOLD ITALIC SMALL ALPHA..MATHEMATICAL BOLD ITALIC SMALL OMEGA
-	{0x1D750, 0x1D755, prLower},   // L&   [6] MATHEMATICAL BOLD ITALIC EPSILON SYMBOL..MATHEMATICAL BOLD ITALIC PI SYMBOL
-	{0x1D756, 0x1D76E, prUpper},   // L&  [25] MATHEMATICAL SANS-SERIF BOLD CAPITAL ALPHA..MATHEMATICAL SANS-SERIF BOLD CAPITAL OMEGA
-	{0x1D770, 0x1D788, prLower},   // L&  [25] MATHEMATICAL SANS-SERIF BOLD SMALL ALPHA..MATHEMATICAL SANS-SERIF BOLD SMALL OMEGA
-	{0x1D78A, 0x1D78F, prLower},   // L&   [6] MATHEMATICAL SANS-SERIF BOLD EPSILON SYMBOL..MATHEMATICAL SANS-SERIF BOLD PI SYMBOL
-	{0x1D790, 0x1D7A8, prUpper},   // L&  [25] MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL ALPHA..MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL OMEGA
-	{0x1D7AA, 0x1D7C2, prLower},   // L&  [25] MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL ALPHA..MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL OMEGA
-	{0x1D7C4, 0x1D7C9, prLower},   // L&   [6] MATHEMATICAL SANS-SERIF BOLD ITALIC EPSILON SYMBOL..MATHEMATICAL SANS-SERIF BOLD ITALIC PI SYMBOL
-	{0x1D7CA, 0x1D7CA, prUpper},   // L&       MATHEMATICAL BOLD CAPITAL DIGAMMA
-	{0x1D7CB, 0x1D7CB, prLower},   // L&       MATHEMATICAL BOLD SMALL DIGAMMA
-	{0x1D7CE, 0x1D7FF, prNumeric}, // Nd  [50] MATHEMATICAL BOLD DIGIT ZERO..MATHEMATICAL MONOSPACE DIGIT NINE
-	{0x1DA00, 0x1DA36, prExtend},  // Mn  [55] SIGNWRITING HEAD RIM..SIGNWRITING AIR SUCKING IN
-	{0x1DA3B, 0x1DA6C, prExtend},  // Mn  [50] SIGNWRITING MOUTH CLOSED NEUTRAL..SIGNWRITING EXCITEMENT
-	{0x1DA75, 0x1DA75, prExtend},  // Mn       SIGNWRITING UPPER BODY TILTING FROM HIP JOINTS
-	{0x1DA84, 0x1DA84, prExtend},  // Mn       SIGNWRITING LOCATION HEAD NECK
-	{0x1DA88, 0x1DA88, prSTerm},   // Po       SIGNWRITING FULL STOP
-	{0x1DA9B, 0x1DA9F, prExtend},  // Mn   [5] SIGNWRITING FILL MODIFIER-2..SIGNWRITING FILL MODIFIER-6
-	{0x1DAA1, 0x1DAAF, prExtend},  // Mn  [15] SIGNWRITING ROTATION MODIFIER-2..SIGNWRITING ROTATION MODIFIER-16
-	{0x1DF00, 0x1DF09, prLower},   // L&  [10] LATIN SMALL LETTER FENG DIGRAPH WITH TRILL..LATIN SMALL LETTER T WITH HOOK AND RETROFLEX HOOK
-	{0x1DF0A, 0x1DF0A, prOLetter}, // Lo       LATIN LETTER RETROFLEX CLICK WITH RETROFLEX HOOK
-	{0x1DF0B, 0x1DF1E, prLower},   // L&  [20] LATIN SMALL LETTER ESH WITH DOUBLE BAR..LATIN SMALL LETTER S WITH CURL
-	{0x1DF25, 0x1DF2A, prLower},   // L&   [6] LATIN SMALL LETTER D WITH MID-HEIGHT LEFT HOOK..LATIN SMALL LETTER T WITH MID-HEIGHT LEFT HOOK
-	{0x1E000, 0x1E006, prExtend},  // Mn   [7] COMBINING GLAGOLITIC LETTER AZU..COMBINING GLAGOLITIC LETTER ZHIVETE
-	{0x1E008, 0x1E018, prExtend},  // Mn  [17] COMBINING GLAGOLITIC LETTER ZEMLJA..COMBINING GLAGOLITIC LETTER HERU
-	{0x1E01B, 0x1E021, prExtend},  // Mn   [7] COMBINING GLAGOLITIC LETTER SHTA..COMBINING GLAGOLITIC LETTER YATI
-	{0x1E023, 0x1E024, prExtend},  // Mn   [2] COMBINING GLAGOLITIC LETTER YU..COMBINING GLAGOLITIC LETTER SMALL YUS
-	{0x1E026, 0x1E02A, prExtend},  // Mn   [5] COMBINING GLAGOLITIC LETTER YO..COMBINING GLAGOLITIC LETTER FITA
-	{0x1E030, 0x1E06D, prLower},   // Lm  [62] MODIFIER LETTER CYRILLIC SMALL A..MODIFIER LETTER CYRILLIC SMALL STRAIGHT U WITH STROKE
-	{0x1E08F, 0x1E08F, prExtend},  // Mn       COMBINING CYRILLIC SMALL LETTER BYELORUSSIAN-UKRAINIAN I
-	{0x1E100, 0x1E12C, prOLetter}, // Lo  [45] NYIAKENG PUACHUE HMONG LETTER MA..NYIAKENG PUACHUE HMONG LETTER W
-	{0x1E130, 0x1E136, prExtend},  // Mn   [7] NYIAKENG PUACHUE HMONG TONE-B..NYIAKENG PUACHUE HMONG TONE-D
-	{0x1E137, 0x1E13D, prOLetter}, // Lm   [7] NYIAKENG PUACHUE HMONG SIGN FOR PERSON..NYIAKENG PUACHUE HMONG SYLLABLE LENGTHENER
-	{0x1E140, 0x1E149, prNumeric}, // Nd  [10] NYIAKENG PUACHUE HMONG DIGIT ZERO..NYIAKENG PUACHUE HMONG DIGIT NINE
-	{0x1E14E, 0x1E14E, prOLetter}, // Lo       NYIAKENG PUACHUE HMONG LOGOGRAM NYAJ
-	{0x1E290, 0x1E2AD, prOLetter}, // Lo  [30] TOTO LETTER PA..TOTO LETTER A
-	{0x1E2AE, 0x1E2AE, prExtend},  // Mn       TOTO SIGN RISING TONE
-	{0x1E2C0, 0x1E2EB, prOLetter}, // Lo  [44] WANCHO LETTER AA..WANCHO LETTER YIH
-	{0x1E2EC, 0x1E2EF, prExtend},  // Mn   [4] WANCHO TONE TUP..WANCHO TONE KOINI
-	{0x1E2F0, 0x1E2F9, prNumeric}, // Nd  [10] WANCHO DIGIT ZERO..WANCHO DIGIT NINE
-	{0x1E4D0, 0x1E4EA, prOLetter}, // Lo  [27] NAG MUNDARI LETTER O..NAG MUNDARI LETTER ELL
-	{0x1E4EB, 0x1E4EB, prOLetter}, // Lm       NAG MUNDARI SIGN OJOD
-	{0x1E4EC, 0x1E4EF, prExtend},  // Mn   [4] NAG MUNDARI SIGN MUHOR..NAG MUNDARI SIGN SUTUH
-	{0x1E4F0, 0x1E4F9, prNumeric}, // Nd  [10] NAG MUNDARI DIGIT ZERO..NAG MUNDARI DIGIT NINE
-	{0x1E7E0, 0x1E7E6, prOLetter}, // Lo   [7] ETHIOPIC SYLLABLE HHYA..ETHIOPIC SYLLABLE HHYO
-	{0x1E7E8, 0x1E7EB, prOLetter}, // Lo   [4] ETHIOPIC SYLLABLE GURAGE HHWA..ETHIOPIC SYLLABLE HHWE
-	{0x1E7ED, 0x1E7EE, prOLetter}, // Lo   [2] ETHIOPIC SYLLABLE GURAGE MWI..ETHIOPIC SYLLABLE GURAGE MWEE
-	{0x1E7F0, 0x1E7FE, prOLetter}, // Lo  [15] ETHIOPIC SYLLABLE GURAGE QWI..ETHIOPIC SYLLABLE GURAGE PWEE
-	{0x1E800, 0x1E8C4, prOLetter}, // Lo [197] MENDE KIKAKUI SYLLABLE M001 KI..MENDE KIKAKUI SYLLABLE M060 NYON
-	{0x1E8D0, 0x1E8D6, prExtend},  // Mn   [7] MENDE KIKAKUI COMBINING NUMBER TEENS..MENDE KIKAKUI COMBINING NUMBER MILLIONS
-	{0x1E900, 0x1E921, prUpper},   // L&  [34] ADLAM CAPITAL LETTER ALIF..ADLAM CAPITAL LETTER SHA
-	{0x1E922, 0x1E943, prLower},   // L&  [34] ADLAM SMALL LETTER ALIF..ADLAM SMALL LETTER SHA
-	{0x1E944, 0x1E94A, prExtend},  // Mn   [7] ADLAM ALIF LENGTHENER..ADLAM NUKTA
-	{0x1E94B, 0x1E94B, prOLetter}, // Lm       ADLAM NASALIZATION MARK
-	{0x1E950, 0x1E959, prNumeric}, // Nd  [10] ADLAM DIGIT ZERO..ADLAM DIGIT NINE
-	{0x1EE00, 0x1EE03, prOLetter}, // Lo   [4] ARABIC MATHEMATICAL ALEF..ARABIC MATHEMATICAL DAL
-	{0x1EE05, 0x1EE1F, prOLetter}, // Lo  [27] ARABIC MATHEMATICAL WAW..ARABIC MATHEMATICAL DOTLESS QAF
-	{0x1EE21, 0x1EE22, prOLetter}, // Lo   [2] ARABIC MATHEMATICAL INITIAL BEH..ARABIC MATHEMATICAL INITIAL JEEM
-	{0x1EE24, 0x1EE24, prOLetter}, // Lo       ARABIC MATHEMATICAL INITIAL HEH
-	{0x1EE27, 0x1EE27, prOLetter}, // Lo       ARABIC MATHEMATICAL INITIAL HAH
-	{0x1EE29, 0x1EE32, prOLetter}, // Lo  [10] ARABIC MATHEMATICAL INITIAL YEH..ARABIC MATHEMATICAL INITIAL QAF
-	{0x1EE34, 0x1EE37, prOLetter}, // Lo   [4] ARABIC MATHEMATICAL INITIAL SHEEN..ARABIC MATHEMATICAL INITIAL KHAH
-	{0x1EE39, 0x1EE39, prOLetter}, // Lo       ARABIC MATHEMATICAL INITIAL DAD
-	{0x1EE3B, 0x1EE3B, prOLetter}, // Lo       ARABIC MATHEMATICAL INITIAL GHAIN
-	{0x1EE42, 0x1EE42, prOLetter}, // Lo       ARABIC MATHEMATICAL TAILED JEEM
-	{0x1EE47, 0x1EE47, prOLetter}, // Lo       ARABIC MATHEMATICAL TAILED HAH
-	{0x1EE49, 0x1EE49, prOLetter}, // Lo       ARABIC MATHEMATICAL TAILED YEH
-	{0x1EE4B, 0x1EE4B, prOLetter}, // Lo       ARABIC MATHEMATICAL TAILED LAM
-	{0x1EE4D, 0x1EE4F, prOLetter}, // Lo   [3] ARABIC MATHEMATICAL TAILED NOON..ARABIC MATHEMATICAL TAILED AIN
-	{0x1EE51, 0x1EE52, prOLetter}, // Lo   [2] ARABIC MATHEMATICAL TAILED SAD..ARABIC MATHEMATICAL TAILED QAF
-	{0x1EE54, 0x1EE54, prOLetter}, // Lo       ARABIC MATHEMATICAL TAILED SHEEN
-	{0x1EE57, 0x1EE57, prOLetter}, // Lo       ARABIC MATHEMATICAL TAILED KHAH
-	{0x1EE59, 0x1EE59, prOLetter}, // Lo       ARABIC MATHEMATICAL TAILED DAD
-	{0x1EE5B, 0x1EE5B, prOLetter}, // Lo       ARABIC MATHEMATICAL TAILED GHAIN
-	{0x1EE5D, 0x1EE5D, prOLetter}, // Lo       ARABIC MATHEMATICAL TAILED DOTLESS NOON
-	{0x1EE5F, 0x1EE5F, prOLetter}, // Lo       ARABIC MATHEMATICAL TAILED DOTLESS QAF
-	{0x1EE61, 0x1EE62, prOLetter}, // Lo   [2] ARABIC MATHEMATICAL STRETCHED BEH..ARABIC MATHEMATICAL STRETCHED JEEM
-	{0x1EE64, 0x1EE64, prOLetter}, // Lo       ARABIC MATHEMATICAL STRETCHED HEH
-	{0x1EE67, 0x1EE6A, prOLetter}, // Lo   [4] ARABIC MATHEMATICAL STRETCHED HAH..ARABIC MATHEMATICAL STRETCHED KAF
-	{0x1EE6C, 0x1EE72, prOLetter}, // Lo   [7] ARABIC MATHEMATICAL STRETCHED MEEM..ARABIC MATHEMATICAL STRETCHED QAF
-	{0x1EE74, 0x1EE77, prOLetter}, // Lo   [4] ARABIC MATHEMATICAL STRETCHED SHEEN..ARABIC MATHEMATICAL STRETCHED KHAH
-	{0x1EE79, 0x1EE7C, prOLetter}, // Lo   [4] ARABIC MATHEMATICAL STRETCHED DAD..ARABIC MATHEMATICAL STRETCHED DOTLESS BEH
-	{0x1EE7E, 0x1EE7E, prOLetter}, // Lo       ARABIC MATHEMATICAL STRETCHED DOTLESS FEH
-	{0x1EE80, 0x1EE89, prOLetter}, // Lo  [10] ARABIC MATHEMATICAL LOOPED ALEF..ARABIC MATHEMATICAL LOOPED YEH
-	{0x1EE8B, 0x1EE9B, prOLetter}, // Lo  [17] ARABIC MATHEMATICAL LOOPED LAM..ARABIC MATHEMATICAL LOOPED GHAIN
-	{0x1EEA1, 0x1EEA3, prOLetter}, // Lo   [3] ARABIC MATHEMATICAL DOUBLE-STRUCK BEH..ARABIC MATHEMATICAL DOUBLE-STRUCK DAL
-	{0x1EEA5, 0x1EEA9, prOLetter}, // Lo   [5] ARABIC MATHEMATICAL DOUBLE-STRUCK WAW..ARABIC MATH
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/rivo/uniseg/sentenceproperties.go","mode":420,"size":241800,"sha256":"272502600803b8e99721cb9d76002a6546ea2350056bf66bb7860c39a2032bd9","index":5,"count":6,"newline":"lf","encoding":"utf-8","payloadBytes":1800}
-EMATICAL DOUBLE-STRUCK YEH
-	{0x1EEAB, 0x1EEBB, prOLetter}, // Lo  [17] ARABIC MATHEMATICAL DOUBLE-STRUCK LAM..ARABIC MATHEMATICAL DOUBLE-STRUCK GHAIN
-	{0x1F130, 0x1F149, prUpper},   // So  [26] SQUARED LATIN CAPITAL LETTER A..SQUARED LATIN CAPITAL LETTER Z
-	{0x1F150, 0x1F169, prUpper},   // So  [26] NEGATIVE CIRCLED LATIN CAPITAL LETTER A..NEGATIVE CIRCLED LATIN CAPITAL LETTER Z
-	{0x1F170, 0x1F189, prUpper},   // So  [26] NEGATIVE SQUARED LATIN CAPITAL LETTER A..NEGATIVE SQUARED LATIN CAPITAL LETTER Z
-	{0x1F676, 0x1F678, prClose},   // So   [3] SANS-SERIF HEAVY DOUBLE TURNED COMMA QUOTATION MARK ORNAMENT..SANS-SERIF HEAVY LOW DOUBLE COMMA QUOTATION MARK ORNAMENT
-	{0x1FBF0, 0x1FBF9, prNumeric}, // Nd  [10] SEGMENTED DIGIT ZERO..SEGMENTED DIGIT NINE
-	{0x20000, 0x2A6DF, prOLetter}, // Lo [42720] CJK UNIFIED IDEOGRAPH-20000..CJK UNIFIED IDEOGRAPH-2A6DF
-	{0x2A700, 0x2B739, prOLetter}, // Lo [4154] CJK UNIFIED IDEOGRAPH-2A700..CJK UNIFIED IDEOGRAPH-2B739
-	{0x2B740, 0x2B81D, prOLetter}, // Lo [222] CJK UNIFIED IDEOGRAPH-2B740..CJK UNIFIED IDEOGRAPH-2B81D
-	{0x2B820, 0x2CEA1, prOLetter}, // Lo [5762] CJK UNIFIED IDEOGRAPH-2B820..CJK UNIFIED IDEOGRAPH-2CEA1
-	{0x2CEB0, 0x2EBE0, prOLetter}, // Lo [7473] CJK UNIFIED IDEOGRAPH-2CEB0..CJK UNIFIED IDEOGRAPH-2EBE0
-	{0x2F800, 0x2FA1D, prOLetter}, // Lo [542] CJK COMPATIBILITY IDEOGRAPH-2F800..CJK COMPATIBILITY IDEOGRAPH-2FA1D
-	{0x30000, 0x3134A, prOLetter}, // Lo [4939] CJK UNIFIED IDEOGRAPH-30000..CJK UNIFIED IDEOGRAPH-3134A
-	{0x31350, 0x323AF, prOLetter}, // Lo [4192] CJK UNIFIED IDEOGRAPH-31350..CJK UNIFIED IDEOGRAPH-323AF
-	{0xE0001, 0xE0001, prFormat},  // Cf       LANGUAGE TAG
-	{0xE0020, 0xE007F, prExtend},  // Cf  [96] TAG SPACE..CANCEL TAG
-	{0xE0100, 0xE01EF, prExtend},  // Mn [240] VARIATION SELECTOR-17..VARIATION SELECTOR-256
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/rivo/uniseg/sentencerules.go","mode":420,"size":7887,"sha256":"12ff3986697a1e31c9029c885c39662a267c6bd40e2df88b0466eb7ff34ebf56","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7887}
-package uniseg
-
-import "unicode/utf8"
-
-// The states of the sentence break parser.
-const (
-	sbAny = iota
-	sbCR
-	sbParaSep
-	sbATerm
-	sbUpper
-	sbLower
-	sbSB7
-	sbSB8Close
-	sbSB8Sp
-	sbSTerm
-	sbSB8aClose
-	sbSB8aSp
-)
-
-// sbTransitions implements the sentence break parser's state transitions. It's
-// anologous to [grTransitions], see comments there for details.
-//
-// Unicode version 15.0.0.
-func sbTransitions(state, prop int) (newState int, sentenceBreak bool, rule int) {
-	switch uint64(state) | uint64(prop)<<32 {
-	// SB3.
-	case sbAny | prCR<<32:
-		return sbCR, false, 9990
-	case sbCR | prLF<<32:
-		return sbParaSep, false, 30
-
-	// SB4.
-	case sbAny | prSep<<32:
-		return sbParaSep, false, 9990
-	case sbAny | prLF<<32:
-		return sbParaSep, false, 9990
-	case sbParaSep | prAny<<32:
-		return sbAny, true, 40
-	case sbCR | prAny<<32:
-		return sbAny, true, 40
-
-	// SB6.
-	case sbAny | prATerm<<32:
-		return sbATerm, false, 9990
-	case sbATerm | prNumeric<<32:
-		return sbAny, false, 60
-	case sbSB7 | prNumeric<<32:
-		return sbAny, false, 60 // Because ATerm also appears in SB7.
-
-	// SB7.
-	case sbAny | prUpper<<32:
-		return sbUpper, false, 9990
-	case sbAny | prLower<<32:
-		return sbLower, false, 9990
-	case sbUpper | prATerm<<32:
-		return sbSB7, false, 70
-	case sbLower | prATerm<<32:
-		return sbSB7, false, 70
-	case sbSB7 | prUpper<<32:
-		return sbUpper, false, 70
-
-	// SB8a.
-	case sbAny | prSTerm<<32:
-		return sbSTerm, false, 9990
-	case sbATerm | prSContinue<<32:
-		return sbAny, false, 81
-	case sbATerm | prATerm<<32:
-		return sbATerm, false, 81
-	case sbATerm | prSTerm<<32:
-		return sbSTerm, false, 81
-	case sbSB7 | prSContinue<<32:
-		return sbAny, false, 81
-	case sbSB7 | prATerm<<32:
-		return sbATerm, false, 81
-	case sbSB7 | prSTerm<<32:
-		return sbSTerm, false, 81
-	case sbSB8Close | prSContinue<<32:
-		return sbAny, false, 81
-	case sbSB8Close | prATerm<<32:
-		return sbATerm, false, 81
-	case sbSB8Close | prSTerm<<32:
-		return sbSTerm, false, 81
-	case sbSB8Sp | prSContinue<<32:
-		return sbAny, false, 81
-	case sbSB8Sp | prATerm<<32:
-		return sbATerm, false, 81
-	case sbSB8Sp | prSTerm<<32:
-		return sbSTerm, false, 81
-	case sbSTerm | prSContinue<<32:
-		return sbAny, false, 81
-	case sbSTerm | prATerm<<32:
-		return sbATerm, false, 81
-	case sbSTerm | prSTerm<<32:
-		return sbSTerm, false, 81
-	case sbSB8aClose | prSContinue<<32:
-		return sbAny, false, 81
-	case sbSB8aClose | prATerm<<32:
-		return sbATerm, false, 81
-	case sbSB8aClose | prSTerm<<32:
-		return sbSTerm, false, 81
-	case sbSB8aSp | prSContinue<<32:
-		return sbAny, false, 81
-	case sbSB8aSp | prATerm<<32:
-		return sbATerm, false, 81
-	case sbSB8aSp | prSTerm<<32:
-		return sbSTerm, false, 81
-
-	// SB9.
-	case sbATerm | prClose<<32:
-		return sbSB8Close, false, 90
-	case sbSB7 | prClose<<32:
-		return sbSB8Close, false, 90
-	case sbSB8Close | prClose<<32:
-		return sbSB8Close, false, 90
-	case sbATerm | prSp<<32:
-		return sbSB8Sp, false, 90
-	case sbSB7 | prSp<<32:
-		return sbSB8Sp, false, 90
-	case sbSB8Close | prSp<<32:
-		return sbSB8Sp, false, 90
-	case sbSTerm | prClose<<32:
-		return sbSB8aClose, false, 90
-	case sbSB8aClose | prClose<<32:
-		return sbSB8aClose, false, 90
-	case sbSTerm | prSp<<32:
-		return sbSB8aSp, false, 90
-	case sbSB8aClose | prSp<<32:
-		return sbSB8aSp, false, 90
-	case sbATerm | prSep<<32:
-		return sbParaSep, false, 90
-	case sbATerm | prCR<<32:
-		return sbParaSep, false, 90
-	case sbATerm | prLF<<32:
-		return sbParaSep, false, 90
-	case sbSB7 | prSep<<32:
-		return sbParaSep, false, 90
-	case sbSB7 | prCR<<32:
-		return sbParaSep, false, 90
-	case sbSB7 | prLF<<32:
-		return sbParaSep, false, 90
-	case sbSB8Close | prSep<<32:
-		return sbParaSep, false, 90
-	case sbSB8Close | prCR<<32:
-		return sbParaSep, false, 90
-	case sbSB8Close | prLF<<32:
-		return sbParaSep, false, 90
-	case sbSTerm | prSep<<32:
-		return sbParaSep, false, 90
-	case sbSTerm | prCR<<32:
-		return sbParaSep, false, 90
-	case sbSTerm | prLF<<32:
-		return sbParaSep, false, 90
-	case sbSB8aClose | prSep<<32:
-		return sbParaSep, false, 90
-	case sbSB8aClose | prCR<<32:
-		return sbParaSep, false, 90
-	case sbSB8aClose | prLF<<32:
-		return sbParaSep, false, 90
-
-	// SB10.
-	case sbSB8Sp | prSp<<32:
-		return sbSB8Sp, false, 100
-	case sbSB8aSp | prSp<<32:
-		return sbSB8aSp, false, 100
-	case sbSB8Sp | prSep<<32:
-		return sbParaSep, false, 100
-	case sbSB8Sp | prCR<<32:
-		return sbParaSep, false, 100
-	case sbSB8Sp | prLF<<32:
-		return sbParaSep, false, 100
-
-	// SB11.
-	case sbATerm | prAny<<32:
-		return sbAny, true, 110
-	case sbSB7 | prAny<<32:
-		return sbAny, true, 110
-	case sbSB8Close | prAny<<32:
-		return sbAny, true, 110
-	case sbSB8Sp | prAny<<32:
-		return sbAny, true, 110
-	case sbSTerm | prAny<<32:
-		return sbAny, true, 110
-	case sbSB8aClose | prAny<<32:
-		return sbAny, true, 110
-	case sbSB8aSp | prAny<<32:
-		return sbAny, true, 110
-	// We'll always break after ParaSep due to SB4.
-
-	default:
-		return -1, false, -1
-	}
-}
-
-// transitionSentenceBreakState determines the new state of the sentence break
-// parser given the current state and the next code point. It also returns
-// whether a sentence boundary was detected. If more than one code point is
-// needed to determine the new state, the byte slice or the string starting
-// after rune "r" can be used (whichever is not nil or empty) for further
-// lookups.
-func transitionSentenceBreakState(state int, r rune, b []byte, str string) (newState int, sentenceBreak bool) {
-	// Determine the property of the next character.
-	nextProperty := property(sentenceBreakCodePoints, r)
-
-	// SB5 (Replacing Ignore Rules).
-	if nextProperty == prExtend || nextProperty == prFormat {
-		if state == sbParaSep || state == sbCR {
-			return sbAny, true // Make sure we don't apply SB5 to SB3 or SB4.
-		}
-		if state < 0 {
-			return sbAny, true // SB1.
-		}
-		return state, false
-	}
-
-	// Find the applicable transition in the table.
-	var rule int
-	newState, sentenceBreak, rule = sbTransitions(state, nextProperty)
-	if newState < 0 {
-		// No specific transition found. Try the less specific ones.
-		anyPropState, anyPropProp, anyPropRule := sbTransitions(state, prAny)
-		anyStateState, anyStateProp, anyStateRule := sbTransitions(sbAny, nextProperty)
-		if anyPropState >= 0 && anyStateState >= 0 {
-			// Both apply. We'll use a mix (see comments for grTransitions).
-			newState, sentenceBreak, rule = anyStateState, anyStateProp, anyStateRule
-			if anyPropRule < anyStateRule {
-				sentenceBreak, rule = anyPropProp, anyPropRule
-			}
-		} else if anyPropState >= 0 {
-			// We only have a specific state.
-			newState, sentenceBreak, rule = anyPropState, anyPropProp, anyPropRule
-			// This branch will probably never be reached because okAnyState will
-			// always be true given the current transition map. But we keep it here
-			// for future modifications to the transition map where this may not be
-			// true anymore.
-		} else if anyStateState >= 0 {
-			// We only have a specific property.
-			newState, sentenceBreak, rule = anyStateState, anyStateProp, anyStateRule
-		} else {
-			// No known transition. SB999: Any × Any.
-			newState, sentenceBreak, rule = sbAny, false, 9990
-		}
-	}
-
-	// SB8.
-	if rule > 80 && (state == sbATerm || state == sbSB8Close || state == sbSB8Sp || state == sbSB7) {
-		// Check the right side of the rule.
-		var length int
-		for nextProperty != prOLetter &&
-			nextProperty != prUpper &&
-			nextProperty != prLower &&
-			nextProperty != prSep &&
-			nextProperty != prCR &&
-			nextProperty != prLF &&
-			nextProperty != prATerm &&
-			nextProperty != prSTerm {
-			// Move on to the next rune.
-			if b != nil { // Byte slice version.
-				r, length = utf8.DecodeRune(b)
-				b = b[length:]
-			} else { // String version.
-				r, length = utf8.DecodeRuneInString(str)
-				str = str[length:]
-			}
-			if r == utf8.RuneError {
-				break
-			}
-			nextProperty = property(sentenceBreakCodePoints, r)
-		}
-		if nextProperty == prLower {
-			return sbLower, false
-		}
-	}
-
-	return
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/rivo/uniseg/step.go","mode":420,"size":9698,"sha256":"93c8f1f8b5eac3e00393eeb49a616fa08d3fdf5b20e0e29a069c73c4bffeb7e7","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":9698}
-package uniseg
-
-import "unicode/utf8"
-
-// The bit masks used to extract boundary information returned by [Step].
-const (
-	MaskLine     = 3
-	MaskWord     = 4
-	MaskSentence = 8
-)
-
-// The number of bits to shift the boundary information returned by [Step] to
-// obtain the monospace width of the grapheme cluster.
-const ShiftWidth = 4
-
-// The bit positions by which boundary flags are shifted by the [Step] function.
-// These must correspond to the Mask constants.
-const (
-	shiftWord     = 2
-	shiftSentence = 3
-	// shiftwWidth is ShiftWidth above. No mask as these are always the remaining bits.
-)
-
-// The bit positions by which states are shifted by the [Step] function. These
-// values must ensure state values defined for each of the boundary algorithms
-// don't overlap (and that they all still fit in a single int). These must
-// correspond to the Mask constants.
-const (
-	shiftWordState     = 4
-	shiftSentenceState = 9
-	shiftLineState     = 13
-	shiftPropState     = 21 // No mask as these are always the remaining bits.
-)
-
-// The bit mask used to extract the state returned by the [Step] function, after
-// shifting. These values must correspond to the shift constants.
-const (
-	maskGraphemeState = 0xf
-	maskWordState     = 0x1f
-	maskSentenceState = 0xf
-	maskLineState     = 0xff
-)
-
-// Step returns the first grapheme cluster (user-perceived character) found in
-// the given byte slice. It also returns information about the boundary between
-// that grapheme cluster and the one following it as well as the monospace width
-// of the grapheme cluster. There are three types of boundary information: word
-// boundaries, sentence boundaries, and line breaks. This function is therefore
-// a combination of [FirstGraphemeCluster], [FirstWord], [FirstSentence], and
-// [FirstLineSegment].
-//
-// The "boundaries" return value can be evaluated as follows:
-//
-//   - boundaries&MaskWord != 0: The boundary is a word boundary.
-//   - boundaries&MaskWord == 0: The boundary is not a word boundary.
-//   - boundaries&MaskSentence != 0: The boundary is a sentence boundary.
-//   - boundaries&MaskSentence == 0: The boundary is not a sentence boundary.
-//   - boundaries&MaskLine == LineDontBreak: You must not break the line at the
-//     boundary.
-//   - boundaries&MaskLine == LineMustBreak: You must break the line at the
-//     boundary.
-//   - boundaries&MaskLine == LineCanBreak: You may or may not break the line at
-//     the boundary.
-//   - boundaries >> ShiftWidth: The width of the grapheme cluster for most
-//     monospace fonts where a value of 1 represents one character cell.
-//
-// This function can be called continuously to extract all grapheme clusters
-// from a byte slice, as illustrated in the examples below.
-//
-// If you don't know which state to pass, for example when calling the function
-// for the first time, you must pass -1. For consecutive calls, pass the state
-// and rest slice returned by the previous call.
-//
-// The "rest" slice is the sub-slice of the original byte slice "b" starting
-// after the last byte of the identified grapheme cluster. If the length of the
-// "rest" slice is 0, the entire byte slice "b" has been processed. The
-// "cluster" byte slice is the sub-slice of the input slice containing the
-// first identified grapheme cluster.
-//
-// Given an empty byte slice "b", the function returns nil values.
-//
-// While slightly less convenient than using the Graphemes class, this function
-// has much better performance and makes no allocations. It lends itself well to
-// large byte slices.
-//
-// Note that in accordance with [UAX #14 LB3], the final segment will end with
-// a mandatory line break (boundaries&MaskLine == LineMustBreak). You can choose
-// to ignore this by checking if the length of the "rest" slice is 0 and calling
-// [HasTrailingLineBreak] or [HasTrailingLineBreakInString] on the last rune.
-//
-// [UAX #14 LB3]: https://www.unicode.org/reports/tr14/#Algorithm
-func Step(b []byte, state int) (cluster, rest []byte, boundaries int, newState int) {
-	// An empty byte slice returns nothing.
-	if len(b) == 0 {
-		return
-	}
-
-	// Extract the first rune.
-	r, length := utf8.DecodeRune(b)
-	if len(b) <= length { // If we're already past the end, there is nothing else to parse.
-		var prop int
-		if state < 0 {
-			prop = propertyGraphemes(r)
-		} else {
-			prop = state >> shiftPropState
-		}
-		return b, nil, LineMustBreak | (1 << shiftWord) | (1 << shiftSentence) | (runeWidth(r, prop) << ShiftWidth), grAny | (wbAny << shiftWordState) | (sbAny << shiftSentenceState) | (lbAny << shiftLineState) | (prop << shiftPropState)
-	}
-
-	// If we don't know the state, determine it now.
-	var graphemeState, wordState, sentenceState, lineState, firstProp int
-	remainder := b[length:]
-	if state < 0 {
-		graphemeState, firstProp, _ = transitionGraphemeState(state, r)
-		wordState, _ = transitionWordBreakState(state, r, remainder, "")
-		sentenceState, _ = transitionSentenceBreakState(state, r, remainder, "")
-		lineState, _ = transitionLineBreakState(state, r, remainder, "")
-	} else {
-		graphemeState = state & maskGraphemeState
-		wordState = (state >> shiftWordState) & maskWordState
-		sentenceState = (state >> shiftSentenceState) & maskSentenceState
-		lineState = (state >> shiftLineState) & maskLineState
-		firstProp = state >> shiftPropState
-	}
-
-	// Transition until we find a grapheme cluster boundary.
-	width := runeWidth(r, firstProp)
-	for {
-		var (
-			graphemeBoundary, wordBoundary, sentenceBoundary bool
-			lineBreak, prop                                  int
-		)
-
-		r, l := utf8.DecodeRune(remainder)
-		remainder = b[length+l:]
-
-		graphemeState, prop, graphemeBoundary = transitionGraphemeState(graphemeState, r)
-		wordState, wordBoundary = transitionWordBreakState(wordState, r, remainder, "")
-		sentenceState, sentenceBoundary = transitionSentenceBreakState(sentenceState, r, remainder, "")
-		lineState, lineBreak = transitionLineBreakState(lineState, r, remainder, "")
-
-		if graphemeBoundary {
-			boundary := lineBreak | (width << ShiftWidth)
-			if wordBoundary {
-				boundary |= 1 << shiftWord
-			}
-			if sentenceBoundary {
-				boundary |= 1 << shiftSentence
-			}
-			return b[:length], b[length:], boundary, graphemeState | (wordState << shiftWordState) | (sentenceState << shiftSentenceState) | (lineState << shiftLineState) | (prop << shiftPropState)
-		}
-
-		if firstProp == prExtendedPictographic {
-			if r == vs15 {
-				width = 1
-			} else if r == vs16 {
-				width = 2
-			}
-		} else if firstProp != prRegionalIndicator && firstProp != prL {
-			width += runeWidth(r, prop)
-		}
-
-		length += l
-		if len(b) <= length {
-			return b, nil, LineMustBreak | (1 << shiftWord) | (1 << shiftSentence) | (width << ShiftWidth), grAny | (wbAny << shiftWordState) | (sbAny << shiftSentenceState) | (lbAny << shiftLineState) | (prop << shiftPropState)
-		}
-	}
-}
-
-// StepString is like [Step] but its input and outputs are strings.
-func StepString(str string, state int) (cluster, rest string, boundaries int, newState int) {
-	// An empty byte slice returns nothing.
-	if len(str) == 0 {
-		return
-	}
-
-	// Extract the first rune.
-	r, length := utf8.DecodeRuneInString(str)
-	if len(str) <= length { // If we're already past the end, there is nothing else to parse.
-		prop := propertyGraphemes(r)
-		return str, "", LineMustBreak | (1 << shiftWord) | (1 << shiftSentence) | (runeWidth(r, prop) << ShiftWidth), grAny | (wbAny << shiftWordState) | (sbAny << shiftSentenceState) | (lbAny << shiftLineState)
-	}
-
-	// If we don't know the state, determine it now.
-	var graphemeState, wordState, sentenceState, lineState, firstProp int
-	remainder := str[length:]
-	if state < 0 {
-		graphemeState, firstProp, _ = transitionGraphemeState(state, r)
-		wordState, _ = transitionWordBreakState(state, r, nil, remainder)
-		sentenceState, _ = transitionSentenceBreakState(state, r, nil, remainder)
-		lineState, _ = transitionLineBreakState(state, r, nil, remainder)
-	} else {
-		graphemeState = state & maskGraphemeState
-		wordState = (state >> shiftWordState) & maskWordState
-		sentenceState = (state >> shiftSentenceState) & maskSentenceState
-		lineState = (state >> shiftLineState) & maskLineState
-		firstProp = state >> shiftPropState
-	}
-
-	// Transition until we find a grapheme cluster boundary.
-	width := runeWidth(r, firstProp)
-	for {
-		var (
-			graphemeBoundary, wordBoundary, sentenceBoundary bool
-			lineBreak, prop                                  int
-		)
-
-		r, l := utf8.DecodeRuneInString(remainder)
-		remainder = str[length+l:]
-
-		graphemeState, prop, graphemeBoundary = transitionGraphemeState(graphemeState, r)
-		wordState, wordBoundary = transitionWordBreakState(wordState, r, nil, remainder)
-		sentenceState, sentenceBoundary = transitionSentenceBreakState(sentenceState, r, nil, remainder)
-		lineState, lineBreak = transitionLineBreakState(lineState, r, nil, remainder)
-
-		if graphemeBoundary {
-			boundary := lineBreak | (width << ShiftWidth)
-			if wordBoundary {
-				boundary |= 1 << shiftWord
-			}
-			if sentenceBoundary {
-				boundary |= 1 << shiftSentence
-			}
-			return str[:length], str[length:], boundary, graphemeState | (wordState << shiftWordState) | (sentenceState << shiftSentenceState) | (lineState << shiftLineState) | (prop << shiftPropState)
-		}
-
-		if firstProp == prExtendedPictographic {
-			if r == vs15 {
-				width = 1
-			} else if r == vs16 {
-				width = 2
-			}
-		} else if firstProp != prRegionalIndicator && firstProp != prL {
-			width += runeWidth(r, prop)
-		}
-
-		length += l
-		if len(str) <= length {
-			return str, "", LineMustBreak | (1 << shiftWord) | (1 << shiftSentence) | (width << ShiftWidth), grAny | (wbAny << shiftWordState) | (sbAny << shiftSentenceState) | (lbAny << shiftLineState) | (prop << shiftPropState)
-		}
-	}
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/rivo/uniseg/width.go","mode":420,"size":1631,"sha256":"9a76bbb3ef247b33e00a3d5d7b98380d8d3ea46e793b50ab13fbbc8b246008ee","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1631}
-package uniseg
-
-// EastAsianAmbiguousWidth specifies the monospace width for East Asian
-// characters classified as Ambiguous. The default is 1 but some rare fonts
-// render them with a width of 2.
-var EastAsianAmbiguousWidth = 1
-
-// runeWidth returns the monospace width for the given rune. The provided
-// grapheme property is a value mapped by the [graphemeCodePoints] table.
-//
-// Every rune has a width of 1, except for runes with the following properties
-// (evaluated in this order):
-//
-//   - Control, CR, LF, Extend, ZWJ: Width of 0
-//   - \u2e3a, TWO-EM DASH: Width of 3
-//   - \u2e3b, THREE-EM DASH: Width of 4
-//   - East-Asian width Fullwidth and Wide: Width of 2 (Ambiguous and Neutral
-//     have a width of 1)
-//   - Regional Indicator: Width of 2
-//   - Extended Pictographic: Width of 2, unless Emoji Presentation is "No".
-func runeWidth(r rune, graphemeProperty int) int {
-	switch graphemeProperty {
-	case prControl, prCR, prLF, prExtend, prZWJ:
-		return 0
-	case prRegionalIndicator:
-		return 2
-	case prExtendedPictographic:
-		if property(emojiPresentation, r) == prEmojiPresentation {
-			return 2
-		}
-		return 1
-	}
-
-	switch r {
-	case 0x2e3a:
-		return 3
-	case 0x2e3b:
-		return 4
-	}
-
-	switch propertyEastAsianWidth(r) {
-	case prW, prF:
-		return 2
-	case prA:
-		return EastAsianAmbiguousWidth
-	}
-
-	return 1
-}
-
-// StringWidth returns the monospace width for the given string, that is, the
-// number of same-size cells to be occupied by the string.
-func StringWidth(s string) (width int) {
-	state := -1
-	for len(s) > 0 {
-		var w int
-		_, s, w, state = FirstGraphemeClusterInString(s, state)
-		width += w
-	}
-	return
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/rivo/uniseg/word.go","mode":420,"size":2656,"sha256":"3b0856f8e6bc473e8129c2611dea482201acdef4e62c6f9ea2073c59fa77808e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2656}
-package uniseg
-
-import "unicode/utf8"
-
-// FirstWord returns the first word found in the given byte slice according to
-// the rules of [Unicode Standard Annex #29, Word Boundaries]. This function can
-// be called continuously to extract all words from a byte slice, as illustrated
-// in the example below.
-//
-// If you don't know the current state, for example when calling the function
-// for the first time, you must pass -1. For consecutive calls, pass the state
-// and rest slice returned by the previous call.
-//
-// The "rest" slice is the sub-slice of the original byte slice "b" starting
-// after the last byte of the identified word. If the length of the "rest" slice
-// is 0, the entire byte slice "b" has been processed. The "word" byte slice is
-// the sub-slice of the input slice containing the identified word.
-//
-// Given an empty byte slice "b", the function returns nil values.
-//
-// [Unicode Standard Annex #29, Word Boundaries]: http://unicode.org/reports/tr29/#Word_Boundaries
-func FirstWord(b []byte, state int) (word, rest []byte, newState int) {
-	// An empty byte slice returns nothing.
-	if len(b) == 0 {
-		return
-	}
-
-	// Extract the first rune.
-	r, length := utf8.DecodeRune(b)
-	if len(b) <= length { // If we're already past the end, there is nothing else to parse.
-		return b, nil, wbAny
-	}
-
-	// If we don't know the state, determine it now.
-	if state < 0 {
-		state, _ = transitionWordBreakState(state, r, b[length:], "")
-	}
-
-	// Transition until we find a boundary.
-	var boundary bool
-	for {
-		r, l := utf8.DecodeRune(b[length:])
-		state, boundary = transitionWordBreakState(state, r, b[length+l:], "")
-
-		if boundary {
-			return b[:length], b[length:], state
-		}
-
-		length += l
-		if len(b) <= length {
-			return b, nil, wbAny
-		}
-	}
-}
-
-// FirstWordInString is like [FirstWord] but its input and outputs are strings.
-func FirstWordInString(str string, state int) (word, rest string, newState int) {
-	// An empty byte slice returns nothing.
-	if len(str) == 0 {
-		return
-	}
-
-	// Extract the first rune.
-	r, length := utf8.DecodeRuneInString(str)
-	if len(str) <= length { // If we're already past the end, there is nothing else to parse.
-		return str, "", wbAny
-	}
-
-	// If we don't know the state, determine it now.
-	if state < 0 {
-		state, _ = transitionWordBreakState(state, r, nil, str[length:])
-	}
-
-	// Transition until we find a boundary.
-	var boundary bool
-	for {
-		r, l := utf8.DecodeRuneInString(str[length:])
-		state, boundary = transitionWordBreakState(state, r, nil, str[length+l:])
-
-		if boundary {
-			return str[:length], str[length:], state
-		}
-
-		length += l
-		if len(str) <= length {
-			return str, "", wbAny
-		}
-	}
-}
-
 @@END

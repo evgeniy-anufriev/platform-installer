@@ -1,3 +1,1122 @@
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/alecthomas/chroma/v2/lexers/embedded/scilab.xml","mode":420,"size":32525,"sha256":"988dfd45ebb0a683adfdd736e81745d7bd7ea7fb7f7c5b17ae6e4b0011a682b1","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":32525}
+<lexer>
+  <config>
+    <name>Scilab</name>
+    <alias>scilab</alias>
+    <filename>*.sci</filename>
+    <filename>*.sce</filename>
+    <filename>*.tst</filename>
+    <mime_type>text/scilab</mime_type>
+  </config>
+  <rules>
+    <state name="root">
+      <rule pattern="//.*?$">
+        <token type="CommentSingle"/>
+      </rule>
+      <rule pattern="^\s*function">
+        <token type="Keyword"/>
+        <push state="deffunc"/>
+      </rule>
+      <rule pattern="(unwind_protect_cleanup|end_unwind_protect|unwind_protect|end_try_catch|endproperties|endclassdef|endfunction|persistent|properties|endmethods|otherwise|endevents|endswitch|__FILE__|continue|classdef|__LINE__|endwhile|function|methods|elseif|return|static|events|global|endfor|switch|until|endif|while|catch|break|case|else|set|end|try|for|get|do|if)\b">
+        <token type="Keyword"/>
+      </rule>
+      <rule pattern="(gencompilationflags_unix|neldermead_defaultoutput|optimbase_isinnonlincons|tbx_builder_gateway_lang|optimbase_hasconstraints|getinstalledlookandfeels|tbx_build_gateway_loader|xcosValidateCompareBlock|assert_checkalmostequal|optimsimplex_deltafvmax|optimsimplex_gradientfv|tbx_build_gateway_clean|add_module_help_chapter|optimsimplex_fvvariance|optimsimplex_compsomefv|del_module_help_chapter|saveconsecutivecommands|removeModulePreferences|xcosPalGenerateAllIcons|get_absolute_file_path|%Block_xcosUpdateBlock|optimbase_checkcostfun|nyquistfrequencybounds|with_modelica_compiler|optimsimplex_computefv|assert_checkfilesequal|tbx_build_localization|formatSgridDampingTip|block_parameter_error|xcosConfigureModelica|formatNicholsPhaseTip|addlocalizationdomain|optimbase_checkbounds|scicos_workspace_init|formatZgridDampingTip|neldermead_updatesimp|optimbase_logshutdown|optimsimplex_setallfv|xcosSimulationStarted|datatipSetOrientation|extract_help_examples|tbx_builder_help_lang|arobasestring2strings|initial_scicos_tables|optimsimplex_getallfv|fire_closing_finished|atomsGetInstalledPath|tbx_build_help_loader|assert_cond2reqdigits|nmplot_simplexhistory|assert_comparecomplex|optimsimplex_setnbve|assert_computedigits|optimsimplex_getallx|optimsimplex_fvstdev|optimsimplex_deltafv|optimsimplex_setallx|xcosConfigureXmlFile|optimbase_isfeasible|parallel_concurrency|output_nsga2_default|addModulePreferences|xcosValidateBlockSet|compute_initial_temp|crossover_ga_default|optimsimplex_destroy|optimsimplex_reflect|devtools_run_builder|selection_ga_elitist|xcosShowBlockWarning|optimbase_isinbounds|formatNicholsGainTip|jallowClassReloading|detectmsifort64tools|demo_function_choice|optimbase_logstartup|optimsimplex_getnbve|%H5Object_fieldnames|tbx_builder_src_lang|neldermead_configure|createXConfiguration|tbx_build_pal_loader|optimsimplex_dirmat|optimsimplex_fvmean|output_nsga_default|crossover_ga_binary|getPreferencesValue|formatHallModuleTip|getrelativefilename|output_moga_default|optimbase_configure|atomsRepositoryList|xcosPalGenerateIcon|accept_func_default|xcosDiagramToScilab|optimbase_hasbounds|find_scicos_version|fftwlibraryisloaded|optimsimplex_setall|optimbase_hasnlcons|optimbase_outstruct|mutation_ga_default|optimsimplex_shrink|neldermead_function|tbx_generate_pofile|setPreferencesValue|selection_ga_random|matfile_varreadnext|importScicosDiagram|tbx_builder_gateway|optimsimplex_center|optimsimplex_getall|optimbase_terminate|optimbase_proj2bnds|optimbase_outputcmd|findmsifortcompiler|generateBlockImages|getvariablesonstack|getdefaultlanguage|formatBodePhaseTip|nmplot_historyplot|formatHallPhaseTip|formatPhaseplotTip|coding_ga_identity|xcosCodeGeneration|formatSgridFreqTip|xcosBlockInterface|formatZgridFreqTip|generateBlockImage|saveafterncommands|optimsimplex_setve|scicos_debug_count|setdefaultlanguage|neldermead_restart|get_scicos_version|atomsGetLoadedPath|with_macros_source|atomsRestoreConfig|optimbase_function|assert_cond2reltol|datatipManagerMode|optimsimplex_setfv|optimsimplex_getfv|atomsRepositoryDel|xcosPalCategoryAdd|system_getproperty|system_setproperty|mutation_ga_binary|atomsRepositoryAdd|optimsimplex_check|ilib_gen_Make_unix|optimbase_incriter|%XMLList_i_XMLList|%XMLList_i_XMLElem|neldermead_destroy|%XMLElem_i_XMLList|%XMLElem_i_XMLElem|demo_folder_choice|tbx_builder_macros|optimplotfunccount|disposefftwlibrary|neigh_func_default|optimsimplex_getve|%XMLAttr_i_XMLElem|%hmS_k_hmS_generic|fftw_forget_wisdom|assert_checkequal|optimsimplex_getx|optimbase_stoplog|atomsGetInstalled|detectmsvc64tools|importXcosDiagram|%XMLDoc_i_XMLList|%XMLElem_i_XMLDoc|optimsimplex_setn|atomsAutoloadList|atomsSystemUpdate|optimsimplex_getn|number_properties|neldermead_search|ilib_include_flag|optimsimplex_setx|firstnonsingleton|getcallbackobject|x_choose_modeless|optimbase_histset|atomsCategoryList|optimbase_histget|recompilefunction|datatipSetDisplay|optimbase_destroy|check_modules_xml|pointer_xproperty|optimbase_checkx0|formatGainplotTip|csvStringToDouble|jconvMatrixMethod|optimsimplex_sort|getscilabkeywords|removelinehistory|optimsimplex_xbar|assert_checkfalse|output_ga_default|configure_msifort|assert_checkerror|get_function_path|iswaitingforinput|getDiagramVersion|tbx_build_gateway|tbx_build_cleaner|optimsimplex_size|tbx_build_blocks|getshortpathname|tbx_build_loader|convert_to_float|xmlSetAttributes|TCL_DeleteInterp|tbx_build_macros|matfile_varwrite|formatNyquistTip|coding_ga_binary|xmlIsValidObject|tbx_builder_help|xmlGetNsByPrefix|nmplot_outputcmd|assert_checktrue|del_help_chapter|atomsIsInstalled|atomsAutoloadAdd|import_from_hdf5|formatBodeMagTip|datatipSetInterp|xcosAddToolsMenu|atomsAutoloadDel|findmsvccompiler|%cblock_c_cblock|temp_law_default|phase_simulation|%XMLNs_i_XMLElem|ilib_gen_cleaner|nmplot_configure|ilib_gen_gateway|add_help_chapter|%cblock_f_cblock|accept_func_vfsa|demo_file_choice|atomsCheckModule|%TSIMPLEX_string|replace_Ix_by_Fx|%xlssheet_string|atomsDepTreeShow|optimsimplex_new|optimsimplex_log|instruction2code|is_absolute_path|remove_profiling|neldermead_costf|javalibrarypath|relocate_handle|tbx_builder_src|set_fftw_wisdom|updatebrowsevar|%XMLAttr_length|init_ga_default|getModelicaPath|atomsSystemInit|%TNMPLOT_string|TCL_CreateSlave|reset_profiling|importScicosPal|%_listvarinfile|graphicfunction|expression2code|scicos_getvalue|scicos_simulate|is_handle_valid|test_on_columns|matfile_listvar|neigh_func_vfsa|neldermead_cget|loadfftwlibrary|listvar_in_hdf5|ilib_gen_loader|%XMLList_length|nonreg_test_run|get_fftw_wisdom|atomsSaveConfig|%fptr_i_XMLList|datatipSetStyle|xcosUpdateBlock|nmplot_function|assert_generror|xcosPalAddBlock|TCL_ExistInterp|getlongpathname|%TNELDER_string|TCL_GetVersion|%_EObj_1__EObj|gethistoryfile|%_EObj_2__EObj|xcosPalDisable|nmplot_restart|TCL_ExistArray|getlookandfeel|%_EObj_3__EObj|jautoTranspose|nmplot_destroy|nmplot_contour|TCL_DoOneEvent|%_EObj_4__EObj|ilib_build_jar|%_EObj_k__EObj|linear_interpn|xmlGetNsByHref|%XMLSet_length|%spb_i_XMLList|neldermead_log|neldermead_get|%ptr_i_XMLList|ilib_mex_build|xcos_debug_gui|isequalbitwise|neigh_func_fsa|neigh_func_csa|xmlGetOpenDocs|atomsSetConfig|configure_msvc|optimbase_cget|%xlssheet_size|check_versions|%_EObj_a__EObj|%_EObj_z__EObj|DominationRank|historymanager|%_EObj_y__EObj|export_to_hdf5|translatepaths|atomsGetConfig|%_EObj_d__EObj|%TOPTIM_string|displayhistory|%_EObj_x__EObj|%_EObj_j__EObj|setlookandfeel|%_EObj_s__EObj|sethistoryfile|%lss_i_XMLList|!_deff_wrapper|test_run_level|%_EObj_r__EObj|warnBlockByUID|%_EObj_g__EObj|tbx_build_help|temp_law_huang|formatBlackTip|%_EObj_q__EObj|%msp_i_XMLList|%_EObj_p__EObj|atomsGetLoaded|returntoscilab|set_blockerror|progressionbar|%_EObj_o__EObj|%_EObj_h__EObj|sci_haltscicos|%_EObj_n__EObj|%_EObj_i__EObj|%_EObj_m__EObj|check_gateways|%_EObj_l__EObj|neldermead_new|%sp_i_XMLList|add_profiling|mtlb_fftshift|res_with_prec|tbx_build_src|mtlb_isletter|mtlb_legendre|mtlb_linspace|printsetupbox|temp_law_vfsa|set_xproperty|fixedpointgcd|enlarge_shape|mtlb_semilogx|mtlb_semilogy|mtlb_sortrows|get_file_path|browsehistory|mtlb_colordef|mtlb_toeplitz|unit_test_run|matfile_close|demo_viewCode|%plist_string|xcosBlockEval|haveacompiler|getblocklabel|demo_compiler|help_from_sci|help_skeleton|librarieslist|jgetclassname|xcosPalEnable|jdisableTrace|atomsAutoload|xcosPalExport|datatipCreate|nmplot_search|xcosPalDelete|datatipRemove|javaclasspath|listvarinfile|listfunctions|%ce_i_XMLList|datatipToggle|%hm_i_XMLList|taucs_chsolve|numderivative|ilib_for_link|ilib_gen_Make|definedfields|%XMLList_size|getscicosvars|%st_i_XMLList|getscilabmode|atomsIsLoaded|uiDisplayTree|optimbase_get|uicontextmenu|xcos_simulate|%ip_i_XMLList|optimbase_log|%XMLAttr_size|optimplotfval|resize_matrix|%grayplot_i_h|%mc_i_XMLList|%diagram_xcos|%champdat_i_h|optimbase_set|optimbase_new|head_comments|pareto_filter|TCL_UnsetVar|convertindex|%h_i_XMLList|jenableTrace|is_hdf5_file|jnewInstance|%c_i_XMLList|%c_i_XMLElem|jwrapinfloat|end_scicosim|remove_param|show_margins|%c_i_XMLAttr|%i_i_XMLList|%hm_iconvert|nicholschart|matfile_open|%b_i_XMLList|eval_cshep2d|ilib_verbose|mtlb_subplot|st_deviation|st_i_generic|xcos_compile|mtlb_strfind|mtlb_strcmpi|taucs_chinfo|ascii2string|mtlb_sprintf|taucs_chfact|mtlb_realmin|closeEditvar|mtlb_realmax|ilib_compile|%l_i_XMLList|%XMLSet_size|parallel_run|temp_law_csa|%p_i_XMLList|temp_law_fsa|%r_i_XMLList|%cblock_size|swap_handles|testexamples|%i_contour2d|loadXcosLibs|mtlb_num2str|mtlb_meshdom|ReadHBSparse|mtlb_logical|h5isCompound|cb_m2sci_gui|mtlb_isspace|mtlb_isfield|raise_window|%s_i_XMLList|realtimeinit|warnobsolete|fseek_origin|resethistory|bytecodewalk|atomsInstall|mtlb_fprintf|mtlb_findstr|generic_i_ce|generic_i_hm|with_javasci|scicos_debug|mtlb_choices|mtlb_cumprod|%spb_cumprod|createstruct|getdebuginfo|mtlb_dec2hex|atomsVersion|getdynlibext|generic_i_st|TCL_EvalFile|TCL_ExistVar|%spb_cumsum|setlanguage|mtlb_double|getlanguage|get_profile|TCL_EvalStr|show_window|%_EObj_disp|mtlb_delete|generic_i_s|mtlb_cumsum|xmlValidate|scicos_time|%mps_string|%msp_length|generic_i_h|%i_msprintf|savehistory|%i_mfprintf|rotate_axes|mtlb_fliplr|mtlb_format|xmlDocument|atomsUpdate|mtlb_fscanf|xmlAsNumber|%xlssheet_e|mtlb_fwrite|mtlb_filter|readgateway|endfunction|%hm_cumprod|%grand_perm|matfile2sci|%xlssheet_p|ui_observer|printfigure|householder|xcosPalMove|xcosPalLoad|preferences|mtlb_loglog|plotbrowser|mtlb_median|stripblanks|loadmatfile|%XMLValid_p|%hm_dsearch|filebrowser|mtlb_pcolor|pathconvert|tbx_builder|clearglobal|closeEditor|taucs_chdel|mtlb_setstr|taucs_chget|mtlb_sscanf|h5writeattr|mtlb_strcmp|helpbrowser|%msp_sparse|mtlb_sparse|csvTextScan|historysize|atomsSearch|%cblock_c_s|mtlb_strrep|htmlReadStr|%msp_spones|classmarkov|%TSIMPLEX_p|plotprofile|mtlb_uint16|mtlb_uint32|example_run|xmltoformat|prettyprint|datatipMove|%b_iconvert|loadhistory|libraryinfo|showprofile|nmplot_cget|demo_choose|atomsRemove|%sp_cumprod|optim_nsga2|with_module|%c_i_XMLDoc|%s_f_cblock|%s_c_cblock|%H5Object_p|sciGUI_init|jgetmethods|savematfile|jautoUnwrap|umf_lusolve|%H5Object_e|eigenmarkov|%ticks_i_h|%i_4__EObj|%c_dsearch|%i_3__EObj|%i_a__EObj|%i_2__EObj|%lss_o_lss|%i_cumprod|%c_z__EObj|%c_y__EObj|%c_x__EObj|%lss_n_lss|%c_s__EObj|%c_r__EObj|%c_q__EObj|%c_p__EObj|%c_o__EObj|jcreatejar|%c_n__EObj|%c_m__EObj|odeoptions|%c_l__EObj|%c_k__EObj|daeoptions|jgetfields|%c_i__EObj|isalphanum|nmplot_new|nmplot_log|jinvoke_db|%i_d__EObj|%lss_m_lss|%i_g__EObj|nmplot_get|junwraprem|optim_moga|optim_nsga|%i_h__EObj|demo_begin|%c_h__EObj|%c_g__EObj|clean_help|%i_i__EObj|%i_j__EObj|%c_d__EObj|%i_k__EObj|%c_a__EObj|%c_4__EObj|%c_3__EObj|%c_2__EObj|%c_1__EObj|%b_z__EObj|%b_y__EObj|%b_x__EObj|%b_s__EObj|loadScicos|%b_r__EObj|%b_q__EObj|%i_l__EObj|%b_p__EObj|%b_o__EObj|%b_n__EObj|%b_m__EObj|%b_l__EObj|%b_k__EObj|%b_j__EObj|%b_i__EObj|%i_1__EObj|%b_h__EObj|%b_g__EObj|%b_d__EObj|%b_a__EObj|derivative|%b_4__EObj|%i_m__EObj|%b_3__EObj|%b_2__EObj|%lss_l_lss|%b_1__EObj|isLeapYear|%lss_r_lss|%lss_s_lss|edit_error|%lss_i_lss|%_EObj_z_s|%lss_f_lss|%_EObj_z_i|messagebox|%_EObj_z_c|%b_cumprod|%_EObj_z_b|%_EObj_y_s|mtlb_zeros|fieldnames|mtlb_upper|mtlb_uint8|%lss_c_lss|%_strsplit|%i_n__EObj|find_links|%_EObj_y_i|%_EObj_y_c|%_EObj_y_b|%_EObj_x_s|%_EObj_x_i|%i_o__EObj|umf_lufact|%_EObj_x_c|%i_p__EObj|%i_q__EObj|%_EObj_x_b|test_clean|%i_r__EObj|havewindow|%TNMPLOT_p|%lss_v_lss|%TNELDER_p|%i_s__EObj|%i_x__EObj|%_EObj_s_s|%_EObj_s_i|%_EObj_s_c|%_EObj_s_b|%i_y__EObj|%_EObj_r_s|%_EObj_r_i|h5readattr|%i_z__EObj|mtlb_rcond|mtlb_randn|%_EObj_r_c|%_EObj_r_b|%l_i__EObj|%_EObj_q_s|%_EObj_q_i|fminsearch|%lss_a_lss|%msp_spget|%_EObj_q_c|%_EObj_q_b|%s_1__EObj|%_EObj_p_s|%_EObj_p_i|%s_2__EObj|%_EObj_p_c|%s_3__EObj|%s_4__EObj|%_EObj_p_b|%sp_length|%_EObj_o_s|mtlb_lower|%ce_matrix|%ce_string|%s_a__EObj|mtlb_logic|%s_d__EObj|%_EObj_o_i|%_EObj_o_c|%_EObj_o_b|%_EObj_n_s|%s_g__EObj|%_EObj_n_i|%_EObj_n_c|%s_h__EObj|%fptr_i_st|%s_i__EObj|%_EObj_n_b|mtlb_int32|mtlb_int16|%_EObj_m_s|mtlb_image|%_EObj_m_i|%_EObj_m_c|%_EObj_m_b|%s_j__EObj|%_EObj_l_s|%_EObj_l_i|%_EObj_l_c|optimplotx|%s_k__EObj|%_EObj_l_b|format_txt|%_EObj_k_s|gstacksize|%_EObj_k_i|%_EObj_k_c|%s_l__EObj|%s_m__EObj|mtlb_fread|%s_n__EObj|%s_o__EObj|mtlb_fopen|%s_p__EObj|%s_q__EObj|%s_r__EObj|fun2string|%_EObj_k_b|%_EObj_j_s|%_EObj_j_i|%_EObj_j_c|%_EObj_j_b|%_EObj_h_s|getversion|mtlb_false|%_EObj_h_i|%_EObj_h_c|%s_s__EObj|%s_x__EObj|%s_y__EObj|%s_z__EObj|%_EObj_h_b|%sp_string|%l_isequal|getmodules|mtlb_exist|%_EObj_g_s|mtlb_error|%_EObj_g_i|%_EObj_g_c|%_EObj_g_b|%mc_string|bode_asymp|TCL_GetVar|%_EObj_d_s|%_EObj_d_i|TCL_SetVar|%_EObj_d_c|%_EObj_d_b|%_EObj_a_s|gethistory|%spb_g_spb|%spb_h_spb|%_EObj_a_i|%ip_string|xcosPalAdd|%st_i_fptr|addhistory|%_EObj_a_c|xmlRelaxNG|%_EObj_a_b|mtlb_close|%i_plot2d2|xmlReadStr|%i_plot2d1|%st_matrix|%_EObj_4_s|%_EObj_4_i|%_EObj_4_c|xmlElement|%st_string|%hm_bool2s|%_EObj_4_b|vectorfind|%_EObj_3_i|%_EObj_3_c|%hm_cumsum|OS_Version|ilib_build|%_EObj_3_b|%_EObj_2_s|fprintfMat|PlotSparse|bsplin3val|xcosPalGet|%_EObj_2_i|%_EObj_2_c|%_EObj_2_b|%_EObj_1_s|%_EObj_1_i|%_EObj_1_c|buildouttb|%i_dsearch|%_EObj_1_b|%msp_n_msp|%_EClass_p|%i_contour|%_EClass_e|list_param|%_EClass_6|%hm_degree|!!_invoke_|fftw_flags|%i_Matplot|completion|contour2di|csvDefault|%msp_o_msp|%hm_string|testmatrix|squarewave|%p_cumprod|%sp_cumsum|launchtest|randpencil|%XMLList_p|%XMLList_e|%XMLList_6|%hm_isreal|%XMLElem_p|%XMLElem_e|%XMLElem_6|deletefile|scisptdemo|uigetcolor|%r_cumprod|%XMLAttr_p|init_param|%XMLAttr_e|%XMLAttr_6|sci_sparse|%hm_median|%hm_matrix|umf_luinfo|%_EObj_3_s|%c_j__EObj|%i_mprintf|lasterror|umf_luget|uiputfile|%XMLDoc_6|inv_coeff|%r_cumsum|intersect|unsetmenu|%p_string|iscellstr|usecanvas|useeditor|integrate|%r_matrix|%r_string|uigetfont|mtlb_more|uigetfile|%s_bezout|%XMLDoc_e|%XMLDoc_p|uicontrol|%p_matrix|%s_matrix|%sp_floor|%sp_grand|%p_cumsum|%sp_gsort|write_csv|%XMLSet_6|karmarkar|%XMLSet_e|x_mdialog|%XMLSet_p|lindquist|%msp_maxi|invsyslin|xchoicesi|%msp_i_st|%msp_find|listfiles|lmisolver|%sp_round|%lss_size|%lss_rand|%lss_ones|%lss_norm|m2sci_gui|%i_cumsum|stringbox|%i_matrix|%lss_i_st|xmltohtml|%lss_i_ce|%msp_full|ifftshift|ClipBoard|%spb_diag|PlaySound|stacksize|TCL_UpVar|xgetmouse|xgraduate|mfile2sci|_code2str|hallchart|_str2code|%spb_i_ce|%spb_i_st|xmlAppend|%spb_prod|xmlAsText|umf_ludel|xmlDelete|%spb_tril|%i_string|%spb_triu|xmlFormat|%st_i_lss|mtlb_axes|mtlb_axis|mtlb_beta|%st_i_msp|%i_plot2d|spcompack|%st_i_spb|mtlb_cond|xmlRemove|xmlSchema|backslash|simp_mode|%i_length|variancef|IsAScalar|mtlb_diag|get_param|mtlb_diff|tree2code|toolboxes|mtlb_echo|mtlb_eval|genmarkov|browsevar|%i_champ1|%i_bezout|sci_tree4|sci_tree3|sci_tree2|add_param|rubberbox|closeXcos|mtlb_find|ana_style|%hm_zeros|createdir|removedir|steadycos|zoom_rect|mtlb_full|%hm_stdev|%hm_round|mtlb_grid|mtlb_hold|curblockc|spaninter|mtlb_ifft|set_param|mtlb_int8|drawlater|duplicate|atomsList|atomsLoad|mtlb_mean|mtlb_mesh|atomsQuit|mtlb_ones|mtlb_plot|%hm_isnan|mtlb_prod|mtlb_rand|phaseplot|mtlb_size|mtlb_sort|%hm_gsort|nearfloat|%hm_grand|mtlb_mode|%TOPTIM_p|%hm_floor|atomsShow|mtlb_tril|%_EVoid_p|mtlb_triu|mtlb_true|fileparts|mtlb_type|%_sodload|model2blk|findfiles|find_freq|fscanfMat|filt_sinc|atomsTest|getdrives|bench_run|getmemory|%b_cumsum|h5dataset|factorial|h5isArray|nancumsum|h5isGroup|nand2mean|h5isSpace|%cblock_p|%cblock_e|htmlWrite|mclearerr|%c_matrix|companion|dispfiles|condestsp|nanmedian|invoke_lu|nanreglin|macr2tree|createfun|%bicgstab|jgetfield|jsetfield|%b_matrix|%b_string|lsqrsolve|lsq_splin|h_inf_st|demo_end|nextpow2|legendre|loadXcos|demo_gui|demo_run|jgetinfo|narsimul|ctr_gram|jcompile|noisegen|nanstdev|isletter|macr2lst|isglobal|convol2d|num2cell|obs_gram|observer|cont_mat|%c_grand|cont_frm|conjgrad|obsv_mat|%b_i_spb|%c_i_lss|diophant|optim_ga|dt_ility|maxfiles|colregul|colinout|colcompr|interp3d|interp2d|optim_sa|iconvert|%b_h_spb|htmlRead|htmlDump|nanmeanf|h5umount|%b_grand|h5isVlen|h5isType|%ce_c_ce|%b_g_spb|%ce_f_ce|%ce_i_ce|cheb2mag|%ce_i_st|h5isList|cheb1mag|%ce_size|%b_f_spb|cepstrum|cell2mat|h5isFile|h5isAttr|mfprintf|cat_code|optimget|h5exists|%st_i_ip|calendar|optimset|%hm_1_hm|grayplot|%hm_2_hm|bytecode|%hm_3_hm|mvcorrel|%hm_4_hm|getfield|bloc2exp|%hm_a_hm|binomial|%b_c_spb|fftshift|funcprot|fullpath|%hm_c_hm|%hm_ceil|%hm_conj|mtlb_var|findABCD|fromjava|%hm_d_hm|%_unwrap|movefile|fileinfo|p_margin|mtlb_sum|exportUI|%hm_f_hm|%hm_find|msprintf|%hm_g_hm|name2rgb|mtlb_std|%hm_h_hm|pertrans|%hm_i_ce|pfactors|%hm_i_hm|phasemag|findx0BD|errclear|errcatch|%hm_i_st|princomp|%hm_imag|projspec|param3d1|emptystr|%hm_j_hm|mtlb_min|%hm_k_hm|mtlb_max|function|qp_solve|rhs2code|ric_desc|mtlb_isa|drawaxis|%hm_mean|rowcompr|rowinout|rowregul|rowshuff|%hm_n_hm|savewave|diffobjs|dgettext|mtlb_imp|dec2base|%hm_o_hm|show_pca|data2sig|soundsec|%hm_ones|read_csv|spanplus|%hm_prod|%hm_q_hm|continue|%hm_rand|%hm_real|mtlb_get|curblock|%hm_s_hm|specfact|st_ility|%hm_sign|csvWrite|%hm_size|%hm_sqrt|realtime|statgain|csvIsnum|%hm_x_hm|fourplan|fsfirlin|fullfile|coserror|asciimat|copyfile|%plist_p|code2str|xstringb|g_margin|mtlb_fft|%i_ascii|test_run|mtlb_eye|%i_champ|scicosim|captions|thrownan|toeplitz|add_demo|tokenpos|buildDoc|scinotes|setfield|mtlb_dir|%i_grand|trianfml|trimmean|sig2data|trisolve|variance|xmlXPath|vec2list|basename|base2dec|wavwrite|%st_size|xmlWrite|%st_o_tl|%st_o_mc|wfir_gui|mtlb_cov|whereami|%st_n_mc|who_user|%st_i_st|mtlb_box|%st_i_sp|getshell|arl2_ius|addinter|gettklib|mtlb_any|addcolor|%i_round|%st_f_st|%st_c_st|mtlb_all|gfrancis|splitURL|%spb_sum|mstr2sci|%ip_i_st|xmlAddNs|%ip_n_ip|%ip_o_ip|%spb_i_h|%ip_part|xls_read|xls_open|%spb_i_b|hankelsv|%spb_h_b|meshgrid|str2code|%spb_g_b|%spb_f_b|markp2ss|Matplot1|hypermat|%spb_c_b|%spb_and|%sp_z_sp|%sp_y_sp|%sp_triu|%sp_tril|Calendar|iirgroup|%lss_a_p|%lss_a_r|%lss_a_s|xcos_run|%lss_c_p|%lss_c_r|%lss_c_s|%sp_sqrt|%lss_eye|xmltochm|%lss_f_p|%lss_f_r|%lss_f_s|mapsound|makecell|%lss_i_p|%lss_i_r|%lss_i_s|strindex|%lss_inv|macrovar|%lss_l_p|%lss_l_r|%lss_l_s|xmltojar|%lss_m_p|%lss_m_r|%lss_m_s|m_circle|%lss_n_p|%lss_n_r|%lss_n_s|lqg2stan|xmltopdf|%lss_o_p|%lss_o_r|%lss_o_s|strsplit|xmltoweb|%lss_r_p|%lss_r_r|%lss_r_s|logspace|%sp_s_sp|yulewalk|%lss_s_p|%lss_s_r|%lss_s_s|loadwave|strsubst|%_EObj_t|%lss_v_p|%lss_v_r|%lss_v_s|%sp_r_sp|%sp_q_sp|%sp_prod|%sp_norm|%_EObj_p|%mc_i_st|%mc_n_st|%mc_o_st|%_EObj_e|%sp_l_sp|%_EObj_6|%msp_a_s|%msp_abs|%sp_k_sp|list2vec|%msp_i_s|linspace|tempname|%msp_m_s|linsolve|%_EObj_0|%msp_nnz|lex_sort|%sp_i_st|x_dialog|x_choose|%sp_i_sp|%p_a_lss|%sp_i_ce|%p_c_lss|isvector|%XMLNs_p|isstruct|issquare|issparse|%sp_diag|%sp_d_sp|clearfun|%p_f_lss|%XMLNs_e|%p_grand|%XMLNs_6|%sp_conj|%sp_ceil|%p_i_lss|%sp_a_sp|%s_v_lss|%s_s_lss|%s_r_lss|%s_o_lss|%s_n_lss|isscalar|%s_m_msp|%s_m_lss|%p_l_lss|%s_l_lss|%s_i_spb|%s_i_lss|%s_grand|%p_m_lss|%s_f_lss|typename|uigetdir|%p_n_lss|%s_c_lss|imrep2ss|%p_o_lss|inistate|%s_a_msp|%s_a_lss|%r_v_lss|ismatrix|%r_s_lss|%r_r_lss|%r_o_lss|%p_r_lss|%r_n_lss|iscolumn|%r_m_lss|%p_s_lss|%r_l_lss|%r_i_lss|interpln|%r_f_lss|%p_v_lss|intsplin|is_param|%r_clean|%r_c_lss|%r_a_lss|%_EObj_5|gainplot|%hm_x_s|readmps|mtlb_is|saveGui|sciargs|semidef|setmenu|zeropen|%r_a_hm|plot3d1|plot2d4|plot2d3|plot2d2|%p_x_hm|plot2d1|splin2d|splin3d|pathsep|param3d|mtlb_qr|mtlb_qz|minreal|sprintf|openged|%r_diag|members|mdelete|manedit|strcspn|macglov|strncpy|%r_i_ce|%r_i_hm|%p_simp|strrchr|newaxes|msscanf|%r_i_st|lqg_ltr|mputstr|mprintf|mgetstr|lmitool|mfscanf|mvvacov|symfcti|nanmean|%r_m_hm|lusolve|leastsq|lcmdiag|lstsize|lsslist|loadGui|kroneck|toolbar|junwrap|%r_norm|justify|jremove|toprint|jinvoke|%r_ones|jimport|jexists|%r_prod|nthroot|isfield|isempty|uipopup|iserror|numdiff|nyquist|%r_rand|xmltops|%r_s_hm|isequal|umfpack|inttrap|obscont|%r_simp|%r_size|%p_prod|isdigit|interp1|%r_tril|%r_triu|%p_part|oct2dec|var2vec|isascii|%r_varn|inttype|vec2var|waitbar|warning|ind2sub|whereis|h5write|write4b|h5mount|%s_1_hm|h5label|%s_2_hm|xarrows|%s_3_hm|xchange|%s_4_hm|h5isSet|%i_diag|h5isRef|%s_a_hm|h5group|%s_a_ip|h5flush|%p_o_sp|h5close|%s_a_sp|gettext|htrianr|hilbert|hex2dec|xfpolys|getdate|harmean|gammaln|%s_c_sp|filesep|fileext|xmlDump|xmlName|%s_d_sp|xmlRead|fadj2sp|geomean|penlaur|permute|%s_f_sp|execstr|xstring|fullrfk|%p_m_hm|playsnd|fstabst|pmodulo|pol2des|%s_i_ce|pol2str|%s_i_hm|polfact|frep2tf|apropos|profile|qpsolve|%s_i_sp|quaskro|%s_i_st|rafiter|%s_k_hm|readxls|regress|%s_k_sp|flipdim|%s_l_hm|editvar|repfreq|%0_i_st|%3d_i_h|%_gsort|%s_l_sp|%_rlist|dsearch|%s_m_hm|findBDK|%s_m_ip|drawnow|factors|%b_diag|riccati|%s_n_hm|routh_t|rowcomp|dlgamma|samplef|%s_n_st|%s_o_hm|entropy|ell1mag|dispbpt|%b_i_ce|%s_o_st|%i_maxi|sci2exp|delmenu|scitest|%s_q_hm|dllinfo|%b_i_hm|dirname|%s_q_sp|%b_i_sp|detrend|%p_i_st|%b_i_st|derivat|setdiff|%s_r_sp|%b_n_hm|%s_s_hm|%b_o_hm|%s_s_ip|%b_prod|%b_tril|%s_s_sp|%s_simp|dec2oct|dec2hex|dec2bin|intppty|datevec|%s_x_hm|datenum|datafit|%b_triu|spantwo|%s_y_sp|spzeros|cumprod|%s_z_sp|squeeze|ssprint|csvRead|%sp_and|%sp_c_s|%p_i_hm|cshep2d|%sp_cos|%p_i_ce|strange|%sp_d_s|%c_diag|%sp_det|strcmpi|%i_mini|%sp_exp|%sp_f_s|contrss|%c_i_ce|%c_i_hm|cond2sp|%sp_i_h|%sp_i_s|sub2ind|complex|%sp_int|%sp_inv|%sp_k_s|%c_i_st|%sp_l_s|%c_n_st|%mc_i_s|%sp_max|%sp_min|%mc_i_h|colcomp|%sp_p_s|sysconv|%sp_q_s|%c_o_st|%sp_r_s|%lt_i_s|%c_ones|%sp_s_s|cmoment|%sp_sin|cmndred|%l_o_st|%sp_sum|cmb_lin|cls2dls|%sp_y_s|sysdiag|%sp_z_s|%c_rand|%c_tril|%l_n_st|chsolve|%c_triu|sysfact|%ce_i_s|syssize|systmat|%l_i_st|convstr|cellstr|%i_mput|%ip_s_s|%i_prod|%ip_m_s|%spb_or|%ip_a_s|ccontrg|%choose|%i_sign|%h_i_st|%hm_1_s|%i_tril|%hm_2_s|%st_i_b|%st_i_c|buttmag|%st_i_h|%st_i_i|%i_triu|%hm_3_s|%hm_4_s|%st_i_p|%st_i_r|%st_i_s|bloc2ss|%sp_a_s|Matplot|callblk|%st_n_c|%st_n_l|%hm_a_r|%st_n_p|%st_n_s|%st_o_c|%st_o_l|bin2dec|%st_o_p|%st_o_s|time_id|xcosPal|%hm_a_s|balreal|with_tk|auwrite|augment|%hm_abs|%hm_and|%i_i_st|%hm_cos|%hm_d_s|%i_i_hm|%hm_exp|%hm_eye|%hm_i_b|%i_i_ce|%hm_i_h|%hm_i_i|%hm_i_p|winlist|%hm_i_r|%hm_i_s|%hm_int|%hm_j_s|%hm_k_s|weekday|%hm_log|wcenter|%hm_m_p|wavread|besselh|besseli|besselj|%hm_m_r|%hm_m_s|%hm_max|%hm_min|%hm_n_b|%hm_n_c|%hm_n_i|%hm_n_p|%hm_n_s|%hm_o_b|analyze|%hm_o_c|%hm_o_i|%hm_o_p|%hm_o_s|arma2ss|blkslvi|blkfc1i|%hm_r_s|%hm_s_r|arsimul|%hm_s_s|%hm_sin|besselk|%hm_sum|bessely|%hm_x_p|trzeros|pencost|bezout|%i_1_s|asinhm|typeof|unique|%i_2_s|%i_3_s|%i_4_s|bfinit|armax1|trfmod|%hm_or|unix_g|unix_s|atanhm|bool2s|arma2p|unix_w|unix_x|unpack|analpf|%i_a_i|aff2ab|adj2sp|%i_a_s|%i_and|%i_b_s|%i_d_i|%i_d_s|unwrap|banner|acoshm|balanc|wiener|wigner|%i_fft|window|%i_g_i|%i_gcd|%i_h_i|NDcost|%i_i_h|G_make|c_link|%i_i_i|%i_i_s|%i_j_i|%xls_p|%xls_e|auread|%i_j_s|%i_l_s|%i_lcm|%i_m_i|tf2des|%i_m_s|%i_n_s|bitand|bitcmp|bitget|%i_o_s|bitset|bitxor|cdfbet|%i_p_i|cdfbin|%i_p_s|%i_q_s|cdfchi|%i_r_i|cdfchn|%i_r_s|bvodeS|%i_s_i|%i_s_s|cdffnc|%i_sum|calerf|calfrq|cdfgam|cdfnbn|cdfnor|%dir_p|%i_x_i|%i_x_s|cdfpoi|champ1|%l_i_h|center|%l_i_s|cfspec|%l_n_c|system|%l_n_l|%spb_e|syslin|%l_n_m|%l_n_p|chepol|chfact|%l_n_s|%l_o_c|%l_o_l|%l_o_m|%l_o_p|%l_o_s|%lss_e|%lss_s|%lss_t|%m_n_l|%m_o_l|svplot|%sp_or|%c_o_l|%mps_p|%c_n_l|%msp_e|%msp_p|%c_i_s|%msp_t|%p_a_r|%c_i_r|%p_c_r|%c_i_h|%p_d_p|%c_i_c|%c_f_s|%p_d_r|struct|%c_eye|%p_d_s|convol|%p_det|copfac|correl|%p_f_r|%p_i_h|stdevf|%p_i_p|stabil|ctree2|ctree3|ctree4|ssrand|resume|%c_b_s|%c_b_c|%c_a_c|ss2des|srfaur|%b_x_s|%i_min|%s_z_r|sqroot|%s_z_p|sprand|cspect|%b_x_b|cumsum|%s_y_r|%s_y_p|sp2adj|%s_x_r|smooth|%s_x_i|%s_x_b|sm2des|%s_v_s|dawson|%s_v_r|%s_v_p|%p_i_r|%s_s_r|%b_sum|%b_s_s|%b_s_b|%b_r_s|%b_r_b|%p_i_s|%b_p_s|%s_s_i|%s_s_b|%b_m_s|%b_m_b|%s_r_s|%s_r_r|%b_l_s|des2ss|des2tf|%b_l_b|%s_r_p|determ|degree|%s_r_i|%s_r_b|dhnorm|delbpt|%b_i_s|delete|%s_q_r|%s_q_p|%s_q_i|%s_pow|dsimul|%b_i_h|%s_p_i|%s_p_b|%s_o_r|editor|%b_i_b|%p_inv|%s_o_l|%b_h_s|%s_o_i|eomday|%s_n_r|sample|%p_j_s|dnaupd|equil1|erfinv|dneupd|double|%s_n_l|%s_n_i|%b_g_s|%b_f_s|%p_k_p|factor|%s_m_r|%p_k_r|faurre|%p_k_s|driver|%b_c_s|%b_a_s|%b_a_b|filter|dsaupd|findAC|%s_m_i|%s_m_b|dseupd|%_save|%s_lcm|repmat|%s_l_s|%s_l_r|%s_l_p|%p_l_p|%s_l_i|ereduc|%s_l_b|remezb|%s_k_r|select|reglin|recons|%s_k_p|%s_j_i|%p_l_r|%s_i_s|elseif|pspect|psmall|projsl|%s_i_r|primes|%s_i_p|prbs_a|zneupd|%p_l_s|freson|%s_i_i|%s_i_h|znaupd|%s_i_c|%s_i_b|fspecg|%s_h_s|%s_h_b|ftuneq|xtitle|fullrf|%s_gcd|%s_g_s|%s_g_b|exists|gamitg|%s_f_r|perctl|%p_m_r|xs2svg|return|xs2ppm|xs2png|xs2pdf|xs2jpg|xs2gif|genlib|xs2eps|%p_n_l|xs2emf|xs2bmp|xrects|pencan|xpolys|pen2ea|xpause|parrot|%s_f_b|%i_max|figure|%s_d_r|%p_y_s|%s_d_p|givens|glever|%s_d_i|%s_d_b|gschur|findBD|format|h2norm|fsolve|fstair|xmlDTD|h_norm|xlfont|funptr|%s_c_r|geom3d|%p_n_r|getURL|%p_o_l|xfrect|%s_c_b|hermit|%p_o_r|getenv|%s_b_s|getmd5|horner|xfpoly|getpid|%s_b_i|xfarcs|%s_and|global|h5attr|%s_a_r|h5dump|%p_p_s|%s_a_i|iirmod|%s_a_b|%s_4_i|xclick|%s_3_i|%s_2_i|%s_1_i|%r_z_s|%r_z_r|h5open|h5read|winsid|im_inv|%r_z_p|%r_y_s|inpnvi|interp|%r_y_r|%r_y_p|%r_x_s|%r_x_r|%r_x_p|%r_v_s|%r_v_r|%r_v_p|intdec|obsvss|%i_abs|unzoom|%r_sum|%r_s_s|unglue|%r_s_r|%r_s_p|%p_q_p|%r_r_s|%r_r_r|%r_r_p|uiwait|%p_q_r|isfile|iscell|uint32|uint16|%r_q_s|%r_q_r|%r_q_p|uimenu|isreal|jarray|%r_p_s|%_load|%r_o_s|tr_zer|%r_o_r|%r_o_p|%p_q_s|%r_n_s|%r_n_r|kernel|length|linmeq|%r_n_p|%p_r_p|%p_r_r|tokens|lstcat|%r_m_s|%r_m_r|%r_m_p|lufact|nehari|ndgrid|nansum|tohome|%p_r_s|matrix|lin2mu|lincos|nanmin|mclose|%r_l_s|nanmax|merror|ta2lpd|syredi|%r_l_r|%r_l_p|%p_s_r|mu2lin|%r_k_s|strtok|strtod|strstr|%r_k_r|%r_k_p|%r_j_s|strspn|mtlb_t|mscanf|strrev|%r_inv|%r_i_s|mucomp|%r_i_r|%r_i_p|%r_f_s|%r_f_r|string|newest|%r_f_p|%p_sum|strcmp|strchr|strcat|%r_eye|newfun|notify|median|%_eigs|mtlb_s|%r_det|opentk|%r_d_s|%r_d_r|ordmmd|%r_d_p|modulo|moment|%p_v_p|%p_v_r|spones|%p_v_s|mtlb_0|mtlb_a|%r_c_s|%r_c_r|plot2d|%r_c_p|%r_a_s|spchol|sparse|sorder|%r_a_r|%r_a_p|plot3d|%p_x_r|pppdiv|predef|sident|sfinit|printf|%p_y_p|setenv|mtlb_e|setbpt|prompt|%p_y_r|sctree|zpbutt|mtlb_l|%p_z_s|%p_z_r|rankqr|read4b|mtlb_i|%p_z_p|regexp|residu|blanks|%b_d_s|xpoly|remez|rlist|zpch2|roots|readb|round|zpch1|zgrid|rdivf|rcond|%s_or|rtitr|%sp_e|%ip_p|%st_6|%st_e|%i_or|schur|about|%st_p|sfact|print|amell|xcorr|%st_t|ascii|abinv|acosd|slash|sleep|acosh|spget|splin|acosm|acotd|bdiag|mrfit|mkdir|minss|acoth|optim|acscd|acsch|aplat|unobs|odedc|arhnk|meanf|armac|armax|gfare|asecd|union|asech|asind|mtell|asinh|mseek|asinm|%hm_s|%hm_p|mputl|atand|atanh|trans|mopen|trace|mlist|atanm|log10|mgetl|bvode|mgeti|%hm_e|bilin|tf2ss|bitor|black|timer|linfn|%hm_5|bstap|tlist|cainv|canon|levin|luget|champ|ndims|chdir|clean|ludel|clear|ltitr|coeff|color|lattp|contr|log1p|conv2|lattn|%ce_t|tanhm|krac2|tabul|lines|light|nfreq|chart|%ce_p|kpure|ldivf|%ce_6|clock|jwrap|coffg|coshm|stdev|cothm|covar|jdeff|jcast|isrow|ss2tf|isnum|ss2ss|isinf|cross|uint8|%bicg|ulink|numer|invrs|sqrtm|isdir|speye|daskr|isdef|dasrt|dassl|input|sound|solve|signm|sm2ss|dbphi|sinhm|int3d|int32|int2d|int16|sincd|where|imult|debug|sgrid|denom|sensi|sdiff|delip|dhinf|diary|writb|write|scanf|samwr|epred|eqfir|xarcs|eqiir|equil|iirlp|h5get|etime|evans|evstr|xfarc|rmdir|gsort|ffilt|grand|findR|%ar_p|glist|findm|while|getos|histc|getio|pause|range|xgrid|quart|xinit|erfcx|gamma|catch|break|h_inf|error|fromc|frexp|abort|frfit|gtild|floor|gspec|polar|group|gmres|frmag|xmlNs|zeros|fspec|ftest|feval|zpell|gcare|perms|xsegs|xs2ps|xname|xrect|isnan|%ce_e|mget|real|pbig|expm|pack|rpem|perl|%pcg|getd|read|exit|pfss|%r_0|xset|%r_e|pinv|%r_p|exec|plzr|orth|fftw|file|find|fort|freq|h_cl|full|erfi|case|proj|halt|hank|%r_s|else|%r_t|%s_5|%s_e|xcov|help|erfc|xget|rank|save|%i_p|hilb|quit|then|flts|rand|%p_e|hrmt|prod|idct|idst|glue|%asn|fft2|grep|%b_e|ifft|h5cp|acos|eval|xend|xdel|xcos|rref|addf|h5ls|xarc|eigs|disp|h5mv|edit|h5rm|diag|sign|simp|dtsi|hess|dscr|hinf|ppol|secd|sech|pdiv|diff|host|detr|deff|ieee|imag|impl|poly|abcd|%i_e|sinc|whos|sind|sinh|int8|sinm|what|intg|smga|date|varn|asin|intc|damp|user|unix|atan|size|intl|csim|csgn|csch|invr|cscd|wfir|spec|srkf|null|mtlb|ricc|sskf|type|acot|triu|coth|cotg|cotd|cosm|tril|jmat|cosh|cosd|%c_e|conv|cond|part|kalm|sylm|sylv|coff|kron|ldiv|asec|nlev|beep|char|link|tand|tanh|list|tanm|acsc|corr|copy|load|mfft|sqrt|conj|comp|mese|ones|arl2|leqe|norm|chol|leqr|%cgs|mean|ceil|cdft|cell|lyap|casc|mulf|beta|cdff|logm|bode|linf|meof|mput|log2|bilt|move|call|mode|subf|h5ln|argn|toc|min|tic|svd|tan|pca|max|lqe|lqg|lin|lqr|gcd|lft|cat|mad|lev|nnz|clc|eye|ode|lcm|lcf|lsq|log|cos|exp|lib|ver|msd|sva|cov|now|iqr|csc|czt|dae|inv|int|rat|dcf|sin|ddp|dct|dir|and|sec|det|who|pcg|iir|abs|dst|set|fec|phc|pwd|fix|qld|fft|try|erf|sum|end|for|%sn|acf|get|qmr|%k|do|qr|if|_d|or|lu|ls|cd|_)\b">
+        <token type="NameBuiltin"/>
+      </rule>
+      <rule pattern="(differential_equationlib|compatibility_functilib|elementary_functionslib|simulated_annealinglib|genetic_algorithmslib|development_toolslib|signal_processinglib|special_functionslib|external_objectslib|modules_managerlib|data_structureslib|linear_algebralib|interpolationlib|output_streamlib|dynamic_linklib|optimizationlib|scicos_utilslib|optimsimplexlib|spreadsheetlib|scicos_autolib|preferenceslib|polynomialslib|overloadinglib|%toolboxes_dir|neldermeadlib|%modalWarning|parameterslib|demo_toolslib|statisticslib|functionslib|helptoolslib|optimbaselib|scinoteslib|%toolboxes|arnoldilib|integerlib|umfpacklib|randliblib|sparselib|assertlib|fileiolib|stringlib|tclscilib|soundlib|m2scilib|cacsdlib|atomslib|matiolib|timelib|SCIHOME|xcoslib|corelib|TMPDIR|jvoid|iolib|evoid|enull|%fftw|jnull|%nan|home|%eps|%gui|%inf|%io|%tk|SCI|PWD|%pi|fd|%z|%i|%s|%f|%t|%e|%T|%F|\$)\b">
+        <token type="NameConstant"/>
+      </rule>
+      <rule pattern="-|==|~=|&lt;|&gt;|&lt;=|&gt;=|&amp;&amp;|&amp;|~|\|\|?">
+        <token type="Operator"/>
+      </rule>
+      <rule pattern="\.\*|\*|\+|\.\^|\.\\|\.\/|\/|\\">
+        <token type="Operator"/>
+      </rule>
+      <rule pattern="[\[\](){}@.,=:;]">
+        <token type="Punctuation"/>
+      </rule>
+      <rule pattern="&#34;[^&#34;]*&#34;">
+        <token type="LiteralString"/>
+      </rule>
+      <rule pattern="(?&lt;=[\w)\].])\&#39;+">
+        <token type="Operator"/>
+      </rule>
+      <rule pattern="(?&lt;![\w)\].])\&#39;">
+        <token type="LiteralString"/>
+        <push state="string"/>
+      </rule>
+      <rule pattern="(\d+\.\d*|\d*\.\d+)([eEf][+-]?[0-9]+)?">
+        <token type="LiteralNumberFloat"/>
+      </rule>
+      <rule pattern="\d+[eEf][+-]?[0-9]+">
+        <token type="LiteralNumberFloat"/>
+      </rule>
+      <rule pattern="\d+">
+        <token type="LiteralNumberInteger"/>
+      </rule>
+      <rule pattern="[a-zA-Z_]\w*">
+        <token type="Name"/>
+      </rule>
+      <rule pattern=".">
+        <token type="Text"/>
+      </rule>
+    </state>
+    <state name="string">
+      <rule pattern="[^&#39;]*&#39;">
+        <token type="LiteralString"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern=".">
+        <token type="LiteralString"/>
+        <pop depth="1"/>
+      </rule>
+    </state>
+    <state name="deffunc">
+      <rule pattern="(\s*)(?:(.+)(\s*)(=)(\s*))?(.+)(\()(.*)(\))(\s*)">
+        <bygroups>
+          <token type="TextWhitespace"/>
+          <token type="Text"/>
+          <token type="TextWhitespace"/>
+          <token type="Punctuation"/>
+          <token type="TextWhitespace"/>
+          <token type="NameFunction"/>
+          <token type="Punctuation"/>
+          <token type="Text"/>
+          <token type="Punctuation"/>
+          <token type="TextWhitespace"/>
+        </bygroups>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="(\s*)([a-zA-Z_]\w*)">
+        <bygroups>
+          <token type="Text"/>
+          <token type="NameFunction"/>
+        </bygroups>
+        <pop depth="1"/>
+      </rule>
+    </state>
+  </rules>
+</lexer>
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/alecthomas/chroma/v2/lexers/embedded/scss.xml","mode":420,"size":29344,"sha256":"3508a4f40cb372ed064120a37c2eed2adfc2e92727b64db60c82ba7c3b1384e5","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":29344}
+<lexer>
+  <config>
+    <name>SCSS</name>
+    <alias>scss</alias>
+    <filename>*.scss</filename>
+    <mime_type>text/x-scss</mime_type>
+    <case_insensitive>true</case_insensitive>
+    <dot_all>true</dot_all>
+    <not_multiline>true</not_multiline>
+  </config>
+  <rules>
+    <state name="string-double">
+      <rule pattern="(\\.|#(?=[^\n{])|[^\n&#34;#])+">
+        <token type="LiteralStringDouble"/>
+      </rule>
+      <rule pattern="#\{">
+        <token type="LiteralStringInterpol"/>
+        <push state="interpolation"/>
+      </rule>
+      <rule pattern="&#34;">
+        <token type="LiteralStringDouble"/>
+        <pop depth="1"/>
+      </rule>
+    </state>
+    <state name="id">
+      <rule pattern="[\w-]+">
+        <token type="NameNamespace"/>
+      </rule>
+      <rule pattern="#\{">
+        <token type="LiteralStringInterpol"/>
+        <push state="interpolation"/>
+      </rule>
+      <rule>
+        <pop depth="1"/>
+      </rule>
+    </state>
+    <state name="value">
+      <rule pattern="[ \t]+">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="!(important|default|global)">
+        <token type="Keyword"/>
+      </rule>
+      <rule pattern="[!$][\w-]+">
+        <token type="NameVariable"/>
+      </rule>
+      <rule pattern="url\(">
+        <token type="LiteralStringOther"/>
+        <push state="string-url"/>
+      </rule>
+      <rule pattern="[a-z_-][\w-]*(?=\()">
+        <token type="NameFunction"/>
+      </rule>
+      <rule pattern="\b(scroll-padding-inline-start|spatial-navigation-function|transition-timing-function|overscroll-behavior-inline|spatial-navigation-contain|border-bottom-right-radius|scroll-padding-block-start|scroll-margin-inline-start|border-bottom-left-radius|border-start-start-radius|border-inline-start-color|animation-iteration-count|border-inline-start-width|animation-timing-function|text-decoration-thickness|border-inline-start-style|scroll-margin-block-start|scroll-padding-inline-end|spatial-navigation-action|overscroll-behavior-block|scroll-margin-inline-end|border-block-start-style|border-block-start-width|scroll-padding-block-end|border-block-start-color|border-inline-end-width|border-top-right-radius|text-underline-position|scroll-margin-block-end|border-start-end-radius|border-end-start-radius|border-inline-end-style|border-inline-end-color|font-variant-east-asian|border-block-end-style|font-language-override|border-block-end-color|border-block-end-width|text-emphasis-position|border-top-left-radius|font-variant-ligatures|background-attachment|overscroll-behavior-x|text-decoration-style|scroll-padding-inline|background-blend-mode|text-decoration-color|text-underline-offset|overscroll-behavior-y|font-variant-position|shape-image-threshold|grid-template-columns|border-end-end-radius|font-feature-settings|scroll-padding-bottom|font-variant-numeric|initial-letter-align|text-combine-upright|box-decoration-break|overflow-clip-margin|scroll-padding-right|padding-inline-start|scroll-margin-bottom|text-decoration-skip|scroll-margin-inline|scroll-padding-block|animation-play-state|text-decoration-line|scroll-margin-block|border-image-outset|font-optical-sizing|animation-fill-mode|margin-inline-start|border-bottom-color|transition-property|border-inline-width|animation-direction|grid-template-areas|forced-color-adjust|border-inline-style|border-inline-start|text-emphasis-style|scroll-padding-left|border-bottom-width|scroll-margin-right|border-inline-color|overscroll-behavior|list-style-position|hanging-punctuation|background-position|border-bottom-style|border-image-source|transition-duration|initial-letter-wrap|padding-block-start|border-image-repeat|backface-visibility|font-variant-emoji|margin-block-start|border-block-start|border-block-style|padding-inline-end|border-right-width|perspective-origin|inset-inline-start|border-right-color|border-block-color|mask-border-repeat|mask-border-source|border-image-width|scroll-padding-top|animation-duration|border-image-slice|grid-template-rows|content-visibility|scroll-margin-left|border-block-width|border-right-style|image-orientation|scroll-snap-align|page-break-inside|column-rule-width|mask-border-width|column-rule-style|mask-border-slice|column-rule-color|grid-auto-columns|page-break-before|background-repeat|counter-increment|font-variant-caps|padding-block-end|border-inline-end|grid-column-start|border-left-width|border-left-style|border-left-color|scroll-margin-top|inset-block-start|margin-inline-end|background-origin|mask-border-mode|scroll-snap-stop|scroll-snap-type|scrollbar-gutter|font-size-adjust|transform-origin|page-orientation|image-resolution|margin-block-end|footnote-display|page-break-after|border-block-end|text-group-align|text-orientation|transition-delay|background-image|text-size-adjust|border-top-width|border-top-style|list-style-image|border-top-color|background-color|inset-inline-end|offset-distance|background-size|background-clip|list-style-type|footnote-policy|text-decoration|scrollbar-color|scrollbar-width|text-align-last|image-rendering|animation-delay|transform-style|object-position|offset-position|text-space-trim|justify-content|overflow-anchor|scroll-behavior|inset-block-end|border-collapse|grid-column-end|overflow-inline|border-spacing|scroll-padding|text-align-all|pointer-events|max-block-size|text-transform|letter-spacing|lighting-color|mask-composite|initial-letter|mix-blend-mode|overflow-block|animation-name|padding-bottom|flex-direction|padding-inline|font-synthesis|grid-auto-flow|vertical-align|outline-offset|text-rendering|grid-auto-rows|grid-row-start|margin-inline|padding-block|offset-rotate|text-overflow|border-inline|margin-bottom|offset-anchor|scroll-margin|outline-style|border-bottom|shape-outside|outline-width|shape-padding|text-emphasis|align-content|grid-template|border-radius|transform-box|overflow-wrap|justify-items|mask-position|place-content|inline-sizing|counter-reset|padding-right|outline-color|table-layout|column-width|writing-mode|font-variant|touch-action|padding-left|color-adjust|word-spacing|text-justify|shape-margin|caption-side|break-inside|shape-inside|margin-right|break-before|font-kerning|font-stretch|border-width|margin-break|text-spacing|border-style|aspect-ratio|margin-block|grid-row-end|border-block|line-padding|border-right|wrap-through|border-color|border-image|justify-self|inset-inline|unicode-bidi|column-count|column-span|border-left|white-space|wrap-inside|grid-column|will-change|text-shadow|offset-path|user-select|inline-size|break-after|place-items|caret-color|text-indent|padding-top|inset-block|wrap-before|font-weight|flex-shrink|line-height|perspective|column-fill|mask-repeat|align-items|margin-left|mask-origin|margin-trim|column-rule|font-family|empty-cells|counter-set|mask-border|overflow-y|string-set|align-self|text-align|place-self|list-style|wrap-after|block-size|word-break|line-clamp|line-break|flex-basis|max-height|min-height|object-fit|appearance|box-sizing|transition|mask-image|background|border-top|visibility|overflow-x|column-gap|font-style|box-shadow|margin-top|mask-size|line-snap|flex-wrap|nav-right|isolation|flex-grow|flex-flow|translate|line-grid|text-wrap|wrap-flow|min-width|max-width|direction|clip-path|transform|mask-clip|max-lines|mask-type|grid-area|animation|mask-mode|word-wrap|font-size|nav-down|position|overflow|grid-row|tab-size|nav-left|z-index|row-gap|content|opacity|padding|display|outline|columns|hyphens|orphans|margin|border|rotate|filter|resize|quotes|bottom|height|offset|nav-up|cursor|widows|width|inset|clear|color|right|float|scale|order|left|font|flex|mask|page|grid|clip|all|gap|src|top)(?=\s*:)">
+        <token type="NameAttribute"/>
+      </rule>
+      <rule pattern="(?&lt;!:\s*)[^ \t:=&#34;\[;(),.]+(?=[ \t]*:(?:#{|[^{])+?[;,])">
+        <token type="NameAttribute"/>
+      </rule>
+      <rule pattern="\b(no-discretionary-ligatures|no-historical-ligatures|discretionary-ligatures|simp-chinese-informal|trad-chinese-informal|korean-hanja-informal|historical-ligatures|korean-hangul-formal|decimal-leading-zero|korean-hanja-formal|ruby-text-container|ruby-base-container|no-common-ligatures|trad-chinese-formal|simp-chinese-formal|cjk-earthly-branch|geometricPrecision|optimizeLegibility|table-header-group|table-footer-group|diagonal-fractions|table-column-group|proportional-width|disclosure-closed|stacked-fractions|japanese-informal|alternate-reverse|cjk-heavenly-stem|proportional-nums|slider-horizontal|ideograph-numeric|common-ligatures|isolate-override|ethiopic-numeric|ideograph-alpha|table-row-group|all-petite-caps|cjk-ideographic|inter-character|ultra-condensed|scroll-position|extra-condensed|japanese-formal|disclosure-open|menulist-button|upper-armenian|lower-armenian|extra-expanded|semi-condensed|space-adjacent|all-small-caps|discard-before|katakana-iroha|full-size-kana|no-close-quote|ultra-expanded|hiragana-iroha|target-counter|column-reverse|spelling-error|grammar-error|optimizeSpeed|discard-after|no-contextual|trim-adjacent|table-caption|square-button|semi-expanded|border-bottom|ui-sans-serif|double-circle|vertical-text|outside-shape|horizontal-tb|no-open-quote|space-between|small-caption|oldstyle-nums|bidi-override|progress-bar|match-parent|line-through|space-around|inline-table|inline-block|high-quality|space-evenly|table-column|currentColor|arabic-indic|ui-monospace|rotate-right|inline-start|avoid-region|avoid-column|match-source|manipulation|tabular-nums|context-menu|slashed-zero|cubic-bezier|titling-caps|wrap-reverse|color-dodge|sideways-lr|no-compress|space-first|searchfield|lining-nums|fit-content|ease-in-out|punctuation|min-content|petite-caps|crisp-edges|push-button|translate3d|row-reverse|perspective|max-content|nesw-resize|not-allowed|preserve-3d|space-start|drop-shadow|padding-box|text-bottom|rotate-left|block-start|inline-grid|inline-flex|upper-latin|upper-alpha|lower-latin|auto‑flow|lower-alpha|message-box|lower-greek|upper-roman|lower-roman|vertical-rl|traditional|justify-all|close-quote|content-box|vertical-lr|cjk-decimal|transparent|sideways-rl|target-text|balance-all|ideographic|nwse-resize|saturation|flex-start|open-quote|from-image|avoid-flex|avoid-line|stroke-box|ui-rounded|margin-box|self-start|inline-end|devanagari|avoid-page|status-bar|all-scroll|col-resize|row-resize|translateZ|translateY|translateX|hue-rotate|small-caps|brightness|step-start|capitalize|trim-start|trim-inner|sans-serif|scale-down|contextual|break-word|horizontal|inter-word|color-burn|cross-fade|hard-light|soft-light|border-box|table-cell|luminosity|full-width|difference|simplified|alphabetic|mandatory|exclusion|from-font|table-row|flow-root|underline|image-set|proximity|ruby-base|ruby-text|list-item|monospace|intersect|ns-resize|textfield|ew-resize|uppercase|sw-resize|se-resize|nw-resize|lowercase|grayscale|ne-resize|pan-right|translate|backwards|available|luminance|condensed|alternate|mongolian|plaintext|malayalam|cambodian|transform|block-end|force-end|break-all|crosshair|allow-end|no-repeat|pixelated|system-ui|xxx-large|space-end|w-resize|georgian|flex-end|baseline|gujarati|fangsong|ui-serif|fill-box|keep-all|view-box|xx-small|gurmukhi|pre-line|pre-wrap|contents|xx-large|text-top|hiragana|self-end|katakana|collapse|separate|anywhere|saturate|expanded|subtract|progress|repeat-x|rotate3d|repeat-y|contrast|relative|forwards|infinite|absolute|matrix3d|vertical|overline|pan-down|pan-left|step-end|triangle|ease-out|textarea|sideways|checkbox|menulist|ellipsis|trim-end|grabbing|multiply|zoom-out|n-resize|s-resize|armenian|ordinal|zoom-in|visible|overlay|no-drop|listbox|unicode|lighten|ease-in|lighter|element|running|justify|display|fantasy|unicase|subgrid|reverse|upright|stretch|rotateX|current|exclude|rotateY|pointer|contain|opacity|default|no-clip|in-flow|hanging|isolate|discard|tibetan|persian|myanmar|rotateZ|content|inherit|outside|initial|kannada|smaller|decimal|symbols|x-large|balance|x-small|economy|caption|minimum|maximum|polygon|ellipse|cursive|bengali|masonry|static|region|column|run-in|inline|middle|circle|larger|button|square|pretty|always|hidden|rotate|inside|scroll|screen|matrix|create|unsafe|center|paused|nowrap|medium|darken|sesame|strict|outset|pan-up|bolder|telugu|scaleX|linear|scaleY|groove|double|scaleZ|dashed|minmax|legacy|hebrew|bottom|dotted|leader|normal|stable|weight|smooth|filled|italic|revert|manual|repeat|sticky|invert|table|round|space|alias|jis78|dense|sepia|emoji|auto;|clear|skewX|cover|right|skewY|style|light|unset|force|alpha|large|focus|solid|ridge|white|embed|tamil|blink|first|scale|radio|color|jis83|under|block|jis90|inset|start|pan-y|oriya|super|loose|mixed|thick|slice|pan-x|khmer|width|local|fixed|clone|avoid|serif|exact|recto|meter|small|verso|jis04|image|flow|flex|grid|ruby|wrap|ease|safe|grab|move|icon|bold|last|open|over|wavy|show|hide|both|url;|none|blur|text|line|menu|copy|dark|left|math|cell|clip|fill|skew|wait|help|flat|snap|keep|thai|thin|disc|path|page|attr|rect|auto|row|all|rtl|end|ltr|sub|hue|dot|url|top|lao|add|ray|pre|x|y|z)\b">
+        <token type="NameEntity"/>
+      </rule>
+      <rule pattern="(?i)\b(LightGoldenRodYellow|MediumSpringGreen|MediumAquaMarine|MediumSlateBlue|MediumVioletRed|MediumTurquoise|LightSlateGray|LightSlateGrey|MediumSeaGreen|BlanchedAlmond|LightSteelBlue|CornflowerBlue|DarkOliveGreen|DarkGoldenRod|PaleGoldenRod|PaleTurquoise|LavenderBlush|RebeccaPurple|DarkSlateGray|DarkSlateGrey|LightSeaGreen|PaleVioletRed|DarkTurquoise|DarkSlateBlue|AntiqueWhite|DarkSeaGreen|LightSkyBlue|MediumOrchid|LemonChiffon|MediumPurple|MidnightBlue|GreenYellow|DarkMagenta|LightSalmon|LightYellow|DeepSkyBlue|NavajoWhite|SaddleBrown|SpringGreen|ForestGreen|FloralWhite|YellowGreen|PapayaWhip|Aquamarine|DodgerBlue|Chartreuse|BlueViolet|DarkViolet|DarkOrange|LightGreen|GhostWhite|WhiteSmoke|DarkOrchid|MediumBlue|PowderBlue|LightCoral|DarkSalmon|SandyBrown|IndianRed|RoyalBlue|SteelBlue|AliceBlue|SlateGrey|MistyRose|Turquoise|LawnGreen|MintCream|LightBlue|SlateGray|LightCyan|GoldenRod|LightGray|LightGrey|Gainsboro|OliveDrab|Chocolate|DarkGreen|PeachPuff|RosyBrown|BurlyWood|FireBrick|SlateBlue|LightPink|LimeGreen|OrangeRed|CadetBlue|DarkKhaki|PaleGreen|HoneyDew|SeaShell|SeaGreen|DeepPink|Cornsilk|DarkBlue|DarkCyan|DarkGray|DarkGrey|Moccasin|Lavender|DarkRed|HotPink|SkyBlue|OldLace|Thistle|Fuchsia|Magenta|DimGrey|Crimson|DimGray|Tomato|Bisque|Silver|Orchid|Orange|Yellow|Sienna|Maroon|Salmon|Purple|Indigo|Violet|Green|Beige|Azure|Olive|Ivory|Coral|Wheat|White|Linen|Brown|Khaki|Black|Cyan|Blue|Aqua|Navy|Peru|Teal|Grey|Snow|Gray|Gold|Plum|Pink|Lime|Red|Tan)\b">
+        <token type="NameConstant"/>
+      </rule>
+      <rule pattern="(true|false)">
+        <token type="NamePseudo"/>
+      </rule>
+      <rule pattern="(and|or|not)">
+        <token type="OperatorWord"/>
+      </rule>
+      <rule pattern="/\*">
+        <token type="CommentMultiline"/>
+        <push state="inline-comment"/>
+      </rule>
+      <rule pattern="//[^\n]*">
+        <token type="CommentSingle"/>
+      </rule>
+      <rule pattern="\#[a-z0-9]{1,6}">
+        <token type="LiteralNumberHex"/>
+      </rule>
+      <rule pattern="(-)?(\d+)(\%|[a-z]+)?">
+        <bygroups>
+          <token type="Operator"/>
+          <token type="LiteralNumberInteger"/>
+          <token type="KeywordType"/>
+        </bygroups>
+      </rule>
+      <rule pattern="(-?)(\d*\.\d+)(\%|[a-z]+)?">
+        <bygroups>
+          <token type="Operator"/>
+          <token type="LiteralNumberFloat"/>
+          <token type="KeywordType"/>
+        </bygroups>
+      </rule>
+      <rule pattern="#\{">
+        <token type="LiteralStringInterpol"/>
+        <push state="interpolation"/>
+      </rule>
+      <rule pattern="[~^*!&amp;%&lt;&gt;|+=@:,./?-]+">
+        <token type="Operator"/>
+      </rule>
+      <rule pattern="[\[\]()]+">
+        <token type="Punctuation"/>
+      </rule>
+      <rule pattern="&#34;">
+        <token type="LiteralStringDouble"/>
+        <push state="string-double"/>
+      </rule>
+      <rule pattern="&#39;">
+        <token type="LiteralStringSingle"/>
+        <push state="string-single"/>
+      </rule>
+      <rule pattern="[a-z_-][\w-]*">
+        <token type="Name"/>
+      </rule>
+      <rule pattern="\n">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="[;{}]">
+        <token type="Punctuation"/>
+        <pop depth="1"/>
+      </rule>
+    </state>
+    <state name="inline-comment">
+      <rule pattern="(\\#|#(?=[^{])|\*(?=[^/])|[^#*])+">
+        <token type="CommentMultiline"/>
+      </rule>
+      <rule pattern="#\{">
+        <token type="LiteralStringInterpol"/>
+        <push state="interpolation"/>
+      </rule>
+      <rule pattern="\*/">
+        <token type="Comment"/>
+        <pop depth="1"/>
+      </rule>
+    </state>
+    <state name="string-single">
+      <rule pattern="(\\.|#(?=[^\n{])|[^\n&#39;#])+">
+        <token type="LiteralStringSingle"/>
+      </rule>
+      <rule pattern="#\{">
+        <token type="LiteralStringInterpol"/>
+        <push state="interpolation"/>
+      </rule>
+      <rule pattern="&#39;">
+        <token type="LiteralStringSingle"/>
+        <pop depth="1"/>
+      </rule>
+    </state>
+    <state name="interpolation">
+      <rule pattern="\}">
+        <token type="LiteralStringInterpol"/>
+        <pop depth="1"/>
+      </rule>
+      <rule>
+        <include state="value"/>
+      </rule>
+    </state>
+    <state name="each">
+      <rule pattern="in">
+        <token type="OperatorWord"/>
+      </rule>
+      <rule>
+        <include state="value"/>
+      </rule>
+    </state>
+    <state name="attr">
+      <rule pattern="#\{">
+        <token type="LiteralStringInterpol"/>
+        <push state="interpolation"/>
+      </rule>
+      <rule pattern="[ \t]*:">
+        <token type="Operator"/>
+        <push state="value"/>
+      </rule>
+      <rule>
+        <pop depth="1"/>
+      </rule>
+    </state>
+    <state name="root">
+      <rule pattern="[{}()]">
+        <token type="Punctuation"/>
+      </rule>
+      <rule pattern="\s+">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="//.*?\n">
+        <token type="CommentSingle"/>
+      </rule>
+      <rule pattern="/\*.*?\*/">
+        <token type="CommentMultiline"/>
+      </rule>
+      <rule pattern="@import">
+        <token type="Keyword"/>
+        <push state="value"/>
+      </rule>
+      <rule pattern="(@(?:use|forward))(\s+)([^\s;]+)(?:(\s+)(as)(\s+)(\w+|\*))?(?:(\s+)(with))?">
+        <bygroups>
+          <token type="Keyword"/>
+          <token type="Text"/>
+          <usingself state="selector"/>
+          <token type="Text"/>
+          <token type="Keyword"/>
+          <token type="Text"/>
+          <token type="NameNamespace"/>
+          <token type="Text"/>
+          <token type="Keyword"/>
+        </bygroups>
+        <push state="value"/>
+      </rule>
+      <rule pattern="@for">
+        <token type="Keyword"/>
+        <push state="for"/>
+      </rule>
+      <rule pattern="@each">
+        <token type="Keyword"/>
+        <push state="each"/>
+      </rule>
+      <rule pattern="@(debug|warn|else if|if|while|return)">
+        <token type="Keyword"/>
+        <push state="value"/>
+      </rule>
+      <rule pattern="(@(?:mixin|function))( [\w-]+)">
+        <bygroups>
+          <token type="Keyword"/>
+          <token type="NameFunction"/>
+        </bygroups>
+        <push state="value"/>
+      </rule>
+      <rule pattern="(@include)( [\w-]+)">
+        <bygroups>
+          <token type="Keyword"/>
+          <token type="NameDecorator"/>
+        </bygroups>
+        <push state="value"/>
+      </rule>
+      <rule pattern="@extend">
+        <token type="Keyword"/>
+        <push state="selector"/>
+      </rule>
+      <rule pattern="(@media)(\s+)">
+        <bygroups>
+          <token type="Keyword"/>
+          <token type="Text"/>
+        </bygroups>
+        <push state="value"/>
+      </rule>
+      <rule pattern="@[\w-]+">
+        <token type="Keyword"/>
+        <push state="selector"/>
+      </rule>
+      <rule pattern="(\$[\w-]*\w)([ \t]*:)">
+        <bygroups>
+          <token type="NameVariable"/>
+          <token type="Operator"/>
+        </bygroups>
+        <push state="value"/>
+      </rule>
+      <rule pattern="#\{">
+        <token type="LiteralStringInterpol"/>
+        <push state="interpolation"/>
+      </rule>
+      <rule pattern="\b(scroll-padding-inline-start|spatial-navigation-function|transition-timing-function|overscroll-behavior-inline|spatial-navigation-contain|border-bottom-right-radius|scroll-padding-block-start|scroll-margin-inline-start|border-inline-start-width|border-start-start-radius|border-inline-start-color|animation-iteration-count|spatial-navigation-action|animation-timing-function|text-decoration-thickness|border-inline-start-style|scroll-margin-block-start|scroll-padding-inline-end|border-bottom-left-radius|overscroll-behavior-block|scroll-margin-inline-end|border-block-start-style|border-block-start-width|scroll-padding-block-end|border-block-start-color|scroll-margin-block-end|border-top-right-radius|text-underline-position|border-inline-end-width|border-start-end-radius|border-end-start-radius|border-inline-end-style|border-inline-end-color|font-variant-east-asian|border-block-end-style|font-language-override|border-block-end-color|border-block-end-width|text-emphasis-position|border-top-left-radius|font-variant-ligatures|shape-image-threshold|overscroll-behavior-x|text-decoration-style|scroll-padding-inline|background-blend-mode|text-decoration-color|text-underline-offset|overscroll-behavior-y|border-end-end-radius|scroll-padding-bottom|grid-template-columns|font-variant-position|font-feature-settings|background-attachment|font-variant-numeric|initial-letter-align|text-combine-upright|text-decoration-line|overflow-clip-margin|scroll-padding-right|padding-inline-start|scroll-margin-bottom|text-decoration-skip|scroll-margin-inline|scroll-padding-block|animation-play-state|box-decoration-break|backface-visibility|border-image-outset|font-optical-sizing|animation-fill-mode|margin-inline-start|border-bottom-color|transition-property|border-inline-width|animation-direction|grid-template-areas|forced-color-adjust|border-inline-style|border-inline-start|text-emphasis-style|scroll-padding-left|border-bottom-width|scroll-margin-right|border-inline-color|overscroll-behavior|list-style-position|hanging-punctuation|background-position|border-bottom-style|border-image-source|transition-duration|initial-letter-wrap|padding-block-start|border-image-repeat|scroll-margin-block|font-variant-emoji|margin-block-start|border-block-start|border-block-style|padding-inline-end|border-block-width|perspective-origin|border-right-style|border-right-color|border-block-color|mask-border-repeat|mask-border-source|border-image-width|scroll-padding-top|animation-duration|border-image-slice|grid-template-rows|content-visibility|scroll-margin-left|border-right-width|inset-inline-start|background-origin|scroll-snap-align|page-break-inside|column-rule-width|mask-border-width|column-rule-style|mask-border-slice|column-rule-color|grid-auto-columns|page-break-before|background-repeat|counter-increment|font-variant-caps|padding-block-end|border-inline-end|grid-column-start|border-left-width|border-left-style|border-left-color|scroll-margin-top|inset-block-start|margin-inline-end|image-orientation|mask-border-mode|scroll-snap-stop|scroll-snap-type|scrollbar-gutter|font-size-adjust|transform-origin|page-orientation|image-resolution|margin-block-end|footnote-display|page-break-after|border-block-end|text-group-align|text-orientation|transition-delay|background-image|text-size-adjust|border-top-width|border-top-style|list-style-image|border-top-color|background-color|inset-inline-end|offset-distance|background-size|background-clip|list-style-type|footnote-policy|text-decoration|scrollbar-color|scrollbar-width|text-align-last|image-rendering|animation-delay|transform-style|object-position|offset-position|text-space-trim|justify-content|overflow-anchor|overflow-inline|inset-block-end|border-collapse|grid-column-end|scroll-behavior|border-spacing|scroll-padding|text-align-all|pointer-events|max-block-size|text-transform|letter-spacing|lighting-color|mask-composite|initial-letter|mix-blend-mode|overflow-block|animation-name|grid-row-start|flex-direction|padding-inline|grid-auto-rows|grid-auto-flow|vertical-align|outline-offset|text-rendering|font-synthesis|padding-bottom|margin-inline|padding-block|offset-rotate|text-overflow|border-inline|margin-bottom|offset-anchor|scroll-margin|outline-style|border-bottom|shape-outside|outline-width|shape-padding|text-emphasis|align-content|grid-template|border-radius|transform-box|overflow-wrap|justify-items|mask-position|place-content|inline-sizing|counter-reset|padding-right|outline-color|writing-mode|column-width|column-count|table-layout|touch-action|padding-left|color-adjust|word-spacing|text-justify|shape-margin|caption-side|break-inside|shape-inside|margin-right|break-before|font-kerning|font-stretch|border-width|margin-break|text-spacing|border-style|aspect-ratio|margin-block|grid-row-end|border-block|line-padding|border-right|wrap-through|border-color|border-image|justify-self|inset-inline|unicode-bidi|font-variant|empty-cells|border-left|white-space|wrap-inside|grid-column|will-change|text-shadow|offset-path|user-select|inline-size|break-after|place-items|caret-color|text-indent|padding-top|inset-block|wrap-before|font-weight|flex-shrink|line-height|perspective|column-fill|mask-repeat|align-items|margin-left|mask-origin|margin-trim|column-rule|font-family|column-span|counter-set|mask-border|mask-image|string-set|align-self|margin-top|place-self|list-style|wrap-after|block-size|word-break|line-clamp|line-break|flex-basis|max-height|min-height|object-fit|appearance|box-sizing|transition|box-shadow|background|border-top|visibility|overflow-x|column-gap|font-style|overflow-y|text-align|mask-size|line-snap|flex-wrap|nav-right|isolation|flex-grow|flex-flow|translate|line-grid|text-wrap|wrap-flow|min-width|max-width|direction|clip-path|word-wrap|mask-clip|max-lines|mask-type|grid-area|animation|mask-mode|transform|font-size|nav-down|position|overflow|grid-row|tab-size|nav-left|display|row-gap|content|opacity|padding|orphans|outline|columns|hyphens|z-index|margin|border|rotate|filter|resize|quotes|bottom|height|offset|nav-up|cursor|widows|color|inset|order|scale|right|float|width|clear|font|flex|left|mask|clip|page|grid|gap|src|top|all)(?=\s*:)">
+        <token type="NameAttribute"/>
+        <push state="attr"/>
+      </rule>
+      <rule pattern="(?&lt;!:\s*)[^ \t:=&#34;\[;(),.]+(?=[ \t]*:(?:#{|[^{])+?[;,])">
+        <token type="NameAttribute"/>
+        <push state="attr"/>
+      </rule>
+      <rule>
+        <push state="selector"/>
+      </rule>
+    </state>
+    <state name="for">
+      <rule pattern="(from|to|through)">
+        <token type="OperatorWord"/>
+      </rule>
+      <rule>
+        <include state="value"/>
+      </rule>
+    </state>
+    <state name="class">
+      <rule pattern="[\w-]+">
+        <token type="NameClass"/>
+      </rule>
+      <rule pattern="#\{">
+        <token type="LiteralStringInterpol"/>
+        <push state="interpolation"/>
+      </rule>
+      <rule>
+        <pop depth="1"/>
+      </rule>
+    </state>
+    <state name="selector">
+      <rule pattern="[ \t]+">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="\:">
+        <token type="NameDecorator"/>
+        <push state="pseudo-class"/>
+      </rule>
+      <rule pattern="\.">
+        <token type="NameClass"/>
+        <push state="class"/>
+      </rule>
+      <rule pattern="#\{">
+        <token type="LiteralStringInterpol"/>
+        <push state="interpolation"/>
+      </rule>
+      <rule pattern="\#">
+        <token type="NameNamespace"/>
+        <push state="id"/>
+      </rule>
+      <rule pattern="&amp;">
+        <token type="Keyword"/>
+      </rule>
+      <rule pattern="[~^*!&amp;\[\]()&lt;&gt;|+=@:,./?-]">
+        <token type="Operator"/>
+      </rule>
+      <rule pattern="(%)([\w-]+)">
+        <bygroups>
+          <token type="Operator"/>
+          <token type="NameClass"/>
+        </bygroups>
+      </rule>
+      <rule pattern="&#34;">
+        <token type="LiteralStringDouble"/>
+        <push state="string-double"/>
+      </rule>
+      <rule pattern="&#39;">
+        <token type="LiteralStringSingle"/>
+        <push state="string-single"/>
+      </rule>
+      <rule pattern="\n">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="[;{}]">
+        <token type="Punctuation"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="[\w-]+">
+        <token type="NameTag"/>
+      </rule>
+    </state>
+    <state name="string-url">
+      <rule pattern="(\\#|#(?=[^\n{])|[^\n#)])+">
+        <token type="LiteralStringOther"/>
+      </rule>
+      <rule pattern="#\{">
+        <token type="LiteralStringInterpol"/>
+        <push state="interpolation"/>
+      </rule>
+      <rule pattern="\)">
+        <token type="LiteralStringOther"/>
+        <pop depth="1"/>
+      </rule>
+    </state>
+    <state name="pseudo-class">
+      <rule pattern="[\w-]+">
+        <token type="NameDecorator"/>
+      </rule>
+      <rule pattern="#\{">
+        <token type="LiteralStringInterpol"/>
+        <push state="interpolation"/>
+      </rule>
+      <rule>
+        <pop depth="1"/>
+      </rule>
+    </state>
+  </rules>
+</lexer>
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/alecthomas/chroma/v2/lexers/embedded/sed.xml","mode":420,"size":2193,"sha256":"3399828ace4885454a4eed3510f036c31377d76b16bc23f70594ff27a7efb8c0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2193}
+<lexer>
+  <config>
+    <name>Sed</name>
+    <alias>sed</alias>
+    <alias>gsed</alias>
+    <alias>ssed</alias>
+    <filename>*.sed</filename>
+    <filename>*.[gs]sed</filename>
+    <mime_type>text/x-sed</mime_type>
+  </config>
+  <rules>
+    <state name="root">
+      <rule pattern="\s+"><token type="TextWhitespace"/></rule>
+      <rule pattern="#.*$"><token type="CommentSingle"/></rule>
+      <rule pattern="[0-9]+"><token type="LiteralNumberInteger"/></rule>
+      <rule pattern="\$"><token type="Operator"/></rule>
+      <rule pattern="[{};,!]"><token type="Punctuation"/></rule>
+      <rule pattern="[dDFgGhHlnNpPqQxz=]"><token type="Keyword"/></rule>
+      <rule pattern="([berRtTvwW:])([^;\n]*)"><bygroups><token type="Keyword"/><token type="LiteralStringSingle"/></bygroups></rule>
+      <rule pattern="([aci])((?:.*?\\\n)*(?:.*?[^\\]$))"><bygroups><token type="Keyword"/><token type="LiteralStringDouble"/></bygroups></rule>
+      <rule pattern="([qQ])([0-9]*)"><bygroups><token type="Keyword"/><token type="LiteralNumberInteger"/></bygroups></rule>
+      <rule pattern="(/)((?:(?:\\[^\n]|[^\\])*?\\\n)*?(?:\\.|[^\\])*?)(/)"><bygroups><token type="Punctuation"/><token type="LiteralStringRegex"/><token type="Punctuation"/></bygroups></rule>
+      <rule pattern="(\\(.))((?:(?:\\[^\n]|[^\\])*?\\\n)*?(?:\\.|[^\\])*?)(\2)"><bygroups><token type="Punctuation"/>None<token type="LiteralStringRegex"/><token type="Punctuation"/></bygroups></rule>
+      <rule pattern="(y)(.)((?:(?:\\[^\n]|[^\\])*?\\\n)*?(?:\\.|[^\\])*?)(\2)((?:(?:\\[^\n]|[^\\])*?\\\n)*?(?:\\.|[^\\])*?)(\2)"><bygroups><token type="Keyword"/><token type="Punctuation"/><token type="LiteralStringSingle"/><token type="Punctuation"/><token type="LiteralStringSingle"/><token type="Punctuation"/></bygroups></rule>
+      <rule pattern="(s)(.)((?:(?:\\[^\n]|[^\\])*?\\\n)*?(?:\\.|[^\\])*?)(\2)((?:(?:\\[^\n]|[^\\])*?\\\n)*?(?:\\.|[^\\])*?)(\2)((?:[gpeIiMm]|[0-9])*)"><bygroups><token type="Keyword"/><token type="Punctuation"/><token type="LiteralStringRegex"/><token type="Punctuation"/><token type="LiteralStringSingle"/><token type="Punctuation"/><token type="Keyword"/></bygroups></rule>
+    </state>
+  </rules>
+</lexer>
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/alecthomas/chroma/v2/lexers/embedded/sieve.xml","mode":420,"size":2046,"sha256":"ea82940dde58210fc999442a66bc83e5f85a248156fed6b556c8fbf1954975a0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2046}
+<lexer>
+  <config>
+    <name>Sieve</name>
+    <alias>sieve</alias>
+    <filename>*.siv</filename>
+    <filename>*.sieve</filename>
+  </config>
+  <rules>
+    <state name="root">
+      <rule pattern="\s+">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="[();,{}\[\]]">
+        <token type="Punctuation"/>
+      </rule>
+      <rule pattern="(?i)require">
+        <token type="KeywordNamespace"/>
+      </rule>
+      <rule pattern="(?i)(:)(addresses|all|contains|content|create|copy|comparator|count|days|detail|domain|fcc|flags|from|handle|importance|is|localpart|length|lowerfirst|lower|matches|message|mime|options|over|percent|quotewildcard|raw|regex|specialuse|subject|text|under|upperfirst|upper|value)">
+        <bygroups>
+          <token type="NameTag"/>
+          <token type="NameTag"/>
+        </bygroups>
+      </rule>
+      <rule pattern="(?i)(address|addflag|allof|anyof|body|discard|elsif|else|envelope|ereject|exists|false|fileinto|if|hasflag|header|keep|notify_method_capability|notify|not|redirect|reject|removeflag|setflag|size|spamtest|stop|string|true|vacation|virustest)">
+        <token type="NameBuiltin"/>
+      </rule>
+      <rule pattern="(?i)set">
+        <token type="KeywordDeclaration"/>
+      </rule>
+      <rule pattern="([0-9.]+)([kmgKMG])?">
+        <bygroups>
+          <token type="LiteralNumber"/>
+          <token type="LiteralNumber"/>
+        </bygroups>
+      </rule>
+      <rule pattern="#.*$">
+        <token type="CommentSingle"/>
+      </rule>
+      <rule pattern="/\*.*\*/">
+        <token type="CommentMultiline"/>
+      </rule>
+      <rule pattern="&#34;[^&#34;]*?&#34;">
+        <token type="LiteralString"/>
+      </rule>
+      <rule pattern="text:">
+        <token type="NameTag"/>
+        <push state="text"/>
+      </rule>
+    </state>
+    <state name="text">
+      <rule pattern="[^.].*?\n">
+        <token type="LiteralString"/>
+      </rule>
+      <rule pattern="^\.">
+        <token type="Punctuation"/>
+        <pop depth="1"/>
+      </rule>
+    </state>
+  </rules>
+</lexer>
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/alecthomas/chroma/v2/lexers/embedded/smali.xml","mode":420,"size":3936,"sha256":"d2de4a47ab884cc1e475c649b161c4a8b0b8eec5b1fde42d7e6146ec7102158e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3936}
+<!--
+  Generated from https://github.com/pygments/pygments/blob/15f222adefd2bf7835bfd74a12d720028ae68d29/pygments/lexers/dalvik.py.
+-->
+<lexer>
+  <config>
+    <name>Smali</name>
+    <alias>smali</alias>
+    <filename>*.smali</filename>
+    <mime_type>text/smali</mime_type>
+  </config>
+  <rules>
+    <state name="root">
+      <rule><include state="comment"/></rule>
+      <rule><include state="label"/></rule>
+      <rule><include state="field"/></rule>
+      <rule><include state="method"/></rule>
+      <rule><include state="class"/></rule>
+      <rule><include state="directive"/></rule>
+      <rule><include state="access-modifier"/></rule>
+      <rule><include state="instruction"/></rule>
+      <rule><include state="literal"/></rule>
+      <rule><include state="punctuation"/></rule>
+      <rule><include state="type"/></rule>
+      <rule><include state="whitespace"/></rule>
+    </state>
+    <state name="directive">
+      <rule pattern="^([ \t]*)(\.(?:class|super|implements|field|subannotation|annotation|enum|method|registers|locals|array-data|packed-switch|sparse-switch|catchall|catch|line|parameter|local|prologue|epilogue|source))"><bygroups><token type="TextWhitespace"/><token type="Keyword"/></bygroups></rule>
+      <rule pattern="^([ \t]*)(\.end)( )(field|subannotation|annotation|method|array-data|packed-switch|sparse-switch|parameter|local)"><bygroups><token type="TextWhitespace"/><token type="Keyword"/><token type="TextWhitespace"/><token type="Keyword"/></bygroups></rule>
+      <rule pattern="^([ \t]*)(\.restart)( )(local)"><bygroups><token type="TextWhitespace"/><token type="Keyword"/><token type="TextWhitespace"/><token type="Keyword"/></bygroups></rule>
+    </state>
+    <state name="access-modifier">
+      <rule pattern="(public|private|protected|static|final|synchronized|bridge|varargs|native|abstract|strictfp|synthetic|constructor|declared-synchronized|interface|enum|annotation|volatile|transient)"><token type="Keyword"/></rule>
+    </state>
+    <state name="whitespace">
+      <rule pattern="\n"><token type="TextWhitespace"/></rule>
+      <rule pattern="\s+"><token type="TextWhitespace"/></rule>
+    </state>
+    <state name="instruction">
+      <rule pattern="\b[vp]\d+\b"><token type="NameBuiltin"/></rule>
+      <rule pattern="(\b[a-z][A-Za-z0-9/-]+)(\s+)"><bygroups><token type="Text"/><token type="TextWhitespace"/></bygroups></rule>
+    </state>
+    <state name="literal">
+      <rule pattern="&quot;.*&quot;"><token type="LiteralString"/></rule>
+      <rule pattern="0x[0-9A-Fa-f]+t?"><token type="LiteralNumberHex"/></rule>
+      <rule pattern="[0-9]*\.[0-9]+([eE][0-9]+)?[fd]?"><token type="LiteralNumberFloat"/></rule>
+      <rule pattern="[0-9]+L?"><token type="LiteralNumberInteger"/></rule>
+    </state>
+    <state name="field">
+      <rule pattern="(\$?\b)([\w$]*)(:)"><bygroups><token type="Punctuation"/><token type="NameVariable"/><token type="Punctuation"/></bygroups></rule>
+    </state>
+    <state name="method">
+      <rule pattern="&lt;(?:cl)?init&gt;"><token type="NameFunction"/></rule>
+      <rule pattern="(\$?\b)([\w$]*)(\()"><bygroups><token type="Punctuation"/><token type="NameFunction"/><token type="Punctuation"/></bygroups></rule>
+    </state>
+    <state name="label">
+      <rule pattern=":\w+"><token type="NameLabel"/></rule>
+    </state>
+    <state name="class">
+      <rule pattern="(L)((?:[\w$]+/)*)([\w$]+)(;)"><bygroups><token type="KeywordType"/><token type="Text"/><token type="NameClass"/><token type="Text"/></bygroups></rule>
+    </state>
+    <state name="punctuation">
+      <rule pattern="-&gt;"><token type="Punctuation"/></rule>
+      <rule pattern="[{},():=.-]"><token type="Punctuation"/></rule>
+    </state>
+    <state name="type">
+      <rule pattern="[ZBSCIJFDV\[]+"><token type="KeywordType"/></rule>
+    </state>
+    <state name="comment">
+      <rule pattern="#.*?\n"><token type="Comment"/></rule>
+    </state>
+  </rules>
+</lexer>
+
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/alecthomas/chroma/v2/lexers/embedded/smalltalk.xml","mode":420,"size":8610,"sha256":"fb5a2a27416589464ba1318e19b074b40b34f3ffba5fd83da9d60094218aa05b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":8610}
+<lexer>
+  <config>
+    <name>Smalltalk</name>
+    <alias>smalltalk</alias>
+    <alias>squeak</alias>
+    <alias>st</alias>
+    <filename>*.st</filename>
+    <mime_type>text/x-smalltalk</mime_type>
+  </config>
+  <rules>
+    <state name="inner_parenth">
+      <rule pattern="\)">
+        <token type="LiteralStringSymbol"/>
+        <pop depth="1"/>
+      </rule>
+      <rule>
+        <include state="_parenth_helper"/>
+      </rule>
+    </state>
+    <state name="objects">
+      <rule pattern="\[">
+        <token type="Text"/>
+        <push state="blockvariables"/>
+      </rule>
+      <rule pattern="\]">
+        <token type="Text"/>
+        <push state="afterobject"/>
+      </rule>
+      <rule pattern="\b(self|super|true|false|nil|thisContext)\b">
+        <token type="NameBuiltinPseudo"/>
+        <push state="afterobject"/>
+      </rule>
+      <rule pattern="\b[A-Z]\w*(?!:)\b">
+        <token type="NameClass"/>
+        <push state="afterobject"/>
+      </rule>
+      <rule pattern="\b[a-z]\w*(?!:)\b">
+        <token type="NameVariable"/>
+        <push state="afterobject"/>
+      </rule>
+      <rule pattern="#(&#34;(&#34;&#34;|[^&#34;])*&#34;|[-+*/\\~&lt;&gt;=|&amp;!?,@%]+|[\w:]+)">
+        <token type="LiteralStringSymbol"/>
+        <push state="afterobject"/>
+      </rule>
+      <rule>
+        <include state="literals"/>
+      </rule>
+    </state>
+    <state name="afterobject">
+      <rule pattern="! !$">
+        <token type="Keyword"/>
+        <pop depth="1"/>
+      </rule>
+      <rule>
+        <include state="whitespaces"/>
+      </rule>
+      <rule pattern="\b(ifTrue:|ifFalse:|whileTrue:|whileFalse:|timesRepeat:)">
+        <token type="NameBuiltin"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="\b(new\b(?!:))">
+        <token type="NameBuiltin"/>
+      </rule>
+      <rule pattern=":=|_">
+        <token type="Operator"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="\b[a-zA-Z]+\w*:">
+        <token type="NameFunction"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="\b[a-zA-Z]+\w*">
+        <token type="NameFunction"/>
+      </rule>
+      <rule pattern="\w+:?|[-+*/\\~&lt;&gt;=|&amp;!?,@%]+">
+        <token type="NameFunction"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="\.">
+        <token type="Punctuation"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern=";">
+        <token type="Punctuation"/>
+      </rule>
+      <rule pattern="[\])}]">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="[\[({]">
+        <token type="Text"/>
+        <pop depth="1"/>
+      </rule>
+    </state>
+    <state name="literals">
+      <rule pattern="&#39;(&#39;&#39;|[^&#39;])*&#39;">
+        <token type="LiteralString"/>
+        <push state="afterobject"/>
+      </rule>
+      <rule pattern="\$.">
+        <token type="LiteralStringChar"/>
+        <push state="afterobject"/>
+      </rule>
+      <rule pattern="#\(">
+        <token type="LiteralStringSymbol"/>
+        <push state="parenth"/>
+      </rule>
+      <rule pattern="\)">
+        <token type="Text"/>
+        <push state="afterobject"/>
+      </rule>
+      <rule pattern="(\d+r)?-?\d+(\.\d+)?(e-?\d+)?">
+        <token type="LiteralNumber"/>
+        <push state="afterobject"/>
+      </rule>
+    </state>
+    <state name="root">
+      <rule pattern="(&lt;)(\w+:)(.*?)(&gt;)">
+        <bygroups>
+          <token type="Text"/>
+          <token type="Keyword"/>
+          <token type="Text"/>
+          <token type="Text"/>
+        </bygroups>
+      </rule>
+      <rule>
+        <include state="squeak fileout"/>
+      </rule>
+      <rule>
+        <include state="whitespaces"/>
+      </rule>
+      <rule>
+        <include state="method definition"/>
+      </rule>
+      <rule pattern="(\|)([\w\s]*)(\|)">
+        <bygroups>
+          <token type="Operator"/>
+          <token type="NameVariable"/>
+          <token type="Operator"/>
+        </bygroups>
+      </rule>
+      <rule>
+        <include state="objects"/>
+      </rule>
+      <rule pattern="\^|:=|_">
+        <token type="Operator"/>
+      </rule>
+      <rule pattern="[\]({}.;!]">
+        <token type="Text"/>
+      </rule>
+    </state>
+    <state name="_parenth_helper">
+      <rule>
+        <include state="whitespaces"/>
+      </rule>
+      <rule pattern="(\d+r)?-?\d+(\.\d+)?(e-?\d+)?">
+        <token type="LiteralNumber"/>
+      </rule>
+      <rule pattern="[-+*/\\~&lt;&gt;=|&amp;#!?,@%\w:]+">
+        <token type="LiteralStringSymbol"/>
+      </rule>
+      <rule pattern="&#39;(&#39;&#39;|[^&#39;])*&#39;">
+        <token type="LiteralString"/>
+      </rule>
+      <rule pattern="\$.">
+        <token type="LiteralStringChar"/>
+      </rule>
+      <rule pattern="#*\(">
+        <token type="LiteralStringSymbol"/>
+        <push state="inner_parenth"/>
+      </rule>
+    </state>
+    <state name="parenth">
+      <rule pattern="\)">
+        <token type="LiteralStringSymbol"/>
+        <push state="root" state="afterobject"/>
+      </rule>
+      <rule>
+        <include state="_parenth_helper"/>
+      </rule>
+    </state>
+    <state name="whitespaces">
+      <rule pattern="\s+">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="&#34;(&#34;&#34;|[^&#34;])*&#34;">
+        <token type="Comment"/>
+      </rule>
+    </state>
+    <state name="squeak fileout">
+      <rule pattern="^&#34;(&#34;&#34;|[^&#34;])*&#34;!">
+        <token type="Keyword"/>
+      </rule>
+      <rule pattern="^&#39;(&#39;&#39;|[^&#39;])*&#39;!">
+        <token type="Keyword"/>
+      </rule>
+      <rule pattern="^(!)(\w+)( commentStamp: )(.*?)( prior: .*?!\n)(.*?)(!)">
+        <bygroups>
+          <token type="Keyword"/>
+          <token type="NameClass"/>
+          <token type="Keyword"/>
+          <token type="LiteralString"/>
+          <token type="Keyword"/>
+          <token type="Text"/>
+          <token type="Keyword"/>
+        </bygroups>
+      </rule>
+      <rule pattern="^(!)(\w+(?: class)?)( methodsFor: )(&#39;(?:&#39;&#39;|[^&#39;])*&#39;)(.*?!)">
+        <bygroups>
+          <token type="Keyword"/>
+          <token type="NameClass"/>
+          <token type="Keyword"/>
+          <token type="LiteralString"/>
+          <token type="Keyword"/>
+        </bygroups>
+      </rule>
+      <rule pattern="^(\w+)( subclass: )(#\w+)(\s+instanceVariableNames: )(.*?)(\s+classVariableNames: )(.*?)(\s+poolDictionaries: )(.*?)(\s+category: )(.*?)(!)">
+        <bygroups>
+          <token type="NameClass"/>
+          <token type="Keyword"/>
+          <token type="LiteralStringSymbol"/>
+          <token type="Keyword"/>
+          <token type="LiteralString"/>
+          <token type="Keyword"/>
+          <token type="LiteralString"/>
+          <token type="Keyword"/>
+          <token type="LiteralString"/>
+          <token type="Keyword"/>
+          <token type="LiteralString"/>
+          <token type="Keyword"/>
+        </bygroups>
+      </rule>
+      <rule pattern="^(\w+(?: class)?)(\s+instanceVariableNames: )(.*?)(!)">
+        <bygroups>
+          <token type="NameClass"/>
+          <token type="Keyword"/>
+          <token type="LiteralString"/>
+          <token type="Keyword"/>
+        </bygroups>
+      </rule>
+      <rule pattern="(!\n)(\].*)(! !)$">
+        <bygroups>
+          <token type="Keyword"/>
+          <token type="Text"/>
+          <token type="Keyword"/>
+        </bygroups>
+      </rule>
+      <rule pattern="! !$">
+        <token type="Keyword"/>
+      </rule>
+    </state>
+    <state name="method definition">
+      <rule pattern="([a-zA-Z]+\w*:)(\s*)(\w+)">
+        <bygroups>
+          <token type="NameFunction"/>
+          <token type="Text"/>
+          <token type="NameVariable"/>
+        </bygroups>
+      </rule>
+      <rule pattern="^(\b[a-zA-Z]+\w*\b)(\s*)$">
+        <bygroups>
+          <token type="NameFunction"/>
+          <token type="Text"/>
+        </bygroups>
+      </rule>
+      <rule pattern="^([-+*/\\~&lt;&gt;=|&amp;!?,@%]+)(\s*)(\w+)(\s*)$">
+        <bygroups>
+          <token type="NameFunction"/>
+          <token type="Text"/>
+          <token type="NameVariable"/>
+          <token type="Text"/>
+        </bygroups>
+      </rule>
+    </state>
+    <state name="blockvariables">
+      <rule>
+        <include state="whitespaces"/>
+      </rule>
+      <rule pattern="(:)(\s*)(\w+)">
+        <bygroups>
+          <token type="Operator"/>
+          <token type="Text"/>
+          <token type="NameVariable"/>
+        </bygroups>
+      </rule>
+      <rule pattern="\|">
+        <token type="Operator"/>
+        <pop depth="1"/>
+      </rule>
+      <rule>
+        <pop depth="1"/>
+      </rule>
+    </state>
+  </rules>
+</lexer>
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/alecthomas/chroma/v2/lexers/embedded/smarty.xml","mode":420,"size":2262,"sha256":"7314f55aebf2f9332b1619d8dafb1bb45e604fb3fc073afa3c055c513246f440","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2262}
+<lexer>
+  <config>
+    <name>Smarty</name>
+    <alias>smarty</alias>
+    <filename>*.tpl</filename>
+    <mime_type>application/x-smarty</mime_type>
+    <dot_all>true</dot_all>
+  </config>
+  <rules>
+    <state name="root">
+      <rule pattern="[^{]+">
+        <token type="Other"/>
+      </rule>
+      <rule pattern="(\{)(\*.*?\*)(\})">
+        <bygroups>
+          <token type="CommentPreproc"/>
+          <token type="Comment"/>
+          <token type="CommentPreproc"/>
+        </bygroups>
+      </rule>
+      <rule pattern="(\{php\})(.*?)(\{/php\})">
+        <bygroups>
+          <token type="CommentPreproc"/>
+          <using lexer="PHP"/>
+          <token type="CommentPreproc"/>
+        </bygroups>
+      </rule>
+      <rule pattern="(\{)(/?[a-zA-Z_]\w*)(\s*)">
+        <bygroups>
+          <token type="CommentPreproc"/>
+          <token type="NameFunction"/>
+          <token type="Text"/>
+        </bygroups>
+        <push state="smarty"/>
+      </rule>
+      <rule pattern="\{">
+        <token type="CommentPreproc"/>
+        <push state="smarty"/>
+      </rule>
+    </state>
+    <state name="smarty">
+      <rule pattern="\s+">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="\{">
+        <token type="CommentPreproc"/>
+        <push/>
+      </rule>
+      <rule pattern="\}">
+        <token type="CommentPreproc"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="#[a-zA-Z_]\w*#">
+        <token type="NameVariable"/>
+      </rule>
+      <rule pattern="\$[a-zA-Z_]\w*(\.\w+)*">
+        <token type="NameVariable"/>
+      </rule>
+      <rule pattern="[~!%^&amp;*()+=|\[\]:;,.&lt;&gt;/?@-]">
+        <token type="Operator"/>
+      </rule>
+      <rule pattern="(true|false|null)\b">
+        <token type="KeywordConstant"/>
+      </rule>
+      <rule pattern="[0-9](\.[0-9]*)?(eE[+-][0-9])?[flFLdD]?|0[xX][0-9a-fA-F]+[Ll]?">
+        <token type="LiteralNumber"/>
+      </rule>
+      <rule pattern="&#34;(\\\\|\\&#34;|[^&#34;])*&#34;">
+        <token type="LiteralStringDouble"/>
+      </rule>
+      <rule pattern="&#39;(\\\\|\\&#39;|[^&#39;])*&#39;">
+        <token type="LiteralStringSingle"/>
+      </rule>
+      <rule pattern="[a-zA-Z_]\w*">
+        <token type="NameAttribute"/>
+      </rule>
+    </state>
+  </rules>
+</lexer>
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/alecthomas/chroma/v2/lexers/embedded/snobol.xml","mode":420,"size":2749,"sha256":"aededab5310b00e5de040af44f6797299a3fcef68e7cb664e1791c5e7b7c025e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2749}
+<lexer>
+  <config>
+    <name>Snobol</name>
+    <alias>snobol</alias>
+    <filename>*.snobol</filename>
+    <mime_type>text/x-snobol</mime_type>
+  </config>
+  <rules>
+    <state name="heredoc">
+      <rule pattern=".*\n">
+        <token type="LiteralStringHeredoc"/>
+      </rule>
+    </state>
+    <state name="root">
+      <rule pattern="\*.*\n">
+        <token type="Comment"/>
+      </rule>
+      <rule pattern="[+.] ">
+        <token type="Punctuation"/>
+        <push state="statement"/>
+      </rule>
+      <rule pattern="-.*\n">
+        <token type="Comment"/>
+      </rule>
+      <rule pattern="END\s*\n">
+        <token type="NameLabel"/>
+        <push state="heredoc"/>
+      </rule>
+      <rule pattern="[A-Za-z$][\w$]*">
+        <token type="NameLabel"/>
+        <push state="statement"/>
+      </rule>
+      <rule pattern="\s+">
+        <token type="Text"/>
+        <push state="statement"/>
+      </rule>
+    </state>
+    <state name="statement">
+      <rule pattern="\s*\n">
+        <token type="Text"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="\s+">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="(?&lt;=[^\w.])(LT|LE|EQ|NE|GE|GT|INTEGER|IDENT|DIFFER|LGT|SIZE|REPLACE|TRIM|DUPL|REMDR|DATE|TIME|EVAL|APPLY|OPSYN|LOAD|UNLOAD|LEN|SPAN|BREAK|ANY|NOTANY|TAB|RTAB|REM|POS|RPOS|FAIL|FENCE|ABORT|ARB|ARBNO|BAL|SUCCEED|INPUT|OUTPUT|TERMINAL)(?=[^\w.])">
+        <token type="NameBuiltin"/>
+      </rule>
+      <rule pattern="[A-Za-z][\w.]*">
+        <token type="Name"/>
+      </rule>
+      <rule pattern="\*\*|[?$.!%*/#+\-@|&amp;\\=]">
+        <token type="Operator"/>
+      </rule>
+      <rule pattern="&#34;[^&#34;]*&#34;">
+        <token type="LiteralString"/>
+      </rule>
+      <rule pattern="&#39;[^&#39;]*&#39;">
+        <token type="LiteralString"/>
+      </rule>
+      <rule pattern="[0-9]+(?=[^.EeDd])">
+        <token type="LiteralNumberInteger"/>
+      </rule>
+      <rule pattern="[0-9]+(\.[0-9]*)?([EDed][-+]?[0-9]+)?">
+        <token type="LiteralNumberFloat"/>
+      </rule>
+      <rule pattern=":">
+        <token type="Punctuation"/>
+        <push state="goto"/>
+      </rule>
+      <rule pattern="[()&lt;&gt;,;]">
+        <token type="Punctuation"/>
+      </rule>
+    </state>
+    <state name="goto">
+      <rule pattern="\s*\n">
+        <token type="Text"/>
+        <pop depth="2"/>
+      </rule>
+      <rule pattern="\s+">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="F|S">
+        <token type="Keyword"/>
+      </rule>
+      <rule pattern="(\()([A-Za-z][\w.]*)(\))">
+        <bygroups>
+          <token type="Punctuation"/>
+          <token type="NameLabel"/>
+          <token type="Punctuation"/>
+        </bygroups>
+      </rule>
+    </state>
+  </rules>
+</lexer>
+@@END
 @@PORTABLE {"path":"third_party/wails/vendor/github.com/alecthomas/chroma/v2/lexers/embedded/solidity.xml","mode":420,"size":61041,"sha256":"329b4955d6e704c1804de0d566dcb4d1546af0dd9406fae3159e0d404a9d2c8f","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
 <lexer>
   <config>
@@ -153838,2422 +154957,5 @@ func (err ErrImageTooSmall) Error() string {
 func panicf(format string, values ...interface{}) {
 	panic(fmt.Sprintf(format, values...))
 }
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/jackmordaunt/icns/icns.go","mode":420,"size":3573,"sha256":"fa7397f2e4b4f87b78aaf28eadbd31873f36b85ff26a11ef4bf1ade9a28d131a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3573}
-package icns
-
-import (
-	"errors"
-	"image"
-	"io"
-
-	"github.com/nfnt/resize"
-)
-
-// Encoder encodes ICNS files from a source image.
-type Encoder struct {
-	Wr        io.Writer
-	Algorithm InterpolationFunction
-}
-
-// NewEncoder initialises an encoder.
-func NewEncoder(wr io.Writer) *Encoder {
-	return &Encoder{
-		Wr: wr,
-	}
-}
-
-// WithAlgorithm applies the interpolation function used to resize the image.
-func (enc *Encoder) WithAlgorithm(a InterpolationFunction) *Encoder {
-	enc.Algorithm = a
-	return enc
-}
-
-// Encode icns with the given configuration.
-func (enc *Encoder) Encode(img image.Image) error {
-	if enc.Wr == nil {
-		return errors.New("cannot write to nil writer")
-	}
-	if img == nil {
-		return errors.New("cannot encode nil image")
-	}
-	iconset, err := NewIconSet(img, enc.Algorithm)
-	if err != nil {
-		return err
-	}
-	if _, err := iconset.WriteTo(enc.Wr); err != nil {
-		return err
-	}
-	return nil
-}
-
-// Encode writes img to wr in ICNS format.
-// img is assumed to be a rectangle; non-square dimensions will be squared
-// without preserving the aspect ratio.
-// Uses nearest neighbor as interpolation algorithm.
-func Encode(wr io.Writer, img image.Image) error {
-	return NewEncoder(wr).Encode(img)
-}
-
-// NewIconSet uses the source image to create an IconSet.
-// If width != height, the image will be resized using the largest side without
-// preserving the aspect ratio.
-func NewIconSet(img image.Image, interp InterpolationFunction) (*IconSet, error) {
-	biggest := findNearestSize(img)
-	if biggest == 0 {
-		return nil, ErrImageTooSmall{image: img, need: 16}
-	}
-	icons := []*Icon{}
-	for _, size := range sizesFrom(biggest) {
-		t, ok := getTypeFromSize(size)
-		if !ok {
-			continue
-		}
-		iconImg := resize.Resize(size, size, img, interp)
-		icon := &Icon{
-			Type:  t,
-			Image: iconImg,
-		}
-		icons = append(icons, icon)
-	}
-	iconset := &IconSet{
-		Icons: icons,
-	}
-	return iconset, nil
-}
-
-// Big-endian.
-// https://golang.org/src/image/png/writer.go
-func writeUint32(b []uint8, u uint32) {
-	b[0] = uint8(u >> 24)
-	b[1] = uint8(u >> 16)
-	b[2] = uint8(u >> 8)
-	b[3] = uint8(u >> 0)
-}
-
-var sizes = []uint{
-	1024,
-	512,
-	256,
-	64,
-	32,
-}
-
-// findNearestSize finds the biggest icon size we can use for this image.
-func findNearestSize(img image.Image) uint {
-	size := biggestSide(img)
-	for _, s := range sizes {
-		if size >= s {
-			return s
-		}
-	}
-	return 0
-}
-
-func biggestSide(img image.Image) uint {
-	var size uint
-	b := img.Bounds()
-	w, h := uint(b.Max.X), uint(b.Max.Y)
-	size = w
-	if h > size {
-		size = h
-	}
-	return size
-}
-
-// sizesFrom returns a slice containing the sizes less than and including max.
-func sizesFrom(max uint) []uint {
-	for ii, s := range sizes {
-		if s <= max {
-			return sizes[ii:len(sizes)]
-		}
-	}
-	return []uint{}
-}
-
-// OsType is a 4 character identifier used to differentiate icon types.
-type OsType struct {
-	ID   string
-	Size uint
-}
-
-var osTypes = []OsType{
-	{ID: "ic10", Size: uint(1024)},
-	{ID: "ic14", Size: uint(512)},
-	{ID: "ic13", Size: uint(256)},
-	{ID: "ic07", Size: uint(128)},
-	{ID: "ic12", Size: uint(64)},
-	{ID: "ic11", Size: uint(32)},
-}
-
-// getTypeFromSize returns the type for the given icon size (in px).
-// The boolean indicates whether the type exists.
-func getTypeFromSize(size uint) (OsType, bool) {
-	for _, t := range osTypes {
-		if t.Size == size {
-			return t, true
-		}
-	}
-	return OsType{}, false
-}
-
-func getTypeFromID(ID string) (OsType, bool) {
-	for _, t := range osTypes {
-		if t.ID == ID {
-			return t, true
-		}
-	}
-	return OsType{}, false
-}
-
-func osTypeFromID(ID string) OsType {
-	t, _ := getTypeFromID(ID)
-	return t
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/jackmordaunt/icns/interpolation.go","mode":420,"size":546,"sha256":"e555c99eae27a9a45ce2e58fa663234d82ca88e7e35082d5a568aa5afab66c8e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":546}
-package icns
-
-import (
-	"github.com/nfnt/resize"
-)
-
-// InterpolationFunction is the algorithm used to resize the image.
-type InterpolationFunction = resize.InterpolationFunction
-
-// InterpolationFunction constants.
-const (
-	// Nearest-neighbor interpolation
-	NearestNeighbor InterpolationFunction = iota
-	// Bilinear interpolation
-	Bilinear
-	// Bicubic interpolation (with cubic hermite spline)
-	Bicubic
-	// Mitchell-Netravali interpolation
-	MitchellNetravali
-	// Lanczos interpolation (a=2)
-	Lanczos2
-	// Lanczos interpolation (a=3)
-	Lanczos3
-)
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/jackmordaunt/icns/reader.go","mode":420,"size":1601,"sha256":"60ca156e1fc93ab385d95f547624569d794ab058bcee86ee3ad1d1e52021cab7","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1601}
-package icns
-
-import (
-	"bytes"
-	"encoding/binary"
-	"fmt"
-	"image"
-	"io"
-	"io/ioutil"
-
-	"github.com/pkg/errors"
-)
-
-// Decode finds the largest icon listed in the icns file and returns it,
-// ignoring all other sizes. The format returned will be whatever the icon data
-// is, typically jpeg or png.
-func Decode(r io.Reader) (image.Image, error) {
-	data, err := ioutil.ReadAll(r)
-	if err != nil {
-		return nil, err
-	}
-	icnsHeader := data[0:4]
-	if string(icnsHeader) != "icns" {
-		return nil, fmt.Errorf("invalid header for icns file")
-	}
-	fileSize := binary.BigEndian.Uint32(data[4:8])
-	icons := []iconReader{}
-	read := uint32(8)
-	for read < fileSize {
-		next := data[read : read+4]
-		read += 4
-		switch string(next) {
-		case "TOC ":
-			read += 4
-			continue
-		case "icnV":
-			read += 4
-			continue
-		}
-		if isOsType(string(next)) {
-			iconSize := binary.BigEndian.Uint32(data[read : read+4])
-			read += 4
-			iconData := data[read : read+iconSize]
-			read += iconSize
-			icons = append(icons, iconReader{
-				OsType: osTypeFromID(string(next)),
-				r:      bytes.NewBuffer(iconData),
-			})
-		}
-	}
-	if len(icons) == 0 {
-		return nil, fmt.Errorf("no icons found")
-	}
-	var biggest iconReader
-	for _, icon := range icons {
-		if icon.Size > biggest.Size {
-			biggest = icon
-		}
-	}
-	img, _, err := image.Decode(biggest.r)
-	if err != nil {
-		return nil, errors.Wrap(err, "decoding largest image")
-	}
-	return img, nil
-}
-
-type iconReader struct {
-	OsType
-	r io.Reader
-}
-
-func isOsType(ID string) bool {
-	_, ok := getTypeFromID(ID)
-	return ok
-}
-
-func init() {
-	image.RegisterFormat("icns", "icns", Decode, nil)
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/jackmordaunt/icns/readme.md","mode":420,"size":2180,"sha256":"b855554cad88a2c61c2516ae958f2d9026e1266340550c386abccbeed9019dac","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2180}
-# icns
-
-Easily convert `.jpg` and `.png` to `.icns` with the command line tool `icnsify`, or use the library to convert from any `image.Image` to `.icns`.
-
-`go get github.com/jackmordaunt/icns`
-
-`icns` files allow for high resolution icons to make your apps look sexy. The most common ways to generate icns files are:
-
-1. `iconutil`, which is a Mac native cli utility.
-2. `ImageMagick` which adds a large dependency to your project for such a simple use case.
-
-With this library you can use pure Go to create `icns` files from any source image, given that you can decode it into an `image.Image`, without any heavyweight dependencies or subprocessing required. You can also use it to create icns files on windows and linux (thanks Go).
-
-A small CLI app `icnsify` is provided allowing you to create icns files using this library from the command line. It supports piping, which is something `iconutil` does not do, making it substantially easier to wrap or chuck into a shell pipeline.
-
-Note: All icons within the `icns` are sized for high dpi retina screens, using the appropriate `icns` OSTypes.
-
-## Command Line
-
-Pipe it
-
-`cat icon.png | icnsify | cat > icon.icns`
-
-`cat icon.icns | icnsify | cat > icon.png`
-
-Standard
-
-`icnsify -i icon.png -o icon.icns`
-
-`icnsify -i icon.icns -o icon.png`
-
-## Library Usage
-
-```go
-func main() {
-        pngf, err := os.Open("path/to/icon.png")
-        if err != nil {
-                log.Fatalf("opening source image: %v", err)
-        }
-        defer pngf.Close()
-        srcImg, _, err := image.Decode(pngf)
-        if err != nil {
-                log.Fatalf("decoding source image: %v", err)
-        }
-        dest, err := os.Create("path/to/icon.icns")
-        if err != nil {
-                log.Fatalf("opening destination file: %v", err)
-        }
-        defer dest.Close()
-        if err := icns.Encode(dest, srcImg); err != nil {
-                log.Fatalf("encoding icns: %v", err)
-        }
-}
-```
-
-## Roadmap
-
-* [x] Encoder: `image.Image -> .icns`
-* [x] Command Line Interface
-  * [x] Encoding
-  * [x] Pipe support
-  * [x] Decoding
-* [x] Implement Decoder: `.icns -> image.Image`
-* [ ] Symmetric test: `decode(encode(img)) == img`
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/jackmordaunt/icns/writer.go","mode":420,"size":2676,"sha256":"3fd3e43c1266353ef0fd2bbf1cbc048d65ef5de32f4b213444dd0323f530863f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2676}
-package icns
-
-import (
-	"bytes"
-	"image"
-	"image/png"
-	"io"
-)
-
-// Icon encodes an icns icon.
-type Icon struct {
-	Type  OsType
-	Image image.Image
-
-	header    [8]byte
-	headerSet bool
-	data      []byte
-}
-
-// WriteTo encodes the icon into wr.
-func (i *Icon) WriteTo(wr io.Writer) (int64, error) {
-	var written int64
-	if err := i.encodeImage(); err != nil {
-		return written, err
-	}
-	size, err := i.writeHeader(wr)
-	written += size
-	if err != nil {
-		return written, err
-	}
-	size, err = i.writeData(wr)
-	written += size
-	if err != nil {
-		return written, err
-	}
-	return written, nil
-}
-
-func (i *Icon) encodeImage() error {
-	if len(i.data) > 0 {
-		return nil
-	}
-	data, err := encodeImage(i.Image)
-	if err != nil {
-		return err
-	}
-	i.data = data
-	return nil
-}
-
-func encodeImage(img image.Image) ([]byte, error) {
-	buf := bytes.NewBuffer(nil)
-	if err := png.Encode(buf, img); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
-}
-
-func (i *Icon) writeHeader(wr io.Writer) (int64, error) {
-	if !i.headerSet {
-		defer func() { i.headerSet = true }()
-		i.header[0] = i.Type.ID[0]
-		i.header[1] = i.Type.ID[1]
-		i.header[2] = i.Type.ID[2]
-		i.header[3] = i.Type.ID[3]
-		length := uint32(len(i.data) + 8)
-		writeUint32(i.header[4:8], length)
-	}
-	written, err := wr.Write(i.header[:8])
-	return int64(written), err
-}
-
-func (i *Icon) writeData(wr io.Writer) (int64, error) {
-	written, err := wr.Write(i.data)
-	return int64(written), err
-}
-
-// IconSet encodes a set of icons into an ICNS file.
-type IconSet struct {
-	Icons []*Icon
-
-	header    [8]byte
-	headerSet bool
-	data      []byte
-}
-
-// WriteTo writes the ICNS file to wr.
-func (s *IconSet) WriteTo(wr io.Writer) (int64, error) {
-	var written int64
-	if err := s.encodeIcons(); err != nil {
-		return written, err
-	}
-	size, err := s.writeHeader(wr)
-	written += size
-	if err != nil {
-		return written, err
-	}
-	size, err = s.writeData(wr)
-	written += size
-	if err != nil {
-		return written, err
-	}
-	return written, nil
-}
-
-func (s *IconSet) encodeIcons() error {
-	if len(s.data) > 0 {
-		return nil
-	}
-	buf := bytes.NewBuffer(nil)
-	for _, icon := range s.Icons {
-		if _, err := icon.WriteTo(buf); err != nil {
-			return err
-		}
-	}
-	s.data = buf.Bytes()
-	return nil
-}
-
-func (s *IconSet) writeHeader(wr io.Writer) (int64, error) {
-	if !s.headerSet {
-		defer func() { s.headerSet = true }()
-		s.header[0] = 'i'
-		s.header[1] = 'c'
-		s.header[2] = 'n'
-		s.header[3] = 's'
-		length := uint32(len(s.data) + 8)
-		writeUint32(s.header[4:8], length)
-	}
-	written, err := wr.Write(s.header[:8])
-	return int64(written), err
-}
-
-func (s *IconSet) writeData(wr io.Writer) (int64, error) {
-	written, err := wr.Write(s.data)
-	return int64(written), err
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/jaypipes/ghw/.gitignore","mode":420,"size":28,"sha256":"75142b11635706946c017546989213fbe62f2f0505e8ffa5016d490b376ef691","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":28}
-vendor/
-coverage*.*
-*~
-bin/
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/jaypipes/ghw/CODE_OF_CONDUCT.md","mode":420,"size":5491,"sha256":"5401d6dc967ed69158888149b18deab551ffd4aea13bacc130381692da5e244d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5491}
-
-# Contributor Covenant Code of Conduct
-
-## Our Pledge
-
-We as members, contributors, and leaders pledge to make participation in our
-community a harassment-free experience for everyone, regardless of age, body
-size, visible or invisible disability, ethnicity, sex characteristics, gender
-identity and expression, level of experience, education, socio-economic status,
-nationality, personal appearance, race, caste, color, religion, or sexual identity
-and orientation.
-
-We pledge to act and interact in ways that contribute to an open, welcoming,
-diverse, inclusive, and healthy community.
-
-## Our Standards
-
-Examples of behavior that contributes to a positive environment for our
-community include:
-
-* Demonstrating empathy and kindness toward other people
-* Being respectful of differing opinions, viewpoints, and experiences
-* Giving and gracefully accepting constructive feedback
-* Accepting responsibility and apologizing to those affected by our mistakes,
-  and learning from the experience
-* Focusing on what is best not just for us as individuals, but for the
-  overall community
-
-Examples of unacceptable behavior include:
-
-* The use of sexualized language or imagery, and sexual attention or
-  advances of any kind
-* Trolling, insulting or derogatory comments, and personal or political attacks
-* Public or private harassment
-* Publishing others' private information, such as a physical or email
-  address, without their explicit permission
-* Other conduct which could reasonably be considered inappropriate in a
-  professional setting
-
-## Enforcement Responsibilities
-
-Community leaders are responsible for clarifying and enforcing our standards of
-acceptable behavior and will take appropriate and fair corrective action in
-response to any behavior that they deem inappropriate, threatening, offensive,
-or harmful.
-
-Community leaders have the right and responsibility to remove, edit, or reject
-comments, commits, code, wiki edits, issues, and other contributions that are
-not aligned to this Code of Conduct, and will communicate reasons for moderation
-decisions when appropriate.
-
-## Scope
-
-This Code of Conduct applies within all community spaces, and also applies when
-an individual is officially representing the community in public spaces.
-Examples of representing our community include using an official e-mail address,
-posting via an official social media account, or acting as an appointed
-representative at an online or offline event.
-
-## Enforcement
-
-Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the community leaders responsible for enforcement at
-[INSERT CONTACT METHOD].
-All complaints will be reviewed and investigated promptly and fairly.
-
-All community leaders are obligated to respect the privacy and security of the
-reporter of any incident.
-
-## Enforcement Guidelines
-
-Community leaders will follow these Community Impact Guidelines in determining
-the consequences for any action they deem in violation of this Code of Conduct:
-
-### 1. Correction
-
-**Community Impact**: Use of inappropriate language or other behavior deemed
-unprofessional or unwelcome in the community.
-
-**Consequence**: A private, written warning from community leaders, providing
-clarity around the nature of the violation and an explanation of why the
-behavior was inappropriate. A public apology may be requested.
-
-### 2. Warning
-
-**Community Impact**: A violation through a single incident or series
-of actions.
-
-**Consequence**: A warning with consequences for continued behavior. No
-interaction with the people involved, including unsolicited interaction with
-those enforcing the Code of Conduct, for a specified period of time. This
-includes avoiding interactions in community spaces as well as external channels
-like social media. Violating these terms may lead to a temporary or
-permanent ban.
-
-### 3. Temporary Ban
-
-**Community Impact**: A serious violation of community standards, including
-sustained inappropriate behavior.
-
-**Consequence**: A temporary ban from any sort of interaction or public
-communication with the community for a specified period of time. No public or
-private interaction with the people involved, including unsolicited interaction
-with those enforcing the Code of Conduct, is allowed during this period.
-Violating these terms may lead to a permanent ban.
-
-### 4. Permanent Ban
-
-**Community Impact**: Demonstrating a pattern of violation of community
-standards, including sustained inappropriate behavior,  harassment of an
-individual, or aggression toward or disparagement of classes of individuals.
-
-**Consequence**: A permanent ban from any sort of public interaction within
-the community.
-
-## Attribution
-
-This Code of Conduct is adapted from the [Contributor Covenant][homepage],
-version 2.1, available at
-[https://www.contributor-covenant.org/version/2/1/code_of_conduct.html][v2.1].
-
-Community Impact Guidelines were inspired by
-[Mozilla's code of conduct enforcement ladder][Mozilla CoC].
-
-For answers to common questions about this code of conduct, see the FAQ at
-[https://www.contributor-covenant.org/faq][FAQ]. Translations are available
-at [https://www.contributor-covenant.org/translations][translations].
-
-[homepage]: https://www.contributor-covenant.org
-[v2.1]: https://www.contributor-covenant.org/version/2/1/code_of_conduct.html
-[Mozilla CoC]: https://github.com/mozilla/diversity
-[FAQ]: https://www.contributor-covenant.org/faq
-[translations]: https://www.contributor-covenant.org/translations
-
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/jaypipes/ghw/CONTRIBUTING.md","mode":420,"size":2137,"sha256":"7d6ea3a270c4b768752feaaa78e32f9585298b5bac27837402d3deb33f11f742","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2137}
-# How to Contribute
-
-We welcome any and all contributions to `ghw`! Filing [bug reports][gh-issues],
-asking questions and submitting patches are all encouraged.
-
-[gh-issues]: https://github.com/jaypipes/ghw/issues
-
-## Submitting patches via pull requests
-
-We use GitHub pull requests to review code submissions.
-
-Consult [GitHub Help][pr-help] for more information on using pull requests.
-
-[pr-help]: https://help.github.com/articles/about-pull-requests/
-
-We ask that contributors submitting a pull request sign their commits and
-attest to the Developer Certificate of Origin (DCO).
-
-## Developer Certificate of Origin
-
-The DCO is a lightweight way for contributors to certify that they wrote or
-otherwise have the right to submit the code they are contributing to the
-project. Here is the [full text of the DCO][dco], reformatted for readability:
-
-> By making a contribution to this project, I certify that:
-> 
-> a. The contribution was created in whole or in part by me and I have the
-> right to submit it under the open source license indicated in the file; or
-> 
-> b. The contribution is based upon previous work that, to the best of my
-> knowledge, is covered under an appropriate open source license and I have the
-> right under that license to submit that work with modifications, whether
-> created in whole or in part by me, under the same open source license (unless
-> I am permitted to submit under a different license), as indicated in the
-> file; or
-> 
-> c. The contribution was provided directly to me by some other person who
-> certified (a), (b) or (c) and I have not modified it.
-> 
-> d. I understand and agree that this project and the contribution are public
-> and that a record of the contribution (including all personal information I
-> submit with it, including my sign-off) is maintained indefinitely and may be
-> redistributed consistent with this project or the open source license(s)
-> involved.
-
-[dco]: https://developercertificate.org/
-
-You can sign your commits using `git commit -s` before pushing commits to
-Github and creating a pull request.
-
-## Community Guidelines
-
-1. Be kind.
-2. Seriously, that's it.
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/jaypipes/ghw/COPYING","mode":420,"size":10143,"sha256":"5df2a0d87d6c562f0ea11c688ac52532aa28d744cabc7994ff0537f64b3b3320","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":10143}
-
-                                 Apache License
-                           Version 2.0, January 2004
-                        http://www.apache.org/licenses/
-
-   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
-
-   1. Definitions.
-
-      "License" shall mean the terms and conditions for use, reproduction,
-      and distribution as defined by Sections 1 through 9 of this document.
-
-      "Licensor" shall mean the copyright owner or entity authorized by
-      the copyright owner that is granting the License.
-
-      "Legal Entity" shall mean the union of the acting entity and all
-      other entities that control, are controlled by, or are under common
-      control with that entity. For the purposes of this definition,
-      "control" means (i) the power, direct or indirect, to cause the
-      direction or management of such entity, whether by contract or
-      otherwise, or (ii) ownership of fifty percent (50%) or more of the
-      outstanding shares, or (iii) beneficial ownership of such entity.
-
-      "You" (or "Your") shall mean an individual or Legal Entity
-      exercising permissions granted by this License.
-
-      "Source" form shall mean the preferred form for making modifications,
-      including but not limited to software source code, documentation
-      source, and configuration files.
-
-      "Object" form shall mean any form resulting from mechanical
-      transformation or translation of a Source form, including but
-      not limited to compiled object code, generated documentation,
-      and conversions to other media types.
-
-      "Work" shall mean the work of authorship, whether in Source or
-      Object form, made available under the License, as indicated by a
-      copyright notice that is included in or attached to the work
-      (an example is provided in the Appendix below).
-
-      "Derivative Works" shall mean any work, whether in Source or Object
-      form, that is based on (or derived from) the Work and for which the
-      editorial revisions, annotations, elaborations, or other modifications
-      represent, as a whole, an original work of authorship. For the purposes
-      of this License, Derivative Works shall not include works that remain
-      separable from, or merely link (or bind by name) to the interfaces of,
-      the Work and Derivative Works thereof.
-
-      "Contribution" shall mean any work of authorship, including
-      the original version of the Work and any modifications or additions
-      to that Work or Derivative Works thereof, that is intentionally
-      submitted to Licensor for inclusion in the Work by the copyright owner
-      or by an individual or Legal Entity authorized to submit on behalf of
-      the copyright owner. For the purposes of this definition, "submitted"
-      means any form of electronic, verbal, or written communication sent
-      to the Licensor or its representatives, including but not limited to
-      communication on electronic mailing lists, source code control systems,
-      and issue tracking systems that are managed by, or on behalf of, the
-      Licensor for the purpose of discussing and improving the Work, but
-      excluding communication that is conspicuously marked or otherwise
-      designated in writing by the copyright owner as "Not a Contribution."
-
-      "Contributor" shall mean Licensor and any individual or Legal Entity
-      on behalf of whom a Contribution has been received by Licensor and
-      subsequently incorporated within the Work.
-
-   2. Grant of Copyright License. Subject to the terms and conditions of
-      this License, each Contributor hereby grants to You a perpetual,
-      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
-      copyright license to reproduce, prepare Derivative Works of,
-      publicly display, publicly perform, sublicense, and distribute the
-      Work and such Derivative Works in Source or Object form.
-
-   3. Grant of Patent License. Subject to the terms and conditions of
-      this License, each Contributor hereby grants to You a perpetual,
-      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
-      (except as stated in this section) patent license to make, have made,
-      use, offer to sell, sell, import, and otherwise transfer the Work,
-      where such license applies only to those patent claims licensable
-      by such Contributor that are necessarily infringed by their
-      Contribution(s) alone or by combination of their Contribution(s)
-      with the Work to which such Contribution(s) was submitted. If You
-      institute patent litigation against any entity (including a
-      cross-claim or counterclaim in a lawsuit) alleging that the Work
-      or a Contribution incorporated within the Work constitutes direct
-      or contributory patent infringement, then any patent licenses
-      granted to You under this License for that Work shall terminate
-      as of the date such litigation is filed.
-
-   4. Redistribution. You may reproduce and distribute copies of the
-      Work or Derivative Works thereof in any medium, with or without
-      modifications, and in Source or Object form, provided that You
-      meet the following conditions:
-
-      (a) You must give any other recipients of the Work or
-          Derivative Works a copy of this License; and
-
-      (b) You must cause any modified files to carry prominent notices
-          stating that You changed the files; and
-
-      (c) You must retain, in the Source form of any Derivative Works
-          that You distribute, all copyright, patent, trademark, and
-          attribution notices from the Source form of the Work,
-          excluding those notices that do not pertain to any part of
-          the Derivative Works; and
-
-      (d) If the Work includes a "NOTICE" text file as part of its
-          distribution, then any Derivative Works that You distribute must
-          include a readable copy of the attribution notices contained
-          within such NOTICE file, excluding those notices that do not
-          pertain to any part of the Derivative Works, in at least one
-          of the following places: within a NOTICE text file distributed
-          as part of the Derivative Works; within the Source form or
-          documentation, if provided along with the Derivative Works; or,
-          within a display generated by the Derivative Works, if and
-          wherever such third-party notices normally appear. The contents
-          of the NOTICE file are for informational purposes only and
-          do not modify the License. You may add Your own attribution
-          notices within Derivative Works that You distribute, alongside
-          or as an addendum to the NOTICE text from the Work, provided
-          that such additional attribution notices cannot be construed
-          as modifying the License.
-
-      You may add Your own copyright statement to Your modifications and
-      may provide additional or different license terms and conditions
-      for use, reproduction, or distribution of Your modifications, or
-      for any such Derivative Works as a whole, provided Your use,
-      reproduction, and distribution of the Work otherwise complies with
-      the conditions stated in this License.
-
-   5. Submission of Contributions. Unless You explicitly state otherwise,
-      any Contribution intentionally submitted for inclusion in the Work
-      by You to the Licensor shall be under the terms and conditions of
-      this License, without any additional terms or conditions.
-      Notwithstanding the above, nothing herein shall supersede or modify
-      the terms of any separate license agreement you may have executed
-      with Licensor regarding such Contributions.
-
-   6. Trademarks. This License does not grant permission to use the trade
-      names, trademarks, service marks, or product names of the Licensor,
-      except as required for reasonable and customary use in describing the
-      origin of the Work and reproducing the content of the NOTICE file.
-
-   7. Disclaimer of Warranty. Unless required by applicable law or
-      agreed to in writing, Licensor provides the Work (and each
-      Contributor provides its Contributions) on an "AS IS" BASIS,
-      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
-      implied, including, without limitation, any warranties or conditions
-      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
-      PARTICULAR PURPOSE. You are solely responsible for determining the
-      appropriateness of using or redistributing the Work and assume any
-      risks associated with Your exercise of permissions under this License.
-
-   8. Limitation of Liability. In no event and under no legal theory,
-      whether in tort (including negligence), contract, or otherwise,
-      unless required by applicable law (such as deliberate and grossly
-      negligent acts) or agreed to in writing, shall any Contributor be
-      liable to You for damages, including any direct, indirect, special,
-      incidental, or consequential damages of any character arising as a
-      result of this License or out of the use or inability to use the
-      Work (including but not limited to damages for loss of goodwill,
-      work stoppage, computer failure or malfunction, or any and all
-      other commercial damages or losses), even if such Contributor
-      has been advised of the possibility of such damages.
-
-   9. Accepting Warranty or Additional Liability. While redistributing
-      the Work or Derivative Works thereof, You may choose to offer,
-      and charge a fee for, acceptance of support, warranty, indemnity,
-      or other liability obligations and/or rights consistent with this
-      License. However, in accepting such obligations, You may act only
-      on Your own behalf and on Your sole responsibility, not on behalf
-      of any other Contributor, and only if You agree to indemnify,
-      defend, and hold each Contributor harmless for any liability
-      incurred by, or claims asserted against, such Contributor by reason
-      of your accepting any such warranty or additional liability.
-
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/jaypipes/ghw/Dockerfile","mode":420,"size":533,"sha256":"55be11ad30c12c55e6746022f23fbd6a96948da65423ecf378aa4a6fb5287398","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":533}
-FROM golang:1.21-buster as builder
-WORKDIR /go/src/github.com/jaypipes/ghw
-
-ENV GOPROXY=direct
-
-# go.mod and go.sum go into their own layers.
-COPY go.mod .
-COPY go.sum .
-
-# This ensures `go mod download` happens only when go.mod and go.sum change.
-RUN go mod download
-
-COPY . .
-
-RUN CGO_ENABLED=0 go build -o ghwc ./cmd/ghwc/
-
-FROM alpine:3.7@sha256:8421d9a84432575381bfabd248f1eb56f3aa21d9d7cd2511583c68c9b7511d10
-RUN apk add --no-cache ethtool
-
-WORKDIR /bin
-
-COPY --from=builder /go/src/github.com/jaypipes/ghw/ghwc /bin
-
-CMD ghwc
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/jaypipes/ghw/Makefile","mode":420,"size":697,"sha256":"640144060140ad7af98800a379482b16a14271a934cb8d6e9e9c25ac6d04b69b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":697}
-VERSION ?= $(shell git describe --tags --always --dirty)
-
-.PHONY: test clean vet fmt fmtcheck build run
-
-bin/ghwc:
-	@cd cmd/ghwc && go build -o ../../bin/ghwc main.go && cd ../../
-
-# If the first argument is "run"...
-ifeq (run,$(firstword $(MAKECMDGOALS)))
-  # use the rest as arguments for "run"
-  RUN_ARGS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
-  # ...and turn them into do-nothing targets
-  $(eval $(RUN_ARGS):;@:)
-endif
-
-build: clean bin/ghwc
-
-run: build
-	@bin/ghwc $(RUN_ARGS)
-
-test: vet
-	go test -v ./...
-
-fmt:
-	@echo "Running gofmt on all sources..."
-	@gofmt -s -l -w .
-
-fmtcheck:
-	@bash -c "diff -u <(echo -n) <(gofmt -d .)"
-
-vet:
-	go vet ./...
-
-clean:
-	@rm -f bin/ghwc
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/jaypipes/ghw/README.md","mode":420,"size":53068,"sha256":"0c7216cc2759e027356d8e6c2dfbb88418cfcb00d5b70107899cd0cfa877f879","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
-# `ghw` - Go HardWare discovery/inspection library
-
-[![Go Reference](https://pkg.go.dev/badge/github.com/jaypipes/ghw.svg)](https://pkg.go.dev/github.com/jaypipes/ghw)
-[![Go Report Card](https://goreportcard.com/badge/github.com/jaypipes/ghw)](https://goreportcard.com/report/github.com/jaypipes/ghw)
-[![Build Status](https://github.com/jaypipes/ghw/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/jaypipes/ghw/actions)
-[![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](CODE_OF_CONDUCT.md)
-
-![ghw mascot](images/ghw-gopher.png)
-
-`ghw` is a Go library providing hardware inspection and discovery for Linux and
-Windows. There currently exists partial support for MacOSX.
-
-## Design Principles
-
-* No root privileges needed for discovery
-
-  `ghw` goes the extra mile to be useful without root privileges. We query for
-  host hardware information as directly as possible without relying on shellouts
-  to programs like `dmidecode` that require root privileges to execute.
-
-  Elevated privileges are indeed required to query for some information, but
-  `ghw` will never error out if blocked from reading that information. Instead,
-  `ghw` will print a warning message about the information that could not be
-  retrieved. You may disable these warning messages with the
-  `GHW_DISABLE_WARNINGS` environment variable.
-
-* Well-documented code and plenty of example code
-
-  The code itself should be well-documented with lots of usage examples.
-
-* Interfaces should be consistent across modules
-
-  Each module in the library should be structured in a consistent fashion, and
-  the structs returned by various library functions should have consistent
-  attribute and method names.
-
-## Inspecting != Monitoring
-
-`ghw` is a tool for gathering information about your hardware's **capacity**
-and **capabilities**.
-
-It is important to point out that `ghw` does **NOT** report information that is
-temporary or variable. It is **NOT** a system monitor nor is it an appropriate
-tool for gathering data points for metrics that change over time.  If you are
-looking for a system that tracks **usage** of CPU, memory, network I/O or disk
-I/O, there are plenty of great open source tools that do this! Check out the
-[Prometheus project](https://prometheus.io/) for a great example.
-
-## Usage
-
-`ghw` has functions that return an `Info` object about a particular hardware
-domain (e.g. CPU, Memory, Block storage, etc).
-
-Use the following functions in `ghw` to inspect information about the host
-hardware:
-
-* [`ghw.CPU()`](#cpu)
-* [`ghw.Memory()`](#memory)
-* [`ghw.Block()`](#block-storage) (block storage)
-* [`ghw.Topology()`](#topology) (processor architecture, NUMA topology and
-  memory cache hierarchy)
-* [`ghw.Network()`](#network)
-* [`ghw.PCI()`](#pci)
-* [`ghw.GPU()`](#gpu) (graphical processing unit)
-* [`ghw.Accelerator()`](#accelerator) (processing accelerators, AI)
-* [`ghw.Chassis()`](#chassis)
-* [`ghw.BIOS()`](#bios)
-* [`ghw.Baseboard()`](#baseboard)
-* [`ghw.Product()`](#product)
-
-### CPU
-
-The `ghw.CPU()` function returns a `ghw.CPUInfo` struct that contains
-information about the CPUs on the host system.
-
-`ghw.CPUInfo` contains the following fields:
-
-* `ghw.CPUInfo.TotalCores` has the total number of physical cores the host
-  system contains
-* `ghw.CPUInfo.TotalHardwareThreads` has the total number of hardware threads
-  the host system contains
-* `ghw.CPUInfo.Processors` is an array of `ghw.Processor` structs, one for each
-  physical processor package contained in the host
-
-Each `ghw.Processor` struct contains a number of fields:
-
-* `ghw.Processor.ID` is the physical processor `uint32` ID according to the
-  system
-* `ghw.Processor.TotalCores` is the number of physical cores in the processor
-  package
-* `ghw.Processor.TotalHardwareThreads` is the number of hardware threads in the
-  processor package
-* `ghw.Processor.Vendor` is a string containing the vendor name
-* `ghw.Processor.Model` is a string containing the vendor's model name
-* `ghw.Processor.Capabilities` (Linux only) is an array of strings indicating
-  the features the processor has enabled
-* `ghw.Processor.Cores` (Linux only) is an array of `ghw.ProcessorCore` structs
-  that are packed onto this physical processor
-
-A `ghw.ProcessorCore` has the following fields:
-
-* `ghw.ProcessorCore.ID` is the `uint32` identifier that the host gave this
-  core. Note that this does *not* necessarily equate to a zero-based index of
-  the core within a physical package. For example, the core IDs for an Intel Core
-  i7 are 0, 1, 2, 8, 9, and 10
-* `ghw.ProcessorCore.TotalHardwareThreads` is the number of hardware threads
-  associated with the core
-* `ghw.ProcessorCore.LogicalProcessors` is an array of ints representing the
-  logical processor IDs assigned to any processing unit for the core. These are
-  sometimes called the "thread siblings". Logical processor IDs are the
-  *zero-based* index of the processor on the host and are *not* related to the
-  core ID.
-
-```go
-package main
-
-import (
-	"fmt"
-	"math"
-	"strings"
-
-	"github.com/jaypipes/ghw"
-)
-
-func main() {
-	cpu, err := ghw.CPU()
-	if err != nil {
-		fmt.Printf("Error getting CPU info: %v", err)
-	}
-
-	fmt.Printf("%v\n", cpu)
-
-	for _, proc := range cpu.Processors {
-		fmt.Printf(" %v\n", proc)
-		for _, core := range proc.Cores {
-			fmt.Printf("  %v\n", core)
-		}
-		if len(proc.Capabilities) > 0 {
-			// pretty-print the (large) block of capability strings into rows
-			// of 6 capability strings
-			rows := int(math.Ceil(float64(len(proc.Capabilities)) / float64(6)))
-			for row := 1; row < rows; row = row + 1 {
-				rowStart := (row * 6) - 1
-				rowEnd := int(math.Min(float64(rowStart+6), float64(len(proc.Capabilities))))
-				rowElems := proc.Capabilities[rowStart:rowEnd]
-				capStr := strings.Join(rowElems, " ")
-				if row == 1 {
-					fmt.Printf("  capabilities: [%s\n", capStr)
-				} else if rowEnd < len(proc.Capabilities) {
-					fmt.Printf("                 %s\n", capStr)
-				} else {
-					fmt.Printf("                 %s]\n", capStr)
-				}
-			}
-		}
-	}
-}
-```
-
-Example output from my personal workstation:
-
-```
-cpu (1 physical package, 6 cores, 12 hardware threads)
- physical package #0 (6 cores, 12 hardware threads)
-  processor core #0 (2 threads), logical processors [0 6]
-  processor core #1 (2 threads), logical processors [1 7]
-  processor core #2 (2 threads), logical processors [2 8]
-  processor core #3 (2 threads), logical processors [3 9]
-  processor core #4 (2 threads), logical processors [4 10]
-  processor core #5 (2 threads), logical processors [5 11]
-  capabilities: [msr pae mce cx8 apic sep
-                 mtrr pge mca cmov pat pse36
-                 clflush dts acpi mmx fxsr sse
-                 sse2 ss ht tm pbe syscall
-                 nx pdpe1gb rdtscp lm constant_tsc arch_perfmon
-                 pebs bts rep_good nopl xtopology nonstop_tsc
-                 cpuid aperfmperf pni pclmulqdq dtes64 monitor
-                 ds_cpl vmx est tm2 ssse3 cx16
-                 xtpr pdcm pcid sse4_1 sse4_2 popcnt
-                 aes lahf_lm pti retpoline tpr_shadow vnmi
-                 flexpriority ept vpid dtherm ida arat]
-```
-
-### Memory
-
-The `ghw.Memory()` function returns a `ghw.MemoryInfo` struct that contains
-information about the RAM on the host system.
-
-`ghw.MemoryInfo` contains the following fields:
-
-* `ghw.MemoryInfo.TotalPhysicalBytes` contains the amount of physical memory on
-  the host
-* `ghw.MemoryInfo.TotalUsableBytes` contains the amount of memory the
-  system can actually use. Usable memory accounts for things like the kernel's
-  resident memory size and some reserved system bits. Please note this value is
-  **NOT** the amount of memory currently in use by processes in the system. See
-  [the discussion][#physical-versus-usage-memory] about the difference.
-* `ghw.MemoryInfo.SupportedPageSizes` is an array of integers representing the
-  size, in bytes, of memory pages the system supports
-* `ghw.MemoryInfo.Modules` is an array of pointers to `ghw.MemoryModule`
-  structs, one for each physical [DIMM](https://en.wikipedia.org/wiki/DIMM).
-  Currently, this information is only included on Windows, with Linux support
-  [planned](https://github.com/jaypipes/ghw/pull/171#issuecomment-597082409).
-
-```go
-package main
-
-import (
-	"fmt"
-
-	"github.com/jaypipes/ghw"
-)
-
-func main() {
-	memory, err := ghw.Memory()
-	if err != nil {
-		fmt.Printf("Error getting memory info: %v", err)
-	}
-
-	fmt.Println(memory.String())
-}
-```
-
-Example output from my personal workstation:
-
-```
-memory (24GB physical, 24GB usable)
-```
-
-#### Physical versus Usable Memory
-
-There has been [some](https://github.com/jaypipes/ghw/pull/171)
-[confusion](https://github.com/jaypipes/ghw/issues/183) regarding the
-difference between the total physical bytes versus total usable bytes of
-memory.
-
-Some of this confusion has been due to a misunderstanding of the term "usable".
-As mentioned [above](#inspection!=monitoring), `ghw` does inspection of the
-system's capacity.
-
-A host computer has two capacities when it comes to RAM. The first capacity is
-the amount of RAM that is contained in all memory banks (DIMMs) that are
-attached to the motherboard. `ghw.MemoryInfo.TotalPhysicalBytes` refers to this
-first capacity.
-
-There is a (usually small) amount of RAM that is consumed by the bootloader
-before the operating system is started (booted). Once the bootloader has booted
-the operating system, the amount of RAM that may be used by the operating
-system and its applications is fixed. `ghw.MemoryInfo.TotalUsableBytes` refers
-to this second capacity.
-
-You can determine the amount of RAM that the bootloader used (that is not made
-available to the operating system) by subtracting
-`ghw.MemoryInfo.TotalUsableBytes` from `ghw.MemoryInfo.TotalPhysicalBytes`:
-
-```go
-package main
-
-import (
-	"fmt"
-
-	"github.com/jaypipes/ghw"
-)
-
-func main() {
-	memory, err := ghw.Memory()
-	if err != nil {
-		fmt.Printf("Error getting memory info: %v", err)
-	}
-
-        phys := memory.TotalPhysicalBytes
-        usable := memory.TotalUsableBytes
-
-	fmt.Printf("The bootloader consumes %d bytes of RAM\n", phys - usable)
-}
-```
-
-Example output from my personal workstation booted into a Windows10 operating
-system with a Linux GRUB bootloader:
-
-```
-The bootloader consumes 3832720 bytes of RAM
-```
-
-### Block storage
-
-The `ghw.Block()` function returns a `ghw.BlockInfo` struct that contains
-information about the block storage on the host system.
-
-`ghw.BlockInfo` contains the following fields:
-
-* `ghw.BlockInfo.TotalSizeBytes` contains the amount of physical block storage
-  on the host.
-* `ghw.BlockInfo.Disks` is an array of pointers to `ghw.Disk` structs, one for
-  each disk found by the system
-
-Each `ghw.Disk` struct contains the following fields:
-
-* `ghw.Disk.Name` contains a string with the short name of the disk, e.g. "sda"
-* `ghw.Disk.SizeBytes` contains the amount of storage the disk provides
-* `ghw.Disk.PhysicalBlockSizeBytes` contains the size of the physical blocks
-  used on the disk, in bytes. This is typically the minimum amount of data that
-  will be written in a single write operation for the disk.
-* `ghw.Disk.IsRemovable` contains a boolean indicating if the disk drive is
-  removable
-* `ghw.Disk.DriveType` is the type of drive. It is of type `ghw.DriveType`
-  which has a `ghw.DriveType.String()` method that can be called to return a
-  string representation of the bus. This string will be `HDD`, `FDD`, `ODD`,
-  or `SSD`, which correspond to a hard disk drive (rotational), floppy drive,
-  optical (CD/DVD) drive and solid-state drive.
-* `ghw.Disk.StorageController` is the type of storage controller. It is of type
-  `ghw.StorageController` which has a `ghw.StorageController.String()` method
-  that can be called to return a string representation of the bus. This string
-  will be `SCSI`, `IDE`, `virtio`, `MMC`, or `NVMe`
-* `ghw.Disk.BusPath` (Linux, Darwin only) is the filepath to the bus used by
-  the disk.
-* `ghw.Disk.NUMANodeID` (Linux only) is the numeric index of the NUMA node this
-  disk is local to, or -1 if the host system is not a NUMA system or is not
-  Linux.
-* `ghw.Disk.Vendor` contains a string with the name of the hardware vendor for
-  the disk
-* `ghw.Disk.Model` contains a string with the vendor-assigned disk model name
-* `ghw.Disk.SerialNumber` contains a string with the disk's serial number
-* `ghw.Disk.WWN` contains a string with the disk's
-  [World Wide Name](https://en.wikipedia.org/wiki/World_Wide_Name)
-* `ghw.Disk.Partitions` contains an array of pointers to `ghw.Partition`
-  structs, one for each partition on the disk
-
-Each `ghw.Partition` struct contains these fields:
-
-* `ghw.Partition.Name` contains a string with the short name of the partition,
-  e.g. `sda1`
-* `ghw.Partition.Label` contains the label for the partition itself. On Linux
-  systems, this is derived from the `ID_PART_ENTRY_NAME` [udev][udev] entry for
-  the partition.
-* `ghw.Partition.FilesystemLabel` contains the label for the filesystem housed
-  on the partition. On Linux systems, this is derived from the `ID_FS_NAME`
-  [udev][udev] entry for the partition.
-* `ghw.Partition.SizeBytes` contains the amount of storage the partition
-  provides
-* `ghw.Partition.MountPoint` contains a string with the partition's mount
-  point, or `""` if no mount point was discovered
-* `ghw.Partition.Type` contains a string indicated the filesystem type for the
-  partition, or `""` if the system could not determine the type
-* `ghw.Partition.IsReadOnly` is a bool indicating the partition is read-only
-* `ghw.Partition.Disk` is a pointer to the `ghw.Disk` object associated with
-  the partition.
-* `ghw.Partition.UUID` is a string containing the partition UUID on Linux and MacOS,
-  and the `VolumeSerialNumber` on Windows (e.g. "A8C3D032"). On Linux systems, this is
-  derived from the `ID_PART_ENTRY_UUID` [udev][udev] entry for the partition.
-
-[udev]: https://en.wikipedia.org/wiki/Udev
-
-```go
-package main
-
-import (
-	"fmt"
-
-	"github.com/jaypipes/ghw"
-)
-
-func main() {
-	block, err := ghw.Block()
-	if err != nil {
-		fmt.Printf("Error getting block storage info: %v", err)
-	}
-
-	fmt.Printf("%v\n", block)
-
-	for _, disk := range block.Disks {
-		fmt.Printf(" %v\n", disk)
-		for _, part := range disk.Partitions {
-			fmt.Printf("  %v\n", part)
-		}
-	}
-}
-```
-
-Example output from my personal workstation:
-
-```
-block storage (1 disk, 2TB physical storage)
- sda HDD (2TB) SCSI [@pci-0000:04:00.0-scsi-0:1:0:0 (node #0)] vendor=LSI model=Logical_Volume serial=600508e000000000f8253aac9a1abd0c WWN=0x600508e000000000f8253aac9a1abd0c
-  /dev/sda1 (100MB)
-  /dev/sda2 (187GB)
-  /dev/sda3 (449MB)
-  /dev/sda4 (1KB)
-  /dev/sda5 (15GB)
-  /dev/sda6 (2TB) [ext4] mounted@/
-```
-
-> **NOTE**: `ghw` looks in the udev runtime database for some information. If
-> you are using `ghw` in a container, remember to bind mount `/dev/disk` and
-> `/run` into your container, otherwise `ghw` won't be able to query the udev
-> DB or sysfs paths for information.
-
-### Topology
-
-> **NOTE**: Topology support is currently Linux-only. Windows support is
-> [planned](https://github.com/jaypipes/ghw/issues/166).
-
-The `ghw.Topology()` function returns a `ghw.TopologyInfo` struct that contains
-information about the host computer's architecture (NUMA vs. SMP), the host's
-NUMA node layout and processor-specific memory caches.
-
-The `ghw.TopologyInfo` struct contains two fields:
-
-* `ghw.TopologyInfo.Architecture` contains an enum with the value `ghw.NUMA` or
-  `ghw.SMP` depending on what the topology of the system is
-* `ghw.TopologyInfo.Nodes` is an array of pointers to `ghw.TopologyNode`
-  structs, one for each topology node (typically physical processor package)
-  found by the system
-
-Each `ghw.TopologyNode` struct contains the following fields:
-
-* `ghw.TopologyNode.ID` is the system's `uint32` identifier for the node
-* `ghw.TopologyNode.Memory` is a `ghw.MemoryArea` struct describing the memory
-  attached to this node.
-* `ghw.TopologyNode.Cores` is an array of pointers to `ghw.ProcessorCore` structs that
-  are contained in this node
-* `ghw.TopologyNode.Caches` is an array of pointers to `ghw.MemoryCache` structs that
-  represent the low-level caches associated with processors and cores on the
-  system
-* `ghw.TopologyNode.Distance` is an array of distances between NUMA nodes as reported
-  by the system.
-
-`ghw.MemoryArea` describes a collection of *physical* RAM on the host.
-
-In the simplest and most common case, all system memory fits in a single memory
-area. In more complex host systems, like [NUMA systems][numa], many memory
-areas may be present in the host system (e.g. one for each NUMA cell).
-
-[numa]: https://en.wikipedia.org/wiki/Non-uniform_memory_access
-
-The `ghw.MemoryArea` struct contains the following fields:
-
-* `ghw.MemoryArea.TotalPhysicalBytes` contains the amount of physical memory
-  associated with this memory area.
-* `ghw.MemoryArea.TotalUsableBytes` contains the amount of memory of this
-  memory area the system can actually use. Usable memory accounts for things
-  like the kernel's resident memory size and some reserved system bits. Please
-  note this value is **NOT** the amount of memory currently in use by processes
-  in the system. See [the discussion][#physical-versus-usage-memory] about
-  the difference.
-
-See above in the [CPU](#cpu) section for information about the
-`ghw.ProcessorCore` struct and how to use and query it.
-
-Each `ghw.MemoryCache` struct contains the following fields:
-
-* `ghw.MemoryCache.Type` is an enum that contains one of `ghw.DATA`,
-  `ghw.INSTRUCTION` or `ghw.UNIFIED` depending on whether the cache stores CPU
-  instructions, program data, or both
-* `ghw.MemoryCache.Level` is a positive integer indicating how close the cache
-  is to the processor. The lower the number, the closer the cache is to the
-  processor and the faster the processor can access its contents
-* `ghw.MemoryCache.SizeBytes` is an integer containing the number of bytes the
-  cache can contain
-* `ghw.MemoryCache.LogicalProcessors` is an array of integers representing the
-  logical processors that use the cache
-
-```go
-package main
-
-import (
-	"fmt"
-
-	"github.com/jaypipes/ghw"
-)
-
-func main() {
-	topology, err := ghw.Topology()
-	if err != nil {
-		fmt.Printf("Error getting topology info: %v", err)
-	}
-
-	fmt.Printf("%v\n", topology)
-
-	for _, node := range topology.Nodes {
-		fmt.Printf(" %v\n", node)
-		for _, cache := range node.Caches {
-			fmt.Printf("  %v\n", cache)
-		}
-	}
-}
-```
-
-Example output from my personal workstation:
-
-```
-topology SMP (1 nodes)
- node #0 (6 cores)
-  L1i cache (32 KB) shared with logical processors: 3,9
-  L1i cache (32 KB) shared with logical processors: 2,8
-  L1i cache (32 KB) shared with logical processors: 11,5
-  L1i cache (32 KB) shared with logical processors: 10,4
-  L1i cache (32 KB) shared with logical processors: 0,6
-  L1i cache (32 KB) shared with logical processors: 1,7
-  L1d cache (32 KB) shared with logical processors: 11,5
-  L1d cache (32 KB) shared with logical processors: 10,4
-  L1d cache (32 KB) shared with logical processors: 3,9
-  L1d cache (32 KB) shared with logical processors: 1,7
-  L1d cache (32 KB) shared with logical processors: 0,6
-  L1d cache (32 KB) shared with logical processors: 2,8
-  L2 cache (256 KB) shared with logical processors: 2,8
-  L2 cache (256 KB) shared with logical processors: 3,9
-  L2 cache (256 KB) shared with logical processors: 0,6
-  L2 cache (256 KB) shared with logical processors: 10,4
-  L2 cache (256 KB) shared with logical processors: 1,7
-  L2 cache (256 KB) shared with logical processors: 11,5
-  L3 cache (12288 KB) shared with logical processors: 0,1,10,11,2,3,4,5,6,7,8,9
-```
-
-### Network
-
-The `ghw.Network()` function returns a `ghw.NetworkInfo` struct that contains
-information about the host computer's networking hardware.
-
-The `ghw.NetworkInfo` struct contains one field:
-
-* `ghw.NetworkInfo.NICs` is an array of pointers to `ghw.NIC` structs, one
-  for each network interface controller found for the system
-
-Each `ghw.NIC` struct contains the following fields:
-
-* `ghw.NIC.Name` is the system's identifier for the NIC
-* `ghw.NIC.MACAddress` is the Media Access Control (MAC) address for the NIC,
-  if any
-* `ghw.NIC.IsVirtual` is a boolean indicating if the NIC is a virtualized
-  device
-* `ghw.NIC.Capabilities` (Linux only) is an array of pointers to
-  `ghw.NICCapability` structs that can describe the things the NIC supports.
-  These capabilities match the returned values from the `ethtool -k <DEVICE>`
-  call on Linux as well as the AutoNegotiation and PauseFrameUse capabilities
-  from `ethtool`.
-* `ghw.NIC.PCIAddress` (Linux only) is the PCI device address of the device
-  backing the NIC.  this is not-nil only if the backing device is indeed a PCI
-  device; more backing devices (e.g. USB) will be added in future versions.
-* `ghw.NIC.Speed` (Linux only) is a string showing the current link speed.  On
-  Linux, this field will be present even if `ethtool` is not available.
-* `ghw.NIC.Duplex` (Linux only) is a string showing the current link duplex. On
-  Linux, this field will be present even if `ethtool` is not available.
-* `ghw.NIC.SupportedLinkModes` (Linux only) is a string slice containing a list
-  of supported link modes, e.g. "10baseT/Half", "1000baseT/Full".
-* `ghw.NIC.SupportedPorts` (Linux only) is a string slice containing the list
-  of supported port types, e.g. "MII", "TP", "FIBRE", "Twisted Pair".
-* `ghw.NIC.SupportedFECModes` (Linux only) is a string slice containing a list
-  of supported Forward Error Correction (FEC) Modes.
-* `ghw.NIC.AdvertisedLinkModes` (Linux only) is a string slice containing the
-  link modes being advertised during auto negotiation.
-* `ghw.NIC.AdvertisedFECModes` (Linux only) is a string slice containing the
-  Forward Error Correction (FEC) modes advertised during auto negotiation.
-
-The `ghw.NICCapability` struct contains the following fields:
-
-* `ghw.NICCapability.Name` is the string name of the capability (e.g.
-  "tcp-segmentation-offload")
-* `ghw.NICCapability.IsEnabled` is a boolean indicating whether the capability
-  is currently enabled/active on the NIC
-* `ghw.NICCapability.CanEnable` is a boolean indicating whether the capability
-  may be enabled
-
-```go
-package main
-
-import (
-    "fmt"
-
-    "github.com/jaypipes/ghw"
-)
-
-func main() {
-    net, err := ghw.Network()
-    if err != nil {
-        fmt.Printf("Error getting network info: %v", err)
-    }
-
-    fmt.Printf("%v\n", net)
-
-    for _, nic := range net.NICs {
-        fmt.Printf(" %v\n", nic)
-
-        enabledCaps := make([]int, 0)
-        for x, cap := range nic.Capabilities {
-            if cap.IsEnabled {
-                enabledCaps = append(enabledCaps, x)
-            }
-        }
-        if len(enabledCaps) > 0 {
-            fmt.Printf("  enabled capabilities:\n")
-            for _, x := range enabledCaps {
-                fmt.Printf("   - %s\n", nic.Capabilities[x].Name)
-            }
-        }
-    }
-}
-```
-
-Example output from my personal laptop:
-
-```
-net (3 NICs)
- docker0
-  enabled capabilities:
-   - tx-checksumming
-   - tx-checksum-ip-generic
-   - scatter-gather
-   - tx-scatter-gather
-   - tx-scatter-gather-fraglist
-   - tcp-segmentation-offload
-   - tx-tcp-segmentation
-   - tx-tcp-ecn-segmentation
-   - tx-tcp-mangleid-segmentation
-   - tx-tcp6-segmentation
-   - udp-fragmentation-offload
-   - generic-segmentation-offload
-   - generic-receive-offload
-   - tx-vlan-offload
-   - highdma
-   - tx-lockless
-   - netns-local
-   - tx-gso-robust
-   - tx-fcoe-segmentation
-   - tx-gre-segmentation
-   - tx-gre-csum-segmentation
-   - tx-ipxip4-segmentation
-   - tx-ipxip6-segmentation
-   - tx-udp_tnl-segmentation
-   - tx-udp_tnl-csum-segmentation
-   - tx-gso-partial
-   - tx-sctp-segmentation
-   - tx-esp-segmentation
-   - tx-vlan-stag-hw-insert
- enp58s0f1
-  enabled capabilities:
-   - rx-checksumming
-   - generic-receive-offload
-   - rx-vlan-offload
-   - tx-vlan-offload
-   - highdma
-   - auto-negotiation
- wlp59s0
-  enabled capabilities:
-   - scatter-gather
-   - tx-scatter-gather
-   - generic-segmentation-offload
-   - generic-receive-offload
-   - highdma
-   - netns-local
-```
-
-### PCI
-
-`ghw` contains a PCI database inspection and querying facility that allows
-developers to not only gather information about devices on a local PCI bus but
-also query for information about hardware device classes, vendor and product
-information.
-
-> **NOTE**: Parsing of the PCI-IDS file database is provided by the separate
-> [github.com/jaypipes/pcidb library](http://github.com/jaypipes/pcidb). You
-> can read that library's README for more information about the various structs
-> that are exposed on the `ghw.PCIInfo` struct.
-
-The `ghw.PCI()` function returns a `ghw.PCIInfo` struct that contains
-information about the host computer's PCI devices.
-
-The `ghw.PCIInfo` struct contains one field:
-
-* `ghw.PCIInfo.Devices` is a slice of pointers to `ghw.PCIDevice` structs that
-  describe the PCI devices on the host system
-
-> **NOTE**: PCI products are often referred to by their "device ID". We use the
-> term "product ID" in `ghw` because it more accurately reflects what the
-> identifier is for: a specific product line produced by the vendor.
-
-The `ghw.PCIDevice` struct has the following fields:
-
-* `ghw.PCIDevice.Vendor` is a pointer to a `pcidb.Vendor` struct that
-  describes the device's primary vendor. This will always be non-nil.
-* `ghw.PCIDevice.Product` is a pointer to a `pcidb.Product` struct that
-  describes the device's primary product. This will always be non-nil.
-* `ghw.PCIDevice.Subsystem` is a pointer to a `pcidb.Product` struct that
-  describes the device's secondary/sub-product. This will always be non-nil.
-* `ghw.PCIDevice.Class` is a pointer to a `pcidb.Class` struct that
-  describes the device's class. This will always be non-nil.
-* `ghw.PCIDevice.Subclass` is a pointer to a `pcidb.Subclass` struct
-  that describes the device's subclass. This will always be non-nil.
-* `ghw.PCIDevice.ProgrammingInterface` is a pointer to a
-  `pcidb.ProgrammingInterface` struct that describes the device subclass'
-  programming interface. This will always be non-nil.
-* `ghw.PCIDevice.Driver` is a string representing the device driver the
-  system is using to handle this device. Can be empty string if this
-  information is not available. If the information is not available, this does
-  not mean the device is not functioning, but rather that `ghw` was not able to
-  retrieve driver information.
-
-The `ghw.PCIAddress` (which is an alias for the `ghw.pci.address.Address`
-struct) contains the PCI address fields. It has a `ghw.PCIAddress.String()`
-method that returns the canonical Domain:Bus:Device.Function ([D]BDF)
-representation of this Address.
-
-The `ghw.PCIAddress` struct has the following fields:
-
-* `ghw.PCIAddress.Domain` is a string representing the PCI domain component of
-  the address.
-* `ghw.PCIAddress.Bus` is a string representing the PCI bus component of
-  the address.
-* `ghw.PCIAddress.Device` is a string representing the PCI device component of
-  the address.
-* `ghw.PCIAddress.Function` is a string representing the PCI function component of
-  the address.
-
-> **NOTE**: Older versions (pre-`v0.9.0`) erroneously referred to the `Device`
-> field as the `Slot` field. As noted by [@pearsonk](https://github.com/pearsonk)
-> in [#220](https://github.com/jaypipes/ghw/issues/220), this was a misnomer.
-
-The following code snippet shows how to list the PCI devices on the host system
-and output a simple list of PCI address and vendor/product information:
-
-```go
-package main
-
-import (
-	"fmt"
-
-	"github.com/jaypipes/ghw"
-)
-
-func main() {
-	pci, err := ghw.PCI()
-	if err != nil {
-		fmt.Printf("Error getting PCI info: %v", err)
-	}
-	fmt.Printf("host PCI devices:\n")
-	fmt.Println("====================================================")
-
-	for _, device := range pci.Devices {
-		vendor := device.Vendor
-		vendorName := vendor.Name
-		if len(vendor.Name) > 20 {
-			vendorName = string([]byte(vendorName)[0:17]) + "..."
-		}
-		product := device.Product
-		productName := product.Name
-		if len(product.Name) > 40 {
-			productName = string([]byte(productName)[0:37]) + "..."
-		}
-		fmt.Printf("%-12s\t%-20s\t%-40s\n", device.Address, vendorName, productName)
-	}
-}
-```
-
-on my local workstation the output of the above looks like the following:
-
-```
-host PCI devices:
-====================================================
-0000:00:00.0	Intel Corporation   	5520/5500/X58 I/O Hub to ESI Port
-0000:00:01.0	Intel Corporation   	5520/5500/X58 I/O Hub PCI Express Roo...
-0000:00:02.0	Intel Corporation   	5520/5500/X58 I/O Hub PCI Express Roo...
-0000:00:03.0	Intel Corporation   	5520/5500/X58 I/O Hub PCI Express Roo...
-0000:00:07.0	Intel Corporation   	5520/5500/X58 I/O Hub PCI Express Roo...
-0000:00:10.0	Intel Corporation   	7500/5520/5500/X58 Physical and Link ...
-0000:00:10.1	Intel Corporation   	7500/5520/5500/X58 Routing and Protoc...
-0000:00:14.0	Intel Corporation   	7500/5520/5500/X58 I/O Hub System Man...
-0000:00:14.1	Intel Corporation   	7500/5520/5500/X58 I/O Hub GPIO and S...
-0000:00:14.2	Intel Corporation   	7500/5520/5500/X58 I/O Hub Control St...
-0000:00:14.3	Intel Corporation   	7500/5520/5500/X58 I/O Hub Throttle R...
-0000:00:19.0	Intel Corporation   	82567LF-2 Gigabit Network Connection
-0000:00:1a.0	Intel Corporation   	82801JI (ICH10 Family) USB UHCI Contr...
-0000:00:1a.1	Intel Corporation   	82801JI (ICH10 Family) USB UHCI Contr...
-0000:00:1a.2	Intel Corporation   	82801JI (ICH10 Family) USB UHCI Contr...
-0000:00:1a.7	Intel Corporation   	82801JI (ICH10 Family) USB2 EHCI Cont...
-0000:00:1b.0	Intel Corporation   	82801JI (ICH10 Family) HD Audio Contr...
-0000:00:1c.0	Intel Corporation   	82801JI (ICH10 Family) PCI Express Ro...
-0000:00:1c.1	Intel Corporation   	82801JI (ICH10 Family) PCI Express Po...
-0000:00:1c.4	Intel Corporation   	82801JI (ICH10 Family) PCI Express Ro...
-0000:00:1d.0	Intel Corporation   	82801JI (ICH10 Family) USB UHCI Contr...
-0000:00:1d.1	Intel Corporation   	82801JI (ICH10 Family) USB UHCI Contr...
-0000:00:1d.2	Intel Corporation   	82801JI (ICH10 Family) USB UHCI Contr...
-0000:00:1d.7	Intel Corporation   	82801JI (ICH10 Family) USB2 EHCI Cont...
-0000:00:1e.0	Intel Corporation   	82801 PCI Bridge
-0000:00:1f.0	Intel Corporation   	82801JIR (ICH10R) LPC Interface Contr...
-0000:00:1f.2	Intel Corporation   	82801JI (ICH10 Family) SATA AHCI Cont...
-0000:00:1f.3	Intel Corporation   	82801JI (ICH10 Family) SMBus Controller
-0000:01:00.0	NEC Corporation     	uPD720200 USB 3.0 Host Controller
-0000:02:00.0	Marvell Technolog...	88SE9123 PCIe SATA 6.0 Gb/s controller
-0000:02:00.1	Marvell Technolog...	88SE912x IDE Controller
-0000:03:00.0	NVIDIA Corporation  	GP107 [GeForce GTX 1050 Ti]
-0000:03:00.1	NVIDIA Corporation  	UNKNOWN
-0000:04:00.0	LSI Logic / Symbi...	SAS2004 PCI-Express Fusion-MPT SAS-2 ...
-0000:06:00.0	Qualcomm Atheros    	AR5418 Wireless Network Adapter [AR50...
-0000:08:03.0	LSI Corporation     	FW322/323 [TrueFire] 1394a Controller
-0000:3f:00.0	Intel Corporation   	UNKNOWN
-0000:3f:00.1	Intel Corporation   	Xeon 5600 Series QuickPath Architectu...
-0000:3f:02.0	Intel Corporation   	Xeon 5600 Series QPI Link 0
-0000:3f:02.1	Intel Corporation   	Xeon 5600 Series QPI Physical 0
-0000:3f:02.2	Intel Corporation   	Xeon 5600 Series Mirror Port Link 0
-0000:3f:02.3	Intel Corporation   	Xeon 5600 Series Mirror Port Link 1
-0000:3f:03.0	Intel Corporation   	Xeon 5600 Series Integrated Memory Co...
-0000:3f:03.1	Intel Corporation   	Xeon 5600 Series Integrated Memory Co...
-0000:3f:03.4	Intel Corporation   	Xeon 5600 Series Integrated Memory Co...
-0000:3f:04.0	Intel Corporation   	Xeon 5600 Series Integrated Memory Co...
-0000:3f:04.1	Intel Corporation   	Xeon 5600 Series Integrated Memory Co...
-0000:3f:04.2	Intel Corporation   	Xeon 5600 Series Integrated Memory Co...
-0000:3f:04.3	Intel Corporation   	Xeon 5600 Series Integrated Memory Co...
-0000:3f:05.0	Intel Corporation   	Xeon 5600 Series Integrated Memory Co...
-0000:3f:05.1	Intel Corporation   	Xeon 5600 Series Integrated Memory Co...
-0000:3f:05.2	Intel Corporation   	Xeon 5600 Series Integrated Memory Co...
-0000:3f:05.3	Intel Corporation   	Xeon 5600 Series Integrated Memory Co...
-0000:3f:06.0	Intel Corporation   	Xeon 5600 Series Integrated Memory Co...
-0000:3f:06.1	Intel Corporation   	Xeon 5600 Series Integrated Memory Co...
-0000:3f:06.2	Intel Corporation   	Xeon 5600 Series Integrated Memory Co...
-0000:3f:06.3	Intel Corporation   	Xeon 5600 Series Integrated Memory Co...
-```
-
-#### Finding a PCI device by PCI address
-
-In addition to the above information, the `ghw.PCIInfo` struct has the
-following method:
-
-* `ghw.PCIInfo.GetDevice(address string)`
-
-The following code snippet shows how to call the `ghw.PCIInfo.GetDevice()`
-method and use its returned `ghw.PCIDevice` struct pointer:
-
-```go
-package main
-
-import (
-	"fmt"
-	"os"
-
-	"github.com/jaypipes/ghw"
-)
-
-func main() {
-	pci, err := ghw.PCI()
-	if err != nil {
-		fmt.Printf("Error getting PCI info: %v", err)
-	}
-
-	addr := "0000:00:00.0"
-	if len(os.Args) == 2 {
-		addr = os.Args[1]
-	}
-	fmt.Printf("PCI device information for %s\n", addr)
-	fmt.Println("====================================================")
-	deviceInfo := pci.GetDevice(addr)
-	if deviceInfo == nil {
-		fmt.Printf("could not retrieve PCI device information for %s\n", addr)
-		return
-	}
-
-	vendor := deviceInfo.Vendor
-	fmt.Printf("Vendor: %s [%s]\n", vendor.Name, vendor.ID)
-	product := deviceInfo.Product
-	fmt.Printf("Product: %s [%s]\n", product.Name, product.ID)
-	subsystem := deviceInfo.Subsystem
-	subvendor := pci.Vendors[subsystem.VendorID]
-	subvendorName := "UNKNOWN"
-	if subvendor != nil {
-		subvendorName = subvendor.Name
-	}
-	fmt.Printf("Subsystem: %s [%s] (Subvendor: %s)\n", subsystem.Name, subsystem.ID, subvendorName)
-	class := deviceInfo.Class
-	fmt.Printf("Class: %s [%s]\n", class.Name, class.ID)
-	subclass := deviceInfo.Subclass
-	fmt.Printf("Subclass: %s [%s]\n", subclass.Name, subclass.ID)
-	progIface := deviceInfo.ProgrammingInterface
-	fmt.Printf("Programming Interface: %s [%s]\n", progIface.Name, progIface.ID)
-}
-```
-
-Here's a sample output from my local workstation:
-
-```
-PCI device information for 0000:03:00.0
-====================================================
-Vendor: NVIDIA Corporation [10de]
-Product: GP107 [GeForce GTX 1050 Ti] [1c82]
-Subsystem: UNKNOWN [8613] (Subvendor: ASUSTeK Computer Inc.)
-Class: Display controller [03]
-Subclass: VGA compatible controller [00]
-Programming Interface: VGA controller [00]
-```
-
-### GPU
-
-The `ghw.GPU()` function returns a `ghw.GPUInfo` struct that contains
-information about the host computer's graphics hardware.
-
-The `ghw.GPUInfo` struct contains one field:
-
-* `ghw.GPUInfo.GraphicCards` is an array of pointers to `ghw.GraphicsCard`
-  structs, one for each graphics card found for the system
-
-Each `ghw.GraphicsCard` struct contains the following fields:
-
-* `ghw.GraphicsCard.Index` is the system's numeric zero-based index for the
-  card on the bus
-* `ghw.GraphicsCard.Address` is the PCI address for the graphics card
-* `ghw.GraphicsCard.DeviceInfo` is a pointer to a `ghw.PCIDevice` struct
-  describing the graphics card. This may be `nil` if no PCI device information
-  could be determined for the card.
-* `ghw.GraphicsCard.Node` is an pointer to a `ghw.TopologyNode` struct that the
-  GPU/graphics card is affined to. On non-NUMA systems, this will always be
-  `nil`.
-
-```go
-package main
-
-import (
-	"fmt"
-
-	"github.com/jaypipes/ghw"
-)
-
-func main() {
-	gpu, err := ghw.GPU()
-	if err != nil {
-		fmt.Printf("Error getting GPU info: %v", err)
-	}
-
-	fmt.Printf("%v\n", gpu)
-
-	for _, card := range gpu.GraphicsCards {
-		fmt.Printf(" %v\n", card)
-	}
-}
-```
-
-Example output from my personal workstation:
-
-```
-gpu (1 graphics card)
- card #0 @0000:03:00.0 -> class: 'Display controller' vendor: 'NVIDIA Corporation' product: 'GP107 [GeForce GTX 1050 Ti]'
-```
-
-**NOTE**: You can [read more](#pci) about the fields of the `ghw.PCIDevice`
-struct if you'd like to dig deeper into PCI subsystem and programming interface
-information
-
-**NOTE**: You can [read more](#topology) about the fields of the
-`ghw.TopologyNode` struct if you'd like to dig deeper into the NUMA/topology
-subsystem
-
-### Accelerator
-
-The `ghw.Accelerator()` function returns a `ghw.AcceleratorInfo` struct that contains
-information about the host computer's processing accelerator hardware. In this category
-we can find used hardware for AI. The hardware detected in this category will be
-processing accelerators (PCI class `1200`), 3D controllers (`0302`) and Display
-controllers (`0380`).
-
-The `ghw.AcceleratorInfo` struct contains one field:
-
-* `ghw.AcceleratorInfo.Devices` is an array of pointers to `ghw.AcceleratorDevice`
-  structs, one for each processing accelerator card found for the system.
-
-Each `ghw.AcceleratorDevice` struct contains the following fields:
-
-* `ghw.AcceleratorDevice.Address` is the PCI address for the processing accelerator card.
-* `ghw.AcceleratorDevice.PCIDevice` is a pointer to a `ghw.PCIDevice` struct.
-  describing the processing accelerator card. This may be `nil` if no PCI device
-  information could be determined for the card.
-
-```go
-package main
-
-import (
-	"fmt"
-
-	"github.com/jaypipes/ghw"
-)
-
-func main() {
-	accel, err := ghw.Accelerator()
-	if err != nil {
-		fmt.Printf("Error getting processing accelerator info: %v", err)
-	}
-
-	fmt.Printf("%v\n", accel)
-
-	for _, card := range accel.Devices {
-		fmt.Printf(" %v\n", device)
-	}
-}
-```
-
-Example output from a testing machine:
-
-```
-processing accelerators (1 device)
- device @0000:00:04.0 -> driver: 'fake_pci_driver' class: 'Processing accelerators' vendor: 'Red Hat, Inc.' product: 'QEMU PCI Test Device'
-```
-
-**NOTE**: You can [read more](#pci) about the fields of the `ghw.PCIDevice`
-struct if you'd like to dig deeper into PCI subsystem and programming interface
-information
-
-### Chassis
-
-The `ghw.Chassis()` function returns a `ghw.ChassisInfo` struct that contains
-information about the host computer's hardware chassis.
-
-The `ghw.ChassisInfo` struct contains multiple fields:
-
-* `ghw.ChassisInfo.AssetTag` is a string with the chassis asset tag
-* `ghw.ChassisInfo.SerialNumber` is a string with the chassis serial number
-* `ghw.ChassisInfo.Type` is a string with the chassis type *code*
-* `ghw.ChassisInfo.TypeDescription` is a string with a description of the
-  chassis type
-* `ghw.ChassisInfo.Vendor` is a string with the chassis vendor
-* `ghw.ChassisInfo.Version` is a string with the chassis version
-
-> **NOTE**: These fields are often missing for non-server hardware. Don't be
-> surprised to see empty string or "None" values.
-
-```go
-package main
-
-import (
-	"fmt"
-
-	"github.com/jaypipes/ghw"
-)
-
-func main() {
-	chassis, err := ghw.Chassis()
-	if err != nil {
-		fmt.Printf("Error getting chassis info: %v", err)
-	}
-
-	fmt.Printf("%v\n", chassis)
-}
-```
-
-Example output from my personal workstation:
-
-```
-chassis type=Desktop vendor=System76 version=thelio-r1
-```
-
-> **NOTE**: Some of the values such as serial numbers are shown as unknown
-> because the Linux kernel by default disallows access to those fields if
-> you're not running as root. They will be populated if it runs as root or
-> otherwise you may see warnings like the following:
-
-```
-WARNING: Unable to read chassis_serial: open /sys/class/dmi/id/chassis_serial: permission denied
-```
-
-You can ignore them or use the [Disabling warning messages](#disabling-warning-messages)
-feature to quiet things down.
-
-### BIOS
-
-The `ghw.BIOS()` function returns a `ghw.BIOSInfo` struct that contains
-information about the host computer's basis input/output system (BIOS).
-
-The `ghw.BIOSInfo` struct contains multiple fields:
-
-* `ghw.BIOSInfo.Vendor` is a string with the BIOS vendor
-* `ghw.BIOSInfo.Version` is a string with the BIOS version
-* `ghw.BIOSInfo.Date` is a string with the date the BIOS was flashed/created
-
-```go
-package main
-
-import (
-	"fmt"
-
-	"github.com/jaypipes/ghw"
-)
-
-func main() {
-	bios, err := ghw.BIOS()
-	if err != nil {
-		fmt.Printf("Error getting BIOS info: %v", err)
-	}
-
-	fmt.Printf("%v\n", bios)
-}
-```
-
-Example output from my personal workstation:
-
-```
-bios vendor=System76 version=F2 Z5 date=11/14/2018
-```
-
-### Baseboard
-
-The `ghw.Baseboard()` function returns a `ghw.BaseboardInfo` struct that
-contains information about the host computer's hardware baseboard.
-
-The `ghw.BaseboardInfo` struct contains multiple fields:
-
-* `ghw.BaseboardInfo.AssetTag` is a string with the baseboard asset tag
-* `ghw.BaseboardInfo.SerialNumber` is a string with the baseboard serial number
-* `ghw.BaseboardInfo.Vendor` is a string with the baseboard vendor
-* `ghw.BaseboardInfo.Product` is a string with the baseboard name on Linux and
-  Product on Windows
-* `ghw.BaseboardInfo.Version` is a string with the baseboard version
-
-> **NOTE**: These fields are often missing for non-server hardware. Don't be
-> surprised to see empty string or "None" values.
-
-```go
-package main
-
-import (
-	"fmt"
-
-	"github.com/jaypipes/ghw"
-)
-
-func main() {
-	baseboard, err := ghw.Baseboard()
-	if err != nil {
-		fmt.Printf("Error getting baseboard info: %v", err)
-	}
-
-	fmt.Printf("%v\n", baseboard)
-}
-```
-
-Example output from my personal workstation:
-
-```
-baseboard vendor=System76 version=thelio-r1
-```
-
-> **NOTE**: Some of the values such as serial numbers are shown as unknown
-> because the Linux kernel by default disallows access to those fields if
-> you're not running as root. They will be populated if it runs as root or
-> otherwise you may see warnings like the following:
-
-```
-WARNING: Unable to read board_serial: open /sys/class/dmi/id/board_serial: permission denied
-```
-
-You can ignore them or use the [Disabling warning messages](#disabling-warning-messages)
-feature to quiet things down.
-
-### Product
-
-The `ghw.Product()` function returns a `ghw.ProductInfo` struct that
-contains information about the host computer's hardware product line.
-
-The `ghw.ProductInfo` struct contains multiple fields:
-
-* `ghw.ProductInfo.Family` is a string describing the product family
-* `ghw.ProductInfo.Name` is a string with the product name
-* `ghw.ProductInfo.SerialNumber` is a string with the product serial number
-* `ghw.ProductInfo.UUID` is a string with the product UUID
-* `ghw.ProductInfo.SKU` is a string with the product stock unit identifier
-  (SKU)
-* `ghw.ProductInfo.Vendor` is a string with the product vendor
-* `ghw.ProductInfo.Version` is a string with the product version
-
-> **NOTE**: These fields are often missing for non-server hardware. Don't be
-> surprised to see empty string, "Default string" or "None" values.
-
-```go
-package main
-
-import (
-	"fmt"
-
-	"github.com/jaypipes/ghw"
-)
-
-func main() {
-	product, err := ghw.Product()
-	if err != nil {
-		fmt.Printf("Error getting product info: %v", err)
-	}
-
-	fmt.Printf("%v\n", product)
-}
-```
-
-Example output from my personal workstation:
-
-```
-product family=Default string name=Thelio vendor=System76 sku=Default string version=thelio-r1
-```
-
-> **NOTE**: Some of the values such as serial numbers are shown as unknown
-> because the Linux kernel by default disallows access to those fields if
-> you're not running as root.  They will be populated if it runs as root or
-> otherwise you may see warnings like the following:
-
-```
-WARNING: Unable to read product_serial: open /sys/class/dmi/id/product_serial: permission denied
-```
-
-You can ignore them or use the [Disabling warning messages](#disabling-warning-messages)
-feature to quiet things down.
-
-## Advanced Usage
-
-### Disabling warning messages
-
-When `ghw` isn't able to retrieve some information, it may print certain
-warning messages to `stderr`. To disable these warnings, simply set the
-`GHW_DISABLE_WARNINGS` environs variable:
-
-```
-$ ghwc memory
-WARNING:
-Could not determine total physical bytes of memory. This may
-be due to the host being a virtual machine or container with no
-/var/log/syslog file, or the current user may not have necessary
-privileges to read the syslog. We are falling back to setting the
-total physical amount of memory to the total usable amount of memory
-memory (24GB physical, 24GB usable)
-```
-
-```
-$ GHW_DISABLE_WARNINGS=1 ghwc memory
-memory (24GB physical, 24GB usable)
-```
-
-You can disable warning programmatically using the `WithDisableWarnings` option:
-
-```go
-
-import (
-	"github.com/jaypipes/ghw"
-)
-
-mem, err := ghw.Memory(ghw.WithDisableWarnings())
-```
-
-`WithDisableWarnings` is a alias for the `WithNullAlerter` option, which in turn
-leverages the more general `Alerter` feature of ghw.
-
-You may supply a `Alerter` to ghw to redirect all the warnings there, like
-logger objects (see for example golang's stdlib `log.Logger`).
-`Alerter` is in fact the minimal logging interface `ghw needs.
-To learn more, please check the `option.Alerter` interface and the `ghw.WithAlerter()`
-function.
-
-### Overriding the root mountpoint `ghw` uses
-
-When `ghw` looks for information about the host system, it considers `/` as its
-root mountpoint. So, for example, when looking up CPU information on a Linux
-system, `ghw.CPU()` will use the path `/proc/cpuinfo`.
-
-If you are calling `ghw` from a system that has an alternate root mountpoint,
-you can either set the `GHW_CHROOT` environment variable to that alternate
-path, or call one of the functions like `ghw.CPU()` or `ghw.Memory()` with the
-`ghw.WithChroot()` modifier.
-
-For example, if you are executing from within an application container that has
-bind-mounted the root host filesystem to the mount point `/host`, you would set
-`GHW_CHROOT` to `/host` so that `ghw` can find `/proc/cpuinfo` at
-`/host/proc/cpuinfo`.
-
-Alternately, you can use the `ghw.WithChroot()` function like so:
-
-```go
-cpu, err := ghw.CPU(ghw.WithChroot("/host"))
-```
-
-### Serialization to JSON or YAML
-
-All of the `ghw` `XXXInfo` structs -- e.g. `ghw.CPUInfo` -- have two methods
-for producing a serialized JSON or YAML string representation of the contained
-information:
-
-* `JSONString()` returns a string containing the information serialized into
-  JSON. It accepts a single boolean parameter indicating whether to use
-  indentation when outputting the string
-* `YAMLString()` returns a string containing the information serialized into
-  YAML
-
-```go
-package main
-
-import (
-	"fmt"
-
-	"github.com/jaypipes/ghw"
-)
-
-func main() {
-	mem, err := ghw.Memory()
-	if err != nil {
-		fmt.Printf("Error getting memory info: %v", err)
-	}
-
-	fmt.Printf("%s", mem.YAMLString())
-}
-```
-
-the above example code prints the following out on my local workstation:
-
-```
-memory:
-  supported_page_sizes:
-  - 1073741824
-  - 2097152
-  total_physical_bytes: 25263415296
-  total_usable_bytes: 25263415296
-```
-
-### Overriding a specific mountpoint (Linux only)
-
-When running inside containers, it can be cumbersome to only override the root
-mountpoint. Inside containers, when granting access to the host file systems,
-it is common to bind-mount them to a non-standard location, like `/sys` on
-`/host-sys` or `/proc` to `/host-proc`.  It is rarer to mount them to a common
-subtree (e.g. `/sys` to `/host/sys` and `/proc` to `/host/proc`...)
-
-To better cover this use case, `ghw.WithPathOverrides()` can be used to supply
-a mapping of directories to mountpoints, like this example shows:
-
-```go
-cpu, err := ghw.CPU(ghw.WithPathOverrides(ghw.PathOverrides{
-	"/proc": "/host-proc",
-	"/sys": "/host-sys",
-}))
-```
-
-**NOTE**: This feature works in addition and is composable with the
-`ghw.WithChroot()` function and `GHW_CHROOT` environment variable.
-
-### Reading hardware information from a `ghw` snapshot (Linux only)
-
-The `ghwc snapshot` command creates a snapshot of a host's hardware information.
-
-Use the `ghwc -s` flag to supply a path to a snapshot to read with the `ghwc`
-command-line program.
-
-```
-$ ghwc -s testdata/snapshots/linux-amd64-amd-ryzen-1600.tar.gz
-block storage (8 disks, 3TB physical storage)
- dm-0 SSD (90GB) Unknown [@unknown (node #0)] vendor=unknown
- dm-1 Unknown (16GB) Unknown [@unknown (node #0)] vendor=unknown
- dm-2 SSD (60GB) Unknown [@unknown (node #0)] vendor=unknown
- dm-3 SSD (13GB) Unknown [@unknown (node #0)] vendor=unknown
- dm-4 SSD (436GB) Unknown [@unknown (node #0)] vendor=unknown
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/jaypipes/ghw/README.md","mode":420,"size":53068,"sha256":"0c7216cc2759e027356d8e6c2dfbb88418cfcb00d5b70107899cd0cfa877f879","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":5068}
- sda SSD (239GB) SCSI [@unknown (node #0)] vendor=unknown
-  sda1 (128MB) [unknown]
-  sda2 (384MB) [unknown]
-  sda3 (238GB) [unknown]
- sdb HDD (932GB) SCSI [@unknown (node #0)] vendor=unknown
-  sdb1 (2GB) [unknown]
-  sdb2 (930GB) [unknown]
- sdc SSD (466GB) SCSI [@unknown (node #0)] vendor=unknown
-  sdc1 (32GB) [unknown]
-  sdc2 (434GB) [unknown]
-cpu (1 physical package, 6 cores, 12 hardware threads)
- physical package #0 (6 cores, 12 hardware threads)
-  processor core #0 (2 threads), logical processors [0 6]
-  processor core #1 (2 threads), logical processors [1 7]
-  processor core #5 (2 threads), logical processors [4 10]
-  processor core #6 (2 threads), logical processors [5 11]
-  processor core #2 (2 threads), logical processors [2 8]
-  processor core #4 (2 threads), logical processors [3 9]
-  capabilities: [msr pae mce cx8 apic sep
-                 mtrr pge mca cmov pat pse36
-                 clflush mmx fxsr sse sse2 ht
-                 syscall nx mmxext fxsr_opt pdpe1gb rdtscp
-                 lm constant_tsc art rep_good nopl nonstop_tsc
-                 extd_apicid aperfmperf eagerfpu pni pclmulqdq monitor
-                 ssse3 fma cx16 sse4_1 sse4_2 movbe
-                 popcnt aes xsave avx f16c rdrand
-                 lahf_lm cmp_legacy svm extapic cr8_legacy abm
-                 sse4a misalignsse 3dnowprefetch osvw skinit wdt
-                 tce topoext perfctr_core perfctr_nb bpext perfctr_l2
-                 hw_pstate sme retpoline_amd ssbd ibpb vmmcall
-                 fsgsbase bmi1 avx2 smep bmi2 rdseed
-                 adx smap clflushopt sha_ni xsaveopt xsavec
-                 xgetbv1 clzero irperf xsaveerptr arat npt
-                 lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid
-                 decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif
-                 overflow_recov succor smca]
-gpu (1 graphics card)
- card #0 @0000:0a:00.0 -> driver: '' class: 'Display controller' vendor: 'Advanced Micro Devices, Inc. [AMD/ATI]' product: 'Turks XT [Radeon HD 6670/7670]'
-processing accelerators (0 devices)
-memory (32GB physical, 32GB usable)
-net (4 NICs)
- enp3s0
- enp6s0f0
- enp6s0f1
- enp8s0
-topology NUMA (0 nodes)
-chassis type=unknown vendor=unknown version=unknown
-bios vendor=unknown version=unknown
-baseboard vendor=unknown version=unknown product=unknown
-product family=unknown name=unknown vendor=unknown sku=unknown version=unknown
-PCI (43 devices)
-```
-
-### Creating snapshots
-
-You can create `ghw` snapshots using the `ghwc snapshot` command or
-programmatically using the `pkg/snapshot` package.
-
-Below is an example of creating a `ghw` snapshot using the `pkg/snapshot`
-package.
-
-```go
-
-import (
-	"fmt"
-	"os"
-
-	"github.com/jaypipes/ghw/pkg/snapshot"
-)
-
-// ...
-
-scratchDir, err := os.MkdirTemp("", "ghw-snapshot-*")
-if err != nil {
-	fmt.Printf("Error creating clone directory: %v", err)
-}
-defer os.RemoveAll(scratchDir)
-
-// this step clones all the files and directories ghw cares about
-if err := snapshot.CloneTreeInto(scratchDir); err != nil {
-	fmt.Printf("error cloning into %q: %v", scratchDir, err)
-}
-
-// optionally, you may add extra content into your snapshot.
-// ghw will ignore the extra content.
-// Glob patterns like `filepath.Glob` are supported.
-fileSpecs := []string{
-	"/proc/cmdline",
-}
-
-// options allows the client code to optionally deference symlinks, or copy
-// them into the cloned tree as symlinks
-var opts *snapshot.CopyFileOptions
-if err := snapshot.CopyFilesInto(fileSpecs, scratchDir, opts); err != nil {
-	fmt.Printf("error cloning extra files into %q: %v", scratchDir, err)
-}
-
-// automates the creation of the gzipped tarball out of the given tree.
-if err := snapshot.PackFrom("my-snapshot.tgz", scratchDir); err != nil {
-	fmt.Printf("error packing %q into %q: %v", scratchDir, *output, err)
-}
-```
-
-## Calling external programs
-
-By default `ghw` may call external programs, for example `ethtool`, to learn
-about hardware capabilities.  In some rare circumstances it may be useful to
-opt out from this behaviour and rely only on the data provided by
-pseudo-filesystems, like sysfs.
-
-The most common use case is when we want to read a snapshot from `ghw`. In
-these cases the information provided by tools will be inconsistent with the
-data from the snapshot - since they will be run on a different host than the
-host the snapshot was created for.
-
-To prevent `ghw` from calling external tools, set the `GHW_DISABLE_TOOLS`
-environment variable to any value, or, programmatically, use the
-`ghw.WithDisableTools()` function.  The default behaviour of ghw is to call
-external tools when available.
-
-> **WARNING**: on all platforms, disabling external tools make ghw return less
-> data.  Unless noted otherwise, there is _no fallback flow_ if external tools
-> are disabled. On MacOSX/Darwin, disabling external tools disables block
-> support entirely
-
-## Developers
-
-[Contributions](CONTRIBUTING.md) to `ghw` are welcomed! Fork the repo on GitHub
-and submit a pull request with your proposed changes. Or, feel free to log an
-issue for a feature request or bug report.
 
 @@END
