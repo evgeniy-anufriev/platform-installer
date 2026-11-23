@@ -995,7 +995,7 @@ it.each([false, true])("approves and starts through one Go operation (blocked=%s
     runtime: {}, expiresAt: "2099-01-01T00:00:00Z",
   };
   const combined = vi.fn().mockResolvedValue(blocked
-    ? { status: "BLOCKED", plan, error: { code: "INSTALLATION_SECRETS_MISSING", message: "Введите пароль" } }
+    ? { status: "BLOCKED", plan, error: { code: "RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE", message: "Не удалось подтвердить требования плана к секретам", diagnosticCodes: ["PROJECT_TRANSFER_FAILED"] } }
     : { status: "STARTED", plan: { ...plan, approved: true }, run: { runId: "combined-run", state: "RUNNING", sequence: 0 } });
   const approve = vi.fn(), start = vi.fn(), subscribe = vi.fn().mockResolvedValue({ status: "SUBSCRIBED", subscriptionId: "combined-subscription" });
   const value = api({
@@ -1021,7 +1021,8 @@ it.each([false, true])("approves and starts through one Go operation (blocked=%s
   expect(approve).not.toHaveBeenCalled();
   expect(start).not.toHaveBeenCalled();
   if (blocked) {
-    expect(await screen.findByText("INSTALLATION_SECRETS_MISSING")).toBeTruthy();
+    expect(await screen.findByText("RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE")).toBeTruthy();
+    expect(screen.getByText(/Диагностика Core и плана: PROJECT_TRANSFER_FAILED/)).toBeTruthy();
     expect(subscribe).not.toHaveBeenCalled();
     expect(screen.getByRole("tab", { name: "План" }).getAttribute("aria-selected")).toBe("true");
   } else {

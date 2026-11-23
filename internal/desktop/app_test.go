@@ -434,6 +434,12 @@ func TestRuntimeSecretDescriptorDiagnosticCodesAreBoundedTokensOnly(t *testing.T
 	if got := runtimeSecretDescriptorDiagnosticCodes(errors.New("arbitrary transport text")); len(got) != 0 {
 		t.Fatalf("untyped error exposed diagnostic codes: %q", got)
 	}
+	if got := runtimeSecretDescriptorDiagnosticCodes(errors.New("PROJECT_CANDIDATE_ANSIBLE_CONFIG_INVALID")); !slices.Equal(got, []string{"PROJECT_CANDIDATE_ANSIBLE_CONFIG_INVALID"}) {
+		t.Fatalf("known local diagnostic code lost: %q", got)
+	}
+	if got := runtimeSecretDescriptorDiagnosticCodes(errors.New("UNRECOGNIZED_UPPERCASE_TEXT")); len(got) != 0 {
+		t.Fatalf("unrecognized text exposed as a diagnostic code: %q", got)
+	}
 }
 
 func TestInstallationPlanKeepsBoundedImageDiagnostic(t *testing.T) {

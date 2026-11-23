@@ -228,8 +228,7 @@ func (a *App) ApproveInstallationPlan(planID string, acknowledgements []string) 
 	}
 	missing, secretErr := a.missingInstallationSecretsLocked(record.Plan, false)
 	if secretErr != nil {
-		code := projectErrorCode(secretErr)
-		return approvalFailure(&ProjectOpenError{Code: code, Message: projectErrorMessage(code)})
+		return approvalFailure(secretErr)
 	}
 	if len(missing) > 0 {
 		return approvalFailure(missingInstallationSecretsError(missing))
@@ -247,14 +246,15 @@ func (a *App) ApproveInstallationPlan(planID string, acknowledgements []string) 
 
 // missingInstallationSecretsLocked uses only the current Core plan and the
 // Core-attested descriptor set. Values remain private inside the broker.
-func (a *App) missingInstallationSecretsLocked(plan executionnode.DeploymentPlan, attest bool) ([]string, error) {
-	passwords, err := installationPlanRuntimeSecretRequirements(plan)
-	if err != nil {
-		return nil, err
+func (a *App) missingInstallationSecretsLocked(plan executionnode.DeploymentPlan, attest bool) ([]string, *ProjectOpenError) {
+	passwords, requirementErr := installationPlanRuntimeSecretRequirements(plan)
+	if requirementErr != nil {
+		return nil, requirementErr
 	}
 	binding, err := a.credentialBindingLocked()
 	if err != nil {
-		return nil, err
+		code := projectErrorCode(err)
+		return nil, &ProjectOpenError{Code: code, Message: projectErrorMessage(code)}
 	}
 	missing := a.secrets.MissingRequiredSecrets(binding, passwords, executionnodePlanRequiresPKIStorePassword(plan), !attest)
 	if len(passwords) > 0 && (attest || len(missing) > 0) {
@@ -265,10 +265,7 @@ func (a *App) missingInstallationSecretsLocked(plan executionnode.DeploymentPlan
 		if currentDescriptors == nil || len(missing) > 0 {
 			descriptors := a.getRuntimeSecretDescriptorsLocked(false)
 			if descriptors.Status != "READY" {
-				if descriptors.Error != nil && descriptors.Error.Code != "" {
-					return nil, errors.New(descriptors.Error.Code)
-				}
-				return nil, errors.New("RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE")
+				return nil, runtimeSecretDescriptorOperationError(descriptors.Error)
 			}
 			currentDescriptors = a.runtimeSecretEvidenceDescriptorsLocked(plan.ProjectRevision)
 		}
@@ -278,7 +275,8 @@ func (a *App) missingInstallationSecretsLocked(plan executionnode.DeploymentPlan
 		}
 		for _, requirement := range plan.RequiredCredentials {
 			if executionnode.RuntimeSecretValuePurpose(requirement.Purpose) && !known[requirement.RequirementRef+"\x00"+requirement.Purpose] {
-				return nil, errors.New("RUNTIME_SECRET_DESCRIPTORS_STALE")
+				code := "RUNTIME_SECRET_DESCRIPTORS_STALE"
+				return nil, &ProjectOpenError{Code: code, Message: projectErrorMessage(code)}
 			}
 		}
 	}
@@ -408,7 +406,7 @@ func executionnodePlanRequiresPKIStorePassword(plan executionnode.DeploymentPlan
 // installationPlanRuntimeSecretRequirements is intentionally derived from the
 // fresh Core plan rather than the UI catalog. It is used only to bind already
 // pending runtime-only values at approval and the pre-target Start gate.
-func installationPlanRuntimeSecretRequirements(plan executionnode.DeploymentPlan) ([]string, error) {
+func installationPlanRuntimeSecretRequirements(plan executionnode.DeploymentPlan) ([]string, *ProjectOpenError) {
 	result := make([]string, 0)
 	seen := map[string]struct{}{}
 	for _, requirement := range plan.RequiredCredentials {
@@ -416,16 +414,28 @@ func installationPlanRuntimeSecretRequirements(plan executionnode.DeploymentPlan
 			continue
 		}
 		if !runtimeSecretDescriptorRequirement.MatchString(requirement.RequirementRef) {
-			return nil, errors.New("RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE")
+			return nil, runtimeSecretDescriptorFailure("PLAN_SECRET_REQUIREMENT_REF_INVALID")
 		}
 		if _, duplicate := seen[requirement.RequirementRef]; duplicate {
-			return nil, errors.New("RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE")
+			return nil, runtimeSecretDescriptorFailure("PLAN_SECRET_REQUIREMENT_REF_DUPLICATE")
 		}
 		seen[requirement.RequirementRef] = struct{}{}
 		result = append(result, requirement.RequirementRef)
 	}
 	sort.Strings(result)
 	return result, nil
+}
+
+func runtimeSecretDescriptorFailure(diagnosticCode string) *ProjectOpenError {
+	code := "RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE"
+	return &ProjectOpenError{Code: code, Message: projectErrorMessage(code), DiagnosticCodes: []string{diagnosticCode}}
+}
+
+func runtimeSecretDescriptorOperationError(err *ProjectOpenError) *ProjectOpenError {
+	if err == nil || err.Code == "" {
+		return runtimeSecretDescriptorFailure("RUNTIME_SECRET_DESCRIPTOR_RESULT_UNAVAILABLE")
+	}
+	return &ProjectOpenError{Code: err.Code, Message: projectErrorMessage(err.Code), DiagnosticCodes: err.DiagnosticCodes}
 }
 
 func installationRuntimeBinding(release map[string]any) (InstallationRuntimeBinding, bool) {

@@ -68,12 +68,16 @@ func TestInstallationPlanArtifactFindingsRejectUnsafeDetails(t *testing.T) {
 
 type countingSecretDescriptorTransport struct {
 	installationPlanTransport
-	calls       int
-	descriptors []executionnode.RuntimeSecretDescriptor
+	calls         int
+	descriptors   []executionnode.RuntimeSecretDescriptor
+	descriptorErr error
 }
 
 func (transport *countingSecretDescriptorTransport) BuildRuntimeSecretDescriptors(_ context.Context, _ executionnode.Node, _ string, _ map[string]any, request executionnode.RuntimeSecretDescriptorRequest) (executionnode.RuntimeSecretDescriptorResult, error) {
 	transport.calls++
+	if transport.descriptorErr != nil {
+		return executionnode.RuntimeSecretDescriptorResult{}, transport.descriptorErr
+	}
 	descriptors := transport.descriptors
 	if descriptors == nil {
 		descriptors = []executionnode.RuntimeSecretDescriptor{
@@ -482,6 +486,27 @@ func TestTypedDescriptorFailureKeepsItsActualStartError(t *testing.T) {
 	}
 }
 
+func TestCombinedApprovalKeepsSecretDescriptorDiagnostics(t *testing.T) {
+	app, builder, client := installationPlanApp(t, false)
+	builder.requiredCredentials = []executionnode.RequiredCredential{{RequirementRef: "service-password", Purpose: "SERVICE_PASSWORD"}}
+	transport := &countingSecretDescriptorTransport{descriptorErr: &executionnode.ExecutionError{
+		Code:     "PROJECT_SNAPSHOT_INPUT_INVALID",
+		Findings: []executionnode.Finding{{Code: "APPLICATION_INPUT_INVALID", SafeMessage: "raw transport detail"}},
+	}}
+	app.binding.reader.transport = transport
+	created := app.CreateInstallationPlan(nil)
+	if created.Plan == nil {
+		t.Fatal("plan unavailable")
+	}
+	result := app.ApproveAndStartInstallation(created.Plan.ID, []string{"ACK_RISK"})
+	if result.Error == nil || result.Error.Code != "RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE" ||
+		strings.Join(result.Error.DiagnosticCodes, ",") != "PROJECT_SNAPSHOT_INPUT_INVALID,APPLICATION_INPUT_INVALID" ||
+		strings.Contains(result.Error.Message, "raw transport detail") ||
+		result.Plan == nil || result.Plan.Approved || transport.calls != 1 || client.starts != 0 {
+		t.Fatalf("unexpected combined approval result: %+v, error=%+v", result, result.Error)
+	}
+}
+
 func TestStartReadsMixedServiceDescriptorsOnce(t *testing.T) {
 	app, builder, _ := installationPlanApp(t, false)
 	transport := &countingSecretDescriptorTransport{}
@@ -748,9 +773,16 @@ func TestInstallationPlanRuntimeSecretRequirementsUseOnlyClosedCorePlanEntries(t
 	if err != nil || strings.Join(got, ",") != "redis-password,redis-sentinel-password" {
 		t.Fatalf("requirements=%v err=%v", got, err)
 	}
-	plan.RequiredCredentials = append(plan.RequiredCredentials, executionnode.RequiredCredential{RequirementRef: "invalid_ref", Purpose: "SERVICE_PASSWORD"})
-	if _, err := installationPlanRuntimeSecretRequirements(plan); err == nil || err.Error() != "RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE" {
-		t.Fatalf("invalid plan secret reference error=%v", err)
+	for ref, diagnostic := range map[string]string{
+		"invalid_ref":    "PLAN_SECRET_REQUIREMENT_REF_INVALID",
+		"redis-password": "PLAN_SECRET_REQUIREMENT_REF_DUPLICATE",
+	} {
+		input := plan
+		input.RequiredCredentials = append(input.RequiredCredentials, executionnode.RequiredCredential{RequirementRef: ref, Purpose: "SERVICE_PASSWORD"})
+		if _, err := installationPlanRuntimeSecretRequirements(input); err == nil || err.Code != "RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE" ||
+			strings.Join(err.DiagnosticCodes, ",") != diagnostic {
+			t.Fatalf("plan secret reference error=%+v, want %s", err, diagnostic)
+		}
 	}
 }
 

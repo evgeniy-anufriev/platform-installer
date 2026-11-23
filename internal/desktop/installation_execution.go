@@ -454,13 +454,13 @@ func (a *App) StartApprovedInstallation(planID string) InstallationRunOperation 
 		passwordRequirements, requirementErr := installationPlanRuntimeSecretRequirements(planRecord.Plan)
 		if requirementErr != nil {
 			a.editMu.Unlock()
-			return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: projectErrorCode(requirementErr), Message: projectErrorMessage(projectErrorCode(requirementErr))}}
+			return InstallationRunOperation{Status: "BLOCKED", Error: requirementErr}
 		}
 		if len(passwordRequirements) > 0 {
 			missing, secretErr := a.missingInstallationSecretsLocked(planRecord.Plan, false)
 			if secretErr != nil {
 				a.editMu.Unlock()
-				return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: projectErrorCode(secretErr), Message: projectErrorMessage(projectErrorCode(secretErr))}}
+				return InstallationRunOperation{Status: "BLOCKED", Error: secretErr}
 			}
 			if len(missing) > 0 {
 				a.editMu.Unlock()
@@ -471,11 +471,7 @@ func (a *App) StartApprovedInstallation(planID string) InstallationRunOperation 
 			descriptors := a.runtimeSecretDescriptorsForStartLocked(revision)
 			if descriptors.Status != "READY" {
 				a.editMu.Unlock()
-				if descriptors.Error != nil {
-					return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: descriptors.Error.Code, Message: projectErrorMessage(descriptors.Error.Code), DiagnosticCodes: descriptors.Error.DiagnosticCodes}}
-				}
-				code := "RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE"
-				return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: code, Message: projectErrorMessage(code)}}
+				return InstallationRunOperation{Status: "BLOCKED", Error: runtimeSecretDescriptorOperationError(descriptors.Error)}
 			}
 			if len(typedInputs) > 0 && !runtimeDescriptorsMatchPlan(descriptors.Descriptors, typedInputs, planRecord.Plan.ExecutionMode) {
 				a.editMu.Unlock()
@@ -485,7 +481,7 @@ func (a *App) StartApprovedInstallation(planID string) InstallationRunOperation 
 		missing, secretErr := a.missingInstallationSecretsLocked(planRecord.Plan, true)
 		if secretErr != nil {
 			a.editMu.Unlock()
-			return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: projectErrorCode(secretErr), Message: projectErrorMessage(projectErrorCode(secretErr))}}
+			return InstallationRunOperation{Status: "BLOCKED", Error: secretErr}
 		}
 		if len(missing) > 0 {
 			a.editMu.Unlock()

@@ -1316,7 +1316,7 @@ func (a *App) getRuntimeSecretDescriptorsLocked(clearAttached bool) RuntimeSecre
 	}
 	requestID, err := executionnode.NewRequestID()
 	if err != nil {
-		return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: "RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE", Message: "Could not create a bounded secret descriptor request."}}
+		return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: runtimeSecretDescriptorFailure("RUNTIME_SECRET_DESCRIPTOR_REQUEST_ID_FAILED")}
 	}
 	ctx, cancel := a.operationContext(projectCoreResolutionTimeout)
 	defer cancel()
@@ -1333,21 +1333,24 @@ func (a *App) getRuntimeSecretDescriptorsLocked(clearAttached bool) RuntimeSecre
 	view := RuntimeSecretDescriptorOperation{Status: "READY", ProjectRevision: result.ProjectRevision, DescriptorSetFingerprint: result.DescriptorSetFingerprint}
 	for _, item := range result.Descriptors {
 		if !validRuntimeSecretDescriptor(item) {
-			return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: "RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE", Message: "Core returned an unsafe service secret descriptor."}}
+			return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: runtimeSecretDescriptorFailure("SERVICE_SECRET_DESCRIPTOR_INVALID")}
 		}
 		view.Descriptors = append(view.Descriptors, RuntimeSecretDescriptorView{RequirementRef: item.RequirementRef, Purpose: item.Purpose, ServiceDeployment: item.ServiceDeployment, DisplayLabel: item.DisplayLabel, RequiredWhen: item.RequiredWhen, Operations: append([]string(nil), item.Operations...), Hosts: append([]string(nil), item.Hosts...)})
 	}
 	seen := map[string]bool{}
 	for _, item := range view.Descriptors {
 		if seen[item.RequirementRef] {
-			return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: "RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE"}}
+			return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: runtimeSecretDescriptorFailure("SECRET_DESCRIPTOR_REF_DUPLICATE")}
 		}
 		seen[item.RequirementRef] = true
 	}
 	sources := map[string]bool{}
 	for _, item := range result.ApplicationInputs {
-		if !validApplicationSecretDescriptor(item) || seen[item.RequirementRef] || sources[item.SourceRef] {
-			return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: "RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE", Message: "Core returned an unsafe application secret descriptor."}}
+		if !validApplicationSecretDescriptor(item) {
+			return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: runtimeSecretDescriptorFailure("APPLICATION_SECRET_DESCRIPTOR_INVALID")}
+		}
+		if seen[item.RequirementRef] || sources[item.SourceRef] {
+			return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: runtimeSecretDescriptorFailure("SECRET_DESCRIPTOR_REF_DUPLICATE")}
 		}
 		seen[item.RequirementRef] = true
 		sources[item.SourceRef] = true
@@ -1406,7 +1409,7 @@ func (a *App) bindRuntimeSecretDescriptorsLocked(view RuntimeSecretDescriptorOpe
 		applicationSources, sourceErr := a.pendingApplicationSourceBindingsLocked(credentialBinding, view.ProjectRevision, view.ApplicationInputs)
 		if sourceErr != nil {
 			a.runtimeSecretEvidence = nil
-			return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: "RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE", Message: projectErrorMessage("RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE")}}
+			return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: runtimeSecretDescriptorFailure("APPLICATION_SECRET_SOURCE_BINDING_INVALID")}
 		}
 		a.runtimeSecretEvidence.applicationSources = applicationSources
 		if err := a.secrets.PromotePendingRuntimeSecretValues(credentialBinding, requirements, applicationSources); err != nil {
@@ -1421,12 +1424,26 @@ func (a *App) bindRuntimeSecretDescriptorsLocked(view RuntimeSecretDescriptorOpe
 	return view
 }
 
-// runtimeSecretDescriptorDiagnosticCodes returns only bounded machine tokens
-// from the fixed Execution Node protocol. It deliberately excludes diagnostic
-// messages, command output, paths and all user/project data.
+// runtimeSecretDescriptorDiagnosticCodes exposes only protocol codes and known
+// local failure codes. It excludes messages, paths and user/project data.
 func runtimeSecretDescriptorDiagnosticCodes(err error) []string {
+	if err == nil {
+		return nil
+	}
 	var executionErr *executionnode.ExecutionError
 	if !errors.As(err, &executionErr) || executionErr == nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			return []string{"CORE_RESOLUTION_TIMEOUT"}
+		}
+		switch err.Error() {
+		case "RUNTIME_SECRET_DESCRIPTORS_INPUT_INVALID", "RUNTIME_SECRET_DESCRIPTORS_UNSUPPORTED",
+			"RUNTIME_SECRET_DESCRIPTORS_RESPONSE_INVALID", "EXECUTION_RUNTIME_IDENTITY_UNCONFIRMED",
+			"PROJECT_CANDIDATE_INVALID", "PROJECT_CANDIDATE_FILE_UNSAFE", "PROJECT_CANDIDATE_PATH_INVALID",
+			"PROJECT_CANDIDATE_PATH_COLLISION", "PROJECT_CANDIDATE_LIMIT_EXCEEDED",
+			"PROJECT_CANDIDATE_HARDLINK_UNSAFE", "PROJECT_CANDIDATE_ANSIBLE_CONFIG_INVALID",
+			"PROJECT_CANDIDATE_FILE_REPLACED":
+			return []string{err.Error()}
+		}
 		return nil
 	}
 	var result []string
@@ -2219,7 +2236,7 @@ func projectErrorMessage(code string) string {
 	case "RUNTIME_SECRET_DESCRIPTOR_NOT_FOUND":
 		return "Для выбранного сервиса в текущем режиме секреты не требуются."
 	case "RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE":
-		return "Не удалось получить требования к секретам от Core на узле выполнения. Проверьте доступность узла и повторите запуск этого плана; секреты не удалены."
+		return "Не удалось подтвердить требования плана к секретам. Установка не запущена, введённые секреты сохранены."
 	case "RUNTIME_SECRET_DESCRIPTORS_UNSUPPORTED":
 		return "Активный runtime узла выполнения не поддерживает проверку секретов сервисов. Обновите набор установки и подготовьте узел заново."
 	case "RUNTIME_SECRET_DESCRIPTORS_RESPONSE_INVALID":

@@ -1352,6 +1352,13 @@ function PlanStage({
                 <li>
                   <code>{operation.error.code}</code> —{" "}
                   {operation.error.message}
+                  {!!operation.error.diagnosticCodes?.length && (
+                    <span>
+                      {" "}
+                      Диагностика Core и плана:{" "}
+                      {operation.error.diagnosticCodes.join(", ")}
+                    </span>
+                  )}
                 </li>
               )}
               {run?.error && (
