@@ -3070,6 +3070,155 @@ except (OSError, ValueError) as error:
 PY
 
 @@END
+@@PORTABLE {"path":"scripts/profile_installation_start.sh","mode":493,"size":6736,"sha256":"9ca897f89e8b5d566a7c936ac5e2393023a325861b2b9750f51a1a78e5ed4b51","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":6736}
+#!/bin/sh
+# Read-only profile of plan confirmation and startup on the Execution Node.
+set -eu
+exec python3 - "$@" <<'PY'
+import argparse
+from datetime import datetime, timedelta, timezone
+import hashlib
+import json
+import math
+import os
+from pathlib import Path
+import re
+import sys
+
+
+OPERATIONS = {
+    'BuildRuntimeSecretDescriptors': 'Требования к секретам',
+    'PrepareApplicationImages': 'Входы проверки registry (DESCRIBE)',
+    'BuildDeploymentPlan': 'Сборка авторитетного плана',
+}
+EVENTS = {
+    'ACCEPTED': 'Контроллер принят к запуску',
+    'RUN_STARTED': 'Контроллер запущен',
+    'ACTION_STARTED': 'Первое действие плана',
+    'TASK_STARTED': 'Первая задача Ansible',
+}
+
+
+def timestamp(value):
+    at = datetime.fromisoformat(value.replace('Z', '+00:00'))
+    if at.utcoffset() is None:
+        raise ValueError('Укажите часовой пояс, например +03:00')
+    return at.astimezone(timezone.utc)
+
+
+def format_time(at):
+    return at.astimezone().isoformat(timespec='milliseconds')
+
+
+def seconds(value):
+    if type(value) in (int, float) and math.isfinite(value) and value >= 0:
+        return f'{value:.3f} с'
+    return '—'
+
+
+def run_events(directory):
+    marks = {}
+    with (directory / 'events.jsonl').open(encoding='utf-8') as stream:
+        for line in stream:
+            if not line.endswith('\n'):
+                break
+            event = json.loads(line)
+            kind = event.get('eventType')
+            if kind == 'DIAGNOSTIC' and event.get('message') == 'Detached controller accepted':
+                kind = 'ACCEPTED'
+            if kind in EVENTS and kind not in marks:
+                marks[kind] = timestamp(event['timestamp'])
+                if kind == 'TASK_STARTED':
+                    break
+    return marks
+
+
+def show_core(directory, scope, since, until):
+    records = []
+    ignored = 0
+    for operation in OPERATIONS:
+        for path in directory.glob(f'{scope}.{operation}.timing.json'):
+            try:
+                with path.open(encoding='utf-8') as stream:
+                    finished = datetime.fromtimestamp(os.fstat(stream.fileno()).st_mtime, timezone.utc)
+                    if not since <= finished <= until:
+                        continue
+                    data = json.load(stream)
+                if data.get('operation') != operation:
+                    raise ValueError('Unexpected operation')
+                records.append((finished, operation, data))
+            except (OSError, ValueError, AttributeError):
+                ignored += 1
+    print('Вызовы Core, завершённые в выбранном интервале')
+    for finished, operation, data in sorted(records, key=lambda row: row[0]):
+        resolution = data.get('resolution') or {}
+        source = resolution.get('source') if isinstance(resolution, dict) else None
+        if source not in ('fresh', 'shared', 'request'):
+            source = '—'
+        print(f'{format_time(finished)}  {OPERATIONS[operation]} ({operation})'
+              f'  всего {seconds(data.get("elapsedSeconds"))}'
+              f'  ожидание блокировки {seconds(data.get("lockWaitSeconds"))}'
+              f'  расчёт {source}')
+    if not records:
+        print('Файлы таймингов в этом интервале не найдены.')
+    if ignored:
+        print(f'Пропущено нечитаемых или некорректных файлов: {ignored}')
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Профиль от одобрения плана до первой задачи')
+    parser.add_argument('--run', help='ID запуска installer-… из журнала')
+    parser.add_argument('--since', help='Время нажатия кнопки с часовым поясом ISO 8601')
+    parser.add_argument('--state-root', type=Path, default=Path('/var/lib/platform-installer/execution'),
+                        help='Каталог состояния Execution Node или локальная копия для разбора')
+    args = parser.parse_args()
+    if args.run and not re.fullmatch(r'installer-[0-9a-f]{32}', args.run):
+        parser.error('Некорректный ID запуска')
+
+    now = datetime.now(timezone.utc)
+    marks = {}
+    scope = '[0-9a-f]' * 64 + '.json'
+    if args.run:
+        directory = args.state_root / 'runs' / args.run
+        with (directory / 'metadata.json').open(encoding='utf-8') as stream:
+            project = json.load(stream)['projectIdentity']
+        # Same project key as Core's project_resolution.scope_name.
+        scope = hashlib.sha256(json.dumps([project], sort_keys=True).encode()).hexdigest() + '.json'
+        marks = run_events(directory)
+
+    until = marks.get('TASK_STARTED', now)
+    since = timestamp(args.since) if args.since else marks.get('ACCEPTED', until) - timedelta(minutes=10)
+    if since > until:
+        parser.error('Начало интервала позже первой задачи или текущего времени')
+    print(f'Интервал: {format_time(since)} — {format_time(until)}')
+    if not args.run:
+        print('Показаны тайминги всех проектов в этом интервале. Для отбора по проекту укажите --run.')
+    show_core(args.state_root / 'project-resolutions', scope, since, until)
+    if args.run:
+        print('\nСобытия принятого запуска')
+        previous = since if args.since else None
+        for kind, label in EVENTS.items():
+            if kind in marks:
+                at = marks[kind]
+                delta = f'  +{(at - previous).total_seconds():.3f} с' if previous else ''
+                print(f'{format_time(at)}  {label}{delta}')
+                previous = at
+        if 'TASK_STARTED' not in marks:
+            print('Первое событие задачи пока отсутствует.')
+        elif args.since:
+            print('От нажатия до первой задачи: ' + seconds((marks['TASK_STARTED'] - since).total_seconds()))
+    print('\nФайлы Core содержат последний замер каждой операции для проекта.')
+    print('DESCRIBE не включает сетевой проход registry. Тайминги Core не включают локальную проверку bundle и передачу проекта.')
+
+
+try:
+    main()
+except (OSError, ValueError, TypeError, KeyError) as error:
+    print(f'Ошибка: {error}', file=sys.stderr)
+    sys.exit(2)
+PY
+
+@@END
 @@PORTABLE {"path":"scripts/read_exec_node_run_status.sh","mode":420,"size":748,"sha256":"45b819a5f84b2899f90690f1bf5d6b64e56762846e3d9e0c45be63b61f8d3016","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":748}
 sudo python3 - <<'PY'
 import json
