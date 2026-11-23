@@ -1,3 +1,2093 @@
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/gookit/color/color.go","mode":420,"size":5833,"sha256":"a9b86bd0a1a2d056fe529a08f5094a4188ac3fe93640efc9c6f8a6ab6e7119e0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5833}
+/*
+Package color is command line color library.
+Support rich color rendering output, universal API method, compatible with Windows system
+
+Source code and other details for the project are available at GitHub:
+
+	https://github.com/gookit/color
+
+More usage please see README and tests.
+*/
+package color
+
+import (
+	"fmt"
+	"io"
+	"os"
+	"regexp"
+	"strings"
+
+	"github.com/xo/terminfo"
+)
+
+// color render templates
+//
+// ESC 操作的表示:
+//
+//	"\033"(Octal 8进制) = "\x1b"(Hexadecimal 16进制) = 27 (10进制)
+const (
+	// StartSet chars
+	StartSet = "\x1b["
+	// ResetSet close all properties.
+	ResetSet = "\x1b[0m"
+	// SettingTpl string.
+	SettingTpl = "\x1b[%sm"
+	// FullColorTpl for build color code
+	FullColorTpl = "\x1b[%sm%s\x1b[0m"
+	// CodeSuffix string for color code.
+	CodeSuffix = "[0m"
+)
+
+// CodeExpr regex to clear color codes eg "\033[1;36mText\x1b[0m"
+const CodeExpr = `\033\[[\d;?]+m`
+
+var (
+	// Enable switch color render and display
+	//
+	// NOTICE:
+	// if ENV: NO_COLOR is not empty, will disable color render.
+	Enable = os.Getenv("NO_COLOR") == ""
+	// RenderTag render HTML tag on call color.Xprint, color.PrintX
+	RenderTag = true
+	// debug mode for development.
+	//
+	// set env:
+	// 	COLOR_DEBUG_MODE=on
+	// or:
+	// 	COLOR_DEBUG_MODE=on go run ./_examples/envcheck.go
+	debugMode = os.Getenv("COLOR_DEBUG_MODE") == "on"
+	// inner errors record on detect color level
+	innerErrs []error
+	// output the default io.Writer message print
+	output io.Writer = os.Stdout
+	// mark current env, It's like in `cmd.exe`
+	// if not in windows, it's always False.
+	isLikeInCmd bool
+	// the color support level for current terminal
+	// needVTP - need enable VTP, only for Windows OS
+	colorLevel, needVTP = detectTermColorLevel()
+	// match color codes
+	codeRegex = regexp.MustCompile(CodeExpr)
+	// mark current env is support color.
+	// Always: isLikeInCmd != supportColor
+	// supportColor = IsSupportColor()
+)
+
+// TermColorLevel Get the currently supported color level
+func TermColorLevel() Level {
+	return colorLevel
+}
+
+// SupportColor Whether the current environment supports color output
+func SupportColor() bool {
+	return colorLevel > terminfo.ColorLevelNone
+}
+
+// Support16Color on the current ENV
+// func Support16Color() bool {
+// 	return colorLevel > terminfo.ColorLevelNone
+// }
+
+// Support256Color Whether the current environment supports 256-color output
+func Support256Color() bool {
+	return colorLevel > terminfo.ColorLevelBasic
+}
+
+// SupportTrueColor Whether the current environment supports (RGB)True-color output
+func SupportTrueColor() bool {
+	return colorLevel > terminfo.ColorLevelHundreds
+}
+
+/*************************************************************
+ * global settings
+ *************************************************************/
+
+// Set console color attributes
+func Set(colors ...Color) (int, error) {
+	code := Colors2code(colors...)
+	err := SetTerminal(code)
+	return 0, err
+}
+
+// Reset reset console color attributes
+func Reset() (int, error) {
+	err := ResetTerminal()
+	return 0, err
+}
+
+// Disable disable color output
+func Disable() bool {
+	oldVal := Enable
+	Enable = false
+	return oldVal
+}
+
+// NotRenderTag on call color.Xprint, color.PrintX
+func NotRenderTag() {
+	RenderTag = false
+}
+
+// SetOutput set default colored text output
+func SetOutput(w io.Writer) {
+	output = w
+}
+
+// ResetOutput reset output
+func ResetOutput() {
+	output = os.Stdout
+}
+
+// ResetOptions reset all package option setting
+func ResetOptions() {
+	RenderTag = true
+	Enable = true
+	output = os.Stdout
+}
+
+// ForceSetColorLevel force open color render
+func ForceSetColorLevel(level terminfo.ColorLevel) terminfo.ColorLevel {
+	oldLevelVal := colorLevel
+	colorLevel = level
+	return oldLevelVal
+}
+
+// ForceColor force open color render
+func ForceColor() terminfo.ColorLevel {
+	return ForceOpenColor()
+}
+
+// ForceOpenColor force open color render
+func ForceOpenColor() terminfo.ColorLevel {
+	// TODO should set level to ?
+	return ForceSetColorLevel(terminfo.ColorLevelMillions)
+}
+
+// IsLikeInCmd check result
+//
+// Deprecated: please don't use
+func IsLikeInCmd() bool {
+	return isLikeInCmd
+}
+
+// InnerErrs info
+func InnerErrs() []error {
+	return innerErrs
+}
+
+/*************************************************************
+ * render color code
+ *************************************************************/
+
+// RenderCode render message by color code.
+//
+// Usage:
+//
+//	msg := RenderCode("3;32;45", "some", "message")
+func RenderCode(code string, args ...any) string {
+	var message string
+	if ln := len(args); ln == 0 {
+		return ""
+	}
+
+	message = fmt.Sprint(args...)
+	if len(code) == 0 {
+		return message
+	}
+
+	// disabled OR not support color
+	if !Enable || !SupportColor() {
+		return ClearCode(message)
+	}
+
+	// return fmt.Sprintf(FullColorTpl, code, message)
+	return StartSet + code + "m" + message + ResetSet
+}
+
+// RenderWithSpaces Render code with spaces.
+// If the number of args is > 1, a space will be added between the args
+func RenderWithSpaces(code string, args ...any) string {
+	msg := formatArgsForPrintln(args)
+	if len(code) == 0 {
+		return msg
+	}
+
+	// disabled OR not support color
+	if !Enable || !SupportColor() {
+		return ClearCode(msg)
+	}
+
+	return StartSet + code + "m" + msg + ResetSet
+}
+
+// RenderString render a string with color code.
+//
+// Usage:
+//
+//	msg := RenderString("3;32;45", "a message")
+func RenderString(code string, str string) string {
+	if len(code) == 0 || str == "" {
+		return str
+	}
+
+	// disabled OR not support color
+	if !Enable || !SupportColor() {
+		return ClearCode(str)
+	}
+
+	// return fmt.Sprintf(FullColorTpl, code, str)
+	return StartSet + code + "m" + str + ResetSet
+}
+
+// ClearCode clear color codes.
+//
+// eg:
+//
+//	"\033[36;1mText\x1b[0m" -> "Text"
+func ClearCode(str string) string {
+	if !strings.Contains(str, CodeSuffix) {
+		return str
+	}
+	return codeRegex.ReplaceAllString(str, "")
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/gookit/color/color_16.go","mode":420,"size":11025,"sha256":"e1eeec776e2b25b30751aa388cf56cefbb899dfb67a7576aa31ad08e220f067d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":11025}
+package color
+
+import (
+	"fmt"
+	"strconv"
+)
+
+// Color Color16, 16 color value type
+// 3(2^3=8) OR 4(2^4=16) bite color.
+type Color uint8
+type Basic = Color // alias of Color
+
+// Opts basic color options. code: 0 - 9
+type Opts []Color
+
+// Add option value
+func (o *Opts) Add(ops ...Color) {
+	for _, op := range ops {
+		if uint8(op) < 10 {
+			*o = append(*o, op)
+		}
+	}
+}
+
+// IsValid options
+func (o Opts) IsValid() bool {
+	return len(o) > 0
+}
+
+// IsEmpty options
+func (o Opts) IsEmpty() bool {
+	return len(o) == 0
+}
+
+// String options to string. eg: "1;3"
+func (o Opts) String() string {
+	return Colors2code(o...)
+}
+
+/*************************************************************
+ * Basic 16 color definition
+ *************************************************************/
+
+const (
+	// OptMax max option value. range: 0 - 9
+	OptMax = 10
+	// DiffFgBg diff foreground and background color
+	DiffFgBg = 10
+)
+
+// Boundary value for foreground/background color 16
+//
+//   - base: fg 30~37, bg 40~47
+//   - light: fg 90~97, bg 100~107
+const (
+	FgBase uint8 = 30
+	FgMax  uint8 = 37
+	BgBase uint8 = 40
+	BgMax  uint8 = 47
+
+	HiFgBase uint8 = 90
+	HiFgMax  uint8 = 97
+	HiBgBase uint8 = 100
+	HiBgMax  uint8 = 107
+)
+
+// Foreground colors. basic foreground colors 30 - 37
+const (
+	FgBlack Color = iota + 30
+	FgRed
+	FgGreen
+	FgYellow
+	FgBlue
+	FgMagenta // 品红
+	FgCyan    // 青色
+	FgWhite
+	// FgDefault revert default FG
+	FgDefault Color = 39
+)
+
+// Extra foreground color 90 - 97(非标准)
+const (
+	FgDarkGray Color = iota + 90 // 亮黑（灰）
+	FgLightRed
+	FgLightGreen
+	FgLightYellow
+	FgLightBlue
+	FgLightMagenta
+	FgLightCyan
+	FgLightWhite
+	// FgGray is alias of FgDarkGray
+	FgGray Color = 90 // 亮黑（灰）
+)
+
+// Background colors. basic background colors 40 - 47
+const (
+	BgBlack Color = iota + 40
+	BgRed
+	BgGreen
+	BgYellow // BgBrown like yellow
+	BgBlue
+	BgMagenta
+	BgCyan
+	BgWhite
+	// BgDefault revert default BG
+	BgDefault Color = 49
+)
+
+// Extra background color 100 - 107 (non-standard)
+const (
+	BgDarkGray Color = iota + 100
+	BgLightRed
+	BgLightGreen
+	BgLightYellow
+	BgLightBlue
+	BgLightMagenta
+	BgLightCyan
+	BgLightWhite
+	// BgGray is alias of BgDarkGray
+	BgGray Color = 100
+)
+
+// Option settings. range: 0 - 9
+const (
+	OpReset         Color = iota // 0 重置所有设置
+	OpBold                       // 1 加粗
+	OpFuzzy                      // 2 模糊(不是所有的终端仿真器都支持)
+	OpItalic                     // 3 斜体(不是所有的终端仿真器都支持)
+	OpUnderscore                 // 4 下划线
+	OpBlink                      // 5 闪烁
+	OpFastBlink                  // 6 快速闪烁(未广泛支持)
+	OpReverse                    // 7 颠倒的 交换背景色与前景色
+	OpConcealed                  // 8 隐匿的
+	OpStrikethrough              // 9 删除的，删除线(未广泛支持)
+)
+
+// There are basic and light foreground color aliases
+const (
+	Red     = FgRed
+	Cyan    = FgCyan
+	Gray    = FgDarkGray // is light Black
+	Blue    = FgBlue
+	Black   = FgBlack
+	Green   = FgGreen
+	White   = FgWhite
+	Yellow  = FgYellow
+	Magenta = FgMagenta
+
+	// special
+
+	Bold   = OpBold
+	Normal = FgDefault
+
+	// extra light
+
+	LightRed     = FgLightRed
+	LightCyan    = FgLightCyan
+	LightBlue    = FgLightBlue
+	LightGreen   = FgLightGreen
+	LightWhite   = FgLightWhite
+	LightYellow  = FgLightYellow
+	LightMagenta = FgLightMagenta
+
+	HiRed     = FgLightRed
+	HiCyan    = FgLightCyan
+	HiBlue    = FgLightBlue
+	HiGreen   = FgLightGreen
+	HiWhite   = FgLightWhite
+	HiYellow  = FgLightYellow
+	HiMagenta = FgLightMagenta
+
+	BgHiRed     = BgLightRed
+	BgHiCyan    = BgLightCyan
+	BgHiBlue    = BgLightBlue
+	BgHiGreen   = BgLightGreen
+	BgHiWhite   = BgLightWhite
+	BgHiYellow  = BgLightYellow
+	BgHiMagenta = BgLightMagenta
+)
+
+// Bit4 a method for create Color
+func Bit4(code uint8) Color { return Color(code) }
+
+/*************************************************************
+ * Color render methods
+ *************************************************************/
+
+// Name get color code name.
+func (c Color) Name() string {
+	name, ok := basic2nameMap[uint8(c)]
+	if ok {
+		return name
+	}
+	return "unknown"
+}
+
+// Text render a text message
+func (c Color) Text(message string) string { return RenderString(c.String(), message) }
+
+// Render messages by color setting
+//
+// Usage:
+//
+//	green := color.FgGreen.Render
+//	fmt.Println(green("message"))
+func (c Color) Render(a ...any) string { return RenderCode(c.String(), a...) }
+
+// Renderln messages by color setting.
+// like Println, will add spaces for each argument
+//
+// Usage:
+//
+//	green := color.FgGreen.Renderln
+//	fmt.Println(green("message"))
+func (c Color) Renderln(a ...any) string { return RenderWithSpaces(c.String(), a...) }
+
+// Sprint render messages by color setting. is alias of the Render()
+func (c Color) Sprint(a ...any) string { return RenderCode(c.String(), a...) }
+
+// Sprintf format and render message.
+//
+// Usage:
+//
+//		green := color.Green.Sprintf
+//	 colored := green("message")
+func (c Color) Sprintf(format string, args ...any) string {
+	return RenderString(c.String(), fmt.Sprintf(format, args...))
+}
+
+// Print messages.
+//
+// Usage:
+//
+//	color.Green.Print("message")
+//
+// OR:
+//
+//	green := color.FgGreen.Print
+//	green("message")
+func (c Color) Print(args ...any) {
+	doPrintV2(c.Code(), fmt.Sprint(args...))
+}
+
+// Printf format and print messages.
+//
+// Usage:
+//
+//	color.Cyan.Printf("string %s", "arg0")
+func (c Color) Printf(format string, a ...any) {
+	doPrintV2(c.Code(), fmt.Sprintf(format, a...))
+}
+
+// Println messages with new line
+func (c Color) Println(a ...any) { doPrintlnV2(c.String(), a) }
+
+// Light current color. eg: 36(FgCyan) -> 96(FgLightCyan).
+//
+// Usage:
+//
+//	lightCyan := Cyan.Light()
+//	lightCyan.Print("message")
+func (c Color) Light() Color {
+	val := uint8(c)
+	if val >= 30 && val <= 47 {
+		return Color(val + 60)
+	}
+
+	// don't change
+	return c
+}
+
+// Darken current color. eg. 96(FgLightCyan) -> 36(FgCyan)
+//
+// Usage:
+//
+//	cyan := LightCyan.Darken()
+//	cyan.Print("message")
+func (c Color) Darken() Color {
+	val := uint8(c)
+	if val >= 90 && val <= 107 {
+		return Color(val - 60)
+	}
+
+	// don't change
+	return c
+}
+
+// C256 convert 16 color to 256-color code.
+func (c Color) C256() Color256 {
+	val := uint8(c)
+	if val < 10 { // is option code
+		return emptyC256 // empty
+	}
+
+	var isBg uint8
+	if val >= BgBase && val <= 47 { // is bg
+		isBg = AsBg
+		val = val - 10 // to fg code
+	} else if val >= HiBgBase && val <= 107 { // is hi bg
+		isBg = AsBg
+		val = val - 10 // to fg code
+	}
+
+	if c256, ok := basicTo256Map[val]; ok {
+		return Color256{c256, isBg}
+	}
+
+	// use raw value direct convert
+	return Color256{val}
+}
+
+// ToFg always convert fg
+func (c Color) ToFg() Color {
+	val := uint8(c)
+	// option code, don't change
+	if val < 10 {
+		return c
+	}
+	return Color(Bg2Fg(val))
+}
+
+// ToBg always convert bg
+func (c Color) ToBg() Color {
+	val := uint8(c)
+	// option code, don't change
+	if val < 10 {
+		return c
+	}
+	return Color(Fg2Bg(val))
+}
+
+// RGB convert 16 color to 256-color code.
+func (c Color) RGB() RGBColor {
+	val := uint8(c)
+	if val < 10 { // is option code
+		return emptyRGBColor
+	}
+
+	return HEX(Basic2hex(val), c.IsBg())
+}
+
+// Code convert to code string. eg "35"
+func (c Color) Code() string {
+	return strconv.FormatInt(int64(c), 10)
+}
+
+// String convert to code string. eg "35"
+func (c Color) String() string {
+	return strconv.FormatInt(int64(c), 10)
+}
+
+// IsBg check is background color
+func (c Color) IsBg() bool {
+	val := uint8(c)
+	return val >= BgBase && val <= BgMax || val >= HiBgBase && val <= HiBgMax
+}
+
+// IsFg check is foreground color
+func (c Color) IsFg() bool {
+	val := uint8(c)
+	return val >= FgBase && val <= FgMax || val >= HiFgBase && val <= HiFgMax
+}
+
+// IsOption check is option code: 0-9
+func (c Color) IsOption() bool { return uint8(c) < OptMax }
+
+// IsValid color value
+func (c Color) IsValid() bool { return uint8(c) < HiBgMax }
+
+/*************************************************************
+ * basic color maps
+ *************************************************************/
+
+// FgColors foreground colors map
+var FgColors = map[string]Color{
+	"black":   FgBlack,
+	"red":     FgRed,
+	"green":   FgGreen,
+	"yellow":  FgYellow,
+	"blue":    FgBlue,
+	"magenta": FgMagenta,
+	"cyan":    FgCyan,
+	"white":   FgWhite,
+	"default": FgDefault,
+}
+
+// BgColors background colors map
+var BgColors = map[string]Color{
+	"black":   BgBlack,
+	"red":     BgRed,
+	"green":   BgGreen,
+	"yellow":  BgYellow,
+	"blue":    BgBlue,
+	"magenta": BgMagenta,
+	"cyan":    BgCyan,
+	"white":   BgWhite,
+	"default": BgDefault,
+}
+
+// ExFgColors extra foreground colors map
+var ExFgColors = map[string]Color{
+	"darkGray":     FgDarkGray,
+	"lightRed":     FgLightRed,
+	"lightGreen":   FgLightGreen,
+	"lightYellow":  FgLightYellow,
+	"lightBlue":    FgLightBlue,
+	"lightMagenta": FgLightMagenta,
+	"lightCyan":    FgLightCyan,
+	"lightWhite":   FgLightWhite,
+}
+
+// ExBgColors extra background colors map
+var ExBgColors = map[string]Color{
+	"darkGray":     BgDarkGray,
+	"lightRed":     BgLightRed,
+	"lightGreen":   BgLightGreen,
+	"lightYellow":  BgLightYellow,
+	"lightBlue":    BgLightBlue,
+	"lightMagenta": BgLightMagenta,
+	"lightCyan":    BgLightCyan,
+	"lightWhite":   BgLightWhite,
+}
+
+// Options color options map
+//
+// Deprecated: please use AllOptions instead.
+var Options = AllOptions
+
+// AllOptions color options map
+var AllOptions = map[string]Color{
+	"reset":      OpReset,
+	"bold":       OpBold,
+	"fuzzy":      OpFuzzy,
+	"italic":     OpItalic,
+	"underscore": OpUnderscore,
+	"blink":      OpBlink,
+	"reverse":    OpReverse,
+	"concealed":  OpConcealed,
+}
+
+var (
+	// TODO basic name alias
+	// basicNameAlias = map[string]string{}
+	// optionWithAlias = buildOpWithAlias()
+	// basic color name to code
+	// name2basicMap = initName2basicMap()
+
+	// basic2nameMap basic color code to name
+	basic2nameMap = map[uint8]string{
+		30: "black",
+		31: "red",
+		32: "green",
+		33: "yellow",
+		34: "blue",
+		35: "magenta",
+		36: "cyan",
+		37: "white",
+		// hi color code
+		90: "lightBlack",
+		91: "lightRed",
+		92: "lightGreen",
+		93: "lightYellow",
+		94: "lightBlue",
+		95: "lightMagenta",
+		96: "lightCyan",
+		97: "lightWhite",
+		// options
+		0: "reset",
+		1: "bold",
+		2: "fuzzy",
+		3: "italic",
+		4: "underscore",
+		5: "blink",
+		7: "reverse",
+		8: "concealed",
+	}
+)
+
+// Bg2Fg bg color value to fg value
+func Bg2Fg(val uint8) uint8 {
+	if val >= BgBase && val <= 47 { // is bg
+		val = val - 10
+	} else if val >= HiBgBase && val <= 107 { // is hi bg
+		val = val - 10
+	}
+	return val
+}
+
+// Fg2Bg fg color value to bg value
+func Fg2Bg(val uint8) uint8 {
+	if val >= FgBase && val <= 37 { // is fg
+		val = val + 10
+	} else if val >= HiFgBase && val <= 97 { // is hi fg
+		val = val + 10
+	}
+	return val
+}
+
+// Basic2nameMap data
+func Basic2nameMap() map[uint8]string { return basic2nameMap }
+
+// func initName2basicMap() map[string]uint8 {
+// 	n2b := make(map[string]uint8, len(basic2nameMap))
+// 	for u, s := range basic2nameMap {
+// 		n2b[s] = u
+// 	}
+// 	return n2b
+// }
+
+// func buildOpWithAlias() map[string]uint8 {
+// }
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/gookit/color/color_256.go","mode":420,"size":6618,"sha256":"f08e8b8ad05e47336b3c0f67e614c189da56cfd250795cd043aa0ad1335508fb","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":6618}
+package color
+
+import (
+	"fmt"
+	"strconv"
+	"strings"
+)
+
+/*
+from wikipedia, 256 color:
+   ESC[ … 38;5;<n> … m选择前景色
+   ESC[ … 48;5;<n> … m选择背景色
+     0-  7：标准颜色（同 ESC[30–37m）
+     8- 15：高强度颜色（同 ESC[90–97m）
+    16-231：6 × 6 × 6 立方（216色）: 16 + 36 × r + 6 × g + b (0 ≤ r, g, b ≤ 5)
+   232-255：从黑到白的24阶灰度色
+*/
+
+// tpl for 8 bit 256 color(`2^8`)
+//
+// format:
+//
+//		ESC[ … 38;5;<n> … m // 选择前景色
+//	 ESC[ … 48;5;<n> … m // 选择背景色
+//
+// example:
+//
+//	fg "\x1b[38;5;242m"
+//	bg "\x1b[48;5;208m"
+//	both "\x1b[38;5;242;48;5;208m"
+//
+// links:
+//
+//	https://zh.wikipedia.org/wiki/ANSI%E8%BD%AC%E4%B9%89%E5%BA%8F%E5%88%97#8位
+const (
+	TplFg256 = "38;5;%d"
+	TplBg256 = "48;5;%d"
+	Fg256Pfx = "38;5;"
+	Bg256Pfx = "48;5;"
+)
+
+/*************************************************************
+ * 8bit(256) Color: Bit8Color Color256
+ *************************************************************/
+
+// Color256 256 color (8 bit), uint8 range at 0 - 255.
+// Support 256 color on windows CMD, PowerShell
+//
+// 颜色值使用10进制和16进制都可 0x98 = 152
+//
+// The color consists of two uint8:
+//
+//	0: color value
+//	1: color type; Fg=0, Bg=1, >1: unset value
+//
+// example:
+//
+//	fg color: [152, 0]
+//	bg color: [152, 1]
+//
+// lint warn - Name starts with package name
+type Color256 [2]uint8
+type Bit8Color = Color256 // alias
+
+var emptyC256 = Color256{1: 99}
+
+// Bit8 create a color256
+func Bit8(val uint8, isBg ...bool) Color256 {
+	return C256(val, isBg...)
+}
+
+// C256 create a color256
+func C256(val uint8, isBg ...bool) Color256 {
+	bc := Color256{val}
+
+	// mark is bg color
+	if len(isBg) > 0 && isBg[0] {
+		bc[1] = AsBg
+	}
+
+	return bc
+}
+
+// Set terminal by 256 color code
+func (c Color256) Set() error {
+	return SetTerminal(c.String())
+}
+
+// Reset terminal. alias of the ResetTerminal()
+func (c Color256) Reset() error {
+	return ResetTerminal()
+}
+
+// Print print message
+func (c Color256) Print(a ...any) {
+	doPrintV2(c.String(), fmt.Sprint(a...))
+}
+
+// Printf format and print message
+func (c Color256) Printf(format string, a ...any) {
+	doPrintV2(c.String(), fmt.Sprintf(format, a...))
+}
+
+// Println print message with newline
+func (c Color256) Println(a ...any) {
+	doPrintlnV2(c.String(), a)
+}
+
+// Sprint returns rendered message
+func (c Color256) Sprint(a ...any) string {
+	return RenderCode(c.String(), a...)
+}
+
+// Sprintf returns format and rendered message
+func (c Color256) Sprintf(format string, a ...any) string {
+	return RenderString(c.String(), fmt.Sprintf(format, a...))
+}
+
+// C16 convert color-256 to 16 color.
+func (c Color256) C16() Color {
+	return c.Basic()
+}
+
+// Basic convert color-256 to basic 16 color.
+func (c Color256) Basic() Color {
+	return Color(c[0]) // TODO
+}
+
+// RGB convert color-256 to RGB color.
+func (c Color256) RGB() RGBColor {
+	return RGBFromSlice(C256ToRgb(c[0]), c[1] == AsBg)
+}
+
+// RGBColor convert color-256 to RGB color.
+func (c Color256) RGBColor() RGBColor {
+	return c.RGB()
+}
+
+// Value return color value
+func (c Color256) Value() uint8 {
+	return c[0]
+}
+
+// Code convert to color code string. eg: "12"
+func (c Color256) Code() string {
+	return strconv.Itoa(int(c[0]))
+}
+
+// FullCode convert to color code string with prefix. eg: "38;5;12"
+func (c Color256) FullCode() string {
+	return c.String()
+}
+
+// String convert to color code string with prefix. eg: "38;5;12"
+func (c Color256) String() string {
+	if c[1] == AsFg { // 0 is Fg
+		return Fg256Pfx + strconv.Itoa(int(c[0]))
+	}
+
+	if c[1] == AsBg { // 1 is Bg
+		return Bg256Pfx + strconv.Itoa(int(c[0]))
+	}
+	return "" // empty
+}
+
+// IsFg color
+func (c Color256) IsFg() bool { return c[1] == AsFg }
+
+// ToFg 256 color
+func (c Color256) ToFg() Color256 {
+	c[1] = AsFg
+	return c
+}
+
+// IsBg color
+func (c Color256) IsBg() bool { return c[1] == AsBg }
+
+// ToBg 256 color
+func (c Color256) ToBg() Color256 {
+	c[1] = AsBg
+	return c
+}
+
+// IsEmpty value
+func (c Color256) IsEmpty() bool { return c[1] > 1 }
+
+/*************************************************************
+ * 8bit(256) Style
+ *************************************************************/
+
+// Style256 definition
+//
+// 前/背景色
+// 都是由两位uint8组成, 第一位是色彩值；
+// 第二位与 Bit8Color 不一样的是，在这里表示是否设置了值 0 未设置 !=0 已设置
+type Style256 struct {
+	// Name of the style
+	Name string
+	// color options of the style
+	opts Opts
+	// fg and bg color
+	fg, bg Color256
+}
+
+// S256 create a color256 style
+//
+// Usage:
+//
+//	s := color.S256()
+//	s := color.S256(132) // fg
+//	s := color.S256(132, 203) // fg and bg
+func S256(fgAndBg ...uint8) *Style256 {
+	s := &Style256{}
+	vl := len(fgAndBg)
+	if vl > 0 { // with fg
+		s.fg = Color256{fgAndBg[0], 1}
+
+		if vl > 1 { // and with bg
+			s.bg = Color256{fgAndBg[1], 1}
+		}
+	}
+
+	return s
+}
+
+// Set fg and bg color value, can also with color options
+func (s *Style256) Set(fgVal, bgVal uint8, opts ...Color) *Style256 {
+	s.fg = Color256{fgVal, 1}
+	s.bg = Color256{bgVal, 1}
+	s.opts.Add(opts...)
+	return s
+}
+
+// SetBg set bg color value
+func (s *Style256) SetBg(bgVal uint8) *Style256 {
+	s.bg = Color256{bgVal, 1}
+	return s
+}
+
+// SetFg set fg color value
+func (s *Style256) SetFg(fgVal uint8) *Style256 {
+	s.fg = Color256{fgVal, 1}
+	return s
+}
+
+// SetOpts set options
+func (s *Style256) SetOpts(opts Opts) *Style256 {
+	s.opts = opts
+	return s
+}
+
+// AddOpts add options
+func (s *Style256) AddOpts(opts ...Color) *Style256 {
+	s.opts.Add(opts...)
+	return s
+}
+
+// Print message
+func (s *Style256) Print(a ...any) {
+	doPrintV2(s.String(), fmt.Sprint(a...))
+}
+
+// Printf format and print message
+func (s *Style256) Printf(format string, a ...any) {
+	doPrintV2(s.String(), fmt.Sprintf(format, a...))
+}
+
+// Println print message with newline
+func (s *Style256) Println(a ...any) {
+	doPrintlnV2(s.String(), a)
+}
+
+// Sprint returns rendered message
+func (s *Style256) Sprint(a ...any) string {
+	return RenderCode(s.Code(), a...)
+}
+
+// Sprintf returns format and rendered message
+func (s *Style256) Sprintf(format string, a ...any) string {
+	return RenderString(s.Code(), fmt.Sprintf(format, a...))
+}
+
+// Code convert to color code string
+func (s *Style256) Code() string {
+	return s.String()
+}
+
+// String convert to color code string
+func (s *Style256) String() string {
+	var ss []string
+	if s.fg[1] > 0 {
+		ss = append(ss, Fg256Pfx+strconv.FormatInt(int64(s.fg[0]), 10))
+	}
+
+	if s.bg[1] > 0 {
+		ss = append(ss, Bg256Pfx+strconv.FormatInt(int64(s.bg[0]), 10))
+	}
+
+	if s.opts.IsValid() {
+		ss = append(ss, s.opts.String())
+	}
+	return strings.Join(ss, ";")
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/gookit/color/color_rgb.go","mode":420,"size":10348,"sha256":"126904812895e65972708cbe2b01290e9ef430f9a4cb4e4aad8ffb337e4c4794","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":10348}
+package color
+
+import (
+	"fmt"
+	"strconv"
+	"strings"
+)
+
+// 24 bit RGB color
+// RGB:
+//
+//	R 0-255 G 0-255 B 0-255
+//	R 00-FF G 00-FF B 00-FF (16进制)
+//
+// Format:
+//
+//	ESC[ … 38;2;<r>;<g>;<b> … m // Select RGB foreground color
+//	ESC[ … 48;2;<r>;<g>;<b> … m // Choose RGB background color
+//
+// links:
+//
+//	https://zh.wikipedia.org/wiki/ANSI%E8%BD%AC%E4%B9%89%E5%BA%8F%E5%88%97#24位
+//
+// example:
+//
+//	fg: \x1b[38;2;30;144;255mMESSAGE\x1b[0m
+//	bg: \x1b[48;2;30;144;255mMESSAGE\x1b[0m
+//	both: \x1b[38;2;233;90;203;48;2;30;144;255mMESSAGE\x1b[0m
+const (
+	TplFgRGB = "38;2;%d;%d;%d"
+	TplBgRGB = "48;2;%d;%d;%d"
+	FgRGBPfx = "38;2;"
+	BgRGBPfx = "48;2;"
+)
+
+// mark color is fg or bg.
+const (
+	AsFg uint8 = iota
+	AsBg
+)
+
+/*************************************************************
+ * RGB Color(Bit24Color, TrueColor)
+ *************************************************************/
+
+// RGBColor definition.
+// Support RGB color on Windows CMD, PowerShell
+//
+// The first to third digits represent the color value.
+// The last digit represents the foreground(0), background(1), >1 is unset value
+//
+// Usage:
+//
+//	// 0, 1, 2 is R,G,B.
+//	// 3rd: Fg=0, Bg=1, >1: unset value
+//	RGBColor{30,144,255, 0}
+//	RGBColor{30,144,255, 1}
+type RGBColor [4]uint8
+
+// create an empty RGBColor
+var emptyRGBColor = RGBColor{3: 99}
+
+// RGB color create.
+//
+// Usage:
+//
+//	c := RGB(30,144,255)
+//	c := RGB(30,144,255, true)
+//	c.Print("message")
+func RGB(r, g, b uint8, isBg ...bool) RGBColor {
+	rgb := RGBColor{r, g, b}
+	if len(isBg) > 0 && isBg[0] {
+		rgb[3] = AsBg
+	}
+
+	return rgb
+}
+
+// Rgb alias of the RGB()
+func Rgb(r, g, b uint8, isBg ...bool) RGBColor { return RGB(r, g, b, isBg...) }
+
+// Bit24 alias of the RGB()
+func Bit24(r, g, b uint8, isBg ...bool) RGBColor { return RGB(r, g, b, isBg...) }
+
+// RgbFromInt create instance from int r,g,b value
+func RgbFromInt(r, g, b int, isBg ...bool) RGBColor {
+	return RGB(uint8(r), uint8(g), uint8(b), isBg...)
+}
+
+// RgbFromInts create instance from []int r,g,b value
+func RgbFromInts(rgb []int, isBg ...bool) RGBColor {
+	return RGB(uint8(rgb[0]), uint8(rgb[1]), uint8(rgb[2]), isBg...)
+}
+
+// HEX create RGB color from a HEX color string.
+//
+// Usage:
+//
+//	c := HEX("ccc") // rgb: [204 204 204]
+//	c := HEX("aabbcc") // rgb: [170 187 204]
+//	c := HEX("#aabbcc")
+//	c := HEX("0xaabbcc")
+//	c.Print("message")
+func HEX(hex string, isBg ...bool) RGBColor {
+	if rgb := HexToRgb(hex); len(rgb) > 0 {
+		return RGB(uint8(rgb[0]), uint8(rgb[1]), uint8(rgb[2]), isBg...)
+	}
+
+	// mark is empty
+	return emptyRGBColor
+}
+
+// Hex alias of the HEX()
+func Hex(hex string, isBg ...bool) RGBColor { return HEX(hex, isBg...) }
+
+// RGBFromHEX quick RGBColor from hex string, alias of HEX()
+func RGBFromHEX(hex string, isBg ...bool) RGBColor { return HEX(hex, isBg...) }
+
+// HSL create RGB color from a hsl value.
+// more see HslToRgb()
+func HSL(h, s, l float64, isBg ...bool) RGBColor {
+	rgb := HslToRgb(h, s, l)
+	return RGB(rgb[0], rgb[1], rgb[2], isBg...)
+}
+
+// Hsl alias of the HSL()
+func Hsl(h, s, l float64, isBg ...bool) RGBColor { return HSL(h, s, l, isBg...) }
+
+// HSLInt create RGB color from a hsl int value.
+// more see HslIntToRgb()
+func HSLInt(h, s, l int, isBg ...bool) RGBColor {
+	rgb := HslIntToRgb(h, s, l)
+	return RGB(rgb[0], rgb[1], rgb[2], isBg...)
+}
+
+// HslInt alias of the HSLInt()
+func HslInt(h, s, l int, isBg ...bool) RGBColor { return HSLInt(h, s, l, isBg...) }
+
+// RGBFromSlice quick RGBColor from slice
+func RGBFromSlice(rgb []uint8, isBg ...bool) RGBColor {
+	return RGB(rgb[0], rgb[1], rgb[2], isBg...)
+}
+
+// RGBFromString create RGB color from a string.
+// Support use color name in the {namedRgbMap}
+//
+// Usage:
+//
+//	c := RGBFromString("170,187,204")
+//	c.Print("message")
+//
+//	c := RGBFromString("brown")
+//	c.Print("message with color brown")
+func RGBFromString(rgb string, isBg ...bool) RGBColor {
+	// use color name in the {namedRgbMap}
+	if rgbVal, ok := namedRgbMap[rgb]; ok {
+		rgb = rgbVal
+	}
+
+	// use rgb string.
+	ss := stringToArr(rgb, ",")
+	if len(ss) != 3 {
+		return emptyRGBColor
+	}
+
+	var ar [3]uint8
+	for i, val := range ss {
+		iv, err := strconv.Atoi(val)
+		if err != nil || !isValidUint8(iv) {
+			return emptyRGBColor
+		}
+
+		ar[i] = uint8(iv)
+	}
+
+	return RGB(ar[0], ar[1], ar[2], isBg...)
+}
+
+// Set terminal by rgb/true color code
+func (c RGBColor) Set() error {
+	return SetTerminal(c.String())
+}
+
+// Reset terminal. alias of the ResetTerminal()
+func (c RGBColor) Reset() error {
+	return ResetTerminal()
+}
+
+// Print print message
+func (c RGBColor) Print(a ...any) {
+	doPrintV2(c.String(), fmt.Sprint(a...))
+}
+
+// Printf format and print message
+func (c RGBColor) Printf(format string, a ...any) {
+	doPrintV2(c.String(), fmt.Sprintf(format, a...))
+}
+
+// Println print message with newline
+func (c RGBColor) Println(a ...any) {
+	doPrintlnV2(c.String(), a)
+}
+
+// Sprint returns rendered message
+func (c RGBColor) Sprint(a ...any) string {
+	return RenderCode(c.String(), a...)
+}
+
+// Sprintf returns format and rendered message
+func (c RGBColor) Sprintf(format string, a ...any) string {
+	return RenderString(c.String(), fmt.Sprintf(format, a...))
+}
+
+// Values to RGB values
+func (c RGBColor) Values() []int {
+	return []int{int(c[0]), int(c[1]), int(c[2])}
+}
+
+// Code to color code string without prefix. eg: "204;123;56"
+func (c RGBColor) Code() string {
+	return fmt.Sprintf("%d;%d;%d", c[0], c[1], c[2])
+}
+
+// Hex color rgb to hex string. as in "ff0080".
+func (c RGBColor) Hex() string {
+	return fmt.Sprintf("%02x%02x%02x", c[0], c[1], c[2])
+}
+
+// RgbString to color code string without prefix. eg: "204,123,56"
+func (c RGBColor) RgbString() string {
+	return fmt.Sprintf("%d,%d,%d", c[0], c[1], c[2])
+}
+
+// FullCode to color code string with prefix
+func (c RGBColor) FullCode() string {
+	return c.String()
+}
+
+// String to color code string with prefix. eg: "38;2;204;123;56"
+func (c RGBColor) String() string {
+	if c[3] == AsFg {
+		return fmt.Sprintf(TplFgRGB, c[0], c[1], c[2])
+	}
+
+	if c[3] == AsBg {
+		return fmt.Sprintf(TplBgRGB, c[0], c[1], c[2])
+	}
+
+	// c[3] > 1 is empty
+	return ""
+}
+
+// ToBg convert to background color
+func (c RGBColor) ToBg() RGBColor {
+	c[3] = AsBg
+	return c
+}
+
+// ToFg convert to foreground color
+func (c RGBColor) ToFg() RGBColor {
+	c[3] = AsFg
+	return c
+}
+
+// IsEmpty value
+func (c RGBColor) IsEmpty() bool {
+	return c[3] > AsBg
+}
+
+// IsValid value
+// func (c RGBColor) IsValid() bool {
+// 	return c[3] <= AsBg
+// }
+
+// C256 returns the closest approximate 256 (8 bit) color
+func (c RGBColor) C256() Color256 {
+	return C256(RgbTo256(c[0], c[1], c[2]), c[3] == AsBg)
+}
+
+// Basic returns the closest approximate 16 (4 bit) color
+func (c RGBColor) Basic() Color {
+	// return Color(RgbToAnsi(c[0], c[1], c[2], c[3] == AsBg))
+	return Color(Rgb2basic(c[0], c[1], c[2], c[3] == AsBg))
+}
+
+// Color returns the closest approximate 16 (4 bit) color
+func (c RGBColor) Color() Color { return c.Basic() }
+
+// C16 returns the closest approximate 16 (4 bit) color
+func (c RGBColor) C16() Color { return c.Basic() }
+
+/*************************************************************
+ * RGB Style
+ *************************************************************/
+
+// RGBStyle supports set foreground and background color
+//
+// All are composed of 4 digits uint8, the first three digits are the color value;
+// The last bit is different from RGBColor, here it indicates whether the value is set.
+//
+//	1    Has been set
+//	^1   Not set
+type RGBStyle struct {
+	// Name of the style
+	Name string
+	// color options of the style
+	opts Opts
+	// fg and bg color
+	fg, bg RGBColor
+}
+
+// NewRGBStyle create a RGBStyle.
+func NewRGBStyle(fg RGBColor, bg ...RGBColor) *RGBStyle {
+	s := &RGBStyle{}
+	if len(bg) > 0 {
+		s.SetBg(bg[0])
+	}
+
+	return s.SetFg(fg)
+}
+
+// HEXStyle create a RGBStyle from HEX color string.
+//
+// Usage:
+//
+//	s := HEXStyle("aabbcc", "eee")
+//	s.Print("message")
+func HEXStyle(fg string, bg ...string) *RGBStyle {
+	s := &RGBStyle{}
+	if len(bg) > 0 {
+		s.SetBg(HEX(bg[0]))
+	}
+
+	if len(fg) > 0 {
+		s.SetFg(HEX(fg))
+	}
+	return s
+}
+
+// RGBStyleFromString create a RGBStyle from color value string.
+//
+// Usage:
+//
+//	s := RGBStyleFromString("170,187,204", "70,87,4")
+//	s.Print("message")
+func RGBStyleFromString(fg string, bg ...string) *RGBStyle {
+	s := &RGBStyle{}
+	if len(bg) > 0 {
+		s.SetBg(RGBFromString(bg[0]))
+	}
+
+	return s.SetFg(RGBFromString(fg))
+}
+
+// Set fg and bg color, can also with color options
+func (s *RGBStyle) Set(fg, bg RGBColor, opts ...Color) *RGBStyle {
+	return s.SetFg(fg).SetBg(bg).SetOpts(opts)
+}
+
+// SetFg set fg color
+func (s *RGBStyle) SetFg(fg RGBColor) *RGBStyle {
+	fg[3] = 1 // add fixed value, mark is valid
+	s.fg = fg
+	return s
+}
+
+// SetBg set bg color
+func (s *RGBStyle) SetBg(bg RGBColor) *RGBStyle {
+	bg[3] = 1 // add fixed value, mark is valid
+	s.bg = bg
+	return s
+}
+
+// SetOpts set color options
+func (s *RGBStyle) SetOpts(opts Opts) *RGBStyle {
+	s.opts = opts
+	return s
+}
+
+// AddOpts add options
+func (s *RGBStyle) AddOpts(opts ...Color) *RGBStyle {
+	s.opts.Add(opts...)
+	return s
+}
+
+// Print print message
+func (s *RGBStyle) Print(a ...any) {
+	doPrintV2(s.String(), fmt.Sprint(a...))
+}
+
+// Printf format and print message
+func (s *RGBStyle) Printf(format string, a ...any) {
+	doPrintV2(s.String(), fmt.Sprintf(format, a...))
+}
+
+// Println print message with newline
+func (s *RGBStyle) Println(a ...any) {
+	doPrintlnV2(s.String(), a)
+}
+
+// Sprint returns rendered message
+func (s *RGBStyle) Sprint(a ...any) string {
+	return RenderCode(s.String(), a...)
+}
+
+// Sprintf returns format and rendered message
+func (s *RGBStyle) Sprintf(format string, a ...any) string {
+	return RenderString(s.String(), fmt.Sprintf(format, a...))
+}
+
+// Code convert to color code string
+func (s *RGBStyle) Code() string {
+	return s.String()
+}
+
+// FullCode convert to color code string
+func (s *RGBStyle) FullCode() string {
+	return s.String()
+}
+
+// String convert to color code string
+func (s *RGBStyle) String() string {
+	var ss []string
+	// last value ensure is enable.
+	if s.fg[3] == 1 {
+		ss = append(ss, fmt.Sprintf(TplFgRGB, s.fg[0], s.fg[1], s.fg[2]))
+	}
+
+	if s.bg[3] == 1 {
+		ss = append(ss, fmt.Sprintf(TplBgRGB, s.bg[0], s.bg[1], s.bg[2]))
+	}
+
+	if s.opts.IsValid() {
+		ss = append(ss, s.opts.String())
+	}
+
+	return strings.Join(ss, ";")
+}
+
+// IsEmpty style
+func (s *RGBStyle) IsEmpty() bool {
+	return s.fg[3] != 1 && s.bg[3] != 1
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/gookit/color/color_tag.go","mode":420,"size":13894,"sha256":"689a35796d53c4f5d7b2359f21efc4fd5ee96715218ecf9ce7c7c19701f1ca6e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":13894}
+package color
+
+import (
+	"fmt"
+	"regexp"
+	"strings"
+)
+
+// output colored text like use html tag. (not support windows cmd)
+const (
+	// MatchExpr regex to match color tags
+	//
+	// Notice: golang 不支持反向引用. 即不支持使用 \1 引用第一个匹配 ([a-z=;]+)
+	// MatchExpr = `<([a-z=;]+)>(.*?)<\/\1>`
+	// 所以调整一下 统一使用 `</>` 来结束标签，例如 "<info>some text</>"
+	//
+	// allow custom attrs, eg: "<fg=white;bg=blue;op=bold>content</>"
+	// (?s:...) s - 让 "." 匹配换行
+	MatchExpr = `<([0-9a-zA-Z_=,;]+)>(?s:(.*?))<\/>`
+
+	// AttrExpr regex to match custom color attributes
+	// eg: "<fg=white;bg=blue;op=bold>content</>"
+	AttrExpr = `(fg|bg|op)[\s]*=[\s]*([0-9a-zA-Z,]+);?`
+
+	// StripExpr regex used for removing color tags
+	// StripExpr = `<[\/]?[a-zA-Z=;]+>`
+	// 随着上面的做一些调整
+	StripExpr = `<[\/]?[0-9a-zA-Z_=,;]*>`
+)
+
+var (
+	attrRegex  = regexp.MustCompile(AttrExpr)
+	matchRegex = regexp.MustCompile(MatchExpr)
+	stripRegex = regexp.MustCompile(StripExpr)
+)
+
+/*************************************************************
+ * internal defined color tags
+ *************************************************************/
+
+// There are internal defined fg color tags
+//
+// Usage:
+//
+//	<tag>content text</>
+//
+// @notice 加 0 在前面是为了防止之前的影响到现在的设置
+var colorTags = map[string]string{
+	// basic tags
+	"red":      "0;31",
+	"red1":     "1;31", // with bold
+	"redB":     "1;31",
+	"red_b":    "1;31",
+	"blue":     "0;34",
+	"blue1":    "1;34", // with bold
+	"blueB":    "1;34",
+	"blue_b":   "1;34",
+	"cyan":     "0;36",
+	"cyan1":    "1;36", // with bold
+	"cyanB":    "1;36",
+	"cyan_b":   "1;36",
+	"green":    "0;32",
+	"green1":   "1;32", // with bold
+	"greenB":   "1;32",
+	"green_b":  "1;32",
+	"black":    "0;30",
+	"white":    "1;37",
+	"default":  "0;39", // no color
+	"normal":   "0;39", // no color
+	"brown":    "0;33", // #A52A2A
+	"yellow":   "0;33",
+	"ylw0":     "0;33",
+	"yellowB":  "1;33", // with bold
+	"ylw1":     "1;33",
+	"ylwB":     "1;33",
+	"magenta":  "0;35",
+	"mga":      "0;35", // short name
+	"magentaB": "1;35", // with bold
+	"magenta1": "1;35",
+	"mgb":      "1;35",
+	"mga1":     "1;35",
+	"mgaB":     "1;35",
+
+	// light/hi tags
+
+	"gray":          "0;90",
+	"darkGray":      "0;90",
+	"dark_gray":     "0;90",
+	"lightYellow":   "0;93",
+	"light_yellow":  "0;93",
+	"hiYellow":      "0;93",
+	"hi_yellow":     "0;93",
+	"hiYellowB":     "1;93", // with bold
+	"hi_yellow_b":   "1;93",
+	"lightMagenta":  "0;95",
+	"light_magenta": "0;95",
+	"hiMagenta":     "0;95",
+	"hi_magenta":    "0;95",
+	"lightMagenta1": "1;95", // with bold
+	"hiMagentaB":    "1;95", // with bold
+	"hi_magenta_b":  "1;95",
+	"lightRed":      "0;91",
+	"light_red":     "0;91",
+	"hiRed":         "0;91",
+	"hi_red":        "0;91",
+	"lightRedB":     "1;91", // with bold
+	"light_red_b":   "1;91",
+	"hi_red_b":      "1;91",
+	"lightGreen":    "0;92",
+	"light_green":   "0;92",
+	"hiGreen":       "0;92",
+	"hi_green":      "0;92",
+	"lightGreenB":   "1;92",
+	"light_green_b": "1;92",
+	"hi_green_b":    "1;92",
+	"lightBlue":     "0;94",
+	"light_blue":    "0;94",
+	"hiBlue":        "0;94",
+	"hi_blue":       "0;94",
+	"lightBlueB":    "1;94",
+	"light_blue_b":  "1;94",
+	"hi_blue_b":     "1;94",
+	"lightCyan":     "0;96",
+	"light_cyan":    "0;96",
+	"hiCyan":        "0;96",
+	"hi_cyan":       "0;96",
+	"lightCyanB":    "1;96",
+	"light_cyan_b":  "1;96",
+	"hi_cyan_b":     "1;96",
+	"lightWhite":    "0;97;40",
+	"light_white":   "0;97;40",
+
+	// option
+	"bold":       "1",
+	"b":          "1",
+	"italic":     "3",
+	"i":          "3", // italic
+	"underscore": "4",
+	"us":         "4", // short name for 'underscore'
+	"blink":      "5",
+	"fb":         "6", // fast blink
+	"reverse":    "7",
+	"st":         "9", // strikethrough
+
+	// alert tags, like bootstrap's alert
+	"suc":     "1;32", // same "green" and "bold"
+	"success": "1;32",
+	"info":    "0;32", // same "green",
+	"comment": "0;33", // same "brown"
+	"note":    "36;1",
+	"notice":  "36;4",
+	"warn":    "0;1;33",
+	"warning": "0;30;43",
+	"primary": "0;34",
+	"danger":  "1;31", // same "red" but add bold
+	"err":     "97;41",
+	"error":   "97;41", // fg light white; bg red
+}
+
+/*************************************************************
+ * internal defined tag attributes
+ *************************************************************/
+
+// built-in attributes for fg,bg 16-colors and op codes.
+var (
+	attrFgs = map[string]string{
+		// basic colors
+
+		"black":   FgBlack.Code(),
+		"red":     "31",
+		"green":   "32",
+		"brown":   "33", // #A52A2A
+		"yellow":  "33",
+		"ylw":     "33",
+		"blue":    "34",
+		"cyan":    "36",
+		"magenta": "35",
+		"mga":     "35",
+		"white":   FgWhite.Code(),
+		"default": "39", // no color
+		"normal":  "39", // no color
+
+		// light/hi colors
+
+		"darkGray":      FgDarkGray.Code(),
+		"dark_gray":     "90",
+		"gray":          "90",
+		"lightYellow":   "93",
+		"light_yellow":  "93",
+		"hiYellow":      "93",
+		"hi_yellow":     "93",
+		"lightMagenta":  "95",
+		"light_magenta": "95",
+		"hiMagenta":     "95",
+		"hi_magenta":    "95",
+		"hi_mga":        "95",
+		"lightRed":      "91",
+		"light_red":     "91",
+		"hiRed":         "91",
+		"hi_red":        "91",
+		"lightGreen":    "92",
+		"light_green":   "92",
+		"hiGreen":       "92",
+		"hi_green":      "92",
+		"lightBlue":     "94",
+		"light_blue":    "94",
+		"hiBlue":        "94",
+		"hi_blue":       "94",
+		"lightCyan":     "96",
+		"light_cyan":    "96",
+		"hiCyan":        "96",
+		"hi_cyan":       "96",
+		"lightWhite":    "97",
+		"light_white":   "97",
+	}
+
+	attrBgs = map[string]string{
+		// basic colors
+
+		"black":   BgBlack.Code(),
+		"red":     "41",
+		"green":   "42",
+		"brown":   "43", // #A52A2A
+		"yellow":  "43",
+		"ylw":     "43",
+		"blue":    "44",
+		"cyan":    "46",
+		"magenta": "45",
+		"mga":     "45",
+		"white":   FgWhite.Code(),
+		"default": "49", // no color
+		"normal":  "49", // no color
+
+		// light/hi colors
+
+		"darkGray":      BgDarkGray.Code(),
+		"dark_gray":     "100",
+		"gray":          "100",
+		"lightYellow":   "103",
+		"light_yellow":  "103",
+		"hiYellow":      "103",
+		"hi_yellow":     "103",
+		"lightMagenta":  "105",
+		"light_magenta": "105",
+		"hiMagenta":     "105",
+		"hi_magenta":    "105",
+		"hi_mga":        "105",
+		"lightRed":      "101",
+		"light_red":     "101",
+		"hiRed":         "101",
+		"hi_red":        "101",
+		"lightGreen":    "102",
+		"light_green":   "102",
+		"hiGreen":       "102",
+		"hi_green":      "102",
+		"lightBlue":     "104",
+		"light_blue":    "104",
+		"hiBlue":        "104",
+		"hi_blue":       "104",
+		"lightCyan":     "106",
+		"light_cyan":    "106",
+		"hiCyan":        "106",
+		"hi_cyan":       "106",
+		"lightWhite":    BgLightWhite.Code(),
+		"light_white":   "107",
+	}
+
+	attrOpts = map[string]string{
+		"reset":         OpReset.Code(),
+		"bold":          OpBold.Code(),
+		"b":             OpBold.Code(),
+		"fuzzy":         OpFuzzy.Code(),
+		"italic":        OpItalic.Code(),
+		"i":             OpItalic.Code(),
+		"underscore":    OpUnderscore.Code(),
+		"us":            OpUnderscore.Code(),
+		"u":             OpUnderscore.Code(),
+		"blink":         OpBlink.Code(),
+		"fastblink":     OpFastBlink.Code(),
+		"fb":            OpFastBlink.Code(),
+		"reverse":       OpReverse.Code(),
+		"concealed":     OpConcealed.Code(),
+		"strikethrough": OpStrikethrough.Code(),
+		"st":            OpStrikethrough.Code(),
+	}
+)
+
+/*************************************************************
+ * parse color tags
+ *************************************************************/
+
+var (
+	tagParser = TagParser{}
+	// regex for match color 256 code
+	rxNumStr  = regexp.MustCompile("^[0-9]{1,3}$")
+	rxHexCode = regexp.MustCompile("^#?([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
+)
+
+// TagParser struct
+type TagParser struct {
+	disable bool
+}
+
+// NewTagParser create
+func NewTagParser() *TagParser {
+	return &TagParser{}
+}
+
+// func (tp *TagParser) Disable() *TagParser {
+// 	tp.disable = true
+// 	return tp
+// }
+
+// ParseByEnv parse given string. will check package setting.
+func (tp *TagParser) ParseByEnv(str string) string {
+	// disable handler TAG
+	if !RenderTag {
+		return str
+	}
+
+	// disable OR not support color
+	if !Enable || !SupportColor() {
+		return ClearTag(str)
+	}
+	return tp.Parse(str)
+}
+
+// Parse given string, replace color tag and return rendered string
+//
+// Use built in tags:
+//
+//	<TAG_NAME>CONTENT</>
+//	// e.g: `<info>message</>`
+//
+// Custom tag attributes:
+//
+//	`<fg=VALUE;bg=VALUE;op=VALUES>CONTENT</>`
+//	// e.g: `<fg=167;bg=232>wel</>`
+func (tp *TagParser) Parse(str string) string {
+	// not contains color tag
+	if !strings.Contains(str, "</>") {
+		return str
+	}
+
+	// find color tags by regex. str eg: "<fg=white;bg=blue;op=bold>content</>"
+	matched := matchRegex.FindAllStringSubmatch(str, -1)
+
+	// item: 0 full text 1 tag name 2 tag content
+	for _, item := range matched {
+		full, tag, body := item[0], item[1], item[2]
+
+		// use defined color tag name: "<info>content</>" -> tag: "info"
+		if !strings.ContainsRune(tag, '=') {
+			if code := colorTags[tag]; len(code) > 0 {
+				str = strings.Replace(str, full, RenderString(code, body), 1)
+			} else if code, ok := namedRgbMap[tag]; ok {
+				code = strings.Replace(code, ",", ";", -1)
+				now := RenderString(FgRGBPfx+code, body)
+				str = strings.Replace(str, full, now, 1)
+			}
+			continue
+		}
+
+		// custom color in tag
+		// - basic: "fg=white;bg=blue;op=bold"
+		if code := ParseCodeFromAttr(tag); len(code) > 0 {
+			str = strings.Replace(str, full, RenderString(code, body), 1)
+		}
+	}
+
+	return str
+}
+
+// ReplaceTag parse string, replace color tag and return rendered string
+func ReplaceTag(str string) string {
+	return tagParser.ParseByEnv(str)
+}
+
+// ParseCodeFromAttr parse color attributes.
+//
+// attr format:
+//
+//	// VALUE please see var: FgColors, BgColors, AllOptions
+//	"fg=VALUE;bg=VALUE;op=VALUE"
+//
+// 16 color:
+//
+//	"fg=yellow"
+//	"bg=red"
+//	"op=bold,underscore" // option is allow multi value
+//	"fg=white;bg=blue;op=bold"
+//	"fg=white;op=bold,underscore"
+//
+// 256 color:
+//
+//	"fg=167"
+//	"fg=167;bg=23"
+//	"fg=167;bg=23;op=bold"
+//
+// True color:
+//
+//	// hex
+//	"fg=fc1cac"
+//	"fg=fc1cac;bg=c2c3c4"
+//	// r,g,b
+//	"fg=23,45,214"
+//	"fg=23,45,214;bg=109,99,88"
+func ParseCodeFromAttr(attr string) (code string) {
+	if !strings.ContainsRune(attr, '=') {
+		return
+	}
+
+	attr = strings.Trim(attr, ";=,")
+	if len(attr) == 0 {
+		return
+	}
+
+	var codes []string
+	matched := attrRegex.FindAllStringSubmatch(attr, -1)
+
+	for _, item := range matched {
+		pos, val := item[1], item[2]
+		switch pos {
+		case "fg":
+			if code, ok := attrFgs[val]; ok { // attr fg
+				codes = append(codes, code)
+			} else if code := rgbHex256toCode(val, false); code != "" {
+				codes = append(codes, code)
+			}
+		case "bg":
+			if code, ok := attrBgs[val]; ok { // attr bg
+				codes = append(codes, code)
+			} else if code := rgbHex256toCode(val, true); code != "" {
+				codes = append(codes, code)
+			}
+		case "op": // options allow multi value
+			if strings.Contains(val, ",") {
+				ns := strings.Split(val, ",")
+				for _, n := range ns {
+					if code, ok := attrOpts[n]; ok { // attr ops
+						codes = append(codes, code)
+					}
+				}
+			} else if code, ok := attrOpts[val]; ok {
+				codes = append(codes, code)
+			}
+		}
+	}
+
+	return strings.Join(codes, ";")
+}
+
+func rgbHex256toCode(val string, isBg bool) (code string) {
+	if len(val) == 6 && rxHexCode.MatchString(val) { // hex: "fc1cac"
+		code = HEX(val, isBg).String()
+	} else if strings.ContainsRune(val, ',') { // rgb: "231,178,161"
+		code = strings.Replace(val, ",", ";", -1)
+		if isBg {
+			code = BgRGBPfx + code
+		} else {
+			code = FgRGBPfx + code
+		}
+	} else if len(val) < 4 && rxNumStr.MatchString(val) { // 256 code
+		if isBg {
+			code = Bg256Pfx + val
+		} else {
+			code = Fg256Pfx + val
+		}
+	}
+	return
+}
+
+// ClearTag clear all tag for a string
+func ClearTag(s string) string {
+	if !strings.Contains(s, "</>") {
+		return s
+	}
+	return stripRegex.ReplaceAllString(s, "")
+}
+
+/*************************************************************
+ * helper methods
+ *************************************************************/
+
+// GetTagCode get color code by tag name
+func GetTagCode(name string) string { return colorTags[name] }
+
+// ApplyTag for messages
+func ApplyTag(tag string, a ...any) string {
+	return RenderCode(GetTagCode(tag), a...)
+}
+
+// WrapTag wrap a tag for a string "<tag>content</>"
+func WrapTag(s string, tag string) string {
+	if s == "" || tag == "" {
+		return s
+	}
+	return fmt.Sprintf("<%s>%s</>", tag, s)
+}
+
+// GetColorTags get all internal color tags
+func GetColorTags() map[string]string {
+	return colorTags
+}
+
+// IsDefinedTag is defined tag name
+func IsDefinedTag(name string) bool {
+	_, ok := colorTags[name]
+	return ok
+}
+
+/*************************************************************
+ * Tag extra
+ *************************************************************/
+
+// Tag value is a defined style name
+// Usage:
+//
+//	Tag("info").Println("message")
+type Tag string
+
+// Print messages
+func (tg Tag) Print(a ...any) {
+	name := string(tg)
+	str := fmt.Sprint(a...)
+
+	if stl := GetStyle(name); !stl.IsEmpty() {
+		stl.Print(str)
+	} else {
+		doPrintV2(GetTagCode(name), str)
+	}
+}
+
+// Printf format and print messages
+func (tg Tag) Printf(format string, a ...any) {
+	name := string(tg)
+	str := fmt.Sprintf(format, a...)
+
+	if stl := GetStyle(name); !stl.IsEmpty() {
+		stl.Print(str)
+	} else {
+		doPrintV2(GetTagCode(name), str)
+	}
+}
+
+// Println messages line
+func (tg Tag) Println(a ...any) {
+	name := string(tg)
+	if stl := GetStyle(name); !stl.IsEmpty() {
+		stl.Println(a...)
+	} else {
+		doPrintlnV2(GetTagCode(name), a)
+	}
+}
+
+// Sprint render messages
+func (tg Tag) Sprint(a ...any) string {
+	return RenderCode(GetTagCode(string(tg)), a...)
+}
+
+// Sprintf format and render messages
+func (tg Tag) Sprintf(format string, a ...any) string {
+	tag := string(tg)
+	str := fmt.Sprintf(format, a...)
+
+	return RenderString(GetTagCode(tag), str)
+}
+
+@@END
 @@PORTABLE {"path":"third_party/wails/vendor/github.com/gookit/color/convert.go","mode":420,"size":26616,"sha256":"0fb62a4cfff4711e37c03c9f4befb34949919307c9f33c5049666d69c842ff3e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":26616}
 package color
 
@@ -92336,520 +94426,4 @@ var graphemeCodePoints = [][3]int{
 	{0xC88C, 0xC88C, prLV},                     // Lo       HANGUL SYLLABLE JWA
 	{0xC88D, 0xC8A7, prLVT},                    // Lo  [27] HANGUL SYLLABLE JWAG..HANGUL SYLLABLE JWAH
 	{0xC8A8, 0xC8A8, prLV},                     // Lo       HANGUL SYLLABL
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/rivo/uniseg/graphemeproperties.go","mode":420,"size":179629,"sha256":"321483625d9a4aa92e4a5730df51c59d5b49725cd20e3879749488e5628b3da8","index":2,"count":4,"newline":"lf","encoding":"utf-8","payloadBytes":48049}
-E JWAE
-	{0xC8A9, 0xC8C3, prLVT},                    // Lo  [27] HANGUL SYLLABLE JWAEG..HANGUL SYLLABLE JWAEH
-	{0xC8C4, 0xC8C4, prLV},                     // Lo       HANGUL SYLLABLE JOE
-	{0xC8C5, 0xC8DF, prLVT},                    // Lo  [27] HANGUL SYLLABLE JOEG..HANGUL SYLLABLE JOEH
-	{0xC8E0, 0xC8E0, prLV},                     // Lo       HANGUL SYLLABLE JYO
-	{0xC8E1, 0xC8FB, prLVT},                    // Lo  [27] HANGUL SYLLABLE JYOG..HANGUL SYLLABLE JYOH
-	{0xC8FC, 0xC8FC, prLV},                     // Lo       HANGUL SYLLABLE JU
-	{0xC8FD, 0xC917, prLVT},                    // Lo  [27] HANGUL SYLLABLE JUG..HANGUL SYLLABLE JUH
-	{0xC918, 0xC918, prLV},                     // Lo       HANGUL SYLLABLE JWEO
-	{0xC919, 0xC933, prLVT},                    // Lo  [27] HANGUL SYLLABLE JWEOG..HANGUL SYLLABLE JWEOH
-	{0xC934, 0xC934, prLV},                     // Lo       HANGUL SYLLABLE JWE
-	{0xC935, 0xC94F, prLVT},                    // Lo  [27] HANGUL SYLLABLE JWEG..HANGUL SYLLABLE JWEH
-	{0xC950, 0xC950, prLV},                     // Lo       HANGUL SYLLABLE JWI
-	{0xC951, 0xC96B, prLVT},                    // Lo  [27] HANGUL SYLLABLE JWIG..HANGUL SYLLABLE JWIH
-	{0xC96C, 0xC96C, prLV},                     // Lo       HANGUL SYLLABLE JYU
-	{0xC96D, 0xC987, prLVT},                    // Lo  [27] HANGUL SYLLABLE JYUG..HANGUL SYLLABLE JYUH
-	{0xC988, 0xC988, prLV},                     // Lo       HANGUL SYLLABLE JEU
-	{0xC989, 0xC9A3, prLVT},                    // Lo  [27] HANGUL SYLLABLE JEUG..HANGUL SYLLABLE JEUH
-	{0xC9A4, 0xC9A4, prLV},                     // Lo       HANGUL SYLLABLE JYI
-	{0xC9A5, 0xC9BF, prLVT},                    // Lo  [27] HANGUL SYLLABLE JYIG..HANGUL SYLLABLE JYIH
-	{0xC9C0, 0xC9C0, prLV},                     // Lo       HANGUL SYLLABLE JI
-	{0xC9C1, 0xC9DB, prLVT},                    // Lo  [27] HANGUL SYLLABLE JIG..HANGUL SYLLABLE JIH
-	{0xC9DC, 0xC9DC, prLV},                     // Lo       HANGUL SYLLABLE JJA
-	{0xC9DD, 0xC9F7, prLVT},                    // Lo  [27] HANGUL SYLLABLE JJAG..HANGUL SYLLABLE JJAH
-	{0xC9F8, 0xC9F8, prLV},                     // Lo       HANGUL SYLLABLE JJAE
-	{0xC9F9, 0xCA13, prLVT},                    // Lo  [27] HANGUL SYLLABLE JJAEG..HANGUL SYLLABLE JJAEH
-	{0xCA14, 0xCA14, prLV},                     // Lo       HANGUL SYLLABLE JJYA
-	{0xCA15, 0xCA2F, prLVT},                    // Lo  [27] HANGUL SYLLABLE JJYAG..HANGUL SYLLABLE JJYAH
-	{0xCA30, 0xCA30, prLV},                     // Lo       HANGUL SYLLABLE JJYAE
-	{0xCA31, 0xCA4B, prLVT},                    // Lo  [27] HANGUL SYLLABLE JJYAEG..HANGUL SYLLABLE JJYAEH
-	{0xCA4C, 0xCA4C, prLV},                     // Lo       HANGUL SYLLABLE JJEO
-	{0xCA4D, 0xCA67, prLVT},                    // Lo  [27] HANGUL SYLLABLE JJEOG..HANGUL SYLLABLE JJEOH
-	{0xCA68, 0xCA68, prLV},                     // Lo       HANGUL SYLLABLE JJE
-	{0xCA69, 0xCA83, prLVT},                    // Lo  [27] HANGUL SYLLABLE JJEG..HANGUL SYLLABLE JJEH
-	{0xCA84, 0xCA84, prLV},                     // Lo       HANGUL SYLLABLE JJYEO
-	{0xCA85, 0xCA9F, prLVT},                    // Lo  [27] HANGUL SYLLABLE JJYEOG..HANGUL SYLLABLE JJYEOH
-	{0xCAA0, 0xCAA0, prLV},                     // Lo       HANGUL SYLLABLE JJYE
-	{0xCAA1, 0xCABB, prLVT},                    // Lo  [27] HANGUL SYLLABLE JJYEG..HANGUL SYLLABLE JJYEH
-	{0xCABC, 0xCABC, prLV},                     // Lo       HANGUL SYLLABLE JJO
-	{0xCABD, 0xCAD7, prLVT},                    // Lo  [27] HANGUL SYLLABLE JJOG..HANGUL SYLLABLE JJOH
-	{0xCAD8, 0xCAD8, prLV},                     // Lo       HANGUL SYLLABLE JJWA
-	{0xCAD9, 0xCAF3, prLVT},                    // Lo  [27] HANGUL SYLLABLE JJWAG..HANGUL SYLLABLE JJWAH
-	{0xCAF4, 0xCAF4, prLV},                     // Lo       HANGUL SYLLABLE JJWAE
-	{0xCAF5, 0xCB0F, prLVT},                    // Lo  [27] HANGUL SYLLABLE JJWAEG..HANGUL SYLLABLE JJWAEH
-	{0xCB10, 0xCB10, prLV},                     // Lo       HANGUL SYLLABLE JJOE
-	{0xCB11, 0xCB2B, prLVT},                    // Lo  [27] HANGUL SYLLABLE JJOEG..HANGUL SYLLABLE JJOEH
-	{0xCB2C, 0xCB2C, prLV},                     // Lo       HANGUL SYLLABLE JJYO
-	{0xCB2D, 0xCB47, prLVT},                    // Lo  [27] HANGUL SYLLABLE JJYOG..HANGUL SYLLABLE JJYOH
-	{0xCB48, 0xCB48, prLV},                     // Lo       HANGUL SYLLABLE JJU
-	{0xCB49, 0xCB63, prLVT},                    // Lo  [27] HANGUL SYLLABLE JJUG..HANGUL SYLLABLE JJUH
-	{0xCB64, 0xCB64, prLV},                     // Lo       HANGUL SYLLABLE JJWEO
-	{0xCB65, 0xCB7F, prLVT},                    // Lo  [27] HANGUL SYLLABLE JJWEOG..HANGUL SYLLABLE JJWEOH
-	{0xCB80, 0xCB80, prLV},                     // Lo       HANGUL SYLLABLE JJWE
-	{0xCB81, 0xCB9B, prLVT},                    // Lo  [27] HANGUL SYLLABLE JJWEG..HANGUL SYLLABLE JJWEH
-	{0xCB9C, 0xCB9C, prLV},                     // Lo       HANGUL SYLLABLE JJWI
-	{0xCB9D, 0xCBB7, prLVT},                    // Lo  [27] HANGUL SYLLABLE JJWIG..HANGUL SYLLABLE JJWIH
-	{0xCBB8, 0xCBB8, prLV},                     // Lo       HANGUL SYLLABLE JJYU
-	{0xCBB9, 0xCBD3, prLVT},                    // Lo  [27] HANGUL SYLLABLE JJYUG..HANGUL SYLLABLE JJYUH
-	{0xCBD4, 0xCBD4, prLV},                     // Lo       HANGUL SYLLABLE JJEU
-	{0xCBD5, 0xCBEF, prLVT},                    // Lo  [27] HANGUL SYLLABLE JJEUG..HANGUL SYLLABLE JJEUH
-	{0xCBF0, 0xCBF0, prLV},                     // Lo       HANGUL SYLLABLE JJYI
-	{0xCBF1, 0xCC0B, prLVT},                    // Lo  [27] HANGUL SYLLABLE JJYIG..HANGUL SYLLABLE JJYIH
-	{0xCC0C, 0xCC0C, prLV},                     // Lo       HANGUL SYLLABLE JJI
-	{0xCC0D, 0xCC27, prLVT},                    // Lo  [27] HANGUL SYLLABLE JJIG..HANGUL SYLLABLE JJIH
-	{0xCC28, 0xCC28, prLV},                     // Lo       HANGUL SYLLABLE CA
-	{0xCC29, 0xCC43, prLVT},                    // Lo  [27] HANGUL SYLLABLE CAG..HANGUL SYLLABLE CAH
-	{0xCC44, 0xCC44, prLV},                     // Lo       HANGUL SYLLABLE CAE
-	{0xCC45, 0xCC5F, prLVT},                    // Lo  [27] HANGUL SYLLABLE CAEG..HANGUL SYLLABLE CAEH
-	{0xCC60, 0xCC60, prLV},                     // Lo       HANGUL SYLLABLE CYA
-	{0xCC61, 0xCC7B, prLVT},                    // Lo  [27] HANGUL SYLLABLE CYAG..HANGUL SYLLABLE CYAH
-	{0xCC7C, 0xCC7C, prLV},                     // Lo       HANGUL SYLLABLE CYAE
-	{0xCC7D, 0xCC97, prLVT},                    // Lo  [27] HANGUL SYLLABLE CYAEG..HANGUL SYLLABLE CYAEH
-	{0xCC98, 0xCC98, prLV},                     // Lo       HANGUL SYLLABLE CEO
-	{0xCC99, 0xCCB3, prLVT},                    // Lo  [27] HANGUL SYLLABLE CEOG..HANGUL SYLLABLE CEOH
-	{0xCCB4, 0xCCB4, prLV},                     // Lo       HANGUL SYLLABLE CE
-	{0xCCB5, 0xCCCF, prLVT},                    // Lo  [27] HANGUL SYLLABLE CEG..HANGUL SYLLABLE CEH
-	{0xCCD0, 0xCCD0, prLV},                     // Lo       HANGUL SYLLABLE CYEO
-	{0xCCD1, 0xCCEB, prLVT},                    // Lo  [27] HANGUL SYLLABLE CYEOG..HANGUL SYLLABLE CYEOH
-	{0xCCEC, 0xCCEC, prLV},                     // Lo       HANGUL SYLLABLE CYE
-	{0xCCED, 0xCD07, prLVT},                    // Lo  [27] HANGUL SYLLABLE CYEG..HANGUL SYLLABLE CYEH
-	{0xCD08, 0xCD08, prLV},                     // Lo       HANGUL SYLLABLE CO
-	{0xCD09, 0xCD23, prLVT},                    // Lo  [27] HANGUL SYLLABLE COG..HANGUL SYLLABLE COH
-	{0xCD24, 0xCD24, prLV},                     // Lo       HANGUL SYLLABLE CWA
-	{0xCD25, 0xCD3F, prLVT},                    // Lo  [27] HANGUL SYLLABLE CWAG..HANGUL SYLLABLE CWAH
-	{0xCD40, 0xCD40, prLV},                     // Lo       HANGUL SYLLABLE CWAE
-	{0xCD41, 0xCD5B, prLVT},                    // Lo  [27] HANGUL SYLLABLE CWAEG..HANGUL SYLLABLE CWAEH
-	{0xCD5C, 0xCD5C, prLV},                     // Lo       HANGUL SYLLABLE COE
-	{0xCD5D, 0xCD77, prLVT},                    // Lo  [27] HANGUL SYLLABLE COEG..HANGUL SYLLABLE COEH
-	{0xCD78, 0xCD78, prLV},                     // Lo       HANGUL SYLLABLE CYO
-	{0xCD79, 0xCD93, prLVT},                    // Lo  [27] HANGUL SYLLABLE CYOG..HANGUL SYLLABLE CYOH
-	{0xCD94, 0xCD94, prLV},                     // Lo       HANGUL SYLLABLE CU
-	{0xCD95, 0xCDAF, prLVT},                    // Lo  [27] HANGUL SYLLABLE CUG..HANGUL SYLLABLE CUH
-	{0xCDB0, 0xCDB0, prLV},                     // Lo       HANGUL SYLLABLE CWEO
-	{0xCDB1, 0xCDCB, prLVT},                    // Lo  [27] HANGUL SYLLABLE CWEOG..HANGUL SYLLABLE CWEOH
-	{0xCDCC, 0xCDCC, prLV},                     // Lo       HANGUL SYLLABLE CWE
-	{0xCDCD, 0xCDE7, prLVT},                    // Lo  [27] HANGUL SYLLABLE CWEG..HANGUL SYLLABLE CWEH
-	{0xCDE8, 0xCDE8, prLV},                     // Lo       HANGUL SYLLABLE CWI
-	{0xCDE9, 0xCE03, prLVT},                    // Lo  [27] HANGUL SYLLABLE CWIG..HANGUL SYLLABLE CWIH
-	{0xCE04, 0xCE04, prLV},                     // Lo       HANGUL SYLLABLE CYU
-	{0xCE05, 0xCE1F, prLVT},                    // Lo  [27] HANGUL SYLLABLE CYUG..HANGUL SYLLABLE CYUH
-	{0xCE20, 0xCE20, prLV},                     // Lo       HANGUL SYLLABLE CEU
-	{0xCE21, 0xCE3B, prLVT},                    // Lo  [27] HANGUL SYLLABLE CEUG..HANGUL SYLLABLE CEUH
-	{0xCE3C, 0xCE3C, prLV},                     // Lo       HANGUL SYLLABLE CYI
-	{0xCE3D, 0xCE57, prLVT},                    // Lo  [27] HANGUL SYLLABLE CYIG..HANGUL SYLLABLE CYIH
-	{0xCE58, 0xCE58, prLV},                     // Lo       HANGUL SYLLABLE CI
-	{0xCE59, 0xCE73, prLVT},                    // Lo  [27] HANGUL SYLLABLE CIG..HANGUL SYLLABLE CIH
-	{0xCE74, 0xCE74, prLV},                     // Lo       HANGUL SYLLABLE KA
-	{0xCE75, 0xCE8F, prLVT},                    // Lo  [27] HANGUL SYLLABLE KAG..HANGUL SYLLABLE KAH
-	{0xCE90, 0xCE90, prLV},                     // Lo       HANGUL SYLLABLE KAE
-	{0xCE91, 0xCEAB, prLVT},                    // Lo  [27] HANGUL SYLLABLE KAEG..HANGUL SYLLABLE KAEH
-	{0xCEAC, 0xCEAC, prLV},                     // Lo       HANGUL SYLLABLE KYA
-	{0xCEAD, 0xCEC7, prLVT},                    // Lo  [27] HANGUL SYLLABLE KYAG..HANGUL SYLLABLE KYAH
-	{0xCEC8, 0xCEC8, prLV},                     // Lo       HANGUL SYLLABLE KYAE
-	{0xCEC9, 0xCEE3, prLVT},                    // Lo  [27] HANGUL SYLLABLE KYAEG..HANGUL SYLLABLE KYAEH
-	{0xCEE4, 0xCEE4, prLV},                     // Lo       HANGUL SYLLABLE KEO
-	{0xCEE5, 0xCEFF, prLVT},                    // Lo  [27] HANGUL SYLLABLE KEOG..HANGUL SYLLABLE KEOH
-	{0xCF00, 0xCF00, prLV},                     // Lo       HANGUL SYLLABLE KE
-	{0xCF01, 0xCF1B, prLVT},                    // Lo  [27] HANGUL SYLLABLE KEG..HANGUL SYLLABLE KEH
-	{0xCF1C, 0xCF1C, prLV},                     // Lo       HANGUL SYLLABLE KYEO
-	{0xCF1D, 0xCF37, prLVT},                    // Lo  [27] HANGUL SYLLABLE KYEOG..HANGUL SYLLABLE KYEOH
-	{0xCF38, 0xCF38, prLV},                     // Lo       HANGUL SYLLABLE KYE
-	{0xCF39, 0xCF53, prLVT},                    // Lo  [27] HANGUL SYLLABLE KYEG..HANGUL SYLLABLE KYEH
-	{0xCF54, 0xCF54, prLV},                     // Lo       HANGUL SYLLABLE KO
-	{0xCF55, 0xCF6F, prLVT},                    // Lo  [27] HANGUL SYLLABLE KOG..HANGUL SYLLABLE KOH
-	{0xCF70, 0xCF70, prLV},                     // Lo       HANGUL SYLLABLE KWA
-	{0xCF71, 0xCF8B, prLVT},                    // Lo  [27] HANGUL SYLLABLE KWAG..HANGUL SYLLABLE KWAH
-	{0xCF8C, 0xCF8C, prLV},                     // Lo       HANGUL SYLLABLE KWAE
-	{0xCF8D, 0xCFA7, prLVT},                    // Lo  [27] HANGUL SYLLABLE KWAEG..HANGUL SYLLABLE KWAEH
-	{0xCFA8, 0xCFA8, prLV},                     // Lo       HANGUL SYLLABLE KOE
-	{0xCFA9, 0xCFC3, prLVT},                    // Lo  [27] HANGUL SYLLABLE KOEG..HANGUL SYLLABLE KOEH
-	{0xCFC4, 0xCFC4, prLV},                     // Lo       HANGUL SYLLABLE KYO
-	{0xCFC5, 0xCFDF, prLVT},                    // Lo  [27] HANGUL SYLLABLE KYOG..HANGUL SYLLABLE KYOH
-	{0xCFE0, 0xCFE0, prLV},                     // Lo       HANGUL SYLLABLE KU
-	{0xCFE1, 0xCFFB, prLVT},                    // Lo  [27] HANGUL SYLLABLE KUG..HANGUL SYLLABLE KUH
-	{0xCFFC, 0xCFFC, prLV},                     // Lo       HANGUL SYLLABLE KWEO
-	{0xCFFD, 0xD017, prLVT},                    // Lo  [27] HANGUL SYLLABLE KWEOG..HANGUL SYLLABLE KWEOH
-	{0xD018, 0xD018, prLV},                     // Lo       HANGUL SYLLABLE KWE
-	{0xD019, 0xD033, prLVT},                    // Lo  [27] HANGUL SYLLABLE KWEG..HANGUL SYLLABLE KWEH
-	{0xD034, 0xD034, prLV},                     // Lo       HANGUL SYLLABLE KWI
-	{0xD035, 0xD04F, prLVT},                    // Lo  [27] HANGUL SYLLABLE KWIG..HANGUL SYLLABLE KWIH
-	{0xD050, 0xD050, prLV},                     // Lo       HANGUL SYLLABLE KYU
-	{0xD051, 0xD06B, prLVT},                    // Lo  [27] HANGUL SYLLABLE KYUG..HANGUL SYLLABLE KYUH
-	{0xD06C, 0xD06C, prLV},                     // Lo       HANGUL SYLLABLE KEU
-	{0xD06D, 0xD087, prLVT},                    // Lo  [27] HANGUL SYLLABLE KEUG..HANGUL SYLLABLE KEUH
-	{0xD088, 0xD088, prLV},                     // Lo       HANGUL SYLLABLE KYI
-	{0xD089, 0xD0A3, prLVT},                    // Lo  [27] HANGUL SYLLABLE KYIG..HANGUL SYLLABLE KYIH
-	{0xD0A4, 0xD0A4, prLV},                     // Lo       HANGUL SYLLABLE KI
-	{0xD0A5, 0xD0BF, prLVT},                    // Lo  [27] HANGUL SYLLABLE KIG..HANGUL SYLLABLE KIH
-	{0xD0C0, 0xD0C0, prLV},                     // Lo       HANGUL SYLLABLE TA
-	{0xD0C1, 0xD0DB, prLVT},                    // Lo  [27] HANGUL SYLLABLE TAG..HANGUL SYLLABLE TAH
-	{0xD0DC, 0xD0DC, prLV},                     // Lo       HANGUL SYLLABLE TAE
-	{0xD0DD, 0xD0F7, prLVT},                    // Lo  [27] HANGUL SYLLABLE TAEG..HANGUL SYLLABLE TAEH
-	{0xD0F8, 0xD0F8, prLV},                     // Lo       HANGUL SYLLABLE TYA
-	{0xD0F9, 0xD113, prLVT},                    // Lo  [27] HANGUL SYLLABLE TYAG..HANGUL SYLLABLE TYAH
-	{0xD114, 0xD114, prLV},                     // Lo       HANGUL SYLLABLE TYAE
-	{0xD115, 0xD12F, prLVT},                    // Lo  [27] HANGUL SYLLABLE TYAEG..HANGUL SYLLABLE TYAEH
-	{0xD130, 0xD130, prLV},                     // Lo       HANGUL SYLLABLE TEO
-	{0xD131, 0xD14B, prLVT},                    // Lo  [27] HANGUL SYLLABLE TEOG..HANGUL SYLLABLE TEOH
-	{0xD14C, 0xD14C, prLV},                     // Lo       HANGUL SYLLABLE TE
-	{0xD14D, 0xD167, prLVT},                    // Lo  [27] HANGUL SYLLABLE TEG..HANGUL SYLLABLE TEH
-	{0xD168, 0xD168, prLV},                     // Lo       HANGUL SYLLABLE TYEO
-	{0xD169, 0xD183, prLVT},                    // Lo  [27] HANGUL SYLLABLE TYEOG..HANGUL SYLLABLE TYEOH
-	{0xD184, 0xD184, prLV},                     // Lo       HANGUL SYLLABLE TYE
-	{0xD185, 0xD19F, prLVT},                    // Lo  [27] HANGUL SYLLABLE TYEG..HANGUL SYLLABLE TYEH
-	{0xD1A0, 0xD1A0, prLV},                     // Lo       HANGUL SYLLABLE TO
-	{0xD1A1, 0xD1BB, prLVT},                    // Lo  [27] HANGUL SYLLABLE TOG..HANGUL SYLLABLE TOH
-	{0xD1BC, 0xD1BC, prLV},                     // Lo       HANGUL SYLLABLE TWA
-	{0xD1BD, 0xD1D7, prLVT},                    // Lo  [27] HANGUL SYLLABLE TWAG..HANGUL SYLLABLE TWAH
-	{0xD1D8, 0xD1D8, prLV},                     // Lo       HANGUL SYLLABLE TWAE
-	{0xD1D9, 0xD1F3, prLVT},                    // Lo  [27] HANGUL SYLLABLE TWAEG..HANGUL SYLLABLE TWAEH
-	{0xD1F4, 0xD1F4, prLV},                     // Lo       HANGUL SYLLABLE TOE
-	{0xD1F5, 0xD20F, prLVT},                    // Lo  [27] HANGUL SYLLABLE TOEG..HANGUL SYLLABLE TOEH
-	{0xD210, 0xD210, prLV},                     // Lo       HANGUL SYLLABLE TYO
-	{0xD211, 0xD22B, prLVT},                    // Lo  [27] HANGUL SYLLABLE TYOG..HANGUL SYLLABLE TYOH
-	{0xD22C, 0xD22C, prLV},                     // Lo       HANGUL SYLLABLE TU
-	{0xD22D, 0xD247, prLVT},                    // Lo  [27] HANGUL SYLLABLE TUG..HANGUL SYLLABLE TUH
-	{0xD248, 0xD248, prLV},                     // Lo       HANGUL SYLLABLE TWEO
-	{0xD249, 0xD263, prLVT},                    // Lo  [27] HANGUL SYLLABLE TWEOG..HANGUL SYLLABLE TWEOH
-	{0xD264, 0xD264, prLV},                     // Lo       HANGUL SYLLABLE TWE
-	{0xD265, 0xD27F, prLVT},                    // Lo  [27] HANGUL SYLLABLE TWEG..HANGUL SYLLABLE TWEH
-	{0xD280, 0xD280, prLV},                     // Lo       HANGUL SYLLABLE TWI
-	{0xD281, 0xD29B, prLVT},                    // Lo  [27] HANGUL SYLLABLE TWIG..HANGUL SYLLABLE TWIH
-	{0xD29C, 0xD29C, prLV},                     // Lo       HANGUL SYLLABLE TYU
-	{0xD29D, 0xD2B7, prLVT},                    // Lo  [27] HANGUL SYLLABLE TYUG..HANGUL SYLLABLE TYUH
-	{0xD2B8, 0xD2B8, prLV},                     // Lo       HANGUL SYLLABLE TEU
-	{0xD2B9, 0xD2D3, prLVT},                    // Lo  [27] HANGUL SYLLABLE TEUG..HANGUL SYLLABLE TEUH
-	{0xD2D4, 0xD2D4, prLV},                     // Lo       HANGUL SYLLABLE TYI
-	{0xD2D5, 0xD2EF, prLVT},                    // Lo  [27] HANGUL SYLLABLE TYIG..HANGUL SYLLABLE TYIH
-	{0xD2F0, 0xD2F0, prLV},                     // Lo       HANGUL SYLLABLE TI
-	{0xD2F1, 0xD30B, prLVT},                    // Lo  [27] HANGUL SYLLABLE TIG..HANGUL SYLLABLE TIH
-	{0xD30C, 0xD30C, prLV},                     // Lo       HANGUL SYLLABLE PA
-	{0xD30D, 0xD327, prLVT},                    // Lo  [27] HANGUL SYLLABLE PAG..HANGUL SYLLABLE PAH
-	{0xD328, 0xD328, prLV},                     // Lo       HANGUL SYLLABLE PAE
-	{0xD329, 0xD343, prLVT},                    // Lo  [27] HANGUL SYLLABLE PAEG..HANGUL SYLLABLE PAEH
-	{0xD344, 0xD344, prLV},                     // Lo       HANGUL SYLLABLE PYA
-	{0xD345, 0xD35F, prLVT},                    // Lo  [27] HANGUL SYLLABLE PYAG..HANGUL SYLLABLE PYAH
-	{0xD360, 0xD360, prLV},                     // Lo       HANGUL SYLLABLE PYAE
-	{0xD361, 0xD37B, prLVT},                    // Lo  [27] HANGUL SYLLABLE PYAEG..HANGUL SYLLABLE PYAEH
-	{0xD37C, 0xD37C, prLV},                     // Lo       HANGUL SYLLABLE PEO
-	{0xD37D, 0xD397, prLVT},                    // Lo  [27] HANGUL SYLLABLE PEOG..HANGUL SYLLABLE PEOH
-	{0xD398, 0xD398, prLV},                     // Lo       HANGUL SYLLABLE PE
-	{0xD399, 0xD3B3, prLVT},                    // Lo  [27] HANGUL SYLLABLE PEG..HANGUL SYLLABLE PEH
-	{0xD3B4, 0xD3B4, prLV},                     // Lo       HANGUL SYLLABLE PYEO
-	{0xD3B5, 0xD3CF, prLVT},                    // Lo  [27] HANGUL SYLLABLE PYEOG..HANGUL SYLLABLE PYEOH
-	{0xD3D0, 0xD3D0, prLV},                     // Lo       HANGUL SYLLABLE PYE
-	{0xD3D1, 0xD3EB, prLVT},                    // Lo  [27] HANGUL SYLLABLE PYEG..HANGUL SYLLABLE PYEH
-	{0xD3EC, 0xD3EC, prLV},                     // Lo       HANGUL SYLLABLE PO
-	{0xD3ED, 0xD407, prLVT},                    // Lo  [27] HANGUL SYLLABLE POG..HANGUL SYLLABLE POH
-	{0xD408, 0xD408, prLV},                     // Lo       HANGUL SYLLABLE PWA
-	{0xD409, 0xD423, prLVT},                    // Lo  [27] HANGUL SYLLABLE PWAG..HANGUL SYLLABLE PWAH
-	{0xD424, 0xD424, prLV},                     // Lo       HANGUL SYLLABLE PWAE
-	{0xD425, 0xD43F, prLVT},                    // Lo  [27] HANGUL SYLLABLE PWAEG..HANGUL SYLLABLE PWAEH
-	{0xD440, 0xD440, prLV},                     // Lo       HANGUL SYLLABLE POE
-	{0xD441, 0xD45B, prLVT},                    // Lo  [27] HANGUL SYLLABLE POEG..HANGUL SYLLABLE POEH
-	{0xD45C, 0xD45C, prLV},                     // Lo       HANGUL SYLLABLE PYO
-	{0xD45D, 0xD477, prLVT},                    // Lo  [27] HANGUL SYLLABLE PYOG..HANGUL SYLLABLE PYOH
-	{0xD478, 0xD478, prLV},                     // Lo       HANGUL SYLLABLE PU
-	{0xD479, 0xD493, prLVT},                    // Lo  [27] HANGUL SYLLABLE PUG..HANGUL SYLLABLE PUH
-	{0xD494, 0xD494, prLV},                     // Lo       HANGUL SYLLABLE PWEO
-	{0xD495, 0xD4AF, prLVT},                    // Lo  [27] HANGUL SYLLABLE PWEOG..HANGUL SYLLABLE PWEOH
-	{0xD4B0, 0xD4B0, prLV},                     // Lo       HANGUL SYLLABLE PWE
-	{0xD4B1, 0xD4CB, prLVT},                    // Lo  [27] HANGUL SYLLABLE PWEG..HANGUL SYLLABLE PWEH
-	{0xD4CC, 0xD4CC, prLV},                     // Lo       HANGUL SYLLABLE PWI
-	{0xD4CD, 0xD4E7, prLVT},                    // Lo  [27] HANGUL SYLLABLE PWIG..HANGUL SYLLABLE PWIH
-	{0xD4E8, 0xD4E8, prLV},                     // Lo       HANGUL SYLLABLE PYU
-	{0xD4E9, 0xD503, prLVT},                    // Lo  [27] HANGUL SYLLABLE PYUG..HANGUL SYLLABLE PYUH
-	{0xD504, 0xD504, prLV},                     // Lo       HANGUL SYLLABLE PEU
-	{0xD505, 0xD51F, prLVT},                    // Lo  [27] HANGUL SYLLABLE PEUG..HANGUL SYLLABLE PEUH
-	{0xD520, 0xD520, prLV},                     // Lo       HANGUL SYLLABLE PYI
-	{0xD521, 0xD53B, prLVT},                    // Lo  [27] HANGUL SYLLABLE PYIG..HANGUL SYLLABLE PYIH
-	{0xD53C, 0xD53C, prLV},                     // Lo       HANGUL SYLLABLE PI
-	{0xD53D, 0xD557, prLVT},                    // Lo  [27] HANGUL SYLLABLE PIG..HANGUL SYLLABLE PIH
-	{0xD558, 0xD558, prLV},                     // Lo       HANGUL SYLLABLE HA
-	{0xD559, 0xD573, prLVT},                    // Lo  [27] HANGUL SYLLABLE HAG..HANGUL SYLLABLE HAH
-	{0xD574, 0xD574, prLV},                     // Lo       HANGUL SYLLABLE HAE
-	{0xD575, 0xD58F, prLVT},                    // Lo  [27] HANGUL SYLLABLE HAEG..HANGUL SYLLABLE HAEH
-	{0xD590, 0xD590, prLV},                     // Lo       HANGUL SYLLABLE HYA
-	{0xD591, 0xD5AB, prLVT},                    // Lo  [27] HANGUL SYLLABLE HYAG..HANGUL SYLLABLE HYAH
-	{0xD5AC, 0xD5AC, prLV},                     // Lo       HANGUL SYLLABLE HYAE
-	{0xD5AD, 0xD5C7, prLVT},                    // Lo  [27] HANGUL SYLLABLE HYAEG..HANGUL SYLLABLE HYAEH
-	{0xD5C8, 0xD5C8, prLV},                     // Lo       HANGUL SYLLABLE HEO
-	{0xD5C9, 0xD5E3, prLVT},                    // Lo  [27] HANGUL SYLLABLE HEOG..HANGUL SYLLABLE HEOH
-	{0xD5E4, 0xD5E4, prLV},                     // Lo       HANGUL SYLLABLE HE
-	{0xD5E5, 0xD5FF, prLVT},                    // Lo  [27] HANGUL SYLLABLE HEG..HANGUL SYLLABLE HEH
-	{0xD600, 0xD600, prLV},                     // Lo       HANGUL SYLLABLE HYEO
-	{0xD601, 0xD61B, prLVT},                    // Lo  [27] HANGUL SYLLABLE HYEOG..HANGUL SYLLABLE HYEOH
-	{0xD61C, 0xD61C, prLV},                     // Lo       HANGUL SYLLABLE HYE
-	{0xD61D, 0xD637, prLVT},                    // Lo  [27] HANGUL SYLLABLE HYEG..HANGUL SYLLABLE HYEH
-	{0xD638, 0xD638, prLV},                     // Lo       HANGUL SYLLABLE HO
-	{0xD639, 0xD653, prLVT},                    // Lo  [27] HANGUL SYLLABLE HOG..HANGUL SYLLABLE HOH
-	{0xD654, 0xD654, prLV},                     // Lo       HANGUL SYLLABLE HWA
-	{0xD655, 0xD66F, prLVT},                    // Lo  [27] HANGUL SYLLABLE HWAG..HANGUL SYLLABLE HWAH
-	{0xD670, 0xD670, prLV},                     // Lo       HANGUL SYLLABLE HWAE
-	{0xD671, 0xD68B, prLVT},                    // Lo  [27] HANGUL SYLLABLE HWAEG..HANGUL SYLLABLE HWAEH
-	{0xD68C, 0xD68C, prLV},                     // Lo       HANGUL SYLLABLE HOE
-	{0xD68D, 0xD6A7, prLVT},                    // Lo  [27] HANGUL SYLLABLE HOEG..HANGUL SYLLABLE HOEH
-	{0xD6A8, 0xD6A8, prLV},                     // Lo       HANGUL SYLLABLE HYO
-	{0xD6A9, 0xD6C3, prLVT},                    // Lo  [27] HANGUL SYLLABLE HYOG..HANGUL SYLLABLE HYOH
-	{0xD6C4, 0xD6C4, prLV},                     // Lo       HANGUL SYLLABLE HU
-	{0xD6C5, 0xD6DF, prLVT},                    // Lo  [27] HANGUL SYLLABLE HUG..HANGUL SYLLABLE HUH
-	{0xD6E0, 0xD6E0, prLV},                     // Lo       HANGUL SYLLABLE HWEO
-	{0xD6E1, 0xD6FB, prLVT},                    // Lo  [27] HANGUL SYLLABLE HWEOG..HANGUL SYLLABLE HWEOH
-	{0xD6FC, 0xD6FC, prLV},                     // Lo       HANGUL SYLLABLE HWE
-	{0xD6FD, 0xD717, prLVT},                    // Lo  [27] HANGUL SYLLABLE HWEG..HANGUL SYLLABLE HWEH
-	{0xD718, 0xD718, prLV},                     // Lo       HANGUL SYLLABLE HWI
-	{0xD719, 0xD733, prLVT},                    // Lo  [27] HANGUL SYLLABLE HWIG..HANGUL SYLLABLE HWIH
-	{0xD734, 0xD734, prLV},                     // Lo       HANGUL SYLLABLE HYU
-	{0xD735, 0xD74F, prLVT},                    // Lo  [27] HANGUL SYLLABLE HYUG..HANGUL SYLLABLE HYUH
-	{0xD750, 0xD750, prLV},                     // Lo       HANGUL SYLLABLE HEU
-	{0xD751, 0xD76B, prLVT},                    // Lo  [27] HANGUL SYLLABLE HEUG..HANGUL SYLLABLE HEUH
-	{0xD76C, 0xD76C, prLV},                     // Lo       HANGUL SYLLABLE HYI
-	{0xD76D, 0xD787, prLVT},                    // Lo  [27] HANGUL SYLLABLE HYIG..HANGUL SYLLABLE HYIH
-	{0xD788, 0xD788, prLV},                     // Lo       HANGUL SYLLABLE HI
-	{0xD789, 0xD7A3, prLVT},                    // Lo  [27] HANGUL SYLLABLE HIG..HANGUL SYLLABLE HIH
-	{0xD7B0, 0xD7C6, prV},                      // Lo  [23] HANGUL JUNGSEONG O-YEO..HANGUL JUNGSEONG ARAEA-E
-	{0xD7CB, 0xD7FB, prT},                      // Lo  [49] HANGUL JONGSEONG NIEUN-RIEUL..HANGUL JONGSEONG PHIEUPH-THIEUTH
-	{0xFB1E, 0xFB1E, prExtend},                 // Mn       HEBREW POINT JUDEO-SPANISH VARIKA
-	{0xFE00, 0xFE0F, prExtend},                 // Mn  [16] VARIATION SELECTOR-1..VARIATION SELECTOR-16
-	{0xFE20, 0xFE2F, prExtend},                 // Mn  [16] COMBINING LIGATURE LEFT HALF..COMBINING CYRILLIC TITLO RIGHT HALF
-	{0xFEFF, 0xFEFF, prControl},                // Cf       ZERO WIDTH NO-BREAK SPACE
-	{0xFF9E, 0xFF9F, prExtend},                 // Lm   [2] HALFWIDTH KATAKANA VOICED SOUND MARK..HALFWIDTH KATAKANA SEMI-VOICED SOUND MARK
-	{0xFFF0, 0xFFF8, prControl},                // Cn   [9] <reserved-FFF0>..<reserved-FFF8>
-	{0xFFF9, 0xFFFB, prControl},                // Cf   [3] INTERLINEAR ANNOTATION ANCHOR..INTERLINEAR ANNOTATION TERMINATOR
-	{0x101FD, 0x101FD, prExtend},               // Mn       PHAISTOS DISC SIGN COMBINING OBLIQUE STROKE
-	{0x102E0, 0x102E0, prExtend},               // Mn       COPTIC EPACT THOUSANDS MARK
-	{0x10376, 0x1037A, prExtend},               // Mn   [5] COMBINING OLD PERMIC LETTER AN..COMBINING OLD PERMIC LETTER SII
-	{0x10A01, 0x10A03, prExtend},               // Mn   [3] KHAROSHTHI VOWEL SIGN I..KHAROSHTHI VOWEL SIGN VOCALIC R
-	{0x10A05, 0x10A06, prExtend},               // Mn   [2] KHAROSHTHI VOWEL SIGN E..KHAROSHTHI VOWEL SIGN O
-	{0x10A0C, 0x10A0F, prExtend},               // Mn   [4] KHAROSHTHI VOWEL LENGTH MARK..KHAROSHTHI SIGN VISARGA
-	{0x10A38, 0x10A3A, prExtend},               // Mn   [3] KHAROSHTHI SIGN BAR ABOVE..KHAROSHTHI SIGN DOT BELOW
-	{0x10A3F, 0x10A3F, prExtend},               // Mn       KHAROSHTHI VIRAMA
-	{0x10AE5, 0x10AE6, prExtend},               // Mn   [2] MANICHAEAN ABBREVIATION MARK ABOVE..MANICHAEAN ABBREVIATION MARK BELOW
-	{0x10D24, 0x10D27, prExtend},               // Mn   [4] HANIFI ROHINGYA SIGN HARBAHAY..HANIFI ROHINGYA SIGN TASSI
-	{0x10EAB, 0x10EAC, prExtend},               // Mn   [2] YEZIDI COMBINING HAMZA MARK..YEZIDI COMBINING MADDA MARK
-	{0x10EFD, 0x10EFF, prExtend},               // Mn   [3] ARABIC SMALL LOW WORD SAKTA..ARABIC SMALL LOW WORD MADDA
-	{0x10F46, 0x10F50, prExtend},               // Mn  [11] SOGDIAN COMBINING DOT BELOW..SOGDIAN COMBINING STROKE BELOW
-	{0x10F82, 0x10F85, prExtend},               // Mn   [4] OLD UYGHUR COMBINING DOT ABOVE..OLD UYGHUR COMBINING TWO DOTS BELOW
-	{0x11000, 0x11000, prSpacingMark},          // Mc       BRAHMI SIGN CANDRABINDU
-	{0x11001, 0x11001, prExtend},               // Mn       BRAHMI SIGN ANUSVARA
-	{0x11002, 0x11002, prSpacingMark},          // Mc       BRAHMI SIGN VISARGA
-	{0x11038, 0x11046, prExtend},               // Mn  [15] BRAHMI VOWEL SIGN AA..BRAHMI VIRAMA
-	{0x11070, 0x11070, prExtend},               // Mn       BRAHMI SIGN OLD TAMIL VIRAMA
-	{0x11073, 0x11074, prExtend},               // Mn   [2] BRAHMI VOWEL SIGN OLD TAMIL SHORT E..BRAHMI VOWEL SIGN OLD TAMIL SHORT O
-	{0x1107F, 0x11081, prExtend},               // Mn   [3] BRAHMI NUMBER JOINER..KAITHI SIGN ANUSVARA
-	{0x11082, 0x11082, prSpacingMark},          // Mc       KAITHI SIGN VISARGA
-	{0x110B0, 0x110B2, prSpacingMark},          // Mc   [3] KAITHI VOWEL SIGN AA..KAITHI VOWEL SIGN II
-	{0x110B3, 0x110B6, prExtend},               // Mn   [4] KAITHI VOWEL SIGN U..KAITHI VOWEL SIGN AI
-	{0x110B7, 0x110B8, prSpacingMark},          // Mc   [2] KAITHI VOWEL SIGN O..KAITHI VOWEL SIGN AU
-	{0x110B9, 0x110BA, prExtend},               // Mn   [2] KAITHI SIGN VIRAMA..KAITHI SIGN NUKTA
-	{0x110BD, 0x110BD, prPrepend},              // Cf       KAITHI NUMBER SIGN
-	{0x110C2, 0x110C2, prExtend},               // Mn       KAITHI VOWEL SIGN VOCALIC R
-	{0x110CD, 0x110CD, prPrepend},              // Cf       KAITHI NUMBER SIGN ABOVE
-	{0x11100, 0x11102, prExtend},               // Mn   [3] CHAKMA SIGN CANDRABINDU..CHAKMA SIGN VISARGA
-	{0x11127, 0x1112B, prExtend},               // Mn   [5] CHAKMA VOWEL SIGN A..CHAKMA VOWEL SIGN UU
-	{0x1112C, 0x1112C, prSpacingMark},          // Mc       CHAKMA VOWEL SIGN E
-	{0x1112D, 0x11134, prExtend},               // Mn   [8] CHAKMA VOWEL SIGN AI..CHAKMA MAAYYAA
-	{0x11145, 0x11146, prSpacingMark},          // Mc   [2] CHAKMA VOWEL SIGN AA..CHAKMA VOWEL SIGN EI
-	{0x11173, 0x11173, prExtend},               // Mn       MAHAJANI SIGN NUKTA
-	{0x11180, 0x11181, prExtend},               // Mn   [2] SHARADA SIGN CANDRABINDU..SHARADA SIGN ANUSVARA
-	{0x11182, 0x11182, prSpacingMark},          // Mc       SHARADA SIGN VISARGA
-	{0x111B3, 0x111B5, prSpacingMark},          // Mc   [3] SHARADA VOWEL SIGN AA..SHARADA VOWEL SIGN II
-	{0x111B6, 0x111BE, prExtend},               // Mn   [9] SHARADA VOWEL SIGN U..SHARADA VOWEL SIGN O
-	{0x111BF, 0x111C0, prSpacingMark},          // Mc   [2] SHARADA VOWEL SIGN AU..SHARADA SIGN VIRAMA
-	{0x111C2, 0x111C3, prPrepend},              // Lo   [2] SHARADA SIGN JIHVAMULIYA..SHARADA SIGN UPADHMANIYA
-	{0x111C9, 0x111CC, prExtend},               // Mn   [4] SHARADA SANDHI MARK..SHARADA EXTRA SHORT VOWEL MARK
-	{0x111CE, 0x111CE, prSpacingMark},          // Mc       SHARADA VOWEL SIGN PRISHTHAMATRA E
-	{0x111CF, 0x111CF, prExtend},               // Mn       SHARADA SIGN INVERTED CANDRABINDU
-	{0x1122C, 0x1122E, prSpacingMark},          // Mc   [3] KHOJKI VOWEL SIGN AA..KHOJKI VOWEL SIGN II
-	{0x1122F, 0x11231, prExtend},               // Mn   [3] KHOJKI VOWEL SIGN U..KHOJKI VOWEL SIGN AI
-	{0x11232, 0x11233, prSpacingMark},          // Mc   [2] KHOJKI VOWEL SIGN O..KHOJKI VOWEL SIGN AU
-	{0x11234, 0x11234, prExtend},               // Mn       KHOJKI SIGN ANUSVARA
-	{0x11235, 0x11235, prSpacingMark},          // Mc       KHOJKI SIGN VIRAMA
-	{0x11236, 0x11237, prExtend},               // Mn   [2] KHOJKI SIGN NUKTA..KHOJKI SIGN SHADDA
-	{0x1123E, 0x1123E, prExtend},               // Mn       KHOJKI SIGN SUKUN
-	{0x11241, 0x11241, prExtend},               // Mn       KHOJKI VOWEL SIGN VOCALIC R
-	{0x112DF, 0x112DF, prExtend},               // Mn       KHUDAWADI SIGN ANUSVARA
-	{0x112E0, 0x112E2, prSpacingMark},          // Mc   [3] KHUDAWADI VOWEL SIGN AA..KHUDAWADI VOWEL SIGN II
-	{0x112E3, 0x112EA, prExtend},               // Mn   [8] KHUDAWADI VOWEL SIGN U..KHUDAWADI SIGN VIRAMA
-	{0x11300, 0x11301, prExtend},               // Mn   [2] GRANTHA SIGN COMBINING ANUSVARA ABOVE..GRANTHA SIGN CANDRABINDU
-	{0x11302, 0x11303, prSpacingMark},          // Mc   [2] GRANTHA SIGN ANUSVARA..GRANTHA SIGN VISARGA
-	{0x1133B, 0x1133C, prExtend},               // Mn   [2] COMBINING BINDU BELOW..GRANTHA SIGN NUKTA
-	{0x1133E, 0x1133E, prExtend},               // Mc       GRANTHA VOWEL SIGN AA
-	{0x1133F, 0x1133F, prSpacingMark},          // Mc       GRANTHA VOWEL SIGN I
-	{0x11340, 0x11340, prExtend},               // Mn       GRANTHA VOWEL SIGN II
-	{0x11341, 0x11344, prSpacingMark},          // Mc   [4] GRANTHA VOWEL SIGN U..GRANTHA VOWEL SIGN VOCALIC RR
-	{0x11347, 0x11348, prSpacingMark},          // Mc   [2] GRANTHA VOWEL SIGN EE..GRANTHA VOWEL SIGN AI
-	{0x1134B, 0x1134D, prSpacingMark},          // Mc   [3] GRANTHA VOWEL SIGN OO..GRANTHA SIGN VIRAMA
-	{0x11357, 0x11357, prExtend},               // Mc       GRANTHA AU LENGTH MARK
-	{0x11362, 0x11363, prSpacingMark},          // Mc   [2] GRANTHA VOWEL SIGN VOCALIC L..GRANTHA VOWEL SIGN VOCALIC LL
-	{0x11366, 0x1136C, prExtend},               // Mn   [7] COMBINING GRANTHA DIGIT ZERO..COMBINING GRANTHA DIGIT SIX
-	{0x11370, 0x11374, prExtend},               // Mn   [5] COMBINING GRANTHA LETTER A..COMBINING GRANTHA LETTER PA
-	{0x11435, 0x11437, prSpacingMark},          // Mc   [3] NEWA VOWEL SIGN AA..NEWA VOWEL SIGN II
-	{0x11438, 0x1143F, prExtend},               // Mn   [8] NEWA VOWEL SIGN U..NEWA VOWEL SIGN AI
-	{0x11440, 0x11441, prSpacingMark},          // Mc   [2] NEWA VOWEL SIGN O..NEWA VOWEL SIGN AU
-	{0x11442, 0x11444, prExtend},               // Mn   [3] NEWA SIGN VIRAMA..NEWA SIGN ANUSVARA
-	{0x11445, 0x11445, prSpacingMark},          // Mc       NEWA SIGN VISARGA
-	{0x11446, 0x11446, prExtend},               // Mn       NEWA SIGN NUKTA
-	{0x1145E, 0x1145E, prExtend},               // Mn       NEWA SANDHI MARK
-	{0x114B0, 0x114B0, prExtend},               // Mc       TIRHUTA VOWEL SIGN AA
-	{0x114B1, 0x114B2, prSpacingMark},          // Mc   [2] TIRHUTA VOWEL SIGN I..TIRHUTA VOWEL SIGN II
-	{0x114B3, 0x114B8, prExtend},               // Mn   [6] TIRHUTA VOWEL SIGN U..TIRHUTA VOWEL SIGN VOCALIC LL
-	{0x114B9, 0x114B9, prSpacingMark},          // Mc       TIRHUTA VOWEL SIGN E
-	{0x114BA, 0x114BA, prExtend},               // Mn       TIRHUTA VOWEL SIGN SHORT E
-	{0x114BB, 0x114BC, prSpacingMark},          // Mc   [2] TIRHUTA VOWEL SIGN AI..TIRHUTA VOWEL SIGN O
-	{0x114BD, 0x114BD, prExtend},               // Mc       TIRHUTA VOWEL SIGN SHORT O
-	{0x114BE, 0x114BE, prSpacingMark},          // Mc       TIRHUTA VOWEL SIGN AU
-	{0x114BF, 0x114C0, prExtend},               // Mn   [2] TIRHUTA SIGN CANDRABINDU..TIRHUTA SIGN ANUSVARA
-	{0x114C1, 0x114C1, prSpacingMark},          // Mc       TIRHUTA SIGN VISARGA
-	{0x114C2, 0x114C3, prExtend},               // Mn   [2] TIRHUTA SIGN VIRAMA..TIRHUTA SIGN NUKTA
-	{0x115AF, 0x115AF, prExtend},               // Mc       SIDDHAM VOWEL SIGN AA
-	{0x115B0, 0x115B1, prSpacingMark},          // Mc   [2] SIDDHAM VOWEL SIGN I..SIDDHAM VOWEL SIGN II
-	{0x115B2, 0x115B5, prExtend},               // Mn   [4] SIDDHAM VOWEL SIGN U..SIDDHAM VOWEL SIGN VOCALIC RR
-	{0x115B8, 0x115BB, prSpacingMark},          // Mc   [4] SIDDHAM VOWEL SIGN E..SIDDHAM VOWEL SIGN AU
-	{0x115BC, 0x115BD, prExtend},               // Mn   [2] SIDDHAM SIGN CANDRABINDU..SIDDHAM SIGN ANUSVARA
-	{0x115BE, 0x115BE, prSpacingMark},          // Mc       SIDDHAM SIGN VISARGA
-	{0x115BF, 0x115C0, prExtend},               // Mn   [2] SIDDHAM SIGN VIRAMA..SIDDHAM SIGN NUKTA
-	{0x115DC, 0x115DD, prExtend},               // Mn   [2] SIDDHAM VOWEL SIGN ALTERNATE U..SIDDHAM VOWEL SIGN ALTERNATE UU
-	{0x11630, 0x11632, prSpacingMark},          // Mc   [3] MODI VOWEL SIGN AA..MODI VOWEL SIGN II
-	{0x11633, 0x1163A, prExtend},               // Mn   [8] MODI VOWEL SIGN U..MODI VOWEL SIGN AI
-	{0x1163B, 0x1163C, prSpacingMark},          // Mc   [2] MODI VOWEL SIGN O..MODI VOWEL SIGN AU
-	{0x1163D, 0x1163D, prExtend},               // Mn       MODI SIGN ANUSVARA
-	{0x1163E, 0x1163E, prSpacingMark},          // Mc       MODI SIGN VISARGA
-	{0x1163F, 0x11640, prExtend},               // Mn   [2] MODI SIGN VIRAMA..MODI SIGN ARDHACANDRA
-	{0x116AB, 0x116AB, prExtend},               // Mn       TAKRI SIGN ANUSVARA
-	{0x116AC, 0x116AC, prSpacingMark},          // Mc       TAKRI SIGN VISARGA
-	{0x116AD, 0x116AD, prExtend},               // Mn       TAKRI VOWEL SIGN AA
-	{0x116AE, 0x116AF, prSpacingMark},          // Mc   [2] TAKRI VOWEL SIGN I..TAKRI VOWEL SIGN II
-	{0x116B0, 0x116B5, prExtend},               // Mn   [6] TAKRI VOWEL SIGN U..TAKRI VOWEL SIGN AU
-	{0x116B6, 0x116B6, prSpacingMark},          // Mc       TAKRI SIGN VIRAMA
-	{0x116B7, 0x116B7, prExtend},               // Mn       TAKRI SIGN NUKTA
-	{0x1171D, 0x1171F, prExtend},               // Mn   [3] AHOM CONSONANT SIGN MEDIAL LA..AHOM CONSONANT SIGN MEDIAL LIGATING RA
-	{0x11722, 0x11725, prExtend},               // Mn   [4] AHOM VOWEL SIGN I..AHOM VOWEL SIGN UU
-	{0x11726, 0x11726, prSpacingMark},          // Mc       AHOM VOWEL SIGN E
-	{0x11727, 0x1172B, prExtend},               // Mn   [5] AHOM VOWEL SIGN AW..AHOM SIGN KILLER
-	{0x1182C, 0x1182E, prSpacingMark},          // Mc   [3] DOGRA VOWEL SIGN AA..DOGRA VOWEL SIGN II
-	{0x1182F, 0x11837, prExtend},               // Mn   [9] DOGRA VOWEL SIGN U..DOGRA SIGN ANUSVARA
-	{0x11838, 0x11838, prSpacingMark},          // Mc       DOGRA SIGN VISARGA
-	{0x11839, 0x1183A, prExtend},               // Mn   [2] DOGRA SIGN VIRAMA..DOGRA SIGN NUKTA
-	{0x11930, 0x11930, prExtend},               // Mc       DIVES AKURU VOWEL SIGN AA
-	{0x11931, 0x11935, prSpacingMark},          // Mc   [5] DIVES AKURU VOWEL SIGN I..DIVES AKURU VOWEL SIGN E
-	{0x11937, 0x11938, prSpacingMark},          // Mc   [2] DIVES AKURU VOWEL SIGN AI..DIVES AKURU VOWEL SIGN O
-	{0x1193B, 0x1193C, prExtend},               // Mn   [2] DIVES AKURU SIGN ANUSVARA..DIVES AKURU SIGN CANDRABINDU
-	{0x1193D, 0x1193D, prSpacingMark},          // Mc       DIVES AKURU SIGN HALANTA
-	{0x1193E, 0x1193E, prExtend},               // Mn       DIVES AKURU VIRAMA
-	{0x1193F, 0x1193F, prPrepend},              // Lo       DIVES AKURU PREFIXED NASAL SIGN
-	{0x11940, 0x11940, prSpacingMark},          // Mc       DIVES AKURU MEDIAL YA
-	{0x11941, 0x11941, prPrepend},              // Lo       DIVES AKURU INITIAL RA
-	{0x11942, 0x11942, prSpacingMark},          // Mc       DIVES AKURU MEDIAL RA
-	{0x11943, 0x11943, prExtend},               // Mn       DIVES AKURU SIGN NUKTA
-	{0x119D1, 0x119D3, prSpacingMark},          // Mc   [3] NANDINAGARI VOWEL SIGN AA..NANDINAGARI VOWEL SIGN II
-	{0x119D4, 0x119D7, prExtend},               // Mn   [4] NANDINAGARI VOWEL SIGN U..NANDINAGARI VOWEL SIGN VOCALIC RR
-	{0x119DA, 0x119DB, prExtend},               // Mn   [2] NANDINAGARI VOWEL SIGN E..NANDINAGARI VOWEL SIGN AI
-	{0x119DC, 0x119DF, prSpacingMark},          // Mc   [4] NANDINAGARI VOWEL SIGN O..NANDINAGARI SIGN VISARGA
-	{0x119E0, 0x119E0, prExtend},               // Mn       NANDINAGARI SIGN VIRAMA
-	{0x119E4, 0x119E4, prSpacingMark},          // Mc       NANDINAGARI VOWEL SIGN PRISHTHAMATRA E
-	{0x11A01, 0x11A0A, prExtend},               // Mn  [10] ZANABAZAR SQUARE VOWEL SIGN I..ZANABAZAR SQUARE VOWEL LENGTH MARK
-	{0x11A33, 0x11A38, prExtend},               // Mn   [6] ZANABAZAR SQUARE FINAL CONSONANT MARK..ZANABAZAR SQUARE SIGN ANUSVARA
-	{0x11A39, 0x11A39, prSpacingMark},          // Mc       ZANABAZAR SQUARE SIGN VISARGA
-	{0x11A3A, 0x11A3A, prPrepend},              // Lo       ZANABAZAR SQUARE CLUSTER-INITIAL LETTER RA
-	{0x11A3B, 0x11A3E, prExtend},               // Mn   [4] ZANABAZAR SQUARE CLUSTER-FINAL LETTER YA..ZANABAZAR SQUARE CLUSTER-FINAL LETTER VA
-	{0x11A47, 0x11A47, prExtend},               // Mn       ZANABAZAR SQUARE SUBJOINER
-	{0x11A51, 0x11A56, prExtend},               // Mn   [6] SOYOMBO VOWEL SIGN I..SOYOMBO VOWEL SIGN OE
-	{0x11A57, 0x11A58, prSpacingMark},          // Mc   [2] SOYOMBO VOWEL SIGN AI..SOYOMBO VOWEL SIGN AU
-	{0x11A59, 0x11A5B, prExtend},               // Mn   [3] SOYOMBO VOWEL SIGN VOCALIC R..SOYOMBO VOWEL LENGTH MARK
-	{0x11A84, 0x11A89, prPrepend},              // Lo   [6] SOYOMBO SIGN JIHVAMULIYA..SOYOMBO CLUSTER-INITIAL LETTER SA
-	{0x11A8A, 0x11A96, prExtend},               // Mn  [13] SOYOMBO FINAL CONSONANT SIGN G..SOYOMBO SIGN ANUSVARA
-	{0x11A97, 0x11A97, prSpacingMark},          // Mc       SOYOMBO SIGN VISARGA
-	{0x11A98, 0x11A99, prExtend},               // Mn   [2] SOYOMBO GEMINATION MARK..SOYOMBO SUBJOINER
-	{0x11C2F, 0x11C2F, prSpacingMark},          // Mc       BHAIKSUKI VOWEL SIGN AA
-	{0x11C30, 0x11C36, prExtend},               // Mn   [7] BHAIKSUKI VOWEL SIGN I..BHAIKSUKI VOWEL SIGN VOCALIC L
-	{0x11C38, 0x11C3D, prExtend},               // Mn   [6] BHAIKSUKI VOWEL SIGN E..BHAIKSUKI SIGN ANUSVARA
-	{0x11C3E, 0x11C3E, prSpacingMark},          // Mc       BHAIKSUKI SIGN VISARGA
-	{0x11C3F, 0x11C3F, prExtend},               // Mn       BHAIKSUKI SIGN VIRAMA
-	{0x11C92, 0x11CA7, prExtend},               // Mn  [22] MARCHEN SUBJOINED LETTER KA..MARCHEN SUBJOINED LETTER ZA
-	{0x11CA9, 0x11CA9, prSpacingMark},          // Mc       MARCHEN SUBJOINED LETTER YA
-	{0x11CAA, 0x11CB0, prExtend},               // Mn   [7] MARCHEN SUBJOINED LETTER RA..MARCHEN VOWEL SIGN AA
-	{0x11CB1, 0x11CB1, prSpacingMark},          // Mc       MARCHEN VOWEL SIGN I
-	{0x11CB2, 0x11CB3, prExtend},               // Mn   [2] MARCHEN VOWEL SIGN U..MARCHEN VOWEL SIGN E
-	{0x11CB4, 0x11CB4, prSpacingMark},          // Mc       MARCHEN VOWEL SIGN O
-	{0x11CB5, 0x11CB6, prExtend},               // Mn   [2] MARCHEN SIGN ANUSVARA..MARCHEN SIGN CANDRABINDU
-	{0x11D31, 0x11D36, prExtend},               // Mn   [6] MASARAM GONDI VOWEL SIGN AA..MASARAM GONDI VOWEL SIGN VOCALIC R
-	{0x11D3A, 0x11D3A, prExtend},               // Mn       MASARAM GONDI VOWEL SIGN E
-	{0x11D3C, 0x11D3D, prExtend},               // Mn   [2] MASARAM GONDI VOWEL SIGN AI..MASARAM GONDI VOWEL SIGN O
-	{0x11D3F, 0x11D45, prExtend},               // Mn   [7] MASARAM GONDI VOWEL SIGN AU..MASARAM GONDI VIRAMA
-	{0x11D46, 0x11D46, prPrepend},              // Lo       MASARAM GONDI REPHA
-	{0x11D47, 0x11D47, prExtend},               // Mn       MASARAM GONDI RA-KARA
-	{0x11D8A, 0x11D8E, prSpacingMark},          // Mc   [5] GUNJALA GONDI VOWEL SIGN AA..GUNJALA GONDI VOWEL SIGN UU
-	{0x11D90, 0x11D91, prExtend},               // Mn   [2] GUNJALA GONDI VOWEL SIGN EE..GUNJALA GONDI VOWEL SIGN AI
-	{0x11D93, 0x11D94, prSpacingMark},          // Mc   [2] GUNJALA GONDI VOWEL SIGN OO..GUNJALA GONDI VOWEL SIGN AU
-	{0x11D95, 0x11D95, prExtend},               // Mn       GUNJALA GONDI SIGN ANUSVARA
-	{0x11D96, 0x11D96, prSpacingMark},          // Mc       GUNJALA GONDI SIGN VISARGA
-	{0x11D97, 0x11D97, prExtend},               // Mn       GUNJALA GONDI VIRAMA
-	{0x11EF3, 0x11EF4, prExtend},               // Mn   [2] MAKASAR VOWEL SIGN I..MAKASAR VOWEL SIGN U
-	{0x11EF5, 0x11EF6, prSpacingMark},          // Mc   [2] MAKASAR VOWEL SIGN E..MAKASAR VOWEL SIGN O
-	{0x11F00, 0x11F01, prExtend},               // Mn   [2] KAWI SIGN CANDRABINDU..KAWI SIGN ANUSVARA
-	{0x11F02, 0x11F02, prPrepend},              // Lo       KAWI SIGN REPHA
-	{0x11F03, 0x11F03, prSpacingMark},          // Mc       KAWI SIGN VISARGA
-	{0x11F34, 0x11F35, prSpacingMark},          // Mc   [2] KAWI VOWEL SIGN AA..KAWI VOWEL SIGN ALTERNATE AA
-	{0x11F36, 0x11F3A, prExtend},               // Mn   [5] KAWI VOWEL SIGN I..KAWI VOWEL SIGN VOCALIC R
-	{0x11F3E, 0x11F3F, prSpacingMark},          // Mc   [2] KAWI VOWEL SIGN E..KAWI VOWEL SIGN AI
-	{0x11F40, 0x11F40, prExtend},               // Mn       KAWI VOWEL SIGN EU
-	{0x11F41, 0x11F41, prSpacingMark},          // Mc       KAWI SIGN KILLER
-	{0x11F42, 0x11F42, prExtend},               // Mn       KAWI CONJOINER
-	{0x13430, 0x1343F, prControl},              // Cf  [16] EGYPTIAN HIEROGLYPH VERTICAL JOINER..EGYPTIAN HIEROGLYPH END WALLED ENCLOSURE
-	{0x13440, 0x13440, prExtend},               // Mn       EGYPTIAN HIEROGLYPH MIRROR HORIZONTALLY
-	{0x13447, 0x13455, prExtend},               // Mn  [15] EGYPTIAN HIEROGLYPH MODIFIER DAMAGED AT TOP START..EGYPTIAN HIEROGLYPH MODIFIER DAMAGED
-	{0x16AF0, 0x16AF4, prExtend},               // Mn   [5] BASSA VAH COMBINING HIGH TONE..BASSA VAH COMBINING HIGH-LOW TONE
-	{0x16B30, 0x16B36, prExtend},               // Mn   [7] PAHAWH HMONG MARK CIM TUB..PAHAWH HMONG MARK CIM TAUM
-	{0x16F4F, 0x16F4F, prExtend},               // Mn       MIAO SIGN CONSONANT MODIFIER BAR
-	{0x16F51, 0x16F87, prSpacingMark},          // Mc  [55] MIAO SIGN ASPIRATION..MIAO VOWEL SIGN UI
-	{0x16F8F, 0x16F92, prExtend},               // Mn   [4] MIAO TONE RIGHT..MIAO TONE BELOW
-	{0x16FE4, 0x16FE4, prExtend},               // Mn       KHITAN SMALL SCRIPT FILLER
-	{0x16FF0, 0x16FF1, prSpacingMark},          // Mc   [2] VIETNAMESE ALTERNATE READING MARK CA..VIETNAMESE ALTERNATE READING MARK NHAY
-	{0x1BC9D, 0x1BC9E, prExtend},               // Mn   [2] DUPLOYAN THICK LETTER SELECTOR..DUPLOYAN DOUBLE MARK
-	{0x1BCA0, 0x1BCA3, prControl},              // Cf   [4] SHORTHAND FORMAT LETTER OVERLAP..SHORTHAND FORMAT UP STEP
-	{0x1CF00, 0x1CF2D, prExtend},               // Mn  [46] ZNAMENNY COMBINING MARK GORAZDO NIZKO S KRYZHEM ON LEFT..ZNAMENNY COMBINING MARK KRYZH ON LEFT
-	{0x1CF30, 0x1CF46, prExtend},               // Mn  [23] ZNAMENNY COMBINING TONAL RANGE MARK MRACHNO..ZNAMENNY PRIZNAK MODIFIER ROG
-	{0x1D165, 0x1D165, prExtend},               // Mc       MUSICAL SYMBOL COMBINING STEM
-	{0x1D166, 0x1D166, prSpacingMark},          // Mc       MUSICAL SYMBOL COMBINING SPRECHGESANG STEM
-	{0x1D167, 0x1D169, prExtend},               // Mn   [3] MUSICAL SYMBOL COMBINING TREMOLO-1..MUSICAL SYMBOL COMBINING TREMOLO-3
-	{0x1D16D, 0x1D16D, prSpacingMark},          // Mc       MUSICAL SYMBOL COMBINING AUGMENTATION DOT
-	{0x1D16E, 0x1D172, prExtend},               // Mc   [5] MUSICAL SYMBOL COMBINING FLAG-1..MUSICAL SYMBOL COMBINING FLAG-5
-	{0x1D173, 0x1D17A, prControl},              // Cf   [8] MUSICAL SYMBOL BEGIN BEAM..MUSICAL SYMBOL END PHRASE
-	{0x1D17B, 0x1D182, prExtend},               // Mn   [8] MUSICAL SYMBOL COMBINING ACCENT..MUSICAL SYMBOL COMBINING LOURE
-	{0x1D185, 0x1D18B, prExtend},               // Mn   [7] MUSICAL SYMBOL COMBINING DOIT..MUSICAL SYMBOL COMBINING TRIPLE TONGUE
-	{0x1D1AA, 0x1D1AD, prExtend},               // Mn   [4] MUSICAL SYMBOL COMBINING DOWN BOW..MUSICAL SYMBOL COMBINING SNAP PIZZICATO
-	{0x1D242, 0x1D244, prExtend},               // Mn   [3] COMBINING GREEK MUSICAL TRISEME..COMBINING GREEK MUSICAL PENTASEME
-	{0x1DA00, 0x1DA36, prExtend},               // Mn  [55] SIGNWRITING HEAD RIM..SIGNWRITING AIR SUCKING IN
-	{0x1DA3B, 0x1DA6C, prExtend},               // Mn  [50] SIGNWRITING MOUTH CLOSED NEUTRAL..SIGNWRITING EXCITEMENT
-	{0x1DA75, 0x1DA75, prExtend},               // Mn       SIGNWRITING UPPER BODY TILTING FROM HIP JOINTS
-	{0x1DA84, 0x1DA84, prExtend},               // Mn       SIGNWRITING LOCATION HEAD NECK
-	{0x1DA9B, 0x1DA9F, prExtend},               // Mn   [5] SIGNWRITING FILL MODIFIER-2..SIGNWRITING FILL MODIFIER-6
-	{0x1DAA1, 0x1DAAF, prExtend},               // Mn  [15] SIGNWRITING ROTATION MODIFIER-2..SIGNWRITING ROTATION MODIFIER-16
-	{0x1E000, 0x1E006, prExtend},               // Mn   [7] COMBINING GLAGOLITIC LETTER AZU..COMBINING GLAGOLITIC LETTER ZHIVETE
-	{0x1E008, 0x1E018, prExtend},               // Mn  [17] COMBINING GLAGOLITIC LETTER ZEMLJA..COMBINING GLAGOLITIC LETTER HERU
-	{0x1E01B, 0x1E021, prExtend},               // Mn   [7] COMBINING GLAGOLITIC LETTER SHTA..COMBINING GLAGOLITIC LETTER YATI
-	{0x1E023, 0x1E024, prExtend},               // Mn   [2] COMBINING GLAGOLITIC LETTER YU..COMBINING GLAGOLITIC LETTER SMALL YUS
-	{0x1E026, 0x1E02A, prExtend},               // Mn   [5] COMBINING GLAGOLITIC LETTER YO..COMBINING GLAGOLITIC LETTER FITA
-	{0x1E08F, 0x1E08F, prExtend},               // Mn       COMBINING CYRILLIC SMALL LETTER BYELORUSSIAN-UKRAINIAN I
-	{0x1E130, 0x1E136, prExtend},               // Mn   [7] NYIAKENG PUACHUE HMONG TONE-B..NYIAKENG PUACHUE HMONG TONE-D
-	{0x1E2AE, 0x1E2AE, prExtend},               // Mn       TOTO SIGN RISING TONE
-	{0x1E2EC, 0x1E2EF, prExtend},               // Mn   [4] WANCHO TONE TUP..WANCHO TONE KOINI
-	{0x1E4EC, 0x1E4EF, prExtend},               // Mn   [4] NAG MUNDARI SIGN MUHOR..NAG MUNDARI SIGN SUTUH
-	{0x1E8D0, 0x1E8D6, prExtend},               // Mn   [7] MENDE KIKAKUI COMBINING NUMBER TEENS..MENDE KIKAKUI COMBINING NUMBER MILLIONS
-	{0x1E944, 0x1E94A, prExtend},               // Mn   [7] ADLAM ALIF LENGTHENER..ADLAM NUKTA
-	{0x1F000, 0x1F003, prExtendedPictographic}, // E0.0   [4] (🀀..🀃)    MAHJONG TILE EAST WIND..MAHJONG TILE NORTH WIND
-	{0x1F004, 0x1F004, prExtendedPictographic}, // E0.6   [1] (🀄)       mahjong red dragon
-	{0x1F005, 0x1F0CE, prExtendedPictographic}, // E0.0 [202] (🀅..🃎)    MAHJONG TILE GREEN DRAGON..PLAYING CARD KING OF DIAMONDS
-	{0x1F0CF, 0x1F0CF, prExtendedPictographic}, // E0.6   [1] (🃏)       joker
-	{0x1F0D0, 0x1F0FF, prExtendedPictographic}, // E0.0  [48] (🃐..🃿)    <reserved-1F0D0>..<reserved-1F0FF>
-	{0x1F10D, 0x1F10F, prExtendedPictographic}, // E0.0   [3] (🄍..🄏)    CIRCLED ZERO WITH SLASH..CIRCLED DOLLAR SIGN WITH OVERLAID BACKSLASH
-	{0x1F12F, 0x1F12F, prExtendedPictographic}, // E0.0   [1] (🄯)       COPYLEFT SYMBOL
-	{0x1F16C, 0x1F16F, prExtendedPictographic}, // E0.0   [4] (🅬..🅯)    RAISED MR SIGN..CIRCLED HUMAN FIGURE
-	{0x1F170, 0x1F171, prExtendedPictographic}, // E0.6   [2] (🅰️..🅱️)    A bu
 @@END
