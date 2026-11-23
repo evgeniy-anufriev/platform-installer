@@ -1,3 +1,1690 @@
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/alecthomas/chroma/v2/lexers/embedded/julia.xml","mode":420,"size":25377,"sha256":"dcbd6563072ba5267a4aee206c3601fcdf7b4eee4c7c3df858938846dd75a02d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":25377}
+<lexer>
+  <config>
+    <name>Julia</name>
+    <alias>julia</alias>
+    <alias>jl</alias>
+    <filename>*.jl</filename>
+    <mime_type>text/x-julia</mime_type>
+    <mime_type>application/x-julia</mime_type>
+  </config>
+  <rules>
+    <state name="string">
+      <rule pattern="(&#34;)((?:[a-zA-Z_¡-􏿿][a-zA-Z_0-9!¡-􏿿]*)|\d+)?">
+        <bygroups>
+          <token type="LiteralString"/>
+          <token type="LiteralStringAffix"/>
+        </bygroups>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="\\([\\&#34;\&#39;$nrbtfav]|(x|u|U)[a-fA-F0-9]+|\d+)">
+        <token type="LiteralStringEscape"/>
+      </rule>
+      <rule>
+        <include state="interp"/>
+      </rule>
+      <rule pattern="%[-#0 +]*([0-9]+|[*])?(\.([0-9]+|[*]))?[hlL]?[E-GXc-giorsux%]">
+        <token type="LiteralStringInterpol"/>
+      </rule>
+      <rule pattern="[^&#34;$%\\]+">
+        <token type="LiteralString"/>
+      </rule>
+      <rule pattern=".">
+        <token type="LiteralString"/>
+      </rule>
+    </state>
+    <state name="curly">
+      <rule pattern="\{">
+        <token type="Punctuation"/>
+        <push/>
+      </rule>
+      <rule pattern="\}">
+        <token type="Punctuation"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="(?:[a-zA-Z_¡-􏿿][a-zA-Z_0-9!¡-􏿿]*)">
+        <token type="KeywordType"/>
+      </rule>
+      <rule>
+        <include state="root"/>
+      </rule>
+    </state>
+    <state name="rawstring">
+      <rule pattern="&#34;">
+        <token type="LiteralString"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="\\&#34;">
+        <token type="LiteralStringEscape"/>
+      </rule>
+      <rule pattern="([^&#34;\\]|\\[^&#34;])+">
+        <token type="LiteralString"/>
+      </rule>
+    </state>
+    <state name="tqcommand">
+      <rule pattern="(```)((?:[a-zA-Z_¡-􏿿][a-zA-Z_0-9!¡-􏿿]*)|\d+)?">
+        <bygroups>
+          <token type="LiteralStringBacktick"/>
+          <token type="LiteralStringAffix"/>
+        </bygroups>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="\\\$">
+        <token type="LiteralStringEscape"/>
+      </rule>
+      <rule>
+        <include state="interp"/>
+      </rule>
+      <rule pattern="[^\\`$]+">
+        <token type="LiteralStringBacktick"/>
+      </rule>
+      <rule pattern=".">
+        <token type="LiteralStringBacktick"/>
+      </rule>
+    </state>
+    <state name="in-intp">
+      <rule pattern="\(">
+        <token type="Punctuation"/>
+        <push/>
+      </rule>
+      <rule pattern="\)">
+        <token type="Punctuation"/>
+        <pop depth="1"/>
+      </rule>
+      <rule>
+        <include state="root"/>
+      </rule>
+    </state>
+    <state name="tqstring">
+      <rule pattern="(&#34;&#34;&#34;)((?:[a-zA-Z_¡-􏿿][a-zA-Z_0-9!¡-􏿿]*)|\d+)?">
+        <bygroups>
+          <token type="LiteralString"/>
+          <token type="LiteralStringAffix"/>
+        </bygroups>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="\\([\\&#34;\&#39;$nrbtfav]|(x|u|U)[a-fA-F0-9]+|\d+)">
+        <token type="LiteralStringEscape"/>
+      </rule>
+      <rule>
+        <include state="interp"/>
+      </rule>
+      <rule pattern="[^&#34;$%\\]+">
+        <token type="LiteralString"/>
+      </rule>
+      <rule pattern=".">
+        <token type="LiteralString"/>
+      </rule>
+    </state>
+    <state name="interp">
+      <rule pattern="\$(?:[a-zA-Z_¡-􏿿][a-zA-Z_0-9!¡-􏿿]*)">
+        <token type="LiteralStringInterpol"/>
+      </rule>
+      <rule pattern="(\$)(\()">
+        <bygroups>
+          <token type="LiteralStringInterpol"/>
+          <token type="Punctuation"/>
+        </bygroups>
+        <push state="in-intp"/>
+      </rule>
+    </state>
+    <state name="tqregex">
+      <rule pattern="(&#34;&#34;&#34;)([imsxa]*)?">
+        <bygroups>
+          <token type="LiteralStringRegex"/>
+          <token type="LiteralStringAffix"/>
+        </bygroups>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="[^&#34;]+">
+        <token type="LiteralStringRegex"/>
+      </rule>
+    </state>
+    <state name="root">
+      <rule pattern="\n">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="[^\S\n]+">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="#=">
+        <token type="CommentMultiline"/>
+        <push state="blockcomment"/>
+      </rule>
+      <rule pattern="#.*$">
+        <token type="Comment"/>
+      </rule>
+      <rule pattern="[\[\](),;]">
+        <token type="Punctuation"/>
+      </rule>
+      <rule pattern="((?:[a-zA-Z_¡-􏿿][a-zA-Z_0-9!¡-􏿿]*))(\s*)(:)((?:[a-zA-Z_¡-􏿿][a-zA-Z_0-9!¡-􏿿]*))">
+        <bygroups>
+          <token type="Name"/>
+          <token type="Text"/>
+          <token type="Operator"/>
+          <token type="Name"/>
+        </bygroups>
+      </rule>
+      <rule pattern="(?&lt;![\]):&lt;&gt;\d.])(:(?:[a-zA-Z_¡-􏿿][a-zA-Z_0-9!¡-􏿿]*))">
+        <token type="LiteralStringSymbol"/>
+      </rule>
+      <rule pattern="(?&lt;=::)(\s*)((?:[a-zA-Z_¡-􏿿][a-zA-Z_0-9!¡-􏿿]*))\b(?![(\[])">
+        <bygroups>
+          <token type="Text"/>
+          <token type="KeywordType"/>
+        </bygroups>
+      </rule>
+      <rule pattern="((?:[a-zA-Z_¡-􏿿][a-zA-Z_0-9!¡-􏿿]*))(\s*)([&lt;&gt;]:)(\s*)((?:[a-zA-Z_¡-􏿿][a-zA-Z_0-9!¡-􏿿]*))\b(?![(\[])">
+        <bygroups>
+          <token type="KeywordType"/>
+          <token type="Text"/>
+          <token type="Operator"/>
+          <token type="Text"/>
+          <token type="KeywordType"/>
+        </bygroups>
+      </rule>
+      <rule pattern="([&lt;&gt;]:)(\s*)((?:[a-zA-Z_¡-􏿿][a-zA-Z_0-9!¡-􏿿]*))\b(?![(\[])">
+        <bygroups>
+          <token type="Operator"/>
+          <token type="Text"/>
+          <token type="KeywordType"/>
+        </bygroups>
+      </rule>
+      <rule pattern="\b((?:[a-zA-Z_¡-􏿿][a-zA-Z_0-9!¡-􏿿]*))(\s*)([&lt;&gt;]:)">
+        <bygroups>
+          <token type="KeywordType"/>
+          <token type="Text"/>
+          <token type="Operator"/>
+        </bygroups>
+      </rule>
+      <rule pattern="(&gt;&gt;&gt;=|&lt;--&gt;|≕&#39;|⊻=|⇁|⥯|⥮|⥥|⥣|⥡|⥠|⥝|⥜|⥙|//=|⥘|⥕|÷=|⥔|&lt;&lt;=|&gt;&gt;=|￪|⥑|⥏|￬|≔|⩴|√|⥍|⥌|→|↔|↚|↛|↞|↠|↢|↣|↦|↤|↮|⇎|⇍|⇏|⇐|⇒|⇔|⇴|⇶|⇷|⇸|⇹|⇺|⇻|⇼|⇽|⇾|⇿|⟵|⟶|⟷|⟹|⟺|⟻|⟼|⟽|⟾|⟿|⤀|⤁|⤂|⤃|⤄|⤅|⤆|⤇|⤌|⤍|⤎|⤏|⤐|⤑|⤔|⤕|⤖|⤗|⤘|⤝|⤞|⤟|⤠|⥄|⥅|⥆|⥇|⥈|⥊|⥋|⥎|⥐|⥒|⥓|⥖|⥗|⥚|⥛|⥞|⥟|⥢|⥤|⥦|⥧|⥨|⥩|⥪|⥫|⥬|⥭|⥰|⧴|⬱|⬰|⬲|⬳|⬴|⬵|⬶|⬷|⬸|⬹|⬺|⬻|⬼|⬽|⬾|⬿|⭀|⭁|⭂|⭃|⭄|⭇|⭈|⭉|⭊|⭋|⭌|￩|￫|⇜|⇝|↜|↝|↩|↪|↫|↬|↼|↽|⇀|⥉|⇄|⇆|⇇|⇉|⇋|⇌|⇚|⇛|⇠|⇢|↷|↶|↺|↻|--&gt;|&lt;--|∛|⤓|⤒|⤋|≥|⤊|≤|⤉|===|≡|⤈|≠|!==|≢|∈|∉|∋|∌|⊆|⊈|⊂|⊄|⊊|∝|∊|∍|∥|∦|∷|∺|∻|∽|∾|≁|≃|≂|≄|≅|≆|≇|≈|≉|≊|≋|≌|≍|≎|≐|≑|≒|≓|≖|≗|≘|≙|≚|≛|≜|≝|≞|≟|≣|≦|≧|≨|≩|≪|≫|≬|≭|≮|≯|≰|≱|≲|≳|≴|≵|≶|≷|≸|≹|≺|≻|≼|≽|≾|≿|⊀|⊁|⊃|⊅|⊇|⊉|⊋|⊏|⊐|⊑|⊒|⊜|⊩|⊬|⊮|⊰|⊱|⊲|⊳|⊴|⊵|⊶|⊷|⋍|⋐|⋑|⋕|⋖|⋗|⋘|⋙|⋚|⋛|⋜|⋝|⋞|⋟|⋠|⋡|⋢|⋣|⋤|⋥|⋦|⋧|⋨|⋩|⋪|⋫|⋬|⋭|⋲|⋳|⋴|⋵|⋶|⋷|⩚|⋹|⋺|⋻|⋼|⋽|⋾|⋿|⟈|⟉|⟒|⦷|⧀|⧁|⧡|⧣|⧤|⧥|⩦|⩧|⩪|⩫|⩬|⩭|⩮|⩯|⩰|⩱|⩲|⩳|⩵|⩶|⩷|⩸|⩹|⩺|⩻|⩼|⩽|⩾|⩿|⪀|⪁|⪂|⪃|⪄|⪅|⪆|⪇|⪈|⪉|⪊|⪋|⪌|⪍|⪎|⪏|⪐|⪑|⪒|⪓|⪔|⪕|⪖|⪗|⪘|⪙|⪚|⪛|⪜|⪝|⪞|⪟|⪠|⪡|⪢|⪣|⪤|⪥|⪦|⪧|⪨|⪩|⪪|⪫|⪬|⪭|⪮|⪯|⪰|⪱|⪲|⪳|⪴|⪵|⪶|⪷|⪸|⪹|⪺|⪻|⪼|⪽|⪾|⪿|⫀|⫁|⫂|⫃|⫄|⫅|⫆|⫇|⫈|⫉|⫊|⫋|⫌|⫍|⫎|⫏|⫐|⫑|⫒|⫓|⫔|⫕|⫖|⫗|⫘|⫙|⫷|⫸|⫹|⫺|⊢|⊣|⟂|⟱|⟰|⇵|↓|…|⁝|⋮|⋱|⋰|⋯|↑|&gt;&gt;&gt;|⨟|⟗|⊕|⊖|⊞|⊟|⟖|∪|∨|⊔|⟕|∓|∔|∸|≏|⊎|⊻|⊽|⋎|⋓|⧺|⧻|⨈|⨢|⨣|⨤|⨥|⨦|⨧|⨨|⨩|⨪|⨫|⨬|⨭|⨮|⨹|⨺|⩁|⩂|⩅|⩊|⩌|⩏|⩐|⩒|⩔|⩖|⩗|⩛|⩝|⩡|⩢|⩣|⨝|▷|⌿|⊍|⫛|⩠|⋅|∘|⩟|⩞|∩|∧|⊗|⊘|⊙|⊚|⊛|⊠|⊡|⊓|∗|∙|∤|⅋|≀|⊼|⋄|⋆|⋇|⋉|⋊|⋋|⋌|⋏|⋒|⟑|⦸|⦼|⦾|⦿|⧶|⧷|⨇|⨰|⨱|⨲|⨳|⨴|⨵|⨶|⨷|⨸|⨻|⨼|⨽|⩀|⩃|⩄|⩋|⩍|⩎|⩑|⩓|⩕|⩘|⋸|⩜|∜|\^=|:=|\$=|÷|¬|\|\||±|\+\+|&amp;&amp;|¦|//|&gt;&gt;|&lt;&lt;|::|-=|\*=|\|&gt;|&lt;\||&gt;:|&lt;:|!=|==|&lt;=|&gt;=|/=|%=|-&gt;|=&gt;|\\=|&amp;=|\|=|×|\+=|:|&lt;|\+|\^|\\|=|-|\$|~|\||\*|\?|!|/|%|&amp;|&gt;)[²³¹ʰʲʳʷʸˡˢˣᴬᴮᴰᴱᴳᴴᴵᴶᴷᴸᴹᴺᴼᴾᴿᵀᵁᵂᵃᵇᵈᵉᵍᵏᵐᵒᵖᵗᵘᵛᵝᵞᵟᵠᵡᵢᵣᵤᵥᵦᵧᵨᵩᵪᶜᶠᶥᶦᶫᶰᶸᶻᶿ′″‴‵‶‷⁗⁰ⁱ⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾ⁿ₀₁₂₃₄₅₆₇₈₉₊₋₌₍₎ₐₑₒₓₕₖₗₘₙₚₛₜⱼⱽ]*">
+        <token type="Operator"/>
+      </rule>
+      <rule pattern="(\.&gt;&gt;&gt;=|\.&lt;--&gt;|\.≕&#39;|\.⊻=|\.⇚|\.//=|\.⥯|\.⥮|\.÷=|\.⥥|\.&lt;&lt;=|\.&gt;&gt;=|\.￪|\.⥣|\.⥡|\.￬|\.≔|\.⩴|\.√|\.⥠|\.⥝|\.→|\.↔|\.↚|\.↛|\.↞|\.↠|\.↢|\.↣|\.↦|\.↤|\.↮|\.⇎|\.⇍|\.⇏|\.⇐|\.⇒|\.⇔|\.⇴|\.⇶|\.⇷|\.⇸|\.⇹|\.⇺|\.⇻|\.⇼|\.⇽|\.⇾|\.⇿|\.⟵|\.⟶|\.⟷|\.⟹|\.⟺|\.⟻|\.⟼|\.⟽|\.⟾|\.⟿|\.⤀|\.⤁|\.⤂|\.⤃|\.⤄|\.⤅|\.⤆|\.⤇|\.⤌|\.⤍|\.⤎|\.⤏|\.⤐|\.⤑|\.⤔|\.⤕|\.⤖|\.⤗|\.⤘|\.⤝|\.⤞|\.⤟|\.⤠|\.⥄|\.⥅|\.⥆|\.⥇|\.⥈|\.⥊|\.⥋|\.⥎|\.⥐|\.⥒|\.⥓|\.⥖|\.⥗|\.⥚|\.⥛|\.⥞|\.⥟|\.⥢|\.⥤|\.⥦|\.⥧|\.⥨|\.⥩|\.⥪|\.⥫|\.⥬|\.⥭|\.⥰|\.⧴|\.⬱|\.⬰|\.⬲|\.⬳|\.⬴|\.⬵|\.⬶|\.⬷|\.⬸|\.⬹|\.⬺|\.⬻|\.⬼|\.⬽|\.⬾|\.⬿|\.⭀|\.⭁|\.⭂|\.⭃|\.⭄|\.⭇|\.⭈|\.⭉|\.⭊|\.⭋|\.⭌|\.￩|\.￫|\.⇜|\.⇝|\.↜|\.↝|\.↩|\.↪|\.↫|\.↬|\.↼|\.↽|\.⇀|\.⇁|\.⇄|\.⇆|\.⇇|\.⇉|\.⇋|\.⇌|\.⥜|\.⇛|\.⇠|\.⇢|\.↷|\.↶|\.↺|\.↻|\.--&gt;|\.&lt;--|\.∛|\.⥙|\.⥘|\.⥕|\.≥|\.⥔|\.≤|\.⥑|\.===|\.≡|\.⥏|\.≠|\.!==|\.≢|\.∈|\.∉|\.∋|\.∌|\.⊆|\.⊈|\.⊂|\.⊄|\.⊊|\.∝|\.∊|\.∍|\.∥|\.∦|\.∷|\.∺|\.∻|\.∽|\.∾|\.≁|\.≃|\.≂|\.≄|\.≅|\.≆|\.≇|\.≈|\.≉|\.≊|\.≋|\.≌|\.≍|\.≎|\.≐|\.≑|\.≒|\.≓|\.≖|\.≗|\.≘|\.≙|\.≚|\.≛|\.≜|\.≝|\.≞|\.≟|\.≣|\.≦|\.≧|\.≨|\.≩|\.≪|\.≫|\.≬|\.≭|\.≮|\.≯|\.≰|\.≱|\.≲|\.≳|\.≴|\.≵|\.≶|\.≷|\.≸|\.≹|\.≺|\.≻|\.≼|\.≽|\.≾|\.≿|\.⊀|\.⊁|\.⊃|\.⊅|\.⊇|\.⊉|\.⊋|\.⊏|\.⊐|\.⊑|\.⊒|\.⊜|\.⊩|\.⊬|\.⊮|\.⊰|\.⊱|\.⊲|\.⊳|\.⊴|\.⊵|\.⊶|\.⊷|\.⋍|\.⋐|\.⋑|\.⋕|\.⋖|\.⋗|\.⋘|\.⋙|\.⋚|\.⋛|\.⋜|\.⋝|\.⋞|\.⋟|\.⋠|\.⋡|\.⋢|\.⋣|\.⋤|\.⋥|\.⋦|\.⋧|\.⋨|\.⋩|\.⋪|\.⋫|\.⋬|\.⋭|\.⋲|\.⋳|\.⋴|\.⋵|\.⋶|\.⋷|\.⋸|\.⋹|\.⋺|\.⋻|\.⟕|\.⋽|\.⋾|\.⋿|\.⟈|\.⟉|\.⟒|\.⦷|\.⧀|\.⧁|\.⧡|\.⧣|\.⧤|\.⧥|\.⩦|\.⩧|\.⩪|\.⩫|\.⩬|\.⩭|\.⩮|\.⩯|\.⩰|\.⩱|\.⩲|\.⩳|\.⩵|\.⩶|\.⩷|\.⩸|\.⩹|\.⩺|\.⩻|\.⩼|\.⩽|\.⩾|\.⩿|\.⪀|\.⪁|\.⪂|\.⪃|\.⪄|\.⪅|\.⪆|\.⪇|\.⪈|\.⪉|\.⪊|\.⪋|\.⪌|\.⪍|\.⪎|\.⪏|\.⪐|\.⪑|\.⪒|\.⪓|\.⪔|\.⪕|\.⪖|\.⪗|\.⪘|\.⪙|\.⪚|\.⪛|\.⪜|\.⪝|\.⪞|\.⪟|\.⪠|\.⪡|\.⪢|\.⪣|\.⪤|\.⪥|\.⪦|\.⪧|\.⪨|\.⪩|\.⪪|\.⪫|\.⪬|\.⪭|\.⪮|\.⪯|\.⪰|\.⪱|\.⪲|\.⪳|\.⪴|\.⪵|\.⪶|\.⪷|\.⪸|\.⪹|\.⪺|\.⪻|\.⪼|\.⪽|\.⪾|\.⪿|\.⫀|\.⫁|\.⫂|\.⫃|\.⫄|\.⫅|\.⫆|\.⫇|\.⫈|\.⫉|\.⫊|\.⫋|\.⫌|\.⫍|\.⫎|\.⫏|\.⫐|\.⫑|\.⫒|\.⫓|\.⫔|\.⫕|\.⫖|\.⫗|\.⫘|\.⫙|\.⫷|\.⫸|\.⫹|\.⫺|\.⊢|\.⊣|\.⟂|\.⥍|\.⥌|\.⥉|\.⤓|\.…|\.⁝|\.⋮|\.⋱|\.⋰|\.⋯|\.⤒|\.⤋|\.⤊|\.⤉|\.⊕|\.⊖|\.⊞|\.⊟|\.⤈|\.∪|\.∨|\.⊔|\.⟱|\.∓|\.∔|\.∸|\.≏|\.⊎|\.⊻|\.⊽|\.⋎|\.⋓|\.⧺|\.⧻|\.⨈|\.⨢|\.⨣|\.⨤|\.⨥|\.⨦|\.⨧|\.⨨|\.⨩|\.⨪|\.⨫|\.⨬|\.⨭|\.⨮|\.⨹|\.⨺|\.⩁|\.⩂|\.⩅|\.⩊|\.⩌|\.⩏|\.⩐|\.⩒|\.⩔|\.⩖|\.⩗|\.⩛|\.⩝|\.⩡|\.⩢|\.⩣|\.⟰|\.⇵|\.⌿|\.↓|\.↑|\.&gt;&gt;&gt;|\.⋅|\.∘|\.⨟|\.⟗|\.∩|\.∧|\.⊗|\.⊘|\.⊙|\.⊚|\.⊛|\.⊠|\.⊡|\.⊓|\.∗|\.∙|\.∤|\.⅋|\.≀|\.⊼|\.⋄|\.⋆|\.⋇|\.⋉|\.⋊|\.⋋|\.⋌|\.⋏|\.⋒|\.⟑|\.⦸|\.⦼|\.⦾|\.⦿|\.⧶|\.⧷|\.⨇|\.⨰|\.⨱|\.⨲|\.⨳|\.⨴|\.⨵|\.⨶|\.⨷|\.⨸|\.⨻|\.⨼|\.⨽|\.⩀|\.⩃|\.⩄|\.⩋|\.⩍|\.⩎|\.⩑|\.⩓|\.⩕|\.⩘|\.⩚|\.⩜|\.⩞|\.⩟|\.⩠|\.⫛|\.⊍|\.▷|\.⨝|\.⋼|\.⟖|\.∜|\.=&gt;|\.//|\.&gt;&gt;|\.&lt;&lt;|\.\+=|\.×|\.-=|\.÷|\.¬|\.\*=|\./=|\.\+\+|\.\\=|\.¦|\.\^=|\.!=|\.\|&gt;|\.&lt;\||\.&gt;:|\.&lt;:|\.±|\.==|\.&lt;=|\.&gt;=|\.%=|\.&amp;=|\.\|=|\.=|\.~|\.&gt;|\.\\|\.&lt;|\.-|\.\||\.\^|\.\*|\.!|\./|\.%|\.&amp;|\.\+)[²³¹ʰʲʳʷʸˡˢˣᴬᴮᴰᴱᴳᴴᴵᴶᴷᴸᴹᴺᴼᴾᴿᵀᵁᵂᵃᵇᵈᵉᵍᵏᵐᵒᵖᵗᵘᵛᵝᵞᵟᵠᵡᵢᵣᵤᵥᵦᵧᵨᵩᵪᶜᶠᶥᶦᶫᶰᶸᶻᶿ′″‴‵‶‷⁗⁰ⁱ⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾ⁿ₀₁₂₃₄₅₆₇₈₉₊₋₌₍₎ₐₑₒₓₕₖₗₘₙₚₛₜⱼⱽ]*">
+        <token type="Operator"/>
+      </rule>
+      <rule pattern="(\.\.\.|\.\.)">
+        <token type="Operator"/>
+      </rule>
+      <rule pattern="&#39;(\\.|\\[0-7]{1,3}|\\x[a-fA-F0-9]{1,3}|\\u[a-fA-F0-9]{1,4}|\\U[a-fA-F0-9]{1,6}|[^\\\&#39;\n])&#39;">
+        <token type="LiteralStringChar"/>
+      </rule>
+      <rule pattern="(?&lt;=[.\w)\]])(\&#39;[²³¹ʰʲʳʷʸˡˢˣᴬᴮᴰᴱᴳᴴᴵᴶᴷᴸᴹᴺᴼᴾᴿᵀᵁᵂᵃᵇᵈᵉᵍᵏᵐᵒᵖᵗᵘᵛᵝᵞᵟᵠᵡᵢᵣᵤᵥᵦᵧᵨᵩᵪᶜᶠᶥᶦᶫᶰᶸᶻᶿ′″‴‵‶‷⁗⁰ⁱ⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾ⁿ₀₁₂₃₄₅₆₇₈₉₊₋₌₍₎ₐₑₒₓₕₖₗₘₙₚₛₜⱼⱽ]*)+">
+        <token type="Operator"/>
+      </rule>
+      <rule pattern="(raw)(&#34;&#34;&#34;)">
+        <bygroups>
+          <token type="LiteralStringAffix"/>
+          <token type="LiteralString"/>
+        </bygroups>
+        <push state="tqrawstring"/>
+      </rule>
+      <rule pattern="(raw)(&#34;)">
+        <bygroups>
+          <token type="LiteralStringAffix"/>
+          <token type="LiteralString"/>
+        </bygroups>
+        <push state="rawstring"/>
+      </rule>
+      <rule pattern="(r)(&#34;&#34;&#34;)">
+        <bygroups>
+          <token type="LiteralStringAffix"/>
+          <token type="LiteralStringRegex"/>
+        </bygroups>
+        <push state="tqregex"/>
+      </rule>
+      <rule pattern="(r)(&#34;)">
+        <bygroups>
+          <token type="LiteralStringAffix"/>
+          <token type="LiteralStringRegex"/>
+        </bygroups>
+        <push state="regex"/>
+      </rule>
+      <rule pattern="((?:[a-zA-Z_¡-􏿿][a-zA-Z_0-9!¡-􏿿]*))?(&#34;&#34;&#34;)">
+        <bygroups>
+          <token type="LiteralStringAffix"/>
+          <token type="LiteralString"/>
+        </bygroups>
+        <push state="tqstring"/>
+      </rule>
+      <rule pattern="((?:[a-zA-Z_¡-􏿿][a-zA-Z_0-9!¡-􏿿]*))?(&#34;)">
+        <bygroups>
+          <token type="LiteralStringAffix"/>
+          <token type="LiteralString"/>
+        </bygroups>
+        <push state="string"/>
+      </rule>
+      <rule pattern="((?:[a-zA-Z_¡-􏿿][a-zA-Z_0-9!¡-􏿿]*))?(```)">
+        <bygroups>
+          <token type="LiteralStringAffix"/>
+          <token type="LiteralStringBacktick"/>
+        </bygroups>
+        <push state="tqcommand"/>
+      </rule>
+      <rule pattern="((?:[a-zA-Z_¡-􏿿][a-zA-Z_0-9!¡-􏿿]*))?(`)">
+        <bygroups>
+          <token type="LiteralStringAffix"/>
+          <token type="LiteralStringBacktick"/>
+        </bygroups>
+        <push state="command"/>
+      </rule>
+      <rule pattern="((?:[a-zA-Z_¡-􏿿][a-zA-Z_0-9!¡-􏿿]*))(\{)">
+        <bygroups>
+          <token type="KeywordType"/>
+          <token type="Punctuation"/>
+        </bygroups>
+        <push state="curly"/>
+      </rule>
+      <rule pattern="(where)(\s+)((?:[a-zA-Z_¡-􏿿][a-zA-Z_0-9!¡-􏿿]*))">
+        <bygroups>
+          <token type="Keyword"/>
+          <token type="Text"/>
+          <token type="KeywordType"/>
+        </bygroups>
+      </rule>
+      <rule pattern="(\{)">
+        <token type="Punctuation"/>
+        <push state="curly"/>
+      </rule>
+      <rule pattern="(abstract[ \t]+type|primitive[ \t]+type|mutable[ \t]+struct|struct)([\s()]+)((?:[a-zA-Z_¡-􏿿][a-zA-Z_0-9!¡-􏿿]*))">
+        <bygroups>
+          <token type="Keyword"/>
+          <token type="Text"/>
+          <token type="KeywordType"/>
+        </bygroups>
+      </rule>
+      <rule pattern="@(?:[a-zA-Z_¡-􏿿][a-zA-Z_0-9!¡-􏿿]*)">
+        <token type="NameDecorator"/>
+      </rule>
+      <rule pattern="@(&gt;&gt;&gt;=|&lt;--&gt;|≕&#39;|⊻=|↽|⥯|⥮|⥥|⥣|⥡|⥠|⥝|⥜|⥙|⥘|⥕|//=|⥔|⥑|÷=|⥏|&lt;&lt;=|&gt;&gt;=|￪|⥍|⥌|￬|≔|⩴|√|⥉|⤓|→|↔|↚|↛|↞|↠|↢|↣|↦|↤|↮|⇎|⇍|⇏|⇐|⇒|⇔|⇴|⇶|⇷|⇸|⇹|⇺|⇻|⇼|⇽|⇾|⇿|⟵|⟶|⟷|⟹|⟺|⟻|⟼|⟽|⟾|⟿|⤀|⤁|⤂|⤃|⤄|⤅|⤆|⤇|⤌|⤍|⤎|⤏|⤐|⤑|⤔|⤕|⤖|⤗|⤘|⤝|⤞|⤟|⤠|⥄|⥅|⥆|⥇|⥈|⥊|⥋|⥎|⥐|⥒|⥓|⥖|⥗|⥚|⥛|⥞|⥟|⥢|⥤|⥦|⥧|⥨|⥩|⥪|⥫|⥬|⥭|⥰|⧴|⬱|⬰|⬲|⬳|⬴|⬵|⬶|⬷|⬸|⬹|⬺|⬻|⬼|⬽|⬾|⬿|⭀|⭁|⭂|⭃|⭄|⭇|⭈|⭉|⭊|⭋|⭌|￩|￫|⇜|⇝|↜|↝|↩|↪|↫|↬|↼|⤒|⇀|⇁|⇄|⇆|⇇|⇉|⇋|⇌|⇚|⇛|⇠|⇢|↷|↶|↺|↻|--&gt;|&lt;--|∛|⤋|⤊|⤉|≥|⤈|≤|⟱|===|≡|⟰|≠|!==|≢|∈|∉|∋|∌|⊆|⊈|⊂|⊄|⊊|∝|∊|∍|∥|∦|∷|∺|∻|∽|∾|≁|≃|≂|≄|≅|≆|≇|≈|≉|≊|≋|≌|≍|≎|≐|≑|≒|≓|≖|≗|≘|≙|≚|≛|≜|≝|≞|≟|≣|≦|≧|≨|≩|≪|≫|≬|≭|≮|≯|≰|≱|≲|≳|≴|≵|≶|≷|≸|≹|≺|≻|≼|≽|≾|≿|⊀|⊁|⊃|⊅|⊇|⊉|⊋|⊏|⊐|⊑|⊒|⊜|⊩|⊬|⊮|⊰|⊱|⊲|⊳|⊴|⊵|⊶|⊷|⋍|⋐|⋑|⋕|⋖|⋗|⋘|⋙|⋚|⋛|⋜|⋝|⋞|⋟|⋠|⋡|⋢|⋣|⋤|⋥|⋦|⋧|⋨|⋩|⋪|⋫|⋬|⋭|⋲|⋳|⋴|⋵|⋶|⩕|⋸|⋹|⋺|⋻|⋼|⋽|⋾|⋿|⟈|⟉|⟒|⦷|⧀|⧁|⧡|⧣|⧤|⧥|⩦|⩧|⩪|⩫|⩬|⩭|⩮|⩯|⩰|⩱|⩲|⩳|⩵|⩶|⩷|⩸|⩹|⩺|⩻|⩼|⩽|⩾|⩿|⪀|⪁|⪂|⪃|⪄|⪅|⪆|⪇|⪈|⪉|⪊|⪋|⪌|⪍|⪎|⪏|⪐|⪑|⪒|⪓|⪔|⪕|⪖|⪗|⪘|⪙|⪚|⪛|⪜|⪝|⪞|⪟|⪠|⪡|⪢|⪣|⪤|⪥|⪦|⪧|⪨|⪩|⪪|⪫|⪬|⪭|⪮|⪯|⪰|⪱|⪲|⪳|⪴|⪵|⪶|⪷|⪸|⪹|⪺|⪻|⪼|⪽|⪾|⪿|⫀|⫁|⫂|⫃|⫄|⫅|⫆|⫇|⫈|⫉|⫊|⫋|⫌|⫍|⫎|⫏|⫐|⫑|⫒|⫓|⫔|⫕|⫖|⫗|⫘|⫙|⫷|⫸|⫹|⫺|⊢|⊣|⟂|⇵|↓|↑|&gt;&gt;&gt;|…|⁝|⋮|⋱|⋰|⋯|⨟|⟗|⟖|⟕|⊕|⊖|⊞|⊟|⨝|∪|∨|⊔|▷|∓|∔|∸|≏|⊎|⊻|⊽|⋎|⋓|⧺|⧻|⨈|⨢|⨣|⨤|⨥|⨦|⨧|⨨|⨩|⨪|⨫|⨬|⨭|⨮|⨹|⨺|⩁|⩂|⩅|⩊|⩌|⩏|⩐|⩒|⩔|⩖|⩗|⩛|⩝|⩡|⩢|⩣|⊍|⫛|⌿|⩠|⩟|⩞|⋅|∘|⩜|⩚|∩|∧|⊗|⊘|⊙|⊚|⊛|⊠|⊡|⊓|∗|∙|∤|⅋|≀|⊼|⋄|⋆|⋇|⋉|⋊|⋋|⋌|⋏|⋒|⟑|⦸|⦼|⦾|⦿|⧶|⧷|⨇|⨰|⨱|⨲|⨳|⨴|⨵|⨶|⨷|⨸|⨻|⨼|⨽|⩀|⩃|⩄|⩋|⩍|⩎|⩑|⩓|⋷|⩘|∜|\\=|:=|\$=|÷|¬|\|\||±|\+\+|&amp;&amp;|¦|::|\.\.|//|&gt;&gt;|&lt;&lt;|\|&gt;|\+=|&lt;\||&gt;:|&lt;:|!=|==|&lt;=|&gt;=|-=|\*=|-&gt;|=&gt;|/=|&amp;=|\|=|%=|\^=|×|~|&gt;|&lt;|\^|=|\.|\+|-|\$|:|\||\*|\?|!|/|%|&amp;|\\)[²³¹ʰʲʳʷʸˡˢˣᴬᴮᴰᴱᴳᴴᴵᴶᴷᴸᴹᴺᴼᴾᴿᵀᵁᵂᵃᵇᵈᵉᵍᵏᵐᵒᵖᵗᵘᵛᵝᵞᵟᵠᵡᵢᵣᵤᵥᵦᵧᵨᵩᵪᶜᶠᶥᶦᶫᶰᶸᶻᶿ′″‴‵‶‷⁗⁰ⁱ⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾ⁿ₀₁₂₃₄₅₆₇₈₉₊₋₌₍₎ₐₑₒₓₕₖₗₘₙₚₛₜⱼⱽ]*">
+        <token type="NameDecorator"/>
+      </rule>
+      <rule pattern="(baremodule|continue|function|finally|module|import|elseif|return|export|global|macro|catch|where|begin|const|ccall|using|quote|break|while|local|else|let|isa|try|for|end|in|if|do)\b">
+        <token type="Keyword"/>
+      </rule>
+      <rule pattern="(ProcessFailedException|InvalidStateException|ReadOnlyMemoryError|TaskFailedException|InterruptException|StackOverflowError|CompositeException|AbstractIrrational|SubstitutionString|ExponentialBackOff|UndefKeywordError|CapturedException|DimensionMismatch|AbstractUnitRange|SegmentationFault|PermutedDimsArray|AbstractVecOrMat|UndefInitializer|CartesianIndices|OutOfMemoryError|ComposedFunction|MissingException|StringIndexError|PartialQuickSort|AbstractDisplay|AbstractPattern|StridedVecOrMat|AbstractChannel|LineNumberNode|AbstractVector|CartesianIndex|AssertionError|IndexCartesian|ErrorException|AbstractMatrix|AbstractString|OverflowError|UndefRefError|LinearIndices|DenseVecOrMat|ArgumentError|StridedVector|StridedMatrix|AbstractArray|AbstractRange|ReentrantLock|AbstractMatch|AbstractFloat|VersionNumber|UndefVarError|RoundingMode|StridedArray|StepRangeLen|OrdinalRange|AbstractChar|AbstractDict|InexactError|DenseVector|WeakKeyDict|MethodError|AbstractSet|IndexLinear|BoundsError|TextDisplay|DomainError|DenseMatrix|SystemError|DivideError|NamedTuple|IndexStyle|Cptrdiff_t|Cuintmax_t|DenseArray|ComplexF16|Irrational|VecElement|Culonglong|RegexMatch|ComplexF32|ComplexF64|BitMatrix|BitVector|Exception|GlobalRef|UnitRange|QuoteNode|TypeError|IOContext|LoadError|Clonglong|Condition|StepRange|Cintmax_t|SubString|InitError|Cssize_t|VecOrMat|BigFloat|Unsigned|UnionAll|Rational|EOFError|BitArray|IOStream|IOBuffer|KeyError|LinRange|Cwchar_t|SubArray|Function|DataType|Cwstring|Csize_t|Float64|Missing|Float32|Complex|Cstring|Float16|Nothing|Cdouble|Cushort|UInt128|Integer|WeakRef|Channel|TypeVar|Cshort|Cfloat|NTuple|IdDict|BitSet|BigInt|UInt16|Symbol|UInt32|Vector|Signed|Vararg|Culong|String|Int128|Number|UInt64|Cuchar|Matrix|Module|Method|Tuple|Int16|Colon|Cuint|UInt8|Regex|Clong|Cvoid|Cchar|Int32|RawFD|Array|Union|Int64|Timer|Pipe|Type|HTML|Text|UInt|MIME|Char|Cint|Some|Expr|Real|Enum|Pair|Dims|Int8|Dict|Task|Bool|Any|Cmd|Int|Set|Ref|Ptr|Val|IO)\b">
+        <token type="KeywordType"/>
+      </rule>
+      <rule pattern="(RoundNearestTiesAway|RoundNearestTiesUp|InsertionSort|RoundFromZero|PROGRAM_FILE|RoundNearest|RoundToZero|ENDIAN_BOM|DEPOT_PATH|RoundDown|QuickSort|MergeSort|LOAD_PATH|VERSION|missing|nothing|devnull|RoundUp|C_NULL|stdout|stderr|NaN32|NaN16|Inf64|Inf32|Inf16|false|stdin|undef|NaN64|true|ARGS|ℯ|NaN|Inf|ENV|im|π|pi)\b">
+        <token type="NameBuiltin"/>
+      </rule>
+      <rule pattern="(?:[a-zA-Z_¡-􏿿][a-zA-Z_0-9!¡-􏿿]*)">
+        <token type="Name"/>
+      </rule>
+      <rule pattern="(\d+((_\d+)+)?\.(?!\.)(\d+((_\d+)+)?)?|\.\d+((_\d+)+)?)([eEf][+-]?[0-9]+)?">
+        <token type="LiteralNumberFloat"/>
+      </rule>
+      <rule pattern="\d+((_\d+)+)?[eEf][+-]?[0-9]+">
+        <token type="LiteralNumberFloat"/>
+      </rule>
+      <rule pattern="0x[a-fA-F0-9]+((_[a-fA-F0-9]+)+)?(\.([a-fA-F0-9]+((_[a-fA-F0-9]+)+)?)?)?p[+-]?\d+">
+        <token type="LiteralNumberFloat"/>
+      </rule>
+      <rule pattern="0b[01]+((_[01]+)+)?">
+        <token type="LiteralNumberBin"/>
+      </rule>
+      <rule pattern="0o[0-7]+((_[0-7]+)+)?">
+        <token type="LiteralNumberOct"/>
+      </rule>
+      <rule pattern="0x[a-fA-F0-9]+((_[a-fA-F0-9]+)+)?">
+        <token type="LiteralNumberHex"/>
+      </rule>
+      <rule pattern="\d+((_\d+)+)?">
+        <token type="LiteralNumberInteger"/>
+      </rule>
+      <rule pattern="(\.)">
+        <token type="Operator"/>
+      </rule>
+    </state>
+    <state name="blockcomment">
+      <rule pattern="[^=#]">
+        <token type="CommentMultiline"/>
+      </rule>
+      <rule pattern="#=">
+        <token type="CommentMultiline"/>
+        <push/>
+      </rule>
+      <rule pattern="=#">
+        <token type="CommentMultiline"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="[=#]">
+        <token type="CommentMultiline"/>
+      </rule>
+    </state>
+    <state name="command">
+      <rule pattern="(`)((?:[a-zA-Z_¡-􏿿][a-zA-Z_0-9!¡-􏿿]*)|\d+)?">
+        <bygroups>
+          <token type="LiteralStringBacktick"/>
+          <token type="LiteralStringAffix"/>
+        </bygroups>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="\\[`$]">
+        <token type="LiteralStringEscape"/>
+      </rule>
+      <rule>
+        <include state="interp"/>
+      </rule>
+      <rule pattern="[^\\`$]+">
+        <token type="LiteralStringBacktick"/>
+      </rule>
+      <rule pattern=".">
+        <token type="LiteralStringBacktick"/>
+      </rule>
+    </state>
+    <state name="tqrawstring">
+      <rule pattern="&#34;&#34;&#34;">
+        <token type="LiteralString"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="([^&#34;]|&#34;[^&#34;][^&#34;])+">
+        <token type="LiteralString"/>
+      </rule>
+    </state>
+    <state name="regex">
+      <rule pattern="(&#34;)([imsxa]*)?">
+        <bygroups>
+          <token type="LiteralStringRegex"/>
+          <token type="LiteralStringAffix"/>
+        </bygroups>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="\\&#34;">
+        <token type="LiteralStringRegex"/>
+      </rule>
+      <rule pattern="[^\\&#34;]+">
+        <token type="LiteralStringRegex"/>
+      </rule>
+    </state>
+  </rules>
+</lexer>
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/alecthomas/chroma/v2/lexers/embedded/jungle.xml","mode":420,"size":2615,"sha256":"d1568ffd7189833986a0c7bda06e58fd8a265b268b1b26f6e7a66e901befa819","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2615}
+<lexer>
+  <config>
+    <name>Jungle</name>
+    <alias>jungle</alias>
+    <filename>*.jungle</filename>
+    <mime_type>text/x-jungle</mime_type>
+  </config>
+  <rules>
+    <state name="var">
+      <rule pattern="[^\S\n]+">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="\b(((re)?source|barrel)Path|excludeAnnotations|annotations|lang)\b">
+        <token type="NameBuiltin"/>
+      </rule>
+      <rule pattern="\bbase\b">
+        <token type="NameConstant"/>
+      </rule>
+      <rule pattern="\b(ind|zsm|hrv|ces|dan|dut|eng|fin|fre|deu|gre|hun|ita|nob|po[lr]|rus|sl[ov]|spa|swe|ara|heb|zh[st]|jpn|kor|tha|vie|bul|tur)">
+        <token type="NameConstant"/>
+      </rule>
+      <rule pattern="\b((semi)?round|rectangle)(-\d+x\d+)?\b">
+        <token type="NameConstant"/>
+      </rule>
+      <rule pattern="[\.;\[\]\(\$]">
+        <token type="Punctuation"/>
+      </rule>
+      <rule pattern="\)">
+        <token type="Punctuation"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="[a-zA-Z_]\w*">
+        <token type="Name"/>
+      </rule>
+      <rule>
+        <pop depth="1"/>
+      </rule>
+    </state>
+    <state name="root">
+      <rule pattern="[^\S\n]+">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="\n">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="#(\n|[\w\W]*?[^#]\n)">
+        <token type="CommentSingle"/>
+      </rule>
+      <rule pattern="^(?=\S)">
+        <token type="None"/>
+        <push state="instruction"/>
+      </rule>
+      <rule pattern="[\.;\[\]\(\)\$]">
+        <token type="Punctuation"/>
+      </rule>
+      <rule pattern="[a-zA-Z_]\w*">
+        <token type="Name"/>
+      </rule>
+    </state>
+    <state name="instruction">
+      <rule pattern="[^\S\n]+">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="=">
+        <token type="Operator"/>
+        <push state="value"/>
+      </rule>
+      <rule pattern="(?=\S)">
+        <token type="None"/>
+        <push state="var"/>
+      </rule>
+      <rule>
+        <pop depth="1"/>
+      </rule>
+    </state>
+    <state name="value">
+      <rule pattern="[^\S\n]+">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="\$\(">
+        <token type="Punctuation"/>
+        <push state="var"/>
+      </rule>
+      <rule pattern="[;\[\]\(\)\$]">
+        <token type="Punctuation"/>
+      </rule>
+      <rule pattern="#(\n|[\w\W]*?[^#]\n)">
+        <token type="CommentSingle"/>
+      </rule>
+      <rule pattern="[\w_\-\.\/\\]+">
+        <token type="Text"/>
+      </rule>
+      <rule>
+        <pop depth="1"/>
+      </rule>
+    </state>
+  </rules>
+</lexer>
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/alecthomas/chroma/v2/lexers/embedded/kotlin.xml","mode":420,"size":7085,"sha256":"bff6142b7fa83e5ae1072f6eab4d614ae9a88ebddfa83493cba05cc11607eacf","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7085}
+<lexer>
+  <config>
+    <name>Kotlin</name>
+    <alias>kotlin</alias>
+    <filename>*.kt</filename>
+    <mime_type>text/x-kotlin</mime_type>
+    <dot_all>true</dot_all>
+  </config>
+  <rules>
+    <state name="string">
+      <rule pattern="\\[tbnr&#39;&#34;\\\$]">
+        <token type="LiteralStringEscape"/>
+      </rule>
+      <rule pattern="\\u[0-9a-fA-F]{4}">
+        <token type="LiteralStringEscape"/>
+      </rule>
+      <rule pattern="&#34;">
+        <token type="LiteralStringDouble"/>
+        <pop depth="1"/>
+      </rule>
+      <rule>
+        <include state="string-interpol"/>
+      </rule>
+      <rule pattern="[^\n\\&#34;$]+">
+        <token type="LiteralStringDouble"/>
+      </rule>
+      <rule pattern="\$">
+        <token type="LiteralStringDouble"/>
+      </rule>
+    </state>
+    <state name="package">
+      <rule pattern="\S+">
+        <token type="NameNamespace"/>
+        <pop depth="1"/>
+      </rule>
+    </state>
+    <state name="class">
+      <rule pattern="\x60[^\x60]+?\x60">
+        <token type="NameClass"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="(?:[_\p{L}][\p{L}\p{N}]*|`@?[_\p{L}][\p{L}\p{N}]+`)">
+        <token type="NameClass"/>
+        <pop depth="1"/>
+      </rule>
+    </state>
+    <state name="property">
+      <rule pattern="\x60[^\x60]+?\x60">
+        <token type="NameProperty"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="(?:[_\p{L}][\p{L}\p{N}]*|`@?[_\p{L}][\p{L}\p{N}]+`)">
+        <token type="NameProperty"/>
+        <pop depth="1"/>
+      </rule>
+    </state>
+    <state name="string-interpol">
+      <rule pattern="\$(?:[_\p{L}][\p{L}\p{N}]*|`@?[_\p{L}][\p{L}\p{N}]+`)">
+        <token type="LiteralStringInterpol"/>
+      </rule>
+      <rule pattern="\${[^}\n]*}">
+        <token type="LiteralStringInterpol"/>
+      </rule>
+    </state>
+    <state name="generics-specification">
+      <rule pattern="&lt;">
+        <token type="Punctuation"/>
+        <push state="generics-specification"/>
+      </rule>
+      <rule pattern="&gt;">
+        <token type="Punctuation"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="[,:*?]">
+        <token type="Punctuation"/>
+      </rule>
+      <rule pattern="(in|out|reified)">
+        <token type="Keyword"/>
+      </rule>
+      <rule pattern="\x60[^\x60]+?\x60">
+        <token type="NameClass"/>
+      </rule>
+      <rule pattern="(?:[_\p{L}][\p{L}\p{N}]*|`@?[_\p{L}][\p{L}\p{N}]+`)">
+        <token type="NameClass"/>
+      </rule>
+      <rule pattern="\s+">
+        <token type="Text"/>
+      </rule>
+    </state>
+    <state name="root">
+      <rule pattern="^\s*\[.*?\]">
+        <token type="NameAttribute"/>
+      </rule>
+      <rule pattern="[^\S\n]+">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="\\\n">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="//[^\n]*\n?">
+        <token type="CommentSingle"/>
+      </rule>
+      <rule pattern="/[*].*?[*]/">
+        <token type="CommentMultiline"/>
+      </rule>
+      <rule pattern="\n">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="!==|!in|!is|===">
+        <token type="Operator"/>
+      </rule>
+      <rule pattern="%=|&amp;&amp;|\*=|\+\+|\+=|--|-=|-&gt;|\.\.|\/=|::|&lt;=|==|&gt;=|!!|!=|\|\||\?[:.]">
+        <token type="Operator"/>
+      </rule>
+      <rule pattern="[~!%^&amp;*()+=|\[\]:;,.&lt;&gt;\/?-]">
+        <token type="Punctuation"/>
+      </rule>
+      <rule pattern="[{}]">
+        <token type="Punctuation"/>
+      </rule>
+      <rule pattern="&#34;&#34;&#34;">
+        <token type="LiteralString"/>
+        <push state="rawstring"/>
+      </rule>
+      <rule pattern="&#34;">
+        <token type="LiteralStringDouble"/>
+        <push state="string"/>
+      </rule>
+      <rule pattern="(&#39;)(\\u[0-9a-fA-F]{4})(&#39;)">
+        <bygroups>
+          <token type="LiteralStringChar"/>
+          <token type="LiteralStringEscape"/>
+          <token type="LiteralStringChar"/>
+        </bygroups>
+      </rule>
+      <rule pattern="&#39;\\.&#39;|&#39;[^\\]&#39;">
+        <token type="LiteralStringChar"/>
+      </rule>
+      <rule pattern="0[xX][0-9a-fA-F]+[Uu]?[Ll]?|[0-9]+(\.[0-9]*)?([eE][+-][0-9]+)?[fF]?[Uu]?[Ll]?">
+        <token type="LiteralNumber"/>
+      </rule>
+      <rule pattern="(companion)(\s+)(object)">
+        <bygroups>
+          <token type="Keyword"/>
+          <token type="Text"/>
+          <token type="Keyword"/>
+        </bygroups>
+      </rule>
+      <rule pattern="(class|interface|object)(\s+)">
+        <bygroups>
+          <token type="Keyword"/>
+          <token type="Text"/>
+        </bygroups>
+        <push state="class"/>
+      </rule>
+      <rule pattern="(package|import)(\s+)">
+        <bygroups>
+          <token type="Keyword"/>
+          <token type="Text"/>
+        </bygroups>
+        <push state="package"/>
+      </rule>
+      <rule pattern="(val|var)(\s+)">
+        <bygroups>
+          <token type="Keyword"/>
+          <token type="Text"/>
+        </bygroups>
+        <push state="property"/>
+      </rule>
+      <rule pattern="(fun)(\s+)">
+        <bygroups>
+          <token type="Keyword"/>
+          <token type="Text"/>
+        </bygroups>
+        <push state="function"/>
+      </rule>
+      <rule pattern="(abstract|actual|annotation|as|as\?|break|by|catch|class|companion|const|constructor|continue|crossinline|data|delegate|do|dynamic|else|enum|expect|external|false|field|file|final|finally|for|fun|get|if|import|in|infix|init|inline|inner|interface|internal|is|it|lateinit|noinline|null|object|open|operator|out|override|package|param|private|property|protected|public|receiver|reified|return|sealed|set|setparam|super|suspend|tailrec|this|throw|true|try|typealias|typeof|val|value|var|vararg|when|where|while)\b">
+        <token type="Keyword"/>
+      </rule>
+      <rule pattern="@(?:[_\p{L}][\p{L}\p{N}]*|`@?[_\p{L}][\p{L}\p{N}]+`)">
+        <token type="NameDecorator"/>
+      </rule>
+      <rule pattern="(?:\p{Lu}[_\p{L}]*)(?=\.)">
+        <token type="NameClass"/>
+      </rule>
+      <rule pattern="(?:[_\p{L}][\p{L}\p{N}]*|`@?[_\p{L}][\p{L}\p{N}]+`)">
+        <token type="Name"/>
+      </rule>
+    </state>
+    <state name="function">
+      <rule pattern="&lt;">
+        <token type="Punctuation"/>
+        <push state="generics-specification"/>
+      </rule>
+      <rule pattern="\x60[^\x60]+?\x60">
+        <token type="NameFunction"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="(?:[_\p{L}][\p{L}\p{N}]*|`@?[_\p{L}][\p{L}\p{N}]+`)">
+        <token type="NameFunction"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="\s+">
+        <token type="Text"/>
+      </rule>
+    </state>
+    <state name="rawstring">
+      <rule pattern="&#34;&#34;&#34;">
+        <token type="LiteralString"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="(?:[^$&#34;]+|\&#34;{1,2}[^&#34;])+">
+        <token type="LiteralString"/>
+      </rule>
+      <rule>
+        <include state="string-interpol"/>
+      </rule>
+      <rule pattern="\$">
+        <token type="LiteralString"/>
+      </rule>
+    </state>
+  </rules>
+</lexer>
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/alecthomas/chroma/v2/lexers/embedded/lighttpd_configuration_file.xml","mode":420,"size":1115,"sha256":"305a109655e8e1de64683aab2815b33ea8a42d2858b11133594a42b534aa5e46","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1115}
+<lexer>
+  <config>
+    <name>Lighttpd configuration file</name>
+    <alias>lighty</alias>
+    <alias>lighttpd</alias>
+    <mime_type>text/x-lighttpd-conf</mime_type>
+  </config>
+  <rules>
+    <state name="root">
+      <rule pattern="#.*\n">
+        <token type="CommentSingle"/>
+      </rule>
+      <rule pattern="/\S*">
+        <token type="Name"/>
+      </rule>
+      <rule pattern="[a-zA-Z._-]+">
+        <token type="Keyword"/>
+      </rule>
+      <rule pattern="\d+\.\d+\.\d+\.\d+(?:/\d+)?">
+        <token type="LiteralNumber"/>
+      </rule>
+      <rule pattern="[0-9]+">
+        <token type="LiteralNumber"/>
+      </rule>
+      <rule pattern="=&gt;|=~|\+=|==|=|\+">
+        <token type="Operator"/>
+      </rule>
+      <rule pattern="\$[A-Z]+">
+        <token type="NameBuiltin"/>
+      </rule>
+      <rule pattern="[(){}\[\],]">
+        <token type="Punctuation"/>
+      </rule>
+      <rule pattern="&#34;([^&#34;\\]*(?:\\.[^&#34;\\]*)*)&#34;">
+        <token type="LiteralStringDouble"/>
+      </rule>
+      <rule pattern="\s+">
+        <token type="Text"/>
+      </rule>
+    </state>
+  </rules>
+</lexer>
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/alecthomas/chroma/v2/lexers/embedded/llvm.xml","mode":420,"size":4475,"sha256":"df1a2f31784d39d3c11a00be4989d58d813a38169996dba196710a7e8da599c8","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4475}
+<lexer>
+  <config>
+    <name>LLVM</name>
+    <alias>llvm</alias>
+    <filename>*.ll</filename>
+    <mime_type>text/x-llvm</mime_type>
+  </config>
+  <rules>
+    <state name="root">
+      <rule>
+        <include state="whitespace"/>
+      </rule>
+      <rule pattern="([-a-zA-Z$._][\w\-$.]*|&#34;[^&#34;]*?&#34;)\s*:">
+        <token type="NameLabel"/>
+      </rule>
+      <rule>
+        <include state="keyword"/>
+      </rule>
+      <rule pattern="%([-a-zA-Z$._][\w\-$.]*|&#34;[^&#34;]*?&#34;)">
+        <token type="NameVariable"/>
+      </rule>
+      <rule pattern="@([-a-zA-Z$._][\w\-$.]*|&#34;[^&#34;]*?&#34;)">
+        <token type="NameVariableGlobal"/>
+      </rule>
+      <rule pattern="%\d+">
+        <token type="NameVariableAnonymous"/>
+      </rule>
+      <rule pattern="@\d+">
+        <token type="NameVariableGlobal"/>
+      </rule>
+      <rule pattern="#\d+">
+        <token type="NameVariableGlobal"/>
+      </rule>
+      <rule pattern="!([-a-zA-Z$._][\w\-$.]*|&#34;[^&#34;]*?&#34;)">
+        <token type="NameVariable"/>
+      </rule>
+      <rule pattern="!\d+">
+        <token type="NameVariableAnonymous"/>
+      </rule>
+      <rule pattern="c?&#34;[^&#34;]*?&#34;">
+        <token type="LiteralString"/>
+      </rule>
+      <rule pattern="0[xX][a-fA-F0-9]+">
+        <token type="LiteralNumber"/>
+      </rule>
+      <rule pattern="-?\d+(?:[.]\d+)?(?:[eE][-+]?\d+(?:[.]\d+)?)?">
+        <token type="LiteralNumber"/>
+      </rule>
+      <rule pattern="[=&lt;&gt;{}\[\]()*.,!]|x\b">
+        <token type="Punctuation"/>
+      </rule>
+    </state>
+    <state name="whitespace">
+      <rule pattern="(\n|\s)+">
+        <token type="Text"/>
+      </rule>
+      <rule pattern=";.*?\n">
+        <token type="Comment"/>
+      </rule>
+    </state>
+    <state name="keyword">
+      <rule pattern="(inaccessiblemem_or_argmemonly|dereferenceable_or_null|externally_initialized|available_externally|linker_private_weak|inaccessiblememonly|local_unnamed_addr|sanitize_address|x86_vectorcallcc|noimplicitfloat|sanitize_thread|source_filename|sanitize_memory|preserve_mostcc|dereferenceable|arm_aapcs_vfpcc|zeroinitializer|extractelement|linker_private|cxx_fast_tlscc|x86_64_win64cc|intel_ocl_bicc|x86_fastcallcc|preserve_allcc|x86_thiscallcc|x86_stdcallcc|amdgpu_kernel|x86_64_sysvcc|addrspacecast|getelementptr|returns_twice|insertelement|shufflevector|msp430_intrcc|extractvalue|linkonce_odr|inteldialect|alwaysinline|blockaddress|noduplicates|thread_local|singlethread|localdynamic|unnamed_addr|avr_signalcc|unreachable|personality|arm_aapcscc|webkit_jscc|catchswitch|initialexec|insertvalue|noduplicate|nonlazybind|extern_weak|spir_kernel|attributes|sideeffect|cleanuppad|cleanupret|inlinehint|convergent|argmemonly|exactmatch|datalayout|landingpad|arm_apcscc|indirectbr|swifterror|ptx_device|ptx_kernel|x86_intrcc|avr_intrcc|alignstack|norecurse|amdgpu_vs|writeonly|localexec|amdgpu_ps|monotonic|amdgpu_gs|amdgpu_cs|allocsize|atomicrmw|swiftself|unordered|sspstrong|nocapture|addrspace|getresult|safestack|appending|noredzone|dllimport|dllexport|nobuiltin|jumptable|protected|spir_func|inbounds|musttail|external|volatile|inalloca|prologue|hhvm_ccc|noinline|readonly|readnone|linkonce|internal|catchret|samesize|returned|ptrtoint|inttoptr|noreturn|constant|nounwind|catchpad|anyregcc|weak_odr|distinct|release|optnone|uwtable|declare|optsize|swiftcc|noalias|private|minsize|default|fptrunc|zeroext|bitcast|nonnull|acq_rel|acquire|signext|builtin|cmpxchg|cleanup|section|largest|deplibs|seq_cst|common|hhvmcc|fptosi|opaque|triple|fptoui|target|filter|comdat|sitofp|module|switch|prefix|fastcc|coldcc|atomic|va_arg|notail|hidden|caller|global|invoke|define|sspreq|within|unwind|alloca|malloc|resume|select|uitofp|store|trunc|naked|byval|fence|fpext|begin|alias|exact|ghccc|ifunc|catch|undef|false|inreg|align|xchg|none|type|sext|call|null|cold|fcmp|icmp|tail|srem|free|load|nand|ashr|lshr|nnan|from|nest|frem|true|sret|urem|fdiv|zext|sdiv|udiv|ninf|arcp|fmul|fast|umax|fsub|umin|weak|fadd|ret|oeq|asm|add|dbg|sub|ccc|one|mul|olt|any|uge|nsz|ule|shl|ogt|ssp|and|sgt|nsw|nuw|min|max|sle|xor|sge|ult|phi|end|ole|une|ueq|uno|ord|oge|slt|ugt|eq|ne|to|gc|cc|or|br|c|x)\b">
+        <token type="Keyword"/>
+      </rule>
+      <rule pattern="(ppc_fp128|metadata|x86_fp80|double|label|fp128|float|token|void|half)">
+        <token type="KeywordType"/>
+      </rule>
+      <rule pattern="i[1-9]\d*">
+        <token type="Keyword"/>
+      </rule>
+    </state>
+  </rules>
+</lexer>
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/alecthomas/chroma/v2/lexers/embedded/lua.xml","mode":420,"size":4464,"sha256":"fc14ba097ca538a8065e1a23eb2477f17b63ad040ecc66d308a2e72fe9403db5","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4464}
+<lexer>
+  <config>
+    <name>Lua</name>
+    <alias>lua</alias>
+    <filename>*.lua</filename>
+    <filename>*.wlua</filename>
+    <mime_type>text/x-lua</mime_type>
+    <mime_type>application/x-lua</mime_type>
+  </config>
+  <rules>
+    <state name="funcname">
+      <rule>
+        <include state="ws"/>
+      </rule>
+      <rule pattern="[.:]">
+        <token type="Punctuation"/>
+      </rule>
+      <rule pattern="(?:[^\W\d]\w*)(?=(?:(?:--\[(=*)\[[\w\W]*?\](\2)\])|(?:--.*$)|(?:\s+))*[.:])">
+        <token type="NameClass"/>
+      </rule>
+      <rule pattern="(?:[^\W\d]\w*)">
+        <token type="NameFunction"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="\(">
+        <token type="Punctuation"/>
+        <pop depth="1"/>
+      </rule>
+    </state>
+    <state name="label">
+      <rule>
+        <include state="ws"/>
+      </rule>
+      <rule pattern="::">
+        <token type="Punctuation"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="(?:[^\W\d]\w*)">
+        <token type="NameLabel"/>
+      </rule>
+    </state>
+    <state name="dqs">
+      <rule pattern="&#34;">
+        <token type="LiteralStringDouble"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="[^\\&#34;]+">
+        <token type="LiteralStringDouble"/>
+      </rule>
+    </state>
+    <state name="root">
+      <rule pattern="#!.*">
+        <token type="CommentPreproc"/>
+      </rule>
+      <rule>
+        <push state="base"/>
+      </rule>
+    </state>
+    <state name="ws">
+      <rule pattern="(?:--\[(=*)\[[\w\W]*?\](\1)\])">
+        <token type="CommentMultiline"/>
+      </rule>
+      <rule pattern="(?:--.*$)">
+        <token type="CommentSingle"/>
+      </rule>
+      <rule pattern="(?:\s+)">
+        <token type="Text"/>
+      </rule>
+    </state>
+    <state name="goto">
+      <rule>
+        <include state="ws"/>
+      </rule>
+      <rule pattern="(?:[^\W\d]\w*)">
+        <token type="NameLabel"/>
+        <pop depth="1"/>
+      </rule>
+    </state>
+    <state name="sqs">
+      <rule pattern="&#39;">
+        <token type="LiteralStringSingle"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="[^\\&#39;]+">
+        <token type="LiteralStringSingle"/>
+      </rule>
+    </state>
+    <state name="base">
+      <rule>
+        <include state="ws"/>
+      </rule>
+      <rule pattern="(?i)0x[\da-f]*(\.[\da-f]*)?(p[+-]?\d+)?">
+        <token type="LiteralNumberHex"/>
+      </rule>
+      <rule pattern="(?i)(\d*\.\d+|\d+\.\d*)(e[+-]?\d+)?">
+        <token type="LiteralNumberFloat"/>
+      </rule>
+      <rule pattern="(?i)\d+e[+-]?\d+">
+        <token type="LiteralNumberFloat"/>
+      </rule>
+      <rule pattern="\d+">
+        <token type="LiteralNumberInteger"/>
+      </rule>
+      <rule pattern="(?s)\[(=*)\[.*?\]\1\]">
+        <token type="LiteralString"/>
+      </rule>
+      <rule pattern="::">
+        <token type="Punctuation"/>
+        <push state="label"/>
+      </rule>
+      <rule pattern="\.{3}">
+        <token type="Punctuation"/>
+      </rule>
+      <rule pattern="[=&lt;&gt;|~&amp;+\-*/%#^]+|\.\.">
+        <token type="Operator"/>
+      </rule>
+      <rule pattern="[\[\]{}().,:;]">
+        <token type="Punctuation"/>
+      </rule>
+      <rule pattern="(and|or|not)\b">
+        <token type="OperatorWord"/>
+      </rule>
+      <rule pattern="(break|do|else|elseif|end|for|if|in|repeat|return|then|until|while)\b">
+        <token type="KeywordReserved"/>
+      </rule>
+      <rule pattern="goto\b">
+        <token type="KeywordReserved"/>
+        <push state="goto"/>
+      </rule>
+      <rule pattern="(local)\b">
+        <token type="KeywordDeclaration"/>
+      </rule>
+      <rule pattern="(true|false|nil)\b">
+        <token type="KeywordConstant"/>
+      </rule>
+      <rule pattern="(function)\b">
+        <token type="KeywordReserved"/>
+        <push state="funcname"/>
+      </rule>
+      <rule pattern="[A-Za-z_]\w*(\.[A-Za-z_]\w*)?">
+        <token type="Name"/>
+      </rule>
+      <rule pattern="&#39;">
+        <token type="LiteralStringSingle"/>
+        <combined state="stringescape" state="sqs"/>
+      </rule>
+      <rule pattern="&#34;">
+        <token type="LiteralStringDouble"/>
+        <combined state="stringescape" state="dqs"/>
+      </rule>
+    </state>
+    <state name="stringescape">
+      <rule pattern="\\([abfnrtv\\&#34;\&#39;]|[\r\n]{1,2}|z\s*|x[0-9a-fA-F]{2}|\d{1,3}|u\{[0-9a-fA-F]+\})">
+        <token type="LiteralStringEscape"/>
+      </rule>
+    </state>
+  </rules>
+</lexer>
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/alecthomas/chroma/v2/lexers/embedded/makefile.xml","mode":420,"size":3520,"sha256":"9987fca52b915bec22625ce681e7e89682f42a37df32f06f0f2789cbeae9a312","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3520}
+<lexer>
+  <config>
+    <name>Makefile</name>
+    <alias>make</alias>
+    <alias>makefile</alias>
+    <alias>mf</alias>
+    <alias>bsdmake</alias>
+    <filename>*.mak</filename>
+    <filename>*.mk</filename>
+    <filename>Makefile</filename>
+    <filename>makefile</filename>
+    <filename>Makefile.*</filename>
+    <filename>GNUmakefile</filename>
+    <filename>BSDmakefile</filename>
+    <filename>Justfile</filename>
+    <filename>justfile</filename>
+    <filename>.justfile</filename>
+    <mime_type>text/x-makefile</mime_type>
+    <ensure_nl>true</ensure_nl>
+  </config>
+  <rules>
+    <state name="root">
+      <rule pattern="^(?:[\t ]+.*\n|\n)+">
+        <using lexer="Bash"/>
+      </rule>
+      <rule pattern="\$[&lt;@$+%?|*]">
+        <token type="Keyword"/>
+      </rule>
+      <rule pattern="\s+">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="#.*?\n">
+        <token type="Comment"/>
+      </rule>
+      <rule pattern="(export)(\s+)(?=[\w${}\t -]+\n)">
+        <bygroups>
+          <token type="Keyword"/>
+          <token type="Text"/>
+        </bygroups>
+        <push state="export"/>
+      </rule>
+      <rule pattern="export\s+">
+        <token type="Keyword"/>
+      </rule>
+      <rule pattern="([\w${}().-]+)(\s*)([!?:+]?=)([ \t]*)((?:.*\\\n)+|.*\n)">
+        <bygroups>
+          <token type="NameVariable"/>
+          <token type="Text"/>
+          <token type="Operator"/>
+          <token type="Text"/>
+          <using lexer="Bash"/>
+        </bygroups>
+      </rule>
+      <rule pattern="(?s)&#34;(\\\\|\\.|[^&#34;\\])*&#34;">
+        <token type="LiteralStringDouble"/>
+      </rule>
+      <rule pattern="(?s)&#39;(\\\\|\\.|[^&#39;\\])*&#39;">
+        <token type="LiteralStringSingle"/>
+      </rule>
+      <rule pattern="([^\n:]+)(:+)([ \t]*)">
+        <bygroups>
+          <token type="NameFunction"/>
+          <token type="Operator"/>
+          <token type="Text"/>
+        </bygroups>
+        <push state="block-header"/>
+      </rule>
+      <rule pattern="\$\(">
+        <token type="Keyword"/>
+        <push state="expansion"/>
+      </rule>
+    </state>
+    <state name="expansion">
+      <rule pattern="[^$a-zA-Z_()]+">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="[a-zA-Z_]+">
+        <token type="NameVariable"/>
+      </rule>
+      <rule pattern="\$">
+        <token type="Keyword"/>
+      </rule>
+      <rule pattern="\(">
+        <token type="Keyword"/>
+        <push/>
+      </rule>
+      <rule pattern="\)">
+        <token type="Keyword"/>
+        <pop depth="1"/>
+      </rule>
+    </state>
+    <state name="export">
+      <rule pattern="[\w${}-]+">
+        <token type="NameVariable"/>
+      </rule>
+      <rule pattern="\n">
+        <token type="Text"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="\s+">
+        <token type="Text"/>
+      </rule>
+    </state>
+    <state name="block-header">
+      <rule pattern="[,|]">
+        <token type="Punctuation"/>
+      </rule>
+      <rule pattern="#.*?\n">
+        <token type="Comment"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="\\\n">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="\$\(">
+        <token type="Keyword"/>
+        <push state="expansion"/>
+      </rule>
+      <rule pattern="[a-zA-Z_]+">
+        <token type="Name"/>
+      </rule>
+      <rule pattern="\n">
+        <token type="Text"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern=".">
+        <token type="Text"/>
+      </rule>
+    </state>
+  </rules>
+</lexer>
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/alecthomas/chroma/v2/lexers/embedded/mako.xml","mode":420,"size":3992,"sha256":"bf80c18c0b902d94b2de037281dd3a146ce61e6d4f70edfe4c38babc5e1d0dc2","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3992}
+<lexer>
+  <config>
+    <name>Mako</name>
+    <alias>mako</alias>
+    <filename>*.mao</filename>
+    <mime_type>application/x-mako</mime_type>
+  </config>
+  <rules>
+    <state name="root">
+      <rule pattern="(\s*)(%)(\s*end(?:\w+))(\n|\Z)">
+        <bygroups>
+          <token type="Text"/>
+          <token type="CommentPreproc"/>
+          <token type="Keyword"/>
+          <token type="Other"/>
+        </bygroups>
+      </rule>
+      <rule pattern="(\s*)(%)([^\n]*)(\n|\Z)">
+        <bygroups>
+          <token type="Text"/>
+          <token type="CommentPreproc"/>
+          <using lexer="Python"/>
+          <token type="Other"/>
+        </bygroups>
+      </rule>
+      <rule pattern="(\s*)(##[^\n]*)(\n|\Z)">
+        <bygroups>
+          <token type="Text"/>
+          <token type="CommentPreproc"/>
+          <token type="Other"/>
+        </bygroups>
+      </rule>
+      <rule pattern="(?s)&lt;%doc&gt;.*?&lt;/%doc&gt;">
+        <token type="CommentPreproc"/>
+      </rule>
+      <rule pattern="(&lt;%)([\w.:]+)">
+        <bygroups>
+          <token type="CommentPreproc"/>
+          <token type="NameBuiltin"/>
+        </bygroups>
+        <push state="tag"/>
+      </rule>
+      <rule pattern="(&lt;/%)([\w.:]+)(&gt;)">
+        <bygroups>
+          <token type="CommentPreproc"/>
+          <token type="NameBuiltin"/>
+          <token type="CommentPreproc"/>
+        </bygroups>
+      </rule>
+      <rule pattern="&lt;%(?=([\w.:]+))">
+        <token type="CommentPreproc"/>
+        <push state="ondeftags"/>
+      </rule>
+      <rule pattern="(&lt;%(?:!?))(.*?)(%&gt;)(?s)">
+        <bygroups>
+          <token type="CommentPreproc"/>
+          <using lexer="Python"/>
+          <token type="CommentPreproc"/>
+        </bygroups>
+      </rule>
+      <rule pattern="(\$\{)(.*?)(\})">
+        <bygroups>
+          <token type="CommentPreproc"/>
+          <using lexer="Python"/>
+          <token type="CommentPreproc"/>
+        </bygroups>
+      </rule>
+      <rule pattern="(?sx)&#xA;                (.+?)                # anything, followed by:&#xA;                (?:&#xA;                 (?&lt;=\n)(?=%|\#\#) | # an eval or comment line&#xA;                 (?=\#\*) |          # multiline comment&#xA;                 (?=&lt;/?%) |          # a python block&#xA;                                     # call start or end&#xA;                 (?=\$\{) |          # a substitution&#xA;                 (?&lt;=\n)(?=\s*%) |&#xA;                                     # - don&#39;t consume&#xA;                 (\\\n) |            # an escaped newline&#xA;                 \Z                  # end of string&#xA;                )&#xA;            ">
+        <bygroups>
+          <token type="Other"/>
+          <token type="Operator"/>
+        </bygroups>
+      </rule>
+      <rule pattern="\s+">
+        <token type="Text"/>
+      </rule>
+    </state>
+    <state name="ondeftags">
+      <rule pattern="&lt;%">
+        <token type="CommentPreproc"/>
+      </rule>
+      <rule pattern="(?&lt;=&lt;%)(include|inherit|namespace|page)">
+        <token type="NameBuiltin"/>
+      </rule>
+      <rule>
+        <include state="tag"/>
+      </rule>
+    </state>
+    <state name="tag">
+      <rule pattern="((?:\w+)\s*=)(\s*)(&#34;.*?&#34;)">
+        <bygroups>
+          <token type="NameAttribute"/>
+          <token type="Text"/>
+          <token type="LiteralString"/>
+        </bygroups>
+      </rule>
+      <rule pattern="/?\s*&gt;">
+        <token type="CommentPreproc"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="\s+">
+        <token type="Text"/>
+      </rule>
+    </state>
+    <state name="attr">
+      <rule pattern="&#34;.*?&#34;">
+        <token type="LiteralString"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="&#39;.*?&#39;">
+        <token type="LiteralString"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="[^\s&gt;]+">
+        <token type="LiteralString"/>
+        <pop depth="1"/>
+      </rule>
+    </state>
+  </rules>
+</lexer>
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/alecthomas/chroma/v2/lexers/embedded/mason.xml","mode":420,"size":3103,"sha256":"f43e45685c5f53cf583eea751a337fcfd93090ccd0d07c930f8c2f5c74378c39","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3103}
+<lexer>
+  <config>
+    <name>Mason</name>
+    <alias>mason</alias>
+    <filename>*.m</filename>
+    <filename>*.mhtml</filename>
+    <filename>*.mc</filename>
+    <filename>*.mi</filename>
+    <filename>autohandler</filename>
+    <filename>dhandler</filename>
+    <mime_type>application/x-mason</mime_type>
+    <priority>0.1</priority>
+  </config>
+  <rules>
+    <state name="root">
+      <rule pattern="\s+">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="(&lt;%doc&gt;)(.*?)(&lt;/%doc&gt;)(?s)">
+        <bygroups>
+          <token type="NameTag"/>
+          <token type="CommentMultiline"/>
+          <token type="NameTag"/>
+        </bygroups>
+      </rule>
+      <rule pattern="(&lt;%(?:def|method))(\s*)(.*?)(&gt;)(.*?)(&lt;/%\2\s*&gt;)(?s)">
+        <bygroups>
+          <token type="NameTag"/>
+          <token type="Text"/>
+          <token type="NameFunction"/>
+          <token type="NameTag"/>
+          <usingself state="root"/>
+          <token type="NameTag"/>
+        </bygroups>
+      </rule>
+      <rule pattern="(&lt;%\w+)(.*?)(&gt;)(.*?)(&lt;/%\2\s*&gt;)(?s)">
+        <bygroups>
+          <token type="NameTag"/>
+          <token type="NameFunction"/>
+          <token type="NameTag"/>
+          <using lexer="Perl"/>
+          <token type="NameTag"/>
+        </bygroups>
+      </rule>
+      <rule pattern="(&lt;&amp;[^|])(.*?)(,.*?)?(&amp;&gt;)(?s)">
+        <bygroups>
+          <token type="NameTag"/>
+          <token type="NameFunction"/>
+          <using lexer="Perl"/>
+          <token type="NameTag"/>
+        </bygroups>
+      </rule>
+      <rule pattern="(&lt;&amp;\|)(.*?)(,.*?)?(&amp;&gt;)(?s)">
+        <bygroups>
+          <token type="NameTag"/>
+          <token type="NameFunction"/>
+          <using lexer="Perl"/>
+          <token type="NameTag"/>
+        </bygroups>
+      </rule>
+      <rule pattern="&lt;/&amp;&gt;">
+        <token type="NameTag"/>
+      </rule>
+      <rule pattern="(&lt;%!?)(.*?)(%&gt;)(?s)">
+        <bygroups>
+          <token type="NameTag"/>
+          <using lexer="Perl"/>
+          <token type="NameTag"/>
+        </bygroups>
+      </rule>
+      <rule pattern="(?&lt;=^)#[^\n]*(\n|\Z)">
+        <token type="Comment"/>
+      </rule>
+      <rule pattern="(?&lt;=^)(%)([^\n]*)(\n|\Z)">
+        <bygroups>
+          <token type="NameTag"/>
+          <using lexer="Perl"/>
+          <token type="Other"/>
+        </bygroups>
+      </rule>
+      <rule pattern="(?sx)&#xA;                 (.+?)               # anything, followed by:&#xA;                 (?:&#xA;                  (?&lt;=\n)(?=[%#]) |  # an eval or comment line&#xA;                  (?=&lt;/?[%&amp;]) |      # a substitution or block or&#xA;                                     # call start or end&#xA;                                     # - don&#39;t consume&#xA;                  (\\\n) |           # an escaped newline&#xA;                  \Z                 # end of string&#xA;                 )">
+        <bygroups>
+          <using lexer="HTML"/>
+          <token type="Operator"/>
+        </bygroups>
+      </rule>
+    </state>
+  </rules>
+</lexer>
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/alecthomas/chroma/v2/lexers/embedded/materialize_sql_dialect.xml","mode":420,"size":8531,"sha256":"b3fbf2c5fd7e1ed2b1fbbf3aec93801fdb3430a44ebe58c207b268cd39b51e8d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":8531}
+<lexer>
+  <config>
+    <name>Materialize SQL dialect</name>
+    <alias>materialize</alias>
+    <alias>mzsql</alias>
+    <mime_type>text/x-materializesql</mime_type>
+    <case_insensitive>true</case_insensitive>
+    <not_multiline>true</not_multiline>
+  </config>
+  <rules>
+    <state name="root">
+      <rule pattern="\s+">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="--.*\n?">
+        <token type="CommentSingle"/>
+      </rule>
+      <rule pattern="/\*">
+        <token type="CommentMultiline"/>
+        <push state="multiline-comments"/>
+      </rule>
+      <rule pattern="(bigint|bigserial|bit|bit\s+varying|bool|boolean|box|bytea|char|character|character\s+varying|cidr|circle|date|decimal|double\s+precision|float4|float8|inet|int|int2|int4|int8|integer|interval|json|jsonb|line|lseg|macaddr|money|numeric|path|pg_lsn|point|polygon|real|serial|serial2|serial4|serial8|smallint|smallserial|text|time|timestamp|timestamptz|timetz|tsquery|tsvector|txid_snapshot|uuid|varbit|varchar|with\s+time\s+zone|without\s+time\s+zone|xml|anyarray|anyelement|anyenum|anynonarray|anyrange|cstring|fdw_handler|internal|language_handler|opaque|record|void)\b">
+        <token type="NameBuiltin"/>
+      </rule>
+      <rule pattern="(?s)(DO)(\s+)(?:(LANGUAGE)?(\s+)(&#39;?)(\w+)?(&#39;?)(\s+))?(\$)([^$]*)(\$)(.*?)(\$)(\10)(\$)">
+        <usingbygroup>
+          <sublexer_name_group>6</sublexer_name_group>
+          <code_group>12</code_group>
+          <emitters>
+            <token type="Keyword"/>
+            <token type="Text"/>
+            <token type="Keyword"/>
+            <token type="Text"/>
+            <token type="LiteralStringSingle"/>
+            <token type="LiteralStringSingle"/>
+            <token type="LiteralStringSingle"/>
+            <token type="Text"/>
+            <token type="LiteralStringHeredoc"/>
+            <token type="LiteralStringHeredoc"/>
+            <token type="LiteralStringHeredoc"/>
+            <token type="LiteralStringHeredoc"/>
+            <token type="LiteralStringHeredoc"/>
+            <token type="LiteralStringHeredoc"/>
+            <token type="LiteralStringHeredoc"/>
+          </emitters>
+        </usingbygroup>
+      </rule>
+      <rule pattern="(ACCESS|ACKS|ADD|ADDRESSES|AGGREGATE|ALL|ALTER|AND|ANY|ARN|ARRANGEMENT|ARRAY|AS|ASC|ASSERT|AT|AUCTION|AUTHORITY|AVAILABILITY|AVRO|AWS|BEGIN|BETWEEN|BIGINT|BILLED|BODY|BOOLEAN|BOTH|BPCHAR|BROKEN|BROKER|BROKERS|BY|BYTES|CARDINALITY|CASCADE|CASE|CAST|CERTIFICATE|CHAIN|CHAR|CHARACTER|CHARACTERISTICS|CHECK|CLIENT|CLOSE|CLUSTER|CLUSTERS|COALESCE|COLLATE|COLUMN|COLUMNS|COMMENT|COMMIT|COMMITTED|COMPACTION|COMPRESSION|COMPUTE|COMPUTECTL|CONFLUENT|CONNECTION|CONNECTIONS|CONSTRAINT|COPY|COUNT|COUNTER|CREATE|CREATECLUSTER|CREATEDB|CREATEROLE|CROSS|CSV|CURRENT|CURSOR|DATABASE|DATABASES|DATUMS|DAY|DAYS|DEALLOCATE|DEBEZIUM|DEBUG|DEBUGGING|DEC|DECIMAL|DECLARE|DECORRELATED|DEFAULT|DEFAULTS|DELETE|DELIMITED|DELIMITER|DESC|DETAILS|DISCARD|DISK|DISTINCT|DOC|DOT|DOUBLE|DROP|EFFORT|ELEMENT|ELSE|ENABLE|END|ENDPOINT|ENFORCED|ENVELOPE|ERROR|ESCAPE|EXCEPT|EXECUTE|EXISTS|EXPECTED|EXPLAIN|EXPOSE|EXTRACT|FACTOR|FALSE|FETCH|FIELDS|FILTER|FIRST|FLOAT|FOLLOWING|FOR|FOREIGN|FORMAT|FORWARD|FROM|FULL|FULLNAME|FUNCTION|GENERATOR|GRANT|GREATEST|GROUP|GROUPS|HAVING|HEADER|HEADERS|HOLD|HOST|HOUR|HOURS|ID|IDEMPOTENCE|IDLE|IF|IGNORE|ILIKE|IN|INCLUDE|INDEX|INDEXES|INFO|INHERIT|INLINE|INNER|INPUT|INSERT|INSPECT|INT|INTEGER|INTERNAL|INTERSECT|INTERVAL|INTO|INTROSPECTION|IS|ISNULL|ISOLATION|JOIN|JSON|KAFKA|KEY|KEYS|LAST|LATERAL|LATEST|LEADING|LEAST|LEFT|LEVEL|LIKE|LIMIT|LIST|LOAD|LOCAL|LOG|LOGICAL|LOGIN|MANAGED|MAP|MARKETING|MATERIALIZE|MATERIALIZED|MAX|MECHANISMS|MEMBERSHIP|MERGE|MESSAGE|METADATA|MINUTE|MINUTES|MODE|MONTH|MONTHS|MS|MUTUALLY|NAME|NAMES|NATURAL|NEXT|NO|NOCREATECLUSTER|NOCREATEDB|NOCREATEROLE|NOINHERIT|NOLOGIN|NONE|NOSUPERUSER|NOT|NOTICE|NULL|NULLIF|NULLS|OBJECTS|OF|OFFSET|ON|ONLY|OPERATOR|OPTIMIZED|OPTIMIZER|OPTIONS|OR|ORDER|ORDINALITY|OUTER|OVER|OWNED|OWNER|PARTITION|PASSWORD|PHYSICAL|PLAN|PLANS|PORT|POSITION|POSTGRES|PRECEDING|PRECISION|PREFIX|PREPARE|PRIMARY|PRIVATELINK|PRIVILEGES|PROGRESS|PROTOBUF|PROTOCOL|PUBLICATION|QUERY|QUOTE|RAISE|RANGE|RAW|READ|REAL|REASSIGN|RECURSION|RECURSIVE|REFERENCES|REFRESH|REGEX|REGION|REGISTRY|RENAME|REPEATABLE|REPLACE|REPLICA|REPLICAS|REPLICATION|RESET|RESPECT|RESTRICT|RETENTION|RETURN|RETURNING|REVOKE|RIGHT|ROLE|ROLES|ROLLBACK|ROTATE|ROW|ROWS|SASL|SCALE|SCHEMA|SCHEMAS|SCRIPT|SECOND|SECONDS|SECRET|SECRETS|SECURITY|SEED|SELECT|SEQUENCES|SERIALIZABLE|SERVICE|SESSION|SET|SHARD|SHOW|SINK|SINKS|SIZE|SMALLINT|SNAPSHOT|SOME|SOURCE|SOURCES|SSH|SSL|START|STDIN|STDOUT|STORAGE|STORAGECTL|STRATEGY|STRICT|STRING|SUBSCRIBE|SUBSOURCE|SUBSOURCES|SUBSTRING|SUPERUSER|SWAP|SYSTEM|TABLE|TABLES|TAIL|TEMP|TEMPORARY|TEST|TEXT|THEN|TICK|TIES|TIME|TIMELINE|TIMEOUT|TIMESTAMP|TIMESTAMPTZ|TO|TOKEN|TOPIC|TPCH|TRACE|TRAILING|TRANSACTION|TRIM|TRUE|TUNNEL|TYPE|TYPES|UNBOUNDED|UNCOMMITTED|UNION|UNIQUE|UNKNOWN|UP|UPDATE|UPSERT|URL|USAGE|USER|USERNAME|USERS|USING|VALIDATE|VALUE|VALUES|VARCHAR|VARYING|VIEW|VIEWS|WARNING|WEBHOOK|WHEN|WHERE|WINDOW|WIRE|WITH|WITHIN|WITHOUT|WORK|WORKERS|WRITE|YEAR|YEARS|ZONE|ZONES)\b">
+        <token type="Keyword"/>
+      </rule>
+      <rule pattern="[+*/&lt;&gt;=~!@#%^&amp;|`?-]+">
+        <token type="Operator"/>
+      </rule>
+      <rule pattern="::">
+        <token type="Operator"/>
+      </rule>
+      <rule pattern="\$\d+">
+        <token type="NameVariable"/>
+      </rule>
+      <rule pattern="([0-9]*\.[0-9]*|[0-9]+)(e[+-]?[0-9]+)?">
+        <token type="LiteralNumberFloat"/>
+      </rule>
+      <rule pattern="[0-9]+">
+        <token type="LiteralNumberInteger"/>
+      </rule>
+      <rule pattern="((?:E|U&amp;)?)(&#39;)">
+        <bygroups>
+          <token type="LiteralStringAffix"/>
+          <token type="LiteralStringSingle"/>
+        </bygroups>
+        <push state="string"/>
+      </rule>
+      <rule pattern="((?:U&amp;)?)(&#34;)">
+        <bygroups>
+          <token type="LiteralStringAffix"/>
+          <token type="LiteralStringName"/>
+        </bygroups>
+        <push state="quoted-ident"/>
+      </rule>
+      <rule pattern="(?s)(\$)([^$]*)(\$)(.*?)(\$)(\2)(\$)(\s+)(LANGUAGE)?(\s+)(&#39;?)(\w+)?(&#39;?)">
+        <usingbygroup>
+          <sublexer_name_group>12</sublexer_name_group>
+          <code_group>4</code_group>
+          <emitters>
+            <token type="LiteralStringHeredoc"/>
+            <token type="LiteralStringHeredoc"/>
+            <token type="LiteralStringHeredoc"/>
+            <token type="LiteralStringHeredoc"/>
+            <token type="LiteralStringHeredoc"/>
+            <token type="LiteralStringHeredoc"/>
+            <token type="LiteralStringHeredoc"/>
+            <token type="Text"/>
+            <token type="Keyword"/>
+            <token type="Text"/>
+            <token type="LiteralStringSingle"/>
+            <token type="LiteralStringSingle"/>
+            <token type="LiteralStringSingle"/>
+          </emitters>
+        </usingbygroup>
+      </rule>
+      <rule pattern="(?s)(\$)([^$]*)(\$)(.*?)(\$)(\2)(\$)">
+        <token type="LiteralStringHeredoc"/>
+      </rule>
+      <rule pattern="[a-z_]\w*">
+        <token type="Name"/>
+      </rule>
+      <rule pattern=":([&#39;&#34;]?)[a-z]\w*\b\1">
+        <token type="NameVariable"/>
+      </rule>
+      <rule pattern="[;:()\[\]{},.]">
+        <token type="Punctuation"/>
+      </rule>
+    </state>
+    <state name="multiline-comments">
+      <rule pattern="/\*">
+        <token type="CommentMultiline"/>
+        <push state="multiline-comments"/>
+      </rule>
+      <rule pattern="\*/">
+        <token type="CommentMultiline"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="[^/*]+">
+        <token type="CommentMultiline"/>
+      </rule>
+      <rule pattern="[/*]">
+        <token type="CommentMultiline"/>
+      </rule>
+    </state>
+    <state name="string">
+      <rule pattern="[^&#39;]+">
+        <token type="LiteralStringSingle"/>
+      </rule>
+      <rule pattern="&#39;&#39;">
+        <token type="LiteralStringSingle"/>
+      </rule>
+      <rule pattern="&#39;">
+        <token type="LiteralStringSingle"/>
+        <pop depth="1"/>
+      </rule>
+    </state>
+    <state name="quoted-ident">
+      <rule pattern="[^&#34;]+">
+        <token type="LiteralStringName"/>
+      </rule>
+      <rule pattern="&#34;&#34;">
+        <token type="LiteralStringName"/>
+      </rule>
+      <rule pattern="&#34;">
+        <token type="LiteralStringName"/>
+        <pop depth="1"/>
+      </rule>
+    </state>
+  </rules>
+</lexer>
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/alecthomas/chroma/v2/lexers/embedded/mathematica.xml","mode":420,"size":1880,"sha256":"f2f940cdb837f58f1449b0e94104eb5e59d1c330b67ee6f7a1a114a51e5bff4b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1880}
+<lexer>
+  <config>
+    <name>Mathematica</name>
+    <alias>mathematica</alias>
+    <alias>mma</alias>
+    <alias>nb</alias>
+    <filename>*.cdf</filename>
+    <filename>*.m</filename>
+    <filename>*.ma</filename>
+    <filename>*.mt</filename>
+    <filename>*.mx</filename>
+    <filename>*.nb</filename>
+    <filename>*.nbp</filename>
+    <filename>*.wl</filename>
+    <mime_type>application/mathematica</mime_type>
+    <mime_type>application/vnd.wolfram.mathematica</mime_type>
+    <mime_type>application/vnd.wolfram.mathematica.package</mime_type>
+    <mime_type>application/vnd.wolfram.cdf</mime_type>
+  </config>
+  <rules>
+    <state name="root">
+      <rule pattern="(?s)\(\*.*?\*\)">
+        <token type="Comment"/>
+      </rule>
+      <rule pattern="([a-zA-Z]+[A-Za-z0-9]*`)">
+        <token type="NameNamespace"/>
+      </rule>
+      <rule pattern="([A-Za-z0-9]*_+[A-Za-z0-9]*)">
+        <token type="NameVariable"/>
+      </rule>
+      <rule pattern="#\d*">
+        <token type="NameVariable"/>
+      </rule>
+      <rule pattern="([a-zA-Z]+[a-zA-Z0-9]*)">
+        <token type="Name"/>
+      </rule>
+      <rule pattern="-?\d+\.\d*">
+        <token type="LiteralNumberFloat"/>
+      </rule>
+      <rule pattern="-?\d*\.\d+">
+        <token type="LiteralNumberFloat"/>
+      </rule>
+      <rule pattern="-?\d+">
+        <token type="LiteralNumberInteger"/>
+      </rule>
+      <rule pattern="(!===|@@@|===|/;|:=|-&gt;|:&gt;|/\.|=\.|~~|&lt;=|@@|/@|&amp;&amp;|\|\||//|&lt;&gt;|;;|&gt;=|-|@|!|\^|/|\*|\?|\+|&amp;|&lt;|&gt;|=|\|)">
+        <token type="Operator"/>
+      </rule>
+      <rule pattern="(,|;|\(|\)|\[|\]|\{|\})">
+        <token type="Punctuation"/>
+      </rule>
+      <rule pattern="&#34;.*?&#34;">
+        <token type="LiteralString"/>
+      </rule>
+      <rule pattern="\s+">
+        <token type="TextWhitespace"/>
+      </rule>
+    </state>
+  </rules>
+</lexer>
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/alecthomas/chroma/v2/lexers/embedded/matlab.xml","mode":420,"size":4502,"sha256":"d6b68feda07cbf7f064bc86cc8a6fd2389d2f9ad7bdf874d3f4fb1a5b18108bb","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4502}
+<lexer>
+  <config>
+    <name>Matlab</name>
+    <alias>matlab</alias>
+    <filename>*.m</filename>
+    <mime_type>text/matlab</mime_type>
+  </config>
+  <rules>
+    <state name="blockcomment">
+      <rule pattern="^\s*%\}">
+        <token type="CommentMultiline"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="^.*\n">
+        <token type="CommentMultiline"/>
+      </rule>
+      <rule pattern=".">
+        <token type="CommentMultiline"/>
+      </rule>
+    </state>
+    <state name="deffunc">
+      <rule pattern="(\s*)(?:(.+)(\s*)(=)(\s*))?(.+)(\()(.*)(\))(\s*)">
+        <bygroups>
+          <token type="TextWhitespace"/>
+          <token type="Text"/>
+          <token type="TextWhitespace"/>
+          <token type="Punctuation"/>
+          <token type="TextWhitespace"/>
+          <token type="NameFunction"/>
+          <token type="Punctuation"/>
+          <token type="Text"/>
+          <token type="Punctuation"/>
+          <token type="TextWhitespace"/>
+        </bygroups>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="(\s*)([a-zA-Z_]\w*)">
+        <bygroups>
+          <token type="Text"/>
+          <token type="NameFunction"/>
+        </bygroups>
+        <pop depth="1"/>
+      </rule>
+    </state>
+    <state name="root">
+      <rule pattern="\n">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="^!.*">
+        <token type="LiteralStringOther"/>
+      </rule>
+      <rule pattern="%\{\s*\n">
+        <token type="CommentMultiline"/>
+        <push state="blockcomment"/>
+      </rule>
+      <rule pattern="%.*$">
+        <token type="Comment"/>
+      </rule>
+      <rule pattern="^\s*function">
+        <token type="Keyword"/>
+        <push state="deffunc"/>
+      </rule>
+      <rule pattern="(properties|persistent|enumerated|otherwise|continue|function|classdef|methods|elseif|events|switch|return|global|parfor|catch|break|while|else|spmd|case|try|end|for|if)\b">
+        <token type="Keyword"/>
+      </rule>
+      <rule pattern="(sin|sind|sinh|asin|asind|asinh|cos|cosd|cosh|acos|acosd|acosh|tan|tand|tanh|atan|atand|atan2|atanh|sec|secd|sech|asec|asecd|asech|csc|cscd|csch|acsc|acscd|acsch|cot|cotd|coth|acot|acotd|acoth|hypot|exp|expm1|log|log1p|log10|log2|pow2|realpow|reallog|realsqrt|sqrt|nthroot|nextpow2|abs|angle|complex|conj|imag|real|unwrap|isreal|cplxpair|fix|floor|ceil|round|mod|rem|sign|airy|besselj|bessely|besselh|besseli|besselk|beta|betainc|betaln|ellipj|ellipke|erf|erfc|erfcx|erfinv|expint|gamma|gammainc|gammaln|psi|legendre|cross|dot|factor|isprime|primes|gcd|lcm|rat|rats|perms|nchoosek|factorial|cart2sph|cart2pol|pol2cart|sph2cart|hsv2rgb|rgb2hsv|zeros|ones|eye|repmat|rand|randn|linspace|logspace|freqspace|meshgrid|accumarray|size|length|ndims|numel|disp|isempty|isequal|isequalwithequalnans|cat|reshape|diag|blkdiag|tril|triu|fliplr|flipud|flipdim|rot90|find|end|sub2ind|ind2sub|bsxfun|ndgrid|permute|ipermute|shiftdim|circshift|squeeze|isscalar|isvector|ans|eps|realmax|realmin|pi|i|inf|nan|isnan|isinf|isfinite|j|why|compan|gallery|hadamard|hankel|hilb|invhilb|magic|pascal|rosser|toeplitz|vander|wilkinson)\b">
+        <token type="NameBuiltin"/>
+      </rule>
+      <rule pattern="\.\.\..*$">
+        <token type="Comment"/>
+      </rule>
+      <rule pattern="-|==|~=|&lt;|&gt;|&lt;=|&gt;=|&amp;&amp;|&amp;|~|\|\|?">
+        <token type="Operator"/>
+      </rule>
+      <rule pattern="\.\*|\*|\+|\.\^|\.\\|\.\/|\/|\\">
+        <token type="Operator"/>
+      </rule>
+      <rule pattern="\[|\]|\(|\)|\{|\}|:|@|\.|,">
+        <token type="Punctuation"/>
+      </rule>
+      <rule pattern="=|:|;">
+        <token type="Punctuation"/>
+      </rule>
+      <rule pattern="(?&lt;=[\w)\].])\&#39;+">
+        <token type="Operator"/>
+      </rule>
+      <rule pattern="(\d+\.\d*|\d*\.\d+)([eEf][+-]?[0-9]+)?">
+        <token type="LiteralNumberFloat"/>
+      </rule>
+      <rule pattern="\d+[eEf][+-]?[0-9]+">
+        <token type="LiteralNumberFloat"/>
+      </rule>
+      <rule pattern="\d+">
+        <token type="LiteralNumberInteger"/>
+      </rule>
+      <rule pattern="(?&lt;![\w)\].])\&#39;">
+        <token type="LiteralString"/>
+        <push state="string"/>
+      </rule>
+      <rule pattern="[a-zA-Z_]\w*">
+        <token type="Name"/>
+      </rule>
+      <rule pattern=".">
+        <token type="Text"/>
+      </rule>
+    </state>
+    <state name="string">
+      <rule pattern="[^\&#39;]*\&#39;">
+        <token type="LiteralString"/>
+        <pop depth="1"/>
+      </rule>
+    </state>
+  </rules>
+</lexer>
+@@END
 @@PORTABLE {"path":"third_party/wails/vendor/github.com/alecthomas/chroma/v2/lexers/embedded/mcfunction.xml","mode":420,"size":5929,"sha256":"7201bf4050b102300bf990c9af544187c20486ff0c1defc1bedc5b401ac03f78","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5929}
 <lexer>
   <config>
@@ -144739,2095 +146426,5 @@ MIT
 package color
 
 type any = interface{}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/gookit/color/color.go","mode":420,"size":5833,"sha256":"a9b86bd0a1a2d056fe529a08f5094a4188ac3fe93640efc9c6f8a6ab6e7119e0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5833}
-/*
-Package color is command line color library.
-Support rich color rendering output, universal API method, compatible with Windows system
-
-Source code and other details for the project are available at GitHub:
-
-	https://github.com/gookit/color
-
-More usage please see README and tests.
-*/
-package color
-
-import (
-	"fmt"
-	"io"
-	"os"
-	"regexp"
-	"strings"
-
-	"github.com/xo/terminfo"
-)
-
-// color render templates
-//
-// ESC 操作的表示:
-//
-//	"\033"(Octal 8进制) = "\x1b"(Hexadecimal 16进制) = 27 (10进制)
-const (
-	// StartSet chars
-	StartSet = "\x1b["
-	// ResetSet close all properties.
-	ResetSet = "\x1b[0m"
-	// SettingTpl string.
-	SettingTpl = "\x1b[%sm"
-	// FullColorTpl for build color code
-	FullColorTpl = "\x1b[%sm%s\x1b[0m"
-	// CodeSuffix string for color code.
-	CodeSuffix = "[0m"
-)
-
-// CodeExpr regex to clear color codes eg "\033[1;36mText\x1b[0m"
-const CodeExpr = `\033\[[\d;?]+m`
-
-var (
-	// Enable switch color render and display
-	//
-	// NOTICE:
-	// if ENV: NO_COLOR is not empty, will disable color render.
-	Enable = os.Getenv("NO_COLOR") == ""
-	// RenderTag render HTML tag on call color.Xprint, color.PrintX
-	RenderTag = true
-	// debug mode for development.
-	//
-	// set env:
-	// 	COLOR_DEBUG_MODE=on
-	// or:
-	// 	COLOR_DEBUG_MODE=on go run ./_examples/envcheck.go
-	debugMode = os.Getenv("COLOR_DEBUG_MODE") == "on"
-	// inner errors record on detect color level
-	innerErrs []error
-	// output the default io.Writer message print
-	output io.Writer = os.Stdout
-	// mark current env, It's like in `cmd.exe`
-	// if not in windows, it's always False.
-	isLikeInCmd bool
-	// the color support level for current terminal
-	// needVTP - need enable VTP, only for Windows OS
-	colorLevel, needVTP = detectTermColorLevel()
-	// match color codes
-	codeRegex = regexp.MustCompile(CodeExpr)
-	// mark current env is support color.
-	// Always: isLikeInCmd != supportColor
-	// supportColor = IsSupportColor()
-)
-
-// TermColorLevel Get the currently supported color level
-func TermColorLevel() Level {
-	return colorLevel
-}
-
-// SupportColor Whether the current environment supports color output
-func SupportColor() bool {
-	return colorLevel > terminfo.ColorLevelNone
-}
-
-// Support16Color on the current ENV
-// func Support16Color() bool {
-// 	return colorLevel > terminfo.ColorLevelNone
-// }
-
-// Support256Color Whether the current environment supports 256-color output
-func Support256Color() bool {
-	return colorLevel > terminfo.ColorLevelBasic
-}
-
-// SupportTrueColor Whether the current environment supports (RGB)True-color output
-func SupportTrueColor() bool {
-	return colorLevel > terminfo.ColorLevelHundreds
-}
-
-/*************************************************************
- * global settings
- *************************************************************/
-
-// Set console color attributes
-func Set(colors ...Color) (int, error) {
-	code := Colors2code(colors...)
-	err := SetTerminal(code)
-	return 0, err
-}
-
-// Reset reset console color attributes
-func Reset() (int, error) {
-	err := ResetTerminal()
-	return 0, err
-}
-
-// Disable disable color output
-func Disable() bool {
-	oldVal := Enable
-	Enable = false
-	return oldVal
-}
-
-// NotRenderTag on call color.Xprint, color.PrintX
-func NotRenderTag() {
-	RenderTag = false
-}
-
-// SetOutput set default colored text output
-func SetOutput(w io.Writer) {
-	output = w
-}
-
-// ResetOutput reset output
-func ResetOutput() {
-	output = os.Stdout
-}
-
-// ResetOptions reset all package option setting
-func ResetOptions() {
-	RenderTag = true
-	Enable = true
-	output = os.Stdout
-}
-
-// ForceSetColorLevel force open color render
-func ForceSetColorLevel(level terminfo.ColorLevel) terminfo.ColorLevel {
-	oldLevelVal := colorLevel
-	colorLevel = level
-	return oldLevelVal
-}
-
-// ForceColor force open color render
-func ForceColor() terminfo.ColorLevel {
-	return ForceOpenColor()
-}
-
-// ForceOpenColor force open color render
-func ForceOpenColor() terminfo.ColorLevel {
-	// TODO should set level to ?
-	return ForceSetColorLevel(terminfo.ColorLevelMillions)
-}
-
-// IsLikeInCmd check result
-//
-// Deprecated: please don't use
-func IsLikeInCmd() bool {
-	return isLikeInCmd
-}
-
-// InnerErrs info
-func InnerErrs() []error {
-	return innerErrs
-}
-
-/*************************************************************
- * render color code
- *************************************************************/
-
-// RenderCode render message by color code.
-//
-// Usage:
-//
-//	msg := RenderCode("3;32;45", "some", "message")
-func RenderCode(code string, args ...any) string {
-	var message string
-	if ln := len(args); ln == 0 {
-		return ""
-	}
-
-	message = fmt.Sprint(args...)
-	if len(code) == 0 {
-		return message
-	}
-
-	// disabled OR not support color
-	if !Enable || !SupportColor() {
-		return ClearCode(message)
-	}
-
-	// return fmt.Sprintf(FullColorTpl, code, message)
-	return StartSet + code + "m" + message + ResetSet
-}
-
-// RenderWithSpaces Render code with spaces.
-// If the number of args is > 1, a space will be added between the args
-func RenderWithSpaces(code string, args ...any) string {
-	msg := formatArgsForPrintln(args)
-	if len(code) == 0 {
-		return msg
-	}
-
-	// disabled OR not support color
-	if !Enable || !SupportColor() {
-		return ClearCode(msg)
-	}
-
-	return StartSet + code + "m" + msg + ResetSet
-}
-
-// RenderString render a string with color code.
-//
-// Usage:
-//
-//	msg := RenderString("3;32;45", "a message")
-func RenderString(code string, str string) string {
-	if len(code) == 0 || str == "" {
-		return str
-	}
-
-	// disabled OR not support color
-	if !Enable || !SupportColor() {
-		return ClearCode(str)
-	}
-
-	// return fmt.Sprintf(FullColorTpl, code, str)
-	return StartSet + code + "m" + str + ResetSet
-}
-
-// ClearCode clear color codes.
-//
-// eg:
-//
-//	"\033[36;1mText\x1b[0m" -> "Text"
-func ClearCode(str string) string {
-	if !strings.Contains(str, CodeSuffix) {
-		return str
-	}
-	return codeRegex.ReplaceAllString(str, "")
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/gookit/color/color_16.go","mode":420,"size":11025,"sha256":"e1eeec776e2b25b30751aa388cf56cefbb899dfb67a7576aa31ad08e220f067d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":11025}
-package color
-
-import (
-	"fmt"
-	"strconv"
-)
-
-// Color Color16, 16 color value type
-// 3(2^3=8) OR 4(2^4=16) bite color.
-type Color uint8
-type Basic = Color // alias of Color
-
-// Opts basic color options. code: 0 - 9
-type Opts []Color
-
-// Add option value
-func (o *Opts) Add(ops ...Color) {
-	for _, op := range ops {
-		if uint8(op) < 10 {
-			*o = append(*o, op)
-		}
-	}
-}
-
-// IsValid options
-func (o Opts) IsValid() bool {
-	return len(o) > 0
-}
-
-// IsEmpty options
-func (o Opts) IsEmpty() bool {
-	return len(o) == 0
-}
-
-// String options to string. eg: "1;3"
-func (o Opts) String() string {
-	return Colors2code(o...)
-}
-
-/*************************************************************
- * Basic 16 color definition
- *************************************************************/
-
-const (
-	// OptMax max option value. range: 0 - 9
-	OptMax = 10
-	// DiffFgBg diff foreground and background color
-	DiffFgBg = 10
-)
-
-// Boundary value for foreground/background color 16
-//
-//   - base: fg 30~37, bg 40~47
-//   - light: fg 90~97, bg 100~107
-const (
-	FgBase uint8 = 30
-	FgMax  uint8 = 37
-	BgBase uint8 = 40
-	BgMax  uint8 = 47
-
-	HiFgBase uint8 = 90
-	HiFgMax  uint8 = 97
-	HiBgBase uint8 = 100
-	HiBgMax  uint8 = 107
-)
-
-// Foreground colors. basic foreground colors 30 - 37
-const (
-	FgBlack Color = iota + 30
-	FgRed
-	FgGreen
-	FgYellow
-	FgBlue
-	FgMagenta // 品红
-	FgCyan    // 青色
-	FgWhite
-	// FgDefault revert default FG
-	FgDefault Color = 39
-)
-
-// Extra foreground color 90 - 97(非标准)
-const (
-	FgDarkGray Color = iota + 90 // 亮黑（灰）
-	FgLightRed
-	FgLightGreen
-	FgLightYellow
-	FgLightBlue
-	FgLightMagenta
-	FgLightCyan
-	FgLightWhite
-	// FgGray is alias of FgDarkGray
-	FgGray Color = 90 // 亮黑（灰）
-)
-
-// Background colors. basic background colors 40 - 47
-const (
-	BgBlack Color = iota + 40
-	BgRed
-	BgGreen
-	BgYellow // BgBrown like yellow
-	BgBlue
-	BgMagenta
-	BgCyan
-	BgWhite
-	// BgDefault revert default BG
-	BgDefault Color = 49
-)
-
-// Extra background color 100 - 107 (non-standard)
-const (
-	BgDarkGray Color = iota + 100
-	BgLightRed
-	BgLightGreen
-	BgLightYellow
-	BgLightBlue
-	BgLightMagenta
-	BgLightCyan
-	BgLightWhite
-	// BgGray is alias of BgDarkGray
-	BgGray Color = 100
-)
-
-// Option settings. range: 0 - 9
-const (
-	OpReset         Color = iota // 0 重置所有设置
-	OpBold                       // 1 加粗
-	OpFuzzy                      // 2 模糊(不是所有的终端仿真器都支持)
-	OpItalic                     // 3 斜体(不是所有的终端仿真器都支持)
-	OpUnderscore                 // 4 下划线
-	OpBlink                      // 5 闪烁
-	OpFastBlink                  // 6 快速闪烁(未广泛支持)
-	OpReverse                    // 7 颠倒的 交换背景色与前景色
-	OpConcealed                  // 8 隐匿的
-	OpStrikethrough              // 9 删除的，删除线(未广泛支持)
-)
-
-// There are basic and light foreground color aliases
-const (
-	Red     = FgRed
-	Cyan    = FgCyan
-	Gray    = FgDarkGray // is light Black
-	Blue    = FgBlue
-	Black   = FgBlack
-	Green   = FgGreen
-	White   = FgWhite
-	Yellow  = FgYellow
-	Magenta = FgMagenta
-
-	// special
-
-	Bold   = OpBold
-	Normal = FgDefault
-
-	// extra light
-
-	LightRed     = FgLightRed
-	LightCyan    = FgLightCyan
-	LightBlue    = FgLightBlue
-	LightGreen   = FgLightGreen
-	LightWhite   = FgLightWhite
-	LightYellow  = FgLightYellow
-	LightMagenta = FgLightMagenta
-
-	HiRed     = FgLightRed
-	HiCyan    = FgLightCyan
-	HiBlue    = FgLightBlue
-	HiGreen   = FgLightGreen
-	HiWhite   = FgLightWhite
-	HiYellow  = FgLightYellow
-	HiMagenta = FgLightMagenta
-
-	BgHiRed     = BgLightRed
-	BgHiCyan    = BgLightCyan
-	BgHiBlue    = BgLightBlue
-	BgHiGreen   = BgLightGreen
-	BgHiWhite   = BgLightWhite
-	BgHiYellow  = BgLightYellow
-	BgHiMagenta = BgLightMagenta
-)
-
-// Bit4 a method for create Color
-func Bit4(code uint8) Color { return Color(code) }
-
-/*************************************************************
- * Color render methods
- *************************************************************/
-
-// Name get color code name.
-func (c Color) Name() string {
-	name, ok := basic2nameMap[uint8(c)]
-	if ok {
-		return name
-	}
-	return "unknown"
-}
-
-// Text render a text message
-func (c Color) Text(message string) string { return RenderString(c.String(), message) }
-
-// Render messages by color setting
-//
-// Usage:
-//
-//	green := color.FgGreen.Render
-//	fmt.Println(green("message"))
-func (c Color) Render(a ...any) string { return RenderCode(c.String(), a...) }
-
-// Renderln messages by color setting.
-// like Println, will add spaces for each argument
-//
-// Usage:
-//
-//	green := color.FgGreen.Renderln
-//	fmt.Println(green("message"))
-func (c Color) Renderln(a ...any) string { return RenderWithSpaces(c.String(), a...) }
-
-// Sprint render messages by color setting. is alias of the Render()
-func (c Color) Sprint(a ...any) string { return RenderCode(c.String(), a...) }
-
-// Sprintf format and render message.
-//
-// Usage:
-//
-//		green := color.Green.Sprintf
-//	 colored := green("message")
-func (c Color) Sprintf(format string, args ...any) string {
-	return RenderString(c.String(), fmt.Sprintf(format, args...))
-}
-
-// Print messages.
-//
-// Usage:
-//
-//	color.Green.Print("message")
-//
-// OR:
-//
-//	green := color.FgGreen.Print
-//	green("message")
-func (c Color) Print(args ...any) {
-	doPrintV2(c.Code(), fmt.Sprint(args...))
-}
-
-// Printf format and print messages.
-//
-// Usage:
-//
-//	color.Cyan.Printf("string %s", "arg0")
-func (c Color) Printf(format string, a ...any) {
-	doPrintV2(c.Code(), fmt.Sprintf(format, a...))
-}
-
-// Println messages with new line
-func (c Color) Println(a ...any) { doPrintlnV2(c.String(), a) }
-
-// Light current color. eg: 36(FgCyan) -> 96(FgLightCyan).
-//
-// Usage:
-//
-//	lightCyan := Cyan.Light()
-//	lightCyan.Print("message")
-func (c Color) Light() Color {
-	val := uint8(c)
-	if val >= 30 && val <= 47 {
-		return Color(val + 60)
-	}
-
-	// don't change
-	return c
-}
-
-// Darken current color. eg. 96(FgLightCyan) -> 36(FgCyan)
-//
-// Usage:
-//
-//	cyan := LightCyan.Darken()
-//	cyan.Print("message")
-func (c Color) Darken() Color {
-	val := uint8(c)
-	if val >= 90 && val <= 107 {
-		return Color(val - 60)
-	}
-
-	// don't change
-	return c
-}
-
-// C256 convert 16 color to 256-color code.
-func (c Color) C256() Color256 {
-	val := uint8(c)
-	if val < 10 { // is option code
-		return emptyC256 // empty
-	}
-
-	var isBg uint8
-	if val >= BgBase && val <= 47 { // is bg
-		isBg = AsBg
-		val = val - 10 // to fg code
-	} else if val >= HiBgBase && val <= 107 { // is hi bg
-		isBg = AsBg
-		val = val - 10 // to fg code
-	}
-
-	if c256, ok := basicTo256Map[val]; ok {
-		return Color256{c256, isBg}
-	}
-
-	// use raw value direct convert
-	return Color256{val}
-}
-
-// ToFg always convert fg
-func (c Color) ToFg() Color {
-	val := uint8(c)
-	// option code, don't change
-	if val < 10 {
-		return c
-	}
-	return Color(Bg2Fg(val))
-}
-
-// ToBg always convert bg
-func (c Color) ToBg() Color {
-	val := uint8(c)
-	// option code, don't change
-	if val < 10 {
-		return c
-	}
-	return Color(Fg2Bg(val))
-}
-
-// RGB convert 16 color to 256-color code.
-func (c Color) RGB() RGBColor {
-	val := uint8(c)
-	if val < 10 { // is option code
-		return emptyRGBColor
-	}
-
-	return HEX(Basic2hex(val), c.IsBg())
-}
-
-// Code convert to code string. eg "35"
-func (c Color) Code() string {
-	return strconv.FormatInt(int64(c), 10)
-}
-
-// String convert to code string. eg "35"
-func (c Color) String() string {
-	return strconv.FormatInt(int64(c), 10)
-}
-
-// IsBg check is background color
-func (c Color) IsBg() bool {
-	val := uint8(c)
-	return val >= BgBase && val <= BgMax || val >= HiBgBase && val <= HiBgMax
-}
-
-// IsFg check is foreground color
-func (c Color) IsFg() bool {
-	val := uint8(c)
-	return val >= FgBase && val <= FgMax || val >= HiFgBase && val <= HiFgMax
-}
-
-// IsOption check is option code: 0-9
-func (c Color) IsOption() bool { return uint8(c) < OptMax }
-
-// IsValid color value
-func (c Color) IsValid() bool { return uint8(c) < HiBgMax }
-
-/*************************************************************
- * basic color maps
- *************************************************************/
-
-// FgColors foreground colors map
-var FgColors = map[string]Color{
-	"black":   FgBlack,
-	"red":     FgRed,
-	"green":   FgGreen,
-	"yellow":  FgYellow,
-	"blue":    FgBlue,
-	"magenta": FgMagenta,
-	"cyan":    FgCyan,
-	"white":   FgWhite,
-	"default": FgDefault,
-}
-
-// BgColors background colors map
-var BgColors = map[string]Color{
-	"black":   BgBlack,
-	"red":     BgRed,
-	"green":   BgGreen,
-	"yellow":  BgYellow,
-	"blue":    BgBlue,
-	"magenta": BgMagenta,
-	"cyan":    BgCyan,
-	"white":   BgWhite,
-	"default": BgDefault,
-}
-
-// ExFgColors extra foreground colors map
-var ExFgColors = map[string]Color{
-	"darkGray":     FgDarkGray,
-	"lightRed":     FgLightRed,
-	"lightGreen":   FgLightGreen,
-	"lightYellow":  FgLightYellow,
-	"lightBlue":    FgLightBlue,
-	"lightMagenta": FgLightMagenta,
-	"lightCyan":    FgLightCyan,
-	"lightWhite":   FgLightWhite,
-}
-
-// ExBgColors extra background colors map
-var ExBgColors = map[string]Color{
-	"darkGray":     BgDarkGray,
-	"lightRed":     BgLightRed,
-	"lightGreen":   BgLightGreen,
-	"lightYellow":  BgLightYellow,
-	"lightBlue":    BgLightBlue,
-	"lightMagenta": BgLightMagenta,
-	"lightCyan":    BgLightCyan,
-	"lightWhite":   BgLightWhite,
-}
-
-// Options color options map
-//
-// Deprecated: please use AllOptions instead.
-var Options = AllOptions
-
-// AllOptions color options map
-var AllOptions = map[string]Color{
-	"reset":      OpReset,
-	"bold":       OpBold,
-	"fuzzy":      OpFuzzy,
-	"italic":     OpItalic,
-	"underscore": OpUnderscore,
-	"blink":      OpBlink,
-	"reverse":    OpReverse,
-	"concealed":  OpConcealed,
-}
-
-var (
-	// TODO basic name alias
-	// basicNameAlias = map[string]string{}
-	// optionWithAlias = buildOpWithAlias()
-	// basic color name to code
-	// name2basicMap = initName2basicMap()
-
-	// basic2nameMap basic color code to name
-	basic2nameMap = map[uint8]string{
-		30: "black",
-		31: "red",
-		32: "green",
-		33: "yellow",
-		34: "blue",
-		35: "magenta",
-		36: "cyan",
-		37: "white",
-		// hi color code
-		90: "lightBlack",
-		91: "lightRed",
-		92: "lightGreen",
-		93: "lightYellow",
-		94: "lightBlue",
-		95: "lightMagenta",
-		96: "lightCyan",
-		97: "lightWhite",
-		// options
-		0: "reset",
-		1: "bold",
-		2: "fuzzy",
-		3: "italic",
-		4: "underscore",
-		5: "blink",
-		7: "reverse",
-		8: "concealed",
-	}
-)
-
-// Bg2Fg bg color value to fg value
-func Bg2Fg(val uint8) uint8 {
-	if val >= BgBase && val <= 47 { // is bg
-		val = val - 10
-	} else if val >= HiBgBase && val <= 107 { // is hi bg
-		val = val - 10
-	}
-	return val
-}
-
-// Fg2Bg fg color value to bg value
-func Fg2Bg(val uint8) uint8 {
-	if val >= FgBase && val <= 37 { // is fg
-		val = val + 10
-	} else if val >= HiFgBase && val <= 97 { // is hi fg
-		val = val + 10
-	}
-	return val
-}
-
-// Basic2nameMap data
-func Basic2nameMap() map[uint8]string { return basic2nameMap }
-
-// func initName2basicMap() map[string]uint8 {
-// 	n2b := make(map[string]uint8, len(basic2nameMap))
-// 	for u, s := range basic2nameMap {
-// 		n2b[s] = u
-// 	}
-// 	return n2b
-// }
-
-// func buildOpWithAlias() map[string]uint8 {
-// }
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/gookit/color/color_256.go","mode":420,"size":6618,"sha256":"f08e8b8ad05e47336b3c0f67e614c189da56cfd250795cd043aa0ad1335508fb","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":6618}
-package color
-
-import (
-	"fmt"
-	"strconv"
-	"strings"
-)
-
-/*
-from wikipedia, 256 color:
-   ESC[ … 38;5;<n> … m选择前景色
-   ESC[ … 48;5;<n> … m选择背景色
-     0-  7：标准颜色（同 ESC[30–37m）
-     8- 15：高强度颜色（同 ESC[90–97m）
-    16-231：6 × 6 × 6 立方（216色）: 16 + 36 × r + 6 × g + b (0 ≤ r, g, b ≤ 5)
-   232-255：从黑到白的24阶灰度色
-*/
-
-// tpl for 8 bit 256 color(`2^8`)
-//
-// format:
-//
-//		ESC[ … 38;5;<n> … m // 选择前景色
-//	 ESC[ … 48;5;<n> … m // 选择背景色
-//
-// example:
-//
-//	fg "\x1b[38;5;242m"
-//	bg "\x1b[48;5;208m"
-//	both "\x1b[38;5;242;48;5;208m"
-//
-// links:
-//
-//	https://zh.wikipedia.org/wiki/ANSI%E8%BD%AC%E4%B9%89%E5%BA%8F%E5%88%97#8位
-const (
-	TplFg256 = "38;5;%d"
-	TplBg256 = "48;5;%d"
-	Fg256Pfx = "38;5;"
-	Bg256Pfx = "48;5;"
-)
-
-/*************************************************************
- * 8bit(256) Color: Bit8Color Color256
- *************************************************************/
-
-// Color256 256 color (8 bit), uint8 range at 0 - 255.
-// Support 256 color on windows CMD, PowerShell
-//
-// 颜色值使用10进制和16进制都可 0x98 = 152
-//
-// The color consists of two uint8:
-//
-//	0: color value
-//	1: color type; Fg=0, Bg=1, >1: unset value
-//
-// example:
-//
-//	fg color: [152, 0]
-//	bg color: [152, 1]
-//
-// lint warn - Name starts with package name
-type Color256 [2]uint8
-type Bit8Color = Color256 // alias
-
-var emptyC256 = Color256{1: 99}
-
-// Bit8 create a color256
-func Bit8(val uint8, isBg ...bool) Color256 {
-	return C256(val, isBg...)
-}
-
-// C256 create a color256
-func C256(val uint8, isBg ...bool) Color256 {
-	bc := Color256{val}
-
-	// mark is bg color
-	if len(isBg) > 0 && isBg[0] {
-		bc[1] = AsBg
-	}
-
-	return bc
-}
-
-// Set terminal by 256 color code
-func (c Color256) Set() error {
-	return SetTerminal(c.String())
-}
-
-// Reset terminal. alias of the ResetTerminal()
-func (c Color256) Reset() error {
-	return ResetTerminal()
-}
-
-// Print print message
-func (c Color256) Print(a ...any) {
-	doPrintV2(c.String(), fmt.Sprint(a...))
-}
-
-// Printf format and print message
-func (c Color256) Printf(format string, a ...any) {
-	doPrintV2(c.String(), fmt.Sprintf(format, a...))
-}
-
-// Println print message with newline
-func (c Color256) Println(a ...any) {
-	doPrintlnV2(c.String(), a)
-}
-
-// Sprint returns rendered message
-func (c Color256) Sprint(a ...any) string {
-	return RenderCode(c.String(), a...)
-}
-
-// Sprintf returns format and rendered message
-func (c Color256) Sprintf(format string, a ...any) string {
-	return RenderString(c.String(), fmt.Sprintf(format, a...))
-}
-
-// C16 convert color-256 to 16 color.
-func (c Color256) C16() Color {
-	return c.Basic()
-}
-
-// Basic convert color-256 to basic 16 color.
-func (c Color256) Basic() Color {
-	return Color(c[0]) // TODO
-}
-
-// RGB convert color-256 to RGB color.
-func (c Color256) RGB() RGBColor {
-	return RGBFromSlice(C256ToRgb(c[0]), c[1] == AsBg)
-}
-
-// RGBColor convert color-256 to RGB color.
-func (c Color256) RGBColor() RGBColor {
-	return c.RGB()
-}
-
-// Value return color value
-func (c Color256) Value() uint8 {
-	return c[0]
-}
-
-// Code convert to color code string. eg: "12"
-func (c Color256) Code() string {
-	return strconv.Itoa(int(c[0]))
-}
-
-// FullCode convert to color code string with prefix. eg: "38;5;12"
-func (c Color256) FullCode() string {
-	return c.String()
-}
-
-// String convert to color code string with prefix. eg: "38;5;12"
-func (c Color256) String() string {
-	if c[1] == AsFg { // 0 is Fg
-		return Fg256Pfx + strconv.Itoa(int(c[0]))
-	}
-
-	if c[1] == AsBg { // 1 is Bg
-		return Bg256Pfx + strconv.Itoa(int(c[0]))
-	}
-	return "" // empty
-}
-
-// IsFg color
-func (c Color256) IsFg() bool { return c[1] == AsFg }
-
-// ToFg 256 color
-func (c Color256) ToFg() Color256 {
-	c[1] = AsFg
-	return c
-}
-
-// IsBg color
-func (c Color256) IsBg() bool { return c[1] == AsBg }
-
-// ToBg 256 color
-func (c Color256) ToBg() Color256 {
-	c[1] = AsBg
-	return c
-}
-
-// IsEmpty value
-func (c Color256) IsEmpty() bool { return c[1] > 1 }
-
-/*************************************************************
- * 8bit(256) Style
- *************************************************************/
-
-// Style256 definition
-//
-// 前/背景色
-// 都是由两位uint8组成, 第一位是色彩值；
-// 第二位与 Bit8Color 不一样的是，在这里表示是否设置了值 0 未设置 !=0 已设置
-type Style256 struct {
-	// Name of the style
-	Name string
-	// color options of the style
-	opts Opts
-	// fg and bg color
-	fg, bg Color256
-}
-
-// S256 create a color256 style
-//
-// Usage:
-//
-//	s := color.S256()
-//	s := color.S256(132) // fg
-//	s := color.S256(132, 203) // fg and bg
-func S256(fgAndBg ...uint8) *Style256 {
-	s := &Style256{}
-	vl := len(fgAndBg)
-	if vl > 0 { // with fg
-		s.fg = Color256{fgAndBg[0], 1}
-
-		if vl > 1 { // and with bg
-			s.bg = Color256{fgAndBg[1], 1}
-		}
-	}
-
-	return s
-}
-
-// Set fg and bg color value, can also with color options
-func (s *Style256) Set(fgVal, bgVal uint8, opts ...Color) *Style256 {
-	s.fg = Color256{fgVal, 1}
-	s.bg = Color256{bgVal, 1}
-	s.opts.Add(opts...)
-	return s
-}
-
-// SetBg set bg color value
-func (s *Style256) SetBg(bgVal uint8) *Style256 {
-	s.bg = Color256{bgVal, 1}
-	return s
-}
-
-// SetFg set fg color value
-func (s *Style256) SetFg(fgVal uint8) *Style256 {
-	s.fg = Color256{fgVal, 1}
-	return s
-}
-
-// SetOpts set options
-func (s *Style256) SetOpts(opts Opts) *Style256 {
-	s.opts = opts
-	return s
-}
-
-// AddOpts add options
-func (s *Style256) AddOpts(opts ...Color) *Style256 {
-	s.opts.Add(opts...)
-	return s
-}
-
-// Print message
-func (s *Style256) Print(a ...any) {
-	doPrintV2(s.String(), fmt.Sprint(a...))
-}
-
-// Printf format and print message
-func (s *Style256) Printf(format string, a ...any) {
-	doPrintV2(s.String(), fmt.Sprintf(format, a...))
-}
-
-// Println print message with newline
-func (s *Style256) Println(a ...any) {
-	doPrintlnV2(s.String(), a)
-}
-
-// Sprint returns rendered message
-func (s *Style256) Sprint(a ...any) string {
-	return RenderCode(s.Code(), a...)
-}
-
-// Sprintf returns format and rendered message
-func (s *Style256) Sprintf(format string, a ...any) string {
-	return RenderString(s.Code(), fmt.Sprintf(format, a...))
-}
-
-// Code convert to color code string
-func (s *Style256) Code() string {
-	return s.String()
-}
-
-// String convert to color code string
-func (s *Style256) String() string {
-	var ss []string
-	if s.fg[1] > 0 {
-		ss = append(ss, Fg256Pfx+strconv.FormatInt(int64(s.fg[0]), 10))
-	}
-
-	if s.bg[1] > 0 {
-		ss = append(ss, Bg256Pfx+strconv.FormatInt(int64(s.bg[0]), 10))
-	}
-
-	if s.opts.IsValid() {
-		ss = append(ss, s.opts.String())
-	}
-	return strings.Join(ss, ";")
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/gookit/color/color_rgb.go","mode":420,"size":10348,"sha256":"126904812895e65972708cbe2b01290e9ef430f9a4cb4e4aad8ffb337e4c4794","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":10348}
-package color
-
-import (
-	"fmt"
-	"strconv"
-	"strings"
-)
-
-// 24 bit RGB color
-// RGB:
-//
-//	R 0-255 G 0-255 B 0-255
-//	R 00-FF G 00-FF B 00-FF (16进制)
-//
-// Format:
-//
-//	ESC[ … 38;2;<r>;<g>;<b> … m // Select RGB foreground color
-//	ESC[ … 48;2;<r>;<g>;<b> … m // Choose RGB background color
-//
-// links:
-//
-//	https://zh.wikipedia.org/wiki/ANSI%E8%BD%AC%E4%B9%89%E5%BA%8F%E5%88%97#24位
-//
-// example:
-//
-//	fg: \x1b[38;2;30;144;255mMESSAGE\x1b[0m
-//	bg: \x1b[48;2;30;144;255mMESSAGE\x1b[0m
-//	both: \x1b[38;2;233;90;203;48;2;30;144;255mMESSAGE\x1b[0m
-const (
-	TplFgRGB = "38;2;%d;%d;%d"
-	TplBgRGB = "48;2;%d;%d;%d"
-	FgRGBPfx = "38;2;"
-	BgRGBPfx = "48;2;"
-)
-
-// mark color is fg or bg.
-const (
-	AsFg uint8 = iota
-	AsBg
-)
-
-/*************************************************************
- * RGB Color(Bit24Color, TrueColor)
- *************************************************************/
-
-// RGBColor definition.
-// Support RGB color on Windows CMD, PowerShell
-//
-// The first to third digits represent the color value.
-// The last digit represents the foreground(0), background(1), >1 is unset value
-//
-// Usage:
-//
-//	// 0, 1, 2 is R,G,B.
-//	// 3rd: Fg=0, Bg=1, >1: unset value
-//	RGBColor{30,144,255, 0}
-//	RGBColor{30,144,255, 1}
-type RGBColor [4]uint8
-
-// create an empty RGBColor
-var emptyRGBColor = RGBColor{3: 99}
-
-// RGB color create.
-//
-// Usage:
-//
-//	c := RGB(30,144,255)
-//	c := RGB(30,144,255, true)
-//	c.Print("message")
-func RGB(r, g, b uint8, isBg ...bool) RGBColor {
-	rgb := RGBColor{r, g, b}
-	if len(isBg) > 0 && isBg[0] {
-		rgb[3] = AsBg
-	}
-
-	return rgb
-}
-
-// Rgb alias of the RGB()
-func Rgb(r, g, b uint8, isBg ...bool) RGBColor { return RGB(r, g, b, isBg...) }
-
-// Bit24 alias of the RGB()
-func Bit24(r, g, b uint8, isBg ...bool) RGBColor { return RGB(r, g, b, isBg...) }
-
-// RgbFromInt create instance from int r,g,b value
-func RgbFromInt(r, g, b int, isBg ...bool) RGBColor {
-	return RGB(uint8(r), uint8(g), uint8(b), isBg...)
-}
-
-// RgbFromInts create instance from []int r,g,b value
-func RgbFromInts(rgb []int, isBg ...bool) RGBColor {
-	return RGB(uint8(rgb[0]), uint8(rgb[1]), uint8(rgb[2]), isBg...)
-}
-
-// HEX create RGB color from a HEX color string.
-//
-// Usage:
-//
-//	c := HEX("ccc") // rgb: [204 204 204]
-//	c := HEX("aabbcc") // rgb: [170 187 204]
-//	c := HEX("#aabbcc")
-//	c := HEX("0xaabbcc")
-//	c.Print("message")
-func HEX(hex string, isBg ...bool) RGBColor {
-	if rgb := HexToRgb(hex); len(rgb) > 0 {
-		return RGB(uint8(rgb[0]), uint8(rgb[1]), uint8(rgb[2]), isBg...)
-	}
-
-	// mark is empty
-	return emptyRGBColor
-}
-
-// Hex alias of the HEX()
-func Hex(hex string, isBg ...bool) RGBColor { return HEX(hex, isBg...) }
-
-// RGBFromHEX quick RGBColor from hex string, alias of HEX()
-func RGBFromHEX(hex string, isBg ...bool) RGBColor { return HEX(hex, isBg...) }
-
-// HSL create RGB color from a hsl value.
-// more see HslToRgb()
-func HSL(h, s, l float64, isBg ...bool) RGBColor {
-	rgb := HslToRgb(h, s, l)
-	return RGB(rgb[0], rgb[1], rgb[2], isBg...)
-}
-
-// Hsl alias of the HSL()
-func Hsl(h, s, l float64, isBg ...bool) RGBColor { return HSL(h, s, l, isBg...) }
-
-// HSLInt create RGB color from a hsl int value.
-// more see HslIntToRgb()
-func HSLInt(h, s, l int, isBg ...bool) RGBColor {
-	rgb := HslIntToRgb(h, s, l)
-	return RGB(rgb[0], rgb[1], rgb[2], isBg...)
-}
-
-// HslInt alias of the HSLInt()
-func HslInt(h, s, l int, isBg ...bool) RGBColor { return HSLInt(h, s, l, isBg...) }
-
-// RGBFromSlice quick RGBColor from slice
-func RGBFromSlice(rgb []uint8, isBg ...bool) RGBColor {
-	return RGB(rgb[0], rgb[1], rgb[2], isBg...)
-}
-
-// RGBFromString create RGB color from a string.
-// Support use color name in the {namedRgbMap}
-//
-// Usage:
-//
-//	c := RGBFromString("170,187,204")
-//	c.Print("message")
-//
-//	c := RGBFromString("brown")
-//	c.Print("message with color brown")
-func RGBFromString(rgb string, isBg ...bool) RGBColor {
-	// use color name in the {namedRgbMap}
-	if rgbVal, ok := namedRgbMap[rgb]; ok {
-		rgb = rgbVal
-	}
-
-	// use rgb string.
-	ss := stringToArr(rgb, ",")
-	if len(ss) != 3 {
-		return emptyRGBColor
-	}
-
-	var ar [3]uint8
-	for i, val := range ss {
-		iv, err := strconv.Atoi(val)
-		if err != nil || !isValidUint8(iv) {
-			return emptyRGBColor
-		}
-
-		ar[i] = uint8(iv)
-	}
-
-	return RGB(ar[0], ar[1], ar[2], isBg...)
-}
-
-// Set terminal by rgb/true color code
-func (c RGBColor) Set() error {
-	return SetTerminal(c.String())
-}
-
-// Reset terminal. alias of the ResetTerminal()
-func (c RGBColor) Reset() error {
-	return ResetTerminal()
-}
-
-// Print print message
-func (c RGBColor) Print(a ...any) {
-	doPrintV2(c.String(), fmt.Sprint(a...))
-}
-
-// Printf format and print message
-func (c RGBColor) Printf(format string, a ...any) {
-	doPrintV2(c.String(), fmt.Sprintf(format, a...))
-}
-
-// Println print message with newline
-func (c RGBColor) Println(a ...any) {
-	doPrintlnV2(c.String(), a)
-}
-
-// Sprint returns rendered message
-func (c RGBColor) Sprint(a ...any) string {
-	return RenderCode(c.String(), a...)
-}
-
-// Sprintf returns format and rendered message
-func (c RGBColor) Sprintf(format string, a ...any) string {
-	return RenderString(c.String(), fmt.Sprintf(format, a...))
-}
-
-// Values to RGB values
-func (c RGBColor) Values() []int {
-	return []int{int(c[0]), int(c[1]), int(c[2])}
-}
-
-// Code to color code string without prefix. eg: "204;123;56"
-func (c RGBColor) Code() string {
-	return fmt.Sprintf("%d;%d;%d", c[0], c[1], c[2])
-}
-
-// Hex color rgb to hex string. as in "ff0080".
-func (c RGBColor) Hex() string {
-	return fmt.Sprintf("%02x%02x%02x", c[0], c[1], c[2])
-}
-
-// RgbString to color code string without prefix. eg: "204,123,56"
-func (c RGBColor) RgbString() string {
-	return fmt.Sprintf("%d,%d,%d", c[0], c[1], c[2])
-}
-
-// FullCode to color code string with prefix
-func (c RGBColor) FullCode() string {
-	return c.String()
-}
-
-// String to color code string with prefix. eg: "38;2;204;123;56"
-func (c RGBColor) String() string {
-	if c[3] == AsFg {
-		return fmt.Sprintf(TplFgRGB, c[0], c[1], c[2])
-	}
-
-	if c[3] == AsBg {
-		return fmt.Sprintf(TplBgRGB, c[0], c[1], c[2])
-	}
-
-	// c[3] > 1 is empty
-	return ""
-}
-
-// ToBg convert to background color
-func (c RGBColor) ToBg() RGBColor {
-	c[3] = AsBg
-	return c
-}
-
-// ToFg convert to foreground color
-func (c RGBColor) ToFg() RGBColor {
-	c[3] = AsFg
-	return c
-}
-
-// IsEmpty value
-func (c RGBColor) IsEmpty() bool {
-	return c[3] > AsBg
-}
-
-// IsValid value
-// func (c RGBColor) IsValid() bool {
-// 	return c[3] <= AsBg
-// }
-
-// C256 returns the closest approximate 256 (8 bit) color
-func (c RGBColor) C256() Color256 {
-	return C256(RgbTo256(c[0], c[1], c[2]), c[3] == AsBg)
-}
-
-// Basic returns the closest approximate 16 (4 bit) color
-func (c RGBColor) Basic() Color {
-	// return Color(RgbToAnsi(c[0], c[1], c[2], c[3] == AsBg))
-	return Color(Rgb2basic(c[0], c[1], c[2], c[3] == AsBg))
-}
-
-// Color returns the closest approximate 16 (4 bit) color
-func (c RGBColor) Color() Color { return c.Basic() }
-
-// C16 returns the closest approximate 16 (4 bit) color
-func (c RGBColor) C16() Color { return c.Basic() }
-
-/*************************************************************
- * RGB Style
- *************************************************************/
-
-// RGBStyle supports set foreground and background color
-//
-// All are composed of 4 digits uint8, the first three digits are the color value;
-// The last bit is different from RGBColor, here it indicates whether the value is set.
-//
-//	1    Has been set
-//	^1   Not set
-type RGBStyle struct {
-	// Name of the style
-	Name string
-	// color options of the style
-	opts Opts
-	// fg and bg color
-	fg, bg RGBColor
-}
-
-// NewRGBStyle create a RGBStyle.
-func NewRGBStyle(fg RGBColor, bg ...RGBColor) *RGBStyle {
-	s := &RGBStyle{}
-	if len(bg) > 0 {
-		s.SetBg(bg[0])
-	}
-
-	return s.SetFg(fg)
-}
-
-// HEXStyle create a RGBStyle from HEX color string.
-//
-// Usage:
-//
-//	s := HEXStyle("aabbcc", "eee")
-//	s.Print("message")
-func HEXStyle(fg string, bg ...string) *RGBStyle {
-	s := &RGBStyle{}
-	if len(bg) > 0 {
-		s.SetBg(HEX(bg[0]))
-	}
-
-	if len(fg) > 0 {
-		s.SetFg(HEX(fg))
-	}
-	return s
-}
-
-// RGBStyleFromString create a RGBStyle from color value string.
-//
-// Usage:
-//
-//	s := RGBStyleFromString("170,187,204", "70,87,4")
-//	s.Print("message")
-func RGBStyleFromString(fg string, bg ...string) *RGBStyle {
-	s := &RGBStyle{}
-	if len(bg) > 0 {
-		s.SetBg(RGBFromString(bg[0]))
-	}
-
-	return s.SetFg(RGBFromString(fg))
-}
-
-// Set fg and bg color, can also with color options
-func (s *RGBStyle) Set(fg, bg RGBColor, opts ...Color) *RGBStyle {
-	return s.SetFg(fg).SetBg(bg).SetOpts(opts)
-}
-
-// SetFg set fg color
-func (s *RGBStyle) SetFg(fg RGBColor) *RGBStyle {
-	fg[3] = 1 // add fixed value, mark is valid
-	s.fg = fg
-	return s
-}
-
-// SetBg set bg color
-func (s *RGBStyle) SetBg(bg RGBColor) *RGBStyle {
-	bg[3] = 1 // add fixed value, mark is valid
-	s.bg = bg
-	return s
-}
-
-// SetOpts set color options
-func (s *RGBStyle) SetOpts(opts Opts) *RGBStyle {
-	s.opts = opts
-	return s
-}
-
-// AddOpts add options
-func (s *RGBStyle) AddOpts(opts ...Color) *RGBStyle {
-	s.opts.Add(opts...)
-	return s
-}
-
-// Print print message
-func (s *RGBStyle) Print(a ...any) {
-	doPrintV2(s.String(), fmt.Sprint(a...))
-}
-
-// Printf format and print message
-func (s *RGBStyle) Printf(format string, a ...any) {
-	doPrintV2(s.String(), fmt.Sprintf(format, a...))
-}
-
-// Println print message with newline
-func (s *RGBStyle) Println(a ...any) {
-	doPrintlnV2(s.String(), a)
-}
-
-// Sprint returns rendered message
-func (s *RGBStyle) Sprint(a ...any) string {
-	return RenderCode(s.String(), a...)
-}
-
-// Sprintf returns format and rendered message
-func (s *RGBStyle) Sprintf(format string, a ...any) string {
-	return RenderString(s.String(), fmt.Sprintf(format, a...))
-}
-
-// Code convert to color code string
-func (s *RGBStyle) Code() string {
-	return s.String()
-}
-
-// FullCode convert to color code string
-func (s *RGBStyle) FullCode() string {
-	return s.String()
-}
-
-// String convert to color code string
-func (s *RGBStyle) String() string {
-	var ss []string
-	// last value ensure is enable.
-	if s.fg[3] == 1 {
-		ss = append(ss, fmt.Sprintf(TplFgRGB, s.fg[0], s.fg[1], s.fg[2]))
-	}
-
-	if s.bg[3] == 1 {
-		ss = append(ss, fmt.Sprintf(TplBgRGB, s.bg[0], s.bg[1], s.bg[2]))
-	}
-
-	if s.opts.IsValid() {
-		ss = append(ss, s.opts.String())
-	}
-
-	return strings.Join(ss, ";")
-}
-
-// IsEmpty style
-func (s *RGBStyle) IsEmpty() bool {
-	return s.fg[3] != 1 && s.bg[3] != 1
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/gookit/color/color_tag.go","mode":420,"size":13894,"sha256":"689a35796d53c4f5d7b2359f21efc4fd5ee96715218ecf9ce7c7c19701f1ca6e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":13894}
-package color
-
-import (
-	"fmt"
-	"regexp"
-	"strings"
-)
-
-// output colored text like use html tag. (not support windows cmd)
-const (
-	// MatchExpr regex to match color tags
-	//
-	// Notice: golang 不支持反向引用. 即不支持使用 \1 引用第一个匹配 ([a-z=;]+)
-	// MatchExpr = `<([a-z=;]+)>(.*?)<\/\1>`
-	// 所以调整一下 统一使用 `</>` 来结束标签，例如 "<info>some text</>"
-	//
-	// allow custom attrs, eg: "<fg=white;bg=blue;op=bold>content</>"
-	// (?s:...) s - 让 "." 匹配换行
-	MatchExpr = `<([0-9a-zA-Z_=,;]+)>(?s:(.*?))<\/>`
-
-	// AttrExpr regex to match custom color attributes
-	// eg: "<fg=white;bg=blue;op=bold>content</>"
-	AttrExpr = `(fg|bg|op)[\s]*=[\s]*([0-9a-zA-Z,]+);?`
-
-	// StripExpr regex used for removing color tags
-	// StripExpr = `<[\/]?[a-zA-Z=;]+>`
-	// 随着上面的做一些调整
-	StripExpr = `<[\/]?[0-9a-zA-Z_=,;]*>`
-)
-
-var (
-	attrRegex  = regexp.MustCompile(AttrExpr)
-	matchRegex = regexp.MustCompile(MatchExpr)
-	stripRegex = regexp.MustCompile(StripExpr)
-)
-
-/*************************************************************
- * internal defined color tags
- *************************************************************/
-
-// There are internal defined fg color tags
-//
-// Usage:
-//
-//	<tag>content text</>
-//
-// @notice 加 0 在前面是为了防止之前的影响到现在的设置
-var colorTags = map[string]string{
-	// basic tags
-	"red":      "0;31",
-	"red1":     "1;31", // with bold
-	"redB":     "1;31",
-	"red_b":    "1;31",
-	"blue":     "0;34",
-	"blue1":    "1;34", // with bold
-	"blueB":    "1;34",
-	"blue_b":   "1;34",
-	"cyan":     "0;36",
-	"cyan1":    "1;36", // with bold
-	"cyanB":    "1;36",
-	"cyan_b":   "1;36",
-	"green":    "0;32",
-	"green1":   "1;32", // with bold
-	"greenB":   "1;32",
-	"green_b":  "1;32",
-	"black":    "0;30",
-	"white":    "1;37",
-	"default":  "0;39", // no color
-	"normal":   "0;39", // no color
-	"brown":    "0;33", // #A52A2A
-	"yellow":   "0;33",
-	"ylw0":     "0;33",
-	"yellowB":  "1;33", // with bold
-	"ylw1":     "1;33",
-	"ylwB":     "1;33",
-	"magenta":  "0;35",
-	"mga":      "0;35", // short name
-	"magentaB": "1;35", // with bold
-	"magenta1": "1;35",
-	"mgb":      "1;35",
-	"mga1":     "1;35",
-	"mgaB":     "1;35",
-
-	// light/hi tags
-
-	"gray":          "0;90",
-	"darkGray":      "0;90",
-	"dark_gray":     "0;90",
-	"lightYellow":   "0;93",
-	"light_yellow":  "0;93",
-	"hiYellow":      "0;93",
-	"hi_yellow":     "0;93",
-	"hiYellowB":     "1;93", // with bold
-	"hi_yellow_b":   "1;93",
-	"lightMagenta":  "0;95",
-	"light_magenta": "0;95",
-	"hiMagenta":     "0;95",
-	"hi_magenta":    "0;95",
-	"lightMagenta1": "1;95", // with bold
-	"hiMagentaB":    "1;95", // with bold
-	"hi_magenta_b":  "1;95",
-	"lightRed":      "0;91",
-	"light_red":     "0;91",
-	"hiRed":         "0;91",
-	"hi_red":        "0;91",
-	"lightRedB":     "1;91", // with bold
-	"light_red_b":   "1;91",
-	"hi_red_b":      "1;91",
-	"lightGreen":    "0;92",
-	"light_green":   "0;92",
-	"hiGreen":       "0;92",
-	"hi_green":      "0;92",
-	"lightGreenB":   "1;92",
-	"light_green_b": "1;92",
-	"hi_green_b":    "1;92",
-	"lightBlue":     "0;94",
-	"light_blue":    "0;94",
-	"hiBlue":        "0;94",
-	"hi_blue":       "0;94",
-	"lightBlueB":    "1;94",
-	"light_blue_b":  "1;94",
-	"hi_blue_b":     "1;94",
-	"lightCyan":     "0;96",
-	"light_cyan":    "0;96",
-	"hiCyan":        "0;96",
-	"hi_cyan":       "0;96",
-	"lightCyanB":    "1;96",
-	"light_cyan_b":  "1;96",
-	"hi_cyan_b":     "1;96",
-	"lightWhite":    "0;97;40",
-	"light_white":   "0;97;40",
-
-	// option
-	"bold":       "1",
-	"b":          "1",
-	"italic":     "3",
-	"i":          "3", // italic
-	"underscore": "4",
-	"us":         "4", // short name for 'underscore'
-	"blink":      "5",
-	"fb":         "6", // fast blink
-	"reverse":    "7",
-	"st":         "9", // strikethrough
-
-	// alert tags, like bootstrap's alert
-	"suc":     "1;32", // same "green" and "bold"
-	"success": "1;32",
-	"info":    "0;32", // same "green",
-	"comment": "0;33", // same "brown"
-	"note":    "36;1",
-	"notice":  "36;4",
-	"warn":    "0;1;33",
-	"warning": "0;30;43",
-	"primary": "0;34",
-	"danger":  "1;31", // same "red" but add bold
-	"err":     "97;41",
-	"error":   "97;41", // fg light white; bg red
-}
-
-/*************************************************************
- * internal defined tag attributes
- *************************************************************/
-
-// built-in attributes for fg,bg 16-colors and op codes.
-var (
-	attrFgs = map[string]string{
-		// basic colors
-
-		"black":   FgBlack.Code(),
-		"red":     "31",
-		"green":   "32",
-		"brown":   "33", // #A52A2A
-		"yellow":  "33",
-		"ylw":     "33",
-		"blue":    "34",
-		"cyan":    "36",
-		"magenta": "35",
-		"mga":     "35",
-		"white":   FgWhite.Code(),
-		"default": "39", // no color
-		"normal":  "39", // no color
-
-		// light/hi colors
-
-		"darkGray":      FgDarkGray.Code(),
-		"dark_gray":     "90",
-		"gray":          "90",
-		"lightYellow":   "93",
-		"light_yellow":  "93",
-		"hiYellow":      "93",
-		"hi_yellow":     "93",
-		"lightMagenta":  "95",
-		"light_magenta": "95",
-		"hiMagenta":     "95",
-		"hi_magenta":    "95",
-		"hi_mga":        "95",
-		"lightRed":      "91",
-		"light_red":     "91",
-		"hiRed":         "91",
-		"hi_red":        "91",
-		"lightGreen":    "92",
-		"light_green":   "92",
-		"hiGreen":       "92",
-		"hi_green":      "92",
-		"lightBlue":     "94",
-		"light_blue":    "94",
-		"hiBlue":        "94",
-		"hi_blue":       "94",
-		"lightCyan":     "96",
-		"light_cyan":    "96",
-		"hiCyan":        "96",
-		"hi_cyan":       "96",
-		"lightWhite":    "97",
-		"light_white":   "97",
-	}
-
-	attrBgs = map[string]string{
-		// basic colors
-
-		"black":   BgBlack.Code(),
-		"red":     "41",
-		"green":   "42",
-		"brown":   "43", // #A52A2A
-		"yellow":  "43",
-		"ylw":     "43",
-		"blue":    "44",
-		"cyan":    "46",
-		"magenta": "45",
-		"mga":     "45",
-		"white":   FgWhite.Code(),
-		"default": "49", // no color
-		"normal":  "49", // no color
-
-		// light/hi colors
-
-		"darkGray":      BgDarkGray.Code(),
-		"dark_gray":     "100",
-		"gray":          "100",
-		"lightYellow":   "103",
-		"light_yellow":  "103",
-		"hiYellow":      "103",
-		"hi_yellow":     "103",
-		"lightMagenta":  "105",
-		"light_magenta": "105",
-		"hiMagenta":     "105",
-		"hi_magenta":    "105",
-		"hi_mga":        "105",
-		"lightRed":      "101",
-		"light_red":     "101",
-		"hiRed":         "101",
-		"hi_red":        "101",
-		"lightGreen":    "102",
-		"light_green":   "102",
-		"hiGreen":       "102",
-		"hi_green":      "102",
-		"lightBlue":     "104",
-		"light_blue":    "104",
-		"hiBlue":        "104",
-		"hi_blue":       "104",
-		"lightCyan":     "106",
-		"light_cyan":    "106",
-		"hiCyan":        "106",
-		"hi_cyan":       "106",
-		"lightWhite":    BgLightWhite.Code(),
-		"light_white":   "107",
-	}
-
-	attrOpts = map[string]string{
-		"reset":         OpReset.Code(),
-		"bold":          OpBold.Code(),
-		"b":             OpBold.Code(),
-		"fuzzy":         OpFuzzy.Code(),
-		"italic":        OpItalic.Code(),
-		"i":             OpItalic.Code(),
-		"underscore":    OpUnderscore.Code(),
-		"us":            OpUnderscore.Code(),
-		"u":             OpUnderscore.Code(),
-		"blink":         OpBlink.Code(),
-		"fastblink":     OpFastBlink.Code(),
-		"fb":            OpFastBlink.Code(),
-		"reverse":       OpReverse.Code(),
-		"concealed":     OpConcealed.Code(),
-		"strikethrough": OpStrikethrough.Code(),
-		"st":            OpStrikethrough.Code(),
-	}
-)
-
-/*************************************************************
- * parse color tags
- *************************************************************/
-
-var (
-	tagParser = TagParser{}
-	// regex for match color 256 code
-	rxNumStr  = regexp.MustCompile("^[0-9]{1,3}$")
-	rxHexCode = regexp.MustCompile("^#?([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
-)
-
-// TagParser struct
-type TagParser struct {
-	disable bool
-}
-
-// NewTagParser create
-func NewTagParser() *TagParser {
-	return &TagParser{}
-}
-
-// func (tp *TagParser) Disable() *TagParser {
-// 	tp.disable = true
-// 	return tp
-// }
-
-// ParseByEnv parse given string. will check package setting.
-func (tp *TagParser) ParseByEnv(str string) string {
-	// disable handler TAG
-	if !RenderTag {
-		return str
-	}
-
-	// disable OR not support color
-	if !Enable || !SupportColor() {
-		return ClearTag(str)
-	}
-	return tp.Parse(str)
-}
-
-// Parse given string, replace color tag and return rendered string
-//
-// Use built in tags:
-//
-//	<TAG_NAME>CONTENT</>
-//	// e.g: `<info>message</>`
-//
-// Custom tag attributes:
-//
-//	`<fg=VALUE;bg=VALUE;op=VALUES>CONTENT</>`
-//	// e.g: `<fg=167;bg=232>wel</>`
-func (tp *TagParser) Parse(str string) string {
-	// not contains color tag
-	if !strings.Contains(str, "</>") {
-		return str
-	}
-
-	// find color tags by regex. str eg: "<fg=white;bg=blue;op=bold>content</>"
-	matched := matchRegex.FindAllStringSubmatch(str, -1)
-
-	// item: 0 full text 1 tag name 2 tag content
-	for _, item := range matched {
-		full, tag, body := item[0], item[1], item[2]
-
-		// use defined color tag name: "<info>content</>" -> tag: "info"
-		if !strings.ContainsRune(tag, '=') {
-			if code := colorTags[tag]; len(code) > 0 {
-				str = strings.Replace(str, full, RenderString(code, body), 1)
-			} else if code, ok := namedRgbMap[tag]; ok {
-				code = strings.Replace(code, ",", ";", -1)
-				now := RenderString(FgRGBPfx+code, body)
-				str = strings.Replace(str, full, now, 1)
-			}
-			continue
-		}
-
-		// custom color in tag
-		// - basic: "fg=white;bg=blue;op=bold"
-		if code := ParseCodeFromAttr(tag); len(code) > 0 {
-			str = strings.Replace(str, full, RenderString(code, body), 1)
-		}
-	}
-
-	return str
-}
-
-// ReplaceTag parse string, replace color tag and return rendered string
-func ReplaceTag(str string) string {
-	return tagParser.ParseByEnv(str)
-}
-
-// ParseCodeFromAttr parse color attributes.
-//
-// attr format:
-//
-//	// VALUE please see var: FgColors, BgColors, AllOptions
-//	"fg=VALUE;bg=VALUE;op=VALUE"
-//
-// 16 color:
-//
-//	"fg=yellow"
-//	"bg=red"
-//	"op=bold,underscore" // option is allow multi value
-//	"fg=white;bg=blue;op=bold"
-//	"fg=white;op=bold,underscore"
-//
-// 256 color:
-//
-//	"fg=167"
-//	"fg=167;bg=23"
-//	"fg=167;bg=23;op=bold"
-//
-// True color:
-//
-//	// hex
-//	"fg=fc1cac"
-//	"fg=fc1cac;bg=c2c3c4"
-//	// r,g,b
-//	"fg=23,45,214"
-//	"fg=23,45,214;bg=109,99,88"
-func ParseCodeFromAttr(attr string) (code string) {
-	if !strings.ContainsRune(attr, '=') {
-		return
-	}
-
-	attr = strings.Trim(attr, ";=,")
-	if len(attr) == 0 {
-		return
-	}
-
-	var codes []string
-	matched := attrRegex.FindAllStringSubmatch(attr, -1)
-
-	for _, item := range matched {
-		pos, val := item[1], item[2]
-		switch pos {
-		case "fg":
-			if code, ok := attrFgs[val]; ok { // attr fg
-				codes = append(codes, code)
-			} else if code := rgbHex256toCode(val, false); code != "" {
-				codes = append(codes, code)
-			}
-		case "bg":
-			if code, ok := attrBgs[val]; ok { // attr bg
-				codes = append(codes, code)
-			} else if code := rgbHex256toCode(val, true); code != "" {
-				codes = append(codes, code)
-			}
-		case "op": // options allow multi value
-			if strings.Contains(val, ",") {
-				ns := strings.Split(val, ",")
-				for _, n := range ns {
-					if code, ok := attrOpts[n]; ok { // attr ops
-						codes = append(codes, code)
-					}
-				}
-			} else if code, ok := attrOpts[val]; ok {
-				codes = append(codes, code)
-			}
-		}
-	}
-
-	return strings.Join(codes, ";")
-}
-
-func rgbHex256toCode(val string, isBg bool) (code string) {
-	if len(val) == 6 && rxHexCode.MatchString(val) { // hex: "fc1cac"
-		code = HEX(val, isBg).String()
-	} else if strings.ContainsRune(val, ',') { // rgb: "231,178,161"
-		code = strings.Replace(val, ",", ";", -1)
-		if isBg {
-			code = BgRGBPfx + code
-		} else {
-			code = FgRGBPfx + code
-		}
-	} else if len(val) < 4 && rxNumStr.MatchString(val) { // 256 code
-		if isBg {
-			code = Bg256Pfx + val
-		} else {
-			code = Fg256Pfx + val
-		}
-	}
-	return
-}
-
-// ClearTag clear all tag for a string
-func ClearTag(s string) string {
-	if !strings.Contains(s, "</>") {
-		return s
-	}
-	return stripRegex.ReplaceAllString(s, "")
-}
-
-/*************************************************************
- * helper methods
- *************************************************************/
-
-// GetTagCode get color code by tag name
-func GetTagCode(name string) string { return colorTags[name] }
-
-// ApplyTag for messages
-func ApplyTag(tag string, a ...any) string {
-	return RenderCode(GetTagCode(tag), a...)
-}
-
-// WrapTag wrap a tag for a string "<tag>content</>"
-func WrapTag(s string, tag string) string {
-	if s == "" || tag == "" {
-		return s
-	}
-	return fmt.Sprintf("<%s>%s</>", tag, s)
-}
-
-// GetColorTags get all internal color tags
-func GetColorTags() map[string]string {
-	return colorTags
-}
-
-// IsDefinedTag is defined tag name
-func IsDefinedTag(name string) bool {
-	_, ok := colorTags[name]
-	return ok
-}
-
-/*************************************************************
- * Tag extra
- *************************************************************/
-
-// Tag value is a defined style name
-// Usage:
-//
-//	Tag("info").Println("message")
-type Tag string
-
-// Print messages
-func (tg Tag) Print(a ...any) {
-	name := string(tg)
-	str := fmt.Sprint(a...)
-
-	if stl := GetStyle(name); !stl.IsEmpty() {
-		stl.Print(str)
-	} else {
-		doPrintV2(GetTagCode(name), str)
-	}
-}
-
-// Printf format and print messages
-func (tg Tag) Printf(format string, a ...any) {
-	name := string(tg)
-	str := fmt.Sprintf(format, a...)
-
-	if stl := GetStyle(name); !stl.IsEmpty() {
-		stl.Print(str)
-	} else {
-		doPrintV2(GetTagCode(name), str)
-	}
-}
-
-// Println messages line
-func (tg Tag) Println(a ...any) {
-	name := string(tg)
-	if stl := GetStyle(name); !stl.IsEmpty() {
-		stl.Println(a...)
-	} else {
-		doPrintlnV2(GetTagCode(name), a)
-	}
-}
-
-// Sprint render messages
-func (tg Tag) Sprint(a ...any) string {
-	return RenderCode(GetTagCode(string(tg)), a...)
-}
-
-// Sprintf format and render messages
-func (tg Tag) Sprintf(format string, a ...any) string {
-	tag := string(tg)
-	str := fmt.Sprintf(format, a...)
-
-	return RenderString(GetTagCode(tag), str)
-}
 
 @@END

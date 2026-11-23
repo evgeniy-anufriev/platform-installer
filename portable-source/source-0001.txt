@@ -820,7 +820,7 @@ class ActionModule(ActionBase):
             return dict(changed=False, failed=True, msg='APPLICATION_ACCOUNT_CALLBACK_INVALID')
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/prepare_application_connections.py","mode":420,"size":2942,"sha256":"b8dc12169ba624682b8acde443e354742c6c09ed95b3e1f797cb09b383e2e55b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2942}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/prepare_application_connections.py","mode":420,"size":3265,"sha256":"a567b58068f0baff8f43aa8868ab0b2511c54c97d3dee8305b22ec5485747637","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3265}
 """Expose native topology before expansion of application ENV/default templates."""
 from ansible.plugins.action import ActionBase
 from ansible.utils.vars import merge_hash
@@ -833,7 +833,7 @@ class ActionModule(ActionBase):
 
     def run(self, tmp=None, task_vars=None):
         values = task_vars or {}
-        placements = {}
+        placements, topology = {}, {}
         try:
             rows = values.get('platform_application_connection_rows', [])
             hosts = {row['hostId']: {'ansibleHost': values['hostvars'][row['hostId']]['ansible_host']} for row in rows}
@@ -853,18 +853,22 @@ class ActionModule(ActionBase):
                                   job['slot'].get('overrides', {}), job['instance'].get('overrides', {}),
                                   job['hostOverride']):
                         ports = merge_hash(ports, layer.get('ports', {}), recursive=True, list_merge='replace')
-                placements.setdefault(job['libraryId'], {}).setdefault(job['slotId'], []).append(dict(
+                placement = dict(
                     hostId=job['hostId'], address=values['hostvars'][job['hostId']].get('ansible_host', job['hostId']),
-                    ports=ports))
+                    ports=ports)
+                placements.setdefault(job['libraryId'], {}).setdefault(job['slotId'], []).append(placement)
+                instance = topology.setdefault(job['libraryId'], {}).setdefault(
+                    job['slotId'], dict(instanceId=job['instanceId'], placements={}))
+                instance['placements'][job['hostId']] = placement
             for library in placements.values():
                 for members in library.values():
                     members.sort(key=lambda row: row['hostId'])
             return dict(changed=False, connections=provided_connections(rows, values['platform_desired_state'], hosts),
-                        placements=placements)
+                        placements=placements, topology=topology)
         except (KeyError, ValueError, TypeError):
             diagnostic = finding('APPLICATION_PROVIDED_CONNECTION_INVALID', 'applicationLibraryDeployments')
             diagnostic['safeMessage'] = 'Не удалось вычислить предоставляемые подключения приложений. Проверьте настройки подключений библиотеки.'
-            return dict(changed=False, connections={}, placements=placements, findings=[diagnostic])
+            return dict(changed=False, connections={}, placements=placements, topology=topology, findings=[diagnostic])
 
 @@END
 @@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/prepare_application_endpoints.py","mode":420,"size":3891,"sha256":"af06b5a63b8f6a86f6a330420b753aabecaee0a14846d2523969de6a75e23147","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3891}
@@ -1057,7 +1061,7 @@ class ActionModule(ActionBase):
             return dict(failed=True, changed=False, error_code=code, msg=code, finding=finding)
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/prepare_application_libraries.py","mode":420,"size":29113,"sha256":"be24c5eb195f12ab52ba52a92c1b5b34212ab437aefd85ac79098f84309a6fbe","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":29113}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/prepare_application_libraries.py","mode":420,"size":30190,"sha256":"ddf93c7a7813d095b31eda7a2a4c19d47cf2e66182f8a6e280f2b1d897137d03","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":30190}
 """Validate local package closure before Ansible loads/expands its defaults."""
 import os
 import copy
@@ -1075,6 +1079,25 @@ from ansible_collections.platform.core.plugins.module_utils.project_snapshot_out
 from ansible_collections.platform.core.plugins.module_utils.project_resolution import pure_templates
 
 
+class _ResolvedApplicationTopology(dict):
+    # Core already resolved these values. Skip Ansible's recursive templating
+    # of the full mapping each time a template reads a single placement.
+    __UNSAFE__ = True
+
+    def __init__(self, values):
+        super().__init__((key, _ResolvedApplicationTopology(value) if isinstance(value, dict) else value)
+                         for key, value in values.items())
+
+    def __deepcopy__(self, memo):
+        # The built-in template lookup copies its variable scope before rendering.
+        return self
+
+    def _read_only(self, *args, **kwargs):
+        raise TypeError('application_topology is read-only')
+
+    __setitem__ = __delitem__ = __ior__ = clear = pop = popitem = setdefault = update = _read_only
+
+
 class ActionModule(ActionBase):
     TRANSFERS_FILES = False
 
@@ -1087,7 +1110,7 @@ class ActionModule(ActionBase):
 
     @staticmethod
     def _placement_variables(task_vars):
-        payloads = {'_application_inputs', '_project_resolution_cache', '_application_resolved',
+        payloads = {'_application_inputs', '_application_connection_inputs', '_project_resolution_cache', '_application_resolved',
                     '_library_resolved_defaults', 'platform_project_resolution',
                     'platform_image_snapshot', 'platform_application_rows',
                     'application_group', '_application_group_result'}
@@ -1109,11 +1132,14 @@ class ActionModule(ActionBase):
     def run(self, tmp=None, task_vars=None):
         task_vars = task_vars or {}
         args = self._task.args
+        if args.get('placements') or args.get('placement_group'):
+            topology = _ResolvedApplicationTopology(task_vars['_application_connection_inputs'].get('topology', {}))
         if args.get('placements'):
             rows, findings, contexts = [], [], {}
             metrics = dict(instances=0, placements=0, libraryContexts=0, rendered=0, reused=0)
             for group in task_vars['_application_inputs']['placement_groups']:
-                result = self._placement_group(dict(task_vars, application_group=group, _library_resolved_defaults=contexts))
+                result = self._placement_group(
+                    dict(task_vars, application_group=group, _library_resolved_defaults=contexts), topology)
                 rows.extend(result['rows'])
                 findings.extend(result['findings'])
                 contexts = result['library_contexts']
@@ -1122,7 +1148,7 @@ class ActionModule(ActionBase):
                     metrics[key] += value
             return dict(changed=False, rows=rows, findings=findings, library_contexts=contexts, metrics=metrics)
         if args.get('placement_group'):
-            return self._placement_group(task_vars)
+            return self._placement_group(task_vars, topology)
         if args.get('resolved_row'):
             return self._resolved_row(args, task_vars)
         if args.get('diagnose_failure'):
@@ -1347,7 +1373,7 @@ class ActionModule(ActionBase):
             contexts[key] = dict(resourceDefaults=defaults, resources=resources, shared=shared)
         return copy.deepcopy(contexts[key])
 
-    def _placement_group(self, task_vars):
+    def _placement_group(self, task_vars, topology):
         contexts = dict(task_vars.get('_library_resolved_defaults', {}))
         initial_contexts = len(contexts)
         rows, findings = [], []
@@ -1364,6 +1390,7 @@ class ActionModule(ActionBase):
                                 space.pop(name)
                 bindings = dict(application_job=job, application_name=job['application']['name'],
                     application_instance_id=job['instanceId'], library_instance_id=job['libraryId'],
+                    application_topology=topology,
                     application_placements=task_vars['_application_connection_inputs']['placements'].get(
                         job['libraryId'], {}).get(job['slotId'], []), application_connections={},
                     application_topics={}, application_databases={}, _application_connections=job['connections'])
@@ -29571,7 +29598,7 @@ def resolve_certificate_requests(project_id, topology, host_vars, defaults=None,
     return {"status": "PASS", "findings": [], "requests": requests, "materializationPlans": plans}
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/project_resolution.py","mode":420,"size":16820,"sha256":"8a096765826d8ec416a1a5a0801bffc650f07ba6d1d2849e601669f7b70676d4","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":16820}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/project_resolution.py","mode":420,"size":16844,"sha256":"3b93df2a1b554657a27ec6f080f2d8f1e9a18fb8a7e21a43ca048814d64e6cb5","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":16844}
 """Private desired-only result reuse; never a source of desired state."""
 import copy
 import hashlib
@@ -29608,7 +29635,7 @@ CONTEXT_NAMES = frozenset(('vars', 'environment', 'inventory_dir', 'playbook_dir
 # lookups. Unknown globals retain the ordinary fresh Ansible path.
 DATA_NAMES = frozenset(('application_job', 'application_connections',
     'application_databases', 'application_topics', 'application_parameters',
-    'application_placements', 'application_instance_id', 'library_instance_id', 'library_resources',
+    'application_placements', 'application_topology', 'application_instance_id', 'library_instance_id', 'library_resources',
     '_application_shared', '_application_library_endpoint', 'hostvars', 'groups', 'inventory_hostname', 'platform_desired_state',
     'platform_application_provided_connections', 'platform_project_root',
     'platform_name_prefix', 'platform_data_root_directory'))
@@ -98325,998 +98352,4 @@ or("SECRET_OUTPUT_UNAVAILABLE");
                           className="outline"
                           disabled={bundleBusy}
                        
-@@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":138757,"sha256":"18fcc2865f06e783b68d08d13656a9d1d18d3c2975570765635b3bf366ee78d3","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":39351}
-   onClick={attachOrphanRun}
-                        >
-                          {orphanRun.status === "CURRENT"
-                            ? "Открыть выполнение"
-                            : "Подключиться"}
-                        </button>
-                      )}
-                    </div>
-                  )}
-                  {orphanRun?.status === "CURRENT" && (
-                    <p role="status">
-                      Запуск уже известен этому Installer. Откройте выполнение,
-                      чтобы восстановить наблюдение.
-                    </p>
-                  )}
-                  {orphanRun?.status === "NONE" && (
-                    <p role="status">Прежний активный запуск не найден.</p>
-                  )}
-                  {orphanRun?.status === "UNAVAILABLE" && (
-                    <p role="status">
-                      Запуск недоступен. Проверьте SSH-доступ и исходный узел
-                      исполнения.
-                    </p>
-                  )}
-                  {orphanRun?.status === "UNKNOWN" && (
-                    <p role="status">
-                      Состояние прежнего запуска не подтверждено.
-                    </p>
-                  )}
-                  {orphanRun?.error && (
-                    <p role="alert">{orphanRun.error.message}</p>
-                  )}
-                </>
-              }
-              onPrepareExecutionNode={prepareExecutionNode}
-            />
-          )}
-          {!loading && !creating && projectOpen && page === "topology" && (
-            <TopologyPage
-              managed={managed}
-              catalog={result.catalog}
-              intents={intents.filter(
-                (
-                  intent,
-                ): intent is
-                  | DeploymentIntent
-                  | PlacementIntent
-                  | EndpointIntent
-                  | ProviderIntent =>
-                  intent.operation === "CreateServiceDeployment" ||
-                  intent.operation === "DeleteServiceDeployment" ||
-                  intent.operation === "ReconcileDeploymentPlacement" ||
-                  intent.operation ===
-                    "ReconcileHostScopedDeploymentPlacement" ||
-                  intent.operation === "CreateEndpointGroup" ||
-                  intent.operation === "UpdateEndpointGroup" ||
-                  intent.operation === "DeleteEndpointGroup" ||
-                  intent.operation === "SetServiceEndpointGroup" ||
-                  intent.operation === "ClearServiceEndpointGroup" ||
-                  intent.operation === "ReconcileEndpointProvider" ||
-                  intent.operation === "ClearEndpointProvider",
-              )}
-              serverIntents={intents.filter(
-                (intent): intent is ServerIntent =>
-                  intent.operation === "CreateServer" ||
-                  intent.operation === "UpdateServer" ||
-                  intent.operation === "DeleteServer",
-              )}
-              busy={editBusy}
-              structuralDisabled={refreshRequired}
-              commandCount={commandCount}
-              onAppend={appendStructuralIntent}
-              onReview={review}
-              onDiscard={discard}
-              activeTab={topologyTab}
-              onActiveTabChange={setTopologyTab}
-              selectedDeploymentId={selectedTopologyDeployment}
-              onSelectedDeploymentChange={setSelectedTopologyDeployment}
-              selectedHostId={selectedTopologyHost}
-              onSelectedHostChange={setSelectedTopologyHost}
-              onConfigureDeployment={(deploymentId) => {
-                setSelectedTopologyDeployment(deploymentId);
-                setSelectedServiceDeployment(deploymentId);
-                setSelectedServiceMember("");
-                setFocusServiceMemberSettings(false);
-                setServicesView("detail");
-                setPage("services");
-              }}
-              onConfigureMember={(deploymentId, memberId) => {
-                setSelectedTopologyDeployment(deploymentId);
-                setSelectedServiceDeployment(deploymentId);
-                setSelectedServiceMember(memberId);
-                setFocusServiceMemberSettings(true);
-                setServicesView("detail");
-                setPage("services");
-              }}
-              preview={endpointPreview}
-              verificationStatus={verification.status}
-            />
-          )}
-          {!loading &&
-            !creating &&
-            projectOpen &&
-            corePagesAvailable &&
-            page === "applications" && (
-              <ApplicationsPage
-                managed={managed}
-                snapshot={snapshot}
-                intents={intents.filter(isApplicationIntent)}
-                busy={
-                  editBusy ||
-                  refreshRequired ||
-                  ["STARTING", "RUNNING", "CANCELLING"].includes(
-                    installationRun?.run?.state || "",
-                  )
-                }
-                onAppend={appendStructuralIntent}
-                onAmend={amendConfigurationIntent}
-                onReview={review}
-                onInstallation={() => setPage("installation")}
-                onProviderSecrets={(deployment) => {
-                  setSelectedServiceDeployment(deployment);
-                  setSelectedServiceMember("");
-                  setServicesView("detail");
-                  setPage("services");
-                }}
-                onDirtyChange={setApplicationFormDirty}
-                choosePackage={api.chooseApplicationPackageDirectory}
-                onImport={reviewPackage}
-                draftActive={!!sessionId}
-                backendError={editError?.message}
-                importCompleted={importCompleted}
-                loadSecrets={api.getRuntimeSecretDescriptors}
-                loadPendingSecrets={api.getPendingApplicationRuntimeSecretDescriptors}
-                loadSecretStatuses={api.getRuntimeSecretStatuses}
-                executionContextKey={JSON.stringify([
-                  executionNode?.selectionKind,
-                  executionNode?.selectedHostId,
-                  executionNode?.runtimeDigest,
-                  executionNode?.status,
-                ])}
-                saveSecrets={api.setDeploymentRuntimeSecretValues}
-                loadSecretAvailability={
-                  api.getApplicationRuntimeSecretAvailability
-                }
-              />
-            )}
-          {!loading &&
-            !creating &&
-            projectOpen &&
-            corePagesAvailable &&
-            page === "services" && (
-              <ServicesPage
-                key={serviceFormEpoch}
-                managed={managed}
-                catalog={result.catalog}
-                effectivePreview={visibleServiceConfigurationPreview}
-                corePreviewNotice={serviceConfigurationPreviewNotice}
-                deploymentIntents={intents.filter(
-                  (intent): intent is DeploymentIntent =>
-                    intent.operation === "CreateServiceDeployment" ||
-                    intent.operation === "DeleteServiceDeployment",
-                )}
-                placementIntents={intents.filter(
-                  (intent): intent is PlacementIntent =>
-                    intent.operation === "ReconcileDeploymentPlacement" ||
-                    intent.operation ===
-                      "ReconcileHostScopedDeploymentPlacement",
-                )}
-                certificateIntents={intents.filter(
-                  (intent): intent is CertificateIntent =>
-                    intent.operation === "CreateCertificateAuthority" ||
-                    intent.operation === "UpdateCertificateAuthority" ||
-                    intent.operation === "DeleteCertificateAuthority" ||
-                    intent.operation === "CreateCertificateProfile" ||
-                    intent.operation === "UpdateCertificateProfile" ||
-                    intent.operation === "DeleteCertificateProfile" ||
-                    intent.operation === "CreateTLSProfile" ||
-                    intent.operation === "UpdateTLSProfile" ||
-                    intent.operation === "DeleteTLSProfile" ||
-                    intent.operation === "CreateCertificateScope" ||
-                    intent.operation === "UpdateCertificateScope" ||
-                    intent.operation === "DeleteCertificateScope",
-                )}
-                configurationIntents={intents.filter(
-                  (intent): intent is ConfigurationIntent =>
-                    intent.operation === "SetServiceConfigurationValue" ||
-                    intent.operation === "RemoveServiceConfigurationOverride",
-                )}
-                busy={editBusy}
-                structuralDisabled={refreshRequired}
-                commandCount={commandCount}
-                error={editError?.message}
-                view={servicesView}
-                selectedDeploymentId={selectedServiceDeployment}
-                selectedMemberId={selectedServiceMember}
-                focusMemberSettings={focusServiceMemberSettings}
-                onSelectedMemberChange={setSelectedServiceMember}
-                onOpenDeployment={(deploymentId) => {
-                  setSelectedServiceDeployment(deploymentId);
-                  setSelectedServiceMember("");
-                  setFocusServiceMemberSettings(false);
-                  setServicesView("detail");
-                }}
-                onBackToList={() => {
-                  setServicesView("list");
-                  setSelectedServiceDeployment("");
-                  setSelectedServiceMember("");
-                  setFocusServiceMemberSettings(false);
-                }}
-                onOpenTopology={() => setPage("topology")}
-                onAmend={amendConfigurationIntent}
-                onManageCertificates={(memberId) => {
-                  setCertificateReturn({
-                    deploymentId: selectedServiceDeployment,
-                    memberId,
-                  });
-                  setPage("certificates");
-                }}
-                onAppend={appendStructuralIntent}
-                onReview={review}
-                onDiscard={discard}
-                onGetPendingRuntimeSecretDescriptors={
-                  getPendingRuntimeSecretDescriptors
-                }
-                loadSecretStatuses={api.getRuntimeSecretStatuses}
-                onSetPendingDeploymentRuntimeSecretValues={
-                  setPendingDeploymentRuntimeSecretValues
-                }
-                onChoosePendingDeploymentRuntimeSecretFile={
-                  choosePendingDeploymentRuntimeSecretFile
-                }
-              />
-            )}
-          {!loading && !creating && projectOpen && page === "certificates" && (
-            <CertificatesPage
-              managed={managed}
-              intents={intents.filter(
-                (intent): intent is CertificateIntent =>
-                  intent.operation === "CreateCertificateAuthority" ||
-                  intent.operation === "UpdateCertificateAuthority" ||
-                  intent.operation === "DeleteCertificateAuthority" ||
-                  intent.operation === "CreateCertificateProfile" ||
-                  intent.operation === "UpdateCertificateProfile" ||
-                  intent.operation === "DeleteCertificateProfile" ||
-                  intent.operation === "CreateTLSProfile" ||
-                  intent.operation === "UpdateTLSProfile" ||
-                  intent.operation === "DeleteTLSProfile" ||
-                  intent.operation === "CreateCertificateScope" ||
-                  intent.operation === "UpdateCertificateScope" ||
-                  intent.operation === "DeleteCertificateScope",
-              )}
-              busy={editBusy}
-              structuralDisabled={refreshRequired}
-              commandCount={commandCount}
-              sourceOptions={certificateSources}
-              verification={verification}
-              verifiedPKI={verifiedPKI}
-              credentialStatus={credentialStatus}
-              onAppend={appendStructuralIntent}
-              onSetPKIStorePassword={setPKIStorePassword}
-              onReview={review}
-              onDiscard={discard}
-              onReturnToServices={
-                certificateReturn
-                  ? () => {
-                      setSelectedServiceDeployment(
-                        certificateReturn.deploymentId,
-                      );
-                      setSelectedServiceMember(
-                        certificateReturn.memberId || "",
-                      );
-                      setServicesView("detail");
-                      setPage("services");
-                      setCertificateReturn(null);
-                    }
-                  : undefined
-              }
-            />
-          )}
-          {!loading &&
-            !creating &&
-            projectOpen &&
-            corePagesAvailable &&
-            page === "installation" && (
-              <InstallationPage
-                key={result.root}
-                state={installationState}
-                draftActive={!!sessionId || refreshRequired}
-                tab={installationTab}
-                onTabChange={setInstallationTab}
-                onOpenServers={() => setPage("servers")}
-                plan={installationPlan}
-                infrastructureObservation={infrastructureObservation}
-                selectedSkippedServices={installationSkippedServices}
-                onSkippedServicesChange={setInstallationSkippedServices}
-                selectedSkipInfrastructureVerify={installationSkipInfraVerify}
-                onSkipInfrastructureVerifyChange={
-                  setInstallationSkipInfraVerify
-                }
-                selectedExecutionMode={installationExecutionMode}
-                onExecutionModeChange={setInstallationExecutionMode}
-                busy={installationBusy}
-                starting={installationStarting}
-                onCreatePlan={createInstallationPlan}
-                applicationVaultSources={installationVaultSources}
-                onApplicationVaultSourcesChange={(sources) => {
-                  setInstallationVaultSources(sources);
-                  setInstallationPlan(undefined);
-                }}
-                serviceDeployments={Object.values(
-                  result.managed?.deployments || {},
-                ).map((item) => ({
-                  deploymentId: item.deploymentId,
-                  serviceType: item.serviceType,
-                }))}
-                serviceExecutionPriorities={serviceExecutionPriorities}
-                libraryDeployments={Object.entries(
-                  result.managed?.applicationLibraries || {},
-                ).map(([deploymentId, value]) => ({
-                  deploymentId,
-                  libraryRef: value.libraryRef,
-                }))}
-                libraryExecutionPriorities={libraryExecutionPriorities}
-                onApprovePlan={approveInstallationPlan}
-                approvalErrorAttempt={approvalErrorAttempt}
-                run={installationRun}
-                runPlan={runPlan}
-                runProgress={runProgress}
-                events={installationEvents}
-                credentialStatus={credentialStatus}
-                onSetOutputEncryptionPassword={setOutputEncryptionPassword}
-                secretOutputPackages={secretOutputPackages}
-                outputDelivery={outputDelivery}
-                onRefreshSecretOutputs={() => void refreshSecretOutputs()}
-                onCollectSecretOutputs={() =>
-                  collectAndDeliverSecretOutputs(
-                    installationRun?.run?.runId || "",
-                    true,
-                  )
-                }
-                onStart={startApprovedInstallation}
-                onCancel={cancelInstallationRun}
-              />
-            )}
-          {!loading && !creating && (
-            <UtilityPages
-              page={page}
-              managed={managed}
-              projectSettingDraftValues={projectSettingValuesFromDraft(intents)}
-              onAppendProjectSetting={appendStructuralIntent}
-              editError={editError}
-              events={installationEvents}
-              runId={installationRun?.run?.runId}
-              configVersion={applicationConfigVersion}
-              serverTypes={serverTypes}
-              configError={configError}
-              onNavigate={setPage}
-            />
-          )}
-          {projectDialog && (
-            <div className="modal" role="presentation">
-              <form className="card dialog" onSubmit={create}>
-                <h1>Создать проект</h1>
-                <label>
-                  Название проекта
-                  <input
-                    maxLength={256}
-                    value={name}
-                    onChange={(event) => {
-                      setName(event.target.value);
-                      setNameRequired(false);
-                      setCreateError(null);
-                    }}
-                    autoFocus
-                    aria-invalid={nameRequired || !!nameError}
-                  />
-                </label>
-                {nameRequired && (
-                  <p className="field-error" role="alert">
-                    Заполните «Название проекта»: оно задаёт новую папку
-                    проекта.
-                  </p>
-                )}
-                {nameError && (
-                  <p className="field-error" role="alert">
-                    {nameError}
-                  </p>
-                )}
-                <label>
-                  Новая папка проекта
-                  <input
-                    required
-                    value={destination}
-                    onChange={(event) => updateDestination(event.target.value)}
-                    onBlur={adoptDestinationParent}
-                    placeholder="C:\\Projects\\production"
-                  />
-                </label>
-                <div className="actions">
-                  <button
-                    type="button"
-                    className="outline"
-                    onClick={chooseParent}
-                  >
-                    Выбрать родительскую папку
-                  </button>
-                  <button
-                    type="button"
-                    className="outline"
-                    onClick={() => setProjectDialog(false)}
-                  >
-                    Отмена
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={creating || !destination.trim()}
-                  >
-                    Создать проект
-                  </button>
-                </div>
-                {createError && (
-                  <p className="field-error" role="alert">
-                    <code>{createError.code}</code> {createError.message}
-                  </p>
-                )}
-                <p>
-                  Название проекта всегда задаёт последнюю папку в пути. Будет
-                  создан только <code>project.yml</code>.
-                </p>
-              </form>
-            </div>
-          )}
-          {reviewOpen && (
-            <ReviewDialog
-              edit={edit}
-              error={editError}
-              busy={editBusy}
-              onClose={() => {
-                setReviewOpen(false);
-                if (importReview) {
-                  void discard();
-                  setImportReview(false);
-                }
-              }}
-              onReview={review}
-              onSave={save}
-              onDiscard={discard}
-            />
-          )}
-          {exportDialog && (
-            <ProjectExportDialog
-              parent={exportParent}
-              name={exportName}
-              operation={exportOperation}
-              busy={exportBusy}
-              onParentChange={setExportParent}
-              onNameChange={setExportName}
-              onChooseParent={chooseExportParent}
-              onPreview={previewExport}
-              onCommit={commitExport}
-              onReopen={reopenExport}
-              onClose={() => !exportBusy && setExportDialog(false)}
-            />
-          )}
-        </div>
-      </main>
-    </div>
-  );
-}
-
-function ProjectPage({
-  catalogStatus,
-  bundleUpdate,
-  bundleBusy,
-  onRefreshBundle,
-  onConfirmBundle,
-  empty,
-  snapshot,
-  managed,
-  verification,
-  local,
-  onClose,
-  onServers,
-  closeDisabled,
-  exportAvailable,
-  onExport,
-}: {
-  catalogStatus?: string;
-  bundleUpdate: RuntimeBundleUpdate | null;
-  bundleBusy: boolean;
-  onRefreshBundle: () => void;
-  onConfirmBundle: () => void;
-  empty: boolean;
-  snapshot: OpenResult["snapshot"];
-  managed: OpenResult["managed"];
-  verification: NonNullable<OpenResult["verification"]>;
-  local: OpenResult["project"];
-  onClose: () => void;
-  onServers: () => void;
-  closeDisabled: boolean;
-  exportAvailable: boolean;
-  onExport: () => void;
-}) {
-  const checked =
-    ["VERIFIED", "INVALID"].includes(verification.status) &&
-    !!verification.projectRevision &&
-    verification.projectRevision === managed?.projectRevision;
-  const findings = checked || verification.error ? verification.findings || [] : [];
-  const bundleCard = (
-    <section className="card" aria-label="Набор установки">
-      <h2>Набор установки</h2>
-      {catalogStatus !== "READY" && (
-        <p role="status">
-          Нужна перепривязка набора установки: сохранённые данные проекта
-          доступны, но текущий проверенный набор не соответствует проекту или
-          отсутствует. Проверка Core и новый план пока недоступны.
-        </p>
-      )}
-      <p>
-        Поместите полученный набор целиком в папку bundle внутри проекта.
-        Обнаружение не меняет привязку.
-      </p>
-      <button
-        className="outline"
-        onClick={onRefreshBundle}
-        disabled={bundleBusy}
-      >
-        Проверить новый набор
-      </button>
-      {bundleUpdate?.status === "NOT_FOUND" && <p>Новый набор не найден.</p>}
-      {bundleUpdate?.status === "UNCHANGED" && (
-        <p>Набор уже привязан к проекту.</p>
-      )}
-      {bundleUpdate?.status === "PREVIEW" && (
-        <>
-          <dl>
-            <dt>Текущий digest</dt>
-            <dd>{bundleUpdate.currentArtifactDigest}</dd>
-            <dt>Новый digest</dt>
-            <dd>{bundleUpdate.newArtifactDigest}</dd>
-            <dt>Каталог</dt>
-            <dd>{bundleUpdate.newCatalogDigest}</dd>
-            <dt>Версия набора / Core</dt>
-            <dd>
-              {bundleUpdate.bundleVersion} / {bundleUpdate.coreVersion}
-            </dd>
-          </dl>
-          <p>
-            После привязки прежняя проверка и одобренный план станут
-            недействительными. Перед установкой заново подготовьте узел,
-            проверьте проект и создайте план.
-          </p>
-          <button onClick={onConfirmBundle} disabled={bundleBusy}>
-            Привязать
-          </button>
-        </>
-      )}
-      {bundleUpdate?.status === "UPDATED" && (
-        <p>
-          Новый набор привязан. Подготовьте узел выполнения и создайте свежий
-          план.
-        </p>
-      )}
-      {bundleUpdate?.status === "BLOCKED" &&
-        bundleUpdate.error?.code !== "INSTALLATION_RUN_ACTIVE" && (
-          <p role="alert">
-            Привязка сейчас недоступна:{" "}
-            {bundleUpdate.error?.message ||
-              bundleUpdate.error?.code ||
-              "проверьте набор и состояние выполнения"}
-            .
-          </p>
-        )}
-      {bundleUpdate?.status === "BLOCKED" &&
-        bundleUpdate.error?.code &&
-        bundleUpdate.error.code !== "INSTALLATION_RUN_ACTIVE" && (
-          <p className="muted">Код: {bundleUpdate.error.code}</p>
-        )}
-      {bundleUpdate?.error?.code === "INSTALLATION_RUN_ACTIVE" && (
-        <div role="alert">
-          <p>
-            Прежний запуск установки не подтверждён как завершённый. Проверка
-            нового набора пока недоступна.
-          </p>
-          <p>
-            Перейдите на страницу «Серверы», восстановите доступ к узлу
-            выполнения и нажмите «Проверить прежний запуск».
-          </p>
-          <button className="outline" onClick={onServers}>
-            Перейти к серверам
-          </button>
-        </div>
-      )}
-      {bundleUpdate?.status === "PUBLISHED_NOT_BOUND" && (
-        <p role="alert">
-          Набор опубликован, но проект не перепривязан. Проверьте проект и
-          повторите операцию.
-        </p>
-      )}
-      {bundleUpdate?.status === "BOUND_REFRESH_REQUIRED" && (
-        <p role="alert">Привязка записана, но проект нужно открыть заново.</p>
-      )}
-    </section>
-  );
-  if (empty && local)
-    return (
-      <>
-        <section className="title">
-          <div>
-            <h1>Проект ещё не настроен</h1>
-            <p>
-              Это корректный проект только с метаданными. Добавьте серверы,
-              затем проверьте и сохраните проект.
-            </p>
-          </div>
-          <button
-            className="outline"
-            onClick={onClose}
-            disabled={closeDisabled}
-          >
-            Закрыть проект
-          </button>
-        </section>
-        <section className="grid">
-          <Stat label="Серверы" value={0} />
-          <Stat label="Развёртывания / Сервисы" value={0} />
-          <Stat label="Выполнения" value={0} />
-          <Stat label="Инвентарь" value="Не создан" />
-        </section>
-        <section className="card">
-          <h2>Сведения проекта</h2>
-          <dl>
-            <dt>Название</dt>
-            <dd>{local.name}</dd>
-            <dt>Project ID</dt>
-            <dd>{local.id}</dd>
-            <dt>Источник совместимости</dt>
-            <dd>{local.source?.bundleDigest}</dd>
-          </dl>
-          <button onClick={onServers}>Добавить первый сервер</button>
-          <button
-            className="outline"
-            onClick={onExport}
-            disabled={!exportAvailable}
-          >
-            Экспортировать проект
-          </button>
-        </section>
-        {bundleCard}
-      </>
-    );
-  return (
-    <>
-      <section className="title">
-        <div>
-          <h1>
-            {(snapshot?.project as Record<string, unknown> | undefined)?.name
-              ? String((snapshot?.project as Record<string, unknown>).name)
-              : "Проект"}
-          </h1>
-          <p>Сохранённые поля проекта, управляемые инсталлером.</p>
-        </div>
-        <button className="outline" onClick={onClose} disabled={closeDisabled}>
-          Закрыть проект
-        </button>
-      </section>
-      <section className="grid">
-        <Stat
-          label="Серверы"
-          value={managed ? count(managed.servers) : "Нет данных"}
-        />
-        <Stat
-          label="Развёртывания"
-          value={managed ? count(managed.deployments) : "Нет данных"}
-        />
-        <Stat
-          label="Профили сертификатов"
-          value={managed ? count(managed.pki?.profiles) : "Нет данных"}
-        />
-        <Stat
-          label="Замечания проверки"
-          value={
-            checked
-              ? findings.length
-              : "Не проверено"
-          }
-        />
-      </section>
-      <section className="card">
-        <h2>Состояние проекта</h2>
-        <dl>
-          <dt>Статус</dt>
-          <dd>
-            {verificationLabel(verification.status, !!verification.error,
-              checked && !!findings.some((finding) => finding.severity === "WARNING"))}
-          </dd>
-          <dt>Ревизия</dt>
-          <dd>{managed?.projectRevision || snapshot?.projectRevision}</dd>
-        </dl>
-        {verification.error && (
-          <p className="field-error" role="alert">
-            {verificationErrorMessage(verification.error.code)}
-          </p>
-        )}
-        {findings.map((finding, index) => (
-          <p className={finding.severity === "BLOCKED" ? "field-error" : undefined} role="status" key={`${finding.code}-${index}`}>
-            [{finding.severity}] {finding.code}: {finding.summary}
-            {finding.subjectId && ` (${finding.subjectKind || "Объект"}: ${finding.subjectId})`}
-          </p>
-        ))}
-        {verification.findingsTruncated && findings.length > 0 && (
-          <p role="status">Показана часть замечаний проверки.</p>
-        )}
-        <button onClick={onServers}>Открыть серверы</button>
-        <button
-          className="outline"
-          onClick={onExport}
-          disabled={!exportAvailable}
-        >
-          Экспортировать проект
-        </button>
-      </section>
-      {bundleCard}
-    </>
-  );
-}
-
-function ProjectExportDialog({
-  parent,
-  name,
-  operation,
-  busy,
-  onParentChange,
-  onNameChange,
-  onChooseParent,
-  onPreview,
-  onCommit,
-  onReopen,
-  onClose,
-}: {
-  parent: string;
-  name: string;
-  operation: ProjectExportOperationResult | null;
-  busy: boolean;
-  onParentChange: (value: string) => void;
-  onNameChange: (value: string) => void;
-  onChooseParent: () => void;
-  onPreview: (event: React.FormEvent) => void;
-  onCommit: () => void;
-  onReopen: () => void;
-  onClose: () => void;
-}) {
-  const plan = operation?.plan;
-  const result = operation?.result;
-  const canPreview = !!parent && !!name.trim() && !busy && !plan;
-  return (
-    <div className="modal" role="presentation">
-      <form
-        className="card dialog review-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="project-export-title"
-        onSubmit={onPreview}
-      >
-        <h1 id="project-export-title">Экспорт проекта</h1>
-        {!plan && !result && (
-          <>
-            <p>
-              Будет создана новая папка с переносимой конфигурацией проекта.
-              Секреты, данные выполнения, обнаруженные сведения, планы, журналы
-              и результаты не экспортируются.
-            </p>
-            <label>
-              Папка назначения
-              <div className="inline-fields">
-                <input
-                  value={parent}
-                  onChange={(event) => onParentChange(event.target.value)}
-                  placeholder="C:\\Projects"
-                  required
-                />
-                <button
-                  type="button"
-                  className="outline"
-                  onClick={onChooseParent}
-                  disabled={busy}
-                >
-                  Выбрать
-                </button>
-              </div>
-            </label>
-            <label>
-              Имя проекта и новой папки
-              <input
-                value={name}
-                onChange={(event) => onNameChange(event.target.value)}
-                placeholder="portable-project"
-                required
-                maxLength={128}
-              />
-            </label>
-          </>
-        )}
-        {operation?.error && (
-          <p className="field-error" role="alert">
-            <code>{operation.error.code}</code> {operation.error.message}
-          </p>
-        )}
-        {plan && (
-          <>
-            <p>
-              Проверьте состав перед публикацией. Существующая папка назначения
-              никогда не будет перезаписана.
-            </p>
-            <dl>
-              <dt>Новая папка</dt>
-              <dd>{plan.destinationRoot}</dd>
-              <dt>Ревизия проекта</dt>
-              <dd>{plan.sourceProjectRevision}</dd>
-              <dt>Файлы</dt>
-              <dd>{plan.documents.length}</dd>
-              <dt>Размер</dt>
-              <dd>{plan.aggregateSize} байт</dd>
-            </dl>
-            <p className="readonly">
-              Исключено:{" "}
-              {plan.excludedCategories.map(exportExclusionLabel).join(", ")}
-            </p>
-          </>
-        )}
-        {result?.status === "EXPORTED" && (
-          <p className="success" role="status">
-            Экспорт завершён: {result.destinationRoot}
-          </p>
-        )}
-        <footer className="dialog-actions">
-          <button
-            type="button"
-            className="outline"
-            onClick={onClose}
-            disabled={busy}
-          >
-            {result?.status === "EXPORTED" ? "Готово" : "Отмена"}
-          </button>
-          {!plan && !result && (
-            <button type="submit" disabled={!canPreview}>
-              {busy ? "Подготовка…" : "Проверить состав"}
-            </button>
-          )}
-          {plan && (
-            <button type="button" onClick={onCommit} disabled={busy}>
-              {busy ? "Экспорт…" : "Экспортировать"}
-            </button>
-          )}
-          {result?.status === "EXPORTED" && (
-            <button type="button" onClick={onReopen} disabled={busy}>
-              {busy ? "Открытие…" : "Открыть экспортированный проект"}
-            </button>
-          )}
-        </footer>
-      </form>
-    </div>
-  );
-}
-
-function reviewFindingMessage(code: string, fallback: string): string {
-  if (code === "REFERENCE_IN_USE") {
-    if (
-      fallback.startsWith("Нельзя удалить экземпляр:") ||
-      fallback.startsWith("Нельзя удалить группу endpoint:")
-    )
-      return fallback;
-    return "Объект используется. Сначала удалите связанные ссылки.";
-  }
-  if (code === "INVALID_VALUE")
-    return "Значение не соответствует ограничениям каталога.";
-  return fallback;
-}
-
-function ReviewDialog({
-  edit,
-  error,
-  busy,
-  onClose,
-  onReview,
-  onSave,
-  onDiscard,
-}: {
-  edit: EditResult | null;
-  error: EditResult["error"] | null;
-  busy: boolean;
-  onClose: () => void;
-  onReview: () => void;
-  onSave: () => void;
-  onDiscard: () => void;
-}) {
-  const plan = edit?.plan;
-  const conflict =
-    error?.code === "EDIT_COMMAND_CONFLICT" ||
-    plan?.finding?.code === "EDIT_COMMAND_CONFLICT";
-  return (
-    <div className="modal" role="presentation">
-      <section
-        className="card dialog review-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="review-title"
-      >
-        <h1 id="review-title">Изменения конфигурации</h1>
-        {error && (
-          <p className="field-error" role="alert">
-            <code>{error.code}</code>{" "}
-            {reviewFindingMessage(error.code, error.message)}
-          </p>
-        )}
-        {plan ? (
-          <>
-            {plan.finding && (
-              <p className="field-error" role="alert">
-                <code>{plan.finding.code}</code>{" "}
-                {reviewFindingMessage(
-                  plan.finding.code,
-                  plan.finding.safeMessage,
-                )}
-              </p>
-            )}
-            {plan.status === "NO_CHANGE" ? (
-              <p role="status">
-                Изменения не затрагивают файлы проекта — сохранять нечего.
-                Пароль PKCS#12 хранится только в текущем сеансе и не
-                записывается в проект.
-              </p>
-            ) : (
-              <p>
-                Локальная структурная проверка завершена. Документов:{" "}
-                {plan.affectedDocuments?.length ?? 0}.
-              </p>
-            )}
-            <ul>
-              {plan.semanticChanges?.map((change, index) => (
-                <li key={index}>{change.safeSummary}</li>
-              ))}
-            </ul>
-            {plan.affectedDocuments && plan.affectedDocuments.length > 0 && (
-              <>
-                <h2>Затрагиваемые документы</h2>
-                <ul>
-                  {plan.affectedDocuments.map((document) => (
-                    <li key={document.logicalPath}>
-                      {document.logicalPath}: {document.before?.state} →{" "}
-                      {document.after?.state}
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
-          </>
-        ) : (
-          <p>Проверка черновика ещё не вернула план.</p>
-        )}
-        <div className="actions">
-          <button className="outline" onClick={onClose}>
-            Вернуться к редактированию
-          </button>
-          <button className="outline" onClick={onDiscard} disabled={busy}>
-            Отменить все изменения
-          </button>
-          {plan?.saveAllowed ? (
-            <button onClick={onSave} disabled={busy}>
-              Сохранить проект
-            </button>
-          ) : !conflict && plan?.status !== "NO_CHANGE" ? (
-            <button onClick={onReview} disabled={busy}>
-              {busy ? "Проверка…" : "Повторить проверку"}
-            </button>
-          ) : null}
-        </div>
-      </section>
-    </div>
-  );
-}
-function Stat({ label, value }: { label: string; value: number | string }) {
-  return (
-    <article className="stat">
-      <span>{label}</span>
-      <strong>{value}</strong>
-      {value === 0 && <small>Нет данных</small>}
-    </article>
-  );
-}
-
 @@END
