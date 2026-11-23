@@ -1805,7 +1805,7 @@ class ActionModule(ActionBase):
             return dict(failed=True, changed=False, msg=code, error_code=code)
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/project_snapshot.py","mode":420,"size":48304,"sha256":"58caaa8d9ab031d4687d8be25d79cd2472eedf01b3fa0454180ba0665ce1e63c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":48304}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/project_snapshot.py","mode":420,"size":49900,"sha256":"6e7ee5475b3265881b25b13815e7db62fcddb5b5f26619f0a8ae46dd73e6c3f0","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48300}
 from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
@@ -1823,7 +1823,8 @@ from ansible.plugins.action import ActionBase
 
 from ansible_collections.platform.core.plugins.module_utils.dns_resolution import resolve_dns_zones
 from ansible_collections.platform.core.plugins.module_utils.deployment_plan import _service_runtime_secret_requirements
-from ansible_collections.platform.core.plugins.module_utils.haproxy_resolution import resolve_haproxy_backends
+from ansible_collections.platform.core.plugins.module_utils.haproxy_resolution import resolve_haproxy_backends, tcp_listener_findings
+from ansible_collections.platform.core.plugins.module_utils.application_endpoints import project_endpoint_sources
 from ansible_collections.platform.core.plugins.module_utils.pki_resolution import application_pki_bindings, resolve_certificate_requests
 from ansible_collections.platform.core.plugins.module_utils.project_snapshot import build_project_snapshot, project_documents
 from ansible_collections.platform.core.plugins.module_utils.project_snapshot_output import write_snapshot_output, SnapshotInputError, snapshot_input_message
@@ -1834,7 +1835,7 @@ from ansible_collections.platform.core.plugins.module_utils.service_endpoint_res
 from ansible_collections.platform.core.plugins.module_utils.schema_validation import SchemaValidationError, SchemaValidator
 from ansible_collections.platform.core.plugins.module_utils.topology_resolution import resolve_topology
 from ansible_collections.platform.core.plugins.module_utils.application_libraries import (
-    infrastructure_state, schema_version, prepare, validate_public_projection, project as project_application_libraries,
+    finding, infrastructure_state, schema_version, prepare, validate_public_projection, project as project_application_libraries,
 )
 from ansible_collections.platform.core.plugins.module_utils.project_validation import canonical_digest
 from ansible_collections.platform.core.plugins.module_utils.application_runtime import resolve_image_lock
@@ -2527,6 +2528,26 @@ class ActionModule(ActionBase):
                 applications["findings"].extend(rechecked["findings"])
                 applications["findings"].extend(resolved_findings)
                 applications["findings"].extend(validate_public_projection(applications))
+                if not applications["findings"] and any(
+                    row["settings"].get("endpoints", {}).get("tcp", {}).get("enabled") for row in rows
+                ):
+                    try:
+                        sources = project_endpoint_sources(rows, materialized, host_addresses)
+                    except ValueError as error:
+                        applications["findings"].append(finding(str(error), "applicationLibraryDeployments"))
+                    else:
+                        occupied_ports = {(row["hostId"], port["published"]) for row in rows
+                                          for port in row["settings"].get("ports", {}).values()}
+                        for host in target_ids:
+                            if not any(deployments.get(key, {}).get("serviceType") == "haproxy"
+                                       for key in inventory_deployments[host]):
+                                continue
+                            for key in ("platform_haproxy_public_port", "platform_haproxy_internal_stats_port"):
+                                port = hostvars[host].get(key, role_defaults.get("haproxy", {}).get(key))
+                                if type(port) is int:
+                                    occupied_ports.add((host, port))
+                        applications["findings"].extend(tcp_listener_findings(
+                            materialized, inventory_deployments, sources, occupied_ports))
                 if applications["findings"]:
                     applications.update(status="BLOCKED", libraries={})
                     snapshot.update(status="PARTIAL", partial=True)
@@ -2571,7 +2592,10 @@ class ActionModule(ActionBase):
                 "msg": "Project snapshot inputs could not be loaded; inspect the structured finding",
                 "finding": {
                     "apiVersion": "platform.installer/finding/v1alpha1",
-                    "kind": "Finding", "code": "PROJECT_SNAPSHOT_INPUT_INVALID",
+                    "kind": "Finding", "code": "PROJECT_SNAPSHOT_INPUT
+@@END
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/project_snapshot.py","mode":420,"size":49900,"sha256":"6e7ee5475b3265881b25b13815e7db62fcddb5b5f26619f0a8ae46dd73e6c3f0","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":1600}
+_INVALID",
                     "status": "BLOCKED", "category": "project-snapshot",
                     "field": "project", "safeMessage": snapshot_input_message(stage, error),
                 },
@@ -23042,14 +23066,14 @@ class PTypeError(TypeError):
     ) -> None: ...
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_connections.py","mode":420,"size":11747,"sha256":"a6154613f828c7182aaa6b4a0585934ebedbb62ad443be20afd2f624328fe75a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":11747}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_connections.py","mode":420,"size":11771,"sha256":"e3afb5c86adda5254b3fac1ccfd2e7c2f3947f6b0439de36eace36c6ce068ec2","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":11771}
 """Application-provided connections from native Ansible-resolved values only."""
 import copy
 import hashlib
 try:
-    from .application_endpoints import public_endpoint_url
+    from .application_endpoints import https_endpoint, public_endpoint_url
 except ImportError:
-    from application_endpoints import public_endpoint_url
+    from application_endpoints import https_endpoint, public_endpoint_url
 
 
 def enabled(settings, name):
@@ -23163,7 +23187,7 @@ def provided_connections(rows, desired, hosts):
             if not matches:
                 continue
             first = matches[0]
-            endpoint = first['settings'].get('endpoint', {})
+            endpoint = https_endpoint(first['settings'])
             ports = first['settings'].get('ports', {})
             group = desired.get('endpointGroups', {}).get(endpoint.get('endpoint_group'), {})
             domain = group.get('address', {}).get('domain')
@@ -23175,7 +23199,7 @@ def provided_connections(rows, desired, hosts):
                 raise ValueError('APPLICATION_PROVIDED_CONNECTION_PROTOCOL_UNSUPPORTED')
             targets = []
             for peer in matches:
-                ep = peer['settings'].get('endpoint', {})
+                ep = https_endpoint(peer['settings'])
                 if ep != endpoint:
                     raise ValueError('APPLICATION_PROVIDED_CONNECTION_HOST_CONFLICT')
                 target_port = peer['settings']['ports'][ep['listener']]['published']
@@ -23283,7 +23307,7 @@ def protected_secret_files(files, refs, runtime_root=None, maximum=None):
         raise AnsibleFilterError('APPLICATION_PROVIDER_SECRET_FILE_INVALID')
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_endpoints.py","mode":420,"size":4441,"sha256":"fb626618ebd9826215195e6f3ab5ba3af0bdb60157e48b44669945910ade1ee1","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4441}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_endpoints.py","mode":420,"size":6045,"sha256":"156d74564f4b18dd279b79e24a8ea3de01d2227823b0784f26b0c667e505b6c4","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":6045}
 """Normalize application placements into the existing endpoint hook input."""
 import ipaddress
 import re
@@ -23294,12 +23318,25 @@ except ImportError:
     from haproxy_resolution import normalize_backend_settings
 
 
+def https_endpoint(settings):
+    legacy = settings.get('endpoint', {})
+    https = settings.get('endpoints', {}).get('https')
+    if https is None:
+        return legacy
+    return dict(https, endpoint_group=legacy.get('endpoint_group'))
+
+
 def placement_target(settings, host, hosts):
     """Use the endpoint placement's existing listener and target address."""
     endpoint = settings.get('endpoint', {})
-    protocol = endpoint.get('protocol', 'http')
-    port = settings.get('ports', {}).get(endpoint.get('listener'), {}).get('published')
-    if protocol not in {'http', 'https'} or type(port) is not int or not 1 <= port <= 65535:
+    if endpoint.get('protocol', 'http') not in {'http', 'https'}:
+        raise ValueError('APPLICATION_ENDPOINT_INVALID')
+    return _listener_target(settings, host, hosts, endpoint.get('listener'))
+
+
+def _listener_target(settings, host, hosts, listener):
+    port = settings.get('ports', {}).get(listener, {}).get('published')
+    if type(port) is not int or not 1 <= port <= 65535:
         raise ValueError('APPLICATION_ENDPOINT_INVALID')
     address = hosts.get(host, {}).get('ansible_host')
     if not isinstance(address, str) or not address:
@@ -23309,15 +23346,15 @@ def placement_target(settings, host, hosts):
 
 def public_endpoint_url(instance_id, settings, desired):
     """Shared endpoints publish HTTPS/443 independently of backend transport."""
-    endpoint = settings.get('endpoint', {})
+    endpoint = https_endpoint(settings)
     domain = desired.get('endpointGroups', {}).get(endpoint.get('endpoint_group'), {}).get('address', {}).get('domain')
     if not endpoint.get('enabled') or not domain:
         raise ValueError('APPLICATION_ENDPOINT_INVALID')
     return 'https://' + instance_id + '.' + domain
 
 
-def _published_target(settings, host, hosts):
-    target = placement_target(settings, host, hosts)
+def _published_target(settings, host, hosts, listener):
+    target = _listener_target(settings, host, hosts, listener)
     try:
         parsed = ipaddress.ip_address(target['address'])
         if parsed.version != 4:
@@ -23332,40 +23369,64 @@ def project_endpoint_sources(rows, desired, hosts):
     sources = {}
     for row in rows:
         settings = row['settings']
-        endpoint = settings.get('endpoint', {})
-        if not endpoint.get('enabled', False):
+        endpoint = https_endpoint(settings)
+        tcp = settings.get('endpoints', {}).get('tcp', {})
+        https_enabled = endpoint.get('enabled', False)
+        tcp_enabled = tcp.get('enabled', False)
+        if not https_enabled and not tcp_enabled:
             continue
         source_id, host = row['instanceId'], row['hostId']
         group_id = endpoint.get('endpoint_group')
         domain = desired.get('endpointGroups', {}).get(group_id, {}).get('address', {}).get('domain')
-        protocol = endpoint.get('protocol', 'http')
-        target = _published_target(settings, host, hosts)
         if (not re.fullmatch(r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?', source_id) or
                 not isinstance(domain, str)):
             raise ValueError('APPLICATION_ENDPOINT_INVALID')
-        defaults = {'balance': 'roundrobin', 'check': True, 'fall': 3, 'rise': 2,
-                    'ssl': protocol == 'https', 'sslVerify': 'required'}
-        backend, findings = normalize_backend_settings(defaults, endpoint.get('haproxy', {}).get('backend', {}),
-                                                       'applicationLibraries.' + row['libraryId'] + '.' + source_id)
-        if findings or backend['ssl'] != (protocol == 'https') or (backend['ssl'] and backend.get('sslVerify') != 'required'):
-            raise ValueError('APPLICATION_ENDPOINT_BACKEND_INVALID')
-        probe = dict({'path': '/', 'expected_status': 200, 'timeout': 10}, **endpoint.get('probe', {}))
-        if (not isinstance(probe['path'], str) or not re.fullmatch(r'/[^\s\x00-\x1f\x7f]{0,2047}', probe['path']) or
-                type(probe['expected_status']) is not int or not 100 <= probe['expected_status'] <= 599 or
-                type(probe['timeout']) is not int or not 1 <= probe['timeout'] <= 60):
-            raise ValueError('APPLICATION_ENDPOINT_PROBE_INVALID')
-        probe['validate_certs'] = True
         record = {'endpointGroup': group_id, 'endpoint': {'scope': 'deployment', 'serviceDeploymentId': source_id,
                   'endpointGroupId': group_id, 'fqdn': source_id + '.' + domain,
-                  'sanDnsNames': [source_id + '.' + domain], 'wildcardDnsNames': []},
-                  'settings': backend, 'probe': probe, 'targets': []}
+                  'sanDnsNames': [source_id + '.' + domain], 'wildcardDnsNames': []}}
+        if https_enabled:
+            record.update(_https_route(row, endpoint, settings, host, hosts))
+        if tcp_enabled:
+            port = tcp.get('public_port')
+            if type(port) is not int or not 1 <= port <= 65535:
+                raise ValueError('APPLICATION_ENDPOINT_TCP_PORT_INVALID')
+            record['tcp'] = {'publicPort': port, 'targets': [
+                _published_target(settings, host, hosts, tcp.get('listener'))]}
         existing = sources.setdefault(source_id, record)
-        if any(existing[key] != record[key] for key in ('endpoint', 'settings', 'probe')):
+        if (any(existing.get(key) != record.get(key) for key in ('endpoint', 'settings', 'probe')) or
+                existing.get('tcp', {}).get('publicPort') != record.get('tcp', {}).get('publicPort')):
             raise ValueError('APPLICATION_HOST_ENDPOINT_CONFLICT')
-        existing['targets'].append(target)
+        if existing is not record:
+            if https_enabled:
+                existing['targets'].extend(record['targets'])
+            if tcp_enabled:
+                existing['tcp']['targets'].extend(record['tcp']['targets'])
     for source in sources.values():
-        source['targets'].sort(key=lambda target: target['hostId'])
+        if 'targets' in source:
+            source['targets'].sort(key=lambda target: target['hostId'])
+        if 'tcp' in source:
+            source['tcp']['targets'].sort(key=lambda target: target['hostId'])
     return sources
+
+
+def _https_route(row, endpoint, settings, host, hosts):
+    protocol = endpoint.get('protocol', 'http')
+    if protocol not in {'http', 'https'}:
+        raise ValueError('APPLICATION_ENDPOINT_INVALID')
+    target = _published_target(settings, host, hosts, endpoint.get('listener'))
+    defaults = {'balance': 'roundrobin', 'check': True, 'fall': 3, 'rise': 2,
+                'ssl': protocol == 'https', 'sslVerify': 'required'}
+    backend, findings = normalize_backend_settings(defaults, endpoint.get('haproxy', {}).get('backend', {}),
+                                                   'applicationLibraries.' + row['libraryId'] + '.' + row['instanceId'])
+    if findings or backend['ssl'] != (protocol == 'https') or (backend['ssl'] and backend.get('sslVerify') != 'required'):
+        raise ValueError('APPLICATION_ENDPOINT_BACKEND_INVALID')
+    probe = dict({'path': '/', 'expected_status': 200, 'timeout': 10}, **endpoint.get('probe', {}))
+    if (not isinstance(probe['path'], str) or not re.fullmatch(r'/[^\s\x00-\x1f\x7f]{0,2047}', probe['path']) or
+            type(probe['expected_status']) is not int or not 100 <= probe['expected_status'] <= 599 or
+            type(probe['timeout']) is not int or not 1 <= probe['timeout'] <= 60):
+        raise ValueError('APPLICATION_ENDPOINT_PROBE_INVALID')
+    probe['validate_certs'] = True
+    return {'settings': backend, 'probe': probe, 'targets': [target]}
 
 @@END
 @@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_images.py","mode":420,"size":12060,"sha256":"259d9eb361527b0422742b84b194b947501f411507253d477c2636093ab42cab","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":12060}
@@ -23733,7 +23794,7 @@ def shared_vault_jobs(jobs, inputs, completed, delivered=()):
     return result
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_libraries.py","mode":420,"size":67607,"sha256":"45a527e41514237c7a8e1f274cf87849e0c2c55ad95a107e5072412faed2f133","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_libraries.py","mode":420,"size":69172,"sha256":"6b3edce1bf3a2c3a3a0095c19ea062dc09e82f987dc1b0ed1925073c65857592","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":48000}
 """Read-only application contract checks. Ansible owns composition and templating."""
 import hashlib
 import copy
@@ -23747,6 +23808,7 @@ try:
     from .kafka_listener_resolution import project_member_listeners
     from .kafka_schema_registry import registry_projection
     from .application_images import registry_request
+    from .application_endpoints import https_endpoint
     from .application_connections import provided_connections, application_connection, enabled, active_script, library_script_hosts, script_secret_source, connection_callback
 except ImportError:
     from project_validation import canonical_digest
@@ -23754,6 +23816,7 @@ except ImportError:
     from kafka_listener_resolution import project_member_listeners
     from kafka_schema_registry import registry_projection
     from application_images import registry_request
+    from application_endpoints import https_endpoint
     from application_connections import provided_connections, application_connection, enabled, active_script, library_script_hosts, script_secret_source, connection_callback
 
 CONTRACT = "platform.installer/project-desired-state/v3alpha1"
@@ -24183,7 +24246,7 @@ def prepare(root, desired, memberships, contract, loader, contracts_root):
                         isinstance(values.get(key, {}), dict) and _literal_library_input(values.get(key, {}))
                         for values in (application['definition'].get('defaults', {}), slot.get('overrides', {}),
                                        selected[slot_id].get('overrides', {}), host_override)
-                        for key in ('endpoint', 'ports'))
+                        for key in ('endpoint', 'endpoints', 'ports'))
                     jobs.append({"libraryId": library_id, "slotId": slot_id, "hostId": host,
                                  "instanceId": application_instance_id(slot_id, library_id,
                                      library['definition'].get('instance_id_strategy', 'qualified')),
@@ -24426,6 +24489,7 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
         for key in ('commonDefaults', 'inherited'):
             nonsecret_values(row.get(key, {}), field + '.' + key, findings)
         nonsecret_values(settings.get("endpoint", {}), field + ".endpoint", findings)
+        nonsecret_values(settings.get("endpoints", {}), field + ".endpoints", findings)
         for resource_id, resource in row["resources"].items():
             nonsecret_values(resource.get("parameters", {}), field + ".resources." + resource_id + ".parameters", findings)
         declared_accounts = settings.get("accounts", {})
@@ -24508,13 +24572,13 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
             provider = desired.get("serviceDeployments", {}).get(binding.get("deploymentRef"), {})
             if provider.get("serviceType") != resource["kind"].split(".")[0]:
                 findings.append(finding("APPLICATION_RESOURCE_PROVIDER_INVALID", field + ".resources." + resource_id))
-        for variable, binding in secret_bindings.items():
+     
+@@END
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_libraries.py","mode":420,"size":69172,"sha256":"6b3edce1bf3a2c3a3a0095c19ea062dc09e82f987dc1b0ed1925073c65857592","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":21172}
+   for variable, binding in secret_bindings.items():
             source = binding["source"]
             if binding.get('format') == 'kafka_scram_jaas':
-                connection = connections.get(source.get(
-@@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_libraries.py","mode":420,"size":67607,"sha256":"45a527e41514237c7a8e1f274cf87849e0c2c55ad95a107e5072412faed2f133","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":19607}
-'account'), {})
+                connection = connections.get(source.get('account'), {})
                 if (connection.get('serviceType') != 'kafka' or source.get('field') != 'password'
                         or source.get('account') not in accounts):
                     findings.append(finding("APPLICATION_SECRET_BINDING_INVALID", field + ".secret_bindings." + variable))
@@ -24522,9 +24586,14 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
                 findings.append(finding("APPLICATION_SECRET_BINDING_INVALID", field + ".secret_bindings." + variable))
             if source.get("library_secret") and source["library_secret"] not in row["sharedSecrets"]:
                 findings.append(finding("APPLICATION_SECRET_BINDING_INVALID", field + ".secret_bindings." + variable))
-        endpoint = settings.get("endpoint", {})
+        endpoint = https_endpoint(settings)
         if endpoint.get("enabled") and (endpoint.get("listener") not in settings.get("ports", {}) or endpoint.get("endpoint_group") not in desired.get("endpointGroups", {})):
             findings.append(finding("APPLICATION_ENDPOINT_INVALID", field + ".endpoint"))
+        tcp = settings.get('endpoints', {}).get('tcp', {})
+        if tcp.get('enabled') and (tcp.get('listener') not in settings.get('ports', {}) or
+                                  endpoint.get('endpoint_group') not in desired.get('endpointGroups', {}) or
+                                  'public_port' not in tcp):
+            findings.append(finding("APPLICATION_ENDPOINT_INVALID", field + ".endpoints.tcp"))
         runtime_ref = row["runtimeRef"]
         runtime = desired.get("serviceDeployments", {}).get(runtime_ref, {})
         if runtime.get("serviceType") != "docker" or not (runtime_ref in hosts.get(host, {}).get("platformDeployments", {}) or any(member.get("host") == host for member in runtime.get("members", {}).values())):
@@ -24596,6 +24665,17 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
                                                            "connections": connections, 'topics': topic_bindings, "credentialRequirements": accounts,
                                                            "identityEnvironment": {name: app_id for name in row["identityNames"]},
                                                            "agentRequired": agent_required, "executionPrerequisites": ["A2_IMAGE_DELIVERY", "A4_PROVIDER_PROVISIONING"] if accounts or agent_required else ["A2_IMAGE_DELIVERY"]})
+        if 'endpoints' in settings:
+            domain = desired.get('endpointGroups', {}).get(endpoint.get('endpoint_group'), {}).get('address', {}).get('domain')
+            public_endpoints = {}
+            if domain:
+                fqdn = app_id + '.' + domain
+                if endpoint.get('enabled'):
+                    public_endpoints['https'] = 'https://' + fqdn
+                if tcp.get('enabled') and 'public_port' in tcp:
+                    public_endpoints['tcp'] = fqdn + ':' + str(tcp['public_port'])
+            if instance.setdefault('publicEndpoints', public_endpoints) != public_endpoints:
+                findings.append(finding('APPLICATION_HOST_ENDPOINT_CONFLICT', field + '.endpoints'))
         if library['resources'] != row['resources'] or library['sharedSecretRequirements'] != row['sharedSecrets']:
             findings.append(finding('APPLICATION_HOST_RESOURCE_CONFLICT', field))
         if instance['connections'] != connections:
@@ -24632,6 +24712,8 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
                                           "composeProject": compose_project,
                                           "runtimeDirectory": library['runtimeDirectory'],
                                           "runtimePath": app_id, "libraryEnvPath": '.env'}
+        if 'endpoints' in settings:
+            instance['placements'][host]['endpoints'] = settings['endpoints']
     for library in libraries.values():
         used = {binding["source"]["library_secret"] for instance in library["instances"].values()
                 for binding in instance.get("secretBindings", {}).values() if "library_secret" in binding["source"]}
@@ -24676,7 +24758,7 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
                                 argument['name'] not in placement.get('parameters', {}) for placement in consumer['placements'].values()):
                             raise ValueError('APPLICATION_SCRIPT_REFERENCE_INVALID')
                         if argument['valueFrom'] == 'endpoint' and 'name' not in argument and any(
-                                not placement.get('endpoint', {}).get('enabled') for placement in consumer['placements'].values()):
+                                not https_endpoint(placement).get('enabled') for placement in consumer['placements'].values()):
                             raise ValueError('APPLICATION_SCRIPT_REFERENCE_INVALID')
                 except (ValueError, KeyError, TypeError):
                     findings.append(finding('APPLICATION_CONNECTION_CALLBACK_INVALID',
@@ -24718,8 +24800,9 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
                         valid = bool(target) and all(
                             host in target.get('placements', {}) and
                             (target['placements'][host].get('endpoint', {}).get('protocol') == 'https'
-                             if source == 'placement_https' else target['placements'][host].get('endpoint', {}).get('enabled')) and
-                            target['placements'][host].get('endpoint', {}).get('listener') in target['placements'][host].get('ports', {})
+                             if source == 'placement_https' else https_endpoint(target['placements'][host]).get('enabled')) and
+                            (target['placements'][host].get('endpoint', {}) if source == 'placement_https'
+                             else https_endpoint(target['placements'][host])).get('listener') in target['placements'][host].get('ports', {})
                             for host in instance['placements'])
                     elif source == 'connection':
                         valid = name in instance.get('connections', {}) and bool(instance['connections'][name].get('targets'))
@@ -24751,12 +24834,12 @@ def validate_public_projection(projection):
             for account_id, account in instance.get("credentialRequirements", {}).items():
                 nonsecret_values(account.get("grants", []), prefix + ".accounts." + account_id + ".grants", findings)
             for host_id, placement in instance.get("placements", {}).items():
-                for section in ("parameters", "environment", "command", "endpoint", "commonDefaults", "inherited"):
+                for section in ("parameters", "environment", "command", "endpoint", "endpoints", "commonDefaults", "inherited"):
                     nonsecret_values(placement.get(section, {}), prefix + ".placements." + host_id + "." + section, findings)
     return findings
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_plan.py","mode":420,"size":19648,"sha256":"8b7371d3fe91dfffd03bdde10b2d90db355087b632a516e672864b249243244f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":19648}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_plan.py","mode":420,"size":20411,"sha256":"e1fc54720785775f988a940e192bce97489e4237879f32a6e621744486ed217c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":20411}
 """Target-free application descriptors; image source selection stays in execution."""
 import os
 try:
@@ -25017,9 +25100,21 @@ def application_execution_model(snapshot, image_lock=None, library_order=None, s
     targets.update(host for host, placements in snapshot.get('topology', {}).get('placementsByHost', {}).items()
                    if placements)
     if active_libraries:
+        summary = 'Apply application libraries'
+        endpoint_updates = [addresses for library in active_libraries.values()
+                            for instance in library.get('instances', {}).values()
+                            if (addresses := instance.get('publicEndpoints')) is not None]
+        if endpoint_updates:
+            addresses = [address for row in endpoint_updates for address in row.values()]
+            if addresses:
+                summary += '; publish ' + ', '.join(addresses[:4])
+                if len(addresses) > 4:
+                    summary += ' and %d more' % (len(addresses) - 4)
+            if any(not row for row in endpoint_updates):
+                summary += '; use full HAProxy reconcile to remove old endpoints with both routes disabled'
         actions.append(dict(id='applications:apply', type=OPERATIONS[0], targets=sorted(targets),
                             dependsOn=[], mutating=True, reboot='NONE',
-                            summary='Apply application libraries'))
+                            summary=summary))
     post_install = any(active_script(script, instance) and script.get('phase') == 'post_install'
                        for library in active_libraries.values() for instance in library.get('instances', {}).values()
                        for script in library.get('scripts', []) + instance.get('scripts', []))
@@ -26145,7 +26240,7 @@ def prepare_script_jobs(root, snapshot, desired, rows, jobs, phase=None):
     return jobs
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_selection.py","mode":420,"size":4066,"sha256":"ac2c1c7385b246dce40e71d16732712a3e97281d56bdce5e40adf5300e1576b6","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4066}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_selection.py","mode":420,"size":4149,"sha256":"2b3ee9b41099bfa0fdc7fa97408576b9e9213e9d8c3806d9fc7f2af5566e8f7e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4149}
 """Invocation-only library selection. The complete project remains authoritative."""
 import copy
 
@@ -26206,15 +26301,15 @@ def integration_consumers(snapshot, provider_library_id, desired=None):
             if not aliases:
                 continue
             placements = {host: {key: copy.deepcopy(placement.get(key, {}))
-                                 for key in ('endpoint', 'parameters')}
+                                 for key in ('endpoint', 'endpoints', 'parameters') if key != 'endpoints' or key in placement}
                           for host, placement in sorted(instance.get('placements', {}).items())}
             if desired is not None:
                 try:
-                    from .application_endpoints import public_endpoint_url
+                    from .application_endpoints import https_endpoint, public_endpoint_url
                 except ImportError:
-                    from application_endpoints import public_endpoint_url
+                    from application_endpoints import https_endpoint, public_endpoint_url
                 for placement in placements.values():
-                    if placement.get('endpoint', {}).get('enabled'):
+                    if https_endpoint(placement).get('enabled'):
                         placement['endpointUrl'] = public_endpoint_url(instance_id, placement, desired)
             result.append(dict(libraryId=library_id, applicationId=instance_id,
                                connections=aliases, placements=placements))
@@ -27927,7 +28022,7 @@ def _selection_result(mode, selected, candidates):
     }
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/haproxy_resolution.py","mode":420,"size":20941,"sha256":"1f415c710d55fead0d566812ae8f2b038c3b45bf7f950c40cc12ca036d29f240","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":20941}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/haproxy_resolution.py","mode":420,"size":22554,"sha256":"4c49e88b9ffaa05145a715248b92984c3d6c562cdcb5047a3a5c362bdba41c46","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":22554}
 from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
@@ -28103,6 +28198,30 @@ def normalize_backend_settings(defaults, override, field):
     return effective, findings
 
 
+def tcp_listener_findings(topology, inventory_deployments, endpoint_sources, occupied_ports=None):
+    findings = []
+    used_tcp_ports = {}
+    for source_id, source in sorted((endpoint_sources or {}).items()):
+        if 'tcp' not in source:
+            continue
+        tcp = source['tcp']
+        field = 'endpointSources.' + source_id + '.tcp'
+        if not isinstance(tcp, dict) or not _valid_port(tcp.get('publicPort')):
+            findings.append(_finding('HAPROXY_TCP_PORT_INVALID', field, 'Invalid TCP listener port'))
+            continue
+        targets = tcp.get('targets')
+        if not isinstance(targets, list) or not targets or any(not _valid_endpoint_target(t) for t in targets):
+            findings.append(_finding('HAPROXY_BACKEND_TARGETS_UNRESOLVED', field, 'Invalid TCP listener targets'))
+        for provider_hosts in haproxy_provider_hosts(topology, inventory_deployments, source).values():
+            for host in provider_hosts:
+                key = (host, tcp['publicPort'])
+                previous = used_tcp_ports.setdefault(key, source_id)
+                if previous != source_id or key in (occupied_ports or ()):
+                    findings.append(_finding('HAPROXY_TCP_PORT_CONFLICT', field,
+                                             'TCP listener conflicts with a known port on a HAProxy host'))
+    return findings
+
+
 def resolve_haproxy_backends(topology, service_catalog, inventory_hosts, inventory_deployments,
                              resolved_endpoints, backend_defaults=None, resolved_configuration=None,
                              pki_requests=None, target_deployment_ids=None, endpoint_sources=None):
@@ -28113,7 +28232,8 @@ def resolve_haproxy_backends(topology, service_catalog, inventory_hosts, invento
     inventory_deployments = inventory_deployments if isinstance(inventory_deployments, dict) else {}
     endpoint_map = resolved_endpoints.get("endpoints", {}) if isinstance(resolved_endpoints, dict) else {}
     selected_ids = set(target_deployment_ids) if isinstance(target_deployment_ids, list) else None
-    findings, resolved = [], {}
+    findings = tcp_listener_findings(topology, inventory_deployments, endpoint_sources)
+    resolved = {}
     for target_id, target in sorted(deployments.items()):
         if selected_ids is not None and target_id not in selected_ids:
             continue
@@ -28248,11 +28368,13 @@ def resolve_haproxy_backends(topology, service_catalog, inventory_hosts, invento
         endpoint = endpoint_map.get(source_id, {})
         group_id = endpoint.get('endpointGroupId')
         proxy_hosts = haproxy_provider_hosts(topology, inventory_deployments, {'endpointGroup': group_id})
-        effective, errors = normalize_backend_settings({}, source.get('settings', {}), 'endpointSources.' + source_id)
-        findings.extend(errors)
         targets = source.get('targets', [])
-        if not targets or not isinstance(targets, list) or any(not _valid_endpoint_target(t) for t in targets):
-            findings.append(_finding('HAPROXY_BACKEND_TARGETS_UNRESOLVED', 'endpointSources.' + source_id, 'Invalid endpoint targets'))
+        effective = {}
+        if 'tcp' not in source or 'settings' in source or targets:
+            effective, errors = normalize_backend_settings({}, source.get('settings', {}), 'endpointSources.' + source_id)
+            findings.extend(errors)
+            if not isinstance(targets, list) or not targets or any(not _valid_endpoint_target(t) for t in targets):
+                findings.append(_finding('HAPROXY_BACKEND_TARGETS_UNRESOLVED', 'endpointSources.' + source_id, 'Invalid endpoint targets'))
         if not endpoint:
             findings.append(_finding('HAPROXY_TARGET_ENDPOINT_UNSUPPORTED', 'endpointSources.' + source_id, 'Endpoint source is unresolved'))
         record = {'targetDeploymentId': source_id, 'backendName': source_id + '-' + str(group_id),
@@ -28260,6 +28382,8 @@ def resolve_haproxy_backends(topology, service_catalog, inventory_hosts, invento
                   'endpoint': endpoint, 'settings': effective, 'targets': targets}
         if source.get('probe'):
             record['probe'] = source['probe']
+        if 'tcp' in source:
+            record['tcp'] = source['tcp']
         if effective.get('ssl'):
             if effective.get('sslVerify') != 'required':
                 findings.append(_finding('HAPROXY_BACKEND_SSL_VERIFY_REQUIRED', 'endpointSources.' + source_id, 'Endpoint TLS requires verified identity'))
@@ -29251,7 +29375,7 @@ def assert_reissue_unchanged(state_root, project_identity, expected):
         raise ValueError("PKI_REISSUE_PLAN_STALE")
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/pki_resolution.py","mode":420,"size":19563,"sha256":"3d56c5d123be0ee48726fe6a14ed5a38f36d8a4ef1d7572c1aa9191ecb33e7b4","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":19563}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/pki_resolution.py","mode":420,"size":19666,"sha256":"cfe168df7c439dbc8080a9592d0b2463d7208e8f92371d9b7df06c76a21a56f9","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":19666}
 from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
@@ -29259,9 +29383,11 @@ __metaclass__ = type
 try:
     from .project_validation import canonical_digest
     from .service_endpoint_resolution import DNS_DOMAIN, DNS_LABEL
+    from .application_endpoints import https_endpoint
 except ImportError:
     from project_validation import canonical_digest
     from service_endpoint_resolution import DNS_DOMAIN, DNS_LABEL
+    from application_endpoints import https_endpoint
 
 
 REQUIRED_DEFAULT_KEYS = (
@@ -29417,7 +29543,7 @@ def application_pki_bindings(rows, desired):
     """Project only the TLS placement and endpoint identity needed for PKI."""
     bindings = {}
     for row in rows:
-        endpoint = row["settings"].get("endpoint", {})
+        endpoint = https_endpoint(row["settings"])
         names = None
         if endpoint.get("enabled") and endpoint.get("protocol") == "https":
             group_id = endpoint.get("endpoint_group")
@@ -33922,12 +34048,13 @@ if __name__ == '__main__':
     main()
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/modules/probe_public_endpoints.py","mode":420,"size":5108,"sha256":"67c3d764d8ee856bb9b6f5d5031a261589edb68432f428322b0cae543c8163b1","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5108}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/modules/probe_public_endpoints.py","mode":420,"size":6133,"sha256":"64b071f9068c802113e0e198c62f932a26d5925c77b35b31d2c0c4852a9b8683","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":6133}
 """Check resolved public endpoints on the execution node with bounded concurrency."""
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from itertools import repeat
 from multiprocessing import get_context
 import re
+import socket
 import subprocess
 import time
 from urllib.error import HTTPError
@@ -34014,7 +34141,13 @@ def main():
                 addresses = source['expectedAddresses']
                 if not isinstance(addresses, list) or not addresses or not all(isinstance(a, str) for a in addresses):
                     raise ValueError()
-                rows.append(dict(name=name, addresses=set(addresses), probe=probe, port=port))
+                if source.get('https', True):
+                    rows.append(dict(name=name, addresses=set(addresses), probe=probe, port=port))
+                if 'tcpPort' in source:
+                    tcp_port = source['tcpPort']
+                    if type(tcp_port) is not int or not 1 <= tcp_port <= 65535:
+                        raise ValueError()
+                    rows.append(dict(name=name, addresses=set(addresses), port=tcp_port, transport='tcp'))
     except (KeyError, TypeError, ValueError):
         module.fail_json(msg='SERVICE_ENDPOINT_PROBE_INPUT_INVALID')
 
@@ -34027,8 +34160,23 @@ def main():
     # Ansible open_url installs a process-global urllib opener. Separate workers
     # keep TLS trust and redirect settings isolated between requests.
     with ProcessPoolExecutor(max_workers=4, mp_context=get_context('fork')) as pool:
-        results = list(pool.map(https_probe, rows, repeat(module.params['ca_path'])))
+        results = list(pool.map(public_probe, rows, repeat(module.params['ca_path'])))
     module.exit_json(changed=False, probes=results)
+
+
+def public_probe(row, ca_path):
+    if row.get('transport') != 'tcp':
+        return https_probe(row, ca_path)
+    timeout = 3
+    for address in sorted(row['addresses']):
+        try:
+            with socket.create_connection((address, row['port']), timeout=timeout):
+                pass
+        except OSError:
+            return dict(name=row['name'], port=row['port'], expected=None, timeout=timeout,
+                        status=-1, reason='TCP_CONNECTION_FAILED', attempts=1, ok=False)
+    return dict(name=row['name'], port=row['port'], expected=None, timeout=timeout,
+                status=0, reason='OK', attempts=1, ok=True)
 
 
 if __name__ == '__main__':
@@ -34168,7 +34316,7 @@ if __name__ == "__main__":
     main()
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/modules/resolve_endpoint_publications.py","mode":420,"size":4208,"sha256":"7c2784075feb839efdf2dc20ab9fc9c15ba7263d0a4a2f8a919f275c8f22d9cd","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4208}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/modules/resolve_endpoint_publications.py","mode":420,"size":4340,"sha256":"df2b574a754fb67a7374d8d409d4ecdeeec90270a598bb8f3b8822e1b9058a82","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4340}
 #!/usr/bin/python
 """Batch the existing endpoint/DNS resolvers without changing their rules."""
 from ansible.module_utils.basic import AnsibleModule
@@ -34223,6 +34371,8 @@ def resolve_batch(desired_state, service_catalog, inventory_hosts, inventory_dep
             expected = sorted({a for r in records if r['owner'] in owners for a in r['addresses']})
         result.append(dict(sourceId=source, projection=projection, dnsRecords=records, fqdns=names,
                            probe=normalized.get('probe', {}), expectedAddresses=expected))
+        if 'tcp' in normalized:
+            result[-1].update(tcpPort=normalized['tcp']['publicPort'], https='probe' in normalized)
     return dict(status='PASS', findings=[], sources=result)
 
 
@@ -51825,7 +51975,7 @@ libraryExecutionPriorities:
 }
 
 @@END
-@@PORTABLE {"path":"contracts/application-libraries/v1alpha1/settings.schema.json","mode":420,"size":20066,"sha256":"c8a6cdb795f2767c19e5b77db498adf8808ff49b43a43d691afc6637d8036555","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":20066}
+@@PORTABLE {"path":"contracts/application-libraries/v1alpha1/settings.schema.json","mode":420,"size":20879,"sha256":"b32eafcb4c31c810845823904620e9cd693c8b831e9eb962a468d164c4d2c3c9","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":20879}
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://platform-installer.local/contracts/application-libraries/v1alpha1/settings.schema.json",
@@ -52231,6 +52381,28 @@ libraryExecutionPriorities:
             }
           },
           "required": [],
+          "additionalProperties": false
+        },
+        "endpoints": {
+          "type": "object",
+          "properties": {
+            "https": {
+              "allOf": [
+                {"$ref": "#/$defs/settings/properties/endpoint"},
+                {"required": ["enabled"], "not": {"required": ["endpoint_group"]}}
+              ]
+            },
+            "tcp": {
+              "type": "object",
+              "properties": {
+                "enabled": {"type": "boolean"},
+                "listener": {"type": "string", "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$", "maxLength": 128},
+                "public_port": {"type": "integer", "minimum": 1, "maximum": 65535}
+              },
+              "required": ["enabled"],
+              "additionalProperties": false
+            }
+          },
           "additionalProperties": false
         },
         "accounts": {
