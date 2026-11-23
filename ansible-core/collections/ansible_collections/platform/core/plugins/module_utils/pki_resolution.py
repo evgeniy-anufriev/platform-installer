@@ -5,9 +5,11 @@ __metaclass__ = type
 try:
     from .project_validation import canonical_digest
     from .service_endpoint_resolution import DNS_DOMAIN, DNS_LABEL
+    from .application_endpoints import https_endpoint
 except ImportError:
     from project_validation import canonical_digest
     from service_endpoint_resolution import DNS_DOMAIN, DNS_LABEL
+    from application_endpoints import https_endpoint
 
 
 REQUIRED_DEFAULT_KEYS = (
@@ -163,7 +165,7 @@ def application_pki_bindings(rows, desired):
     """Project only the TLS placement and endpoint identity needed for PKI."""
     bindings = {}
     for row in rows:
-        endpoint = row["settings"].get("endpoint", {})
+        endpoint = https_endpoint(row["settings"])
         names = None
         if endpoint.get("enabled") and endpoint.get("protocol") == "https":
             group_id = endpoint.get("endpoint_group")

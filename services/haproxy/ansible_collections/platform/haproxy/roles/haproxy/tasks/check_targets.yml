@@ -1,4 +1,25 @@
 ---
+- name: Проверка портов TCP-маршрутов на узле HAProxy
+  ansible.builtin.assert:
+    that:
+      - item.tcp.publicPort not in [platform_haproxy_public_port | int, platform_haproxy_internal_stats_port | int]
+    fail_msg: HAPROXY_TCP_PORT_CONFLICT
+    quiet: true
+  loop: "{{ platform_haproxy_application_backends | selectattr('tcp', 'defined') | list }}"
+  loop_control:
+    label: "{{ item.targetDeploymentId }}"
+  when: platform_haproxy_application_backends | selectattr('tcp', 'defined') | list | length > 0
+
+- name: Проверка доступности целевых TCP-портов с узла HAProxy
+  ansible.builtin.wait_for:
+    host: "{{ item.1.address }}"
+    port: "{{ item.1.port }}"
+    connect_timeout: 3
+    timeout: 10
+  loop: "{{ platform_haproxy_application_backends | selectattr('tcp', 'defined') | subelements('tcp.targets') }}"
+  loop_control:
+    label: "{{ item.0.targetDeploymentId }} / {{ item.1.hostId }}"
+  when: platform_haproxy_application_backends | selectattr('tcp', 'defined') | list | length > 0
 - name: Проверка фактических идентификаторов серверной части TLS перед активацией кандидата HAProxy
   ansible.builtin.command:
     argv:

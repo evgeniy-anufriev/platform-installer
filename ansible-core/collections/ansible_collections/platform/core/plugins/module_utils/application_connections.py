@@ -2,9 +2,9 @@
 import copy
 import hashlib
 try:
-    from .application_endpoints import public_endpoint_url
+    from .application_endpoints import https_endpoint, public_endpoint_url
 except ImportError:
-    from application_endpoints import public_endpoint_url
+    from application_endpoints import https_endpoint, public_endpoint_url
 
 
 def enabled(settings, name):
@@ -118,7 +118,7 @@ def provided_connections(rows, desired, hosts):
             if not matches:
                 continue
             first = matches[0]
-            endpoint = first['settings'].get('endpoint', {})
+            endpoint = https_endpoint(first['settings'])
             ports = first['settings'].get('ports', {})
             group = desired.get('endpointGroups', {}).get(endpoint.get('endpoint_group'), {})
             domain = group.get('address', {}).get('domain')
@@ -130,7 +130,7 @@ def provided_connections(rows, desired, hosts):
                 raise ValueError('APPLICATION_PROVIDED_CONNECTION_PROTOCOL_UNSUPPORTED')
             targets = []
             for peer in matches:
-                ep = peer['settings'].get('endpoint', {})
+                ep = https_endpoint(peer['settings'])
                 if ep != endpoint:
                     raise ValueError('APPLICATION_PROVIDED_CONNECTION_HOST_CONFLICT')
                 target_port = peer['settings']['ports'][ep['listener']]['published']

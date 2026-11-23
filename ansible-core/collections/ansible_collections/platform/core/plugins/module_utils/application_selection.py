@@ -58,15 +58,15 @@ def integration_consumers(snapshot, provider_library_id, desired=None):
             if not aliases:
                 continue
             placements = {host: {key: copy.deepcopy(placement.get(key, {}))
-                                 for key in ('endpoint', 'parameters')}
+                                 for key in ('endpoint', 'endpoints', 'parameters') if key != 'endpoints' or key in placement}
                           for host, placement in sorted(instance.get('placements', {}).items())}
             if desired is not None:
                 try:
-                    from .application_endpoints import public_endpoint_url
+                    from .application_endpoints import https_endpoint, public_endpoint_url
                 except ImportError:
-                    from application_endpoints import public_endpoint_url
+                    from application_endpoints import https_endpoint, public_endpoint_url
                 for placement in placements.values():
-                    if placement.get('endpoint', {}).get('enabled'):
+                    if https_endpoint(placement).get('enabled'):
                         placement['endpointUrl'] = public_endpoint_url(instance_id, placement, desired)
             result.append(dict(libraryId=library_id, applicationId=instance_id,
                                connections=aliases, placements=placements))

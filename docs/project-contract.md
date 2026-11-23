@@ -604,6 +604,22 @@ their normal Ansible precedence. The former root
 `x-applicationLibraryEndpointGroups` is read for compatibility and moved into
 bindings during a library edit/Save, without changing the chosen group.
 
+Application overrides may declare independent `endpoints.https` and
+`endpoints.tcp` routes. Each route declares `enabled`. An enabled route selects
+one ordinary application `listener`; its targets use that listener's published
+port on each placement. HTTPS accepts `protocol: http|https` for the upstream
+and the existing backend and probe settings. TCP requires `public_port` and
+forwards the stream through a dedicated HAProxy TCP listener. Both routes use
+the effective endpoint group and DNS name already defined for the application.
+If `endpoints.https` is absent, the legacy `endpoint` supplies the HTTPS route.
+`endpoints.https.enabled: false` explicitly disables inherited public HTTPS.
+Certificate bindings for the application and direct HTTPS connections to its
+placements retain their existing rules.
+
+If both routes are disabled, ordinary application Apply skips endpoint
+publication. A separate full HAProxy reconcile archives the old managed
+fragment. DNS records are retained when a route is disabled.
+
 `bindings.secrets.deploymentRef` is the library's Vault provider. No additional
 `vault_ref`, `vaultRef` or separate provider-selection action is required.
 Existing pointer metadata is read and removed during a library edit/Save;

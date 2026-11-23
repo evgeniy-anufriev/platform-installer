@@ -28,10 +28,12 @@
   ansible.builtin.assert:
     that:
       - hostvars['localhost'].platform_service_integration_projection.haproxyHosts | difference(ansible_play_hosts_all) | length == 0
-      - hostvars['localhost'].platform_endpoint_sources[item].targets | map(attribute='hostId') | difference(ansible_play_hosts_all) | length == 0
+      - ((source.targets | default([])) + ((source.tcp | default({})).targets | default([]))) | map(attribute='hostId') | difference(ansible_play_hosts_all) | length == 0
     fail_msg: APPLICATION_ENDPOINT_HOST_SCOPE_INCOMPLETE
   loop: "{{ hostvars['localhost']._platform_integration_selected_sources | map(attribute='sourceId') | list }}"
   run_once: true
+  vars:
+    source: "{{ hostvars['localhost'].platform_endpoint_sources[item] }}"
 
 - name: Подготовка исходных кандидатов перед активацией любого провайдера
   ansible.builtin.include_role:

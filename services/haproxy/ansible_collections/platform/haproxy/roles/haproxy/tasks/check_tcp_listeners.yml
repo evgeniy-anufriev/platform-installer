@@ -1,0 +1,15 @@
+---
+- name: Проверка активных TCP-портов HAProxy
+  ansible.builtin.command:
+    argv: [ss, -H, -ltnp, "sport = :{{ item.tcp.publicPort }}"]
+  loop: "{{ platform_haproxy_application_backends | default([]) | selectattr('tcp', 'defined') | list }}"
+  loop_control:
+    label: "{{ item.targetDeploymentId }}"
+  register: _platform_haproxy_tcp_listener
+  changed_when: false
+  until:
+    - _platform_haproxy_tcp_listener.rc == 0
+    - >-
+      '"haproxy",pid=' in _platform_haproxy_tcp_listener.stdout
+  retries: 5
+  delay: 1

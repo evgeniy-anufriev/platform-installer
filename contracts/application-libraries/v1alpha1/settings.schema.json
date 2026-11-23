@@ -405,6 +405,28 @@
           "required": [],
           "additionalProperties": false
         },
+        "endpoints": {
+          "type": "object",
+          "properties": {
+            "https": {
+              "allOf": [
+                {"$ref": "#/$defs/settings/properties/endpoint"},
+                {"required": ["enabled"], "not": {"required": ["endpoint_group"]}}
+              ]
+            },
+            "tcp": {
+              "type": "object",
+              "properties": {
+                "enabled": {"type": "boolean"},
+                "listener": {"type": "string", "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$", "maxLength": 128},
+                "public_port": {"type": "integer", "minimum": 1, "maximum": 65535}
+              },
+              "required": ["enabled"],
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
         "accounts": {
           "type": "object",
           "propertyNames": {

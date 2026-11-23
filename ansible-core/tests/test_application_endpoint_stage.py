@@ -64,6 +64,8 @@ class EndpointTaskTest(unittest.TestCase):
             desired['endpointGroups'] = {'apps': {'address': {'domain': 'apps.example.test', 'wildcard': False}}}
             desired['applicationLibraryDeployments']['sdku']['applications']['gateway']['overrides']['endpoint'] = {
                 'enabled': True, 'listener': 'http', 'endpoint_group': 'apps', 'probe': {'path': '/status'}}
+            desired['applicationLibraryDeployments']['sdku']['applications']['gateway']['overrides']['endpoints'] = {
+                'tcp': {'enabled': True, 'listener': 'http', 'public_port': 19000}}
             desired['endpointGroups']['other'] = {'address': {'domain': 'other.example.test', 'wildcard': False}}
             desired['x-applicationLibraryEndpointGroups'] = {'sdku': 'other'}
             desired_path.write_text(json.dumps(data))
@@ -78,6 +80,8 @@ class EndpointTaskTest(unittest.TestCase):
                           'service_catalog_path': str(REPO / 'examples/catalog/service-catalog.yml')}, 'register': 'endpoint_input'},
                          {'ansible.builtin.assert': {'that': ["endpoint_input.status == 'PASS'",
                           "endpoint_input.sources['gateway-sdku'].targets | length == 2",
+                          "endpoint_input.sources['gateway-sdku'].tcp.targets | length == 2",
+                          "snapshot.snapshot.applicationLibraries.libraries.sdku.instances['gateway-sdku'].publicEndpoints.tcp == 'gateway-sdku.apps.example.test:19000'",
                           "endpoint_input.sources['gateway-sdku'].endpoint.fqdn == 'gateway-sdku.apps.example.test'"]}}]}]
             path = Path(directory) / 'qa.yml'
             path.write_text(yaml.safe_dump(play))

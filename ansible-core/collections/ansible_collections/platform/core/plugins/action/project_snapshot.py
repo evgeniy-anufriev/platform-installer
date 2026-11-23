@@ -15,7 +15,8 @@ from ansible.plugins.action import ActionBase
 
 from ansible_collections.platform.core.plugins.module_utils.dns_resolution import resolve_dns_zones
 from ansible_collections.platform.core.plugins.module_utils.deployment_plan import _service_runtime_secret_requirements
-from ansible_collections.platform.core.plugins.module_utils.haproxy_resolution import resolve_haproxy_backends
+from ansible_collections.platform.core.plugins.module_utils.haproxy_resolution import resolve_haproxy_backends, tcp_listener_findings
+from ansible_collections.platform.core.plugins.module_utils.application_endpoints import project_endpoint_sources
 from ansible_collections.platform.core.plugins.module_utils.pki_resolution import application_pki_bindings, resolve_certificate_requests
 from ansible_collections.platform.core.plugins.module_utils.project_snapshot import build_project_snapshot, project_documents
 from ansible_collections.platform.core.plugins.module_utils.project_snapshot_output import write_snapshot_output, SnapshotInputError, snapshot_input_message
@@ -26,7 +27,7 @@ from ansible_collections.platform.core.plugins.module_utils.service_endpoint_res
 from ansible_collections.platform.core.plugins.module_utils.schema_validation import SchemaValidationError, SchemaValidator
 from ansible_collections.platform.core.plugins.module_utils.topology_resolution import resolve_topology
 from ansible_collections.platform.core.plugins.module_utils.application_libraries import (
-    infrastructure_state, schema_version, prepare, validate_public_projection, project as project_application_libraries,
+    finding, infrastructure_state, schema_version, prepare, validate_public_projection, project as project_application_libraries,
 )
 from ansible_collections.platform.core.plugins.module_utils.project_validation import canonical_digest
 from ansible_collections.platform.core.plugins.module_utils.application_runtime import resolve_image_lock
@@ -719,6 +720,26 @@ class ActionModule(ActionBase):
                 applications["findings"].extend(rechecked["findings"])
                 applications["findings"].extend(resolved_findings)
                 applications["findings"].extend(validate_public_projection(applications))
+                if not applications["findings"] and any(
+                    row["settings"].get("endpoints", {}).get("tcp", {}).get("enabled") for row in rows
+                ):
+                    try:
+                        sources = project_endpoint_sources(rows, materialized, host_addresses)
+                    except ValueError as error:
+                        applications["findings"].append(finding(str(error), "applicationLibraryDeployments"))
+                    else:
+                        occupied_ports = {(row["hostId"], port["published"]) for row in rows
+                                          for port in row["settings"].get("ports", {}).values()}
+                        for host in target_ids:
+                            if not any(deployments.get(key, {}).get("serviceType") == "haproxy"
+                                       for key in inventory_deployments[host]):
+                                continue
+                            for key in ("platform_haproxy_public_port", "platform_haproxy_internal_stats_port"):
+                                port = hostvars[host].get(key, role_defaults.get("haproxy", {}).get(key))
+                                if type(port) is int:
+                                    occupied_ports.add((host, port))
+                        applications["findings"].extend(tcp_listener_findings(
+                            materialized, inventory_deployments, sources, occupied_ports))
                 if applications["findings"]:
                     applications.update(status="BLOCKED", libraries={})
                     snapshot.update(status="PARTIAL", partial=True)

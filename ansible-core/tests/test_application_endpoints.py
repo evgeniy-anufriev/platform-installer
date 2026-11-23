@@ -5,7 +5,7 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'collections', 'ansible_collections',
                               'platform', 'core', 'plugins', 'module_utils'))
-from application_endpoints import project_endpoint_sources
+from application_endpoints import placement_target, project_endpoint_sources, public_endpoint_url
 from service_endpoint_resolution import resolve_service_endpoints
 from haproxy_resolution import resolve_haproxy_backends
 from service_integration_resolution import resolve_service_integrations
@@ -46,6 +46,39 @@ class ApplicationEndpointsTest(unittest.TestCase):
         for row in self.rows:
             row['settings']['endpoint']['enabled'] = False
         self.assertEqual({}, project_endpoint_sources(self.rows, self.desired, self.hosts))
+
+    def test_tcp_is_independent_from_public_https_and_preserves_direct_placement(self):
+        for row in self.rows:
+            row['settings']['ports']['raw'] = {'published': 19000}
+            row['settings']['endpoints'] = {'tcp': {'enabled': True, 'listener': 'raw', 'public_port': 9000}}
+        sources, endpoints, backends = self.resolve()
+        self.assertEqual(1, len(sources))
+        self.assertEqual('gateway-sdku.apps.example.test', endpoints['endpoints']['gateway-sdku']['fqdn'])
+        record = backends['backends']['proxy'][0]
+        self.assertEqual([18081, 18081], [target['port'] for target in record['targets']])
+        self.assertEqual([19000, 19000], [target['port'] for target in record['tcp']['targets']])
+
+        for row in self.rows:
+            row['settings']['endpoints']['https'] = {'enabled': False}
+        sources, _, backends = self.resolve()
+        self.assertNotIn('probe', sources['gateway-sdku'])
+        self.assertEqual([], backends['backends']['proxy'][0]['targets'])
+        self.assertEqual(9000, backends['backends']['proxy'][0]['tcp']['publicPort'])
+        with self.assertRaisesRegex(ValueError, 'APPLICATION_ENDPOINT_INVALID'):
+            public_endpoint_url('gateway-sdku', self.rows[0]['settings'], self.desired)
+        self.assertEqual(18081, placement_target(self.rows[0]['settings'], 'node1', self.hosts)['port'])
+
+    def test_tcp_collision_with_an_unselected_application_on_same_proxy(self):
+        for row in self.rows:
+            row['settings']['endpoints'] = {'tcp': {'enabled': True, 'listener': 'http', 'public_port': 9000}}
+        copy_row = copy.deepcopy(self.rows[0])
+        copy_row['instanceId'] = 'second-gateway'
+        self.rows.append(copy_row)
+        sources, endpoints, _ = self.resolve()
+        result = resolve_haproxy_backends(self.desired, self.catalog, self.hosts, self.placements,
+                                         endpoints, target_deployment_ids=['gateway-sdku'], endpoint_sources=sources)
+        self.assertEqual('BLOCKED', result['status'])
+        self.assertIn('HAPROXY_TCP_PORT_CONFLICT', [finding['code'] for finding in result['findings']])
 
     def test_different_host_ports_allowed_but_settings_mismatch_blocked(self):
         self.rows[1]['settings']['ports']['http']['published'] = 18082

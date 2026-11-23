@@ -744,10 +744,10 @@ export function ApplicationsPage({
       ? objectValue(resolved?.resources)
       : {};
   const [baselineHost, setBaselineHost] = useState("");
-  const instancePlacements =
-    Object.values(resolved?.instances ?? {}).find(
-      (instance) => instance.slotId === slot,
-    )?.placements ?? {};
+  const resolvedInstance = Object.values(resolved?.instances ?? {}).find(
+    (instance) => instance.slotId === slot,
+  );
+  const instancePlacements = resolvedInstance?.placements ?? {};
   const hosts = Object.keys(instancePlacements);
   const selectedBaselineHost = hosts.includes(baselineHost)
     ? baselineHost
@@ -1651,9 +1651,16 @@ export function ApplicationsPage({
                         <p>
                           Публикацию и совместимость backend/TLS проверяет Core.
                         </p>
-                        <ApplicationValueFields
+                        {freshBaseline && Object.entries(objectValue(
+                          objectValue(resolvedInstance).publicEndpoints,
+                        )).map(([route, address]) => (
+                          <p key={route}>{route.toUpperCase()} · {String(address)}</p>
+                        ))}
+                        <fieldset>
+                          <legend>Совместимые настройки endpoint</legend>
+                          <ApplicationValueFields
                           key={selected + slot + "endpoint"}
-                          label="Endpoint"
+                          label="endpoint"
                           compact
                           value={objectValue(overrides.endpoint)}
                           defaults={objectValue(defaults.endpoint)}
@@ -1666,7 +1673,39 @@ export function ApplicationsPage({
                                 : remove("endpoint"),
                             )
                           }
-                        />
+                          />
+                        </fieldset>
+                        {(["https", "tcp"] as const).map((route) => {
+                          const authoredRoute = objectValue(objectValue(overrides.endpoints)[route]);
+                          const inheritedRoute = objectValue(objectValue(defaults.endpoints)[route]);
+                          const existingRoute = route === "https" && !Object.keys(inheritedRoute).length
+                            ? { ...objectValue(defaults.endpoint), ...objectValue(overrides.endpoint) }
+                            : inheritedRoute;
+                          const routeDefaults = route === "https"
+                            ? { enabled: false, listener: "", protocol: "http", ...existingRoute }
+                            : { enabled: false, listener: "", public_port: "", ...existingRoute };
+                          delete (routeDefaults as ObjectValue).endpoint_group;
+                          const label = `Маршрут ${route.toUpperCase()}`;
+                          return (
+                            <fieldset key={selected + slot + route}>
+                              <legend>{label}</legend>
+                              <ApplicationValueFields
+                                label={label}
+                                compact
+                                value={authoredRoute}
+                                defaults={routeDefaults}
+                                disabled={busy}
+                                onDirtyChange={(dirty) => markChildDirty(dirty, route)}
+                                onSave={(value) => {
+                                  if (!Object.keys(value).length) return send(remove(route, "endpoints"));
+                                  const setting: ObjectValue = { ...existingRoute, enabled: routeDefaults.enabled, ...value };
+                                  delete setting.endpoint_group;
+                                  return send(override(route, setting, "endpoints"));
+                                }}
+                              />
+                            </fieldset>
+                          );
+                        })}
                       </details>
                     </div>
                   </div>

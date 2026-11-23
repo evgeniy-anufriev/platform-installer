@@ -34,3 +34,7 @@
   when:
     - (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined)
     - platform_haproxy_active_artifacts_changed | default(false) | bool
+
+- name: Проверка TCP-маршрутов после активации HAProxy
+  ansible.builtin.include_tasks: check_tcp_listeners.yml
+  when: platform_haproxy_application_backends | default([]) | selectattr('tcp', 'defined') | list | length > 0

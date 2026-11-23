@@ -173,6 +173,30 @@ def normalize_backend_settings(defaults, override, field):
     return effective, findings
 
 
+def tcp_listener_findings(topology, inventory_deployments, endpoint_sources, occupied_ports=None):
+    findings = []
+    used_tcp_ports = {}
+    for source_id, source in sorted((endpoint_sources or {}).items()):
+        if 'tcp' not in source:
+            continue
+        tcp = source['tcp']
+        field = 'endpointSources.' + source_id + '.tcp'
+        if not isinstance(tcp, dict) or not _valid_port(tcp.get('publicPort')):
+            findings.append(_finding('HAPROXY_TCP_PORT_INVALID', field, 'Invalid TCP listener port'))
+            continue
+        targets = tcp.get('targets')
+        if not isinstance(targets, list) or not targets or any(not _valid_endpoint_target(t) for t in targets):
+            findings.append(_finding('HAPROXY_BACKEND_TARGETS_UNRESOLVED', field, 'Invalid TCP listener targets'))
+        for provider_hosts in haproxy_provider_hosts(topology, inventory_deployments, source).values():
+            for host in provider_hosts:
+                key = (host, tcp['publicPort'])
+                previous = used_tcp_ports.setdefault(key, source_id)
+                if previous != source_id or key in (occupied_ports or ()):
+                    findings.append(_finding('HAPROXY_TCP_PORT_CONFLICT', field,
+                                             'TCP listener conflicts with a known port on a HAProxy host'))
+    return findings
+
+
 def resolve_haproxy_backends(topology, service_catalog, inventory_hosts, inventory_deployments,
                              resolved_endpoints, backend_defaults=None, resolved_configuration=None,
                              pki_requests=None, target_deployment_ids=None, endpoint_sources=None):
@@ -183,7 +207,8 @@ def resolve_haproxy_backends(topology, service_catalog, inventory_hosts, invento
     inventory_deployments = inventory_deployments if isinstance(inventory_deployments, dict) else {}
     endpoint_map = resolved_endpoints.get("endpoints", {}) if isinstance(resolved_endpoints, dict) else {}
     selected_ids = set(target_deployment_ids) if isinstance(target_deployment_ids, list) else None
-    findings, resolved = [], {}
+    findings = tcp_listener_findings(topology, inventory_deployments, endpoint_sources)
+    resolved = {}
     for target_id, target in sorted(deployments.items()):
         if selected_ids is not None and target_id not in selected_ids:
             continue
@@ -318,11 +343,13 @@ def resolve_haproxy_backends(topology, service_catalog, inventory_hosts, invento
         endpoint = endpoint_map.get(source_id, {})
         group_id = endpoint.get('endpointGroupId')
         proxy_hosts = haproxy_provider_hosts(topology, inventory_deployments, {'endpointGroup': group_id})
-        effective, errors = normalize_backend_settings({}, source.get('settings', {}), 'endpointSources.' + source_id)
-        findings.extend(errors)
         targets = source.get('targets', [])
-        if not targets or not isinstance(targets, list) or any(not _valid_endpoint_target(t) for t in targets):
-            findings.append(_finding('HAPROXY_BACKEND_TARGETS_UNRESOLVED', 'endpointSources.' + source_id, 'Invalid endpoint targets'))
+        effective = {}
+        if 'tcp' not in source or 'settings' in source or targets:
+            effective, errors = normalize_backend_settings({}, source.get('settings', {}), 'endpointSources.' + source_id)
+            findings.extend(errors)
+            if not isinstance(targets, list) or not targets or any(not _valid_endpoint_target(t) for t in targets):
+                findings.append(_finding('HAPROXY_BACKEND_TARGETS_UNRESOLVED', 'endpointSources.' + source_id, 'Invalid endpoint targets'))
         if not endpoint:
             findings.append(_finding('HAPROXY_TARGET_ENDPOINT_UNSUPPORTED', 'endpointSources.' + source_id, 'Endpoint source is unresolved'))
         record = {'targetDeploymentId': source_id, 'backendName': source_id + '-' + str(group_id),
@@ -330,6 +357,8 @@ def resolve_haproxy_backends(topology, service_catalog, inventory_hosts, invento
                   'endpoint': endpoint, 'settings': effective, 'targets': targets}
         if source.get('probe'):
             record['probe'] = source['probe']
+        if 'tcp' in source:
+            record['tcp'] = source['tcp']
         if effective.get('ssl'):
             if effective.get('sslVerify') != 'required':
                 findings.append(_finding('HAPROXY_BACKEND_SSL_VERIFY_REQUIRED', 'endpointSources.' + source_id, 'Endpoint TLS requires verified identity'))

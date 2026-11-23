@@ -35,6 +35,7 @@ type ApplicationInstance struct {
 	ApplicationName           string                          `json:"applicationName"`
 	SlotID                    string                          `json:"slotId"`
 	Placements                map[string]ApplicationPlacement `json:"placements"`
+	PublicEndpoints           map[string]string               `json:"publicEndpoints,omitempty"`
 	Connections               map[string]json.RawMessage      `json:"connections"`
 	CredentialRequirements    map[string]json.RawMessage      `json:"credentialRequirements"`
 	RuntimeSecretRequirements []string                        `json:"runtimeSecretRequirements"`
@@ -61,6 +62,7 @@ type ApplicationPlacement struct {
 	Environment        map[string]any             `json:"environment"`
 	Ports              map[string]json.RawMessage `json:"ports"`
 	Endpoint           json.RawMessage            `json:"endpoint"`
+	Endpoints          json.RawMessage            `json:"endpoints,omitempty"`
 	ContainerName      string                     `json:"containerName"`
 	ComposeProject     string                     `json:"composeProject"`
 	RuntimePath        string                     `json:"runtimePath"`

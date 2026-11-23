@@ -409,7 +409,8 @@ describe("application editor", () => {
     await userEvent.click(
       screen.getByText("Endpoint · публикация HAProxy / DNS"),
     );
-    const input = screen.getByLabelText("protocol");
+    const legacy = screen.getByRole("group", { name: "Совместимые настройки endpoint" });
+    const input = within(legacy).getByLabelText("protocol");
     expect(input.closest(".application-value-row")).toBeTruthy();
     fireEvent.change(input, { target: { value: "https" } });
     await userEvent.click(
@@ -422,6 +423,35 @@ describe("application editor", () => {
       entityId: "gateway",
       setting: "endpoint",
       value: { protocol: "https" },
+    });
+  });
+  it("stages TCP and HTTPS independently in the existing endpoint editor", async () => {
+    const view = structuredClone(managed);
+    const defaults = objectValue(objectValue(
+      view.applicationPackages["application:gateway@1.0.0"].definition,
+    ).defaults);
+    defaults.endpoint = { enabled: true, listener: "web", protocol: "http" };
+    defaults.ports = { web: { container: 8080, published: 18080 }, raw: { container: 9000, published: 19000 } };
+    const calls: ApplicationIntent[] = [];
+    render(<Harness calls={calls} view={view} />);
+    await selectSlot();
+    await userEvent.click(screen.getByText("Endpoint · публикация HAProxy / DNS"));
+    const saveValue = async (group: string, label: string, value: string) => {
+      const input = within(screen.getByRole("group", { name: group })).getByLabelText(label);
+      fireEvent.change(input, { target: { value } });
+      await userEvent.click(within(input.closest(".application-value-row")!).getByRole("button", { name: "В черновик" }));
+    };
+    await saveValue("Маршрут TCP", "listener", "raw");
+    await saveValue("Маршрут TCP", "public_port", "9000");
+    await saveValue("Маршрут TCP", "enabled", "true");
+    expect(calls.at(-1)).toMatchObject({
+      operation: "SetApplicationLibraryOverride", entityId: "gateway", property: "endpoints",
+      setting: "tcp", value: { enabled: true, listener: "raw", public_port: 9000 },
+    });
+    await saveValue("Маршрут HTTPS", "enabled", "false");
+    expect(calls.at(-1)).toMatchObject({
+      operation: "SetApplicationLibraryOverride", entityId: "gateway", property: "endpoints",
+      setting: "https", value: { enabled: false },
     });
   });
   it("uses compact ENV rows and header Add for library common parameters", async () => {

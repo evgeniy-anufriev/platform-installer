@@ -11,6 +11,7 @@ try:
     from .kafka_listener_resolution import project_member_listeners
     from .kafka_schema_registry import registry_projection
     from .application_images import registry_request
+    from .application_endpoints import https_endpoint
     from .application_connections import provided_connections, application_connection, enabled, active_script, library_script_hosts, script_secret_source, connection_callback
 except ImportError:
     from project_validation import canonical_digest
@@ -18,6 +19,7 @@ except ImportError:
     from kafka_listener_resolution import project_member_listeners
     from kafka_schema_registry import registry_projection
     from application_images import registry_request
+    from application_endpoints import https_endpoint
     from application_connections import provided_connections, application_connection, enabled, active_script, library_script_hosts, script_secret_source, connection_callback
 
 CONTRACT = "platform.installer/project-desired-state/v3alpha1"
@@ -447,7 +449,7 @@ def prepare(root, desired, memberships, contract, loader, contracts_root):
                         isinstance(values.get(key, {}), dict) and _literal_library_input(values.get(key, {}))
                         for values in (application['definition'].get('defaults', {}), slot.get('overrides', {}),
                                        selected[slot_id].get('overrides', {}), host_override)
-                        for key in ('endpoint', 'ports'))
+                        for key in ('endpoint', 'endpoints', 'ports'))
                     jobs.append({"libraryId": library_id, "slotId": slot_id, "hostId": host,
                                  "instanceId": application_instance_id(slot_id, library_id,
                                      library['definition'].get('instance_id_strategy', 'qualified')),
@@ -690,6 +692,7 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
         for key in ('commonDefaults', 'inherited'):
             nonsecret_values(row.get(key, {}), field + '.' + key, findings)
         nonsecret_values(settings.get("endpoint", {}), field + ".endpoint", findings)
+        nonsecret_values(settings.get("endpoints", {}), field + ".endpoints", findings)
         for resource_id, resource in row["resources"].items():
             nonsecret_values(resource.get("parameters", {}), field + ".resources." + resource_id + ".parameters", findings)
         declared_accounts = settings.get("accounts", {})
@@ -783,9 +786,14 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
                 findings.append(finding("APPLICATION_SECRET_BINDING_INVALID", field + ".secret_bindings." + variable))
             if source.get("library_secret") and source["library_secret"] not in row["sharedSecrets"]:
                 findings.append(finding("APPLICATION_SECRET_BINDING_INVALID", field + ".secret_bindings." + variable))
-        endpoint = settings.get("endpoint", {})
+        endpoint = https_endpoint(settings)
         if endpoint.get("enabled") and (endpoint.get("listener") not in settings.get("ports", {}) or endpoint.get("endpoint_group") not in desired.get("endpointGroups", {})):
             findings.append(finding("APPLICATION_ENDPOINT_INVALID", field + ".endpoint"))
+        tcp = settings.get('endpoints', {}).get('tcp', {})
+        if tcp.get('enabled') and (tcp.get('listener') not in settings.get('ports', {}) or
+                                  endpoint.get('endpoint_group') not in desired.get('endpointGroups', {}) or
+                                  'public_port' not in tcp):
+            findings.append(finding("APPLICATION_ENDPOINT_INVALID", field + ".endpoints.tcp"))
         runtime_ref = row["runtimeRef"]
         runtime = desired.get("serviceDeployments", {}).get(runtime_ref, {})
         if runtime.get("serviceType") != "docker" or not (runtime_ref in hosts.get(host, {}).get("platformDeployments", {}) or any(member.get("host") == host for member in runtime.get("members", {}).values())):
@@ -857,6 +865,17 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
                                                            "connections": connections, 'topics': topic_bindings, "credentialRequirements": accounts,
                                                            "identityEnvironment": {name: app_id for name in row["identityNames"]},
                                                            "agentRequired": agent_required, "executionPrerequisites": ["A2_IMAGE_DELIVERY", "A4_PROVIDER_PROVISIONING"] if accounts or agent_required else ["A2_IMAGE_DELIVERY"]})
+        if 'endpoints' in settings:
+            domain = desired.get('endpointGroups', {}).get(endpoint.get('endpoint_group'), {}).get('address', {}).get('domain')
+            public_endpoints = {}
+            if domain:
+                fqdn = app_id + '.' + domain
+                if endpoint.get('enabled'):
+                    public_endpoints['https'] = 'https://' + fqdn
+                if tcp.get('enabled') and 'public_port' in tcp:
+                    public_endpoints['tcp'] = fqdn + ':' + str(tcp['public_port'])
+            if instance.setdefault('publicEndpoints', public_endpoints) != public_endpoints:
+                findings.append(finding('APPLICATION_HOST_ENDPOINT_CONFLICT', field + '.endpoints'))
         if library['resources'] != row['resources'] or library['sharedSecretRequirements'] != row['sharedSecrets']:
             findings.append(finding('APPLICATION_HOST_RESOURCE_CONFLICT', field))
         if instance['connections'] != connections:
@@ -893,6 +912,8 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
                                           "composeProject": compose_project,
                                           "runtimeDirectory": library['runtimeDirectory'],
                                           "runtimePath": app_id, "libraryEnvPath": '.env'}
+        if 'endpoints' in settings:
+            instance['placements'][host]['endpoints'] = settings['endpoints']
     for library in libraries.values():
         used = {binding["source"]["library_secret"] for instance in library["instances"].values()
                 for binding in instance.get("secretBindings", {}).values() if "library_secret" in binding["source"]}
@@ -937,7 +958,7 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
                                 argument['name'] not in placement.get('parameters', {}) for placement in consumer['placements'].values()):
                             raise ValueError('APPLICATION_SCRIPT_REFERENCE_INVALID')
                         if argument['valueFrom'] == 'endpoint' and 'name' not in argument and any(
-                                not placement.get('endpoint', {}).get('enabled') for placement in consumer['placements'].values()):
+                                not https_endpoint(placement).get('enabled') for placement in consumer['placements'].values()):
                             raise ValueError('APPLICATION_SCRIPT_REFERENCE_INVALID')
                 except (ValueError, KeyError, TypeError):
                     findings.append(finding('APPLICATION_CONNECTION_CALLBACK_INVALID',
@@ -979,8 +1000,9 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
                         valid = bool(target) and all(
                             host in target.get('placements', {}) and
                             (target['placements'][host].get('endpoint', {}).get('protocol') == 'https'
-                             if source == 'placement_https' else target['placements'][host].get('endpoint', {}).get('enabled')) and
-                            target['placements'][host].get('endpoint', {}).get('listener') in target['placements'][host].get('ports', {})
+                             if source == 'placement_https' else https_endpoint(target['placements'][host]).get('enabled')) and
+                            (target['placements'][host].get('endpoint', {}) if source == 'placement_https'
+                             else https_endpoint(target['placements'][host])).get('listener') in target['placements'][host].get('ports', {})
                             for host in instance['placements'])
                     elif source == 'connection':
                         valid = name in instance.get('connections', {}) and bool(instance['connections'][name].get('targets'))
@@ -1012,6 +1034,6 @@ def validate_public_projection(projection):
             for account_id, account in instance.get("credentialRequirements", {}).items():
                 nonsecret_values(account.get("grants", []), prefix + ".accounts." + account_id + ".grants", findings)
             for host_id, placement in instance.get("placements", {}).items():
-                for section in ("parameters", "environment", "command", "endpoint", "commonDefaults", "inherited"):
+                for section in ("parameters", "environment", "command", "endpoint", "endpoints", "commonDefaults", "inherited"):
                     nonsecret_values(placement.get(section, {}), prefix + ".placements." + host_id + "." + section, findings)
     return findings

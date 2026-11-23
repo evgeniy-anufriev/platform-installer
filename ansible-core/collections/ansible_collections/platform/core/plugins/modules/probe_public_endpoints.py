@@ -3,6 +3,7 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from itertools import repeat
 from multiprocessing import get_context
 import re
+import socket
 import subprocess
 import time
 from urllib.error import HTTPError
@@ -89,7 +90,13 @@ def main():
                 addresses = source['expectedAddresses']
                 if not isinstance(addresses, list) or not addresses or not all(isinstance(a, str) for a in addresses):
                     raise ValueError()
-                rows.append(dict(name=name, addresses=set(addresses), probe=probe, port=port))
+                if source.get('https', True):
+                    rows.append(dict(name=name, addresses=set(addresses), probe=probe, port=port))
+                if 'tcpPort' in source:
+                    tcp_port = source['tcpPort']
+                    if type(tcp_port) is not int or not 1 <= tcp_port <= 65535:
+                        raise ValueError()
+                    rows.append(dict(name=name, addresses=set(addresses), port=tcp_port, transport='tcp'))
     except (KeyError, TypeError, ValueError):
         module.fail_json(msg='SERVICE_ENDPOINT_PROBE_INPUT_INVALID')
 
@@ -102,8 +109,23 @@ def main():
     # Ansible open_url installs a process-global urllib opener. Separate workers
     # keep TLS trust and redirect settings isolated between requests.
     with ProcessPoolExecutor(max_workers=4, mp_context=get_context('fork')) as pool:
-        results = list(pool.map(https_probe, rows, repeat(module.params['ca_path'])))
+        results = list(pool.map(public_probe, rows, repeat(module.params['ca_path'])))
     module.exit_json(changed=False, probes=results)
+
+
+def public_probe(row, ca_path):
+    if row.get('transport') != 'tcp':
+        return https_probe(row, ca_path)
+    timeout = 3
+    for address in sorted(row['addresses']):
+        try:
+            with socket.create_connection((address, row['port']), timeout=timeout):
+                pass
+        except OSError:
+            return dict(name=row['name'], port=row['port'], expected=None, timeout=timeout,
+                        status=-1, reason='TCP_CONNECTION_FAILED', attempts=1, ok=False)
+    return dict(name=row['name'], port=row['port'], expected=None, timeout=timeout,
+                status=0, reason='OK', attempts=1, ok=True)
 
 
 if __name__ == '__main__':

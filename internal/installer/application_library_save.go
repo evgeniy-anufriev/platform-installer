@@ -12,7 +12,7 @@ import (
 var libraryInputID = regexp.MustCompile(`^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$`)
 var exactLibraryRef = regexp.MustCompile(`^[a-z][a-z0-9-]*@[0-9]+\.[0-9]+\.[0-9]+$`)
 var registryAuthority = regexp.MustCompile(`^[a-z0-9][a-z0-9.-]*(?::[0-9]+)?$`)
-var applicationSettingKeys = []string{"image", "command", "user", "restart", "parameters", "environment", "ports", "endpoint", "accounts", "provisioner", "readiness", "config_files", "config_directories", "config_archives", "topicBindings", "connections"}
+var applicationSettingKeys = []string{"image", "command", "user", "restart", "parameters", "environment", "ports", "endpoint", "endpoints", "accounts", "provisioner", "readiness", "config_files", "config_directories", "config_archives", "topicBindings", "connections"}
 
 func applicationEditOperation(op string) bool {
 	if op == "DeleteApplicationLibraryWithPlacements" {
@@ -158,7 +158,10 @@ func validateApplicationEdit(c EditCommand) error {
 		if c.HostID != "" && c.Property != "parameters" && c.Property != "ports" {
 			return invalid
 		}
-		if c.Property != "" && c.Property != "parameters" && c.Property != "environment" && c.Property != "ports" && c.Property != "endpoint" && c.Property != "connections" {
+		if c.Property != "" && c.Property != "parameters" && c.Property != "environment" && c.Property != "ports" && c.Property != "endpoint" && c.Property != "endpoints" && c.Property != "connections" {
+			return invalid
+		}
+		if c.Property == "endpoints" && c.Setting != "https" && c.Setting != "tcp" {
 			return invalid
 		}
 		if !configurationSettingPattern.MatchString(c.Setting) {
@@ -307,7 +310,7 @@ func safeApplicationInput(v any, depth int) error {
 				}
 			}
 			next := safeApplicationInput
-			if key == "environment" || key == "parameters" || key == "grants" || key == "endpoint" || key == "config_files" || key == "config_directories" || key == "config_archives" {
+			if key == "environment" || key == "parameters" || key == "grants" || key == "endpoint" || key == "endpoints" || key == "config_files" || key == "config_directories" || key == "config_archives" {
 				next = boundedApplicationInput
 			}
 			if err := next(item, depth+1); err != nil {

@@ -52,6 +52,8 @@ def resolve_batch(desired_state, service_catalog, inventory_hosts, inventory_dep
             expected = sorted({a for r in records if r['owner'] in owners for a in r['addresses']})
         result.append(dict(sourceId=source, projection=projection, dnsRecords=records, fqdns=names,
                            probe=normalized.get('probe', {}), expectedAddresses=expected))
+        if 'tcp' in normalized:
+            result[-1].update(tcpPort=normalized['tcp']['publicPort'], https='probe' in normalized)
     return dict(status='PASS', findings=[], sources=result)
 
 

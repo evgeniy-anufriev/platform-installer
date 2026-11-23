@@ -20,3 +20,7 @@
 
 - name: Проверка существующей службы и портов HAProxy
   ansible.builtin.include_tasks: verify.yml
+
+- name: Проверка TCP-маршрутов активного HAProxy
+  ansible.builtin.include_tasks: check_tcp_listeners.yml
+  when: platform_haproxy_application_backends | selectattr('tcp', 'defined') | list | length > 0

@@ -258,9 +258,21 @@ def application_execution_model(snapshot, image_lock=None, library_order=None, s
     targets.update(host for host, placements in snapshot.get('topology', {}).get('placementsByHost', {}).items()
                    if placements)
     if active_libraries:
+        summary = 'Apply application libraries'
+        endpoint_updates = [addresses for library in active_libraries.values()
+                            for instance in library.get('instances', {}).values()
+                            if (addresses := instance.get('publicEndpoints')) is not None]
+        if endpoint_updates:
+            addresses = [address for row in endpoint_updates for address in row.values()]
+            if addresses:
+                summary += '; publish ' + ', '.join(addresses[:4])
+                if len(addresses) > 4:
+                    summary += ' and %d more' % (len(addresses) - 4)
+            if any(not row for row in endpoint_updates):
+                summary += '; use full HAProxy reconcile to remove old endpoints with both routes disabled'
         actions.append(dict(id='applications:apply', type=OPERATIONS[0], targets=sorted(targets),
                             dependsOn=[], mutating=True, reboot='NONE',
-                            summary='Apply application libraries'))
+                            summary=summary))
     post_install = any(active_script(script, instance) and script.get('phase') == 'post_install'
                        for library in active_libraries.values() for instance in library.get('instances', {}).values()
                        for script in library.get('scripts', []) + instance.get('scripts', []))

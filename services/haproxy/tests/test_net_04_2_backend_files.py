@@ -1,4 +1,7 @@
 from pathlib import Path
+import shutil
+import subprocess
+import tempfile
 import unittest
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
@@ -50,6 +53,28 @@ class BackendFileContractTests(unittest.TestCase):
         template = (ROLE / "templates" / "30-application-backend.cfg.j2").read_text(encoding="utf-8")
         self.assertIn("platform_haproxy_application_backend.backendName", template)
         self.assertIn("platform_haproxy_application_backend.targets", template)
+
+    @unittest.skipUnless(shutil.which("haproxy"), "HAProxy binary required")
+    def test_tcp_only_fragment_validates_as_a_separate_listener(self):
+        template = Environment(loader=FileSystemLoader(ROLE / "templates"), undefined=StrictUndefined,
+                               trim_blocks=True).get_template("30-application-backend.cfg.j2")
+        rendered = template.render(platform_haproxy_application_backend={
+            "configFileName": "30-backend-gateway-apps.cfg",
+            "targetDeploymentId": "gateway",
+            "endpoint": {"endpointGroupId": "apps"},
+            "targets": [],
+            "tcp": {"publicPort": 19000, "targets": [
+                {"serverName": "node1", "address": "127.0.0.1", "port": 19001},
+            ]},
+        })
+        self.assertIn("listen tcp:gateway:apps\n    mode tcp\n", rendered)
+        self.assertNotIn("\nbackend ", rendered)
+        with tempfile.TemporaryDirectory() as tempdir:
+            path = Path(tempdir) / "haproxy.cfg"
+            path.write_text("defaults\n    mode http\n    timeout connect 5s\n"
+                            "    timeout client 30s\n    timeout server 30s\n" + rendered, encoding="utf-8")
+            result = subprocess.run(["haproxy", "-c", "-f", str(path)], capture_output=True, text=True, check=False)
+            self.assertEqual(0, result.returncode, result.stderr)
 
     def test_stats_fragment_no_longer_renders_application_backends(self):
         template = (ROLE / "templates" / "90-stats-backends.cfg.j2").read_text(encoding="utf-8")
