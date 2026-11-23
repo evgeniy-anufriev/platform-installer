@@ -34,7 +34,7 @@ CONTEXT_NAMES = frozenset(('vars', 'environment', 'inventory_dir', 'playbook_dir
 # lookups. Unknown globals retain the ordinary fresh Ansible path.
 DATA_NAMES = frozenset(('application_job', 'application_connections',
     'application_databases', 'application_topics', 'application_parameters',
-    'application_placements', 'application_instance_id', 'library_instance_id', 'library_resources',
+    'application_placements', 'application_topology', 'application_instance_id', 'library_instance_id', 'library_resources',
     '_application_shared', '_application_library_endpoint', 'hostvars', 'groups', 'inventory_hostname', 'platform_desired_state',
     'platform_application_provided_connections', 'platform_project_root',
     'platform_name_prefix', 'platform_data_root_directory'))

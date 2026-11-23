@@ -410,6 +410,16 @@ host_vars/group_vars block or persistent desired state. Peer-discovery templates
 consume it instead of the internal `_application_inputs.jobs` payload. Existing
 imported package copies must be updated when adopting these templates; changing
 repository examples does not rewrite a saved project's package files.
+Application package defaults also receive the read-only
+`application_topology[<library-deployment-id>][<slot-id>]` mapping. Each entry
+contains `instanceId` and `placements[<host-id>]`, with the same `hostId`,
+`address` and resolved `ports` as `application_placements`. Lookup uses the
+deployment and slot IDs, so multiple deployments can reuse the same package.
+For example, an application's environment may use
+`{{ application_topology['sdku']['data-manager'].placements[application_job.hostId].ports['port-1'].published }}`.
+This works for private applications with no endpoint export. The mapping does
+not publish a listener, create a dependency or expose peer environment or
+credential settings. An unselected slot or a missing host placement has no entry.
 Ansible resolves namespaces/defaults/overrides before Core validates the derived
 rows. No project.yml is required. Infrastructure-only projects retain v2alpha1
 desired-state validation and v1alpha1 snapshots without application packages.

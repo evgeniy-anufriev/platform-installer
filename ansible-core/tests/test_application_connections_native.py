@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'ansible-core/collections/ansible_collections/platform/core/plugins/module_utils'))
 from application_libraries import project
 sys.path.insert(0, str(ROOT / 'ansible-core/collections'))
-from ansible_collections.platform.core.plugins.action.prepare_application_libraries import ActionModule
+from ansible_collections.platform.core.plugins.action.prepare_application_libraries import ActionModule, _ResolvedApplicationTopology
 from ansible_collections.platform.core.plugins.action.prepare_application_connections import ActionModule as ConnectionsAction
 
 
@@ -156,9 +156,10 @@ class PlacementTemplateTests(unittest.TestCase):
         action._loader = DataLoader()
         with tempfile.TemporaryDirectory() as folder:
             template = Path(folder, 'scope.j2')
-            template.write_text('{{ marker }}:{{ values | sum }}')
+            template.write_text("{{ marker }}:{{ values | sum }}:{{ application_topology['lib']['peer'].instanceId }}")
             outer = dict(marker='previous-host', values=[99], _application_resolved=InternalPayload(),
                          _application_inputs=InternalPayload(),
+                         application_topology=_ResolvedApplicationTopology({'lib': {'peer': {'instanceId': 'peer-lib'}}}),
                          application_placements=[{'hostId': 'one'}, {'hostId': 'two'}],
                          _application_resolved_row_0=InternalPayload(),
                          ansible_facts={'_application_resolved': InternalPayload(), 'operator_fact': 7})
@@ -170,7 +171,7 @@ class PlacementTemplateTests(unittest.TestCase):
             for lookup in ('lookup', 'query', 'q'):
                 templar.available_variables['path'] = str(template)
                 actual = templar.template("{{ " + lookup + "('template', path) }}")
-                self.assertEqual('current-host:6' if lookup == 'lookup' else ['current-host:6'], actual)
+                self.assertEqual('current-host:6:peer-lib' if lookup == 'lookup' else ['current-host:6:peer-lib'], actual)
             self.assertEqual(7, scoped['ansible_facts']['operator_fact'])
             self.assertIs(scoped, scoped['vars'])
             self.assertNotIn('_application_resolved', scoped['ansible_facts'])
@@ -181,7 +182,7 @@ class PlacementTemplateTests(unittest.TestCase):
 
     def test_compact_placements_reuse_native_ports_and_preserve_literal_override_order(self):
         def job(host, slot='gateway', native=False):
-            return dict(libraryId='lib', slotId=slot, hostId=host, connections={},
+            return dict(libraryId='lib', slotId=slot, instanceId=slot + '-lib', hostId=host, connections={},
                 skipConnectionTopology=not native,
                 application={'definition': {'defaults': {'ports': {'tcp': {'container': 7000, 'published': 7100}}}}},
                 slot={'overrides': {'ports': {'tcp': {'published': 7200}}}},
@@ -199,6 +200,9 @@ class PlacementTemplateTests(unittest.TestCase):
         self.assertEqual(['192.0.2.1', 'two'], [row['address'] for row in members])
         self.assertEqual({'container': 7000, 'published': 7400}, members[0]['ports']['tcp'])
         self.assertIs(native_ports, result['placements']['lib']['native'][0]['ports'])
+        self.assertEqual('gateway-lib', result['topology']['lib']['gateway']['instanceId'])
+        self.assertIs(members[0], result['topology']['lib']['gateway']['placements']['one'])
+        self.assertIs(native_ports, result['topology']['lib']['native']['placements']['one']['ports'])
         self.assertNotIn('application', members[0])
         self.assertEqual(7100, values['_application_inputs']['jobs'][0]['application']['definition']['defaults']['ports']['tcp']['published'])
 
@@ -316,8 +320,13 @@ class NativeApplicationConnectionsTests(unittest.TestCase):
             defaults.write_text(json.dumps(data))
             for path in root.glob('application-packages/*/1.0.0/roles/*/defaults/main.yml'):
                 definition = json.loads(path.read_text())
-                definition['platform_application_definition']['defaults'].setdefault('environment', {})['QA_PEERS'] = (
-                    '{{ application_placements | to_json }}')
+                environment = definition['platform_application_definition']['defaults'].setdefault('environment', {})
+                environment.update(
+                    QA_PEERS='{{ application_placements | to_json }}',
+                    QA_LIBRARY_PEER="{{ application_topology[library_instance_id]['second'].instanceId }}",
+                    QA_CROSS_LIBRARY_PORT="{{ application_topology['cspa']['second'].placements[application_job.hostId].ports['http'].published }}",
+                    QA_CROSS_LIBRARY_ADDRESS="{{ application_topology['cspa']['second'].placements[application_job.hostId].address }}",
+                )
                 path.write_text(json.dumps(definition))
             vars_path = root / 'inventory/group_vars/all/platform-installer.yml'
             data = json.loads(vars_path.read_text())
@@ -342,6 +351,9 @@ class NativeApplicationConnectionsTests(unittest.TestCase):
                 path = root / f'inventory/host_vars/{node}/platform-installer.yml'
                 data = json.loads(path.read_text())
                 data['platform_application_libraries'] = {'cspa': {}, 'sdku': {}}
+                if node == 'node2':
+                    data['platform_application_libraries']['cspa'] = {
+                        'overrides': {'ports': {'http': {'container': 10101, 'published': 19180}}}}
                 data['qa_host_marker'] = node
                 path.write_text(json.dumps(data))
             output = Path(directory) / 'rows.json'
@@ -395,6 +407,15 @@ class NativeApplicationConnectionsTests(unittest.TestCase):
                 self.assertEqual(row['libraryId'], row['settings']['environment']['QA_RESOURCE'])
                 self.assertEqual(expected, row['resourceDefaults']['postgresql']['databases']['applicationDatabase']['name'])
                 self.assertEqual(expected, row['settings']['environment']['QA_OVERRIDE'])
+                target = next(item for item in rows if item['libraryId'] == 'cspa'
+                              and item['slotId'] == 'second' and item['hostId'] == row['hostId'])
+                self.assertEqual('second-' + row['libraryId'], row['settings']['environment']['QA_LIBRARY_PEER'])
+                self.assertEqual(19180 if row['hostId'] == 'node2' else 18080,
+                                 target['settings']['ports']['http']['published'])
+                self.assertEqual(target['settings']['ports']['http']['published'],
+                                 row['settings']['environment']['QA_CROSS_LIBRARY_PORT'])
+                self.assertEqual(target['hostId'], next(peer['hostId'] for peer in peers
+                                 if peer['address'] == row['settings']['environment']['QA_CROSS_LIBRARY_ADDRESS']))
                 self.assertEqual({'enabled': True, 'ports': [8443]}, row['settings']['parameters']['QA_TYPED'])
                 self.assertEqual(6, row['settings']['parameters']['QA_NUMBER'])
                 if row['slotId'] == 'second':
