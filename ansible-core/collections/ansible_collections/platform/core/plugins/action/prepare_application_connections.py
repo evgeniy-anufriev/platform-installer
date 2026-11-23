@@ -10,7 +10,7 @@ class ActionModule(ActionBase):
 
     def run(self, tmp=None, task_vars=None):
         values = task_vars or {}
-        placements = {}
+        placements, topology = {}, {}
         try:
             rows = values.get('platform_application_connection_rows', [])
             hosts = {row['hostId']: {'ansibleHost': values['hostvars'][row['hostId']]['ansible_host']} for row in rows}
@@ -30,15 +30,19 @@ class ActionModule(ActionBase):
                                   job['slot'].get('overrides', {}), job['instance'].get('overrides', {}),
                                   job['hostOverride']):
                         ports = merge_hash(ports, layer.get('ports', {}), recursive=True, list_merge='replace')
-                placements.setdefault(job['libraryId'], {}).setdefault(job['slotId'], []).append(dict(
+                placement = dict(
                     hostId=job['hostId'], address=values['hostvars'][job['hostId']].get('ansible_host', job['hostId']),
-                    ports=ports))
+                    ports=ports)
+                placements.setdefault(job['libraryId'], {}).setdefault(job['slotId'], []).append(placement)
+                instance = topology.setdefault(job['libraryId'], {}).setdefault(
+                    job['slotId'], dict(instanceId=job['instanceId'], placements={}))
+                instance['placements'][job['hostId']] = placement
             for library in placements.values():
                 for members in library.values():
                     members.sort(key=lambda row: row['hostId'])
             return dict(changed=False, connections=provided_connections(rows, values['platform_desired_state'], hosts),
-                        placements=placements)
+                        placements=placements, topology=topology)
         except (KeyError, ValueError, TypeError):
             diagnostic = finding('APPLICATION_PROVIDED_CONNECTION_INVALID', 'applicationLibraryDeployments')
             diagnostic['safeMessage'] = 'Не удалось вычислить предоставляемые подключения приложений. Проверьте настройки подключений библиотеки.'
-            return dict(changed=False, connections={}, placements=placements, findings=[diagnostic])
+            return dict(changed=False, connections={}, placements=placements, topology=topology, findings=[diagnostic])

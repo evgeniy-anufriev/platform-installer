@@ -15,6 +15,25 @@ from ansible_collections.platform.core.plugins.module_utils.project_snapshot_out
 from ansible_collections.platform.core.plugins.module_utils.project_resolution import pure_templates
 
 
+class _ResolvedApplicationTopology(dict):
+    # Core already resolved these values. Skip Ansible's recursive templating
+    # of the full mapping each time a template reads a single placement.
+    __UNSAFE__ = True
+
+    def __init__(self, values):
+        super().__init__((key, _ResolvedApplicationTopology(value) if isinstance(value, dict) else value)
+                         for key, value in values.items())
+
+    def __deepcopy__(self, memo):
+        # The built-in template lookup copies its variable scope before rendering.
+        return self
+
+    def _read_only(self, *args, **kwargs):
+        raise TypeError('application_topology is read-only')
+
+    __setitem__ = __delitem__ = __ior__ = clear = pop = popitem = setdefault = update = _read_only
+
+
 class ActionModule(ActionBase):
     TRANSFERS_FILES = False
 
@@ -27,7 +46,7 @@ class ActionModule(ActionBase):
 
     @staticmethod
     def _placement_variables(task_vars):
-        payloads = {'_application_inputs', '_project_resolution_cache', '_application_resolved',
+        payloads = {'_application_inputs', '_application_connection_inputs', '_project_resolution_cache', '_application_resolved',
                     '_library_resolved_defaults', 'platform_project_resolution',
                     'platform_image_snapshot', 'platform_application_rows',
                     'application_group', '_application_group_result'}
@@ -49,11 +68,14 @@ class ActionModule(ActionBase):
     def run(self, tmp=None, task_vars=None):
         task_vars = task_vars or {}
         args = self._task.args
+        if args.get('placements') or args.get('placement_group'):
+            topology = _ResolvedApplicationTopology(task_vars['_application_connection_inputs'].get('topology', {}))
         if args.get('placements'):
             rows, findings, contexts = [], [], {}
             metrics = dict(instances=0, placements=0, libraryContexts=0, rendered=0, reused=0)
             for group in task_vars['_application_inputs']['placement_groups']:
-                result = self._placement_group(dict(task_vars, application_group=group, _library_resolved_defaults=contexts))
+                result = self._placement_group(
+                    dict(task_vars, application_group=group, _library_resolved_defaults=contexts), topology)
                 rows.extend(result['rows'])
                 findings.extend(result['findings'])
                 contexts = result['library_contexts']
@@ -62,7 +84,7 @@ class ActionModule(ActionBase):
                     metrics[key] += value
             return dict(changed=False, rows=rows, findings=findings, library_contexts=contexts, metrics=metrics)
         if args.get('placement_group'):
-            return self._placement_group(task_vars)
+            return self._placement_group(task_vars, topology)
         if args.get('resolved_row'):
             return self._resolved_row(args, task_vars)
         if args.get('diagnose_failure'):
@@ -287,7 +309,7 @@ class ActionModule(ActionBase):
             contexts[key] = dict(resourceDefaults=defaults, resources=resources, shared=shared)
         return copy.deepcopy(contexts[key])
 
-    def _placement_group(self, task_vars):
+    def _placement_group(self, task_vars, topology):
         contexts = dict(task_vars.get('_library_resolved_defaults', {}))
         initial_contexts = len(contexts)
         rows, findings = [], []
@@ -304,6 +326,7 @@ class ActionModule(ActionBase):
                                 space.pop(name)
                 bindings = dict(application_job=job, application_name=job['application']['name'],
                     application_instance_id=job['instanceId'], library_instance_id=job['libraryId'],
+                    application_topology=topology,
                     application_placements=task_vars['_application_connection_inputs']['placements'].get(
                         job['libraryId'], {}).get(job['slotId'], []), application_connections={},
                     application_topics={}, application_databases={}, _application_connections=job['connections'])
