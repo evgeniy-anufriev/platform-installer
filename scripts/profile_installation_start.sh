@@ -62,6 +62,7 @@ def run_events(directory):
 
 def show_core(directory, scope, since, until):
     records = []
+    by_project = {}
     ignored = 0
     for operation in OPERATIONS:
         for path in directory.glob(f'{scope}.{operation}.timing.json'):
@@ -73,23 +74,49 @@ def show_core(directory, scope, since, until):
                     data = json.load(stream)
                 if data.get('operation') != operation:
                     raise ValueError('Unexpected operation')
-                records.append((finished, operation, data))
+                project = path.name.split('.', 1)[0]
+                resolution = data.get('resolution')
+                if not isinstance(resolution, dict):
+                    resolution = {}
+                records.append((finished, operation, project, data, resolution))
+                by_project.setdefault(project, {})[operation] = (finished, resolution, data.get('elapsedSeconds'))
             except (OSError, ValueError, AttributeError):
                 ignored += 1
     print('Вызовы Core, завершённые в выбранном интервале')
-    for finished, operation, data in sorted(records, key=lambda row: row[0]):
-        resolution = data.get('resolution') or {}
-        source = resolution.get('source') if isinstance(resolution, dict) else None
+    for finished, operation, project, data, resolution in sorted(records, key=lambda row: row[0]):
+        source = resolution.get('source')
         if source not in ('fresh', 'shared', 'request'):
             source = '—'
+        reusable = resolution.get('reusable')
+        reusable_label = str(reusable).lower() if type(reusable) is bool else '—'
         print(f'{format_time(finished)}  {OPERATIONS[operation]} ({operation})'
+              f'  ключ проекта {project[:12]}'
               f'  всего {seconds(data.get("elapsedSeconds"))}'
               f'  ожидание блокировки {seconds(data.get("lockWaitSeconds"))}'
-              f'  расчёт {source}')
+              f'  расчёт {source}  reusable={reusable_label}'
+              f'  разрешение {seconds(resolution.get("resolveSeconds"))}'
+              f'  чтение кэша {seconds(resolution.get("readSeconds"))}')
     if not records:
         print('Файлы таймингов в этом интервале не найдены.')
     if ignored:
         print(f'Пропущено нечитаемых или некорректных файлов: {ignored}')
+    for project, operations in sorted(by_project.items()):
+        descriptors = operations.get('BuildRuntimeSecretDescriptors')
+        describe = operations.get('PrepareApplicationImages')
+        if not descriptors or not describe or seconds(describe[2]) == '—':
+            continue
+        if (describe[0] - descriptors[0]).total_seconds() < describe[2]:
+            continue
+        earlier, later = descriptors[1], describe[1]
+        if earlier.get('source') != 'fresh' or later.get('source') != 'fresh':
+            continue
+        if earlier.get('reusable') is False:
+            explanation = 'расчёт требований к секретам оказался непригоден для общего кэша.'
+        elif earlier.get('reusable') is True:
+            explanation = 'расчёт требований пригоден для общего кэша, но DESCRIBE его не использовал. Сверьте ревизию и входы. Точная причина в таймингах отсутствует.'
+        else:
+            explanation = 'в тайминге требований нет поля reusable, поэтому причину определить нельзя.'
+        print(f'Два fresh для ключа {project[:12]} — {explanation}')
 
 
 def main():
@@ -134,7 +161,7 @@ def main():
             print('Первое событие задачи пока отсутствует.')
         elif args.since:
             print('От нажатия до первой задачи: ' + seconds((marks['TASK_STARTED'] - since).total_seconds()))
-    print('\nФайлы Core содержат последний замер каждой операции для проекта.')
+    print('\nФайлы Core содержат последний замер каждой операции для проекта. При параллельных запусках строки могут относиться к разным попыткам.')
     print('DESCRIBE не включает сетевой проход registry. Тайминги Core не включают локальную проверку bundle и передачу проекта.')
 
 
