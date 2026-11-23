@@ -8671,7 +8671,7 @@ function ProviderDialog({
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/InstallationPage.tsx","mode":420,"size":90509,"sha256":"3715eaf60cf01d7aa1ffeb90aa739966adf852234ddf45ba148dc62e057587f4","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":52106}
+@@PORTABLE {"path":"frontend/src/InstallationPage.tsx","mode":420,"size":90816,"sha256":"fb86482f0bb1755d6c8be721b0a6a8a7a8271144d80edf6b3ec68d332020b6c2","index":0,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":52117}
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type {
   InstallationEventView,
@@ -10026,6 +10026,13 @@ function PlanStage({
                 <li>
                   <code>{operation.error.code}</code> —{" "}
                   {operation.error.message}
+                  {!!operation.error.diagnosticCodes?.length && (
+                    <span>
+                      {" "}
+                      Диагностика Core и плана:{" "}
+                      {operation.error.diagnosticCodes.join(", ")}
+                    </span>
+                  )}
                 </li>
               )}
               {run?.error && (
@@ -10069,7 +10076,10 @@ function PlanStage({
               {plan.findings.map((item, index) => (
                 <li key={`${item.code}:${index}`}>
                   <code>{item.code}</code>{" "}
-                  {planFindingMessage(item.safeMessage)}
+                  {planFindingMessage(item.safeMes
+@@END
+@@PORTABLE {"path":"frontend/src/InstallationPage.tsx","mode":420,"size":90816,"sha256":"fb86482f0bb1755d6c8be721b0a6a8a7a8271144d80edf6b3ec68d332020b6c2","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":38699}
+sage)}
                 </li>
               ))}
             </ul>
@@ -10081,10 +10091,7 @@ function PlanStage({
             open={!outputPasswordPresent}
           >
             <summary>
-              Защищё
-@@END
-@@PORTABLE {"path":"frontend/src/InstallationPage.tsx","mode":420,"size":90509,"sha256":"3715eaf60cf01d7aa1ffeb90aa739966adf852234ddf45ba148dc62e057587f4","index":1,"count":2,"newline":"lf","encoding":"utf-8","payloadBytes":38403}
-нные выходные файлы
+              Защищённые выходные файлы
               {outputPasswordPresent
                 ? " · пароль задан"
                 : " · требуется пароль"}
@@ -31385,7 +31392,7 @@ func (a *CommandAdapter) BuildSnapshot(ctx context.Context, projectRoot string, 
 }
 
 @@END
-@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":117384,"sha256":"500ae36486bb1a496bc6700e479259c919e1a8a2d9c9906ab26ee13342292f14","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48387}
+@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":117824,"sha256":"99e01636682d030931c960ea3e1682a1847b96783b9a4712c688dea4303efdb2","index":0,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48387}
 package desktop
 
 import (
@@ -32502,7 +32509,7 @@ func (a *App) importPendingDeploymentRuntimeSecretFileBound(input PendingRuntime
 
 func (a *App) pendingRuntimeSecret
 @@END
-@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":117384,"sha256":"500ae36486bb1a496bc6700e479259c919e1a8a2d9c9906ab26ee13342292f14","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48091}
+@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":117824,"sha256":"99e01636682d030931c960ea3e1682a1847b96783b9a4712c688dea4303efdb2","index":1,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":48091}
 DescriptorsLocked(serviceDeployment string) ([]RuntimeSecretDescriptorView, error) {
 	if a.current.Status != "OPEN" || a.current.Project == nil || a.current.Managed == nil || a.current.Catalog == nil || a.current.Catalog.Status != "READY" || serviceDeployment == "" {
 		return nil, errors.New("RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE")
@@ -32707,7 +32714,7 @@ func (a *App) getRuntimeSecretDescriptorsLocked(clearAttached bool) RuntimeSecre
 	}
 	requestID, err := executionnode.NewRequestID()
 	if err != nil {
-		return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: "RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE", Message: "Could not create a bounded secret descriptor request."}}
+		return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: runtimeSecretDescriptorFailure("RUNTIME_SECRET_DESCRIPTOR_REQUEST_ID_FAILED")}
 	}
 	ctx, cancel := a.operationContext(projectCoreResolutionTimeout)
 	defer cancel()
@@ -32724,21 +32731,24 @@ func (a *App) getRuntimeSecretDescriptorsLocked(clearAttached bool) RuntimeSecre
 	view := RuntimeSecretDescriptorOperation{Status: "READY", ProjectRevision: result.ProjectRevision, DescriptorSetFingerprint: result.DescriptorSetFingerprint}
 	for _, item := range result.Descriptors {
 		if !validRuntimeSecretDescriptor(item) {
-			return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: "RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE", Message: "Core returned an unsafe service secret descriptor."}}
+			return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: runtimeSecretDescriptorFailure("SERVICE_SECRET_DESCRIPTOR_INVALID")}
 		}
 		view.Descriptors = append(view.Descriptors, RuntimeSecretDescriptorView{RequirementRef: item.RequirementRef, Purpose: item.Purpose, ServiceDeployment: item.ServiceDeployment, DisplayLabel: item.DisplayLabel, RequiredWhen: item.RequiredWhen, Operations: append([]string(nil), item.Operations...), Hosts: append([]string(nil), item.Hosts...)})
 	}
 	seen := map[string]bool{}
 	for _, item := range view.Descriptors {
 		if seen[item.RequirementRef] {
-			return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: "RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE"}}
+			return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: runtimeSecretDescriptorFailure("SECRET_DESCRIPTOR_REF_DUPLICATE")}
 		}
 		seen[item.RequirementRef] = true
 	}
 	sources := map[string]bool{}
 	for _, item := range result.ApplicationInputs {
-		if !validApplicationSecretDescriptor(item) || seen[item.RequirementRef] || sources[item.SourceRef] {
-			return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: "RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE", Message: "Core returned an unsafe application secret descriptor."}}
+		if !validApplicationSecretDescriptor(item) {
+			return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: runtimeSecretDescriptorFailure("APPLICATION_SECRET_DESCRIPTOR_INVALID")}
+		}
+		if seen[item.RequirementRef] || sources[item.SourceRef] {
+			return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: runtimeSecretDescriptorFailure("SECRET_DESCRIPTOR_REF_DUPLICATE")}
 		}
 		seen[item.RequirementRef] = true
 		sources[item.SourceRef] = true
@@ -32797,7 +32807,7 @@ func (a *App) bindRuntimeSecretDescriptorsLocked(view RuntimeSecretDescriptorOpe
 		applicationSources, sourceErr := a.pendingApplicationSourceBindingsLocked(credentialBinding, view.ProjectRevision, view.ApplicationInputs)
 		if sourceErr != nil {
 			a.runtimeSecretEvidence = nil
-			return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: "RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE", Message: projectErrorMessage("RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE")}}
+			return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: runtimeSecretDescriptorFailure("APPLICATION_SECRET_SOURCE_BINDING_INVALID")}
 		}
 		a.runtimeSecretEvidence.applicationSources = applicationSources
 		if err := a.secrets.PromotePendingRuntimeSecretValues(credentialBinding, requirements, applicationSources); err != nil {
@@ -32812,12 +32822,26 @@ func (a *App) bindRuntimeSecretDescriptorsLocked(view RuntimeSecretDescriptorOpe
 	return view
 }
 
-// runtimeSecretDescriptorDiagnosticCodes returns only bounded machine tokens
-// from the fixed Execution Node protocol. It deliberately excludes diagnostic
-// messages, command output, paths and all user/project data.
+// runtimeSecretDescriptorDiagnosticCodes exposes only protocol codes and known
+// local failure codes. It excludes messages, paths and user/project data.
 func runtimeSecretDescriptorDiagnosticCodes(err error) []string {
+	if err == nil {
+		return nil
+	}
 	var executionErr *executionnode.ExecutionError
 	if !errors.As(err, &executionErr) || executionErr == nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			return []string{"CORE_RESOLUTION_TIMEOUT"}
+		}
+		switch err.Error() {
+		case "RUNTIME_SECRET_DESCRIPTORS_INPUT_INVALID", "RUNTIME_SECRET_DESCRIPTORS_UNSUPPORTED",
+			"RUNTIME_SECRET_DESCRIPTORS_RESPONSE_INVALID", "EXECUTION_RUNTIME_IDENTITY_UNCONFIRMED",
+			"PROJECT_CANDIDATE_INVALID", "PROJECT_CANDIDATE_FILE_UNSAFE", "PROJECT_CANDIDATE_PATH_INVALID",
+			"PROJECT_CANDIDATE_PATH_COLLISION", "PROJECT_CANDIDATE_LIMIT_EXCEEDED",
+			"PROJECT_CANDIDATE_HARDLINK_UNSAFE", "PROJECT_CANDIDATE_ANSIBLE_CONFIG_INVALID",
+			"PROJECT_CANDIDATE_FILE_REPLACED":
+			return []string{err.Error()}
+		}
 		return nil
 	}
 	var result []string
@@ -33461,7 +33485,10 @@ func (a *App) GetServiceConfigurationPreview() (result executionnode.ServiceConf
 	a.editMu.Lock()
 	defer a.editMu.Unlock()
 	after, err := installer.PreviewProjectRevision(root)
-	if err != nil || a.current.Status != "OPEN" || a.current.Root != root || a.current.Managed == nil || a.current.Catalog == nil || a.current.Catalog.Status != "READY" || a.current.Managed.ProjectRevision != revision || after != revision || preview.ProjectRevision != revision || !runtimeEvidenceMatchesExpected(preview.Runtime, binding.reader.runtimeRelease) || a.revalidateSavedPreviewBindingLocked(binding) != nil {
+	if err != nil || a.current.Status != "OPEN" || a.current.Root != root || a.current.Managed == nil || a.current.Catalog == nil || a.current.Catalog.Status != "READY" || a.current.Managed.ProjectRevision != revision || after != revision || preview.ProjectRevision != revision || !runtimeEvidenceMatchesExpected(preview.Runtime, binding.reader.runtimeRelease) || a.revalidateSavedPreviewBindingLocked(binding)
+@@END
+@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":117824,"sha256":"99e01636682d030931c960ea3e1682a1847b96783b9a4712c688dea4303efdb2","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":21346}
+ != nil {
 		return executionnode.ServiceConfigurationPreview{}, errors.New("SERVICE_CONFIGURATION_PREVIEW_STALE")
 	}
 	for deploymentID, scoped := range preview.Services {
@@ -33471,10 +33498,7 @@ func (a *App) GetServiceConfigurationPreview() (result executionnode.ServiceConf
 		}
 		var service *projectlifecycle.ProjectCatalogService
 		for index := range a.current.Catalog.Services {
-			if a.current.Catalog.Services[inde
-@@END
-@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":117384,"sha256":"500ae36486bb1a496bc6700e479259c919e1a8a2d9c9906ab26ee13342292f14","index":2,"count":3,"newline":"lf","encoding":"utf-8","payloadBytes":20906}
-x].ID == deployment.ServiceType {
+			if a.current.Catalog.Services[index].ID == deployment.ServiceType {
 				service = &a.current.Catalog.Services[index]
 				break
 			}
@@ -33613,7 +33637,7 @@ func projectErrorMessage(code string) string {
 	case "RUNTIME_SECRET_DESCRIPTOR_NOT_FOUND":
 		return "Для выбранного сервиса в текущем режиме секреты не требуются."
 	case "RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE":
-		return "Не удалось получить требования к секретам от Core на узле выполнения. Проверьте доступность узла и повторите запуск этого плана; секреты не удалены."
+		return "Не удалось подтвердить требования плана к секретам. Установка не запущена, введённые секреты сохранены."
 	case "RUNTIME_SECRET_DESCRIPTORS_UNSUPPORTED":
 		return "Активный runtime узла выполнения не поддерживает проверку секретов сервисов. Обновите набор установки и подготовьте узел заново."
 	case "RUNTIME_SECRET_DESCRIPTORS_RESPONSE_INVALID":
@@ -37420,7 +37444,7 @@ func (a *App) executionTransport(identity runtimesecret.ExecutionIdentity, bindi
 }
 
 @@END
-@@PORTABLE {"path":"internal/desktop/installation_execution.go","mode":420,"size":44964,"sha256":"3f2163c55fe8593c9e0cb050f1c78a5b4d19ba944e58d37cb4fe704ec74d27dd","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":44964}
+@@PORTABLE {"path":"internal/desktop/installation_execution.go","mode":420,"size":44333,"sha256":"43e310cab4c0b0474ed4ec5346f5504571d497f5a37318daf6aca85f3e710a5c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":44333}
 package desktop
 
 import (
@@ -37877,13 +37901,13 @@ func (a *App) StartApprovedInstallation(planID string) InstallationRunOperation 
 		passwordRequirements, requirementErr := installationPlanRuntimeSecretRequirements(planRecord.Plan)
 		if requirementErr != nil {
 			a.editMu.Unlock()
-			return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: projectErrorCode(requirementErr), Message: projectErrorMessage(projectErrorCode(requirementErr))}}
+			return InstallationRunOperation{Status: "BLOCKED", Error: requirementErr}
 		}
 		if len(passwordRequirements) > 0 {
 			missing, secretErr := a.missingInstallationSecretsLocked(planRecord.Plan, false)
 			if secretErr != nil {
 				a.editMu.Unlock()
-				return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: projectErrorCode(secretErr), Message: projectErrorMessage(projectErrorCode(secretErr))}}
+				return InstallationRunOperation{Status: "BLOCKED", Error: secretErr}
 			}
 			if len(missing) > 0 {
 				a.editMu.Unlock()
@@ -37894,11 +37918,7 @@ func (a *App) StartApprovedInstallation(planID string) InstallationRunOperation 
 			descriptors := a.runtimeSecretDescriptorsForStartLocked(revision)
 			if descriptors.Status != "READY" {
 				a.editMu.Unlock()
-				if descriptors.Error != nil {
-					return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: descriptors.Error.Code, Message: projectErrorMessage(descriptors.Error.Code), DiagnosticCodes: descriptors.Error.DiagnosticCodes}}
-				}
-				code := "RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE"
-				return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: code, Message: projectErrorMessage(code)}}
+				return InstallationRunOperation{Status: "BLOCKED", Error: runtimeSecretDescriptorOperationError(descriptors.Error)}
 			}
 			if len(typedInputs) > 0 && !runtimeDescriptorsMatchPlan(descriptors.Descriptors, typedInputs, planRecord.Plan.ExecutionMode) {
 				a.editMu.Unlock()
@@ -37908,7 +37928,7 @@ func (a *App) StartApprovedInstallation(planID string) InstallationRunOperation 
 		missing, secretErr := a.missingInstallationSecretsLocked(planRecord.Plan, true)
 		if secretErr != nil {
 			a.editMu.Unlock()
-			return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: projectErrorCode(secretErr), Message: projectErrorMessage(projectErrorCode(secretErr))}}
+			return InstallationRunOperation{Status: "BLOCKED", Error: secretErr}
 		}
 		if len(missing) > 0 {
 			a.editMu.Unlock()
@@ -38368,7 +38388,7 @@ func (a *App) CancelInstallationRun(runID string) InstallationRunOperation {
 }
 
 @@END
-@@PORTABLE {"path":"internal/desktop/installation_plan.go","mode":420,"size":25151,"sha256":"e9a73ef8c5b6066925adcd197c0edebcbf3a4eb9e86ac8585da8542c340fe9ff","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":25151}
+@@PORTABLE {"path":"internal/desktop/installation_plan.go","mode":420,"size":25774,"sha256":"5ab93afa5ed9a059718e7ab1e32e6b8d2765c65bd9af4c76c42ae162c84dd59d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":25774}
 package desktop
 
 import (
@@ -38599,8 +38619,7 @@ func (a *App) ApproveInstallationPlan(planID string, acknowledgements []string) 
 	}
 	missing, secretErr := a.missingInstallationSecretsLocked(record.Plan, false)
 	if secretErr != nil {
-		code := projectErrorCode(secretErr)
-		return approvalFailure(&ProjectOpenError{Code: code, Message: projectErrorMessage(code)})
+		return approvalFailure(secretErr)
 	}
 	if len(missing) > 0 {
 		return approvalFailure(missingInstallationSecretsError(missing))
@@ -38618,14 +38637,15 @@ func (a *App) ApproveInstallationPlan(planID string, acknowledgements []string) 
 
 // missingInstallationSecretsLocked uses only the current Core plan and the
 // Core-attested descriptor set. Values remain private inside the broker.
-func (a *App) missingInstallationSecretsLocked(plan executionnode.DeploymentPlan, attest bool) ([]string, error) {
-	passwords, err := installationPlanRuntimeSecretRequirements(plan)
-	if err != nil {
-		return nil, err
+func (a *App) missingInstallationSecretsLocked(plan executionnode.DeploymentPlan, attest bool) ([]string, *ProjectOpenError) {
+	passwords, requirementErr := installationPlanRuntimeSecretRequirements(plan)
+	if requirementErr != nil {
+		return nil, requirementErr
 	}
 	binding, err := a.credentialBindingLocked()
 	if err != nil {
-		return nil, err
+		code := projectErrorCode(err)
+		return nil, &ProjectOpenError{Code: code, Message: projectErrorMessage(code)}
 	}
 	missing := a.secrets.MissingRequiredSecrets(binding, passwords, executionnodePlanRequiresPKIStorePassword(plan), !attest)
 	if len(passwords) > 0 && (attest || len(missing) > 0) {
@@ -38636,10 +38656,7 @@ func (a *App) missingInstallationSecretsLocked(plan executionnode.DeploymentPlan
 		if currentDescriptors == nil || len(missing) > 0 {
 			descriptors := a.getRuntimeSecretDescriptorsLocked(false)
 			if descriptors.Status != "READY" {
-				if descriptors.Error != nil && descriptors.Error.Code != "" {
-					return nil, errors.New(descriptors.Error.Code)
-				}
-				return nil, errors.New("RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE")
+				return nil, runtimeSecretDescriptorOperationError(descriptors.Error)
 			}
 			currentDescriptors = a.runtimeSecretEvidenceDescriptorsLocked(plan.ProjectRevision)
 		}
@@ -38649,7 +38666,8 @@ func (a *App) missingInstallationSecretsLocked(plan executionnode.DeploymentPlan
 		}
 		for _, requirement := range plan.RequiredCredentials {
 			if executionnode.RuntimeSecretValuePurpose(requirement.Purpose) && !known[requirement.RequirementRef+"\x00"+requirement.Purpose] {
-				return nil, errors.New("RUNTIME_SECRET_DESCRIPTORS_STALE")
+				code := "RUNTIME_SECRET_DESCRIPTORS_STALE"
+				return nil, &ProjectOpenError{Code: code, Message: projectErrorMessage(code)}
 			}
 		}
 	}
@@ -38779,7 +38797,7 @@ func executionnodePlanRequiresPKIStorePassword(plan executionnode.DeploymentPlan
 // installationPlanRuntimeSecretRequirements is intentionally derived from the
 // fresh Core plan rather than the UI catalog. It is used only to bind already
 // pending runtime-only values at approval and the pre-target Start gate.
-func installationPlanRuntimeSecretRequirements(plan executionnode.DeploymentPlan) ([]string, error) {
+func installationPlanRuntimeSecretRequirements(plan executionnode.DeploymentPlan) ([]string, *ProjectOpenError) {
 	result := make([]string, 0)
 	seen := map[string]struct{}{}
 	for _, requirement := range plan.RequiredCredentials {
@@ -38787,16 +38805,28 @@ func installationPlanRuntimeSecretRequirements(plan executionnode.DeploymentPlan
 			continue
 		}
 		if !runtimeSecretDescriptorRequirement.MatchString(requirement.RequirementRef) {
-			return nil, errors.New("RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE")
+			return nil, runtimeSecretDescriptorFailure("PLAN_SECRET_REQUIREMENT_REF_INVALID")
 		}
 		if _, duplicate := seen[requirement.RequirementRef]; duplicate {
-			return nil, errors.New("RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE")
+			return nil, runtimeSecretDescriptorFailure("PLAN_SECRET_REQUIREMENT_REF_DUPLICATE")
 		}
 		seen[requirement.RequirementRef] = struct{}{}
 		result = append(result, requirement.RequirementRef)
 	}
 	sort.Strings(result)
 	return result, nil
+}
+
+func runtimeSecretDescriptorFailure(diagnosticCode string) *ProjectOpenError {
+	code := "RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE"
+	return &ProjectOpenError{Code: code, Message: projectErrorMessage(code), DiagnosticCodes: []string{diagnosticCode}}
+}
+
+func runtimeSecretDescriptorOperationError(err *ProjectOpenError) *ProjectOpenError {
+	if err == nil || err.Code == "" {
+		return runtimeSecretDescriptorFailure("RUNTIME_SECRET_DESCRIPTOR_RESULT_UNAVAILABLE")
+	}
+	return &ProjectOpenError{Code: err.Code, Message: projectErrorMessage(err.Code), DiagnosticCodes: err.DiagnosticCodes}
 }
 
 func installationRuntimeBinding(release map[string]any) (InstallationRuntimeBinding, bool) {
