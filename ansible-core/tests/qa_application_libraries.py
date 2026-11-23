@@ -1,4 +1,5 @@
 """Real target-free Ansible acceptance; run only on the Execution Node."""
+import hashlib
 import json
 import os
 import shutil
@@ -12,6 +13,74 @@ FIXTURE = os.path.join(REPO, "examples/valid/application-libraries")
 
 
 class StandaloneLibrariesQA(unittest.TestCase):
+    def test_scenarios_resolve_in_target_free_snapshot_and_plan(self):
+        utils = os.path.join(REPO, 'ansible-core/collections/ansible_collections/platform/core/plugins/module_utils')
+        import sys
+        sys.path.insert(0, utils)
+        from application_plan import application_execution_model
+
+        def manifest(kind, name):
+            return os.path.join(self.root, kind + '-packages', name, '1.0.0', kind + '.yml')
+
+        def add_scenario(name, action, asset=None):
+            def update(document):
+                document['apiVersion'] = 'platform.installer/application-package/v1alpha5'
+                if asset:
+                    document['files'].append(asset)
+                document['user_scenarios'] = {'demo': dict(
+                    title='Demo project', description='Test installation intent',
+                    setting='demo_enabled', action=action)}
+            self.edit(manifest('library', name), update)
+
+        app_manifest = manifest('application', 'apigateway')
+        script = os.path.join(os.path.dirname(app_manifest), 'assets/scenario.sh')
+        os.makedirs(os.path.dirname(script), exist_ok=True)
+        with open(script, 'wb') as stream:
+            stream.write(b'#!/bin/sh\nexit 0\n')
+        def app(document):
+            document['apiVersion'] = 'platform.installer/application-package/v1alpha3'
+            document['files'].append('assets/scenario.sh')
+            document['scripts'] = [dict(id='create-demo', phase='post_install', execution='once',
+                                        source='assets/scenario.sh')]
+        self.edit(app_manifest, app)
+        # The fixture shares a package between the libraries. Scope the script separately to each slot owner.
+        add_scenario('sdku', dict(kind='package_script', slot_ref='gateway', script_ref='create-demo'))
+        cspa_manifest = manifest('library', 'cspa')
+        dump = os.path.join(os.path.dirname(cspa_manifest), 'assets/demo.dump')
+        os.makedirs(os.path.dirname(dump), exist_ok=True)
+        archive = b'fixture bytes, never executed'
+        with open(dump, 'wb') as stream:
+            stream.write(archive)
+        add_scenario('cspa', dict(kind='resource_initialization', resource_ref='applicationDatabase',
+                                  restore_on_create=dict(source='assets/demo.dump', format='pg_custom',
+                                                         sha256=hashlib.sha256(archive).hexdigest())),
+                     'assets/demo.dump')
+
+        default = self.snapshot()
+        self.assertEqual(default['applicationLibraries']['status'], 'PASS', default['findings'])
+        libraries = default['applicationLibraries']['libraries']
+        self.assertEqual(libraries['sdku']['instances']['gateway-sdku']['scripts'], [])
+        self.assertNotIn('restore_on_create', libraries['cspa']['resources']['applicationDatabase']['parameters'])
+        self.edit(self.vars, lambda data: [
+            lib.setdefault('overrides', {}).setdefault('parameters', {}).update(demo_enabled=True)
+            for lib in data['platform_desired_state']['applicationLibraryDeployments'].values()])
+        selected = self.snapshot()
+        self.assertEqual(selected['applicationLibraries']['status'], 'PASS', selected['findings'])
+        libraries = selected['applicationLibraries']['libraries']
+        instance = libraries['sdku']['instances']['gateway-sdku']
+        self.assertEqual([script['scenarioId'] for script in instance['scripts']], ['demo'])
+        for placement in instance['placements'].values():
+            self.assertNotIn('demo_enabled', placement['parameters'])
+        restore = libraries['cspa']['resources']['applicationDatabase']['parameters']['restore_on_create']
+        self.assertEqual(restore['source'], 'assets/demo.dump')
+        model = application_execution_model(selected, library_order=['sdku', 'cspa'])
+        summaries = {action['id']: action['summary'] for action in model['actions']}
+        self.assertEqual(summaries['applications:apply'], 'Apply application libraries')
+        self.assertEqual(summaries['applications:post-install'], 'Run post-install application scripts')
+        self.assertNotEqual(
+            application_execution_model(default, library_order=['sdku', 'cspa'])['semanticFingerprint'],
+            model['semanticFingerprint'])
+
     def test_same_package_in_two_slots_resolves_independent_contexts_on_two_hosts(self):
         path = os.path.join(self.root, 'library-packages/sdku/1.0.0/roles/library_sdku/defaults/main.yml')
         self.edit(path, lambda data: data['platform_library_definition']['slots'].update(

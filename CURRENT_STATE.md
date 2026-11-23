@@ -8,6 +8,17 @@ new destructive operation still requires explicit owner authorization.
 
 ## Active work and acceptance
 
+Library installation scenarios, owner-authorized branch
+`codex/library-user-scenarios`: Core/editor implementation in worktree,
+independent TARGETED_RECHECK APPROVE, US-D01 and US-D02 resolved, blocking0.
+Focused RED OS66 (rerun) and React73 PASS, targeted Go/vet PASS. Real
+React/Wails local Save, reopen and reset passed for both scenarios in an
+isolated managed project. Owner-authorized test runtime 8c57d36c activated on
+RED OS 101 through real Wails. SZI dump in isolated fixture; Verify and
+application-only plan passed. Start blocked by missing session secrets,
+no run and no QA DB/containers. Installation acceptance remains open.
+[Evidence and blockers](docs/work/application-libraries/evidence/user-scenarios-implementation.md).
+
 Owner-requested 700 MiB dump optimization (2026-11-18) on the same performance
 branch: local revision hashing streams package assets once without retaining
 their contents; approval reuses its checked view. Fresh Start revision and

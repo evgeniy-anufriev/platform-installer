@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"unicode/utf8"
 )
 
 const maxApplicationPackageFiles = 512
@@ -18,6 +19,7 @@ const maxApplicationPackageFiles = 512
 var packageVersion = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+$`)
 var packageComponent = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
 var packageEnvName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+var packageScenarioID = regexp.MustCompile(`^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$`)
 
 // Fixed data-only destinations. Neither the caller nor a manifest can add
 // tasks, plugins, hooks or roles from another package. JARs are application
@@ -92,13 +94,21 @@ func observeApplicationPackageDocuments(root string, digestOnly bool, reusePrevi
 }
 
 type applicationPackageManifest struct {
-	APIVersion string            `yaml:"apiVersion"`
-	Kind       string            `yaml:"kind"`
-	Name       string            `yaml:"name"`
-	Version    string            `yaml:"version"`
-	Files      []string          `yaml:"files"`
-	Render     map[string]string `yaml:"render,omitempty"`
-	Scripts    []map[string]any  `yaml:"scripts,omitempty"`
+	APIVersion    string                                `yaml:"apiVersion"`
+	Kind          string                                `yaml:"kind"`
+	Name          string                                `yaml:"name"`
+	Version       string                                `yaml:"version"`
+	Files         []string                              `yaml:"files"`
+	Render        map[string]string                     `yaml:"render,omitempty"`
+	Scripts       []map[string]any                      `yaml:"scripts,omitempty"`
+	UserScenarios map[string]applicationPackageScenario `yaml:"user_scenarios,omitempty"`
+}
+
+type applicationPackageScenario struct {
+	Title       string         `yaml:"title"`
+	Description string         `yaml:"description"`
+	Setting     string         `yaml:"setting"`
+	Action      map[string]any `yaml:"action"`
 }
 
 func packageImportError(path, reason string) *writerError {
@@ -106,25 +116,56 @@ func packageImportError(path, reason string) *writerError {
 }
 
 func checkPackageManifest(records []exportRecord, kind, name, version string) (string, error) {
+	return readPackageManifest(records, kind, name, version, nil)
+}
+
+func decodeApplicationPackageManifest(content []byte, path string) (applicationPackageManifest, error) {
+	var m applicationPackageManifest
+	d := yaml.NewDecoder(bytes.NewReader(content))
+	d.KnownFields(true)
+	if d.Decode(&m) != nil {
+		return m, packageImportError(path, "Описание пакета не соответствует формату манифеста.")
+	}
+	if d.Decode(new(any)) != io.EOF {
+		return m, packageImportError(path, "Ожидается один YAML-документ описания пакета.")
+	}
+	return m, nil
+}
+
+func readPackageManifest(records []exportRecord, kind, name, version string, view *[]ManagedApplicationScenario) (string, error) {
 	prefix := kind + "-packages/" + name + "/" + version + "/"
 	byPath := map[string][]byte{}
 	for _, r := range records {
 		byPath[strings.TrimPrefix(r.LogicalPath, prefix)] = r.content
 	}
-	var m applicationPackageManifest
-	if _, ok := byPath[kind+".yml"]; !ok {
+	content, ok := byPath[kind+".yml"]
+	if !ok {
 		return "", packageImportError(prefix+kind+".yml", "Не найден файл описания пакета.")
 	}
-	d := yaml.NewDecoder(strings.NewReader(string(byPath[kind+".yml"])))
-	d.KnownFields(true)
-	if d.Decode(&m) != nil {
-		return "", packageImportError(prefix+kind+".yml", "Описание пакета не соответствует формату манифеста.")
+	m, err := decodeApplicationPackageManifest(content, prefix+kind+".yml")
+	if err != nil {
+		return "", err
 	}
-	if d.Decode(new(any)) != io.EOF {
-		return "", packageImportError(prefix+kind+".yml", "Ожидается один YAML-документ описания пакета.")
-	}
-	if m.APIVersion != "platform.installer/application-package/v1alpha1" && m.APIVersion != "platform.installer/application-package/v1alpha2" && m.APIVersion != "platform.installer/application-package/v1alpha3" && m.APIVersion != "platform.installer/application-package/v1alpha4" {
+	const scenarioVersion = "platform.installer/application-package/v1alpha5"
+	if m.APIVersion != "platform.installer/application-package/v1alpha1" && m.APIVersion != "platform.installer/application-package/v1alpha2" && m.APIVersion != "platform.installer/application-package/v1alpha3" && m.APIVersion != "platform.installer/application-package/v1alpha4" && m.APIVersion != scenarioVersion {
 		return "", packageImportError(prefix+kind+".yml", "Неподдерживаемая apiVersion описания пакета.")
+	}
+	if (m.APIVersion == scenarioVersion && (kind != "library" || len(m.UserScenarios) == 0 || len(m.UserScenarios) > 16)) ||
+		(m.APIVersion != scenarioVersion && m.UserScenarios != nil) {
+		return "", packageImportError(prefix+kind+".yml", "Недопустимый раздел user_scenarios для этой версии пакета.")
+	}
+	scenarios := make([]ManagedApplicationScenario, 0, len(m.UserScenarios))
+	settings := map[string]bool{}
+	for id, scenario := range m.UserScenarios {
+		if !packageScenarioID.MatchString(id) || !packageScenarioID.MatchString(scenario.Setting) ||
+			len(id) > 128 || len(scenario.Setting) > 128 || settings[scenario.Setting] ||
+			scenario.Title == "" || utf8.RuneCountInString(scenario.Title) > 128 ||
+			scenario.Description == "" || utf8.RuneCountInString(scenario.Description) > 512 ||
+			len(scenario.Action) == 0 || safeApplicationInput(scenario.Action, 0) != nil {
+			return "", packageImportError(prefix+kind+".yml", "Некорректное описание пользовательского сценария.")
+		}
+		settings[scenario.Setting] = true
+		scenarios = append(scenarios, ManagedApplicationScenario{ID: id, Title: scenario.Title, Description: scenario.Description, Setting: scenario.Setting})
 	}
 	if m.Kind != strings.ToUpper(kind[:1])+kind[1:]+"Package" {
 		return "", packageImportError(prefix+kind+".yml", "Поле kind не соответствует выбранному типу пакета.")
@@ -236,6 +277,10 @@ func checkPackageManifest(records []exportRecord, kind, name, version string) (s
 		rows = append(rows, []string{p, strings.TrimPrefix(digestBytes(content), "sha256:")})
 	}
 	data, _ := json.Marshal(rows)
+	if view != nil {
+		sort.Slice(scenarios, func(i, j int) bool { return scenarios[i].ID < scenarios[j].ID })
+		*view = scenarios
+	}
 	return digestBytes(data), nil
 }
 
@@ -357,6 +402,41 @@ func (b *Backend) PlanApplicationPackageImport(ctx context.Context, projectRoot,
 			retained = append(retained, record)
 		} else if _, present := incoming[record.LogicalPath]; !present {
 			documents = append(documents, storedDocument{LogicalPath: record.LogicalPath, Before: record.content, Existed: true, Deleted: true})
+		}
+	}
+	if kind == "library" {
+		manifestPath := prefix + "/library.yml"
+		previous, existed := existingByPath[manifestPath]
+		next := incoming[manifestPath]
+		if existed && !bytes.Equal(previous.content, next.content) {
+			oldManifest, err := decodeApplicationPackageManifest(previous.content, manifestPath)
+			if err != nil {
+				return blockedStructuralPlan(revision, err), nil
+			}
+			if len(oldManifest.UserScenarios) > 0 {
+				newManifest, err := decodeApplicationPackageManifest(next.content, manifestPath)
+				if err != nil {
+					return blockedStructuralPlan(revision, err), nil
+				}
+				state, _, _, err := candidate.desired()
+				if err != nil {
+					return blockedStructuralPlan(revision, err), nil
+				}
+				libraries := asMap(state["applicationLibraryDeployments"])
+				ids := make([]string, 0, len(libraries))
+				for id := range libraries {
+					ids = append(ids, id)
+				}
+				sort.Strings(ids)
+				for _, id := range ids {
+					library := asMap(libraries[id])
+					if library["libraryRef"] == name+"@"+version {
+						if err := checkLibraryScenarioTransition(id, library, oldManifest, newManifest); err != nil {
+							return blockedStructuralPlan(revision, err), nil
+						}
+					}
+				}
+			}
 		}
 	}
 	if len(retained)+len(observation.documents) > maxApplicationPackageFiles {

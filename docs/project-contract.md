@@ -385,6 +385,21 @@ Managed PostgreSQL database resources may declare `restore_on_create` with an
 allowlisted custom-format dump and exact digest. The provider restores it only
 when first creating that managed database; a partially restored, unmarked
 database blocks automatic retry rather than being silently overwritten.
+
+Library package manifest `platform.installer/application-package/v1alpha5`
+may declare `user_scenarios`. Each scenario declares a title, description, a
+boolean key in the library deployment's existing `overrides.parameters` and
+one action. An absent override means false. The scenario setting is removed
+from the parameters inherited by application placements. `package_script`
+resolves `slot_ref` and `script_ref` to a declared `post_install` script with
+`execution: once`; that declaration runs only when the scenario is enabled
+for the library deployment. `resource_initialization` resolves `resource_ref`
+to a bound managed PostgreSQL database and supplies the existing
+`restore_on_create` job from an allowlisted library package asset. A competing
+restore declaration is rejected. The setting never modifies an existing
+database or runs any action during editing or Project Verify. The derived
+actions participate in the existing plan and approval fingerprint.
+
 Host membership is `platform_application_libraries.<library-id>` in host_vars.
 Application templates receive `application_placements`: the current library/slot's
 placements sorted by host ID, each containing `hostId`, `address` (inventory

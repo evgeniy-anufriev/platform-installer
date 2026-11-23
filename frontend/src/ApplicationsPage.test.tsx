@@ -467,6 +467,48 @@ describe("application editor", () => {
       "default",
     );
   });
+
+  it("edits and resets a package scenario through the library parameter draft", async () => {
+    const view = structuredClone(managed);
+    objectValue(view.applicationPackages["library:sdku@1.0.0"]).userScenarios =
+      [
+        {
+          id: "demo",
+          title: "Демонстрационный проект",
+          description: "Создать учебный проект",
+          setting: "demo_enabled",
+        },
+      ];
+    const calls: ApplicationIntent[] = [];
+    render(<Harness calls={calls} view={view} />);
+    await userEvent.click(screen.getByRole("button", { name: /^sdku/ }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Общие параметры" }),
+    );
+    const checkbox = screen.getByRole<HTMLInputElement>("checkbox", {
+      name: "Демонстрационный проект",
+    });
+    expect(checkbox.checked).toBe(false);
+    await userEvent.click(checkbox);
+    expect(calls.at(-1)).toMatchObject({
+      operation: "SetApplicationLibraryOverride",
+      property: "parameters",
+      setting: "demo_enabled",
+      value: true,
+    });
+    expect(checkbox.checked).toBe(true);
+    await userEvent.click(
+      screen.getByRole("button", {
+        name: "Сбросить «Демонстрационный проект»",
+      }),
+    );
+    expect(calls.at(-1)).toMatchObject({
+      operation: "RemoveApplicationLibraryOverride",
+      property: "parameters",
+      setting: "demo_enabled",
+    });
+    expect(checkbox.checked).toBe(false);
+  });
   it("retains application package ENV declarations while common defaults await Core verification", async () => {
     const view = structuredClone(managed);
     objectValue(

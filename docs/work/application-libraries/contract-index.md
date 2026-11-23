@@ -32,6 +32,8 @@ Kafka SASL/principal/ACL является отдельным security scope; SSL
 
 ## Проектные предложения и уточнения
 
+- [Сценарии установки из пакетов библиотек](user-scenarios-technical-plan.md) — переключатель в настройках библиотеки, явные ссылки на post_install и заполнение новой БД.
+
 | Документ | Назначение |
 | --- | --- |
 | [application-image-metadata-plan.md](application-image-metadata-plan.md) | Утверждённый владельцем план автоматических image metadata из bundle/registry и runtime credentials экземпляра библиотеки; реализация в отдельном worktree, acceptance отражён в CURRENT_STATE |

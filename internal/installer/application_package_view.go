@@ -29,7 +29,8 @@ func managedApplicationPackages(records []exportRecord) (map[string]ManagedAppli
 	for key, group := range groups {
 		parts := strings.Split(key, "/")
 		kind := strings.TrimSuffix(parts[0], "-packages")
-		digest, err := checkPackageManifest(group, kind, parts[1], parts[2])
+		var scenarios []ManagedApplicationScenario
+		digest, err := readPackageManifest(group, kind, parts[1], parts[2], &scenarios)
 		if err != nil {
 			return nil, managedReadError("Содержимое пакета не соответствует его описанию или требованиям к структуре пакета.", key)
 		}
@@ -42,7 +43,7 @@ func managedApplicationPackages(records []exportRecord) (map[string]ManagedAppli
 				return nil, managedReadError("Некорректный YAML определения пакета.", r.LogicalPath)
 			}
 			ref := parts[1] + "@" + parts[2]
-			result[kind+":"+ref] = ManagedApplicationPackage{Kind: kind, Ref: ref, Digest: digest, Definition: asMap(doc["platform_"+kind+"_definition"])}
+			result[kind+":"+ref] = ManagedApplicationPackage{Kind: kind, Ref: ref, Digest: digest, Definition: asMap(doc["platform_"+kind+"_definition"]), UserScenarios: scenarios}
 		}
 	}
 	return result, nil

@@ -184,6 +184,10 @@ class ActionModule(ActionBase):
         defaults = self._loader.load_from_file(args['defaults_path'])['platform_library_definition'].get(field, {})
         overrides = task_vars['platform_desired_state']['applicationLibraryDeployments'][args['library_id']].get(
             field if field != 'defaults' else 'overrides', {})
+        scenario_settings = args.get('scenario_settings', ())
+        if field == 'defaults' and scenario_settings and 'parameters' in overrides:
+            overrides = dict(overrides, parameters={key: value for key, value in overrides['parameters'].items()
+                                                    if key not in scenario_settings})
         defaults, overrides = templar.template(defaults), templar.template(overrides)
         if field == 'resource_defaults':
             merged = merge_hash(defaults, overrides, recursive=True, list_merge='replace')
@@ -272,7 +276,14 @@ class ActionModule(ActionBase):
                 section = sections.get(resource['kind'])
                 base = defaults.get(section[0], {}).get(section[1], {}).get(name, {}) if section else {}
                 resources[name] = dict(resource, parameters=merge_hash(base, resource['parameters'], recursive=True, list_merge='replace'))
-            shared = self._library_values(dict(args, shared_defaults=True), dict(variables, library_resources=resources))
+            for name, restore in job.get('scenarioRestores', {}).items():
+                parameters = resources[name]['parameters']
+                if 'restore_on_create' in parameters:
+                    raise ValueError('APPLICATION_SCENARIO_RESTORE_CONFLICT')
+                parameters['restore_on_create'] = restore
+            scenario_settings = {item['setting'] for item in job['library'].get('userScenarios', {}).values()}
+            shared = self._library_values(dict(args, shared_defaults=True, scenario_settings=scenario_settings),
+                                          dict(variables, library_resources=resources))
             contexts[key] = dict(resourceDefaults=defaults, resources=resources, shared=shared)
         return copy.deepcopy(contexts[key])
 

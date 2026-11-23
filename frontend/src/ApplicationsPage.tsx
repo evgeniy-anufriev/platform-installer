@@ -266,6 +266,17 @@ export function ApplicationsPage({
       objectValue(packages[kind + ":" + String(reference)]).definition,
     );
   const definition = packageDefinition("library", library.libraryRef);
+  const scenarioMetadata = objectValue(
+    packages["library:" + String(library.libraryRef)],
+  ).userScenarios;
+  const scenarios = Array.isArray(scenarioMetadata)
+    ? scenarioMetadata
+        .map(objectValue)
+        .filter((item) => typeof item.setting === "string")
+    : [];
+  const libraryParameters = objectValue(
+    objectValue(library.overrides).parameters,
+  );
   const resourceDefaults = (provider: string, section: string): ObjectValue => {
     const defaults = (value: unknown) =>
       objectValue(objectValue(objectValue(value)[provider])[section]);
@@ -1305,6 +1316,43 @@ export function ApplicationsPage({
                 )}
                 {!slot && selectedTab === "Общие параметры" && (
                   <>
+                    {scenarios.map(({ id, setting, title, description }) => {
+                      const key = String(setting);
+                      const authored = Object.hasOwn(libraryParameters, key);
+                      return (
+                        <div key={String(id)}>
+                          <label>
+                            <input
+                              type="checkbox"
+                              checked={libraryParameters[key] === true}
+                              disabled={busy}
+                              onChange={(event) => {
+                                void send(
+                                  override(
+                                    key,
+                                    event.currentTarget.checked,
+                                    "parameters",
+                                  ),
+                                );
+                              }}
+                            />
+                            {String(title)}
+                          </label>
+                          <p className="muted">{String(description)}</p>
+                          {authored && (
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() =>
+                                void send(remove(key, "parameters"))
+                              }
+                            >
+                              Сбросить «{String(title)}»
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
                     <p className="muted">
                       Общие значения библиотеки. Изменения сохраняются в
                       group_vars; собственные значения приложений задаются в их
@@ -1315,7 +1363,14 @@ export function ApplicationsPage({
                         key={selected + section + formEpoch}
                         compact
                         hiddenKeys={
-                          section === "parameters" ? ["IDENTITY_GROUPS"] : []
+                          section === "parameters"
+                            ? [
+                                "IDENTITY_GROUPS",
+                                ...scenarios.map((scenario) =>
+                                  String(scenario.setting),
+                                ),
+                              ]
+                            : []
                         }
                         addControl={
                           section === "environment"

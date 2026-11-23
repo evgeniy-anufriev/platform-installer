@@ -2,6 +2,7 @@ package installer
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"platform-installer/internal/projectlifecycle"
@@ -191,6 +192,145 @@ func TestApplicationConfigurationTreeOverridesSaveAndReopen(t *testing.T) {
 		values, ok := overrides[setting].([]any)
 		if !ok || len(values) != 1 || asMap(values[0])["destination"] != descriptor["destination"] {
 			t.Fatalf("configuration tree override not retained: %s", setting)
+		}
+	}
+}
+
+func TestLibraryScenarioSaveReopenAndResetPreservesOtherParameters(t *testing.T) {
+	root, backend, revision := b2Project(t)
+	writeExportFixture(t, root, "library-packages/sdku/1.0.0/roles/library_sdku/defaults/main.yml",
+		"platform_library_definition: {name: sdku, version: 1.0.0, slots: {}}\n")
+	writeExportFixture(t, root, "library-packages/sdku/1.0.0/library.yml", `apiVersion: platform.installer/application-package/v1alpha5
+kind: LibraryPackage
+name: sdku
+version: 1.0.0
+files: [roles/library_sdku/defaults/main.yml]
+user_scenarios:
+  demo:
+    title: Demo project
+    description: Create a sample project
+    setting: demo_enabled
+    action: {kind: package_script, slot_ref: gateway, script_ref: create-demo}
+`)
+	revision, err := ProjectRevision(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	create := b2Command(revision, "CreateApplicationLibraryDeployment")
+	create.Entity = map[string]any{"libraryRef": "sdku@1.0.0", "runtimeRef": "kafka-main",
+		"overrides": map[string]any{"parameters": map[string]any{"other": "keep"}}}
+	result := commitStructuralForTest(t, backend, root, projectlifecycle.ClassificationManaged, revision, []EditCommand{create})
+	for _, on := range []bool{true, false} {
+		operation := "RemoveApplicationLibraryOverride"
+		if on {
+			operation = "SetApplicationLibraryOverride"
+		}
+		command := b2Command(result.NewProjectRevision, operation)
+		command.Property, command.Setting = "parameters", "demo_enabled"
+		if on {
+			command.Value = true
+		}
+		result = commitStructuralForTest(t, backend, root, projectlifecycle.ClassificationManaged, result.NewProjectRevision, []EditCommand{command})
+		view, err := ReadManagedProjectView(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		metadata := view.ApplicationPackages["library:sdku@1.0.0"].UserScenarios
+		if len(metadata) != 1 || metadata[0].ID != "demo" || metadata[0].Setting != "demo_enabled" {
+			t.Fatalf("unexpected scenario metadata: %+v", metadata)
+		}
+		parameters := asMap(asMap(view.ApplicationLibraries["sdku"]["overrides"])["parameters"])
+		value, exists := parameters["demo_enabled"]
+		if parameters["other"] != "keep" || exists != on || (on && value != true) {
+			t.Fatalf("unexpected persisted parameters: %+v", parameters)
+		}
+	}
+}
+
+func TestLibraryScenarioTransitionRequiresReset(t *testing.T) {
+	writePackage := func(t *testing.T, root, version, setting string) {
+		t.Helper()
+		defaults := "roles/library_sdku/defaults/main.yml"
+		api := "v1alpha1"
+		var scenario string
+		if setting != "" {
+			api = "v1alpha5"
+			scenario = fmt.Sprintf(`user_scenarios:
+  demo:
+    title: Demo project
+    description: Create a sample project
+    setting: %s
+    action: {kind: package_script, slot_ref: gateway, script_ref: create-demo}
+`, setting)
+		}
+		writeExportFixture(t, root, "library.yml", fmt.Sprintf("apiVersion: platform.installer/application-package/%s\nkind: LibraryPackage\nname: sdku\nversion: %s\nfiles: [%s]\n%s", api, version, defaults, scenario))
+		writeExportFixture(t, root, defaults, fmt.Sprintf("platform_library_definition: {name: sdku, version: %s, slots: {gateway: {applicationRef: 'gateway@1.0.0'}}}\n", version))
+	}
+	for _, replace := range []bool{false, true} {
+		for _, nextSetting := range []string{"", "renamed_demo", "demo_enabled"} {
+			for _, value := range []bool{false, true} {
+				t.Run(fmt.Sprintf("replace=%t/setting=%s/value=%t", replace, nextSetting, value), func(t *testing.T) {
+					root, backend, _ := b2Project(t)
+					currentPackage := filepath.Join(root, "library-packages", "sdku", "1.0.0")
+					writePackage(t, currentPackage, "1.0.0", "demo_enabled")
+					nextVersion := "2.0.0"
+					source := filepath.Join(root, "library-packages", "sdku", nextVersion)
+					if replace {
+						nextVersion = "1.0.0"
+						source = t.TempDir()
+					}
+					writePackage(t, source, nextVersion, nextSetting)
+					revision, err := ProjectRevision(root)
+					if err != nil {
+						t.Fatal(err)
+					}
+					create := b2Command(revision, "CreateApplicationLibraryDeployment")
+					create.Entity = map[string]any{"libraryRef": "sdku@1.0.0", "runtimeRef": "kafka-main",
+						"overrides": map[string]any{"parameters": map[string]any{"demo_enabled": value, "other": "keep"}}}
+					result := commitStructuralForTest(t, backend, root, projectlifecycle.ClassificationManaged, revision, []EditCommand{create})
+					revision = result.NewProjectRevision
+					planTransition := func(revision string) (*StructuralEditPlan, error) {
+						if replace {
+							return backend.PlanApplicationPackageImport(context.Background(), root, source, revision, "library", "sdku", nextVersion, "")
+						}
+						change := b2Command(revision, "UpdateApplicationLibraryDeployment")
+						change.Entity = map[string]any{"libraryRef": "sdku@" + nextVersion}
+						return backend.PlanStructuralSave(context.Background(), root, projectlifecycle.ClassificationManaged, revision, []EditCommand{change})
+					}
+					plan, err := planTransition(revision)
+					if nextSetting != "demo_enabled" {
+						if err != nil || plan.Status != "BLOCKED" || plan.Finding == nil || plan.Finding.Code != "APPLICATION_SCENARIO_RESET_REQUIRED" {
+							t.Fatalf("expected scenario conflict, got %+v (%v)", plan, err)
+						}
+						if unchanged, err := ProjectRevision(root); err != nil || unchanged != revision {
+							t.Fatalf("blocked transition changed project: %s (%v)", unchanged, err)
+						}
+						reset := b2Command(revision, "RemoveApplicationLibraryOverride")
+						reset.Property, reset.Setting = "parameters", "demo_enabled"
+						result = commitStructuralForTest(t, backend, root, projectlifecycle.ClassificationManaged, revision, []EditCommand{reset})
+						plan, err = planTransition(result.NewProjectRevision)
+					}
+					if err != nil || (plan.Status != "READY" && plan.Status != "NO_CHANGE") {
+						t.Fatalf("transition failed: %+v (%v)", plan, err)
+					}
+					if plan.Status == "READY" {
+						if result := backend.CommitStructuralSave(context.Background(), plan.PlanID); result.Status != "COMMITTED" {
+							t.Fatalf("transition did not commit: %+v", result)
+						}
+					}
+					view, err := ReadManagedProjectView(root)
+					if err != nil {
+						t.Fatal(err)
+					}
+					library := view.ApplicationLibraries["sdku"]
+					parameters := asMap(asMap(library["overrides"])["parameters"])
+					saved, exists := parameters["demo_enabled"]
+					if library["libraryRef"] != "sdku@"+nextVersion || parameters["other"] != "keep" ||
+						exists != (nextSetting == "demo_enabled") || (exists && saved != value) {
+						t.Fatalf("unexpected result: %v, %v", library["libraryRef"], parameters)
+					}
+				})
+			}
 		}
 	}
 }

@@ -283,10 +283,18 @@ type ManagedProjectView struct {
 // ManagedApplicationPackage contains authored package data, never resolved
 // Ansible values. Rendering/interpolation remains Core-owned.
 type ManagedApplicationPackage struct {
-	Kind       string         `json:"kind"`
-	Ref        string         `json:"ref"`
-	Digest     string         `json:"digest"`
-	Definition map[string]any `json:"definition"`
+	Kind          string                       `json:"kind"`
+	Ref           string                       `json:"ref"`
+	Digest        string                       `json:"digest"`
+	Definition    map[string]any               `json:"definition"`
+	UserScenarios []ManagedApplicationScenario `json:"userScenarios,omitempty"`
+}
+
+type ManagedApplicationScenario struct {
+	ID          string `json:"id"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Setting     string `json:"setting"`
 }
 
 // ManagedPKI contains direct Installer-owned desired input only; it never

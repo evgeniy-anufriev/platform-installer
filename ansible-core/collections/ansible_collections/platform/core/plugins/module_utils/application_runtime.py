@@ -257,7 +257,8 @@ def prepare_runtime(root, snapshot, rows, desired, lock, validator, loader, scri
         authority = assemble_authority(requirement, offline, dict(registry or {}, kind="REPOSITORY"), image=True)
         registry_credentials = row.get('registryCredentials', {}).get(registry_request(registry['reference'])['registry'], {}) if registry else {}
         jobs.append(dict(row, placement=placement, account=account, configs=configs,
-                         packageApplicationScripts=app['scripts'], packageLibraryScripts=lib['scripts'],
+                         packageApplicationScripts=instance['scripts'] if lib.get('userScenarios') else app['scripts'],
+                         packageLibraryScripts=lib['scripts'],
                          applicationPackagePath=app['logicalPath'], libraryPackagePath=lib['logicalPath'],
                          directoryConfigs=directories, archiveConfigs=archives, registryCredentials=registry_credentials,
                          agentTemplate=checked_file(root, app['logicalPath']+'/'+agent_template) if agent_template else None,
@@ -286,6 +287,8 @@ def provider_script_contexts(root, snapshot, rows, package_loader, include_selec
         instance = library['instances'][row['instanceId']]
         app = package_loader(row['applicationName'] + '@' + row['applicationVersion'], 'application')
         lib = package_loader(row['libraryRef'], 'library')
+        if lib.get('userScenarios') and row['packageIdentity'] != {'application': app['digest'], 'library': lib['digest']}:
+            raise ValueError('APPLICATION_PACKAGE_CHANGED')
         account = snapshot['effectiveConfiguration']['services'][row['runtimeRef']]['configuration']['accountName']['value']
         placement = instance['placements'][row['hostId']]
         result.append(dict(libraryId=row['libraryId'], instanceId=row['instanceId'], hostId=row['hostId'],
@@ -293,7 +296,8 @@ def provider_script_contexts(root, snapshot, rows, package_loader, include_selec
                            account=account, settings={key: row['settings'].get(key, {}) for key in ('parameters', 'endpoint')},
                            projectId=snapshot['project']['id'], scriptContextOnly=row['libraryId'] not in selected,
                            applicationPackagePath=app['logicalPath'], libraryPackagePath=lib['logicalPath'],
-                           packageApplicationScripts=app['scripts'], packageLibraryScripts=lib['scripts']))
+                           packageApplicationScripts=instance['scripts'] if lib.get('userScenarios') else app['scripts'],
+                           packageLibraryScripts=lib['scripts']))
     return result
 
 
