@@ -1,4 +1,5 @@
 """Native defaults/overrides and exports resolve before consumer template expansion."""
+import copy
 import json
 import os
 from pathlib import Path
@@ -571,6 +572,12 @@ class NativeApplicationConnectionsTests(unittest.TestCase):
                                                 'dest': str(output), 'mode': '0600'}, 'no_log': True}])]))
             env = dict(os.environ, ANSIBLE_CONFIG=str(ROOT / 'ansible-core/ansible.cfg'),
                        ANSIBLE_COLLECTIONS_PATH=str(ROOT / 'ansible-core/collections'))
+            def project_rows(rows, state):
+                hosts = {name: {'ansibleHost': address, 'platformDeployments': {'docker': {}}}
+                         for name, address in [('node1', '192.0.2.11'), ('node2', '192.0.2.12')]}
+                effective = {'services': {'vault-main': {'configuration': {'port': {'value': 8200, 'state': 'RESOLVED'}}}}}
+                return project(rows, state, effective, {}, hosts)
+
             def resolve(expected_status='PASS'):
                 command = ['ansible-playbook', '-i', str(root / 'inventory/hosts.yml'), str(play),
                            '-e', 'platform_project_root=' + str(root), '-e', 'platform_contracts_root=' + str(ROOT / 'contracts')]
@@ -582,10 +589,7 @@ class NativeApplicationConnectionsTests(unittest.TestCase):
                     'TASK [platform.core.resolve_application_libraries : Определение топологии подключений по параметрам пакета и установки]'))
                 rows = json.loads(output.read_text())
                 state = json.loads(vars_path.read_text())['platform_desired_state']
-                hosts = {name: {'ansibleHost': address, 'platformDeployments': {'docker': {}}}
-                         for name, address in [('node1', '192.0.2.11'), ('node2', '192.0.2.12')]}
-                effective = {'services': {'vault-main': {'configuration': {'port': {'value': 8200, 'state': 'RESOLVED'}}}}}
-                projection = project(rows, state, effective, {}, hosts)
+                projection = project_rows(rows, state)
                 self.assertEqual(expected_status, projection['status'], projection['findings'])
                 if expected_status != 'PASS':
                     self.assertTrue(any(row['code'] == 'APPLICATION_PROVIDED_CONNECTION_INVALID'
@@ -606,6 +610,26 @@ class NativeApplicationConnectionsTests(unittest.TestCase):
             self.assertIn('identity', instance['credentialRequirements'])
             self.assertTrue(instance['agentRequired'])
             self.assertEqual('https://gateway-cspa.apps.example.test', rows[-1]['settings']['environment']['API_ENDPOINT'])
+            state = json.loads(vars_path.read_text())['platform_desired_state']
+            for spelling, message in (
+                ('endpoint', 'выключен HTTPS-маршрут'),
+                ('parameter', 'не задан обязательный параметр'),
+            ):
+                with self.subTest(callback_input=spelling):
+                    invalid_rows = copy.deepcopy(rows)
+                    for row in invalid_rows:
+                        if row['libraryId'] != 'sdku':
+                            continue
+                        if spelling == 'endpoint':
+                            row['settings']['endpoint']['enabled'] = False
+                        else:
+                            del row['settings']['parameters']['OPTIONS']
+                    findings = [item for item in project_rows(invalid_rows, state)['findings']
+                                if item['code'] == 'APPLICATION_CONNECTION_CALLBACK_INVALID']
+                    self.assertEqual(1, len(findings))
+                    self.assertEqual('applicationLibraryDeployments.sdku.applications.gateway.connections.identity',
+                                     findings[0]['field'])
+                    self.assertIn(message, findings[0]['safeMessage'])
             edit(vars_path, lambda data: data['platform_desired_state']['applicationLibraryDeployments']['sdku']['applications']['gateway']['overrides']['connections']['identity'].update(enabled=False))
             _, libraries = resolve()
             disabled = libraries['sdku']['instances']['gateway-sdku']

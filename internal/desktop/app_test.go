@@ -52,6 +52,19 @@ func TestProjectVerifyPreservesPackageDiagnostics(t *testing.T) {
 	}
 }
 
+func TestProjectVerifyIdentifiesConnectionCallbackConsumer(t *testing.T) {
+	const field = "applicationLibraryDeployments.sdku.applications.hmi-backend-hydro.connections.sso"
+	const message = "На одном или нескольких размещениях приложения выключен HTTPS-маршрут, требуемый сценарием подключения."
+	findings, _ := safeVerificationFindings([]map[string]any{{
+		"code": "APPLICATION_CONNECTION_CALLBACK_INVALID", "status": "BLOCKED",
+		"safeMessage": message, "field": field,
+	}})
+	if len(findings) != 1 || !strings.Contains(findings[0].Summary, message) ||
+		!strings.Contains(findings[0].Summary, field) {
+		t.Fatalf("connection callback diagnostic was lost: %+v", findings)
+	}
+}
+
 func TestProjectVerifyPublishesOnlyBoundedDiagnosticCodes(t *testing.T) {
 	tests := []struct {
 		err  error

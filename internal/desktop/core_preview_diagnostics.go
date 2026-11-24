@@ -10,6 +10,7 @@ import (
 
 // Presentation only: Core codes and validation severity remain authoritative.
 var projectFindingMessagesRU = map[string]string{
+	"APPLICATION_CONNECTION_CALLBACK_INVALID":                 "Некорректная настройка сценария подключения приложения.",
 	"APPLICATION_PACKAGE_INVALID":                             "Не удалось подготовить пакет библиотеки или приложения. Проверьте манифест, состав файлов и выбранные слоты.",
 	"APPLICATION_IMAGE_REFERENCE_INVALID":                     "Укажите имя образа с тегом, без SHA или @sha256.",
 	"APPLICATION_GENERATED_PROFILE_INVALID":                   "Неизвестный профиль генерации секрета. Допустимы password и client_secret.",

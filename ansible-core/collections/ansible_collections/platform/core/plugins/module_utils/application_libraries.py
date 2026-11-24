@@ -998,8 +998,12 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
                 try:
                     connection_callback(libraries, export)
                 except (ValueError, KeyError, TypeError):
-                    findings.append(finding('APPLICATION_CONNECTION_CALLBACK_INVALID',
-                                            'applicationLibraryDeployments.' + library_id + '.provided_connections.' + export_name))
+                    diagnostic = finding('APPLICATION_CONNECTION_CALLBACK_INVALID',
+                                         'applicationLibraryDeployments.' + library_id + '.provided_connections.' + export_name)
+                    diagnostic['safeMessage'] = (
+                        'У поставщика подключения не найден единственный сценарий с фазой connection_apply и execution: once.'
+                    )
+                    findings.append(diagnostic)
         named = {instance['slotId']: instance for instance in library['instances'].values()}
         packages = {}
         for instance in library['instances'].values():
@@ -1011,8 +1015,10 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
             for alias, connection in consumer.get('connections', {}).items():
                 if not connection.get('connectionProvisioner'):
                     continue
+                reason = 'У поставщика подключения не найден единственный сценарий с фазой connection_apply и execution: once.'
                 try:
                     provider, _, callback = connection_callback(libraries, connection)
+                    reason = 'Для сценария подключения не разрешена обязательная ссылка на секрет.'
                     for source in callback.get('secretInputs', {}).values():
                         value = script_secret_source(source, library, consumer, provider)
                         if value is None and not source.get('optional', False):
@@ -1020,15 +1026,22 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
                     for argument in callback.get('argv', []):
                         if not isinstance(argument, dict):
                             continue
-                        if argument['valueFrom'] == 'parameter' and any(
-                                argument['name'] not in placement.get('parameters', {}) for placement in consumer['placements'].values()):
-                            raise ValueError('APPLICATION_SCRIPT_REFERENCE_INVALID')
-                        if argument['valueFrom'] == 'endpoint' and 'name' not in argument and any(
-                                not https_endpoint(placement).get('enabled') for placement in consumer['placements'].values()):
-                            raise ValueError('APPLICATION_SCRIPT_REFERENCE_INVALID')
+                        reason = 'Не удалось проверить аргументы сценария подключения.'
+                        if argument['valueFrom'] == 'parameter':
+                            reason = 'На одном или нескольких размещениях приложения не задан обязательный параметр сценария подключения.'
+                            if any(argument['name'] not in placement.get('parameters', {})
+                                   for placement in consumer['placements'].values()):
+                                raise ValueError('APPLICATION_SCRIPT_REFERENCE_INVALID')
+                        if argument['valueFrom'] == 'endpoint' and 'name' not in argument:
+                            reason = 'На одном или нескольких размещениях приложения выключен HTTPS-маршрут, требуемый сценарием подключения.'
+                            if any(not https_endpoint(placement).get('enabled') for placement in consumer['placements'].values()):
+                                raise ValueError('APPLICATION_SCRIPT_REFERENCE_INVALID')
                 except (ValueError, KeyError, TypeError):
-                    findings.append(finding('APPLICATION_CONNECTION_CALLBACK_INVALID',
-                                            'applicationLibraryDeployments.' + library_id + '.connections.' + alias))
+                    diagnostic = finding('APPLICATION_CONNECTION_CALLBACK_INVALID',
+                                         'applicationLibraryDeployments.' + library_id + '.applications.' +
+                                         consumer['slotId'] + '.connections.' + alias)
+                    diagnostic['safeMessage'] = reason
+                    findings.append(diagnostic)
 
         for instance_id, instance in library['instances'].items():
             scripts = library.get('scripts', []) + instance.get('scripts', [])
