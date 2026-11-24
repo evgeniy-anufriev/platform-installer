@@ -34,6 +34,53 @@ def finding(code, field):
             "status": "BLOCKED", "safeMessage": "Application library input violates the declared contract"}
 
 
+class PackageInputError(ValueError):
+    """A package or deployment error with an operator-facing message."""
+
+    def __init__(self, *messages):
+        super().__init__(messages[0])
+        self.messages = messages
+
+
+def _package_document(root, path, loader):
+    try:
+        source = checked_file(root, path)
+    except ValueError as error:
+        reason = {
+            "Package file missing": "Не найден файл пакета: ",
+            "Package symlinks are forbidden": "Путь к файлу пакета содержит символическую ссылку: ",
+        }.get(str(error), "Недопустимый путь к файлу пакета: ")
+        raise PackageInputError(reason + path) from None
+    try:
+        document = loader(source)
+    except (OSError, ValueError):
+        raise PackageInputError("Не удалось прочитать YAML: " + path) from None
+    if not isinstance(document, dict):
+        raise PackageInputError("Корневой элемент YAML должен быть объектом: " + path)
+    return document
+
+
+def _check_package_schema(validator, document, schema, path, **kwargs):
+    explanations = {
+        "additionalProperties": "Есть поля, не предусмотренные схемой.",
+        "required": "Отсутствует обязательное поле.",
+        "type": "Неверный тип значения.",
+        "minimum": "Значение ниже допустимого минимума.",
+        "maximum": "Значение выше допустимого максимума.",
+        "pattern": "Недопустимый формат значения.",
+    }
+    messages = []
+    for problem in validator.validate(document, schema, **kwargs):
+        pointer = problem["field"]
+        if not re.fullmatch(r"/[a-zA-Z0-9_./~-]{1,160}", pointer):
+            pointer = ""
+        reason = explanations.get(problem["safeDetails"]["keyword"], "Значение не соответствует схеме пакета.")
+        location = path + (" (" + pointer + ")" if pointer else "")
+        messages.append(reason + " Файл: " + location)
+    if messages:
+        raise PackageInputError(*dict.fromkeys(messages))
+
+
 def infrastructure_state(desired):
     return {key: value for key, value in desired.items() if key != "applicationLibraryDeployments"}
 
@@ -150,33 +197,32 @@ def package_user_scenarios(manifest, definition, checksums):
 def load_package(root, reference, kind, loader, validator, inputs=None):
     match = REF.fullmatch(reference or "")
     if not match:
-        raise ValueError("Invalid exact package reference")
+        raise PackageInputError("Ожидается ссылка на пакет в формате имя@X.Y.Z.")
     name, version = match.groups()
     folder = "%s-packages/%s/%s" % (kind, name, version)
     manifest_path = folder + "/" + kind + ".yml"
-    manifest = loader(checked_file(root, manifest_path))
+    manifest = _package_document(root, manifest_path, loader)
     package_version = {'platform.installer/application-package/v1alpha1': 'v1alpha1',
                        'platform.installer/application-package/v1alpha2': 'v1alpha2',
                        'platform.installer/application-package/v1alpha3': 'v1alpha3',
                        'platform.installer/application-package/v1alpha4': 'v1alpha4',
                        'platform.installer/application-package/v1alpha5': 'v1alpha5'}.get(manifest.get('apiVersion'))
     if package_version is None:
-        raise ValueError('APPLICATION_PACKAGE_VERSION_UNSUPPORTED')
+        raise PackageInputError("Неподдерживаемая версия apiVersion в файле: " + manifest_path)
     schema = os.path.join(validator.schema_root, "application-libraries", package_version, "package.schema.json")
-    if validator.validate(manifest, schema):
-        raise ValueError("Package manifest shape invalid")
+    _check_package_schema(validator, manifest, schema, manifest_path)
     if (manifest["name"], manifest["version"], manifest["kind"]) != (name, version, kind.title() + "Package"):
-        raise ValueError("Package identity mismatch")
+        raise PackageInputError("Имя, версия или тип пакета не совпадают с его расположением: " + manifest_path)
     defaults_path = "roles/%s_%s/defaults/main.yml" % (kind, name)
     if defaults_path not in manifest["files"]:
-        raise ValueError("Defaults absent from allowlist")
+        raise PackageInputError("В files манифеста не указан файл настроек роли: " + manifest_path)
     input_paths = package_inputs(root) if inputs is None else inputs
     listed = {kind + ".yml"}
     for entry in manifest["files"]:
         if entry.endswith("/"):
             prefix = entry[:-1]
             if not prefix or not all(part not in ("", ".", "..") and ":" not in part for part in prefix.split("/")):
-                raise ValueError("Invalid package directory")
+                raise PackageInputError("Недопустимый путь каталога в files манифеста: " + manifest_path)
             listed.update(relative[len(folder) + 1:] for relative in input_paths
                           if relative.startswith(folder + "/" + entry))
         else:
@@ -195,13 +241,13 @@ def load_package(root, reference, kind, loader, validator, inputs=None):
                 checksum.update(chunk)
         digest.append([short, checksum.hexdigest()])
     if discovered != listed:
-        raise ValueError("Package allowlist mismatch")
+        raise PackageInputError("Состав пакета не совпадает со списком files в манифесте: " + manifest_path)
     scripts = manifest.get("scripts", [])
     if len({script["id"] for script in scripts}) != len(scripts):
-        raise ValueError("Duplicate package script identity")
+        raise PackageInputError("В манифесте повторяется идентификатор сценария: " + manifest_path)
     for script in scripts:
         if script["source"] not in discovered or script["source"].endswith("/"):
-            raise ValueError("Package script is not allowlisted")
+            raise PackageInputError("Файл сценария не входит в список файлов пакета: " + manifest_path)
         checked_file(root, folder + "/" + script["source"])
         for argument in script.get("argv", []):
             if not isinstance(argument, dict):
@@ -212,36 +258,37 @@ def load_package(root, reference, kind, loader, validator, inputs=None):
             if source == 'endpoint' and script['phase'] == 'connection_apply' and set(argument) == {'valueFrom'}:
                 expected = {'valueFrom'}
             if set(argument) - {'field'} != expected or ('field' in argument and source not in ('connection', 'provided_connection')):
-                raise ValueError("Package script reference invalid")
-    defaults = loader(checked_file(root, folder + "/" + defaults_path))
+                raise PackageInputError("Некорректная ссылка в аргументах сценария: " + manifest_path)
+    defaults_path = folder + "/" + defaults_path
+    defaults = _package_document(root, defaults_path, loader)
     key = "platform_%s_definition" % kind
     if set(defaults) != {key}:
-        raise ValueError("Package defaults namespace invalid")
+        raise PackageInputError("Ожидается единственный корневой ключ " + key + " в файле: " + defaults_path)
     definition = defaults[key]
     if _has_template_key(definition):
-        raise ValueError("Package defaults keys must be static")
+        raise PackageInputError("Ключи YAML не могут содержать шаблоны Jinja: " + defaults_path)
     template_sections = ("defaults",) if kind == "application" else (
         "defaults", "resource_defaults", "connection_defaults", "provided_connections")
-    if validator.validate(definition, os.path.join(validator.schema_root, "application-libraries", "v1alpha1", kind + ".schema.json"),
-                          template_sections=template_sections):
-        raise ValueError("Package defaults shape invalid")
+    _check_package_schema(validator, definition,
+                          os.path.join(validator.schema_root, "application-libraries", "v1alpha1", kind + ".schema.json"),
+                          defaults_path, template_sections=template_sections)
     if (definition["name"], definition["version"]) != (name, version):
-        raise ValueError("Defaults identity mismatch")
+        raise PackageInputError("Имя или версия в настройках не совпадают с расположением пакета: " + defaults_path)
     if kind == "library" and "files/.env" in discovered:
         with open(checked_file(root, folder + "/files/.env"), encoding="utf-8") as stream:
             env_keys = set()
-            for line in stream:
+            for number, line in enumerate(stream, 1):
                 line = line.strip()
                 if not line or line.startswith("#"):
                     continue
                 match_env = re.fullmatch(r"([A-Za-z_][A-Za-z0-9_]*)=(.*)", line)
                 if not match_env or match_env[1] in env_keys or match_env[1] == "SERVER_ID":
-                    raise ValueError("Library dotenv contract invalid")
+                    raise PackageInputError("Некорректная строка в " + folder + "/files/.env, строка " + str(number))
                 env_keys.add(match_env[1])
     user_scenarios = manifest.get("user_scenarios")
     if user_scenarios:
         user_scenarios = package_user_scenarios(manifest, definition, dict(digest))
-    return {"name": name, "version": version, "defaultsPath": os.path.join(root, folder, defaults_path),
+    return {"name": name, "version": version, "defaultsPath": os.path.join(root, defaults_path),
             **({"userScenarios": user_scenarios} if user_scenarios else {}),
             "definition": definition, "digest": canonical_digest(sorted(digest)), "logicalPath": folder,
             "render": manifest.get("render", {}), "scripts": scripts, "files": sorted(listed - {kind + ".yml"}),
@@ -258,7 +305,13 @@ def invocation_package_loader(root, loader, validator):
         key = (kind, reference)
         if key not in packages:
             if inputs is None:
-                inputs = package_inputs(root)
+                try:
+                    inputs = package_inputs(root)
+                except (ValueError, OSError):
+                    raise PackageInputError(
+                        "Не удалось прочитать состав application-packages и library-packages. "
+                        "Проверьте доступ к файлам, отсутствие символических ссылок и лимит в 512 файлов."
+                    ) from None
             packages[key] = load_package(root, reference, kind, loader, validator, inputs)
         return packages[key]
 
@@ -291,11 +344,11 @@ def library_resources(definition, deployment, applications=()):
         for source in defaults:
             provider_defaults = source.get(provider, {})
             if not isinstance(provider_defaults, dict) or not isinstance(provider_defaults.get(section, {}), dict):
-                raise ValueError("Library resource defaults must be mappings")
+                raise PackageInputError("В resource_defaults ожидается словарь в разделе " + provider + "." + section + ".")
             identifiers.update(provider_defaults.get(section, {}))
         for name in sorted(identifiers - explicit.keys()):
             if name in resources:
-                raise ValueError("Library resource default IDs must be unique across providers")
+                raise PackageInputError("В resource_defaults идентификатор ресурса повторяется у разных провайдеров.")
             resource = dict(kind=kind, binding=binding, parameters={})
             if kind != 'redis.key':
                 resource['mode'] = 'managed'
@@ -388,7 +441,7 @@ def prepare(root, desired, memberships, contract, loader, contracts_root):
             library = package(deployment["libraryRef"], "library")
             deployment = copy.deepcopy(deployment)
             if set(deployment.get('provided_connections', {})) - set(library['definition'].get('provided_connections', {})):
-                raise ValueError('Unknown provided connection override')
+                raise PackageInputError("Переопределение provided_connections ссылается на подключение, не объявленное библиотекой.")
             has_exports = bool(library['definition'].get('provided_connections') or
                                deployment.get('provided_connections'))
             for resource in deployment.get("resources", {}).values():
@@ -397,17 +450,25 @@ def prepare(root, desired, memberships, contract, loader, contracts_root):
                     continue
                 if (resource["kind"] != "postgresql.database" or resource.get("mode", "managed") != "managed"
                         or restore["source"] not in library["files"]):
-                    raise ValueError("Package database restore invalid")
+                    raise PackageInputError("В restore_on_create требуется управляемая база PostgreSQL и файл из пакета библиотеки.")
                 checksum = hashlib.sha256()
                 with open(checked_file(root, library["logicalPath"] + "/" + restore["source"]), "rb") as stream:
                     for chunk in iter(lambda: stream.read(1024 * 1024), b""):
                         checksum.update(chunk)
                 if checksum.hexdigest() != restore["sha256"]:
-                    raise ValueError("Package database restore digest mismatch")
+                    raise PackageInputError("Контрольная сумма файла restore_on_create не совпадает с объявленной.")
             selected = deployment["applications"]
             slots = library["definition"]["slots"]
-            if set(selected) - set(slots) or any(slot.get("required", False) and name not in selected for name, slot in slots.items()):
-                raise ValueError("Recipe slots mismatch")
+            unknown_slots = sorted(set(selected) - set(slots))
+            missing_slots = sorted(name for name, slot in slots.items()
+                                   if slot.get("required", False) and name not in selected)
+            if unknown_slots or missing_slots:
+                for name in unknown_slots + missing_slots:
+                    diagnostic = finding("APPLICATION_PACKAGE_INVALID", field + ".applications." + name)
+                    diagnostic["safeMessage"] = ("Выбранный слот отсутствует в пакете библиотеки." if name in unknown_slots
+                                                 else "Обязательный слот библиотеки не выбран.")
+                    findings.append(diagnostic)
+                continue
             applications = {name: package(slots[name]['applicationRef'], 'application') for name in selected}
             deployment['resources'] = library_resources(library['definition'], deployment,
                 [application['definition'] for application in applications.values()])
@@ -442,7 +503,7 @@ def prepare(root, desired, memberships, contract, loader, contracts_root):
                 for host in placements:
                     host_override = memberships[host][library_id].get('overrides', {})
                     if 'connections' in host_override:
-                        raise ValueError('Host connection override is not supported')
+                        raise PackageInputError("Переопределение connections на уровне хоста не поддерживается.")
                     # Keep the early Ansible render for templated endpoint inputs,
                     # including libraries whose endpoints are never exported.
                     skip_connection_topology = not has_exports and all(
@@ -459,6 +520,11 @@ def prepare(root, desired, memberships, contract, loader, contracts_root):
                                  "deployment": deployment, "instance": selected[slot_id],
                                  **({"scenarioRestores": scenario_restores} if scenario_restores else {}),
                                  "slot": slot, "hostOverride": host_override})
+        except PackageInputError as error:
+            for message in error.messages:
+                diagnostic = finding("APPLICATION_PACKAGE_INVALID", field)
+                diagnostic["safeMessage"] = message
+                findings.append(diagnostic)
         except (ValueError, OSError, KeyError, TypeError):
             findings.append(finding("APPLICATION_PACKAGE_INVALID", field))
     return {"jobs": [] if findings else jobs, "findings": findings}

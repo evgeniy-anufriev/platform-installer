@@ -717,7 +717,9 @@ class ActionModule(ActionBase):
                     metadata.get("id", os.path.basename(project_root)),
                 )
                 applications["findings"].extend(task_vars.get("platform_application_findings", []))
-                applications["findings"].extend(rechecked["findings"])
+                for diagnostic in rechecked["findings"]:
+                    if diagnostic not in applications["findings"]:
+                        applications["findings"].append(diagnostic)
                 applications["findings"].extend(resolved_findings)
                 applications["findings"].extend(validate_public_projection(applications))
                 if not applications["findings"] and any(

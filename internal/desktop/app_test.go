@@ -40,6 +40,18 @@ func TestPreparationStepFailurePublishesOnlySafePhase(t *testing.T) {
 	}
 }
 
+func TestProjectVerifyPreservesPackageDiagnostics(t *testing.T) {
+	const message = "Неверный тип значения. Файл: library-packages/sdku/1.0.0/roles/library_sdku/defaults/main.yml (/slots/gateway/overrides/ports/http/published)"
+	findings, _ := safeVerificationFindings([]map[string]any{{
+		"code": "APPLICATION_PACKAGE_INVALID", "status": "BLOCKED",
+		"safeMessage": message, "field": "applicationLibraryDeployments.sdku",
+	}})
+	if len(findings) != 1 || !strings.Contains(findings[0].Summary, message) ||
+		!strings.Contains(findings[0].Summary, "applicationLibraryDeployments.sdku") {
+		t.Fatalf("package diagnostic was lost: %+v", findings)
+	}
+}
+
 func TestProjectVerifyPublishesOnlyBoundedDiagnosticCodes(t *testing.T) {
 	tests := []struct {
 		err  error

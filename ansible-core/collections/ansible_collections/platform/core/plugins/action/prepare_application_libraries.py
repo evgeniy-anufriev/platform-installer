@@ -123,7 +123,7 @@ class ActionModule(ActionBase):
         try:
             result = prepare(root, task_vars.get("platform_desired_state", {}), memberships,
                              task_vars.get("platform_desired_state_contract"),
-                             lambda path: self._loader.load_from_file(path), args["contracts_root"])
+                             self._load_package_yaml, args["contracts_root"])
         except (ValueError, OSError, KeyError, TypeError, AnsibleError):
             result = {"jobs": [], "findings": [finding("APPLICATION_INPUT_INVALID", "applicationLibraryDeployments")]}
         literal_addresses = {}
@@ -152,6 +152,12 @@ class ActionModule(ActionBase):
                 groups.append([])
             groups[-1].append(job)
         return dict(result, placement_groups=groups, changed=False)
+
+    def _load_package_yaml(self, path):
+        try:
+            return self._loader.load_from_file(path)
+        except AnsibleError:
+            raise ValueError("Package YAML could not be loaded") from None
 
     def _application_values(self, args, task_vars, memo=None):
         defaults_path = args.get('defaults_path') or task_vars['application_job']['application']['defaultsPath']

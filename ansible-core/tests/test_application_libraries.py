@@ -130,8 +130,8 @@ class ApplicationLibrariesTest(unittest.TestCase):
         validator = SchemaValidator(CONTRACTS)
         for topic_name, slot, expected_error in (
             ('{{ library_instance_id }}-events', 'gateway', None),
-            ('invalid topic', 'gateway', 'Package defaults shape invalid'),
-            ('events', '{{ slot_id }}', 'Package defaults keys must be static'),
+            ('invalid topic', 'gateway', r'defaults/main\.yml \(/resource_defaults/kafka/topics/events/name\)'),
+            ('events', '{{ slot_id }}', 'Ключи YAML не могут содержать шаблоны Jinja'),
         ):
             def load_defaults(path):
                 document = load(path)
@@ -479,7 +479,33 @@ class ApplicationLibrariesTest(unittest.TestCase):
         self.assertTrue(prepared["findings"])
         self.memberships["node2"].pop("unknown")
         self.desired["applicationLibraryDeployments"]["sdku"]["applications"]["wrong"] = {}
-        self.assertEqual("APPLICATION_PACKAGE_INVALID", self.prepare()["findings"][0]["code"])
+        diagnostic = self.prepare()["findings"][0]
+        self.assertEqual("APPLICATION_PACKAGE_INVALID", diagnostic["code"])
+        self.assertEqual("applicationLibraryDeployments.sdku.applications.wrong", diagnostic["field"])
+        self.assertIn("слот отсутствует", diagnostic["safeMessage"])
+
+    def test_package_diagnostic_identifies_invalid_slot_setting_without_echoing_value(self):
+        with tempfile.TemporaryDirectory() as directory:
+            shutil.copytree(FIXTURE, directory, dirs_exist_ok=True)
+            relative = "library-packages/sdku/1.0.0/roles/library_sdku/defaults/main.yml"
+            path = os.path.join(directory, relative)
+            document = load(path)
+            slot = document["platform_library_definition"]["slots"]["gateway"]
+            overrides = slot.setdefault("overrides", {})
+            overrides["ports"] = {
+                "http": {"container": 8080, "published": "DO-NOT-PRINT"},
+            }
+            overrides["environment"] = {"CUSTOM_FLAG": ["DO-NOT-PRINT"]}
+            with open(path, "w", encoding="utf-8") as stream:
+                json.dump(document, stream)
+            diagnostics = [item for item in self.prepare(directory)["findings"]
+                           if item["field"] == "applicationLibraryDeployments.sdku"]
+            self.assertEqual(["APPLICATION_PACKAGE_INVALID"] * 2, [item["code"] for item in diagnostics])
+            messages = "\n".join(item["safeMessage"] for item in diagnostics)
+            self.assertIn(relative, messages)
+            self.assertIn("/slots/gateway/overrides/ports/http/published", messages)
+            self.assertIn("/slots/gateway/overrides/environment/CUSTOM_FLAG", messages)
+            self.assertNotIn("DO-NOT-PRINT", messages)
 
     def test_desired_schema_rejects_plaintext_password_field(self):
         self.desired["applicationLibraryDeployments"]["sdku"]["applications"]["gateway"]["password"] = "DO-NOT-PRINT"
