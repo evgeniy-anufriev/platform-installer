@@ -20,6 +20,8 @@ var packageVersion = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+$`)
 var packageComponent = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
 var packageEnvName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 var packageScenarioID = regexp.MustCompile(`^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$`)
+var packageYAMLLine = regexp.MustCompile(`^line ([0-9]+): (.*)$`)
+var packageYAMLDuplicateKey = regexp.MustCompile(`^mapping key .* already defined at line ([0-9]+)$`)
 
 // Fixed data-only destinations. Neither the caller nor a manifest can add
 // tasks, plugins, hooks or roles from another package. JARs are application
@@ -113,6 +115,42 @@ type applicationPackageScenario struct {
 
 func packageImportError(path, reason string) *writerError {
 	return blocked("APPLICATION_PACKAGE_INVALID", "Пакет «"+path+"»: "+reason, path)
+}
+
+func packageDefaultsYAMLError(err error) string {
+	const summary = "Некорректный YAML defaults."
+	const typeErrorPrefix = "yaml: unmarshal errors:\n"
+	detail := strings.TrimPrefix(err.Error(), "yaml: ")
+	if strings.HasPrefix(err.Error(), typeErrorPrefix) {
+		detail = strings.TrimSpace(strings.SplitN(strings.TrimPrefix(err.Error(), typeErrorPrefix), "\n", 2)[0])
+	}
+	location := ""
+	if match := packageYAMLLine.FindStringSubmatch(detail); match != nil {
+		location = " Строка " + match[1] + "."
+		detail = match[2]
+	}
+	// Decoder messages may quote YAML keys and scalar values. Report only
+	// recognized reasons and line numbers, never the raw diagnostic.
+	if match := packageYAMLDuplicateKey.FindStringSubmatch(detail); match != nil {
+		return summary + location + " Повторяющийся ключ. Первое объявление на строке " + match[1] + "."
+	}
+	switch {
+	case detail == "cannot unmarshal !!seq into map[string]interface {}":
+		return summary + location + " В корне файла ожидается словарь, получен список."
+	case strings.HasPrefix(detail, "cannot unmarshal "):
+		return summary + location + " Недопустимый тип данных."
+	case detail == "did not find expected key" || detail == "mapping values are not allowed in this context":
+		return summary + location + " Проверьте отступы и двоеточия рядом с этой строкой."
+	case detail == "did not find expected '-' indicator":
+		return summary + location + " Проверьте отступы и дефисы элементов списка."
+	case detail == "found character that cannot start any token":
+		return summary + location + " Недопустимый символ. Проверьте, нет ли табуляции в отступах."
+	case detail == "found unknown escape character" || detail == "found unexpected end of stream" ||
+		detail == "did not find expected ',' or ']'":
+		return summary + location + " Проверьте кавычки, экранирование и закрывающие скобки."
+	default:
+		return summary + location
+	}
 }
 
 func checkPackageManifest(records []exportRecord, kind, name, version string) (string, error) {
@@ -238,8 +276,8 @@ func readPackageManifest(records []exportRecord, kind, name, version string, vie
 	// Identity/default namespace is checked locally; resolution and semantic
 	// schema validation remain optional target-free Core Project Verify.
 	var defaults map[string]any
-	if yaml.Unmarshal(byPath["roles/"+kind+"_"+name+"/defaults/main.yml"], &defaults) != nil {
-		return "", packageImportError(prefix+defaultsPath, "Некорректный YAML defaults.")
+	if err := yaml.Unmarshal(byPath[defaultsPath], &defaults); err != nil {
+		return "", packageImportError(prefix+defaultsPath, packageDefaultsYAMLError(err))
 	}
 	if len(defaults) != 1 {
 		return "", packageImportError(prefix+defaultsPath, "В defaults ожидается единственный корневой раздел platform_"+kind+"_definition.")

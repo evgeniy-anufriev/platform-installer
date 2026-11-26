@@ -469,6 +469,15 @@ func TestApplicationPackageImportDiagnostics(t *testing.T) {
 		{"defaults-version", "application-packages/gateway/1.0.0/roles/application_gateway/defaults/main.yml", "Версия в defaults", func(t *testing.T, source string) {
 			writeExportFixture(t, source, "roles/application_gateway/defaults/main.yml", "platform_application_definition:\n  name: gateway\n  version: 2.0.0\n")
 		}},
+		{"defaults-duplicate-key", "application-packages/gateway/1.0.0/roles/application_gateway/defaults/main.yml", "Строка 3. Повторяющийся ключ. Первое объявление на строке 2.", func(t *testing.T, source string) {
+			writeExportFixture(t, source, "roles/application_gateway/defaults/main.yml", "platform_application_definition:\n  private-content-never-in-diagnostic: first\n  private-content-never-in-diagnostic: second\n")
+		}},
+		{"defaults-root-list", "application-packages/gateway/1.0.0/roles/application_gateway/defaults/main.yml", "Строка 1. В корне файла ожидается словарь, получен список.", func(t *testing.T, source string) {
+			writeExportFixture(t, source, "roles/application_gateway/defaults/main.yml", "- private-content-never-in-diagnostic\n")
+		}},
+		{"defaults-invalid-indent", "application-packages/gateway/1.0.0/roles/application_gateway/defaults/main.yml", "Строка 2. Недопустимый символ.", func(t *testing.T, source string) {
+			writeExportFixture(t, source, "roles/application_gateway/defaults/main.yml", "platform_application_definition:\n\tname: gateway\n")
+		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			root, b, revision := b2Project(t)
