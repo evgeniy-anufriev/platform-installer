@@ -478,6 +478,12 @@ func TestApplicationPackageImportDiagnostics(t *testing.T) {
 		{"defaults-invalid-indent", "application-packages/gateway/1.0.0/roles/application_gateway/defaults/main.yml", "Строка 2. Недопустимый символ.", func(t *testing.T, source string) {
 			writeExportFixture(t, source, "roles/application_gateway/defaults/main.yml", "platform_application_definition:\n\tname: gateway\n")
 		}},
+		{"defaults-unknown-anchor", "application-packages/gateway/1.0.0/roles/application_gateway/defaults/main.yml", "Ссылка * указывает на необъявленный якорь &.", func(t *testing.T, source string) {
+			writeExportFixture(t, source, "roles/application_gateway/defaults/main.yml", "platform_application_definition: *private-content-never-in-diagnostic\n")
+		}},
+		{"defaults-invalid-encoding", "application-packages/gateway/1.0.0/roles/application_gateway/defaults/main.yml", "Повреждена кодировка текста.", func(t *testing.T, source string) {
+			writeExportFixture(t, source, "roles/application_gateway/defaults/main.yml", "platform_application_definition: \xff\n")
+		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			root, b, revision := b2Project(t)

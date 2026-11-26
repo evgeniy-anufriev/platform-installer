@@ -120,9 +120,12 @@ func packageImportError(path, reason string) *writerError {
 func packageDefaultsYAMLError(err error) string {
 	const summary = "Некорректный YAML defaults."
 	const typeErrorPrefix = "yaml: unmarshal errors:\n"
-	detail := strings.TrimPrefix(err.Error(), "yaml: ")
-	if strings.HasPrefix(err.Error(), typeErrorPrefix) {
-		detail = strings.TrimSpace(strings.SplitN(strings.TrimPrefix(err.Error(), typeErrorPrefix), "\n", 2)[0])
+	detail := err.Error()
+	if list, ok := strings.CutPrefix(detail, typeErrorPrefix); ok {
+		first, _, _ := strings.Cut(list, "\n")
+		detail = strings.TrimSpace(first)
+	} else {
+		detail = strings.TrimPrefix(detail, "yaml: ")
 	}
 	location := ""
 	if match := packageYAMLLine.FindStringSubmatch(detail); match != nil {
@@ -139,6 +142,23 @@ func packageDefaultsYAMLError(err error) string {
 		return summary + location + " В корне файла ожидается словарь, получен список."
 	case strings.HasPrefix(detail, "cannot unmarshal "):
 		return summary + location + " Недопустимый тип данных."
+	case strings.HasPrefix(detail, "invalid map key:"):
+		return summary + location + " В качестве ключа словаря указан список или другой словарь."
+	case strings.HasPrefix(detail, "unknown anchor ") && strings.HasSuffix(detail, " referenced"):
+		return summary + location + " Ссылка * указывает на необъявленный якорь &. Проверьте имя якоря и порядок объявления."
+	case strings.HasPrefix(detail, "anchor ") && strings.HasSuffix(detail, " value contains itself"):
+		return summary + location + " Якорь YAML ссылается сам на себя."
+	case detail == "document contains excessive aliasing":
+		return summary + location + " Слишком много вложенных ссылок на якоря YAML."
+	case detail == "map merge requires map or sequence of maps as the value":
+		return summary + location + " После ключа объединения << ожидается словарь или список словарей."
+	case detail == "!!binary value contains invalid base64 data":
+		return summary + location + " Значение с тегом !!binary не удалось прочитать как Base64."
+	case detail == "control characters are not allowed":
+		return summary + location + " В файле есть недопустимые управляющие символы."
+	case strings.Contains(detail, "UTF-8") || strings.Contains(detail, "UTF-16") ||
+		detail == "unexpected low surrogate area" || detail == "expected low surrogate area":
+		return summary + location + " Повреждена кодировка текста. Проверьте исходную кодировку файла и пересохраните его в UTF-8."
 	case detail == "did not find expected key" || detail == "mapping values are not allowed in this context":
 		return summary + location + " Проверьте отступы и двоеточия рядом с этой строкой."
 	case detail == "did not find expected '-' indicator":
@@ -146,10 +166,13 @@ func packageDefaultsYAMLError(err error) string {
 	case detail == "found character that cannot start any token":
 		return summary + location + " Недопустимый символ. Проверьте, нет ли табуляции в отступах."
 	case detail == "found unknown escape character" || detail == "found unexpected end of stream" ||
-		detail == "did not find expected ',' or ']'":
+		detail == "did not find expected ',' or ']'" || detail == "did not find expected ',' or '}'":
 		return summary + location + " Проверьте кавычки, экранирование и закрывающие скобки."
 	default:
-		return summary + location
+		if location == "" {
+			return summary + " Декодер не указал строку. Причину не удалось распознать."
+		}
+		return summary + location + " Декодер не смог разобрать YAML рядом с указанной строкой."
 	}
 }
 
