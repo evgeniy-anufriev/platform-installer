@@ -1,9 +1,9 @@
 {
   "format": "platform-installer-portable-source-v3",
   "maxPartBytes": 5000000,
-  "sourceRevision": "a37ba45b17dd20f590b9bf3c3b9461117f97aba2",
+  "sourceRevision": "57839cdb73beed3b8b77cc46161efd32d9f0c51b",
   "files": 6646,
-  "sourceBytes": 73502337,
+  "sourceBytes": 73504647,
   "textFiles": 6557,
   "binaryFiles": 89,
   "parts": [
@@ -14,8 +14,8 @@
     },
     {
       "name": "source-0002.txt",
-      "bytes": 4887225,
-      "sha256": "29b9c52c5d59814a38fa8544dd201fe6ad7d282500ca4dbdb34c48077923aaae"
+      "bytes": 4889535,
+      "sha256": "5a670ccf27642c95ff286f35f2d8fa422be1dcc5b7a51ca39ee73fb7abfd00d5"
     },
     {
       "name": "source-0003.txt",
