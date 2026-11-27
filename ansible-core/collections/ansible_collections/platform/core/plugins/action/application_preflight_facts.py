@@ -13,11 +13,14 @@ from ansible_collections.platform.core.plugins.action.bind_application_preflight
 from ansible_collections.platform.core.plugins.filter.application_runtime import preflight_source_jobs
 from ansible_collections.platform.core.plugins.filter.artifact_source import resolve_artifact_source
 from ansible_collections.platform.core.plugins.lookup.application_template import template_names
-from ansible_collections.platform.core.plugins.module_utils.application_runtime import validate_agent, validate_config_contents
+from ansible_collections.platform.core.plugins.module_utils.application_runtime import (
+    pinned_registry_reference, validate_agent, validate_config_contents,
+)
 from ansible_collections.platform.core.plugins.modules.application_source_file import identity, read_source
 
 
 RUNTIME_ROLE = Path(__file__).resolve().parents[2] / 'roles/application_runtime'
+NATIVE_PLACEMENT_VARIABLES = {'application_runtime_job', 'application_root', 'application_library_path'}
 
 
 def docker_accounts(discoveries, config):
@@ -108,27 +111,40 @@ def isolated_config_template(source):
     return True
 
 
-def needs_native_render(jobs, rows):
-    safe_by_path = {}
+def native_render_indices(jobs, rows):
+    templates = {}
+    native = []
 
-    def safe(path, config=False):
+    def scope(path, config=False):
         key = path, config
-        if key not in safe_by_path:
+        if key not in templates:
             try:
-                text = Path(path).read_text(encoding='utf-8')
-                safe_by_path[key] = isolated_config_template(text) if config else template_names(text) is not None
+                source = Path(path).read_text(encoding='utf-8')
+                if config:
+                    result = 'compact' if isolated_config_template(source) else 'global'
+                else:
+                    names = template_names(source, NATIVE_PLACEMENT_VARIABLES)
+                    if names is None:
+                        result = 'global'
+                    else:
+                        result = 'compact' if names.isdisjoint(NATIVE_PLACEMENT_VARIABLES) else 'placement'
             except (OSError, UnicodeError, TemplateError):
-                safe_by_path[key] = False
-        return safe_by_path[key]
+                result = 'global'
+            templates[key] = result
+        return templates[key]
 
-    for job, row in zip(jobs, rows):
-        if (not row['env_key'] or not safe(job['appTemplate']) or
-                (not row['base_key'] and not safe(job['baseTemplate'])) or
-                (job['agentTemplate'] and not safe(job['agentTemplate']))):
-            return True
-        if any('template' in config and not safe(config['path'], config=True) for config in job['configs']):
-            return True
-    return False
+    for index, (job, row) in enumerate(zip(jobs, rows)):
+        scopes = [scope(job['appTemplate'])]
+        if not row['base_key']:
+            scopes.append(scope(job['baseTemplate']))
+        if job['agentTemplate']:
+            scopes.append(scope(job['agentTemplate']))
+        scopes.extend(scope(config['path'], config=True) for config in job['configs'] if 'template' in config)
+        if 'global' in scopes:
+            return set(range(len(rows)))
+        if not row['env_key'] or 'placement' in scopes:
+            native.append(index)
+    return set(native)
 
 
 def validate_library_projection(jobs):
@@ -168,11 +184,14 @@ def image_sources(jobs, accounts, host):
             continue
         scope = {key: job[key] for key in ('account', 'projectId', 'libraryId', 'authority')}
         scope['registryCredentials'] = job.get('registryCredentials', {})
-        key = to_json([repository, job['account'], job['projectId'], job['libraryId'],
+        registry = repository['reference'].split('/')[0]
+        key = to_json([registry, job['account'], job['projectId'], job['libraryId'],
                        scope['registryCredentials'], platform], sort_keys=True)
-        group = groups.setdefault(key, dict(job=scope, indices=[]))
-        group['indices'].append(index)
-    return sources, list(groups.values())
+        group = groups.setdefault(key, dict(job=scope, probes={}))
+        probe_key = pinned_registry_reference(repository['reference'], repository['manifestDigest'])
+        probe = group['probes'].setdefault(probe_key, dict(repository=repository, indices=[]))
+        probe['indices'].append(index)
+    return sources, [dict(job=group['job'], probes=list(group['probes'].values())) for group in groups.values()]
 
 
 class ActionModule(ActionBase):
@@ -264,27 +283,35 @@ class ActionModule(ActionBase):
                 rows = [row for host, placements in local['_application_preflight_inputs'].items()
                         if host in targets for row in placements]
                 jobs = preflight_source_jobs(values['hostvars'], [row['index'] for row in rows])
-                # Native templates can observe facts from other placements or hosts.
-                native = needs_native_render(jobs, rows)
-                facts = {'_application_preflight_native': native,
-                         '_application_preflight_assets': {} if native else collect_assets(jobs)}
+                native = native_render_indices(jobs, rows)
+                facts = {'_application_preflight_native_indices': [rows[index]['index'] for index in sorted(native)],
+                         '_application_preflight_assets': collect_assets(
+                             job for index, job in enumerate(jobs) if index not in native)}
             elif operation == 'accounts':
                 accounts = docker_accounts(values['application_runtime_discoveries'],
                                            values.get('platform_application_registry_config_directory', ''))
                 jobs = preflight_source_jobs(values['hostvars'], [row['index'] for row in values['application_host_jobs']])
-                native = values['hostvars']['localhost']['_application_preflight_native']
-                sources, groups = ({}, []) if native else image_sources(jobs, accounts, values['inventory_hostname'])
+                native = set(values['hostvars'].raw_get('localhost')['_application_preflight_native_indices'])
+                sources, groups = image_sources(jobs, accounts, values['inventory_hostname'])
                 facts = {'_application_preflight_accounts': accounts, '_application_preflight_sources': sources,
-                         '_application_preflight_registry_groups': groups}
+                         '_application_preflight_registry_groups': groups,
+                         '_application_preflight_native': [index for index, row in enumerate(values['application_host_jobs'])
+                                                           if row['index'] in native]}
             elif operation == 'registry':
                 rows = values['application_host_jobs']
-                indices = values['application_registry_group']['indices']
+                probes = values['application_registry_group']['probes']
+                results = values['application_registry_probe']['results']
+                if len(probes) != len(results):
+                    raise ValueError('APPLICATION_PREFLIGHT_CONTEXT_INVALID')
+                observations = {index: result for probe, result in zip(probes, results)
+                                for index in probe['indices']}
+                indices = list(observations)
                 jobs = preflight_source_jobs(values['hostvars'], [rows[index]['index'] for index in indices])
                 sources = dict(values['_application_preflight_sources'])
                 for index, job in zip(indices, jobs):
                     account = values['_application_preflight_accounts'][job['account']]
                     sources[str(index)] = image_source(job, account['application_image_platform'],
-                                                       values['inventory_hostname'], values['application_registry_probe'])
+                                                       values['inventory_hostname'], observations[index])
                 facts = {'_application_preflight_sources': sources}
             elif operation == 'placements':
                 facts = {}
@@ -295,7 +322,10 @@ class ActionModule(ActionBase):
                 ])
                 rows = values['application_host_jobs']
                 jobs = preflight_source_jobs(values['hostvars'], [row['index'] for row in rows])
+                native = set(values['_application_preflight_native'])
                 for index, (row, raw_job) in enumerate(zip(rows, jobs)):
+                    if index in native:
+                        continue
                     context['application_preflight_index'] = index
                     with self._templar.set_temporary_context(available_variables=context):
                         job = self._templar.template(raw_job)
@@ -313,6 +343,7 @@ class ActionModule(ActionBase):
                 if account['application_image_platform']['os'] != job['authority']['requirement']['platform']['os']:
                     raise ValueError('APPLICATION_RUNTIME_DAEMON_INVALID')
                 facts = dict(account, _application_preflight_job=job,
+                             application_image_source=values['_application_preflight_sources'][str(index)],
                              _application_preflight_template_context=row['template_context'],
                              _application_base_render_key=row['base_key'], _application_env_render_key=row['env_key'],
                              application_project_id=job['projectId'], application_name=job['applicationName'],
@@ -335,6 +366,8 @@ class ActionModule(ActionBase):
         except ValueError as error:
             code = str(error) if str(error) in {
                 'APPLICATION_RUNTIME_DAEMON_INVALID', 'APPLICATION_LIBRARY_HOST_PROJECTION_CONFLICT',
+                'IMAGE_PLATFORM_INCOMPATIBLE', 'IMAGE_REGISTRY_PROBE_FAILED',
+                'IMAGE_REGISTRY_PROBE_INVALID', 'IMAGE_SOURCE_UNAVAILABLE',
             } else 'APPLICATION_PREFLIGHT_CONTEXT_INVALID'
             return dict(changed=False, failed=True, msg=code)
         except OSError:

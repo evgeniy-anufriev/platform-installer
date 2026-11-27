@@ -106,7 +106,8 @@ class NativePreflightOptimizationTests(unittest.TestCase):
             capture_output=True, text=True, timeout=90)
 
     def test_host_preflight_assembles_checked_jobs_once_in_placement_order(self):
-        for mode in ('shared', 'application', 'different-contexts', 'foreign-marker', 'assets-registry', 'dynamic-hostvars'):
+        for mode in ('shared', 'application', 'different-contexts', 'foreign-marker', 'assets-registry',
+                     'dynamic-hostvars', 'mixed-registry'):
             with self.subTest(mode=mode):
                 self.check_host_preflight(mode)
 
@@ -114,6 +115,7 @@ class NativePreflightOptimizationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             docker = root / 'docker'
+            calls = root / 'manifest-calls'
             docker.write_text(
                 '#!/bin/sh\n'
                 'case "$1 $2" in\n'
@@ -121,7 +123,8 @@ class NativePreflightOptimizationTests(unittest.TestCase):
                 '"SecurityOptions":["rootless"],"Swarm":{"LocalNodeState":"inactive"}}\';;\n'
                 '  "compose version") echo 2.0;;\n'
                 '  "container ls") exit 0;;\n'
-                '  "manifest inspect") echo \'{"config":{"digest":"sha256:approved"}}\';;\n'
+                '  "manifest inspect") printf "%s\\n" "$3" >> "' + str(calls) +
+                '"; echo \'{"config":{"digest":"sha256:approved"}}\';;\n'
                 '  *) exit 2;;\n'
                 'esac\n')
             docker.chmod(0o700)
@@ -133,6 +136,9 @@ class NativePreflightOptimizationTests(unittest.TestCase):
             if mode == 'dynamic-hostvars':
                 template.write_text('{{ hostvars[inventory_hostname].application_instance_id }} '
                                     '{{ hostvars[inventory_hostname].application_config_digest }}\n')
+            placement_template = root / 'placement.j2'
+            placement_template.write_text(template.read_text().replace('application_parameters.label',
+                                                                        'application_runtime_job.instanceId'))
             base = root / 'base.j2'
             base.write_text(
                 '{% set peer = hostvars[inventory_hostname] %}'
@@ -169,13 +175,15 @@ class NativePreflightOptimizationTests(unittest.TestCase):
                     baseService='base', envSource=None))
                 instances[name] = dict(identityEnvironment=dict(IDENTITY=name),
                                        connections=dict(database='instance'))
-                if mode == 'assets-registry':
+                if mode in ('assets-registry', 'mixed-registry'):
                     job = jobs[-1]
                     job['authority']['requirement'].update(id=name + ':image', imageId='sha256:approved')
                     job['authority']['repository'] = dict(reference='registry.example/test:1', manifestDigest='sha256:' + 'a' * 64)
                     job['configs'] = [dict(source='static.conf', path=str(static), destination='static.conf'),
                                       dict(template='dynamic.j2', path=str(config_template), destination='dynamic.conf')]
                     job['archiveConfigs'] = [dict(path=str(archive), destination='files')]
+                    if mode == 'mixed-registry' and name == 'second':
+                        job['appTemplate'] = str(placement_template)
             stage = yaml.safe_load((ROOT / 'ansible-core/playbooks/applications/stages/preflight.yml').read_text())
             inputs = {'ansible.builtin.set_fact': dict(
                 application_runtime_inputs=dict(jobs=jobs + [dict(jobs[0], hostId='unselected')]),
@@ -188,6 +196,7 @@ class NativePreflightOptimizationTests(unittest.TestCase):
                 'different-contexts': ['second localhost', 'first localhost'],
                 'foreign-marker': [],
                 'assets-registry': ['shared localhost', 'shared localhost'],
+                'mixed-registry': ['shared localhost', 'shared localhost'],
                 'dynamic-hostvars': ['shared localhost', 'shared localhost'],
             }
             if mode == 'foreign-marker':
@@ -208,14 +217,14 @@ class NativePreflightOptimizationTests(unittest.TestCase):
                 'platform_application_preflight_jobs | map(attribute="composeContent") | list == ' +
                 repr(expected_compose),
                 'platform_application_preflight_jobs | map(attribute="source.source") | unique | list == ' +
-                repr(['REPOSITORY' if mode == 'assets-registry' else 'OFFLINE_BUNDLE']),
+                repr(['REPOSITORY' if mode in ('assets-registry', 'mixed-registry') else 'OFFLINE_BUNDLE']),
                 'platform_application_preflight_jobs | map(attribute="baseContent") | list == ' +
                 repr(expected_base[mode]),
                 '_application_shared_base | length == ' + str(
                     {'application': 0, 'shared': 1, 'different-contexts': 2, 'foreign-marker': 0,
-                     'assets-registry': 1, 'dynamic-hostvars': 1}[mode]),
+                     'assets-registry': 1, 'dynamic-hostvars': 1, 'mixed-registry': 1}[mode]),
                 '_application_shared_env | length == 1',
-                'hostvars["localhost"]._application_preflight_native == ' + ('true' if mode == 'dynamic-hostvars' else 'false'),
+                '_application_preflight_native == ' + {'dynamic-hostvars': '[0, 1]', 'mixed-registry': '[0]'}.get(mode, '[]'),
                 'platform_application_preflight_jobs[0].dockerEnvironment.DOCKER_CONFIG == ' +
                 ('registry_config' if mode == 'application' else 'platform_application_preflight_jobs[0].home ~ "/.docker"'),
             ]}, 'no_log': True}]
@@ -223,7 +232,7 @@ class NativePreflightOptimizationTests(unittest.TestCase):
             if mode == 'application':
                 variables['registry_config'] = str(root / 'registry')
                 variables['platform_application_registry_config_directory'] = variables['registry_config']
-            if mode == 'assets-registry':
+            if mode in ('assets-registry', 'mixed-registry'):
                 variables['platform_application_approved_registries'] = ['registry.example']
                 tasks[-1]['ansible.builtin.assert']['that'].extend([
                     'platform_application_preflight_jobs | map(attribute="source.requirement.id") | list == ["second:image", "first:image"]',
@@ -252,16 +261,18 @@ class NativePreflightOptimizationTests(unittest.TestCase):
             self.assertEqual(1, result.stdout.count('Чтение уникальных исходных файлов'))
             self.assertEqual(1, result.stdout.count(
                 'Запись неизменяемого контекста предварительной проверки размещений узла'))
-            self.assertEqual(2 if mode == 'dynamic-hostvars' else int(mode == 'assets-registry'),
+            self.assertEqual({'dynamic-hostvars': 2, 'mixed-registry': 1}.get(mode, 0),
                              result.stdout.count(
                                  'Запись неизменяемого контекста предварительной проверки размещения приложения'))
-            if mode not in ('dynamic-hostvars', 'assets-registry'):
+            if mode not in ('dynamic-hostvars', 'assets-registry', 'mixed-registry'):
                 self.assertNotIn('Предварительная проверка выбранного реестра', result.stdout)
                 self.assertNotIn('Чтение объявленных исходных файлов', result.stdout)
             if mode != 'dynamic-hostvars':
-                self.assertEqual(int(mode == 'assets-registry'),
+                self.assertEqual(int(mode in ('assets-registry', 'mixed-registry')),
                                  result.stdout.count('Проверка только утвержденного неизменяемого манифеста'))
-            if mode not in ('dynamic-hostvars', 'assets-registry'):
+            if mode in ('assets-registry', 'mixed-registry'):
+                self.assertEqual(1, len(calls.read_text().splitlines()))
+            if mode not in ('dynamic-hostvars', 'assets-registry', 'mixed-registry'):
                 self.assertNotIn('Проверка точного контейнера, не раскрывая среду', result.stdout)
                 self.assertNotIn('Проверка доступности публикуемых портов до записи файлов', result.stdout)
             self.assertNotIn('Проверка отсутствия пересечений каталогов библиотек перед записью файлов',

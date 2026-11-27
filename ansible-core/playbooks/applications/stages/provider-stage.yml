@@ -13,25 +13,10 @@
             platform_application_delivered_instances: []
             platform_application_delivered_shared_fields: []
           no_log: true
-        - name: Проверка защищённого runtime-каталога перед передачей сгенерированных учётных данных
-          ansible.builtin.assert:
-            that: "{} | platform.core.application_protected_secret_files([], platform_application_secret_root)"
-            fail_msg: APPLICATION_PROVIDER_SECRET_FILE_INVALID
-          when: platform_application_generated_values | default({}) | length > 0
-          no_log: true
         - name: Доставка сгенерированных паролей приложений через существующие файлы среды выполнения
-          ansible.builtin.copy:
-            content: "{{ item.value }}"
-            dest: "{{ platform_application_secret_root }}/{{ item.key }}"
-            mode: '0600'
-            follow: false
-          loop: "{{ platform_application_generated_values | default({}) | dict2items }}"
-          changed_when: false
-          no_log: true
-        - name: "Передача файлов сгенерированных учётных данных обработчикам провайдера"
-          ansible.builtin.set_fact:
-            platform_application_credential_files: "{{ platform_application_credential_files | default({}) | combine({item.key: platform_application_secret_root ~ '/' ~ item.key}) }}"
-          loop: "{{ platform_application_generated_values | default({}) | dict2items }}"
+          platform.core.application_credential_files:
+            operation: write
+            root: "{{ platform_application_secret_root }}"
           no_log: true
         - name: Чтение существующих источников учётных данных в пределах текущей операции
           ansible.builtin.include_role:
@@ -170,10 +155,9 @@
             platform_application_generated_values: {}
           no_log: true
         - name: Удаление только файлов учётных данных Vault текущей операции
-          ansible.builtin.file:
-            path: "{{ platform_application_secret_root }}/{{ item.passwordRef }}"
-            state: absent
-          loop: "{{ application_vault_inputs.sourceJobs | default([]) | selectattr('passwordRef', 'defined') | list }}"
-          changed_when: false
+          platform.core.application_credential_files:
+            operation: remove
+            root: "{{ platform_application_secret_root }}"
+            names: "{{ application_vault_inputs.sourceJobs | default([]) | selectattr('passwordRef', 'defined') | map(attribute='passwordRef') | list }}"
           no_log: true
           when: not (platform_application_runtime_credential_custody | default(false)) or application_runtime_inputs.integrations.batches | length == 0

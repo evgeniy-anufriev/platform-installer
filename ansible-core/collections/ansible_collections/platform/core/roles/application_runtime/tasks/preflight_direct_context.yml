@@ -1,0 +1,85 @@
+---
+- name: Подготовка прямой проверки размещения
+  when: (application_preflight_mode | default('direct')) == 'direct'
+  block:
+    - name: Привязка учётной записи операции приложения и ключа обнаружения конфигурации Docker
+      ansible.builtin.set_fact:
+        _application_preflight_job: >-
+          {{ (hostvars | platform.core.application_preflight_source_jobs([_application_preflight_input.index]) | first)
+             if application_preflight_index is defined else omit }}
+        _application_preflight_template_context: >-
+          {{ _application_preflight_input.template_context if application_preflight_index is defined else omit }}
+        _application_base_render_key: "{{ _application_preflight_input.base_key if application_preflight_index is defined else '' }}"
+        _application_env_render_key: "{{ _application_preflight_input.env_key if application_preflight_index is defined else '' }}"
+        application_discovery_key: >-
+          {{ [_application_preflight_input.account if application_preflight_index is defined else application_runtime_job.account,
+              platform_application_registry_config_directory] | to_json }}
+      vars:
+        _application_preflight_input: "{{ application_host_jobs[application_preflight_index] }}"
+      no_log: true
+
+    - name: Однократная проверка выбранных учётных записей и Docker без прав root
+      when: not (application_runtime_use_path_batch | default(false) | bool)
+      block:
+        - name: Обнаружение Docker для прямого вызова роли
+          ansible.builtin.include_tasks: discover_runtime.yml
+          when: application_discovery_key not in application_runtime_discoveries
+
+        - name: Чтение путей отдельного размещения
+          ansible.builtin.include_tasks: observe_paths.yml
+          vars:
+            application_host_jobs: ["{{ application_runtime_job }}"]
+            application_observe_paths_only: true
+
+    - name: Привязка точных путей к учетной записи и среде выполнения
+      ansible.builtin.set_fact:
+        application_uid: "{{ application_runtime_discoveries[application_discovery_key].uid }}"
+        application_home: "{{ application_runtime_discoveries[application_discovery_key].home }}"
+        application_project_id: "{{ application_runtime_job.projectId }}"
+        application_name: "{{ application_runtime_job.applicationName }}"
+        application_instance_id: "{{ application_runtime_job.instanceId }}"
+        application_parameters: "{{ application_runtime_job.settings.parameters | default({}) }}"
+        application_root: "{{ _application_path_checks[application_preflight_index].root if application_preflight_index is defined else omit }}"
+        application_library_path: "{{ _application_path_checks[application_preflight_index].root if application_preflight_index is defined else omit }}"
+        application_instance_path: "{{ _application_path_checks[application_preflight_index].instance_path if application_preflight_index is defined else omit }}"
+      no_log: true
+
+    - name: Определение путей размещения общей библиотеки
+      ansible.builtin.include_tasks: resolve_paths.yml
+      when: application_preflight_index is not defined
+      vars:
+        application_path_home: "{{ application_home }}"
+
+    - name: Сохранение путей размещения и защищённого окружения Docker
+      ansible.builtin.set_fact:
+        application_docker_environment:
+          HOME: "{{ application_home }}"
+          XDG_RUNTIME_DIR: "/run/user/{{ application_uid }}"
+          DOCKER_HOST: "unix:///run/user/{{ application_uid }}/docker.sock"
+          DOCKER_CONFIG: "{{ platform_application_registry_config_directory if platform_application_registry_config_directory else application_home ~ '/.docker' }}"
+        application_image_platform:
+          os: "{{ application_runtime_discoveries[application_discovery_key].info.OSType }}"
+          architecture: "{{ {'x86_64': 'amd64', 'aarch64': 'arm64'}.get(application_runtime_discoveries[application_discovery_key].info.Architecture, application_runtime_discoveries[application_discovery_key].info.Architecture) }}"
+      no_log: true
+
+    - name: Проверка отображения user namespace и путей защищённых учётных данных до записи провайдером
+      platform.core.application_identity_files:
+        account: "{{ application_runtime_job.account }}"
+        user: "{{ application_runtime_job.settings.user | default('0:0') }}"
+        instance_path: "{{ application_instance_path }}"
+        agent_required: "{{ true if application_runtime_job.agentTemplate else false }}"
+        pki_plans: "{{ application_runtime_job.pkiPlans | default([]) }}"
+        preflight: true
+      when:
+        - application_preflight_index is not defined
+        - application_runtime_job.agentTemplate or (application_runtime_job.pkiPlans | default([]) | length > 0)
+      no_log: true
+
+    - name: Проверка Docker без прав root и соответствия зафиксированной целевой платформе
+      ansible.builtin.assert:
+        that:
+          - "'rootless' in (application_runtime_discoveries[application_discovery_key].info.SecurityOptions | join(' '))"
+          - application_runtime_discoveries[application_discovery_key].info.Swarm.LocalNodeState == 'inactive'
+          - application_runtime_discoveries[application_discovery_key].info.OSType == application_runtime_job.authority.requirement.platform.os
+          - application_runtime_discoveries[application_discovery_key].info.Architecture in ['x86_64', 'aarch64', 'amd64', 'arm64']
+        fail_msg: APPLICATION_RUNTIME_DAEMON_INVALID

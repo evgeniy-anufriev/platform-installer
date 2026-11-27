@@ -1,0 +1,43 @@
+---
+- name: Проверки отдельного размещения при прямом вызове
+  when: (application_preflight_mode | default('direct')) == 'direct'
+  block:
+    - name: Проверка наблюдений путей текущего размещения
+      ansible.builtin.assert:
+        that: >-
+          [application_runtime_job] | platform.core.application_preflight_observation_inputs(application_runtime_discoveries) |
+          platform.core.application_preflight_validate_observations(inventory_hostname, application_host_path_batch)
+      when: application_preflight_index is not defined
+      no_log: true
+
+    - name: Проверка точного контейнера, не раскрывая среду
+      ansible.builtin.command:
+        argv: [docker, container, inspect, "{{ application_runtime_job.placement.containerName }}"]
+      become_user: "{{ application_runtime_job.account }}"
+      environment: "{{ application_docker_environment }}"
+      register: application_existing_container
+      when: >-
+        application_preflight_index is not defined and
+        (application_runtime_discoveries[application_discovery_key].containerNames is not defined or
+        application_runtime_job.placement.containerName in application_runtime_discoveries[application_discovery_key].containerNames)
+      changed_when: false
+      failed_when: false
+      no_log: true
+
+    - name: Проверка меток владения существующим контейнером
+      ansible.builtin.assert:
+        that: application_existing_container.stdout | platform.core.application_owned_container(application_runtime_job, inventory_hostname)
+        fail_msg: APPLICATION_CONTAINER_OWNERSHIP_INVALID
+      when: application_preflight_index is not defined and application_existing_container.rc | default(1) == 0
+      no_log: true
+
+    - name: Проверка доступности публикуемых портов до записи файлов
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: "{{ item.published }}"
+        state: stopped
+        timeout: 1
+      loop: "{{ application_runtime_job.settings.ports | default({}) | dict2items | map(attribute='value') | list }}"
+      vars:
+        _application_owned_ports: "{{ (((application_existing_container.stdout | from_json)[0].HostConfig.PortBindings | default({}, true) | dict2items | map(attribute='value') | flatten | select('mapping') | map(attribute='HostPort') | list) if (application_existing_container.stdout | from_json)[0].State.Running else []) if application_existing_container.rc | default(1) == 0 else [] }}"
+      when: application_preflight_index is not defined and item.published | string not in _application_owned_ports

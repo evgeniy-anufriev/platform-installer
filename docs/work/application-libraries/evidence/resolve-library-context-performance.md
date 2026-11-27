@@ -1268,3 +1268,29 @@ seeding acceptance, rather than replacing it with a synthetic success result.
 Complete fixture run installer-3443b4dbe9dae93de4ce9a2661308779, revision
 fd9c0728, runtime9a5f47eb, fresh authoritative plan48c447c4faaf81273911a2a4,
 combined approval/Start53.840s. Final timings follow at terminal.
+
+## Registry and credential-file batching in Apply
+
+Baseline `a9a706be`; changed source in `codex/application-preflight-provider-batching`.
+Native Ansible 2.18.15 on RED OS 8.3, same fixture and node within each pair.
+The benchmark runs the production preflight tasks with a local Docker CLI
+fixture and authenticated registry inputs. Three libraries share six pinned
+references; three placements use native-only variables. It excludes network
+registry latency, provider writes, service changes and Wails.
+
+| Body | Before | After | Task headers | Auth contexts | Manifest CLI calls |
+|---|---:|---:|---:|---:|---:|
+| node1 preflight, 12 placements | 67.514 / 53.227 s | 18.721 / 17.946 s | 541 → 127 | 12 → 3 | 12 → 6 |
+| node2 preflight, 24 placements | 91.894 s | 17.037 s | 1057 → 127 | 24 → 3 | 24 → 6 |
+| node1 write and remove 48 credential files | 49.954 / 40.442 s | 0.992 / 0.724 s | 5 → 3 | — | — |
+| node2 write and remove 48 credential files | 36.555 s | 0.572 s | 5 → 3 | — | — |
+
+Preflight retained each job's own image requirement and its configuration
+digest; digest vectors matched across revisions. Native placement actions
+were 12/24 → 3, with global native fallback retained for unresolved hostvars
+dependencies. Credential-file cleanup preserved an unrelated file and rejects
+symlinks/traversal. Crash staging uses the existing journal recovery name class
+verified by `test_exact_application_credential_cleanup_preserves_unrelated_and_symlinks`.
+The descriptor response-bound test fails on both revisions. No full Apply or
+real Wails acceptance is asserted. All three VMs started; node3 subsequently
+timed out in SSH banner exchange.

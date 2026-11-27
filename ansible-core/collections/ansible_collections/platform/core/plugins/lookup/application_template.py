@@ -16,7 +16,7 @@ FILTERS = {'default', 'dirname', 'indent', 'join', 'length', 'list', 'lower', 'r
            'platform.core.application_agent_config'}
 
 
-def template_names(source):
+def template_names(source, additional_variables=()):
     if '#jinja2' in source:
         return None
     try:
@@ -27,7 +27,7 @@ def template_names(source):
         names = meta.find_undeclared_variables(tree)
     except TemplateError:
         return None
-    if (names - PLACEMENT_VARIABLES - {'undef'} or
+    if (names - PLACEMENT_VARIABLES - {'undef'} - set(additional_variables) or
             any(tree.find_all((nodes.Include, nodes.Import, nodes.FromImport, nodes.Extends))) or
             any(item.name not in {'defined', 'undefined'} for item in tree.find_all(nodes.Test)) or
             any(item.name not in FILTERS for item in tree.find_all(nodes.Filter))):

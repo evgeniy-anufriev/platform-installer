@@ -51,12 +51,11 @@
             loop_var: application_library_id
       always:
         - name: "Удаление временных файлов учётных данных после установки библиотек"
-          ansible.builtin.file:
-            path: "{{ hostvars['localhost'].platform_application_secret_root }}/{{ item.passwordRef }}"
-            state: absent
-          loop: "{{ hostvars['localhost'].application_vault_inputs.sourceJobs | default([]) | selectattr('passwordRef', 'defined') | list }}"
+          platform.core.application_credential_files:
+            operation: remove
+            root: "{{ hostvars['localhost'].platform_application_secret_root }}"
+            names: "{{ hostvars['localhost'].application_vault_inputs.sourceJobs | default([]) | selectattr('passwordRef', 'defined') | map(attribute='passwordRef') | list }}"
           delegate_to: localhost
           become: false
           run_once: true
-          changed_when: false
           no_log: true
