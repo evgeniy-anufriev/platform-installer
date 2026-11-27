@@ -110,19 +110,20 @@ def profile(events):
 
 def report_library_gaps(tasks, start, end):
     gaps = []
-    edge, previous = start, 'Начало этапа'
+    edge, previous = start, ('', 'Начало этапа')
     completed = sorted((row for row in tasks if row['end'] is not None), key=lambda row: row['start'])
     incomplete = sorted(row['start'] for row in tasks if row['end'] is None)
     for row in completed:
         begin, stop = max(start, row['start']), min(end, row['end'])
         if stop < begin:
             continue
+        task = (row['role'], row['name'])
         if begin > edge:
-            gaps.append((edge, begin, previous, row['name']))
+            gaps.append((edge, begin, previous, task))
         if stop >= edge:
-            edge, previous = stop, row['name']
+            edge, previous = stop, task
     if end > edge:
-        gaps.append((edge, end, previous, 'Граница этапа'))
+        gaps.append((edge, end, previous, ('', 'Граница этапа')))
 
     durations = [stop - begin for begin, stop, _, _ in gaps]
     outside = sum(durations)
@@ -139,17 +140,32 @@ def report_library_gaps(tasks, start, end):
             opened = bisect_left(incomplete, stop) - bisect_left(incomplete, begin)
             detail = f' | Начато без результата: {opened}' if opened else ''
             stamp = datetime.fromtimestamp(begin, timezone.utc).isoformat()
-            print(f'{stop - begin:8.2f} сек | {stamp} | После: {before} | Перед: {after}{detail}')
+            print(f'{stop - begin:8.2f} сек | {stamp} | После: {before[1]} | Перед: {after[1]}{detail}')
     transitions = defaultdict(lambda: [0.0, 0])
+    short_transitions = defaultdict(lambda: [0.0, 0])
     for begin, stop, before, after in gaps:
-        totals = transitions[(before, after)]
-        totals[0] += stop - begin
+        duration = stop - begin
+        totals = transitions[(before[1], after[1])]
+        totals[0] += duration
         totals[1] += 1
+        if 1 <= duration < 5:
+            totals = short_transitions[(before, after)]
+            totals[0] += duration
+            totals[1] += 1
     repeated = [(names, totals) for names, totals in transitions.items() if totals[1] > 1]
     if repeated:
         print('Повторяющиеся переходы с наибольшей суммой разрывов:')
         for (before, after), (seconds, count) in sorted(repeated, key=lambda row: -row[1][0])[:5]:
             print(f'{seconds:8.2f} сек | {count} раз | в среднем {seconds / count:.2f} сек | {before} → {after}')
+    if short_transitions:
+        print('Все переходы с разрывами 1–<5 сек, по убыванию суммарного времени:')
+        print('Сумма, сек | Повторы | Роль / задача до → Роль / задача после')
+        for (before, after), (seconds, count) in sorted(short_transitions.items(),
+                                                       key=lambda row: (-row[1][0], row[0])):
+            before_role, before_name = before
+            after_role, after_name = after
+            print(f'{seconds:10.2f} | {count:7d} | '
+                  f'{before_role or "—"} / {before_name} → {after_role or "—"} / {after_name}')
 
 
 def benchmark_journal(directory, size, event_count, status_size, stage_event_count):
