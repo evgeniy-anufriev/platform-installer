@@ -40218,7 +40218,7 @@ artifactLock:
     - ansible.builtin.import_tasks: ../tasks/offline-archives.yml
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/applications/stages/provider-stage.yml","mode":420,"size":10874,"sha256":"0fe48886723f59b36fc7b54e89331700c09ebc79b6700ae37e09c252d67eecd3","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":10874}
+@@PORTABLE {"path":"ansible-core/playbooks/applications/stages/provider-stage.yml","mode":420,"size":10964,"sha256":"72725447bc6a8c59e98bf58f37314d7a8abc759aa271342db19f6bf5a3663957","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":10964}
 ---
 - name: "Выполнение обработчиков провайдеров библиотеки, затем экземпляров приложений"
   hosts: localhost
@@ -40346,13 +40346,17 @@ artifactLock:
           loop: "{{ application_provider_inputs.jobs | selectattr('serviceType', 'equalto', 'kafka') | selectattr('accounts') | list }}"
           loop_control:
             loop_var: platform_kafka_application_job
+        - name: Выбор готовых экземпляров для пакетной публикации учётных данных
+          ansible.builtin.set_fact:
+            application_ready_instance_vault_jobs: "{{ application_vault_inputs.instanceJobs | platform.core.application_ready_vault_jobs(application_runtime_inputs.integrations, [], []) }}"
+          no_log: true
         - name: Публикация учетных данных каждого экземпляра и AppRole один раз
           ansible.builtin.include_role:
             name: platform.vault.application_provider
-            tasks_from: instance
-          loop: "{{ application_vault_inputs.instanceJobs | platform.core.application_ready_vault_jobs(application_runtime_inputs.integrations, [], []) }}"
-          loop_control:
-            loop_var: platform_vault_application_job
+            tasks_from: ready
+          vars:
+            platform_vault_ready_jobs: "{{ application_ready_instance_vault_jobs }}"
+          when: application_ready_instance_vault_jobs | length > 0
         - name: "Сохранение результатов доставки учётных данных экземпляров для координатора выполнения"
           ansible.builtin.set_fact:
             platform_application_delivered_shared_fields: >-
@@ -40360,10 +40364,8 @@ artifactLock:
                  platform.core.application_ready_shared_jobs(application_runtime_inputs.integrations, []) |
                  platform.core.application_shared_vault_fields }}
             platform_application_delivered_instances: >-
-              {{ (application_vault_inputs.instanceJobs | platform.core.application_ready_vault_jobs(
-                  application_runtime_inputs.integrations, [], [])) |
-                 map(attribute='libraryId') | zip((application_vault_inputs.instanceJobs |
-                   platform.core.application_ready_vault_jobs(application_runtime_inputs.integrations, [], [])) |
+              {{ application_ready_instance_vault_jobs |
+                 map(attribute='libraryId') | zip(application_ready_instance_vault_jobs |
                    map(attribute='instanceId')) | map('join', '/') | list }}
           no_log: true
         - name: Передача производных учетных данных в среду выполнения
@@ -40765,7 +40767,7 @@ artifactLock:
         loop_var: platform_vault_application_job
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/applications/tasks/deliver-ready.yml","mode":420,"size":4324,"sha256":"e226ab9a7760c9ca9e5e210db8dab4c15c16c728d23837494b1522f26b8026b7","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4324}
+@@PORTABLE {"path":"ansible-core/playbooks/applications/tasks/deliver-ready.yml","mode":420,"size":4475,"sha256":"969c8f2db34f43f188ebf9b745bd9f9bbb2c349b619b64dab7a300502106b397","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4475}
 ---
 - name: Выбор только новых готовых общих полей Vault
   ansible.builtin.set_fact:
@@ -40790,6 +40792,7 @@ artifactLock:
   vars: &vault_context
     platform_application_vault_runtime: "{{ hostvars['localhost'].platform_application_vault_runtime }}"
     platform_application_vault_values: "{{ hostvars['localhost'].platform_application_vault_values }}"
+    platform_application_generated_values: "{{ hostvars['localhost'].platform_application_generated_values | default({}) }}"
     platform_application_vault_documents: "{{ hostvars['localhost'].platform_application_vault_documents }}"
     platform_application_vault_identities: "{{ hostvars['localhost'].platform_application_vault_identities }}"
     platform_application_vault_networks: "{{ hostvars['localhost'].platform_application_vault_networks | default({}) }}"
@@ -40823,15 +40826,15 @@ artifactLock:
 - name: Доставка полных учетных данных и AppRole до запуска любого зависимого потребителя
   ansible.builtin.include_role:
     name: platform.vault.application_provider
-    tasks_from: instance
+    tasks_from: ready
     apply:
       delegate_to: localhost
       delegate_facts: true
       become: false
-  loop: "{{ application_ready_instance_vault_jobs }}"
-  loop_control:
-    loop_var: platform_vault_application_job
-  vars: *vault_context
+  vars:
+    <<: *vault_context
+    platform_vault_ready_jobs: "{{ application_ready_instance_vault_jobs }}"
+  when: application_ready_instance_vault_jobs | length > 0
 
 - name: Запись завершенных результатов доставки без сохранения другого желаемого состояния
   ansible.builtin.set_fact:
@@ -44337,7 +44340,7 @@ def prepare(journal, value, release, runtime_release):
     return dict(status='READY', preparationDigest=digest(result))
 
 @@END
-@@PORTABLE {"path":"ansible-core/tools/execution_lifecycle.py","mode":420,"size":35913,"sha256":"93c7c9affbd9363cf7141128927aff13415959f4a42d4e8082194e7ddf05651d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":35913}
+@@PORTABLE {"path":"ansible-core/tools/execution_lifecycle.py","mode":420,"size":36813,"sha256":"73f30b379b426c02ab60d9d1b5c5a6cbb592fba97bb96972f74b51e772ae6a3b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":36813}
 """Private, durable Execution Node lifecycle primitives for UI-BE-04C.
 
 This module deliberately has no Installer, SSH or arbitrary-command API.  The
@@ -44609,8 +44612,10 @@ class Journal(object):
     def metadata(self): return _read(self.metadata_path)
     def status(self): return _read(self.status_path)
 
-    def _append_event_locked(self, current, event):
-        sequence = max(int(current.get("sequence", 0)), self._last_complete_event_sequence()) + 1
+    def _append_event_locked(self, current, event, previous_sequence=None):
+        if previous_sequence is None:
+            previous_sequence = max(int(current.get("sequence", 0)), self._last_complete_event_sequence())
+        sequence = previous_sequence + 1
         if sequence > MAX_EVENTS:
             raise LifecycleError("RUN_EVENT_LIMIT")
         event["sequence"] = sequence
@@ -44640,20 +44645,39 @@ class Journal(object):
             flags |= os.O_NOFOLLOW
         descriptor = os.open(self.events_path, flags)
         with os.fdopen(descriptor, "rb+") as stream:
-            content = stream.read()
-            complete = content.rfind(b"\n")
-            if complete < 0:
-                stream.seek(0); stream.truncate(); stream.flush(); os.fsync(stream.fileno())
-                return 0
-            if complete != len(content) - 1:
-                stream.seek(complete + 1); stream.truncate(); stream.flush(); os.fsync(stream.fileno())
-                content = content[:complete + 1]
-            lines = content.rstrip(b"\n").split(b"\n")
-            if not lines:
+            size = offset = stream.seek(0, os.SEEK_END)
+            complete, record_end, record_start = None, None, 0
+            while offset:
+                length = min(offset, 4096)
+                offset -= length
+                stream.seek(offset)
+                block = stream.read(length)
+                if complete is None:
+                    newline = block.rfind(b"\n")
+                    if newline < 0:
+                        continue
+                    complete = offset + newline + 1
+                    block = block[:newline]
+                if record_end is None:
+                    block = block.rstrip(b"\n")
+                    if not block:
+                        continue
+                    record_end = offset + len(block)
+                newline = block.rfind(b"\n")
+                if newline >= 0:
+                    record_start = offset + newline + 1
+                    break
+            if (complete or 0) != size:
+                stream.truncate(complete or 0)
+                stream.flush()
+                os.fsync(stream.fileno())
+            if complete is None:
                 return 0
             try:
-                return int(json.loads(lines[-1].decode("utf-8")).get("sequence", 0))
-            except (UnicodeDecodeError, ValueError, TypeError):
+                stream.seek(record_start)
+                record = stream.read(record_end - record_start) if record_end is not None else b""
+                return int(json.loads(record.decode("utf-8")).get("sequence", 0))
+            except (UnicodeDecodeError, ValueError, TypeError, AttributeError):
                 raise LifecycleError("RUN_EVENT_STREAM_INVALID")
 
     def _event_locked(self, current, event_type, status, message, fields):
@@ -44737,7 +44761,7 @@ class Journal(object):
             if status == "FAILED":
                 from execution_task_error import safe_task_error
                 event["error"] = safe_task_error(failure_result, no_log)
-            committed = self._append_event_locked(current, event)
+            committed = self._append_event_locked(current, event, previous_sequence=sequence)
             if truncated:
                 _write(self.task_failure_reported_path, {"reported": True})
             return committed
