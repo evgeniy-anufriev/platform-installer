@@ -3120,7 +3120,7 @@ if __name__ == "__main__":
     sys.exit(main())
 
 @@END
-@@PORTABLE {"path":"scripts/profile_execution_run.sh","mode":420,"size":10175,"sha256":"c70d174ab6983fc92bdd3a20a75ec515cb487b7d2147f0e38ed839789fd32911","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":10175}
+@@PORTABLE {"path":"scripts/profile_execution_run.sh","mode":420,"size":11820,"sha256":"8f82780fc123a01f4f73cbe79685a0cc64ae54af9e443d86495ea7c036730b06","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":11820}
 #!/bin/sh
 # Read-only profile of an existing Installer run. Run on the Execution Node.
 set -eu
@@ -3138,10 +3138,39 @@ BASE = Path('/var/lib/platform-installer/execution/runs')
 RESOLVER = 'platform.core.resolve_application_libraries'
 FIRST = 'Проверка комплектности пакетов библиотек перед загрузкой значений по умолчанию'
 LAST = 'Сбор рассчитанных записей приложений в порядке размещений'
+LIBRARY_ACTION_PREFIX = 'applications:library:'
+LIBRARIES_CLEANUP = 'Удаление временных файлов учётных данных после установки библиотек'
 
 
 def timestamp(value):
     return datetime.fromisoformat(value.replace('Z', '+00:00')).timestamp()
+
+
+def library_events(events, library):
+    action = LIBRARY_ACTION_PREFIX + library
+    selected = []
+    for event in events:
+        event_action = event.get('actionId', '')
+        kind = event.get('eventType')
+        if not selected:
+            if event_action == action and kind == 'ACTION_STARTED':
+                selected.append(event)
+            continue
+        if event_action == action and kind == 'ACTION_COMPLETED':
+            selected.append(event)
+            break
+        if kind == 'ACTION_STARTED' and (event_action or '').startswith(LIBRARY_ACTION_PREFIX):
+            break
+        if event_action != 'applications:apply':
+            continue
+        if kind == 'ACTION_COMPLETED' or (
+                kind == 'TASK_STARTED' and event.get('task', {}).get('name') == LIBRARIES_CLEANUP):
+            break
+        if kind in ('TASK_STARTED', 'TASK_COMPLETED'):
+            selected.append(event)
+    if not selected:
+        raise ValueError(f'В журнале нет события начала установки библиотеки {library}')
+    return selected
 
 
 def profile(events):
@@ -3233,6 +3262,7 @@ def main():
     parser = argparse.ArgumentParser(description='Профиль этапов уже запущенной установки без повторного выполнения Core')
     parser.add_argument('run', nargs='?', help='ID запуска installer-…; без аргумента — выбор из списка')
     parser.add_argument('--events', help='Путь к events.jsonl, в том числе сохранённой копии журнала')
+    parser.add_argument('--library', help='Показать только этап установки и проверки указанной библиотеки')
     args = parser.parse_args()
     if args.run and args.events:
         parser.error('Укажите либо ID запуска, либо --events')
@@ -3278,12 +3308,17 @@ def main():
         status = json.loads((path.parent / 'status.json').read_text())
     except (OSError, ValueError):
         pass
+    if args.library:
+        events = library_events(events, args.library)
     cutoff = max(timestamp(e['timestamp']) for e in events)
-    try:
-        cutoff = max(cutoff,timestamp(status['updatedAt']))
-    except (ValueError, KeyError, TypeError):
-        pass
+    if not args.library:
+        try:
+            cutoff = max(cutoff,timestamp(status['updatedAt']))
+        except (ValueError, KeyError, TypeError):
+            pass
     print(f'Журнал: {path}')
+    if args.library:
+        print(f'Библиотека: {args.library}')
     if broken:
         print(f'Предупреждение: пропущено неполных/некорректных строк: {broken}')
     report(events, status, cutoff)
