@@ -3,6 +3,7 @@
   ansible.builtin.set_fact:
     _image_platform: "{{ application_image_platform if application_image_platform is defined else {'os': ansible_facts.system | lower, 'architecture': {'x86_64': 'amd64', 'aarch64': 'arm64'}.get(ansible_facts.architecture, ansible_facts.architecture)} }}"
     _image_registry: {}
+    _image_manifest: {}
     _image_username: ''
     _image_password: ''
     _image_token: ''
@@ -77,6 +78,23 @@
   ansible.builtin.set_fact:
     _image_offline: "{{ platform_application_image_bundle | platform.core.application_offline_image(application_image_input.reference, _image_platform, application_image_input.legacy) }}"
   no_log: true
+
+- name: Диагностика выбора источника при отсутствии метаданных образа из реестра
+  ansible.builtin.debug:
+    msg:
+      image: "{{ application_image_input.reference }}"
+      target: "{{ application_image_input.hostId }}"
+      platform: "{{ _image_platform }}"
+      reason: >-
+        {{ 'REGISTRY_NOT_APPROVED' if not _image_registry_approved else
+           'REGISTRY_MANIFEST_NOT_FOUND' if _image_manifest.status | default(0) | int == 404 else
+           'REGISTRY_PLATFORM_UNAVAILABLE' if _image_manifest.status | default(0) | int == 200 else
+           'REGISTRY_METADATA_UNAVAILABLE' }}
+      selected_source: >-
+        {{ 'PROJECT_LOCK' if application_image_input.legacy else
+           'OFFLINE_BUNDLE' if _image_offline else 'NONE' }}
+  when: _image_registry | length == 0
+  no_log: false
 
 - name: Фиксация идентификатора выбранного образа и эквивалентного offline-источника
   ansible.builtin.set_fact:
