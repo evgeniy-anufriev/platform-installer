@@ -3,6 +3,7 @@
 set -eu
 exec python3 - "$@" <<'PY'
 import argparse
+from bisect import bisect_left
 from collections import defaultdict
 from datetime import datetime, timezone
 import json
@@ -105,31 +106,38 @@ def profile(events):
     return actions, resolves, tasks, groups
 
 
-def report_library_gaps(events, tasks, start, end):
-    covered = 0.0
-    edge = start
-    for begin, stop in sorted((row['start'], row['end']) for row in tasks if row['end'] is not None):
-        covered += max(0, min(stop, end) - max(begin, edge))
-        edge = max(edge, stop)
-    print(f'Интервалы задач с результатом без перекрытий: {covered:.2f} сек.')
-    print(f'Вне этих интервалов: {max(0, end - start - covered):.2f} сек. '
-          'Задач без результата: ' + str(sum(row['end'] is None for row in tasks)) + '.')
-
+def report_library_gaps(tasks, start, end):
     gaps = []
-    previous = events[0]
-    for event in events[1:]:
-        seconds = timestamp(event['timestamp']) - timestamp(previous['timestamp'])
-        if seconds >= 10:
-            gaps.append((seconds, previous))
-        previous = event
-    seconds = end - timestamp(previous['timestamp'])
-    if seconds >= 10:
-        gaps.append((seconds, previous))
+    edge, previous = start, 'Начало этапа'
+    completed = sorted((row for row in tasks if row['end'] is not None), key=lambda row: row['start'])
+    incomplete = sorted(row['start'] for row in tasks if row['end'] is None)
+    for row in completed:
+        begin, stop = max(start, row['start']), min(end, row['end'])
+        if stop < begin:
+            continue
+        if begin > edge:
+            gaps.append((edge, begin, previous, row['name']))
+        if stop >= edge:
+            edge, previous = stop, row['name']
+    if end > edge:
+        gaps.append((edge, end, previous, 'Граница этапа'))
+
+    durations = [stop - begin for begin, stop, _, _ in gaps]
+    outside = sum(durations)
+    print(f'Интервалы задач с результатом без перекрытий: {max(0, end - start - outside):.2f} сек.')
+    print(f'Вне этих интервалов: {outside:.2f} сек в {len(gaps)} разрывах. '
+          f'Задач без результата: {len(incomplete)}.')
+    for lower, upper, label in ((0, 1, '< 1'), (1, 5, '1–<5'), (5, 10, '5–<10'), (10, float('inf'), '≥ 10')):
+        bucket = [duration for duration in durations if lower <= duration < upper]
+        if bucket:
+            print(f'Разрывы {label} сек: {len(bucket)} шт., всего {sum(bucket):.2f} сек.')
     if gaps:
-        print('До трёх самых длинных пауз в журнале, с предыдущим событием:')
-        for seconds, event in sorted(gaps, key=lambda row: -row[0])[:3]:
-            task = event.get('task', {}).get('name', event.get('actionId', '-'))
-            print(f"{seconds:8.2f} сек | {event['timestamp']} | {event['eventType']} | {task}")
+        print('До пяти самых длинных разрывов вне интервалов задач:')
+        for begin, stop, before, after in sorted(gaps, key=lambda row: row[0] - row[1])[:5]:
+            opened = bisect_left(incomplete, stop) - bisect_left(incomplete, begin)
+            detail = f' | Начато без результата: {opened}' if opened else ''
+            stamp = datetime.fromtimestamp(begin, timezone.utc).isoformat()
+            print(f'{stop - begin:8.2f} сек | {stamp} | После: {before} | Перед: {after}{detail}')
 
 
 def report(events, status, cutoff, top=None, library=None):
@@ -143,7 +151,7 @@ def report(events, status, cutoff, top=None, library=None):
         print(f"Длительность этапа библиотеки: {max(0, end - stage['start']):.2f} сек ({stage_status})")
     print(f'Сумма по всем задачам с результатом: {sum(group[0] for group in groups.values()):.2f} сек.')
     if library:
-        report_library_gaps(events, tasks, stage['start'], end)
+        report_library_gaps(tasks, stage['start'], end)
     unmatched = sum(e.get('eventType') == 'TASK_COMPLETED' for e in events) - sum(t['results'] for t in tasks)
     if unmatched:
         print(f'Предупреждение: результатов задач без события начала: {unmatched}')
