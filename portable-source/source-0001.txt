@@ -133,7 +133,120 @@ tags:
 dependencies: {}
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/application_preflight_facts.py","mode":420,"size":20535,"sha256":"796886aa7348d169dfb732b4c5f6430dd240156b076fab0f54dd77f65146b7fc","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":20535}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/application_credential_files.py","mode":420,"size":4324,"sha256":"992cc698bde278c397f0b5291ec9010dd9ae18b3e6fa3e76720c21b77984fde6","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4324}
+"""Manage the exact set of controller-local, operation-scoped credential files."""
+import os
+import secrets
+import stat
+
+from ansible.errors import AnsibleError
+from ansible.plugins.action import ActionBase
+from ansible_collections.platform.core.plugins.module_utils.application_vault import segment
+
+
+DIRECTORY_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+
+
+def open_root(path):
+    if not isinstance(path, str) or not path.startswith('/') or os.path.normpath(path) != path or path == '/':
+        raise ValueError()
+    directory = os.open('/', DIRECTORY_FLAGS)
+    try:
+        for part in path[1:].split('/'):
+            child = os.open(part, DIRECTORY_FLAGS, dir_fd=directory)
+            os.close(directory)
+            directory = child
+        metadata = os.fstat(directory)
+        if metadata.st_uid != os.geteuid() or metadata.st_mode & 0o077:
+            raise ValueError()
+        return os.dup(directory)
+    finally:
+        os.close(directory)
+
+
+def write_file(directory, name, content):
+    # This exact name class is also removed by execution journal recovery.
+    temporary = '.runtime-application-secret-' + secrets.token_hex(32)
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+    descriptor = os.open(temporary, flags, 0o600, dir_fd=directory)
+    try:
+        with os.fdopen(descriptor, 'wb') as stream:
+            stream.write(content.encode('utf-8'))
+        os.replace(temporary, name, src_dir_fd=directory, dst_dir_fd=directory)
+    finally:
+        try:
+            os.unlink(temporary, dir_fd=directory)
+        except FileNotFoundError:
+            pass
+
+
+def update_files(root, entries, cleanup, check):
+    if not entries:
+        return
+    try:
+        directory = open_root(root)
+    except FileNotFoundError:
+        if cleanup:
+            return
+        raise
+    try:
+        failed = False
+        for name in entries:
+            try:
+                try:
+                    metadata = os.stat(name, dir_fd=directory, follow_symlinks=False)
+                except FileNotFoundError:
+                    metadata = None
+                if metadata and (not stat.S_ISREG(metadata.st_mode) or metadata.st_uid != os.geteuid()):
+                    raise ValueError()
+                if cleanup:
+                    if metadata and not check:
+                        os.unlink(name, dir_fd=directory)
+                elif not check:
+                    write_file(directory, name, entries[name])
+            except (ValueError, OSError):
+                if not cleanup:
+                    raise
+                failed = True
+        if failed:
+            raise ValueError()
+    finally:
+        os.close(directory)
+
+
+class ActionModule(ActionBase):
+    TRANSFERS_FILES = False
+    _requires_connection = False
+
+    def run(self, tmp=None, task_vars=None):
+        values = task_vars or {}
+        try:
+            args = self._templar.template(self._task.args)
+            root = args['root']
+            if args['operation'] == 'remove':
+                if not isinstance(args['names'], list):
+                    raise ValueError()
+                names = dict.fromkeys(segment(name) for name in args['names'])
+                update_files(root, names, True, self._task.check_mode)
+                return dict(changed=False)
+            if args['operation'] != 'write':
+                raise ValueError()
+            generated = values.get('platform_application_generated_values', {})
+            if not isinstance(generated, dict):
+                raise ValueError()
+            entries = {segment(name): content for name, content in generated.items()}
+            if any(not isinstance(content, str) for content in entries.values()):
+                raise ValueError()
+            update_files(root, entries, False, self._task.check_mode)
+            files = dict(values.get('platform_application_credential_files', {}))
+            files.update((name, os.path.join(root, name)) for name in entries)
+            return dict(changed=False, ansible_facts={'platform_application_credential_files': files},
+                        _ansible_facts_cacheable=False)
+        except (AnsibleError, OSError, ValueError, TypeError, KeyError):
+            return dict(changed=False, failed=True, msg='APPLICATION_PROVIDER_SECRET_FILE_INVALID', _ansible_no_log=True)
+
+@@END
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/application_preflight_facts.py","mode":420,"size":22525,"sha256":"dadcf1ccf91a9c05683ef9d1f4be005a5b3280bff33d26fb0f41736c6a918349","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":22525}
 """Bind compact placement inputs and publish checked results in host scope."""
 import hashlib
 import os
@@ -149,11 +262,14 @@ from ansible_collections.platform.core.plugins.action.bind_application_preflight
 from ansible_collections.platform.core.plugins.filter.application_runtime import preflight_source_jobs
 from ansible_collections.platform.core.plugins.filter.artifact_source import resolve_artifact_source
 from ansible_collections.platform.core.plugins.lookup.application_template import template_names
-from ansible_collections.platform.core.plugins.module_utils.application_runtime import validate_agent, validate_config_contents
+from ansible_collections.platform.core.plugins.module_utils.application_runtime import (
+    pinned_registry_reference, validate_agent, validate_config_contents,
+)
 from ansible_collections.platform.core.plugins.modules.application_source_file import identity, read_source
 
 
 RUNTIME_ROLE = Path(__file__).resolve().parents[2] / 'roles/application_runtime'
+NATIVE_PLACEMENT_VARIABLES = {'application_runtime_job', 'application_root', 'application_library_path'}
 
 
 def docker_accounts(discoveries, config):
@@ -244,27 +360,40 @@ def isolated_config_template(source):
     return True
 
 
-def needs_native_render(jobs, rows):
-    safe_by_path = {}
+def native_render_indices(jobs, rows):
+    templates = {}
+    native = []
 
-    def safe(path, config=False):
+    def scope(path, config=False):
         key = path, config
-        if key not in safe_by_path:
+        if key not in templates:
             try:
-                text = Path(path).read_text(encoding='utf-8')
-                safe_by_path[key] = isolated_config_template(text) if config else template_names(text) is not None
+                source = Path(path).read_text(encoding='utf-8')
+                if config:
+                    result = 'compact' if isolated_config_template(source) else 'global'
+                else:
+                    names = template_names(source, NATIVE_PLACEMENT_VARIABLES)
+                    if names is None:
+                        result = 'global'
+                    else:
+                        result = 'compact' if names.isdisjoint(NATIVE_PLACEMENT_VARIABLES) else 'placement'
             except (OSError, UnicodeError, TemplateError):
-                safe_by_path[key] = False
-        return safe_by_path[key]
+                result = 'global'
+            templates[key] = result
+        return templates[key]
 
-    for job, row in zip(jobs, rows):
-        if (not row['env_key'] or not safe(job['appTemplate']) or
-                (not row['base_key'] and not safe(job['baseTemplate'])) or
-                (job['agentTemplate'] and not safe(job['agentTemplate']))):
-            return True
-        if any('template' in config and not safe(config['path'], config=True) for config in job['configs']):
-            return True
-    return False
+    for index, (job, row) in enumerate(zip(jobs, rows)):
+        scopes = [scope(job['appTemplate'])]
+        if not row['base_key']:
+            scopes.append(scope(job['baseTemplate']))
+        if job['agentTemplate']:
+            scopes.append(scope(job['agentTemplate']))
+        scopes.extend(scope(config['path'], config=True) for config in job['configs'] if 'template' in config)
+        if 'global' in scopes:
+            return set(range(len(rows)))
+        if not row['env_key'] or 'placement' in scopes:
+            native.append(index)
+    return set(native)
 
 
 def validate_library_projection(jobs):
@@ -304,11 +433,14 @@ def image_sources(jobs, accounts, host):
             continue
         scope = {key: job[key] for key in ('account', 'projectId', 'libraryId', 'authority')}
         scope['registryCredentials'] = job.get('registryCredentials', {})
-        key = to_json([repository, job['account'], job['projectId'], job['libraryId'],
+        registry = repository['reference'].split('/')[0]
+        key = to_json([registry, job['account'], job['projectId'], job['libraryId'],
                        scope['registryCredentials'], platform], sort_keys=True)
-        group = groups.setdefault(key, dict(job=scope, indices=[]))
-        group['indices'].append(index)
-    return sources, list(groups.values())
+        group = groups.setdefault(key, dict(job=scope, probes={}))
+        probe_key = pinned_registry_reference(repository['reference'], repository['manifestDigest'])
+        probe = group['probes'].setdefault(probe_key, dict(repository=repository, indices=[]))
+        probe['indices'].append(index)
+    return sources, [dict(job=group['job'], probes=list(group['probes'].values())) for group in groups.values()]
 
 
 class ActionModule(ActionBase):
@@ -400,27 +532,35 @@ class ActionModule(ActionBase):
                 rows = [row for host, placements in local['_application_preflight_inputs'].items()
                         if host in targets for row in placements]
                 jobs = preflight_source_jobs(values['hostvars'], [row['index'] for row in rows])
-                # Native templates can observe facts from other placements or hosts.
-                native = needs_native_render(jobs, rows)
-                facts = {'_application_preflight_native': native,
-                         '_application_preflight_assets': {} if native else collect_assets(jobs)}
+                native = native_render_indices(jobs, rows)
+                facts = {'_application_preflight_native_indices': [rows[index]['index'] for index in sorted(native)],
+                         '_application_preflight_assets': collect_assets(
+                             job for index, job in enumerate(jobs) if index not in native)}
             elif operation == 'accounts':
                 accounts = docker_accounts(values['application_runtime_discoveries'],
                                            values.get('platform_application_registry_config_directory', ''))
                 jobs = preflight_source_jobs(values['hostvars'], [row['index'] for row in values['application_host_jobs']])
-                native = values['hostvars']['localhost']['_application_preflight_native']
-                sources, groups = ({}, []) if native else image_sources(jobs, accounts, values['inventory_hostname'])
+                native = set(values['hostvars'].raw_get('localhost')['_application_preflight_native_indices'])
+                sources, groups = image_sources(jobs, accounts, values['inventory_hostname'])
                 facts = {'_application_preflight_accounts': accounts, '_application_preflight_sources': sources,
-                         '_application_preflight_registry_groups': groups}
+                         '_application_preflight_registry_groups': groups,
+                         '_application_preflight_native': [index for index, row in enumerate(values['application_host_jobs'])
+                                                           if row['index'] in native]}
             elif operation == 'registry':
                 rows = values['application_host_jobs']
-                indices = values['application_registry_group']['indices']
+                probes = values['application_registry_group']['probes']
+                results = values['application_registry_probe']['results']
+                if len(probes) != len(results):
+                    raise ValueError('APPLICATION_PREFLIGHT_CONTEXT_INVALID')
+                observations = {index: result for probe, result in zip(probes, results)
+                                for index in probe['indices']}
+                indices = list(observations)
                 jobs = preflight_source_jobs(values['hostvars'], [rows[index]['index'] for index in indices])
                 sources = dict(values['_application_preflight_sources'])
                 for index, job in zip(indices, jobs):
                     account = values['_application_preflight_accounts'][job['account']]
                     sources[str(index)] = image_source(job, account['application_image_platform'],
-                                                       values['inventory_hostname'], values['application_registry_probe'])
+                                                       values['inventory_hostname'], observations[index])
                 facts = {'_application_preflight_sources': sources}
             elif operation == 'placements':
                 facts = {}
@@ -431,7 +571,10 @@ class ActionModule(ActionBase):
                 ])
                 rows = values['application_host_jobs']
                 jobs = preflight_source_jobs(values['hostvars'], [row['index'] for row in rows])
+                native = set(values['_application_preflight_native'])
                 for index, (row, raw_job) in enumerate(zip(rows, jobs)):
+                    if index in native:
+                        continue
                     context['application_preflight_index'] = index
                     with self._templar.set_temporary_context(available_variables=context):
                         job = self._templar.template(raw_job)
@@ -449,6 +592,7 @@ class ActionModule(ActionBase):
                 if account['application_image_platform']['os'] != job['authority']['requirement']['platform']['os']:
                     raise ValueError('APPLICATION_RUNTIME_DAEMON_INVALID')
                 facts = dict(account, _application_preflight_job=job,
+                             application_image_source=values['_application_preflight_sources'][str(index)],
                              _application_preflight_template_context=row['template_context'],
                              _application_base_render_key=row['base_key'], _application_env_render_key=row['env_key'],
                              application_project_id=job['projectId'], application_name=job['applicationName'],
@@ -471,6 +615,8 @@ class ActionModule(ActionBase):
         except ValueError as error:
             code = str(error) if str(error) in {
                 'APPLICATION_RUNTIME_DAEMON_INVALID', 'APPLICATION_LIBRARY_HOST_PROJECTION_CONFLICT',
+                'IMAGE_PLATFORM_INCOMPATIBLE', 'IMAGE_REGISTRY_PROBE_FAILED',
+                'IMAGE_REGISTRY_PROBE_INVALID', 'IMAGE_SOURCE_UNAVAILABLE',
             } else 'APPLICATION_PREFLIGHT_CONTEXT_INVALID'
             return dict(changed=False, failed=True, msg=code)
         except OSError:
@@ -3703,7 +3849,7 @@ class FilterModule(object):
                 "platform_java_properties_value": properties_value}
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/lookup/application_template.py","mode":420,"size":2621,"sha256":"72391d7ecd4af768146983701580167a6f84b2ad5b14732e8a066cd705535023","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2621}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/lookup/application_template.py","mode":420,"size":2674,"sha256":"311d4a8c6d589e8c1c428fe8154ee8352885cc67e357b1f8f8630e98ee55c68e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2674}
 """Use a narrow Ansible template context for self-contained placement templates."""
 from ansible.plugins.loader import lookup_loader
 from ansible.plugins.lookup import LookupBase
@@ -3722,7 +3868,7 @@ FILTERS = {'default', 'dirname', 'indent', 'join', 'length', 'list', 'lower', 'r
            'platform.core.application_agent_config'}
 
 
-def template_names(source):
+def template_names(source, additional_variables=()):
     if '#jinja2' in source:
         return None
     try:
@@ -3733,7 +3879,7 @@ def template_names(source):
         names = meta.find_undeclared_variables(tree)
     except TemplateError:
         return None
-    if (names - PLACEMENT_VARIABLES - {'undef'} or
+    if (names - PLACEMENT_VARIABLES - {'undef'} - set(additional_variables) or
             any(tree.find_all((nodes.Include, nodes.Import, nodes.FromImport, nodes.Extends))) or
             any(item.name not in {'defined', 'undefined'} for item in tree.find_all(nodes.Test)) or
             any(item.name not in FILTERS for item in tree.find_all(nodes.Filter))):
@@ -35503,92 +35649,11 @@ application_runtime_verify_vault: true
   when: not (application_observe_paths_only | default(false) | bool)
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/preflight.yml","mode":420,"size":21645,"sha256":"4a8b8d0320f3d7849a82d6526b547e26554c61386af45749ad35bf5b16f45adb","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":21645}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/preflight.yml","mode":420,"size":11602,"sha256":"86d0a7041bcebd2415513d66a7c445141d48289234e3b9ec1457a3aabe932681","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":11602}
 ---
-- name: Подготовка прямой проверки размещения
+- name: Подготовка контекста при прямом вызове
+  ansible.builtin.include_tasks: preflight_direct_context.yml
   when: (application_preflight_mode | default('direct')) == 'direct'
-  block:
-    - name: Привязка учётной записи операции приложения и ключа обнаружения конфигурации Docker
-      ansible.builtin.set_fact:
-        _application_preflight_job: >-
-          {{ (hostvars | platform.core.application_preflight_source_jobs([_application_preflight_input.index]) | first)
-             if application_preflight_index is defined else omit }}
-        _application_preflight_template_context: >-
-          {{ _application_preflight_input.template_context if application_preflight_index is defined else omit }}
-        _application_base_render_key: "{{ _application_preflight_input.base_key if application_preflight_index is defined else '' }}"
-        _application_env_render_key: "{{ _application_preflight_input.env_key if application_preflight_index is defined else '' }}"
-        application_discovery_key: >-
-          {{ [_application_preflight_input.account if application_preflight_index is defined else application_runtime_job.account,
-              platform_application_registry_config_directory] | to_json }}
-      vars:
-        _application_preflight_input: "{{ application_host_jobs[application_preflight_index] }}"
-      no_log: true
-
-    - name: Однократная проверка выбранных учётных записей и Docker без прав root
-      when: not (application_runtime_use_path_batch | default(false) | bool)
-      block:
-        - name: Обнаружение Docker для прямого вызова роли
-          ansible.builtin.include_tasks: discover_runtime.yml
-          when: application_discovery_key not in application_runtime_discoveries
-
-        - name: Чтение путей отдельного размещения
-          ansible.builtin.include_tasks: observe_paths.yml
-          vars:
-            application_host_jobs: ["{{ application_runtime_job }}"]
-            application_observe_paths_only: true
-
-    - name: Привязка точных путей к учетной записи и среде выполнения
-      ansible.builtin.set_fact:
-        application_uid: "{{ application_runtime_discoveries[application_discovery_key].uid }}"
-        application_home: "{{ application_runtime_discoveries[application_discovery_key].home }}"
-        application_project_id: "{{ application_runtime_job.projectId }}"
-        application_name: "{{ application_runtime_job.applicationName }}"
-        application_instance_id: "{{ application_runtime_job.instanceId }}"
-        application_parameters: "{{ application_runtime_job.settings.parameters | default({}) }}"
-        application_root: "{{ _application_path_checks[application_preflight_index].root if application_preflight_index is defined else omit }}"
-        application_library_path: "{{ _application_path_checks[application_preflight_index].root if application_preflight_index is defined else omit }}"
-        application_instance_path: "{{ _application_path_checks[application_preflight_index].instance_path if application_preflight_index is defined else omit }}"
-      no_log: true
-
-    - name: Определение путей размещения общей библиотеки
-      ansible.builtin.include_tasks: resolve_paths.yml
-      when: application_preflight_index is not defined
-      vars:
-        application_path_home: "{{ application_home }}"
-
-    - name: Сохранение путей размещения и защищённого окружения Docker
-      ansible.builtin.set_fact:
-        application_docker_environment:
-          HOME: "{{ application_home }}"
-          XDG_RUNTIME_DIR: "/run/user/{{ application_uid }}"
-          DOCKER_HOST: "unix:///run/user/{{ application_uid }}/docker.sock"
-          DOCKER_CONFIG: "{{ platform_application_registry_config_directory if platform_application_registry_config_directory else application_home ~ '/.docker' }}"
-        application_image_platform:
-          os: "{{ application_runtime_discoveries[application_discovery_key].info.OSType }}"
-          architecture: "{{ {'x86_64': 'amd64', 'aarch64': 'arm64'}.get(application_runtime_discoveries[application_discovery_key].info.Architecture, application_runtime_discoveries[application_discovery_key].info.Architecture) }}"
-      no_log: true
-
-    - name: Проверка отображения user namespace и путей защищённых учётных данных до записи провайдером
-      platform.core.application_identity_files:
-        account: "{{ application_runtime_job.account }}"
-        user: "{{ application_runtime_job.settings.user | default('0:0') }}"
-        instance_path: "{{ application_instance_path }}"
-        agent_required: "{{ true if application_runtime_job.agentTemplate else false }}"
-        pki_plans: "{{ application_runtime_job.pkiPlans | default([]) }}"
-        preflight: true
-      when:
-        - application_preflight_index is not defined
-        - application_runtime_job.agentTemplate or (application_runtime_job.pkiPlans | default([]) | length > 0)
-      no_log: true
-
-    - name: Проверка Docker без прав root и соответствия зафиксированной целевой платформе
-      ansible.builtin.assert:
-        that:
-          - "'rootless' in (application_runtime_discoveries[application_discovery_key].info.SecurityOptions | join(' '))"
-          - application_runtime_discoveries[application_discovery_key].info.Swarm.LocalNodeState == 'inactive'
-          - application_runtime_discoveries[application_discovery_key].info.OSType == application_runtime_job.authority.requirement.platform.os
-          - application_runtime_discoveries[application_discovery_key].info.Architecture in ['x86_64', 'aarch64', 'amd64', 'arm64']
-        fail_msg: APPLICATION_RUNTIME_DAEMON_INVALID
 
 - name: Подготовка размещения с динамическими шаблонами
   when: (application_preflight_mode | default('direct')) == 'native'
@@ -35598,41 +35663,9 @@ application_runtime_verify_vault: true
         operation: bind
       no_log: true
 
-- name: Предварительная проверка выбранного реестра
-  when: application_runtime_job.authority.repository.reference is defined
-  block:
-    - name: Проверка явного одобрения реестра на целевом узле приложения
-      ansible.builtin.assert:
-        that:
-          - application_runtime_job.authority.repository.reference.split('/')[0] in platform_application_approved_registries or (application_runtime_job.registryCredentials | default({}) | length > 0)
-        fail_msg: APPLICATION_REGISTRY_NOT_APPROVED
-
-    - name: Проверка манифеста выбранной платформы в разрешённом реестре
-      block:
-        - name: Подготовка аутентификации реестра для проверки образа без изменений
-          ansible.builtin.include_tasks: registry_auth.yml
-        - name: Проверка только утвержденного неизменяемого манифеста платформы
-          ansible.builtin.command:
-            argv: [docker, manifest, inspect, "{{ application_runtime_job.authority.repository.reference | platform.core.application_pinned_registry_reference(application_runtime_job.authority.repository.manifestDigest) }}"]
-          become_user: "{{ application_runtime_job.account }}"
-          environment: "{{ application_registry_environment }}"
-          register: application_registry_probe
-          changed_when: false
-          failed_when: false
-          no_log: true
-      always:
-        - name: Удаление временной аутентификации реестра проверки образа
-          ansible.builtin.file:
-            path: "{{ application_registry_auth_stage.path }}"
-            state: absent
-          when: application_registry_auth_stage.path is defined
-          changed_when: false
-
-    - name: Выбор совместимого источника для размещений с общим наблюдением реестра
-      platform.core.application_preflight_facts:
-        operation: registry
-      no_log: true
-      when: (application_preflight_mode | default('direct')) == 'registry'
+- name: Предварительная проверка реестра при прямом вызове
+  ansible.builtin.include_tasks: preflight_registry.yml
+  when: (application_preflight_mode | default('direct')) == 'direct' and application_runtime_job.authority.repository.reference is defined
 
 - name: Расчёт и проверка конфигурации размещения
   when: (application_preflight_mode | default('direct')) != 'registry'
@@ -35649,16 +35682,20 @@ application_runtime_verify_vault: true
         application_image_source: >-
           {{ application_runtime_job.authority | platform.core.platform_resolve_artifact_source(
             application_runtime_job.authority.requirement, inventory_hostname, application_image_platform,
-            (application_registry_probe.stdout | default('') if application_runtime_job.authority.repository.reference is defined else ''),
-            (0 if application_runtime_job.authority.repository.reference is defined and application_registry_probe.rc | default(2) == 0 else
+            (application_direct_probe.stdout | default('') if application_runtime_job.authority.repository.reference is defined else ''),
+            (0 if application_runtime_job.authority.repository.reference is defined and application_direct_probe.rc | default(2) == 0 else
              (2 if application_runtime_job.authority.repository.reference is not defined or
-              (application_registry_probe.stderr | default('')) is search('manifest unknown|no such manifest') else 1))) }}
+              (application_direct_probe.stderr | default('')) is search('manifest unknown|no such manifest') else 1))) }}
+      vars:
+        application_direct_probe: "{{ application_registry_probe.results | default([]) | first | default({}) }}"
+      when: (application_preflight_mode | default('direct')) == 'direct'
       no_log: true
 
     - name: Проверка утверждённого совместимого источника образа
       ansible.builtin.assert:
         that: application_image_source.source != 'BLOCKED'
         fail_msg: "{{ application_image_source.reason }}"
+      when: (application_preflight_mode | default('direct')) == 'direct'
 
     - name: Определение пути и проверка выбранного offline-архива при прямом вызове
       ansible.builtin.set_fact:
@@ -35770,6 +35807,35 @@ application_runtime_verify_vault: true
         or (_application_env_render_key and _application_env_render_key not in _application_shared_env)
       no_log: true
 
+- name: Проверка отдельного размещения при прямом вызове
+  ansible.builtin.include_tasks: preflight_direct_checks.yml
+  when: (application_preflight_mode | default('direct')) == 'direct'
+
+- name: Запись неизменяемого контекста предварительной проверки размещения приложения
+  ansible.builtin.set_fact:
+    "{{ '_application_preflight_result_' ~ application_preflight_index if application_preflight_index is defined else 'platform_application_preflight_jobs' }}": >-
+      {{ _application_preflight_result if application_preflight_index is defined else
+         platform_application_preflight_jobs + [application_runtime_job | combine(_application_preflight_result)] }}
+  vars:
+    _application_preflight_result: >-
+      {{ {
+        'uid': application_uid, 'home': application_home, 'root': application_root,
+        'instancePath': application_instance_path, 'libraryPath': application_library_path,
+        'dockerEnvironment': application_docker_environment, 'source': application_image_source,
+        'configContents': application_config_contents, 'configDigest': application_config_digest,
+        'archiveChecksums': application_archive_checksums,
+        'archivePath': application_selected_archive_path,
+        'composeContent': application_compose_content, 'baseContent': application_base_content, 'agentContent': application_agent_content,
+        'composeArgv': ['docker', 'compose', '--project-name', application_runtime_job.placement.composeProject,
+          '--project-directory', application_instance_path, '--env-file', application_library_path ~ '/.env',
+          '-f', application_instance_path ~ '/compose.yml'],
+        'envContent': application_env_content} }}
+  no_log: true
+  when: (application_preflight_mode | default('direct')) != 'registry'
+
+@@END
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/preflight_direct_checks.yml","mode":420,"size":2775,"sha256":"ade954214006c8ae51df57ff9ce27c773e80bf91dcb133af4cb485831cda4b69","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2775}
+---
 - name: Проверки отдельного размещения при прямом вызове
   when: (application_preflight_mode | default('direct')) == 'direct'
   block:
@@ -35813,27 +35879,135 @@ application_runtime_verify_vault: true
         _application_owned_ports: "{{ (((application_existing_container.stdout | from_json)[0].HostConfig.PortBindings | default({}, true) | dict2items | map(attribute='value') | flatten | select('mapping') | map(attribute='HostPort') | list) if (application_existing_container.stdout | from_json)[0].State.Running else []) if application_existing_container.rc | default(1) == 0 else [] }}"
       when: application_preflight_index is not defined and item.published | string not in _application_owned_ports
 
-- name: Запись неизменяемого контекста предварительной проверки размещения приложения
-  ansible.builtin.set_fact:
-    "{{ '_application_preflight_result_' ~ application_preflight_index if application_preflight_index is defined else 'platform_application_preflight_jobs' }}": >-
-      {{ _application_preflight_result if application_preflight_index is defined else
-         platform_application_preflight_jobs + [application_runtime_job | combine(_application_preflight_result)] }}
-  vars:
-    _application_preflight_result: >-
-      {{ {
-        'uid': application_uid, 'home': application_home, 'root': application_root,
-        'instancePath': application_instance_path, 'libraryPath': application_library_path,
-        'dockerEnvironment': application_docker_environment, 'source': application_image_source,
-        'configContents': application_config_contents, 'configDigest': application_config_digest,
-        'archiveChecksums': application_archive_checksums,
-        'archivePath': application_selected_archive_path,
-        'composeContent': application_compose_content, 'baseContent': application_base_content, 'agentContent': application_agent_content,
-        'composeArgv': ['docker', 'compose', '--project-name', application_runtime_job.placement.composeProject,
-          '--project-directory', application_instance_path, '--env-file', application_library_path ~ '/.env',
-          '-f', application_instance_path ~ '/compose.yml'],
-        'envContent': application_env_content} }}
-  no_log: true
-  when: (application_preflight_mode | default('direct')) != 'registry'
+@@END
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/preflight_direct_context.yml","mode":420,"size":6012,"sha256":"595f368dbed29369ba226c8d6e959b9a895ae4f961577120ca9c61b839f760aa","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":6012}
+---
+- name: Подготовка прямой проверки размещения
+  when: (application_preflight_mode | default('direct')) == 'direct'
+  block:
+    - name: Привязка учётной записи операции приложения и ключа обнаружения конфигурации Docker
+      ansible.builtin.set_fact:
+        _application_preflight_job: >-
+          {{ (hostvars | platform.core.application_preflight_source_jobs([_application_preflight_input.index]) | first)
+             if application_preflight_index is defined else omit }}
+        _application_preflight_template_context: >-
+          {{ _application_preflight_input.template_context if application_preflight_index is defined else omit }}
+        _application_base_render_key: "{{ _application_preflight_input.base_key if application_preflight_index is defined else '' }}"
+        _application_env_render_key: "{{ _application_preflight_input.env_key if application_preflight_index is defined else '' }}"
+        application_discovery_key: >-
+          {{ [_application_preflight_input.account if application_preflight_index is defined else application_runtime_job.account,
+              platform_application_registry_config_directory] | to_json }}
+      vars:
+        _application_preflight_input: "{{ application_host_jobs[application_preflight_index] }}"
+      no_log: true
+
+    - name: Однократная проверка выбранных учётных записей и Docker без прав root
+      when: not (application_runtime_use_path_batch | default(false) | bool)
+      block:
+        - name: Обнаружение Docker для прямого вызова роли
+          ansible.builtin.include_tasks: discover_runtime.yml
+          when: application_discovery_key not in application_runtime_discoveries
+
+        - name: Чтение путей отдельного размещения
+          ansible.builtin.include_tasks: observe_paths.yml
+          vars:
+            application_host_jobs: ["{{ application_runtime_job }}"]
+            application_observe_paths_only: true
+
+    - name: Привязка точных путей к учетной записи и среде выполнения
+      ansible.builtin.set_fact:
+        application_uid: "{{ application_runtime_discoveries[application_discovery_key].uid }}"
+        application_home: "{{ application_runtime_discoveries[application_discovery_key].home }}"
+        application_project_id: "{{ application_runtime_job.projectId }}"
+        application_name: "{{ application_runtime_job.applicationName }}"
+        application_instance_id: "{{ application_runtime_job.instanceId }}"
+        application_parameters: "{{ application_runtime_job.settings.parameters | default({}) }}"
+        application_root: "{{ _application_path_checks[application_preflight_index].root if application_preflight_index is defined else omit }}"
+        application_library_path: "{{ _application_path_checks[application_preflight_index].root if application_preflight_index is defined else omit }}"
+        application_instance_path: "{{ _application_path_checks[application_preflight_index].instance_path if application_preflight_index is defined else omit }}"
+      no_log: true
+
+    - name: Определение путей размещения общей библиотеки
+      ansible.builtin.include_tasks: resolve_paths.yml
+      when: application_preflight_index is not defined
+      vars:
+        application_path_home: "{{ application_home }}"
+
+    - name: Сохранение путей размещения и защищённого окружения Docker
+      ansible.builtin.set_fact:
+        application_docker_environment:
+          HOME: "{{ application_home }}"
+          XDG_RUNTIME_DIR: "/run/user/{{ application_uid }}"
+          DOCKER_HOST: "unix:///run/user/{{ application_uid }}/docker.sock"
+          DOCKER_CONFIG: "{{ platform_application_registry_config_directory if platform_application_registry_config_directory else application_home ~ '/.docker' }}"
+        application_image_platform:
+          os: "{{ application_runtime_discoveries[application_discovery_key].info.OSType }}"
+          architecture: "{{ {'x86_64': 'amd64', 'aarch64': 'arm64'}.get(application_runtime_discoveries[application_discovery_key].info.Architecture, application_runtime_discoveries[application_discovery_key].info.Architecture) }}"
+      no_log: true
+
+    - name: Проверка отображения user namespace и путей защищённых учётных данных до записи провайдером
+      platform.core.application_identity_files:
+        account: "{{ application_runtime_job.account }}"
+        user: "{{ application_runtime_job.settings.user | default('0:0') }}"
+        instance_path: "{{ application_instance_path }}"
+        agent_required: "{{ true if application_runtime_job.agentTemplate else false }}"
+        pki_plans: "{{ application_runtime_job.pkiPlans | default([]) }}"
+        preflight: true
+      when:
+        - application_preflight_index is not defined
+        - application_runtime_job.agentTemplate or (application_runtime_job.pkiPlans | default([]) | length > 0)
+      no_log: true
+
+    - name: Проверка Docker без прав root и соответствия зафиксированной целевой платформе
+      ansible.builtin.assert:
+        that:
+          - "'rootless' in (application_runtime_discoveries[application_discovery_key].info.SecurityOptions | join(' '))"
+          - application_runtime_discoveries[application_discovery_key].info.Swarm.LocalNodeState == 'inactive'
+          - application_runtime_discoveries[application_discovery_key].info.OSType == application_runtime_job.authority.requirement.platform.os
+          - application_runtime_discoveries[application_discovery_key].info.Architecture in ['x86_64', 'aarch64', 'amd64', 'arm64']
+        fail_msg: APPLICATION_RUNTIME_DAEMON_INVALID
+
+@@END
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/preflight_registry.yml","mode":420,"size":2506,"sha256":"d172fc9d889becac0215613fd2d7bcd32d42d84326007880b8db349b2969441a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2506}
+---
+- name: Предварительная проверка выбранного реестра
+  when: application_runtime_job.authority.repository.reference is defined
+  block:
+    - name: Проверка явного одобрения реестра на целевом узле приложения
+      ansible.builtin.assert:
+        that:
+          - application_runtime_job.authority.repository.reference.split('/')[0] in platform_application_approved_registries or (application_runtime_job.registryCredentials | default({}) | length > 0)
+        fail_msg: APPLICATION_REGISTRY_NOT_APPROVED
+
+    - name: Проверка манифеста выбранной платформы в разрешённом реестре
+      block:
+        - name: Подготовка аутентификации реестра для проверки образа без изменений
+          ansible.builtin.include_tasks: registry_auth.yml
+        - name: Проверка только утвержденного неизменяемого манифеста платформы
+          ansible.builtin.command:
+            argv: [docker, manifest, inspect, "{{ application_manifest.reference | platform.core.application_pinned_registry_reference(application_manifest.manifestDigest) }}"]
+          loop: "{{ application_registry_group.probes | map(attribute='repository') | list if (application_preflight_mode | default('direct')) == 'registry' else [application_runtime_job.authority.repository] }}"
+          loop_control:
+            loop_var: application_manifest
+          become_user: "{{ application_runtime_job.account }}"
+          environment: "{{ application_registry_environment }}"
+          register: application_registry_probe
+          changed_when: false
+          failed_when: false
+          no_log: true
+      always:
+        - name: Удаление временной аутентификации реестра проверки образа
+          ansible.builtin.file:
+            path: "{{ application_registry_auth_stage.path }}"
+            state: absent
+          when: application_registry_auth_stage.path is defined
+          changed_when: false
+
+    - name: Выбор совместимого источника для размещений с общим наблюдением реестра
+      platform.core.application_preflight_facts:
+        operation: registry
+      no_log: true
+      when: (application_preflight_mode | default('direct')) == 'registry'
 
 @@END
 @@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/pull_registry.yml","mode":420,"size":1133,"sha256":"73f314f108ac31262abd7f35fb78883bdd751ba5dbc335487f8dad39f37d07bf","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1133}
@@ -39529,7 +39703,7 @@ artifactLock:
   digest: sha256:2222222222222222222222222222222222222222222222222222222222222222
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/applications/apply.yml","mode":420,"size":3391,"sha256":"94825466663295c431bdc8e4ecddcdd322dbed4302fc36fe11668b89d4691de5","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3391}
+@@PORTABLE {"path":"ansible-core/playbooks/applications/apply.yml","mode":420,"size":3398,"sha256":"bb4ca9c01be03db969223a3126e4152c29bec565e56d8e00cf4bedb14aefbbd1","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3398}
 ---
 - name: Начало подготовки библиотек
   hosts: localhost
@@ -39583,14 +39757,13 @@ artifactLock:
             loop_var: application_library_id
       always:
         - name: "Удаление временных файлов учётных данных после установки библиотек"
-          ansible.builtin.file:
-            path: "{{ hostvars['localhost'].platform_application_secret_root }}/{{ item.passwordRef }}"
-            state: absent
-          loop: "{{ hostvars['localhost'].application_vault_inputs.sourceJobs | default([]) | selectattr('passwordRef', 'defined') | list }}"
+          platform.core.application_credential_files:
+            operation: remove
+            root: "{{ hostvars['localhost'].platform_application_secret_root }}"
+            names: "{{ hostvars['localhost'].application_vault_inputs.sourceJobs | default([]) | selectattr('passwordRef', 'defined') | map(attribute='passwordRef') | list }}"
           delegate_to: localhost
           become: false
           run_once: true
-          changed_when: false
           no_log: true
 
 @@END
@@ -39915,7 +40088,7 @@ artifactLock:
       when: platform_endpoint_source_ids | length > 0
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/applications/stages/preflight.yml","mode":420,"size":7153,"sha256":"f99283b9dbe4be496ef070383c6ae694e9b38382d3e496ba842ff0a1947c855e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7153}
+@@PORTABLE {"path":"ansible-core/playbooks/applications/stages/preflight.yml","mode":420,"size":7100,"sha256":"2e4427538296ca9e5b78c395c600fe03054dc326db124447a9cf292a7a22f98e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":7100}
 ---
 - import_playbook: resolve-runtime.yml
 
@@ -40004,7 +40177,7 @@ artifactLock:
     - name: Проверка утверждённых манифестов по общему контексту реестра
       ansible.builtin.include_role:
         name: platform.core.application_runtime
-        tasks_from: preflight
+        tasks_from: preflight_registry
       vars:
         application_preflight_mode: registry
         application_runtime_job: "{{ application_registry_group.job }}"
@@ -40018,7 +40191,7 @@ artifactLock:
         operation: placements
       when:
         - application_host_jobs | length > 0
-        - not hostvars['localhost']._application_preflight_native
+        - application_host_jobs | length > _application_preflight_native | length
       no_log: true
     - name: Проверка размещений с динамическими шаблонами
       ansible.builtin.include_role:
@@ -40028,7 +40201,7 @@ artifactLock:
         application_preflight_mode: native
         application_runtime_defer_archive_verification: true
         application_runtime_job: "{{ _application_preflight_job }}"
-      loop: "{{ range(application_host_jobs | length) | list if hostvars['localhost']._application_preflight_native else [] }}"
+      loop: "{{ _application_preflight_native }}"
       loop_control:
         loop_var: application_preflight_index
     - name: Сбор результатов предварительной проверки размещений узла
@@ -40045,7 +40218,7 @@ artifactLock:
     - ansible.builtin.import_tasks: ../tasks/offline-archives.yml
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/applications/stages/provider-stage.yml","mode":420,"size":12009,"sha256":"877f9f8c787bdaf3a23fc391ff0d7a5071922e5303c4e802d8e598119bf9cdb7","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":12009}
+@@PORTABLE {"path":"ansible-core/playbooks/applications/stages/provider-stage.yml","mode":420,"size":10874,"sha256":"0fe48886723f59b36fc7b54e89331700c09ebc79b6700ae37e09c252d67eecd3","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":10874}
 ---
 - name: "Выполнение обработчиков провайдеров библиотеки, затем экземпляров приложений"
   hosts: localhost
@@ -40061,25 +40234,10 @@ artifactLock:
             platform_application_delivered_instances: []
             platform_application_delivered_shared_fields: []
           no_log: true
-        - name: Проверка защищённого runtime-каталога перед передачей сгенерированных учётных данных
-          ansible.builtin.assert:
-            that: "{} | platform.core.application_protected_secret_files([], platform_application_secret_root)"
-            fail_msg: APPLICATION_PROVIDER_SECRET_FILE_INVALID
-          when: platform_application_generated_values | default({}) | length > 0
-          no_log: true
         - name: Доставка сгенерированных паролей приложений через существующие файлы среды выполнения
-          ansible.builtin.copy:
-            content: "{{ item.value }}"
-            dest: "{{ platform_application_secret_root }}/{{ item.key }}"
-            mode: '0600'
-            follow: false
-          loop: "{{ platform_application_generated_values | default({}) | dict2items }}"
-          changed_when: false
-          no_log: true
-        - name: "Передача файлов сгенерированных учётных данных обработчикам провайдера"
-          ansible.builtin.set_fact:
-            platform_application_credential_files: "{{ platform_application_credential_files | default({}) | combine({item.key: platform_application_secret_root ~ '/' ~ item.key}) }}"
-          loop: "{{ platform_application_generated_values | default({}) | dict2items }}"
+          platform.core.application_credential_files:
+            operation: write
+            root: "{{ platform_application_secret_root }}"
           no_log: true
         - name: Чтение существующих источников учётных данных в пределах текущей операции
           ansible.builtin.include_role:
@@ -40218,11 +40376,10 @@ artifactLock:
             platform_application_generated_values: {}
           no_log: true
         - name: Удаление только файлов учётных данных Vault текущей операции
-          ansible.builtin.file:
-            path: "{{ platform_application_secret_root }}/{{ item.passwordRef }}"
-            state: absent
-          loop: "{{ application_vault_inputs.sourceJobs | default([]) | selectattr('passwordRef', 'defined') | list }}"
-          changed_when: false
+          platform.core.application_credential_files:
+            operation: remove
+            root: "{{ platform_application_secret_root }}"
+            names: "{{ application_vault_inputs.sourceJobs | default([]) | selectattr('passwordRef', 'defined') | map(attribute='passwordRef') | list }}"
           no_log: true
           when: not (platform_application_runtime_credential_custody | default(false)) or application_runtime_inputs.integrations.batches | length == 0
 

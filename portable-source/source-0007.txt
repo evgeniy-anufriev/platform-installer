@@ -1,3 +1,3155 @@
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/protocol/packp/capability/capability.go","mode":420,"size":13643,"sha256":"5c9e976d6ffd8054d63bfedf187b8d694fe2d01638b27f0088a665fbcd8a5e29","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":13643}
+// Package capability defines the server and client capabilities.
+package capability
+
+import (
+	"fmt"
+	"os"
+)
+
+// Capability describes a server or client capability.
+type Capability string
+
+func (n Capability) String() string {
+	return string(n)
+}
+
+const (
+	// MultiACK capability allows the server to return "ACK obj-id continue" as
+	// soon as it finds a commit that it can use as a common base, between the
+	// client's wants and the client's have set.
+	//
+	// By sending this early, the server can potentially head off the client
+	// from walking any further down that particular branch of the client's
+	// repository history.  The client may still need to walk down other
+	// branches, sending have lines for those, until the server has a
+	// complete cut across the DAG, or the client has said "done".
+	//
+	// Without multi_ack, a client sends have lines in --date-order until
+	// the server has found a common base.  That means the client will send
+	// have lines that are already known by the server to be common, because
+	// they overlap in time with another branch that the server hasn't found
+	// a common base on yet.
+	//
+	// For example suppose the client has commits in caps that the server
+	// doesn't and the server has commits in lower case that the client
+	// doesn't, as in the following diagram:
+	//
+	//        +---- u ---------------------- x
+	//       /              +----- y
+	//      /              /
+	//     a -- b -- c -- d -- E -- F
+	//        \
+	// 	+--- Q -- R -- S
+	//
+	// If the client wants x,y and starts out by saying have F,S, the server
+	// doesn't know what F,S is.  Eventually the client says "have d" and
+	// the server sends "ACK d continue" to let the client know to stop
+	// walking down that line (so don't send c-b-a), but it's not done yet,
+	// it needs a base for x. The client keeps going with S-R-Q, until a
+	// gets reached, at which point the server has a clear base and it all
+	// ends.
+	//
+	// Without multi_ack the client would have sent that c-b-a chain anyway,
+	// interleaved with S-R-Q.
+	MultiACK Capability = "multi_ack"
+	// MultiACKDetailed is an extension of multi_ack that permits client to
+	// better understand the server's in-memory state.
+	MultiACKDetailed Capability = "multi_ack_detailed"
+	// NoDone should only be used with the smart HTTP protocol. If
+	// multi_ack_detailed and no-done are both present, then the sender is
+	// free to immediately send a pack following its first "ACK obj-id ready"
+	// message.
+	//
+	// Without no-done in the smart HTTP protocol, the server session would
+	// end and the client has to make another trip to send "done" before
+	// the server can send the pack. no-done removes the last round and
+	// thus slightly reduces latency.
+	NoDone Capability = "no-done"
+	// ThinPack is one with deltas which reference base objects not
+	// contained within the pack (but are known to exist at the receiving
+	// end). This can reduce the network traffic significantly, but it
+	// requires the receiving end to know how to "thicken" these packs by
+	// adding the missing bases to the pack.
+	//
+	// The upload-pack server advertises 'thin-pack' when it can generate
+	// and send a thin pack. A client requests the 'thin-pack' capability
+	// when it understands how to "thicken" it, notifying the server that
+	// it can receive such a pack. A client MUST NOT request the
+	// 'thin-pack' capability if it cannot turn a thin pack into a
+	// self-contained pack.
+	//
+	// Receive-pack, on the other hand, is assumed by default to be able to
+	// handle thin packs, but can ask the client not to use the feature by
+	// advertising the 'no-thin' capability. A client MUST NOT send a thin
+	// pack if the server advertises the 'no-thin' capability.
+	//
+	// The reasons for this asymmetry are historical. The receive-pack
+	// program did not exist until after the invention of thin packs, so
+	// historically the reference implementation of receive-pack always
+	// understood thin packs. Adding 'no-thin' later allowed receive-pack
+	// to disable the feature in a backwards-compatible manner.
+	ThinPack Capability = "thin-pack"
+	// Sideband means that server can send, and client understand multiplexed
+	// progress reports and error info interleaved with the packfile itself.
+	//
+	// These two options are mutually exclusive. A modern client always
+	// favors Sideband64k.
+	//
+	// Either mode indicates that the packfile data will be streamed broken
+	// up into packets of up to either 1000 bytes in the case of 'side_band',
+	// or 65520 bytes in the case of 'side_band_64k'. Each packet is made up
+	// of a leading 4-byte pkt-line length of how much data is in the packet,
+	// followed by a 1-byte stream code, followed by the actual data.
+	//
+	// The stream code can be one of:
+	//
+	//  1 - pack data
+	//  2 - progress messages
+	//  3 - fatal error message just before stream aborts
+	//
+	// The "side-band-64k" capability came about as a way for newer clients
+	// that can handle much larger packets to request packets that are
+	// actually crammed nearly full, while maintaining backward compatibility
+	// for the older clients.
+	//
+	// Further, with side-band and its up to 1000-byte messages, it's actually
+	// 999 bytes of payload and 1 byte for the stream code. With side-band-64k,
+	// same deal, you have up to 65519 bytes of data and 1 byte for the stream
+	// code.
+	//
+	// The client MUST send only maximum of one of "side-band" and "side-
+	// band-64k".  Server MUST diagnose it as an error if client requests
+	// both.
+	Sideband    Capability = "side-band"
+	Sideband64k Capability = "side-band-64k"
+	// OFSDelta server can send, and client understand PACKv2 with delta
+	// referring to its base by position in pack rather than by an obj-id. That
+	// is, they can send/read OBJ_OFS_DELTA (aka type 6) in a packfile.
+	OFSDelta Capability = "ofs-delta"
+	// Agent the server may optionally send this capability to notify the client
+	// that the server is running version `X`. The client may optionally return
+	// its own agent string by responding with an `agent=Y` capability (but it
+	// MUST NOT do so if the server did not mention the agent capability). The
+	// `X` and `Y` strings may contain any printable ASCII characters except
+	// space (i.e., the byte range 32 < x < 127), and are typically of the form
+	// "package/version" (e.g., "git/1.8.3.1"). The agent strings are purely
+	// informative for statistics and debugging purposes, and MUST NOT be used
+	// to programmatically assume the presence or absence of particular features.
+	Agent Capability = "agent"
+	// Shallow capability adds "deepen", "shallow" and "unshallow" commands to
+	// the  fetch-pack/upload-pack protocol so clients can request shallow
+	// clones.
+	Shallow Capability = "shallow"
+	// DeepenSince adds "deepen-since" command to fetch-pack/upload-pack
+	// protocol so the client can request shallow clones that are cut at a
+	// specific time, instead of depth. Internally it's equivalent of doing
+	// "rev-list --max-age=<timestamp>" on the server side. "deepen-since"
+	// cannot be used with "deepen".
+	DeepenSince Capability = "deepen-since"
+	// DeepenNot adds "deepen-not" command to fetch-pack/upload-pack
+	// protocol so the client can request shallow clones that are cut at a
+	// specific revision, instead of depth. Internally it's equivalent of
+	// doing "rev-list --not <rev>" on the server side. "deepen-not"
+	// cannot be used with "deepen", but can be used with "deepen-since".
+	DeepenNot Capability = "deepen-not"
+	// DeepenRelative if this capability is requested by the client, the
+	// semantics of "deepen" command is changed. The "depth" argument is the
+	// depth from the current shallow boundary, instead of the depth from
+	// remote refs.
+	DeepenRelative Capability = "deepen-relative"
+	// NoProgress the client was started with "git clone -q" or something, and
+	// doesn't want that side band 2. Basically the client just says "I do not
+	// wish to receive stream 2 on sideband, so do not send it to me, and if
+	// you did, I will drop it on the floor anyway".  However, the sideband
+	// channel 3 is still used for error responses.
+	NoProgress Capability = "no-progress"
+	// IncludeTag capability is about sending annotated tags if we are
+	// sending objects they point to.  If we pack an object to the client, and
+	// a tag object points exactly at that object, we pack the tag object too.
+	// In general this allows a client to get all new annotated tags when it
+	// fetches a branch, in a single network connection.
+	//
+	// Clients MAY always send include-tag, hardcoding it into a request when
+	// the server advertises this capability. The decision for a client to
+	// request include-tag only has to do with the client's desires for tag
+	// data, whether or not a server had advertised objects in the
+	// refs/tags/* namespace.
+	//
+	// Servers MUST pack the tags if their referrant is packed and the client
+	// has requested include-tags.
+	//
+	// Clients MUST be prepared for the case where a server has ignored
+	// include-tag and has not actually sent tags in the pack.  In such
+	// cases the client SHOULD issue a subsequent fetch to acquire the tags
+	// that include-tag would have otherwise given the client.
+	//
+	// The server SHOULD send include-tag, if it supports it, regardless
+	// of whether or not there are tags available.
+	IncludeTag Capability = "include-tag"
+	// ReportStatus the receive-pack process can receive a 'report-status'
+	// capability, which tells it that the client wants a report of what
+	// happened after a packfile upload and reference update. If the pushing
+	// client requests this capability, after unpacking and updating references
+	// the server will respond with whether the packfile unpacked successfully
+	// and if each reference was updated successfully. If any of those were not
+	// successful, it will send back an error message.  See pack-protocol.txt
+	// for example messages.
+	ReportStatus Capability = "report-status"
+	// DeleteRefs If the server sends back this capability, it means that
+	// it is capable of accepting a zero-id value as the target
+	// value of a reference update.  It is not sent back by the client, it
+	// simply informs the client that it can be sent zero-id values
+	// to delete references
+	DeleteRefs Capability = "delete-refs"
+	// Quiet If the receive-pack server advertises this capability, it is
+	// capable of silencing human-readable progress output which otherwise may
+	// be shown when processing the received pack. A send-pack client should
+	// respond with the 'quiet' capability to suppress server-side progress
+	// reporting if the local progress reporting is also being suppressed
+	// (e.g., via `push -q`, or if stderr does not go to a tty).
+	Quiet Capability = "quiet"
+	// Atomic If the server sends this capability it is capable of accepting
+	// atomic pushes. If the pushing client requests this capability, the server
+	// will update the refs in one atomic transaction. Either all refs are
+	// updated or none.
+	Atomic Capability = "atomic"
+	// PushOptions If the server sends this capability it is able to accept
+	// push options after the update commands have been sent, but before the
+	// packfile is streamed. If the pushing client requests this capability,
+	// the server will pass the options to the pre- and post- receive hooks
+	// that process this push request.
+	PushOptions Capability = "push-options"
+	// AllowTipSHA1InWant if the upload-pack server advertises this capability,
+	// fetch-pack may send "want" lines with SHA-1s that exist at the server but
+	// are not advertised by upload-pack.
+	AllowTipSHA1InWant Capability = "allow-tip-sha1-in-want"
+	// AllowReachableSHA1InWant if the upload-pack server advertises this
+	// capability, fetch-pack may send "want" lines with SHA-1s that exist at
+	// the server but are not advertised by upload-pack.
+	AllowReachableSHA1InWant Capability = "allow-reachable-sha1-in-want"
+	// PushCert the receive-pack server that advertises this capability is
+	// willing to accept a signed push certificate, and asks the <nonce> to be
+	// included in the push certificate.  A send-pack client MUST NOT
+	// send a push-cert packet unless the receive-pack server advertises
+	// this capability.
+	PushCert Capability = "push-cert"
+	// SymRef symbolic reference support for better negotiation.
+	SymRef Capability = "symref"
+	// ObjectFormat takes a hash algorithm as an argument, indicates that the
+	// server supports the given hash algorithms.
+	ObjectFormat Capability = "object-format"
+	// Filter if present, fetch-pack may send "filter" commands to request a
+	// partial clone or partial fetch and request that the server omit various objects from the packfile
+	Filter Capability = "filter"
+)
+
+const userAgent = "go-git/5.x"
+
+// DefaultAgent provides the user agent string.
+func DefaultAgent() string {
+	if envUserAgent, ok := os.LookupEnv("GO_GIT_USER_AGENT_EXTRA"); ok {
+		return fmt.Sprintf("%s %s", userAgent, envUserAgent)
+	}
+	return userAgent
+}
+
+var known = map[Capability]bool{
+	MultiACK: true, MultiACKDetailed: true, NoDone: true, ThinPack: true,
+	Sideband: true, Sideband64k: true, OFSDelta: true, Agent: true,
+	Shallow: true, DeepenSince: true, DeepenNot: true, DeepenRelative: true,
+	NoProgress: true, IncludeTag: true, ReportStatus: true, DeleteRefs: true,
+	Quiet: true, Atomic: true, PushOptions: true, AllowTipSHA1InWant: true,
+	AllowReachableSHA1InWant: true, PushCert: true, SymRef: true,
+	ObjectFormat: true, Filter: true,
+}
+
+var requiresArgument = map[Capability]bool{
+	Agent: true, PushCert: true, SymRef: true, ObjectFormat: true,
+}
+
+var multipleArgument = map[Capability]bool{
+	SymRef: true,
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/protocol/packp/capability/list.go","mode":420,"size":4217,"sha256":"6f7806f29aed17be11e86b1b842e96379de0d3e769f8e7025e30f48ed80a4959","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4217}
+package capability
+
+import (
+	"bytes"
+	"errors"
+	"fmt"
+	"strings"
+)
+
+var (
+	// ErrArgumentsRequired is returned if no arguments are giving with a
+	// capability that requires arguments
+	ErrArgumentsRequired = errors.New("arguments required")
+	// ErrArguments is returned if arguments are given with a capabilities that
+	// not supports arguments
+	ErrArguments = errors.New("arguments not allowed")
+	// ErrEmptyArgument is returned when an empty value is given
+	ErrEmptyArgument = errors.New("empty argument")
+	// ErrMultipleArguments multiple argument given to a capabilities that not
+	// support it
+	ErrMultipleArguments = errors.New("multiple arguments not allowed")
+)
+
+// List represents a list of capabilities
+type List struct {
+	m    map[Capability]*entry
+	sort []string
+}
+
+type entry struct {
+	Name   Capability
+	Values []string
+}
+
+// NewList returns a new List of capabilities
+func NewList() *List {
+	return &List{
+		m: make(map[Capability]*entry),
+	}
+}
+
+// IsEmpty returns true if the List is empty
+func (l *List) IsEmpty() bool {
+	return len(l.sort) == 0
+}
+
+// Decode decodes list of capabilities from raw into the list
+func (l *List) Decode(raw []byte) error {
+	// git 1.x receive pack used to send a leading space on its
+	// git-receive-pack capabilities announcement. We just trim space to be
+	// tolerant to space changes in different versions.
+	raw = bytes.TrimSpace(raw)
+
+	if len(raw) == 0 {
+		return nil
+	}
+
+	for _, data := range bytes.Split(raw, []byte{' '}) {
+		pair := bytes.SplitN(data, []byte{'='}, 2)
+
+		c := Capability(pair[0])
+		if len(pair) == 1 {
+			if err := l.Add(c); err != nil {
+				return err
+			}
+
+			continue
+		}
+
+		if err := l.Add(c, string(pair[1])); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// Get returns the values for a capability
+func (l *List) Get(capability Capability) []string {
+	if _, ok := l.m[capability]; !ok {
+		return nil
+	}
+
+	return l.m[capability].Values
+}
+
+// Set sets a capability removing the previous values
+func (l *List) Set(capability Capability, values ...string) error {
+	if _, ok := l.m[capability]; ok {
+		l.m[capability].Values = l.m[capability].Values[:0]
+	}
+	return l.Add(capability, values...)
+}
+
+// Add adds a capability, values are optional
+func (l *List) Add(c Capability, values ...string) error {
+	if err := l.validate(c, values); err != nil {
+		return err
+	}
+
+	if !l.Supports(c) {
+		l.m[c] = &entry{Name: c}
+		l.sort = append(l.sort, c.String())
+	}
+
+	if len(values) == 0 {
+		return nil
+	}
+
+	if known[c] && !multipleArgument[c] && len(l.m[c].Values) > 0 {
+		return ErrMultipleArguments
+	}
+
+	l.m[c].Values = append(l.m[c].Values, values...)
+	return nil
+}
+
+func (l *List) validateNoEmptyArgs(values []string) error {
+	for _, v := range values {
+		if v == "" {
+			return ErrEmptyArgument
+		}
+	}
+	return nil
+}
+
+func (l *List) validate(c Capability, values []string) error {
+	if !known[c] {
+		return l.validateNoEmptyArgs(values)
+	}
+	if requiresArgument[c] && len(values) == 0 {
+		return ErrArgumentsRequired
+	}
+
+	if !requiresArgument[c] && len(values) != 0 {
+		return ErrArguments
+	}
+
+	if !multipleArgument[c] && len(values) > 1 {
+		return ErrMultipleArguments
+	}
+	return l.validateNoEmptyArgs(values)
+}
+
+// Supports returns true if capability is present
+func (l *List) Supports(capability Capability) bool {
+	_, ok := l.m[capability]
+	return ok
+}
+
+// Delete deletes a capability from the List
+func (l *List) Delete(capability Capability) {
+	if !l.Supports(capability) {
+		return
+	}
+
+	delete(l.m, capability)
+	for i, c := range l.sort {
+		if c != string(capability) {
+			continue
+		}
+
+		l.sort = append(l.sort[:i], l.sort[i+1:]...)
+		return
+	}
+}
+
+// All returns a slice with all defined capabilities.
+func (l *List) All() []Capability {
+	var cs []Capability
+	for _, key := range l.sort {
+		cs = append(cs, Capability(key))
+	}
+
+	return cs
+}
+
+// String generates the capabilities strings, the capabilities are sorted in
+// insertion order
+func (l *List) String() string {
+	var o []string
+	for _, key := range l.sort {
+		cap := l.m[Capability(key)]
+		if len(cap.Values) == 0 {
+			o = append(o, key)
+			continue
+		}
+
+		for _, value := range cap.Values {
+			o = append(o, fmt.Sprintf("%s=%s", key, value))
+		}
+	}
+
+	return strings.Join(o, " ")
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/protocol/packp/common.go","mode":420,"size":1428,"sha256":"3ce5cc4d08ea700f52bd9428b36fec8b8858baab3b6fba2e1981c19d7af47ecd","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1428}
+package packp
+
+import (
+	"fmt"
+)
+
+type stateFn func() stateFn
+
+const (
+	// common
+	hashSize = 40
+
+	// advrefs
+	head   = "HEAD"
+	noHead = "capabilities^{}"
+)
+
+var (
+	// common
+	sp  = []byte(" ")
+	eol = []byte("\n")
+
+	// advertised-refs
+	null       = []byte("\x00")
+	peeled     = []byte("^{}")
+	noHeadMark = []byte(" capabilities^{}\x00")
+
+	// upload-request
+	want            = []byte("want ")
+	shallow         = []byte("shallow ")
+	deepen          = []byte("deepen")
+	deepenCommits   = []byte("deepen ")
+	deepenSince     = []byte("deepen-since ")
+	deepenReference = []byte("deepen-not ")
+
+	// shallow-update
+	unshallow = []byte("unshallow ")
+
+	// server-response
+	ack = []byte("ACK")
+	nak = []byte("NAK")
+
+	// updreq
+	shallowNoSp = []byte("shallow")
+)
+
+func isFlush(payload []byte) bool {
+	return len(payload) == 0
+}
+
+var (
+	// ErrNilWriter is returned when a nil writer is passed to the encoder.
+	ErrNilWriter = fmt.Errorf("nil writer")
+)
+
+// ErrUnexpectedData represents an unexpected data decoding a message
+type ErrUnexpectedData struct {
+	Msg  string
+	Data []byte
+}
+
+// NewErrUnexpectedData returns a new ErrUnexpectedData containing the data and
+// the message given
+func NewErrUnexpectedData(msg string, data []byte) error {
+	return &ErrUnexpectedData{Msg: msg, Data: data}
+}
+
+func (err *ErrUnexpectedData) Error() string {
+	if len(err.Data) == 0 {
+		return err.Msg
+	}
+
+	return fmt.Sprintf("%s (%s)", err.Msg, err.Data)
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/protocol/packp/doc.go","mode":420,"size":26934,"sha256":"bae4d796456991c45b295fc89b7565c9aae92f82fb955f9f8243e9d650ad5e3a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":26934}
+package packp
+
+/*
+
+A nice way to trace the real data transmitted and received by git, use:
+
+GIT_TRACE_PACKET=true git ls-remote http://github.com/src-d/go-git
+GIT_TRACE_PACKET=true git clone http://github.com/src-d/go-git
+
+Here follows a copy of the current protocol specification at the time of
+this writing.
+
+(Please notice that most http git servers will add a flush-pkt after the
+first pkt-line when using HTTP smart.)
+
+
+Documentation Common to Pack and Http Protocols
+===============================================
+
+ABNF Notation
+-------------
+
+ABNF notation as described by RFC 5234 is used within the protocol documents,
+except the following replacement core rules are used:
+----
+  HEXDIG    =  DIGIT / "a" / "b" / "c" / "d" / "e" / "f"
+----
+
+We also define the following common rules:
+----
+  NUL       =  %x00
+  zero-id   =  40*"0"
+  obj-id    =  40*(HEXDIGIT)
+
+  refname  =  "HEAD"
+  refname /=  "refs/" <see discussion below>
+----
+
+A refname is a hierarchical octet string beginning with "refs/" and
+not violating the 'git-check-ref-format' command's validation rules.
+More specifically, they:
+
+. They can include slash `/` for hierarchical (directory)
+  grouping, but no slash-separated component can begin with a
+  dot `.`.
+
+. They must contain at least one `/`. This enforces the presence of a
+  category like `heads/`, `tags/` etc. but the actual names are not
+  restricted.
+
+. They cannot have two consecutive dots `..` anywhere.
+
+. They cannot have ASCII control characters (i.e. bytes whose
+  values are lower than \040, or \177 `DEL`), space, tilde `~`,
+  caret `^`, colon `:`, question-mark `?`, asterisk `*`,
+  or open bracket `[` anywhere.
+
+. They cannot end with a slash `/` or a dot `.`.
+
+. They cannot end with the sequence `.lock`.
+
+. They cannot contain a sequence `@{`.
+
+. They cannot contain a `\\`.
+
+
+pkt-line Format
+---------------
+
+Much (but not all) of the payload is described around pkt-lines.
+
+A pkt-line is a variable length binary string.  The first four bytes
+of the line, the pkt-len, indicates the total length of the line,
+in hexadecimal.  The pkt-len includes the 4 bytes used to contain
+the length's hexadecimal representation.
+
+A pkt-line MAY contain binary data, so implementors MUST ensure
+pkt-line parsing/formatting routines are 8-bit clean.
+
+A non-binary line SHOULD BE terminated by an LF, which if present
+MUST be included in the total length. Receivers MUST treat pkt-lines
+with non-binary data the same whether or not they contain the trailing
+LF (stripping the LF if present, and not complaining when it is
+missing).
+
+The maximum length of a pkt-line's data component is 65516 bytes.
+Implementations MUST NOT send pkt-line whose length exceeds 65520
+(65516 bytes of payload + 4 bytes of length data).
+
+Implementations SHOULD NOT send an empty pkt-line ("0004").
+
+A pkt-line with a length field of 0 ("0000"), called a flush-pkt,
+is a special case and MUST be handled differently than an empty
+pkt-line ("0004").
+
+----
+  pkt-line     =  data-pkt / flush-pkt
+
+  data-pkt     =  pkt-len pkt-payload
+  pkt-len      =  4*(HEXDIG)
+  pkt-payload  =  (pkt-len - 4)*(OCTET)
+
+  flush-pkt    = "0000"
+----
+
+Examples (as C-style strings):
+
+----
+  pkt-line          actual value
+  ---------------------------------
+  "0006a\n"         "a\n"
+  "0005a"           "a"
+  "000bfoobar\n"    "foobar\n"
+  "0004"            ""
+----
+
+Packfile transfer protocols
+===========================
+
+Git supports transferring data in packfiles over the ssh://, git://, http:// and
+file:// transports.  There exist two sets of protocols, one for pushing
+data from a client to a server and another for fetching data from a
+server to a client.  The three transports (ssh, git, file) use the same
+protocol to transfer data. http is documented in http-protocol.txt.
+
+The processes invoked in the canonical Git implementation are 'upload-pack'
+on the server side and 'fetch-pack' on the client side for fetching data;
+then 'receive-pack' on the server and 'send-pack' on the client for pushing
+data.  The protocol functions to have a server tell a client what is
+currently on the server, then for the two to negotiate the smallest amount
+of data to send in order to fully update one or the other.
+
+pkt-line Format
+---------------
+
+The descriptions below build on the pkt-line format described in
+protocol-common.txt. When the grammar indicate `PKT-LINE(...)`, unless
+otherwise noted the usual pkt-line LF rules apply: the sender SHOULD
+include a LF, but the receiver MUST NOT complain if it is not present.
+
+Transports
+----------
+There are three transports over which the packfile protocol is
+initiated.  The Git transport is a simple, unauthenticated server that
+takes the command (almost always 'upload-pack', though Git
+servers can be configured to be globally writable, in which 'receive-
+pack' initiation is also allowed) with which the client wishes to
+communicate and executes it and connects it to the requesting
+process.
+
+In the SSH transport, the client just runs the 'upload-pack'
+or 'receive-pack' process on the server over the SSH protocol and then
+communicates with that invoked process over the SSH connection.
+
+The file:// transport runs the 'upload-pack' or 'receive-pack'
+process locally and communicates with it over a pipe.
+
+Git Transport
+-------------
+
+The Git transport starts off by sending the command and repository
+on the wire using the pkt-line format, followed by a NUL byte and a
+hostname parameter, terminated by a NUL byte.
+
+   0032git-upload-pack /project.git\0host=myserver.com\0
+
+--
+   git-proto-request = request-command SP pathname NUL [ host-parameter NUL ]
+   request-command   = "git-upload-pack" / "git-receive-pack" /
+		       "git-upload-archive"   ; case sensitive
+   pathname          = *( %x01-ff ) ; exclude NUL
+   host-parameter    = "host=" hostname [ ":" port ]
+--
+
+Only host-parameter is allowed in the git-proto-request. Clients
+MUST NOT attempt to send additional parameters. It is used for the
+git-daemon name based virtual hosting.  See --interpolated-path
+option to git daemon, with the %H/%CH format characters.
+
+Basically what the Git client is doing to connect to an 'upload-pack'
+process on the server side over the Git protocol is this:
+
+   $ echo -e -n \
+     "0039git-upload-pack /schacon/gitbook.git\0host=example.com\0" |
+     nc -v example.com 9418
+
+If the server refuses the request for some reasons, it could abort
+gracefully with an error message.
+
+----
+  error-line     =  PKT-LINE("ERR" SP explanation-text)
+----
+
+
+SSH Transport
+-------------
+
+Initiating the upload-pack or receive-pack processes over SSH is
+executing the binary on the server via SSH remote execution.
+It is basically equivalent to running this:
+
+   $ ssh git.example.com "git-upload-pack '/project.git'"
+
+For a server to support Git pushing and pulling for a given user over
+SSH, that user needs to be able to execute one or both of those
+commands via the SSH shell that they are provided on login.  On some
+systems, that shell access is limited to only being able to run those
+two commands, or even just one of them.
+
+In an ssh:// format URI, it's absolute in the URI, so the '/' after
+the host name (or port number) is sent as an argument, which is then
+read by the remote git-upload-pack exactly as is, so it's effectively
+an absolute path in the remote filesystem.
+
+       git clone ssh://user@example.com/project.git
+		    |
+		    v
+    ssh user@example.com "git-upload-pack '/project.git'"
+
+In a "user@host:path" format URI, its relative to the user's home
+directory, because the Git client will run:
+
+     git clone user@example.com:project.git
+		    |
+		    v
+  ssh user@example.com "git-upload-pack 'project.git'"
+
+The exception is if a '~' is used, in which case
+we execute it without the leading '/'.
+
+      ssh://user@example.com/~alice/project.git,
+		     |
+		     v
+   ssh user@example.com "git-upload-pack '~alice/project.git'"
+
+A few things to remember here:
+
+- The "command name" is spelled with dash (e.g. git-upload-pack), but
+  this can be overridden by the client;
+
+- The repository path is always quoted with single quotes.
+
+Fetching Data From a Server
+---------------------------
+
+When one Git repository wants to get data that a second repository
+has, the first can 'fetch' from the second.  This operation determines
+what data the server has that the client does not then streams that
+data down to the client in packfile format.
+
+
+Reference Discovery
+-------------------
+
+When the client initially connects the server will immediately respond
+with a listing of each reference it has (all branches and tags) along
+with the object name that each reference currently points to.
+
+   $ echo -e -n "0039git-upload-pack /schacon/gitbook.git\0host=example.com\0" |
+      nc -v example.com 9418
+   00887217a7c7e582c46cec22a130adf4b9d7d950fba0 HEAD\0multi_ack thin-pack
+		side-band side-band-64k ofs-delta shallow no-progress include-tag
+   00441d3fcd5ced445d1abc402225c0b8a1299641f497 refs/heads/integration
+   003f7217a7c7e582c46cec22a130adf4b9d7d950fba0 refs/heads/master
+   003cb88d2441cac0977faf98efc80305012112238d9d refs/tags/v0.9
+   003c525128480b96c89e6418b1e40909bf6c5b2d580f refs/tags/v1.0
+   003fe92df48743b7bc7d26bcaabfddde0a1e20cae47c refs/tags/v1.0^{}
+   0000
+
+The returned response is a pkt-line stream describing each ref and
+its current value.  The stream MUST be sorted by name according to
+the C locale ordering.
+
+If HEAD is a valid ref, HEAD MUST appear as the first advertised
+ref.  If HEAD is not a valid ref, HEAD MUST NOT appear in the
+advertisement list at all, but other refs may still appear.
+
+The stream MUST include capability declarations behind a NUL on the
+first ref. The peeled value of a ref (that is "ref^{}") MUST be
+immediately after the ref itself, if presented. A conforming server
+MUST peel the ref if it's an annotated tag.
+
+----
+  advertised-refs  =  (no-refs / list-of-refs)
+		      *shallow
+		      flush-pkt
+
+  no-refs          =  PKT-LINE(zero-id SP "capabilities^{}"
+		      NUL capability-list)
+
+  list-of-refs     =  first-ref *other-ref
+  first-ref        =  PKT-LINE(obj-id SP refname
+		      NUL capability-list)
+
+  other-ref        =  PKT-LINE(other-tip / other-peeled)
+  other-tip        =  obj-id SP refname
+  other-peeled     =  obj-id SP refname "^{}"
+
+  shallow          =  PKT-LINE("shallow" SP obj-id)
+
+  capability-list  =  capability *(SP capability)
+  capability       =  1*(LC_ALPHA / DIGIT / "-" / "_")
+  LC_ALPHA         =  %x61-7A
+----
+
+Server and client MUST use lowercase for obj-id, both MUST treat obj-id
+as case-insensitive.
+
+See protocol-capabilities.txt for a list of allowed server capabilities
+and descriptions.
+
+Packfile Negotiation
+--------------------
+After reference and capabilities discovery, the client can decide to
+terminate the connection by sending a flush-pkt, telling the server it can
+now gracefully terminate, and disconnect, when it does not need any pack
+data. This can happen with the ls-remote command, and also can happen when
+the client already is up-to-date.
+
+Otherwise, it enters the negotiation phase, where the client and
+server determine what the minimal packfile necessary for transport is,
+by telling the server what objects it wants, its shallow objects
+(if any), and the maximum commit depth it wants (if any).  The client
+will also send a list of the capabilities it wants to be in effect,
+out of what the server said it could do with the first 'want' line.
+
+----
+  upload-request    =  want-list
+		       *shallow-line
+		       *1depth-request
+		       flush-pkt
+
+  want-list         =  first-want
+		       *additional-want
+
+  shallow-line      =  PKT-LINE("shallow" SP obj-id)
+
+  depth-request     =  PKT-LINE("deepen" SP depth) /
+		       PKT-LINE("deepen-since" SP timestamp) /
+		       PKT-LINE("deepen-not" SP ref)
+
+  first-want        =  PKT-LINE("want" SP obj-id SP capability-list)
+  additional-want   =  PKT-LINE("want" SP obj-id)
+
+  depth             =  1*DIGIT
+----
+
+Clients MUST send all the obj-ids it wants from the reference
+discovery phase as 'want' lines. Clients MUST send at least one
+'want' command in the request body. Clients MUST NOT mention an
+obj-id in a 'want' command which did not appear in the response
+obtained through ref discovery.
+
+The client MUST write all obj-ids which it only has shallow copies
+of (meaning that it does not have the parents of a commit) as
+'shallow' lines so that the server is aware of the limitations of
+the client's history.
+
+The client now sends the maximum commit history depth it wants for
+this transaction, which is the number of commits it wants from the
+tip of the history, if any, as a 'deepen' line.  A depth of 0 is the
+same as not making a depth request. The client does not want to receive
+any commits beyond this depth, nor does it want objects needed only to
+complete those commits. Commits whose parents are not received as a
+result are defined as shallow and marked as such in the server. This
+information is sent back to the client in the next step.
+
+Once all the 'want's and 'shallow's (and optional 'deepen') are
+transferred, clients MUST send a flush-pkt, to tell the server side
+that it is done sending the list.
+
+Otherwise, if the client sent a positive depth request, the server
+will determine which commits will and will not be shallow and
+send this information to the client. If the client did not request
+a positive depth, this step is skipped.
+
+----
+  shallow-update   =  *shallow-line
+		      *unshallow-line
+		      flush-pkt
+
+  shallow-line     =  PKT-LINE("shallow" SP obj-id)
+
+  unshallow-line   =  PKT-LINE("unshallow" SP obj-id)
+----
+
+If the client has requested a positive depth, the server will compute
+the set of commits which are no deeper than the desired depth. The set
+of commits start at the client's wants.
+
+The server writes 'shallow' lines for each
+commit whose parents will not be sent as a result. The server writes
+an 'unshallow' line for each commit which the client has indicated is
+shallow, but is no longer shallow at the currently requested depth
+(that is, its parents will now be sent). The server MUST NOT mark
+as unshallow anything which the client has not indicated was shallow.
+
+Now the client will send a list of the obj-ids it has using 'have'
+lines, so the server can make a packfile that only contains the objects
+that the client needs. In multi_ack mode, the canonical implementation
+will send up to 32 of these at a time, then will send a flush-pkt. The
+canonical implementation will skip ahead and send the next 32 immediately,
+so that there is always a block of 32 "in-flight on the wire" at a time.
+
+----
+  upload-haves      =  have-list
+		       compute-end
+
+  have-list         =  *have-line
+  have-line         =  PKT-LINE("have" SP obj-id)
+  compute-end       =  flush-pkt / PKT-LINE("done")
+----
+
+If the server reads 'have' lines, it then will respond by ACKing any
+of the obj-ids the client said it had that the server also has. The
+server will ACK obj-ids differently depending on which ack mode is
+chosen by the client.
+
+In multi_ack mode:
+
+  * the server will respond with 'ACK obj-id continue' for any common
+    commits.
+
+  * once the server has found an acceptable common base commit and is
+    ready to make a packfile, it will blindly ACK all 'have' obj-ids
+    back to the client.
+
+  * the server will then send a 'NAK' and then wait for another response
+    from the client - either a 'done' or another list of 'have' lines.
+
+In multi_ack_detailed mode:
+
+  * the server will differentiate the ACKs where it is signaling
+    that it is ready to send data with 'ACK obj-id ready' lines, and
+    signals the identified common commits with 'ACK obj-id common' lines.
+
+Without either multi_ack or multi_ack_detailed:
+
+ * upload-pack sends "ACK obj-id" on the first common object it finds.
+   After that it says nothing until the client gives it a "done".
+
+ * upload-pack sends "NAK" on a flush-pkt if no common object
+   has been found yet.  If one has been found, and thus an ACK
+   was already sent, it's silent on the flush-pkt.
+
+After the client has gotten enough ACK responses that it can determine
+that the server has enough information to send an efficient packfile
+(in the canonical implementation, this is determined when it has received
+enough ACKs that it can color everything left in the --date-order queue
+as common with the server, or the --date-order queue is empty), or the
+client determines that it wants to give up (in the canonical implementation,
+this is determined when the client sends 256 'have' lines without getting
+any of them ACKed by the server - meaning there is nothing in common and
+the server should just send all of its objects), then the client will send
+a 'done' command.  The 'done' command signals to the server that the client
+is ready to receive its packfile data.
+
+However, the 256 limit *only* turns on in the canonical client
+implementation if we have received at least one "ACK %s continue"
+during a prior round.  This helps to ensure that at least one common
+ancestor is found before we give up entirely.
+
+Once the 'done' line is read from the client, the server will either
+send a final 'ACK obj-id' or it will send a 'NAK'. 'obj-id' is the object
+name of the last commit determined to be common. The server only sends
+ACK after 'done' if there is at least one common base and multi_ack or
+multi_ack_detailed is enabled. The server always sends NAK after 'done'
+if there is no common base found.
+
+Then the server will start sending its packfile data.
+
+----
+  server-response = *ack_multi ack / nak
+  ack_multi       = PKT-LINE("ACK" SP obj-id ack_status)
+  ack_status      = "continue" / "common" / "ready"
+  ack             = PKT-LINE("ACK" SP obj-id)
+  nak             = PKT-LINE("NAK")
+----
+
+A simple clone may look like this (with no 'have' lines):
+
+----
+   C: 0054want 74730d410fcb6603ace96f1dc55ea6196122532d multi_ack \
+     side-band-64k ofs-delta\n
+   C: 0032want 7d1665144a3a975c05f1f43902ddaf084e784dbe\n
+   C: 0032want 5a3f6be755bbb7deae50065988cbfa1ffa9ab68a\n
+   C: 0032want 7e47fe2bd8d01d481f44d7af0531bd93d3b21c01\n
+   C: 0032want 74730d410fcb6603ace96f1dc55ea6196122532d\n
+   C: 0000
+   C: 0009done\n
+
+   S: 0008NAK\n
+   S: [PACKFILE]
+----
+
+An incremental update (fetch) response might look like this:
+
+----
+   C: 0054want 74730d410fcb6603ace96f1dc55ea6196122532d multi_ack \
+     side-band-64k ofs-delta\n
+   C: 0032want 7d1665144a3a975c05f1f43902ddaf084e784dbe\n
+   C: 0032want 5a3f6be755bbb7deae50065988cbfa1ffa9ab68a\n
+   C: 0000
+   C: 0032have 7e47fe2bd8d01d481f44d7af0531bd93d3b21c01\n
+   C: [30 more have lines]
+   C: 0032have 74730d410fcb6603ace96f1dc55ea6196122532d\n
+   C: 0000
+
+   S: 003aACK 7e47fe2bd8d01d481f44d7af0531bd93d3b21c01 continue\n
+   S: 003aACK 74730d410fcb6603ace96f1dc55ea6196122532d continue\n
+   S: 0008NAK\n
+
+   C: 0009done\n
+
+   S: 0031ACK 74730d410fcb6603ace96f1dc55ea6196122532d\n
+   S: [PACKFILE]
+----
+
+
+Packfile Data
+-------------
+
+Now that the client and server have finished negotiation about what
+the minimal amount of data that needs to be sent to the client is, the server
+will construct and send the required data in packfile format.
+
+See pack-format.txt for what the packfile itself actually looks like.
+
+If 'side-band' or 'side-band-64k' capabilities have been specified by
+the client, the server will send the packfile data multiplexed.
+
+Each packet starting with the packet-line length of the amount of data
+that follows, followed by a single byte specifying the sideband the
+following data is coming in on.
+
+In 'side-band' mode, it will send up to 999 data bytes plus 1 control
+code, for a total of up to 1000 bytes in a pkt-line.  In 'side-band-64k'
+mode it will send up to 65519 data bytes plus 1 control code, for a
+total of up to 65520 bytes in a pkt-line.
+
+The sideband byte will be a '1', '2' or a '3'. Sideband '1' will contain
+packfile data, sideband '2' will be used for progress information that the
+client will generally print to stderr and sideband '3' is used for error
+information.
+
+If no 'side-band' capability was specified, the server will stream the
+entire packfile without multiplexing.
+
+
+Pushing Data To a Server
+------------------------
+
+Pushing data to a server will invoke the 'receive-pack' process on the
+server, which will allow the client to tell it which references it should
+update and then send all the data the server will need for those new
+references to be complete.  Once all the data is received and validated,
+the server will then update its references to what the client specified.
+
+Authentication
+--------------
+
+The protocol itself contains no authentication mechanisms.  That is to be
+handled by the transport, such as SSH, before the 'receive-pack' process is
+invoked.  If 'receive-pack' is configured over the Git transport, those
+repositories will be writable by anyone who can access that port (9418) as
+that transport is unauthenticated.
+
+Reference Discovery
+-------------------
+
+The reference discovery phase is done nearly the same way as it is in the
+fetching protocol. Each reference obj-id and name on the server is sent
+in packet-line format to the client, followed by a flush-pkt.  The only
+real difference is that the capability listing is different - the only
+possible values are 'report-status', 'delete-refs', 'ofs-delta' and
+'push-options'.
+
+Reference Update Request and Packfile Transfer
+----------------------------------------------
+
+Once the client knows what references the server is at, it can send a
+list of reference update requests.  For each reference on the server
+that it wants to update, it sends a line listing the obj-id currently on
+the server, the obj-id the client would like to update it to and the name
+of the reference.
+
+This list is followed by a flush-pkt. Then the push options are transmitted
+one per packet followed by another flush-pkt. After that the packfile that
+should contain all the objects that the server will need to complete the new
+references will be sent.
+
+----
+  update-request    =  *shallow ( command-list | push-cert ) [packfile]
+
+  shallow           =  PKT-LINE("shallow" SP obj-id)
+
+  command-list      =  PKT-LINE(command NUL capability-list)
+		       *PKT-LINE(command)
+		       flush-pkt
+
+  command           =  create / delete / update
+  create            =  zero-id SP new-id  SP name
+  delete            =  old-id  SP zero-id SP name
+  update            =  old-id  SP new-id  SP name
+
+  old-id            =  obj-id
+  new-id            =  obj-id
+
+  push-cert         = PKT-LINE("push-cert" NUL capability-list LF)
+		      PKT-LINE("certificate version 0.1" LF)
+		      PKT-LINE("pusher" SP ident LF)
+		      PKT-LINE("pushee" SP url LF)
+		      PKT-LINE("nonce" SP nonce LF)
+		      PKT-LINE(LF)
+		      *PKT-LINE(command LF)
+		      *PKT-LINE(gpg-signature-lines LF)
+		      PKT-LINE("push-cert-end" LF)
+
+  packfile          = "PACK" 28*(OCTET)
+----
+
+If the receiving end does not support delete-refs, the sending end MUST
+NOT ask for delete command.
+
+If the receiving end does not support push-cert, the sending end
+MUST NOT send a push-cert command.  When a push-cert command is
+sent, command-list MUST NOT be sent; the commands recorded in the
+push certificate is used instead.
+
+The packfile MUST NOT be sent if the only command used is 'delete'.
+
+A packfile MUST be sent if either create or update command is used,
+even if the server already has all the necessary objects.  In this
+case the client MUST send an empty packfile.   The only time this
+is likely to happen is if the client is creating
+a new branch or a tag that points to an existing obj-id.
+
+The server will receive the packfile, unpack it, then validate each
+reference that is being updated that it hasn't changed while the request
+was being processed (the obj-id is still the same as the old-id), and
+it will run any update hooks to make sure that the update is acceptable.
+If all of that is fine, the server will then update the references.
+
+Push Certificate
+----------------
+
+A push certificate begins with a set of header lines.  After the
+header and an empty line, the protocol commands follow, one per
+line. Note that the trailing LF in push-cert PKT-LINEs is _not_
+optional; it must be present.
+
+Currently, the following header fields are defined:
+
+`pusher` ident::
+	Identify the GPG key in "Human Readable Name <email@address>"
+	format.
+
+`pushee` url::
+	The repository URL (anonymized, if the URL contains
+	authentication material) the user who ran `git push`
+	intended to push into.
+
+`nonce` nonce::
+	The 'nonce' string the receiving repository asked the
+	pushing user to include in the certificate, to prevent
+	replay attacks.
+
+The GPG signature lines are a detached signature for the contents
+recorded in the push certificate before the signature block begins.
+The detached signature is used to certify that the commands were
+given by the pusher, who must be the signer.
+
+Report Status
+-------------
+
+After receiving the pack data from the sender, the receiver sends a
+report if 'report-status' capability is in effect.
+It is a short listing of what happened in that update.  It will first
+list the status of the packfile unpacking as either 'unpack ok' or
+'unpack [error]'.  Then it will list the status for each of the references
+that it tried to update.  Each line is either 'ok [refname]' if the
+update was successful, or 'ng [refname] [error]' if the update was not.
+
+----
+  report-status     = unpack-status
+		      1*(command-status)
+		      flush-pkt
+
+  unpack-status     = PKT-LINE("unpack" SP unpack-result)
+  unpack-result     = "ok" / error-msg
+
+  command-status    = command-ok / command-fail
+  command-ok        = PKT-LINE("ok" SP refname)
+  command-fail      = PKT-LINE("ng" SP refname SP error-msg)
+
+  error-msg         = 1*(OCTECT) ; where not "ok"
+----
+
+Updates can be unsuccessful for a number of reasons.  The reference can have
+changed since the reference discovery phase was originally sent, meaning
+someone pushed in the meantime.  The reference being pushed could be a
+non-fast-forward reference and the update hooks or configuration could be
+set to not allow that, etc.  Also, some references can be updated while others
+can be rejected.
+
+An example client/server communication might look like this:
+
+----
+   S: 007c74730d410fcb6603ace96f1dc55ea6196122532d refs/heads/local\0report-status delete-refs ofs-delta\n
+   S: 003e7d1665144a3a975c05f1f43902ddaf084e784dbe refs/heads/debug\n
+   S: 003f74730d410fcb6603ace96f1dc55ea6196122532d refs/heads/master\n
+   S: 003f74730d410fcb6603ace96f1dc55ea6196122532d refs/heads/team\n
+   S: 0000
+
+   C: 003e7d1665144a3a975c05f1f43902ddaf084e784dbe 74730d410fcb6603ace96f1dc55ea6196122532d refs/heads/debug\n
+   C: 003e74730d410fcb6603ace96f1dc55ea6196122532d 5a3f6be755bbb7deae50065988cbfa1ffa9ab68a refs/heads/master\n
+   C: 0000
+   C: [PACKDATA]
+
+   S: 000eunpack ok\n
+   S: 0018ok refs/heads/debug\n
+   S: 002ang refs/heads/master non-fast-forward\n
+----
+*/
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/protocol/packp/filter.go","mode":420,"size":2324,"sha256":"4d826fa6edcfc2c6838f7382f45dd22ccffe44eb8ea14c543add9b9c1f954137","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2324}
+package packp
+
+import (
+	"errors"
+	"fmt"
+	"github.com/go-git/go-git/v5/plumbing"
+	"net/url"
+	"strings"
+)
+
+var ErrUnsupportedObjectFilterType = errors.New("unsupported object filter type")
+
+// Filter values enable the partial clone capability which causes
+// the server to omit objects that match the filter.
+//
+// See [Git's documentation] for more details.
+//
+// [Git's documentation]: https://github.com/git/git/blob/e02ecfcc534e2021aae29077a958dd11c3897e4c/Documentation/rev-list-options.txt#L948
+type Filter string
+
+type BlobLimitPrefix string
+
+const (
+	BlobLimitPrefixNone BlobLimitPrefix = ""
+	BlobLimitPrefixKibi BlobLimitPrefix = "k"
+	BlobLimitPrefixMebi BlobLimitPrefix = "m"
+	BlobLimitPrefixGibi BlobLimitPrefix = "g"
+)
+
+// FilterBlobNone omits all blobs.
+func FilterBlobNone() Filter {
+	return "blob:none"
+}
+
+// FilterBlobLimit omits blobs of size at least n bytes (when prefix is
+// BlobLimitPrefixNone), n kibibytes (when prefix is BlobLimitPrefixKibi),
+// n mebibytes (when prefix is BlobLimitPrefixMebi) or n gibibytes (when
+// prefix is BlobLimitPrefixGibi). n can be zero, in which case all blobs
+// will be omitted.
+func FilterBlobLimit(n uint64, prefix BlobLimitPrefix) Filter {
+	return Filter(fmt.Sprintf("blob:limit=%d%s", n, prefix))
+}
+
+// FilterTreeDepth omits all blobs and trees whose depth from the root tree
+// is larger or equal to depth.
+func FilterTreeDepth(depth uint64) Filter {
+	return Filter(fmt.Sprintf("tree:%d", depth))
+}
+
+// FilterObjectType omits all objects which are not of the requested type t.
+// Supported types are TagObject, CommitObject, TreeObject and BlobObject.
+func FilterObjectType(t plumbing.ObjectType) (Filter, error) {
+	switch t {
+	case plumbing.TagObject:
+		fallthrough
+	case plumbing.CommitObject:
+		fallthrough
+	case plumbing.TreeObject:
+		fallthrough
+	case plumbing.BlobObject:
+		return Filter(fmt.Sprintf("object:type=%s", t.String())), nil
+	default:
+		return "", fmt.Errorf("%w: %s", ErrUnsupportedObjectFilterType, t.String())
+	}
+}
+
+// FilterCombine combines multiple Filter values together.
+func FilterCombine(filters ...Filter) Filter {
+	var escapedFilters []string
+
+	for _, filter := range filters {
+		escapedFilters = append(escapedFilters, url.QueryEscape(string(filter)))
+	}
+
+	return Filter(fmt.Sprintf("combine:%s", strings.Join(escapedFilters, "+")))
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/protocol/packp/gitproto.go","mode":420,"size":2486,"sha256":"d503654e89eef52acc7df4adf3bd594887d7344481eccf0ce281004b523fec39","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2486}
+package packp
+
+import (
+	"fmt"
+	"io"
+	"strings"
+
+	"github.com/go-git/go-git/v5/plumbing/format/pktline"
+)
+
+var (
+	// ErrInvalidGitProtoRequest is returned by Decode if the input is not a
+	// valid git protocol request.
+	ErrInvalidGitProtoRequest = fmt.Errorf("invalid git protocol request")
+)
+
+// GitProtoRequest is a command request for the git protocol.
+// It is used to send the command, endpoint, and extra parameters to the
+// remote.
+// See https://git-scm.com/docs/pack-protocol#_git_transport
+type GitProtoRequest struct {
+	RequestCommand string
+	Pathname       string
+
+	// Optional
+	Host string
+
+	// Optional
+	ExtraParams []string
+}
+
+// validate validates the request.
+func (g *GitProtoRequest) validate() error {
+	if g.RequestCommand == "" {
+		return fmt.Errorf("%w: empty request command", ErrInvalidGitProtoRequest)
+	}
+
+	if g.Pathname == "" {
+		return fmt.Errorf("%w: empty pathname", ErrInvalidGitProtoRequest)
+	}
+
+	return nil
+}
+
+// Encode encodes the request into the writer.
+func (g *GitProtoRequest) Encode(w io.Writer) error {
+	if w == nil {
+		return ErrNilWriter
+	}
+
+	if err := g.validate(); err != nil {
+		return err
+	}
+
+	p := pktline.NewEncoder(w)
+	req := fmt.Sprintf("%s %s\x00", g.RequestCommand, g.Pathname)
+	if host := g.Host; host != "" {
+		req += fmt.Sprintf("host=%s\x00", host)
+	}
+
+	if len(g.ExtraParams) > 0 {
+		req += "\x00"
+		for _, param := range g.ExtraParams {
+			req += param + "\x00"
+		}
+	}
+
+	if err := p.Encode([]byte(req)); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Decode decodes the request from the reader.
+func (g *GitProtoRequest) Decode(r io.Reader) error {
+	s := pktline.NewScanner(r)
+	if !s.Scan() {
+		err := s.Err()
+		if err == nil {
+			return ErrInvalidGitProtoRequest
+		}
+		return err
+	}
+
+	line := string(s.Bytes())
+	if len(line) == 0 {
+		return io.EOF
+	}
+
+	if line[len(line)-1] != 0 {
+		return fmt.Errorf("%w: missing null terminator", ErrInvalidGitProtoRequest)
+	}
+
+	parts := strings.SplitN(line, " ", 2)
+	if len(parts) != 2 {
+		return fmt.Errorf("%w: short request", ErrInvalidGitProtoRequest)
+	}
+
+	g.RequestCommand = parts[0]
+	params := strings.Split(parts[1], string(null))
+	if len(params) < 1 {
+		return fmt.Errorf("%w: missing pathname", ErrInvalidGitProtoRequest)
+	}
+
+	g.Pathname = params[0]
+	if len(params) > 1 {
+		g.Host = strings.TrimPrefix(params[1], "host=")
+	}
+
+	if len(params) > 2 {
+		for _, param := range params[2:] {
+			if param != "" {
+				g.ExtraParams = append(g.ExtraParams, param)
+			}
+		}
+	}
+
+	return nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/protocol/packp/report_status.go","mode":420,"size":3449,"sha256":"183fbf74295d5af2a3b17fe38a7783786399c1656bb988283b0153abc4950f4d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3449}
+package packp
+
+import (
+	"bytes"
+	"fmt"
+	"io"
+	"strings"
+
+	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/format/pktline"
+)
+
+const (
+	ok = "ok"
+)
+
+// ReportStatus is a report status message, as used in the git-receive-pack
+// process whenever the 'report-status' capability is negotiated.
+type ReportStatus struct {
+	UnpackStatus    string
+	CommandStatuses []*CommandStatus
+}
+
+// NewReportStatus creates a new ReportStatus message.
+func NewReportStatus() *ReportStatus {
+	return &ReportStatus{}
+}
+
+// Error returns the first error if any.
+func (s *ReportStatus) Error() error {
+	if s.UnpackStatus != ok {
+		return fmt.Errorf("unpack error: %s", s.UnpackStatus)
+	}
+
+	for _, s := range s.CommandStatuses {
+		if err := s.Error(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// Encode writes the report status to a writer.
+func (s *ReportStatus) Encode(w io.Writer) error {
+	e := pktline.NewEncoder(w)
+	if err := e.Encodef("unpack %s\n", s.UnpackStatus); err != nil {
+		return err
+	}
+
+	for _, cs := range s.CommandStatuses {
+		if err := cs.encode(w); err != nil {
+			return err
+		}
+	}
+
+	return e.Flush()
+}
+
+// Decode reads from the given reader and decodes a report-status message. It
+// does not read more input than what is needed to fill the report status.
+func (s *ReportStatus) Decode(r io.Reader) error {
+	scan := pktline.NewScanner(r)
+	if err := s.scanFirstLine(scan); err != nil {
+		return err
+	}
+
+	if err := s.decodeReportStatus(scan.Bytes()); err != nil {
+		return err
+	}
+
+	flushed := false
+	for scan.Scan() {
+		b := scan.Bytes()
+		if isFlush(b) {
+			flushed = true
+			break
+		}
+
+		if err := s.decodeCommandStatus(b); err != nil {
+			return err
+		}
+	}
+
+	if !flushed {
+		return fmt.Errorf("missing flush")
+	}
+
+	return scan.Err()
+}
+
+func (s *ReportStatus) scanFirstLine(scan *pktline.Scanner) error {
+	if scan.Scan() {
+		return nil
+	}
+
+	if scan.Err() != nil {
+		return scan.Err()
+	}
+
+	return io.ErrUnexpectedEOF
+}
+
+func (s *ReportStatus) decodeReportStatus(b []byte) error {
+	if isFlush(b) {
+		return fmt.Errorf("premature flush")
+	}
+
+	b = bytes.TrimSuffix(b, eol)
+
+	line := string(b)
+	fields := strings.SplitN(line, " ", 2)
+	if len(fields) != 2 || fields[0] != "unpack" {
+		return fmt.Errorf("malformed unpack status: %s", line)
+	}
+
+	s.UnpackStatus = fields[1]
+	return nil
+}
+
+func (s *ReportStatus) decodeCommandStatus(b []byte) error {
+	b = bytes.TrimSuffix(b, eol)
+
+	line := string(b)
+	fields := strings.SplitN(line, " ", 3)
+	status := ok
+	if len(fields) == 3 && fields[0] == "ng" {
+		status = fields[2]
+	} else if len(fields) != 2 || fields[0] != "ok" {
+		return fmt.Errorf("malformed command status: %s", line)
+	}
+
+	cs := &CommandStatus{
+		ReferenceName: plumbing.ReferenceName(fields[1]),
+		Status:        status,
+	}
+	s.CommandStatuses = append(s.CommandStatuses, cs)
+	return nil
+}
+
+// CommandStatus is the status of a reference in a report status.
+// See ReportStatus struct.
+type CommandStatus struct {
+	ReferenceName plumbing.ReferenceName
+	Status        string
+}
+
+// Error returns the error, if any.
+func (s *CommandStatus) Error() error {
+	if s.Status == ok {
+		return nil
+	}
+
+	return fmt.Errorf("command error on %s: %s",
+		s.ReferenceName.String(), s.Status)
+}
+
+func (s *CommandStatus) encode(w io.Writer) error {
+	e := pktline.NewEncoder(w)
+	if s.Error() == nil {
+		return e.Encodef("ok %s\n", s.ReferenceName.String())
+	}
+
+	return e.Encodef("ng %s %s\n", s.ReferenceName.String(), s.Status)
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/protocol/packp/shallowupd.go","mode":420,"size":1794,"sha256":"20c9c4b17344e0ba3b190b361010bafd906abc9994c62e025078b721c6eeeb23","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1794}
+package packp
+
+import (
+	"bytes"
+	"fmt"
+	"io"
+
+	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/format/pktline"
+)
+
+const (
+	shallowLineLen   = 48
+	unshallowLineLen = 50
+)
+
+type ShallowUpdate struct {
+	Shallows   []plumbing.Hash
+	Unshallows []plumbing.Hash
+}
+
+func (r *ShallowUpdate) Decode(reader io.Reader) error {
+	s := pktline.NewScanner(reader)
+
+	for s.Scan() {
+		line := s.Bytes()
+		line = bytes.TrimSpace(line)
+
+		var err error
+		switch {
+		case bytes.HasPrefix(line, shallow):
+			err = r.decodeShallowLine(line)
+		case bytes.HasPrefix(line, unshallow):
+			err = r.decodeUnshallowLine(line)
+		case bytes.Equal(line, pktline.Flush):
+			return nil
+		}
+
+		if err != nil {
+			return err
+		}
+	}
+
+	return s.Err()
+}
+
+func (r *ShallowUpdate) decodeShallowLine(line []byte) error {
+	hash, err := r.decodeLine(line, shallow, shallowLineLen)
+	if err != nil {
+		return err
+	}
+
+	r.Shallows = append(r.Shallows, hash)
+	return nil
+}
+
+func (r *ShallowUpdate) decodeUnshallowLine(line []byte) error {
+	hash, err := r.decodeLine(line, unshallow, unshallowLineLen)
+	if err != nil {
+		return err
+	}
+
+	r.Unshallows = append(r.Unshallows, hash)
+	return nil
+}
+
+func (r *ShallowUpdate) decodeLine(line, prefix []byte, expLen int) (plumbing.Hash, error) {
+	if len(line) != expLen {
+		return plumbing.ZeroHash, fmt.Errorf("malformed %s%q", prefix, line)
+	}
+
+	raw := string(line[expLen-40 : expLen])
+	return plumbing.NewHash(raw), nil
+}
+
+func (r *ShallowUpdate) Encode(w io.Writer) error {
+	e := pktline.NewEncoder(w)
+
+	for _, h := range r.Shallows {
+		if err := e.Encodef("%s%s\n", shallow, h.String()); err != nil {
+			return err
+		}
+	}
+
+	for _, h := range r.Unshallows {
+		if err := e.Encodef("%s%s\n", unshallow, h.String()); err != nil {
+			return err
+		}
+	}
+
+	return e.Flush()
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/protocol/packp/sideband/common.go","mode":420,"size":802,"sha256":"a164ea047e2da01f3914095784995928369573e186f535b9c503e9dbad079cc3","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":802}
+package sideband
+
+// Type sideband type "side-band" or "side-band-64k"
+type Type int8
+
+const (
+	// Sideband legacy sideband type up to 1000-byte messages
+	Sideband Type = iota
+	// Sideband64k sideband type up to 65519-byte messages
+	Sideband64k Type = iota
+
+	// MaxPackedSize for Sideband type
+	MaxPackedSize = 1000
+	// MaxPackedSize64k for Sideband64k type
+	MaxPackedSize64k = 65520
+)
+
+// Channel sideband channel
+type Channel byte
+
+// WithPayload encode the payload as a message
+func (ch Channel) WithPayload(payload []byte) []byte {
+	return append([]byte{byte(ch)}, payload...)
+}
+
+const (
+	// PackData packfile content
+	PackData Channel = 1
+	// ProgressMessage progress messages
+	ProgressMessage Channel = 2
+	// ErrorMessage fatal error message just before stream aborts
+	ErrorMessage Channel = 3
+)
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/protocol/packp/sideband/demux.go","mode":420,"size":3252,"sha256":"115278554dd59dc9ee32e0f9f4e28f38b778e7553a1f9211864b7bd7952671e9","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3252}
+package sideband
+
+import (
+	"errors"
+	"fmt"
+	"io"
+
+	"github.com/go-git/go-git/v5/plumbing/format/pktline"
+)
+
+// ErrMaxPackedExceeded returned by Read, if the maximum packed size is exceeded
+var ErrMaxPackedExceeded = errors.New("max. packed size exceeded")
+
+// Progress where the progress information is stored
+type Progress interface {
+	io.Writer
+}
+
+// Demuxer demultiplexes the progress reports and error info interleaved with the
+// packfile itself.
+//
+// A sideband has three different channels the main one, called PackData, contains
+// the packfile data; the ErrorMessage channel, that contains server errors; and
+// the last one, ProgressMessage channel, containing information about the ongoing
+// task happening in the server (optional, can be suppressed sending NoProgress
+// or Quiet capabilities to the server)
+//
+// In order to demultiplex the data stream, method `Read` should be called to
+// retrieve the PackData channel, the incoming data from the ProgressMessage is
+// written at `Progress` (if any), if any message is retrieved from the
+// ErrorMessage channel an error is returned and we can assume that the
+// connection has been closed.
+type Demuxer struct {
+	t Type
+	r io.Reader
+	s *pktline.Scanner
+
+	max     int
+	pending []byte
+
+	// Progress is where the progress messages are stored
+	Progress Progress
+}
+
+// NewDemuxer returns a new Demuxer for the given t and read from r
+func NewDemuxer(t Type, r io.Reader) *Demuxer {
+	max := MaxPackedSize64k
+	if t == Sideband {
+		max = MaxPackedSize
+	}
+
+	return &Demuxer{
+		t:   t,
+		r:   r,
+		max: max,
+		s:   pktline.NewScanner(r),
+	}
+}
+
+// Read reads up to len(p) bytes from the PackData channel into p, an error can
+// be return if an error happens when reading or if a message is sent in the
+// ErrorMessage channel.
+//
+// When a ProgressMessage is read, is not copy to b, instead of this is written
+// to the Progress
+func (d *Demuxer) Read(b []byte) (n int, err error) {
+	var read, req int
+
+	req = len(b)
+	for read < req {
+		n, err := d.doRead(b[read:req])
+		read += n
+
+		if err != nil {
+			return read, err
+		}
+	}
+
+	return read, nil
+}
+
+func (d *Demuxer) doRead(b []byte) (int, error) {
+	read, err := d.nextPackData()
+	size := len(read)
+	wanted := len(b)
+
+	if size > wanted {
+		d.pending = read[wanted:]
+	}
+
+	if wanted > size {
+		wanted = size
+	}
+
+	size = copy(b, read[:wanted])
+	return size, err
+}
+
+func (d *Demuxer) nextPackData() ([]byte, error) {
+	content := d.getPending()
+	if len(content) != 0 {
+		return content, nil
+	}
+
+	if !d.s.Scan() {
+		if err := d.s.Err(); err != nil {
+			return nil, err
+		}
+
+		return nil, io.EOF
+	}
+
+	content = d.s.Bytes()
+
+	size := len(content)
+	if size == 0 {
+		return nil, io.EOF
+	} else if size > d.max {
+		return nil, ErrMaxPackedExceeded
+	}
+
+	switch Channel(content[0]) {
+	case PackData:
+		return content[1:], nil
+	case ProgressMessage:
+		if d.Progress != nil {
+			_, err := d.Progress.Write(content[1:])
+			return nil, err
+		}
+	case ErrorMessage:
+		return nil, fmt.Errorf("unexpected error: %s", content[1:])
+	default:
+		return nil, fmt.Errorf("unknown channel %s", content)
+	}
+
+	return nil, nil
+}
+
+func (d *Demuxer) getPending() (b []byte) {
+	if len(d.pending) == 0 {
+		return nil
+	}
+
+	content := d.pending
+	d.pending = nil
+
+	return content
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/protocol/packp/sideband/doc.go","mode":420,"size":1355,"sha256":"48db6b84c9ba43db0fec401c3488aa35391b52fb9cf18586b4c2c418748c50e5","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1355}
+// Package sideband implements a sideband mutiplex/demultiplexer
+package sideband
+
+// If 'side-band' or 'side-band-64k' capabilities have been specified by
+// the client, the server will send the packfile data multiplexed.
+//
+// Either mode indicates that the packfile data will be streamed broken
+// up into packets of up to either 1000 bytes in the case of 'side_band',
+// or 65520 bytes in the case of 'side_band_64k'. Each packet is made up
+// of a leading 4-byte pkt-line length of how much data is in the packet,
+// followed by a 1-byte stream code, followed by the actual data.
+//
+// The stream code can be one of:
+//
+//  1 - pack data
+//  2 - progress messages
+//  3 - fatal error message just before stream aborts
+//
+// The "side-band-64k" capability came about as a way for newer clients
+// that can handle much larger packets to request packets that are
+// actually crammed nearly full, while maintaining backward compatibility
+// for the older clients.
+//
+// Further, with side-band and its up to 1000-byte messages, it's actually
+// 999 bytes of payload and 1 byte for the stream code. With side-band-64k,
+// same deal, you have up to 65519 bytes of data and 1 byte for the stream
+// code.
+//
+// The client MUST send only maximum of one of "side-band" and "side-
+// band-64k".  Server MUST diagnose it as an error if client requests
+// both.
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/protocol/packp/sideband/muxer.go","mode":420,"size":1494,"sha256":"1be3e868263d10ed655d12953c947f0fa174643904ef25acf0506c70512fb32e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1494}
+package sideband
+
+import (
+	"io"
+
+	"github.com/go-git/go-git/v5/plumbing/format/pktline"
+)
+
+// Muxer multiplex the packfile along with the progress messages and the error
+// information. The multiplex is perform using pktline format.
+type Muxer struct {
+	max int
+	e   *pktline.Encoder
+}
+
+const chLen = 1
+
+// NewMuxer returns a new Muxer for the given t that writes on w.
+//
+// If t is equal to `Sideband` the max pack size is set to MaxPackedSize, in any
+// other value is given, max pack is set to MaxPackedSize64k, that is the
+// maximum length of a line in pktline format.
+func NewMuxer(t Type, w io.Writer) *Muxer {
+	max := MaxPackedSize64k
+	if t == Sideband {
+		max = MaxPackedSize
+	}
+
+	return &Muxer{
+		max: max - chLen,
+		e:   pktline.NewEncoder(w),
+	}
+}
+
+// Write writes p in the PackData channel
+func (m *Muxer) Write(p []byte) (int, error) {
+	return m.WriteChannel(PackData, p)
+}
+
+// WriteChannel writes p in the given channel. This method can be used with any
+// channel, but is recommend use it only for the ProgressMessage and
+// ErrorMessage channels and use Write for the PackData channel
+func (m *Muxer) WriteChannel(t Channel, p []byte) (int, error) {
+	wrote := 0
+	size := len(p)
+	for wrote < size {
+		n, err := m.doWrite(t, p[wrote:])
+		wrote += n
+
+		if err != nil {
+			return wrote, err
+		}
+	}
+
+	return wrote, nil
+}
+
+func (m *Muxer) doWrite(ch Channel, p []byte) (int, error) {
+	sz := len(p)
+	if sz > m.max {
+		sz = m.max
+	}
+
+	return sz, m.e.Encode(ch.WithPayload(p[:sz]))
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/protocol/packp/srvresp.go","mode":420,"size":3514,"sha256":"d4e17d0d72731f937584bc56f137e40c1da8e4aa5c63b65ec13f589faee4e3fc","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3514}
+package packp
+
+import (
+	"bufio"
+	"bytes"
+	"errors"
+	"fmt"
+	"io"
+
+	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/format/pktline"
+)
+
+const ackLineLen = 44
+
+// ServerResponse object acknowledgement from upload-pack service
+type ServerResponse struct {
+	ACKs []plumbing.Hash
+}
+
+// Decode decodes the response into the struct, isMultiACK should be true, if
+// the request was done with multi_ack or multi_ack_detailed capabilities.
+func (r *ServerResponse) Decode(reader *bufio.Reader, isMultiACK bool) error {
+	s := pktline.NewScanner(reader)
+
+	for s.Scan() {
+		line := s.Bytes()
+
+		if err := r.decodeLine(line); err != nil {
+			return err
+		}
+
+		// we need to detect when the end of a response header and the beginning
+		// of a packfile header happened, some requests to the git daemon
+		// produces a duplicate ACK header even when multi_ack is not supported.
+		stop, err := r.stopReading(reader)
+		if err != nil {
+			return err
+		}
+
+		if stop {
+			break
+		}
+	}
+
+	// isMultiACK is true when the remote server advertises the related
+	// capabilities when they are not in transport.UnsupportedCapabilities.
+	//
+	// Users may decide to remove multi_ack and multi_ack_detailed from the
+	// unsupported capabilities list, which allows them to do initial clones
+	// from Azure DevOps.
+	//
+	// Follow-up fetches may error, therefore errors are wrapped with additional
+	// information highlighting that this capabilities are not supported by go-git.
+	//
+	// TODO: Implement support for multi_ack or multi_ack_detailed responses.
+	err := s.Err()
+	if err != nil && isMultiACK {
+		return fmt.Errorf("multi_ack and multi_ack_detailed are not supported: %w", err)
+	}
+
+	return err
+}
+
+// stopReading detects when a valid command such as ACK or NAK is found to be
+// read in the buffer without moving the read pointer.
+func (r *ServerResponse) stopReading(reader *bufio.Reader) (bool, error) {
+	ahead, err := reader.Peek(7)
+	if err == io.EOF {
+		return true, nil
+	}
+
+	if err != nil {
+		return false, err
+	}
+
+	if len(ahead) > 4 && r.isValidCommand(ahead[0:3]) {
+		return false, nil
+	}
+
+	if len(ahead) == 7 && r.isValidCommand(ahead[4:]) {
+		return false, nil
+	}
+
+	return true, nil
+}
+
+func (r *ServerResponse) isValidCommand(b []byte) bool {
+	commands := [][]byte{ack, nak}
+	for _, c := range commands {
+		if bytes.Equal(b, c) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (r *ServerResponse) decodeLine(line []byte) error {
+	if len(line) == 0 {
+		return fmt.Errorf("unexpected flush")
+	}
+
+	if len(line) >= 3 {
+		if bytes.Equal(line[0:3], ack) {
+			return r.decodeACKLine(line)
+		}
+
+		if bytes.Equal(line[0:3], nak) {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("unexpected content %q", string(line))
+}
+
+func (r *ServerResponse) decodeACKLine(line []byte) error {
+	if len(line) < ackLineLen {
+		return fmt.Errorf("malformed ACK %q", line)
+	}
+
+	sp := bytes.Index(line, []byte(" "))
+	if sp+41 > len(line) {
+		return fmt.Errorf("malformed ACK %q", line)
+	}
+	h := plumbing.NewHash(string(line[sp+1 : sp+41]))
+	r.ACKs = append(r.ACKs, h)
+	return nil
+}
+
+// Encode encodes the ServerResponse into a writer.
+func (r *ServerResponse) Encode(w io.Writer, isMultiACK bool) error {
+	if len(r.ACKs) > 1 && !isMultiACK {
+		// For further information, refer to comments in the Decode func above.
+		return errors.New("multi_ack and multi_ack_detailed are not supported")
+	}
+
+	e := pktline.NewEncoder(w)
+	if len(r.ACKs) == 0 {
+		return e.Encodef("%s\n", nak)
+	}
+
+	return e.Encodef("%s %s\n", ack, r.ACKs[0].String())
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/protocol/packp/ulreq.go","mode":420,"size":5015,"sha256":"0bef99c8ff2292967cdb3caa01ecfc522b3f2ec6bb3110ba0dfe7634cd74554e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5015}
+package packp
+
+import (
+	"fmt"
+	"time"
+
+	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/protocol/packp/capability"
+)
+
+// UploadRequest values represent the information transmitted on a
+// upload-request message.  Values from this type are not zero-value
+// safe, use the New function instead.
+// This is a low level type, use UploadPackRequest instead.
+type UploadRequest struct {
+	Capabilities *capability.List
+	Wants        []plumbing.Hash
+	Shallows     []plumbing.Hash
+	Depth        Depth
+	Filter       Filter
+}
+
+// Depth values stores the desired depth of the requested packfile: see
+// DepthCommit, DepthSince and DepthReference.
+type Depth interface {
+	isDepth()
+	IsZero() bool
+}
+
+// DepthCommits values stores the maximum number of requested commits in
+// the packfile.  Zero means infinite.  A negative value will have
+// undefined consequences.
+type DepthCommits int
+
+func (d DepthCommits) isDepth() {}
+
+func (d DepthCommits) IsZero() bool {
+	return d == 0
+}
+
+// DepthSince values requests only commits newer than the specified time.
+type DepthSince time.Time
+
+func (d DepthSince) isDepth() {}
+
+func (d DepthSince) IsZero() bool {
+	return time.Time(d).IsZero()
+}
+
+// DepthReference requests only commits not to found in the specified reference.
+type DepthReference string
+
+func (d DepthReference) isDepth() {}
+
+func (d DepthReference) IsZero() bool {
+	return string(d) == ""
+}
+
+// NewUploadRequest returns a pointer to a new UploadRequest value, ready to be
+// used. It has no capabilities, wants or shallows and an infinite depth. Please
+// note that to encode an upload-request it has to have at least one wanted hash.
+func NewUploadRequest() *UploadRequest {
+	return &UploadRequest{
+		Capabilities: capability.NewList(),
+		Wants:        []plumbing.Hash{},
+		Shallows:     []plumbing.Hash{},
+		Depth:        DepthCommits(0),
+	}
+}
+
+// NewUploadRequestFromCapabilities returns a pointer to a new UploadRequest
+// value, the request capabilities are filled with the most optimal ones, based
+// on the adv value (advertised capabilities), the UploadRequest generated it
+// has no wants or shallows and an infinite depth.
+func NewUploadRequestFromCapabilities(adv *capability.List) *UploadRequest {
+	r := NewUploadRequest()
+
+	if adv.Supports(capability.MultiACKDetailed) {
+		r.Capabilities.Set(capability.MultiACKDetailed)
+	} else if adv.Supports(capability.MultiACK) {
+		r.Capabilities.Set(capability.MultiACK)
+	}
+
+	if adv.Supports(capability.Sideband64k) {
+		r.Capabilities.Set(capability.Sideband64k)
+	} else if adv.Supports(capability.Sideband) {
+		r.Capabilities.Set(capability.Sideband)
+	}
+
+	if adv.Supports(capability.ThinPack) {
+		r.Capabilities.Set(capability.ThinPack)
+	}
+
+	if adv.Supports(capability.OFSDelta) {
+		r.Capabilities.Set(capability.OFSDelta)
+	}
+
+	if adv.Supports(capability.Agent) {
+		r.Capabilities.Set(capability.Agent, capability.DefaultAgent())
+	}
+
+	return r
+}
+
+// Validate validates the content of UploadRequest, following the next rules:
+//   - Wants MUST have at least one reference
+//   - capability.Shallow MUST be present if Shallows is not empty
+//   - is a non-zero DepthCommits is given capability.Shallow MUST be present
+//   - is a DepthSince is given capability.Shallow MUST be present
+//   - is a DepthReference is given capability.DeepenNot MUST be present
+//   - MUST contain only maximum of one of capability.Sideband and capability.Sideband64k
+//   - MUST contain only maximum of one of capability.MultiACK and capability.MultiACKDetailed
+func (req *UploadRequest) Validate() error {
+	if len(req.Wants) == 0 {
+		return fmt.Errorf("want can't be empty")
+	}
+
+	if err := req.validateRequiredCapabilities(); err != nil {
+		return err
+	}
+
+	if err := req.validateConflictCapabilities(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (req *UploadRequest) validateRequiredCapabilities() error {
+	msg := "missing capability %s"
+
+	if len(req.Shallows) != 0 && !req.Capabilities.Supports(capability.Shallow) {
+		return fmt.Errorf(msg, capability.Shallow)
+	}
+
+	switch req.Depth.(type) {
+	case DepthCommits:
+		if req.Depth != DepthCommits(0) {
+			if !req.Capabilities.Supports(capability.Shallow) {
+				return fmt.Errorf(msg, capability.Shallow)
+			}
+		}
+	case DepthSince:
+		if !req.Capabilities.Supports(capability.DeepenSince) {
+			return fmt.Errorf(msg, capability.DeepenSince)
+		}
+	case DepthReference:
+		if !req.Capabilities.Supports(capability.DeepenNot) {
+			return fmt.Errorf(msg, capability.DeepenNot)
+		}
+	}
+
+	return nil
+}
+
+func (req *UploadRequest) validateConflictCapabilities() error {
+	msg := "capabilities %s and %s are mutually exclusive"
+	if req.Capabilities.Supports(capability.Sideband) &&
+		req.Capabilities.Supports(capability.Sideband64k) {
+		return fmt.Errorf(msg, capability.Sideband, capability.Sideband64k)
+	}
+
+	if req.Capabilities.Supports(capability.MultiACK) &&
+		req.Capabilities.Supports(capability.MultiACKDetailed) {
+		return fmt.Errorf(msg, capability.MultiACK, capability.MultiACKDetailed)
+	}
+
+	return nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/protocol/packp/ulreq_decode.go","mode":420,"size":5475,"sha256":"906e9719e56fe55dee46591c9da823899ee7f7a23f13fb97d168afdd2267ce5b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5475}
+package packp
+
+import (
+	"bytes"
+	"encoding/hex"
+	"fmt"
+	"io"
+	"strconv"
+	"time"
+
+	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/format/pktline"
+)
+
+// Decode reads the next upload-request form its input and
+// stores it in the UploadRequest.
+func (req *UploadRequest) Decode(r io.Reader) error {
+	d := newUlReqDecoder(r)
+	return d.Decode(req)
+}
+
+type ulReqDecoder struct {
+	s     *pktline.Scanner // a pkt-line scanner from the input stream
+	line  []byte           // current pkt-line contents, use parser.nextLine() to make it advance
+	nLine int              // current pkt-line number for debugging, begins at 1
+	err   error            // sticky error, use the parser.error() method to fill this out
+	data  *UploadRequest   // parsed data is stored here
+}
+
+func newUlReqDecoder(r io.Reader) *ulReqDecoder {
+	return &ulReqDecoder{
+		s: pktline.NewScanner(r),
+	}
+}
+
+func (d *ulReqDecoder) Decode(v *UploadRequest) error {
+	d.data = v
+
+	for state := d.decodeFirstWant; state != nil; {
+		state = state()
+	}
+
+	return d.err
+}
+
+// fills out the parser sticky error
+func (d *ulReqDecoder) error(format string, a ...interface{}) {
+	msg := fmt.Sprintf(
+		"pkt-line %d: %s", d.nLine,
+		fmt.Sprintf(format, a...),
+	)
+
+	d.err = NewErrUnexpectedData(msg, d.line)
+}
+
+// Reads a new pkt-line from the scanner, makes its payload available as
+// p.line and increments p.nLine.  A successful invocation returns true,
+// otherwise, false is returned and the sticky error is filled out
+// accordingly.  Trims eols at the end of the payloads.
+func (d *ulReqDecoder) nextLine() bool {
+	d.nLine++
+
+	if !d.s.Scan() {
+		if d.err = d.s.Err(); d.err != nil {
+			return false
+		}
+
+		d.error("EOF")
+		return false
+	}
+
+	d.line = d.s.Bytes()
+	d.line = bytes.TrimSuffix(d.line, eol)
+
+	return true
+}
+
+// Expected format: want <hash>[ capabilities]
+func (d *ulReqDecoder) decodeFirstWant() stateFn {
+	if ok := d.nextLine(); !ok {
+		return nil
+	}
+
+	if !bytes.HasPrefix(d.line, want) {
+		d.error("missing 'want ' prefix")
+		return nil
+	}
+	d.line = bytes.TrimPrefix(d.line, want)
+
+	hash, ok := d.readHash()
+	if !ok {
+		return nil
+	}
+	d.data.Wants = append(d.data.Wants, hash)
+
+	return d.decodeCaps
+}
+
+func (d *ulReqDecoder) readHash() (plumbing.Hash, bool) {
+	if len(d.line) < hashSize {
+		d.err = fmt.Errorf("malformed hash: %v", d.line)
+		return plumbing.ZeroHash, false
+	}
+
+	var hash plumbing.Hash
+	if _, err := hex.Decode(hash[:], d.line[:hashSize]); err != nil {
+		d.error("invalid hash text: %s", err)
+		return plumbing.ZeroHash, false
+	}
+	d.line = d.line[hashSize:]
+
+	return hash, true
+}
+
+// Expected format: sp cap1 sp cap2 sp cap3...
+func (d *ulReqDecoder) decodeCaps() stateFn {
+	d.line = bytes.TrimPrefix(d.line, sp)
+	if err := d.data.Capabilities.Decode(d.line); err != nil {
+		d.error("invalid capabilities: %s", err)
+	}
+
+	return d.decodeOtherWants
+}
+
+// Expected format: want <hash>
+func (d *ulReqDecoder) decodeOtherWants() stateFn {
+	if ok := d.nextLine(); !ok {
+		return nil
+	}
+
+	if bytes.HasPrefix(d.line, shallow) {
+		return d.decodeShallow
+	}
+
+	if bytes.HasPrefix(d.line, deepen) {
+		return d.decodeDeepen
+	}
+
+	if len(d.line) == 0 {
+		return nil
+	}
+
+	if !bytes.HasPrefix(d.line, want) {
+		d.error("unexpected payload while expecting a want: %q", d.line)
+		return nil
+	}
+	d.line = bytes.TrimPrefix(d.line, want)
+
+	hash, ok := d.readHash()
+	if !ok {
+		return nil
+	}
+	d.data.Wants = append(d.data.Wants, hash)
+
+	return d.decodeOtherWants
+}
+
+// Expected format: shallow <hash>
+func (d *ulReqDecoder) decodeShallow() stateFn {
+	if bytes.HasPrefix(d.line, deepen) {
+		return d.decodeDeepen
+	}
+
+	if len(d.line) == 0 {
+		return nil
+	}
+
+	if !bytes.HasPrefix(d.line, shallow) {
+		d.error("unexpected payload while expecting a shallow: %q", d.line)
+		return nil
+	}
+	d.line = bytes.TrimPrefix(d.line, shallow)
+
+	hash, ok := d.readHash()
+	if !ok {
+		return nil
+	}
+	d.data.Shallows = append(d.data.Shallows, hash)
+
+	if ok := d.nextLine(); !ok {
+		return nil
+	}
+
+	return d.decodeShallow
+}
+
+// Expected format: deepen <n> / deepen-since <ul> / deepen-not <ref>
+func (d *ulReqDecoder) decodeDeepen() stateFn {
+	if bytes.HasPrefix(d.line, deepenCommits) {
+		return d.decodeDeepenCommits
+	}
+
+	if bytes.HasPrefix(d.line, deepenSince) {
+		return d.decodeDeepenSince
+	}
+
+	if bytes.HasPrefix(d.line, deepenReference) {
+		return d.decodeDeepenReference
+	}
+
+	if len(d.line) == 0 {
+		return nil
+	}
+
+	d.error("unexpected deepen specification: %q", d.line)
+	return nil
+}
+
+func (d *ulReqDecoder) decodeDeepenCommits() stateFn {
+	d.line = bytes.TrimPrefix(d.line, deepenCommits)
+
+	var n int
+	if n, d.err = strconv.Atoi(string(d.line)); d.err != nil {
+		return nil
+	}
+	if n < 0 {
+		d.err = fmt.Errorf("negative depth")
+		return nil
+	}
+	d.data.Depth = DepthCommits(n)
+
+	return d.decodeFlush
+}
+
+func (d *ulReqDecoder) decodeDeepenSince() stateFn {
+	d.line = bytes.TrimPrefix(d.line, deepenSince)
+
+	var secs int64
+	secs, d.err = strconv.ParseInt(string(d.line), 10, 64)
+	if d.err != nil {
+		return nil
+	}
+	t := time.Unix(secs, 0).UTC()
+	d.data.Depth = DepthSince(t)
+
+	return d.decodeFlush
+}
+
+func (d *ulReqDecoder) decodeDeepenReference() stateFn {
+	d.line = bytes.TrimPrefix(d.line, deepenReference)
+
+	d.data.Depth = DepthReference(string(d.line))
+
+	return d.decodeFlush
+}
+
+func (d *ulReqDecoder) decodeFlush() stateFn {
+	if ok := d.nextLine(); !ok {
+		return nil
+	}
+
+	if len(d.line) != 0 {
+		d.err = fmt.Errorf("unexpected payload while expecting a flush-pkt: %q", d.line)
+	}
+
+	return nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/protocol/packp/ulreq_encode.go","mode":420,"size":3351,"sha256":"aa3478f2c7358d12102c38d19566a21334e90f4f34664c1eabb5b43526b443b0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3351}
+package packp
+
+import (
+	"bytes"
+	"fmt"
+	"io"
+	"time"
+
+	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/format/pktline"
+)
+
+// Encode writes the UlReq encoding of u to the stream.
+//
+// All the payloads will end with a newline character.  Wants and
+// shallows are sorted alphabetically.  A depth of 0 means no depth
+// request is sent.
+func (req *UploadRequest) Encode(w io.Writer) error {
+	e := newUlReqEncoder(w)
+	return e.Encode(req)
+}
+
+type ulReqEncoder struct {
+	pe   *pktline.Encoder // where to write the encoded data
+	data *UploadRequest   // the data to encode
+	err  error            // sticky error
+}
+
+func newUlReqEncoder(w io.Writer) *ulReqEncoder {
+	return &ulReqEncoder{
+		pe: pktline.NewEncoder(w),
+	}
+}
+
+func (e *ulReqEncoder) Encode(v *UploadRequest) error {
+	e.data = v
+
+	if len(v.Wants) == 0 {
+		return fmt.Errorf("empty wants provided")
+	}
+
+	plumbing.HashesSort(e.data.Wants)
+	for state := e.encodeFirstWant; state != nil; {
+		state = state()
+	}
+
+	return e.err
+}
+
+func (e *ulReqEncoder) encodeFirstWant() stateFn {
+	var err error
+	if e.data.Capabilities.IsEmpty() {
+		err = e.pe.Encodef("want %s\n", e.data.Wants[0])
+	} else {
+		err = e.pe.Encodef(
+			"want %s %s\n",
+			e.data.Wants[0],
+			e.data.Capabilities.String(),
+		)
+	}
+
+	if err != nil {
+		e.err = fmt.Errorf("encoding first want line: %s", err)
+		return nil
+	}
+
+	return e.encodeAdditionalWants
+}
+
+func (e *ulReqEncoder) encodeAdditionalWants() stateFn {
+	last := e.data.Wants[0]
+	for _, w := range e.data.Wants[1:] {
+		if bytes.Equal(last[:], w[:]) {
+			continue
+		}
+
+		if err := e.pe.Encodef("want %s\n", w); err != nil {
+			e.err = fmt.Errorf("encoding want %q: %s", w, err)
+			return nil
+		}
+
+		last = w
+	}
+
+	return e.encodeShallows
+}
+
+func (e *ulReqEncoder) encodeShallows() stateFn {
+	plumbing.HashesSort(e.data.Shallows)
+
+	var last plumbing.Hash
+	for _, s := range e.data.Shallows {
+		if bytes.Equal(last[:], s[:]) {
+			continue
+		}
+
+		if err := e.pe.Encodef("shallow %s\n", s); err != nil {
+			e.err = fmt.Errorf("encoding shallow %q: %s", s, err)
+			return nil
+		}
+
+		last = s
+	}
+
+	return e.encodeDepth
+}
+
+func (e *ulReqEncoder) encodeDepth() stateFn {
+	switch depth := e.data.Depth.(type) {
+	case DepthCommits:
+		if depth != 0 {
+			commits := int(depth)
+			if err := e.pe.Encodef("deepen %d\n", commits); err != nil {
+				e.err = fmt.Errorf("encoding depth %d: %s", depth, err)
+				return nil
+			}
+		}
+	case DepthSince:
+		when := time.Time(depth).UTC()
+		if err := e.pe.Encodef("deepen-since %d\n", when.Unix()); err != nil {
+			e.err = fmt.Errorf("encoding depth %s: %s", when, err)
+			return nil
+		}
+	case DepthReference:
+		reference := string(depth)
+		if err := e.pe.Encodef("deepen-not %s\n", reference); err != nil {
+			e.err = fmt.Errorf("encoding depth %s: %s", reference, err)
+			return nil
+		}
+	default:
+		e.err = fmt.Errorf("unsupported depth type")
+		return nil
+	}
+
+	return e.encodeFilter
+}
+
+func (e *ulReqEncoder) encodeFilter() stateFn {
+	if filter := e.data.Filter; filter != "" {
+		if err := e.pe.Encodef("filter %s\n", filter); err != nil {
+			e.err = fmt.Errorf("encoding filter %s: %s", filter, err)
+			return nil
+		}
+	}
+
+	return e.encodeFlush
+}
+
+func (e *ulReqEncoder) encodeFlush() stateFn {
+	if err := e.pe.Flush(); err != nil {
+		e.err = fmt.Errorf("encoding flush-pkt: %s", err)
+		return nil
+	}
+
+	return nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/protocol/packp/updreq.go","mode":420,"size":2849,"sha256":"221a619fdea875e6ad3a7fb6c41309d59cd583ce9b4b46afda2172dbb7b15f46","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":2849}
+package packp
+
+import (
+	"errors"
+	"io"
+
+	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/protocol/packp/capability"
+	"github.com/go-git/go-git/v5/plumbing/protocol/packp/sideband"
+)
+
+var (
+	ErrEmptyCommands    = errors.New("commands cannot be empty")
+	ErrMalformedCommand = errors.New("malformed command")
+)
+
+// ReferenceUpdateRequest values represent reference upload requests.
+// Values from this type are not zero-value safe, use the New function instead.
+type ReferenceUpdateRequest struct {
+	Capabilities *capability.List
+	Commands     []*Command
+	Options      []*Option
+	Shallow      *plumbing.Hash
+	// Packfile contains an optional packfile reader.
+	Packfile io.ReadCloser
+
+	// Progress receives sideband progress messages from the server
+	Progress sideband.Progress
+}
+
+// New returns a pointer to a new ReferenceUpdateRequest value.
+func NewReferenceUpdateRequest() *ReferenceUpdateRequest {
+	return &ReferenceUpdateRequest{
+		// TODO: Add support for push-cert
+		Capabilities: capability.NewList(),
+		Commands:     nil,
+	}
+}
+
+// NewReferenceUpdateRequestFromCapabilities returns a pointer to a new
+// ReferenceUpdateRequest value, the request capabilities are filled with the
+// most optimal ones, based on the adv value (advertised capabilities), the
+// ReferenceUpdateRequest contains no commands
+//
+// It does set the following capabilities:
+//   - agent
+//   - report-status
+//   - ofs-delta
+//   - ref-delta
+//   - delete-refs
+// It leaves up to the user to add the following capabilities later:
+//   - atomic
+//   - ofs-delta
+//   - side-band
+//   - side-band-64k
+//   - quiet
+//   - push-cert
+func NewReferenceUpdateRequestFromCapabilities(adv *capability.List) *ReferenceUpdateRequest {
+	r := NewReferenceUpdateRequest()
+
+	if adv.Supports(capability.Agent) {
+		r.Capabilities.Set(capability.Agent, capability.DefaultAgent())
+	}
+
+	if adv.Supports(capability.ReportStatus) {
+		r.Capabilities.Set(capability.ReportStatus)
+	}
+
+	return r
+}
+
+func (req *ReferenceUpdateRequest) validate() error {
+	if len(req.Commands) == 0 {
+		return ErrEmptyCommands
+	}
+
+	for _, c := range req.Commands {
+		if err := c.validate(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+type Action string
+
+const (
+	Create  Action = "create"
+	Update  Action = "update"
+	Delete  Action = "delete"
+	Invalid Action = "invalid"
+)
+
+type Command struct {
+	Name plumbing.ReferenceName
+	Old  plumbing.Hash
+	New  plumbing.Hash
+}
+
+func (c *Command) Action() Action {
+	if c.Old == plumbing.ZeroHash && c.New == plumbing.ZeroHash {
+		return Invalid
+	}
+
+	if c.Old == plumbing.ZeroHash {
+		return Create
+	}
+
+	if c.New == plumbing.ZeroHash {
+		return Delete
+	}
+
+	return Update
+}
+
+func (c *Command) validate() error {
+	if c.Action() == Invalid {
+		return ErrMalformedCommand
+	}
+
+	return nil
+}
+
+type Option struct {
+	Key   string
+	Value string
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/protocol/packp/updreq_decode.go","mode":420,"size":5139,"sha256":"c6dad16184cce33b883169bfd7a355155beeb4bbc464c986e03291cf13297d3a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5139}
+package packp
+
+import (
+	"bytes"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"io"
+
+	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/format/pktline"
+)
+
+var (
+	shallowLineLength       = len(shallow) + hashSize
+	minCommandLength        = hashSize*2 + 2 + 1
+	minCommandAndCapsLength = minCommandLength + 1
+)
+
+var (
+	ErrEmpty                        = errors.New("empty update-request message")
+	errNoCommands                   = errors.New("unexpected EOF before any command")
+	errMissingCapabilitiesDelimiter = errors.New("capabilities delimiter not found")
+)
+
+func errMalformedRequest(reason string) error {
+	return fmt.Errorf("malformed request: %s", reason)
+}
+
+func errInvalidHashSize(got int) error {
+	return fmt.Errorf("invalid hash size: expected %d, got %d",
+		hashSize, got)
+}
+
+func errInvalidHash(err error) error {
+	return fmt.Errorf("invalid hash: %s", err.Error())
+}
+
+func errInvalidShallowLineLength(got int) error {
+	return errMalformedRequest(fmt.Sprintf(
+		"invalid shallow line length: expected %d, got %d",
+		shallowLineLength, got))
+}
+
+func errInvalidCommandCapabilitiesLineLength(got int) error {
+	return errMalformedRequest(fmt.Sprintf(
+		"invalid command and capabilities line length: expected at least %d, got %d",
+		minCommandAndCapsLength, got))
+}
+
+func errInvalidCommandLineLength(got int) error {
+	return errMalformedRequest(fmt.Sprintf(
+		"invalid command line length: expected at least %d, got %d",
+		minCommandLength, got))
+}
+
+func errInvalidShallowObjId(err error) error {
+	return errMalformedRequest(
+		fmt.Sprintf("invalid shallow object id: %s", err.Error()))
+}
+
+func errInvalidOldObjId(err error) error {
+	return errMalformedRequest(
+		fmt.Sprintf("invalid old object id: %s", err.Error()))
+}
+
+func errInvalidNewObjId(err error) error {
+	return errMalformedRequest(
+		fmt.Sprintf("invalid new object id: %s", err.Error()))
+}
+
+func errMalformedCommand(err error) error {
+	return errMalformedRequest(fmt.Sprintf(
+		"malformed command: %s", err.Error()))
+}
+
+// Decode reads the next update-request message form the reader and wr
+func (req *ReferenceUpdateRequest) Decode(r io.Reader) error {
+	var rc io.ReadCloser
+	var ok bool
+	rc, ok = r.(io.ReadCloser)
+	if !ok {
+		rc = io.NopCloser(r)
+	}
+
+	d := &updReqDecoder{r: rc, s: pktline.NewScanner(r)}
+	return d.Decode(req)
+}
+
+type updReqDecoder struct {
+	r   io.ReadCloser
+	s   *pktline.Scanner
+	req *ReferenceUpdateRequest
+}
+
+func (d *updReqDecoder) Decode(req *ReferenceUpdateRequest) error {
+	d.req = req
+	funcs := []func() error{
+		d.scanLine,
+		d.decodeShallow,
+		d.decodeCommandAndCapabilities,
+		d.decodeCommands,
+		d.setPackfile,
+		req.validate,
+	}
+
+	for _, f := range funcs {
+		if err := f(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (d *updReqDecoder) scanLine() error {
+	if ok := d.s.Scan(); !ok {
+		return d.scanErrorOr(ErrEmpty)
+	}
+
+	return nil
+}
+
+func (d *updReqDecoder) decodeShallow() error {
+	b := d.s.Bytes()
+
+	if !bytes.HasPrefix(b, shallowNoSp) {
+		return nil
+	}
+
+	if len(b) != shallowLineLength {
+		return errInvalidShallowLineLength(len(b))
+	}
+
+	h, err := parseHash(string(b[len(shallow):]))
+	if err != nil {
+		return errInvalidShallowObjId(err)
+	}
+
+	if ok := d.s.Scan(); !ok {
+		return d.scanErrorOr(errNoCommands)
+	}
+
+	d.req.Shallow = &h
+
+	return nil
+}
+
+func (d *updReqDecoder) decodeCommands() error {
+	for {
+		b := d.s.Bytes()
+		if bytes.Equal(b, pktline.Flush) {
+			return nil
+		}
+
+		c, err := parseCommand(b)
+		if err != nil {
+			return err
+		}
+
+		d.req.Commands = append(d.req.Commands, c)
+
+		if ok := d.s.Scan(); !ok {
+			return d.s.Err()
+		}
+	}
+}
+
+func (d *updReqDecoder) decodeCommandAndCapabilities() error {
+	b := d.s.Bytes()
+	i := bytes.IndexByte(b, 0)
+	if i == -1 {
+		return errMissingCapabilitiesDelimiter
+	}
+
+	if len(b) < minCommandAndCapsLength {
+		return errInvalidCommandCapabilitiesLineLength(len(b))
+	}
+
+	cmd, err := parseCommand(b[:i])
+	if err != nil {
+		return err
+	}
+
+	d.req.Commands = append(d.req.Commands, cmd)
+
+	if err := d.req.Capabilities.Decode(b[i+1:]); err != nil {
+		return err
+	}
+
+	if err := d.scanLine(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (d *updReqDecoder) setPackfile() error {
+	d.req.Packfile = d.r
+
+	return nil
+}
+
+func parseCommand(b []byte) (*Command, error) {
+	if len(b) < minCommandLength {
+		return nil, errInvalidCommandLineLength(len(b))
+	}
+
+	var (
+		os, ns string
+		n      plumbing.ReferenceName
+	)
+	if _, err := fmt.Sscanf(string(b), "%s %s %s", &os, &ns, &n); err != nil {
+		return nil, errMalformedCommand(err)
+	}
+
+	oh, err := parseHash(os)
+	if err != nil {
+		return nil, errInvalidOldObjId(err)
+	}
+
+	nh, err := parseHash(ns)
+	if err != nil {
+		return nil, errInvalidNewObjId(err)
+	}
+
+	return &Command{Old: oh, New: nh, Name: n}, nil
+}
+
+func parseHash(s string) (plumbing.Hash, error) {
+	if len(s) != hashSize {
+		return plumbing.ZeroHash, errInvalidHashSize(len(s))
+	}
+
+	if _, err := hex.DecodeString(s); err != nil {
+		return plumbing.ZeroHash, errInvalidHash(err)
+	}
+
+	h := plumbing.NewHash(s)
+	return h, nil
+}
+
+func (d *updReqDecoder) scanErrorOr(origErr error) error {
+	if err := d.s.Err(); err != nil {
+		return err
+	}
+
+	return origErr
+}
+
+@@END
 @@PORTABLE {"path":"third_party/wails/vendor/github.com/go-git/go-git/v5/plumbing/protocol/packp/updreq_encode.go","mode":420,"size":1809,"sha256":"ca6c8577ac2b6b15ce62acf22febc76e58b273df00dba754fa5fe395843a0e7e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1809}
 package packp
 
@@ -102782,3247 +105934,5 @@ License
 
 Copyright (c) 2012 Jan Schlicht <janschlicht@gmail.com>
 Resize is released under a MIT style license.
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/nfnt/resize/converter.go","mode":420,"size":11882,"sha256":"6df51a3d43bb310c8913e8aaa203571c2e37f323d3aadbeca75b9256d793100c","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":11882}
-/*
-Copyright (c) 2012, Jan Schlicht <jan.schlicht@gmail.com>
-
-Permission to use, copy, modify, and/or distribute this software for any purpose
-with or without fee is hereby granted, provided that the above copyright notice
-and this permission notice appear in all copies.
-
-THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
-REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
-FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
-INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS
-OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
-TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
-THIS SOFTWARE.
-*/
-
-package resize
-
-import "image"
-
-// Keep value in [0,255] range.
-func clampUint8(in int32) uint8 {
-	// casting a negative int to an uint will result in an overflown
-	// large uint. this behavior will be exploited here and in other functions
-	// to achieve a higher performance.
-	if uint32(in) < 256 {
-		return uint8(in)
-	}
-	if in > 255 {
-		return 255
-	}
-	return 0
-}
-
-// Keep value in [0,65535] range.
-func clampUint16(in int64) uint16 {
-	if uint64(in) < 65536 {
-		return uint16(in)
-	}
-	if in > 65535 {
-		return 65535
-	}
-	return 0
-}
-
-func resizeGeneric(in image.Image, out *image.RGBA64, scale float64, coeffs []int32, offset []int, filterLength int) {
-	newBounds := out.Bounds()
-	maxX := in.Bounds().Dx() - 1
-
-	for x := newBounds.Min.X; x < newBounds.Max.X; x++ {
-		for y := newBounds.Min.Y; y < newBounds.Max.Y; y++ {
-			var rgba [4]int64
-			var sum int64
-			start := offset[y]
-			ci := y * filterLength
-			for i := 0; i < filterLength; i++ {
-				coeff := coeffs[ci+i]
-				if coeff != 0 {
-					xi := start + i
-					switch {
-					case xi < 0:
-						xi = 0
-					case xi >= maxX:
-						xi = maxX
-					}
-
-					r, g, b, a := in.At(xi+in.Bounds().Min.X, x+in.Bounds().Min.Y).RGBA()
-
-					rgba[0] += int64(coeff) * int64(r)
-					rgba[1] += int64(coeff) * int64(g)
-					rgba[2] += int64(coeff) * int64(b)
-					rgba[3] += int64(coeff) * int64(a)
-					sum += int64(coeff)
-				}
-			}
-
-			offset := (y-newBounds.Min.Y)*out.Stride + (x-newBounds.Min.X)*8
-
-			value := clampUint16(rgba[0] / sum)
-			out.Pix[offset+0] = uint8(value >> 8)
-			out.Pix[offset+1] = uint8(value)
-			value = clampUint16(rgba[1] / sum)
-			out.Pix[offset+2] = uint8(value >> 8)
-			out.Pix[offset+3] = uint8(value)
-			value = clampUint16(rgba[2] / sum)
-			out.Pix[offset+4] = uint8(value >> 8)
-			out.Pix[offset+5] = uint8(value)
-			value = clampUint16(rgba[3] / sum)
-			out.Pix[offset+6] = uint8(value >> 8)
-			out.Pix[offset+7] = uint8(value)
-		}
-	}
-}
-
-func resizeRGBA(in *image.RGBA, out *image.RGBA, scale float64, coeffs []int16, offset []int, filterLength int) {
-	newBounds := out.Bounds()
-	maxX := in.Bounds().Dx() - 1
-
-	for x := newBounds.Min.X; x < newBounds.Max.X; x++ {
-		row := in.Pix[x*in.Stride:]
-		for y := newBounds.Min.Y; y < newBounds.Max.Y; y++ {
-			var rgba [4]int32
-			var sum int32
-			start := offset[y]
-			ci := y * filterLength
-			for i := 0; i < filterLength; i++ {
-				coeff := coeffs[ci+i]
-				if coeff != 0 {
-					xi := start + i
-					switch {
-					case uint(xi) < uint(maxX):
-						xi *= 4
-					case xi >= maxX:
-						xi = 4 * maxX
-					default:
-						xi = 0
-					}
-
-					rgba[0] += int32(coeff) * int32(row[xi+0])
-					rgba[1] += int32(coeff) * int32(row[xi+1])
-					rgba[2] += int32(coeff) * int32(row[xi+2])
-					rgba[3] += int32(coeff) * int32(row[xi+3])
-					sum += int32(coeff)
-				}
-			}
-
-			xo := (y-newBounds.Min.Y)*out.Stride + (x-newBounds.Min.X)*4
-
-			out.Pix[xo+0] = clampUint8(rgba[0] / sum)
-			out.Pix[xo+1] = clampUint8(rgba[1] / sum)
-			out.Pix[xo+2] = clampUint8(rgba[2] / sum)
-			out.Pix[xo+3] = clampUint8(rgba[3] / sum)
-		}
-	}
-}
-
-func resizeNRGBA(in *image.NRGBA, out *image.RGBA, scale float64, coeffs []int16, offset []int, filterLength int) {
-	newBounds := out.Bounds()
-	maxX := in.Bounds().Dx() - 1
-
-	for x := newBounds.Min.X; x < newBounds.Max.X; x++ {
-		row := in.Pix[x*in.Stride:]
-		for y := newBounds.Min.Y; y < newBounds.Max.Y; y++ {
-			var rgba [4]int32
-			var sum int32
-			start := offset[y]
-			ci := y * filterLength
-			for i := 0; i < filterLength; i++ {
-				coeff := coeffs[ci+i]
-				if coeff != 0 {
-					xi := start + i
-					switch {
-					case uint(xi) < uint(maxX):
-						xi *= 4
-					case xi >= maxX:
-						xi = 4 * maxX
-					default:
-						xi = 0
-					}
-
-					// Forward alpha-premultiplication
-					a := int32(row[xi+3])
-					r := int32(row[xi+0]) * a
-					r /= 0xff
-					g := int32(row[xi+1]) * a
-					g /= 0xff
-					b := int32(row[xi+2]) * a
-					b /= 0xff
-
-					rgba[0] += int32(coeff) * r
-					rgba[1] += int32(coeff) * g
-					rgba[2] += int32(coeff) * b
-					rgba[3] += int32(coeff) * a
-					sum += int32(coeff)
-				}
-			}
-
-			xo := (y-newBounds.Min.Y)*out.Stride + (x-newBounds.Min.X)*4
-
-			out.Pix[xo+0] = clampUint8(rgba[0] / sum)
-			out.Pix[xo+1] = clampUint8(rgba[1] / sum)
-			out.Pix[xo+2] = clampUint8(rgba[2] / sum)
-			out.Pix[xo+3] = clampUint8(rgba[3] / sum)
-		}
-	}
-}
-
-func resizeRGBA64(in *image.RGBA64, out *image.RGBA64, scale float64, coeffs []int32, offset []int, filterLength int) {
-	newBounds := out.Bounds()
-	maxX := in.Bounds().Dx() - 1
-
-	for x := newBounds.Min.X; x < newBounds.Max.X; x++ {
-		row := in.Pix[x*in.Stride:]
-		for y := newBounds.Min.Y; y < newBounds.Max.Y; y++ {
-			var rgba [4]int64
-			var sum int64
-			start := offset[y]
-			ci := y * filterLength
-			for i := 0; i < filterLength; i++ {
-				coeff := coeffs[ci+i]
-				if coeff != 0 {
-					xi := start + i
-					switch {
-					case uint(xi) < uint(maxX):
-						xi *= 8
-					case xi >= maxX:
-						xi = 8 * maxX
-					default:
-						xi = 0
-					}
-
-					rgba[0] += int64(coeff) * (int64(row[xi+0])<<8 | int64(row[xi+1]))
-					rgba[1] += int64(coeff) * (int64(row[xi+2])<<8 | int64(row[xi+3]))
-					rgba[2] += int64(coeff) * (int64(row[xi+4])<<8 | int64(row[xi+5]))
-					rgba[3] += int64(coeff) * (int64(row[xi+6])<<8 | int64(row[xi+7]))
-					sum += int64(coeff)
-				}
-			}
-
-			xo := (y-newBounds.Min.Y)*out.Stride + (x-newBounds.Min.X)*8
-
-			value := clampUint16(rgba[0] / sum)
-			out.Pix[xo+0] = uint8(value >> 8)
-			out.Pix[xo+1] = uint8(value)
-			value = clampUint16(rgba[1] / sum)
-			out.Pix[xo+2] = uint8(value >> 8)
-			out.Pix[xo+3] = uint8(value)
-			value = clampUint16(rgba[2] / sum)
-			out.Pix[xo+4] = uint8(value >> 8)
-			out.Pix[xo+5] = uint8(value)
-			value = clampUint16(rgba[3] / sum)
-			out.Pix[xo+6] = uint8(value >> 8)
-			out.Pix[xo+7] = uint8(value)
-		}
-	}
-}
-
-func resizeNRGBA64(in *image.NRGBA64, out *image.RGBA64, scale float64, coeffs []int32, offset []int, filterLength int) {
-	newBounds := out.Bounds()
-	maxX := in.Bounds().Dx() - 1
-
-	for x := newBounds.Min.X; x < newBounds.Max.X; x++ {
-		row := in.Pix[x*in.Stride:]
-		for y := newBounds.Min.Y; y < newBounds.Max.Y; y++ {
-			var rgba [4]int64
-			var sum int64
-			start := offset[y]
-			ci := y * filterLength
-			for i := 0; i < filterLength; i++ {
-				coeff := coeffs[ci+i]
-				if coeff != 0 {
-					xi := start + i
-					switch {
-					case uint(xi) < uint(maxX):
-						xi *= 8
-					case xi >= maxX:
-						xi = 8 * maxX
-					default:
-						xi = 0
-					}
-
-					// Forward alpha-premultiplication
-					a := int64(uint16(row[xi+6])<<8 | uint16(row[xi+7]))
-					r := int64(uint16(row[xi+0])<<8|uint16(row[xi+1])) * a
-					r /= 0xffff
-					g := int64(uint16(row[xi+2])<<8|uint16(row[xi+3])) * a
-					g /= 0xffff
-					b := int64(uint16(row[xi+4])<<8|uint16(row[xi+5])) * a
-					b /= 0xffff
-
-					rgba[0] += int64(coeff) * r
-					rgba[1] += int64(coeff) * g
-					rgba[2] += int64(coeff) * b
-					rgba[3] += int64(coeff) * a
-					sum += int64(coeff)
-				}
-			}
-
-			xo := (y-newBounds.Min.Y)*out.Stride + (x-newBounds.Min.X)*8
-
-			value := clampUint16(rgba[0] / sum)
-			out.Pix[xo+0] = uint8(value >> 8)
-			out.Pix[xo+1] = uint8(value)
-			value = clampUint16(rgba[1] / sum)
-			out.Pix[xo+2] = uint8(value >> 8)
-			out.Pix[xo+3] = uint8(value)
-			value = clampUint16(rgba[2] / sum)
-			out.Pix[xo+4] = uint8(value >> 8)
-			out.Pix[xo+5] = uint8(value)
-			value = clampUint16(rgba[3] / sum)
-			out.Pix[xo+6] = uint8(value >> 8)
-			out.Pix[xo+7] = uint8(value)
-		}
-	}
-}
-
-func resizeGray(in *image.Gray, out *image.Gray, scale float64, coeffs []int16, offset []int, filterLength int) {
-	newBounds := out.Bounds()
-	maxX := in.Bounds().Dx() - 1
-
-	for x := newBounds.Min.X; x < newBounds.Max.X; x++ {
-		row := in.Pix[(x-newBounds.Min.X)*in.Stride:]
-		for y := newBounds.Min.Y; y < newBounds.Max.Y; y++ {
-			var gray int32
-			var sum int32
-			start := offset[y]
-			ci := y * filterLength
-			for i := 0; i < filterLength; i++ {
-				coeff := coeffs[ci+i]
-				if coeff != 0 {
-					xi := start + i
-					switch {
-					case xi < 0:
-						xi = 0
-					case xi >= maxX:
-						xi = maxX
-					}
-					gray += int32(coeff) * int32(row[xi])
-					sum += int32(coeff)
-				}
-			}
-
-			offset := (y-newBounds.Min.Y)*out.Stride + (x - newBounds.Min.X)
-			out.Pix[offset] = clampUint8(gray / sum)
-		}
-	}
-}
-
-func resizeGray16(in *image.Gray16, out *image.Gray16, scale float64, coeffs []int32, offset []int, filterLength int) {
-	newBounds := out.Bounds()
-	maxX := in.Bounds().Dx() - 1
-
-	for x := newBounds.Min.X; x < newBounds.Max.X; x++ {
-		row := in.Pix[x*in.Stride:]
-		for y := newBounds.Min.Y; y < newBounds.Max.Y; y++ {
-			var gray int64
-			var sum int64
-			start := offset[y]
-			ci := y * filterLength
-			for i := 0; i < filterLength; i++ {
-				coeff := coeffs[ci+i]
-				if coeff != 0 {
-					xi := start + i
-					switch {
-					case uint(xi) < uint(maxX):
-						xi *= 2
-					case xi >= maxX:
-						xi = 2 * maxX
-					default:
-						xi = 0
-					}
-					gray += int64(coeff) * int64(uint16(row[xi+0])<<8|uint16(row[xi+1]))
-					sum += int64(coeff)
-				}
-			}
-
-			offset := (y-newBounds.Min.Y)*out.Stride + (x-newBounds.Min.X)*2
-			value := clampUint16(gray / sum)
-			out.Pix[offset+0] = uint8(value >> 8)
-			out.Pix[offset+1] = uint8(value)
-		}
-	}
-}
-
-func resizeYCbCr(in *ycc, out *ycc, scale float64, coeffs []int16, offset []int, filterLength int) {
-	newBounds := out.Bounds()
-	maxX := in.Bounds().Dx() - 1
-
-	for x := newBounds.Min.X; x < newBounds.Max.X; x++ {
-		row := in.Pix[x*in.Stride:]
-		for y := newBounds.Min.Y; y < newBounds.Max.Y; y++ {
-			var p [3]int32
-			var sum int32
-			start := offset[y]
-			ci := y * filterLength
-			for i := 0; i < filterLength; i++ {
-				coeff := coeffs[ci+i]
-				if coeff != 0 {
-					xi := start + i
-					switch {
-					case uint(xi) < uint(maxX):
-						xi *= 3
-					case xi >= maxX:
-						xi = 3 * maxX
-					default:
-						xi = 0
-					}
-					p[0] += int32(coeff) * int32(row[xi+0])
-					p[1] += int32(coeff) * int32(row[xi+1])
-					p[2] += int32(coeff) * int32(row[xi+2])
-					sum += int32(coeff)
-				}
-			}
-
-			xo := (y-newBounds.Min.Y)*out.Stride + (x-newBounds.Min.X)*3
-			out.Pix[xo+0] = clampUint8(p[0] / sum)
-			out.Pix[xo+1] = clampUint8(p[1] / sum)
-			out.Pix[xo+2] = clampUint8(p[2] / sum)
-		}
-	}
-}
-
-func nearestYCbCr(in *ycc, out *ycc, scale float64, coeffs []bool, offset []int, filterLength int) {
-	newBounds := out.Bounds()
-	maxX := in.Bounds().Dx() - 1
-
-	for x := newBounds.Min.X; x < newBounds.Max.X; x++ {
-		row := in.Pix[x*in.Stride:]
-		for y := newBounds.Min.Y; y < newBounds.Max.Y; y++ {
-			var p [3]float32
-			var sum float32
-			start := offset[y]
-			ci := y * filterLength
-			for i := 0; i < filterLength; i++ {
-				if coeffs[ci+i] {
-					xi := start + i
-					switch {
-					case uint(xi) < uint(maxX):
-						xi *= 3
-					case xi >= maxX:
-						xi = 3 * maxX
-					default:
-						xi = 0
-					}
-					p[0] += float32(row[xi+0])
-					p[1] += float32(row[xi+1])
-					p[2] += float32(row[xi+2])
-					sum++
-				}
-			}
-
-			xo := (y-newBounds.Min.Y)*out.Stride + (x-newBounds.Min.X)*3
-			out.Pix[xo+0] = floatToUint8(p[0] / sum)
-			out.Pix[xo+1] = floatToUint8(p[1] / sum)
-			out.Pix[xo+2] = floatToUint8(p[2] / sum)
-		}
-	}
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/nfnt/resize/filters.go","mode":420,"size":3782,"sha256":"d777e872939cab018547f379b30df65f142ed64148093b67120e17314b2c1b8b","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":3782}
-/*
-Copyright (c) 2012, Jan Schlicht <jan.schlicht@gmail.com>
-
-Permission to use, copy, modify, and/or distribute this software for any purpose
-with or without fee is hereby granted, provided that the above copyright notice
-and this permission notice appear in all copies.
-
-THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
-REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
-FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
-INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS
-OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
-TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
-THIS SOFTWARE.
-*/
-
-package resize
-
-import (
-	"math"
-)
-
-func nearest(in float64) float64 {
-	if in >= -0.5 && in < 0.5 {
-		return 1
-	}
-	return 0
-}
-
-func linear(in float64) float64 {
-	in = math.Abs(in)
-	if in <= 1 {
-		return 1 - in
-	}
-	return 0
-}
-
-func cubic(in float64) float64 {
-	in = math.Abs(in)
-	if in <= 1 {
-		return in*in*(1.5*in-2.5) + 1.0
-	}
-	if in <= 2 {
-		return in*(in*(2.5-0.5*in)-4.0) + 2.0
-	}
-	return 0
-}
-
-func mitchellnetravali(in float64) float64 {
-	in = math.Abs(in)
-	if in <= 1 {
-		return (7.0*in*in*in - 12.0*in*in + 5.33333333333) * 0.16666666666
-	}
-	if in <= 2 {
-		return (-2.33333333333*in*in*in + 12.0*in*in - 20.0*in + 10.6666666667) * 0.16666666666
-	}
-	return 0
-}
-
-func sinc(x float64) float64 {
-	x = math.Abs(x) * math.Pi
-	if x >= 1.220703e-4 {
-		return math.Sin(x) / x
-	}
-	return 1
-}
-
-func lanczos2(in float64) float64 {
-	if in > -2 && in < 2 {
-		return sinc(in) * sinc(in*0.5)
-	}
-	return 0
-}
-
-func lanczos3(in float64) float64 {
-	if in > -3 && in < 3 {
-		return sinc(in) * sinc(in*0.3333333333333333)
-	}
-	return 0
-}
-
-// range [-256,256]
-func createWeights8(dy, filterLength int, blur, scale float64, kernel func(float64) float64) ([]int16, []int, int) {
-	filterLength = filterLength * int(math.Max(math.Ceil(blur*scale), 1))
-	filterFactor := math.Min(1./(blur*scale), 1)
-
-	coeffs := make([]int16, dy*filterLength)
-	start := make([]int, dy)
-	for y := 0; y < dy; y++ {
-		interpX := scale*(float64(y)+0.5) - 0.5
-		start[y] = int(interpX) - filterLength/2 + 1
-		interpX -= float64(start[y])
-		for i := 0; i < filterLength; i++ {
-			in := (interpX - float64(i)) * filterFactor
-			coeffs[y*filterLength+i] = int16(kernel(in) * 256)
-		}
-	}
-
-	return coeffs, start, filterLength
-}
-
-// range [-65536,65536]
-func createWeights16(dy, filterLength int, blur, scale float64, kernel func(float64) float64) ([]int32, []int, int) {
-	filterLength = filterLength * int(math.Max(math.Ceil(blur*scale), 1))
-	filterFactor := math.Min(1./(blur*scale), 1)
-
-	coeffs := make([]int32, dy*filterLength)
-	start := make([]int, dy)
-	for y := 0; y < dy; y++ {
-		interpX := scale*(float64(y)+0.5) - 0.5
-		start[y] = int(interpX) - filterLength/2 + 1
-		interpX -= float64(start[y])
-		for i := 0; i < filterLength; i++ {
-			in := (interpX - float64(i)) * filterFactor
-			coeffs[y*filterLength+i] = int32(kernel(in) * 65536)
-		}
-	}
-
-	return coeffs, start, filterLength
-}
-
-func createWeightsNearest(dy, filterLength int, blur, scale float64) ([]bool, []int, int) {
-	filterLength = filterLength * int(math.Max(math.Ceil(blur*scale), 1))
-	filterFactor := math.Min(1./(blur*scale), 1)
-
-	coeffs := make([]bool, dy*filterLength)
-	start := make([]int, dy)
-	for y := 0; y < dy; y++ {
-		interpX := scale*(float64(y)+0.5) - 0.5
-		start[y] = int(interpX) - filterLength/2 + 1
-		interpX -= float64(start[y])
-		for i := 0; i < filterLength; i++ {
-			in := (interpX - float64(i)) * filterFactor
-			if in >= -0.5 && in < 0.5 {
-				coeffs[y*filterLength+i] = true
-			} else {
-				coeffs[y*filterLength+i] = false
-			}
-		}
-	}
-
-	return coeffs, start, filterLength
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/nfnt/resize/nearest.go","mode":420,"size":8957,"sha256":"6d0d16db4a2104f179575cc3d11bb6fb6953f547359b9f0bba83c3c7b1df9d5e","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":8957}
-/*
-Copyright (c) 2014, Charlie Vieth <charlie.vieth@gmail.com>
-
-Permission to use, copy, modify, and/or distribute this software for any purpose
-with or without fee is hereby granted, provided that the above copyright notice
-and this permission notice appear in all copies.
-
-THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
-REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
-FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
-INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS
-OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
-TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
-THIS SOFTWARE.
-*/
-
-package resize
-
-import "image"
-
-func floatToUint8(x float32) uint8 {
-	// Nearest-neighbor values are always
-	// positive no need to check lower-bound.
-	if x > 0xfe {
-		return 0xff
-	}
-	return uint8(x)
-}
-
-func floatToUint16(x float32) uint16 {
-	if x > 0xfffe {
-		return 0xffff
-	}
-	return uint16(x)
-}
-
-func nearestGeneric(in image.Image, out *image.RGBA64, scale float64, coeffs []bool, offset []int, filterLength int) {
-	newBounds := out.Bounds()
-	maxX := in.Bounds().Dx() - 1
-
-	for x := newBounds.Min.X; x < newBounds.Max.X; x++ {
-		for y := newBounds.Min.Y; y < newBounds.Max.Y; y++ {
-			var rgba [4]float32
-			var sum float32
-			start := offset[y]
-			ci := y * filterLength
-			for i := 0; i < filterLength; i++ {
-				if coeffs[ci+i] {
-					xi := start + i
-					switch {
-					case xi < 0:
-						xi = 0
-					case xi >= maxX:
-						xi = maxX
-					}
-					r, g, b, a := in.At(xi+in.Bounds().Min.X, x+in.Bounds().Min.Y).RGBA()
-					rgba[0] += float32(r)
-					rgba[1] += float32(g)
-					rgba[2] += float32(b)
-					rgba[3] += float32(a)
-					sum++
-				}
-			}
-
-			offset := (y-newBounds.Min.Y)*out.Stride + (x-newBounds.Min.X)*8
-			value := floatToUint16(rgba[0] / sum)
-			out.Pix[offset+0] = uint8(value >> 8)
-			out.Pix[offset+1] = uint8(value)
-			value = floatToUint16(rgba[1] / sum)
-			out.Pix[offset+2] = uint8(value >> 8)
-			out.Pix[offset+3] = uint8(value)
-			value = floatToUint16(rgba[2] / sum)
-			out.Pix[offset+4] = uint8(value >> 8)
-			out.Pix[offset+5] = uint8(value)
-			value = floatToUint16(rgba[3] / sum)
-			out.Pix[offset+6] = uint8(value >> 8)
-			out.Pix[offset+7] = uint8(value)
-		}
-	}
-}
-
-func nearestRGBA(in *image.RGBA, out *image.RGBA, scale float64, coeffs []bool, offset []int, filterLength int) {
-	newBounds := out.Bounds()
-	maxX := in.Bounds().Dx() - 1
-
-	for x := newBounds.Min.X; x < newBounds.Max.X; x++ {
-		row := in.Pix[x*in.Stride:]
-		for y := newBounds.Min.Y; y < newBounds.Max.Y; y++ {
-			var rgba [4]float32
-			var sum float32
-			start := offset[y]
-			ci := y * filterLength
-			for i := 0; i < filterLength; i++ {
-				if coeffs[ci+i] {
-					xi := start + i
-					switch {
-					case uint(xi) < uint(maxX):
-						xi *= 4
-					case xi >= maxX:
-						xi = 4 * maxX
-					default:
-						xi = 0
-					}
-					rgba[0] += float32(row[xi+0])
-					rgba[1] += float32(row[xi+1])
-					rgba[2] += float32(row[xi+2])
-					rgba[3] += float32(row[xi+3])
-					sum++
-				}
-			}
-
-			xo := (y-newBounds.Min.Y)*out.Stride + (x-newBounds.Min.X)*4
-			out.Pix[xo+0] = floatToUint8(rgba[0] / sum)
-			out.Pix[xo+1] = floatToUint8(rgba[1] / sum)
-			out.Pix[xo+2] = floatToUint8(rgba[2] / sum)
-			out.Pix[xo+3] = floatToUint8(rgba[3] / sum)
-		}
-	}
-}
-
-func nearestNRGBA(in *image.NRGBA, out *image.NRGBA, scale float64, coeffs []bool, offset []int, filterLength int) {
-	newBounds := out.Bounds()
-	maxX := in.Bounds().Dx() - 1
-
-	for x := newBounds.Min.X; x < newBounds.Max.X; x++ {
-		row := in.Pix[x*in.Stride:]
-		for y := newBounds.Min.Y; y < newBounds.Max.Y; y++ {
-			var rgba [4]float32
-			var sum float32
-			start := offset[y]
-			ci := y * filterLength
-			for i := 0; i < filterLength; i++ {
-				if coeffs[ci+i] {
-					xi := start + i
-					switch {
-					case uint(xi) < uint(maxX):
-						xi *= 4
-					case xi >= maxX:
-						xi = 4 * maxX
-					default:
-						xi = 0
-					}
-					rgba[0] += float32(row[xi+0])
-					rgba[1] += float32(row[xi+1])
-					rgba[2] += float32(row[xi+2])
-					rgba[3] += float32(row[xi+3])
-					sum++
-				}
-			}
-
-			xo := (y-newBounds.Min.Y)*out.Stride + (x-newBounds.Min.X)*4
-			out.Pix[xo+0] = floatToUint8(rgba[0] / sum)
-			out.Pix[xo+1] = floatToUint8(rgba[1] / sum)
-			out.Pix[xo+2] = floatToUint8(rgba[2] / sum)
-			out.Pix[xo+3] = floatToUint8(rgba[3] / sum)
-		}
-	}
-}
-
-func nearestRGBA64(in *image.RGBA64, out *image.RGBA64, scale float64, coeffs []bool, offset []int, filterLength int) {
-	newBounds := out.Bounds()
-	maxX := in.Bounds().Dx() - 1
-
-	for x := newBounds.Min.X; x < newBounds.Max.X; x++ {
-		row := in.Pix[x*in.Stride:]
-		for y := newBounds.Min.Y; y < newBounds.Max.Y; y++ {
-			var rgba [4]float32
-			var sum float32
-			start := offset[y]
-			ci := y * filterLength
-			for i := 0; i < filterLength; i++ {
-				if coeffs[ci+i] {
-					xi := start + i
-					switch {
-					case uint(xi) < uint(maxX):
-						xi *= 8
-					case xi >= maxX:
-						xi = 8 * maxX
-					default:
-						xi = 0
-					}
-					rgba[0] += float32(uint16(row[xi+0])<<8 | uint16(row[xi+1]))
-					rgba[1] += float32(uint16(row[xi+2])<<8 | uint16(row[xi+3]))
-					rgba[2] += float32(uint16(row[xi+4])<<8 | uint16(row[xi+5]))
-					rgba[3] += float32(uint16(row[xi+6])<<8 | uint16(row[xi+7]))
-					sum++
-				}
-			}
-
-			xo := (y-newBounds.Min.Y)*out.Stride + (x-newBounds.Min.X)*8
-			value := floatToUint16(rgba[0] / sum)
-			out.Pix[xo+0] = uint8(value >> 8)
-			out.Pix[xo+1] = uint8(value)
-			value = floatToUint16(rgba[1] / sum)
-			out.Pix[xo+2] = uint8(value >> 8)
-			out.Pix[xo+3] = uint8(value)
-			value = floatToUint16(rgba[2] / sum)
-			out.Pix[xo+4] = uint8(value >> 8)
-			out.Pix[xo+5] = uint8(value)
-			value = floatToUint16(rgba[3] / sum)
-			out.Pix[xo+6] = uint8(value >> 8)
-			out.Pix[xo+7] = uint8(value)
-		}
-	}
-}
-
-func nearestNRGBA64(in *image.NRGBA64, out *image.NRGBA64, scale float64, coeffs []bool, offset []int, filterLength int) {
-	newBounds := out.Bounds()
-	maxX := in.Bounds().Dx() - 1
-
-	for x := newBounds.Min.X; x < newBounds.Max.X; x++ {
-		row := in.Pix[x*in.Stride:]
-		for y := newBounds.Min.Y; y < newBounds.Max.Y; y++ {
-			var rgba [4]float32
-			var sum float32
-			start := offset[y]
-			ci := y * filterLength
-			for i := 0; i < filterLength; i++ {
-				if coeffs[ci+i] {
-					xi := start + i
-					switch {
-					case uint(xi) < uint(maxX):
-						xi *= 8
-					case xi >= maxX:
-						xi = 8 * maxX
-					default:
-						xi = 0
-					}
-					rgba[0] += float32(uint16(row[xi+0])<<8 | uint16(row[xi+1]))
-					rgba[1] += float32(uint16(row[xi+2])<<8 | uint16(row[xi+3]))
-					rgba[2] += float32(uint16(row[xi+4])<<8 | uint16(row[xi+5]))
-					rgba[3] += float32(uint16(row[xi+6])<<8 | uint16(row[xi+7]))
-					sum++
-				}
-			}
-
-			xo := (y-newBounds.Min.Y)*out.Stride + (x-newBounds.Min.X)*8
-			value := floatToUint16(rgba[0] / sum)
-			out.Pix[xo+0] = uint8(value >> 8)
-			out.Pix[xo+1] = uint8(value)
-			value = floatToUint16(rgba[1] / sum)
-			out.Pix[xo+2] = uint8(value >> 8)
-			out.Pix[xo+3] = uint8(value)
-			value = floatToUint16(rgba[2] / sum)
-			out.Pix[xo+4] = uint8(value >> 8)
-			out.Pix[xo+5] = uint8(value)
-			value = floatToUint16(rgba[3] / sum)
-			out.Pix[xo+6] = uint8(value >> 8)
-			out.Pix[xo+7] = uint8(value)
-		}
-	}
-}
-
-func nearestGray(in *image.Gray, out *image.Gray, scale float64, coeffs []bool, offset []int, filterLength int) {
-	newBounds := out.Bounds()
-	maxX := in.Bounds().Dx() - 1
-
-	for x := newBounds.Min.X; x < newBounds.Max.X; x++ {
-		row := in.Pix[x*in.Stride:]
-		for y := newBounds.Min.Y; y < newBounds.Max.Y; y++ {
-			var gray float32
-			var sum float32
-			start := offset[y]
-			ci := y * filterLength
-			for i := 0; i < filterLength; i++ {
-				if coeffs[ci+i] {
-					xi := start + i
-					switch {
-					case xi < 0:
-						xi = 0
-					case xi >= maxX:
-						xi = maxX
-					}
-					gray += float32(row[xi])
-					sum++
-				}
-			}
-
-			offset := (y-newBounds.Min.Y)*out.Stride + (x - newBounds.Min.X)
-			out.Pix[offset] = floatToUint8(gray / sum)
-		}
-	}
-}
-
-func nearestGray16(in *image.Gray16, out *image.Gray16, scale float64, coeffs []bool, offset []int, filterLength int) {
-	newBounds := out.Bounds()
-	maxX := in.Bounds().Dx() - 1
-
-	for x := newBounds.Min.X; x < newBounds.Max.X; x++ {
-		row := in.Pix[x*in.Stride:]
-		for y := newBounds.Min.Y; y < newBounds.Max.Y; y++ {
-			var gray float32
-			var sum float32
-			start := offset[y]
-			ci := y * filterLength
-			for i := 0; i < filterLength; i++ {
-				if coeffs[ci+i] {
-					xi := start + i
-					switch {
-					case uint(xi) < uint(maxX):
-						xi *= 2
-					case xi >= maxX:
-						xi = 2 * maxX
-					default:
-						xi = 0
-					}
-					gray += float32(uint16(row[xi+0])<<8 | uint16(row[xi+1]))
-					sum++
-				}
-			}
-
-			offset := (y-newBounds.Min.Y)*out.Stride + (x-newBounds.Min.X)*2
-			value := floatToUint16(gray / sum)
-			out.Pix[offset+0] = uint8(value >> 8)
-			out.Pix[offset+1] = uint8(value)
-		}
-	}
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/nfnt/resize/resize.go","mode":420,"size":20342,"sha256":"743e311473ade8b0a0e5505dab7a4082978c71fc961b9537ba78c42118214aa3","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":20342}
-/*
-Copyright (c) 2012, Jan Schlicht <jan.schlicht@gmail.com>
-
-Permission to use, copy, modify, and/or distribute this software for any purpose
-with or without fee is hereby granted, provided that the above copyright notice
-and this permission notice appear in all copies.
-
-THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
-REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
-FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
-INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS
-OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
-TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
-THIS SOFTWARE.
-*/
-
-// Package resize implements various image resizing methods.
-//
-// The package works with the Image interface described in the image package.
-// Various interpolation methods are provided and multiple processors may be
-// utilized in the computations.
-//
-// Example:
-//     imgResized := resize.Resize(1000, 0, imgOld, resize.MitchellNetravali)
-package resize
-
-import (
-	"image"
-	"runtime"
-	"sync"
-)
-
-// An InterpolationFunction provides the parameters that describe an
-// interpolation kernel. It returns the number of samples to take
-// and the kernel function to use for sampling.
-type InterpolationFunction int
-
-// InterpolationFunction constants
-const (
-	// Nearest-neighbor interpolation
-	NearestNeighbor InterpolationFunction = iota
-	// Bilinear interpolation
-	Bilinear
-	// Bicubic interpolation (with cubic hermite spline)
-	Bicubic
-	// Mitchell-Netravali interpolation
-	MitchellNetravali
-	// Lanczos interpolation (a=2)
-	Lanczos2
-	// Lanczos interpolation (a=3)
-	Lanczos3
-)
-
-// kernal, returns an InterpolationFunctions taps and kernel.
-func (i InterpolationFunction) kernel() (int, func(float64) float64) {
-	switch i {
-	case Bilinear:
-		return 2, linear
-	case Bicubic:
-		return 4, cubic
-	case MitchellNetravali:
-		return 4, mitchellnetravali
-	case Lanczos2:
-		return 4, lanczos2
-	case Lanczos3:
-		return 6, lanczos3
-	default:
-		// Default to NearestNeighbor.
-		return 2, nearest
-	}
-}
-
-// values <1 will sharpen the image
-var blur = 1.0
-
-// Resize scales an image to new width and height using the interpolation function interp.
-// A new image with the given dimensions will be returned.
-// If one of the parameters width or height is set to 0, its size will be calculated so that
-// the aspect ratio is that of the originating image.
-// The resizing algorithm uses channels for parallel computation.
-// If the input image has width or height of 0, it is returned unchanged.
-func Resize(width, height uint, img image.Image, interp InterpolationFunction) image.Image {
-	scaleX, scaleY := calcFactors(width, height, float64(img.Bounds().Dx()), float64(img.Bounds().Dy()))
-	if width == 0 {
-		width = uint(0.7 + float64(img.Bounds().Dx())/scaleX)
-	}
-	if height == 0 {
-		height = uint(0.7 + float64(img.Bounds().Dy())/scaleY)
-	}
-
-	// Trivial case: return input image
-	if int(width) == img.Bounds().Dx() && int(height) == img.Bounds().Dy() {
-		return img
-	}
-
-	// Input image has no pixels
-	if img.Bounds().Dx() <= 0 || img.Bounds().Dy() <= 0 {
-		return img
-	}
-
-	if interp == NearestNeighbor {
-		return resizeNearest(width, height, scaleX, scaleY, img, interp)
-	}
-
-	taps, kernel := interp.kernel()
-	cpus := runtime.GOMAXPROCS(0)
-	wg := sync.WaitGroup{}
-
-	// Generic access to image.Image is slow in tight loops.
-	// The optimal access has to be determined from the concrete image type.
-	switch input := img.(type) {
-	case *image.RGBA:
-		// 8-bit precision
-		temp := image.NewRGBA(image.Rect(0, 0, input.Bounds().Dy(), int(width)))
-		result := image.NewRGBA(image.Rect(0, 0, int(width), int(height)))
-
-		// horizontal filter, results in transposed temporary image
-		coeffs, offset, filterLength := createWeights8(temp.Bounds().Dy(), taps, blur, scaleX, kernel)
-		wg.Add(cpus)
-		for i := 0; i < cpus; i++ {
-			slice := makeSlice(temp, i, cpus).(*image.RGBA)
-			go func() {
-				defer wg.Done()
-				resizeRGBA(input, slice, scaleX, coeffs, offset, filterLength)
-			}()
-		}
-		wg.Wait()
-
-		// horizontal filter on transposed image, result is not transposed
-		coeffs, offset, filterLength = createWeights8(result.Bounds().Dy(), taps, blur, scaleY, kernel)
-		wg.Add(cpus)
-		for i := 0; i < cpus; i++ {
-			slice := makeSlice(result, i, cpus).(*image.RGBA)
-			go func() {
-				defer wg.Done()
-				resizeRGBA(temp, slice, scaleY, coeffs, offset, filterLength)
-			}()
-		}
-		wg.Wait()
-		return result
-	case *image.NRGBA:
-		// 8-bit precision
-		temp := image.NewRGBA(image.Rect(0, 0, input.Bounds().Dy(), int(width)))
-		result := image.NewRGBA(image.Rect(0, 0, int(width), int(height)))
-
-		// horizontal filter, results in transposed temporary image
-		coeffs, offset, filterLength := createWeights8(temp.Bounds().Dy(), taps, blur, scaleX, kernel)
-		wg.Add(cpus)
-		for i := 0; i < cpus; i++ {
-			slice := makeSlice(temp, i, cpus).(*image.RGBA)
-			go func() {
-				defer wg.Done()
-				resizeNRGBA(input, slice, scaleX, coeffs, offset, filterLength)
-			}()
-		}
-		wg.Wait()
-
-		// horizontal filter on transposed image, result is not transposed
-		coeffs, offset, filterLength = createWeights8(result.Bounds().Dy(), taps, blur, scaleY, kernel)
-		wg.Add(cpus)
-		for i := 0; i < cpus; i++ {
-			slice := makeSlice(result, i, cpus).(*image.RGBA)
-			go func() {
-				defer wg.Done()
-				resizeRGBA(temp, slice, scaleY, coeffs, offset, filterLength)
-			}()
-		}
-		wg.Wait()
-		return result
-
-	case *image.YCbCr:
-		// 8-bit precision
-		// accessing the YCbCr arrays in a tight loop is slow.
-		// converting the image to ycc increases performance by 2x.
-		temp := newYCC(image.Rect(0, 0, input.Bounds().Dy(), int(width)), input.SubsampleRatio)
-		result := newYCC(image.Rect(0, 0, int(width), int(height)), image.YCbCrSubsampleRatio444)
-
-		coeffs, offset, filterLength := createWeights8(temp.Bounds().Dy(), taps, blur, scaleX, kernel)
-		in := imageYCbCrToYCC(input)
-		wg.Add(cpus)
-		for i := 0; i < cpus; i++ {
-			slice := makeSlice(temp, i, cpus).(*ycc)
-			go func() {
-				defer wg.Done()
-				resizeYCbCr(in, slice, scaleX, coeffs, offset, filterLength)
-			}()
-		}
-		wg.Wait()
-
-		coeffs, offset, filterLength = createWeights8(result.Bounds().Dy(), taps, blur, scaleY, kernel)
-		wg.Add(cpus)
-		for i := 0; i < cpus; i++ {
-			slice := makeSlice(result, i, cpus).(*ycc)
-			go func() {
-				defer wg.Done()
-				resizeYCbCr(temp, slice, scaleY, coeffs, offset, filterLength)
-			}()
-		}
-		wg.Wait()
-		return result.YCbCr()
-	case *image.RGBA64:
-		// 16-bit precision
-		temp := image.NewRGBA64(image.Rect(0, 0, input.Bounds().Dy(), int(width)))
-		result := image.NewRGBA64(image.Rect(0, 0, int(width), int(height)))
-
-		// horizontal filter, results in transposed temporary image
-		coeffs, offset, filterLength := createWeights16(temp.Bounds().Dy(), taps, blur, scaleX, kernel)
-		wg.Add(cpus)
-		for i := 0; i < cpus; i++ {
-			slice := makeSlice(temp, i, cpus).(*image.RGBA64)
-			go func() {
-				defer wg.Done()
-				resizeRGBA64(input, slice, scaleX, coeffs, offset, filterLength)
-			}()
-		}
-		wg.Wait()
-
-		// horizontal filter on transposed image, result is not transposed
-		coeffs, offset, filterLength = createWeights16(result.Bounds().Dy(), taps, blur, scaleY, kernel)
-		wg.Add(cpus)
-		for i := 0; i < cpus; i++ {
-			slice := makeSlice(result, i, cpus).(*image.RGBA64)
-			go func() {
-				defer wg.Done()
-				resizeRGBA64(temp, slice, scaleY, coeffs, offset, filterLength)
-			}()
-		}
-		wg.Wait()
-		return result
-	case *image.NRGBA64:
-		// 16-bit precision
-		temp := image.NewRGBA64(image.Rect(0, 0, input.Bounds().Dy(), int(width)))
-		result := image.NewRGBA64(image.Rect(0, 0, int(width), int(height)))
-
-		// horizontal filter, results in transposed temporary image
-		coeffs, offset, filterLength := createWeights16(temp.Bounds().Dy(), taps, blur, scaleX, kernel)
-		wg.Add(cpus)
-		for i := 0; i < cpus; i++ {
-			slice := makeSlice(temp, i, cpus).(*image.RGBA64)
-			go func() {
-				defer wg.Done()
-				resizeNRGBA64(input, slice, scaleX, coeffs, offset, filterLength)
-			}()
-		}
-		wg.Wait()
-
-		// horizontal filter on transposed image, result is not transposed
-		coeffs, offset, filterLength = createWeights16(result.Bounds().Dy(), taps, blur, scaleY, kernel)
-		wg.Add(cpus)
-		for i := 0; i < cpus; i++ {
-			slice := makeSlice(result, i, cpus).(*image.RGBA64)
-			go func() {
-				defer wg.Done()
-				resizeRGBA64(temp, slice, scaleY, coeffs, offset, filterLength)
-			}()
-		}
-		wg.Wait()
-		return result
-	case *image.Gray:
-		// 8-bit precision
-		temp := image.NewGray(image.Rect(0, 0, input.Bounds().Dy(), int(width)))
-		result := image.NewGray(image.Rect(0, 0, int(width), int(height)))
-
-		// horizontal filter, results in transposed temporary image
-		coeffs, offset, filterLength := createWeights8(temp.Bounds().Dy(), taps, blur, scaleX, kernel)
-		wg.Add(cpus)
-		for i := 0; i < cpus; i++ {
-			slice := makeSlice(temp, i, cpus).(*image.Gray)
-			go func() {
-				defer wg.Done()
-				resizeGray(input, slice, scaleX, coeffs, offset, filterLength)
-			}()
-		}
-		wg.Wait()
-
-		// horizontal filter on transposed image, result is not transposed
-		coeffs, offset, filterLength = createWeights8(result.Bounds().Dy(), taps, blur, scaleY, kernel)
-		wg.Add(cpus)
-		for i := 0; i < cpus; i++ {
-			slice := makeSlice(result, i, cpus).(*image.Gray)
-			go func() {
-				defer wg.Done()
-				resizeGray(temp, slice, scaleY, coeffs, offset, filterLength)
-			}()
-		}
-		wg.Wait()
-		return result
-	case *image.Gray16:
-		// 16-bit precision
-		temp := image.NewGray16(image.Rect(0, 0, input.Bounds().Dy(), int(width)))
-		result := image.NewGray16(image.Rect(0, 0, int(width), int(height)))
-
-		// horizontal filter, results in transposed temporary image
-		coeffs, offset, filterLength := createWeights16(temp.Bounds().Dy(), taps, blur, scaleX, kernel)
-		wg.Add(cpus)
-		for i := 0; i < cpus; i++ {
-			slice := makeSlice(temp, i, cpus).(*image.Gray16)
-			go func() {
-				defer wg.Done()
-				resizeGray16(input, slice, scaleX, coeffs, offset, filterLength)
-			}()
-		}
-		wg.Wait()
-
-		// horizontal filter on transposed image, result is not transposed
-		coeffs, offset, filterLength = createWeights16(result.Bounds().Dy(), taps, blur, scaleY, kernel)
-		wg.Add(cpus)
-		for i := 0; i < cpus; i++ {
-			slice := makeSlice(result, i, cpus).(*image.Gray16)
-			go func() {
-				defer wg.Done()
-				resizeGray16(temp, slice, scaleY, coeffs, offset, filterLength)
-			}()
-		}
-		wg.Wait()
-		return result
-	default:
-		// 16-bit precision
-		temp := image.NewRGBA64(image.Rect(0, 0, img.Bounds().Dy(), int(width)))
-		result := image.NewRGBA64(image.Rect(0, 0, int(width), int(height)))
-
-		// horizontal filter, results in transposed temporary image
-		coeffs, offset, filterLength := createWeights16(temp.Bounds().Dy(), taps, blur, scaleX, kernel)
-		wg.Add(cpus)
-		for i := 0; i < cpus; i++ {
-			slice := makeSlice(temp, i, cpus).(*image.RGBA64)
-			go func() {
-				defer wg.Done()
-				resizeGeneric(img, slice, scaleX, coeffs, offset, filterLength)
-			}()
-		}
-		wg.Wait()
-
-		// horizontal filter on transposed image, result is not transposed
-		coeffs, offset, filterLength = createWeights16(result.Bounds().Dy(), taps, blur, scaleY, kernel)
-		wg.Add(cpus)
-		for i := 0; i < cpus; i++ {
-			slice := makeSlice(result, i, cpus).(*image.RGBA64)
-			go func() {
-				defer wg.Done()
-				resizeRGBA64(temp, slice, scaleY, coeffs, offset, filterLength)
-			}()
-		}
-		wg.Wait()
-		return result
-	}
-}
-
-func resizeNearest(width, height uint, scaleX, scaleY float64, img image.Image, interp InterpolationFunction) image.Image {
-	taps, _ := interp.kernel()
-	cpus := runtime.GOMAXPROCS(0)
-	wg := sync.WaitGroup{}
-
-	switch input := img.(type) {
-	case *image.RGBA:
-		// 8-bit precision
-		temp := image.NewRGBA(image.Rect(0, 0, input.Bounds().Dy(), int(width)))
-		result := image.NewRGBA(image.Rect(0, 0, int(width), int(height)))
-
-		// horizontal filter, results in transposed temporary image
-		coeffs, offset, filterLength := createWeightsNearest(temp.Bounds().Dy(), taps, blur, scaleX)
-		wg.Add(cpus)
-		for i := 0; i < cpus; i++ {
-			slice := makeSlice(temp, i, cpus).(*image.RGBA)
-			go func() {
-				defer wg.Done()
-				nearestRGBA(input, slice, scaleX, coeffs, offset, filterLength)
-			}()
-		}
-		wg.Wait()
-
-		// horizontal filter on transposed image, result is not transposed
-		coeffs, offset, filterLength = createWeightsNearest(result.Bounds().Dy(), taps, blur, scaleY)
-		wg.Add(cpus)
-		for i := 0; i < cpus; i++ {
-			slice := makeSlice(result, i, cpus).(*image.RGBA)
-			go func() {
-				defer wg.Done()
-				nearestRGBA(temp, slice, scaleY, coeffs, offset, filterLength)
-			}()
-		}
-		wg.Wait()
-		return result
-	case *image.NRGBA:
-		// 8-bit precision
-		temp := image.NewNRGBA(image.Rect(0, 0, input.Bounds().Dy(), int(width)))
-		result := image.NewNRGBA(image.Rect(0, 0, int(width), int(height)))
-
-		// horizontal filter, results in transposed temporary image
-		coeffs, offset, filterLength := createWeightsNearest(temp.Bounds().Dy(), taps, blur, scaleX)
-		wg.Add(cpus)
-		for i := 0; i < cpus; i++ {
-			slice := makeSlice(temp, i, cpus).(*image.NRGBA)
-			go func() {
-				defer wg.Done()
-				nearestNRGBA(input, slice, scaleX, coeffs, offset, filterLength)
-			}()
-		}
-		wg.Wait()
-
-		// horizontal filter on transposed image, result is not transposed
-		coeffs, offset, filterLength = createWeightsNearest(result.Bounds().Dy(), taps, blur, scaleY)
-		wg.Add(cpus)
-		for i := 0; i < cpus; i++ {
-			slice := makeSlice(result, i, cpus).(*image.NRGBA)
-			go func() {
-				defer wg.Done()
-				nearestNRGBA(temp, slice, scaleY, coeffs, offset, filterLength)
-			}()
-		}
-		wg.Wait()
-		return result
-	case *image.YCbCr:
-		// 8-bit precision
-		// accessing the YCbCr arrays in a tight loop is slow.
-		// converting the image to ycc increases performance by 2x.
-		temp := newYCC(image.Rect(0, 0, input.Bounds().Dy(), int(width)), input.SubsampleRatio)
-		result := newYCC(image.Rect(0, 0, int(width), int(height)), image.YCbCrSubsampleRatio444)
-
-		coeffs, offset, filterLength := createWeightsNearest(temp.Bounds().Dy(), taps, blur, scaleX)
-		in := imageYCbCrToYCC(input)
-		wg.Add(cpus)
-		for i := 0; i < cpus; i++ {
-			slice := makeSlice(temp, i, cpus).(*ycc)
-			go func() {
-				defer wg.Done()
-				nearestYCbCr(in, slice, scaleX, coeffs, offset, filterLength)
-			}()
-		}
-		wg.Wait()
-
-		coeffs, offset, filterLength = createWeightsNearest(result.Bounds().Dy(), taps, blur, scaleY)
-		wg.Add(cpus)
-		for i := 0; i < cpus; i++ {
-			slice := makeSlice(result, i, cpus).(*ycc)
-			go func() {
-				defer wg.Done()
-				nearestYCbCr(temp, slice, scaleY, coeffs, offset, filterLength)
-			}()
-		}
-		wg.Wait()
-		return result.YCbCr()
-	case *image.RGBA64:
-		// 16-bit precision
-		temp := image.NewRGBA64(image.Rect(0, 0, input.Bounds().Dy(), int(width)))
-		result := image.NewRGBA64(image.Rect(0, 0, int(width), int(height)))
-
-		// horizontal filter, results in transposed temporary image
-		coeffs, offset, filterLength := createWeightsNearest(temp.Bounds().Dy(), taps, blur, scaleX)
-		wg.Add(cpus)
-		for i := 0; i < cpus; i++ {
-			slice := makeSlice(temp, i, cpus).(*image.RGBA64)
-			go func() {
-				defer wg.Done()
-				nearestRGBA64(input, slice, scaleX, coeffs, offset, filterLength)
-			}()
-		}
-		wg.Wait()
-
-		// horizontal filter on transposed image, result is not transposed
-		coeffs, offset, filterLength = createWeightsNearest(result.Bounds().Dy(), taps, blur, scaleY)
-		wg.Add(cpus)
-		for i := 0; i < cpus; i++ {
-			slice := makeSlice(result, i, cpus).(*image.RGBA64)
-			go func() {
-				defer wg.Done()
-				nearestRGBA64(temp, slice, scaleY, coeffs, offset, filterLength)
-			}()
-		}
-		wg.Wait()
-		return result
-	case *image.NRGBA64:
-		// 16-bit precision
-		temp := image.NewNRGBA64(image.Rect(0, 0, input.Bounds().Dy(), int(width)))
-		result := image.NewNRGBA64(image.Rect(0, 0, int(width), int(height)))
-
-		// horizontal filter, results in transposed temporary image
-		coeffs, offset, filterLength := createWeightsNearest(temp.Bounds().Dy(), taps, blur, scaleX)
-		wg.Add(cpus)
-		for i := 0; i < cpus; i++ {
-			slice := makeSlice(temp, i, cpus).(*image.NRGBA64)
-			go func() {
-				defer wg.Done()
-				nearestNRGBA64(input, slice, scaleX, coeffs, offset, filterLength)
-			}()
-		}
-		wg.Wait()
-
-		// horizontal filter on transposed image, result is not transposed
-		coeffs, offset, filterLength = createWeightsNearest(result.Bounds().Dy(), taps, blur, scaleY)
-		wg.Add(cpus)
-		for i := 0; i < cpus; i++ {
-			slice := makeSlice(result, i, cpus).(*image.NRGBA64)
-			go func() {
-				defer wg.Done()
-				nearestNRGBA64(temp, slice, scaleY, coeffs, offset, filterLength)
-			}()
-		}
-		wg.Wait()
-		return result
-	case *image.Gray:
-		// 8-bit precision
-		temp := image.NewGray(image.Rect(0, 0, input.Bounds().Dy(), int(width)))
-		result := image.NewGray(image.Rect(0, 0, int(width), int(height)))
-
-		// horizontal filter, results in transposed temporary image
-		coeffs, offset, filterLength := createWeightsNearest(temp.Bounds().Dy(), taps, blur, scaleX)
-		wg.Add(cpus)
-		for i := 0; i < cpus; i++ {
-			slice := makeSlice(temp, i, cpus).(*image.Gray)
-			go func() {
-				defer wg.Done()
-				nearestGray(input, slice, scaleX, coeffs, offset, filterLength)
-			}()
-		}
-		wg.Wait()
-
-		// horizontal filter on transposed image, result is not transposed
-		coeffs, offset, filterLength = createWeightsNearest(result.Bounds().Dy(), taps, blur, scaleY)
-		wg.Add(cpus)
-		for i := 0; i < cpus; i++ {
-			slice := makeSlice(result, i, cpus).(*image.Gray)
-			go func() {
-				defer wg.Done()
-				nearestGray(temp, slice, scaleY, coeffs, offset, filterLength)
-			}()
-		}
-		wg.Wait()
-		return result
-	case *image.Gray16:
-		// 16-bit precision
-		temp := image.NewGray16(image.Rect(0, 0, input.Bounds().Dy(), int(width)))
-		result := image.NewGray16(image.Rect(0, 0, int(width), int(height)))
-
-		// horizontal filter, results in transposed temporary image
-		coeffs, offset, filterLength := createWeightsNearest(temp.Bounds().Dy(), taps, blur, scaleX)
-		wg.Add(cpus)
-		for i := 0; i < cpus; i++ {
-			slice := makeSlice(temp, i, cpus).(*image.Gray16)
-			go func() {
-				defer wg.Done()
-				nearestGray16(input, slice, scaleX, coeffs, offset, filterLength)
-			}()
-		}
-		wg.Wait()
-
-		// horizontal filter on transposed image, result is not transposed
-		coeffs, offset, filterLength = createWeightsNearest(result.Bounds().Dy(), taps, blur, scaleY)
-		wg.Add(cpus)
-		for i := 0; i < cpus; i++ {
-			slice := makeSlice(result, i, cpus).(*image.Gray16)
-			go func() {
-				defer wg.Done()
-				nearestGray16(temp, slice, scaleY, coeffs, offset, filterLength)
-			}()
-		}
-		wg.Wait()
-		return result
-	default:
-		// 16-bit precision
-		temp := image.NewRGBA64(image.Rect(0, 0, img.Bounds().Dy(), int(width)))
-		result := image.NewRGBA64(image.Rect(0, 0, int(width), int(height)))
-
-		// horizontal filter, results in transposed temporary image
-		coeffs, offset, filterLength := createWeightsNearest(temp.Bounds().Dy(), taps, blur, scaleX)
-		wg.Add(cpus)
-		for i := 0; i < cpus; i++ {
-			slice := makeSlice(temp, i, cpus).(*image.RGBA64)
-			go func() {
-				defer wg.Done()
-				nearestGeneric(img, slice, scaleX, coeffs, offset, filterLength)
-			}()
-		}
-		wg.Wait()
-
-		// horizontal filter on transposed image, result is not transposed
-		coeffs, offset, filterLength = createWeightsNearest(result.Bounds().Dy(), taps, blur, scaleY)
-		wg.Add(cpus)
-		for i := 0; i < cpus; i++ {
-			slice := makeSlice(result, i, cpus).(*image.RGBA64)
-			go func() {
-				defer wg.Done()
-				nearestRGBA64(temp, slice, scaleY, coeffs, offset, filterLength)
-			}()
-		}
-		wg.Wait()
-		return result
-	}
-
-}
-
-// Calculates scaling factors using old and new image dimensions.
-func calcFactors(width, height uint, oldWidth, oldHeight float64) (scaleX, scaleY float64) {
-	if width == 0 {
-		if height == 0 {
-			scaleX = 1.0
-			scaleY = 1.0
-		} else {
-			scaleY = oldHeight / float64(height)
-			scaleX = scaleY
-		}
-	} else {
-		scaleX = oldWidth / float64(width)
-		if height == 0 {
-			scaleY = scaleX
-		} else {
-			scaleY = oldHeight / float64(height)
-		}
-	}
-	return
-}
-
-type imageWithSubImage interface {
-	image.Image
-	SubImage(image.Rectangle) image.Image
-}
-
-func makeSlice(img imageWithSubImage, i, n int) image.Image {
-	return img.SubImage(image.Rect(img.Bounds().Min.X, img.Bounds().Min.Y+i*img.Bounds().Dy()/n, img.Bounds().Max.X, img.Bounds().Min.Y+(i+1)*img.Bounds().Dy()/n))
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/nfnt/resize/thumbnail.go","mode":420,"size":1841,"sha256":"6a21ade4daef5262a5187f9501217358d6f6733e82006df6ceb54b607bfe67b2","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1841}
-/*
-Copyright (c) 2012, Jan Schlicht <jan.schlicht@gmail.com>
-
-Permission to use, copy, modify, and/or distribute this software for any purpose
-with or without fee is hereby granted, provided that the above copyright notice
-and this permission notice appear in all copies.
-
-THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
-REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
-FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
-INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS
-OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
-TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
-THIS SOFTWARE.
-*/
-
-package resize
-
-import (
-	"image"
-)
-
-// Thumbnail will downscale provided image to max width and height preserving
-// original aspect ratio and using the interpolation function interp.
-// It will return original image, without processing it, if original sizes
-// are already smaller than provided constraints.
-func Thumbnail(maxWidth, maxHeight uint, img image.Image, interp InterpolationFunction) image.Image {
-	origBounds := img.Bounds()
-	origWidth := uint(origBounds.Dx())
-	origHeight := uint(origBounds.Dy())
-	newWidth, newHeight := origWidth, origHeight
-
-	// Return original image if it have same or smaller size as constraints
-	if maxWidth >= origWidth && maxHeight >= origHeight {
-		return img
-	}
-
-	// Preserve aspect ratio
-	if origWidth > maxWidth {
-		newHeight = uint(origHeight * maxWidth / origWidth)
-		if newHeight < 1 {
-			newHeight = 1
-		}
-		newWidth = maxWidth
-	}
-
-	if newHeight > maxHeight {
-		newWidth = uint(newWidth * maxHeight / newHeight)
-		if newWidth < 1 {
-			newWidth = 1
-		}
-		newHeight = maxHeight
-	}
-	return Resize(newWidth, newHeight, img, interp)
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/nfnt/resize/ycc.go","mode":420,"size":9239,"sha256":"2e080b59520cd6bea0a0f0a379c53fcdb1862ca78f818e146a3843a8fcc9a800","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":9239}
-/*
-Copyright (c) 2014, Charlie Vieth <charlie.vieth@gmail.com>
-
-Permission to use, copy, modify, and/or distribute this software for any purpose
-with or without fee is hereby granted, provided that the above copyright notice
-and this permission notice appear in all copies.
-
-THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
-REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
-FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
-INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS
-OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
-TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
-THIS SOFTWARE.
-*/
-
-package resize
-
-import (
-	"image"
-	"image/color"
-)
-
-// ycc is an in memory YCbCr image.  The Y, Cb and Cr samples are held in a
-// single slice to increase resizing performance.
-type ycc struct {
-	// Pix holds the image's pixels, in Y, Cb, Cr order. The pixel at
-	// (x, y) starts at Pix[(y-Rect.Min.Y)*Stride + (x-Rect.Min.X)*3].
-	Pix []uint8
-	// Stride is the Pix stride (in bytes) between vertically adjacent pixels.
-	Stride int
-	// Rect is the image's bounds.
-	Rect image.Rectangle
-	// SubsampleRatio is the subsample ratio of the original YCbCr image.
-	SubsampleRatio image.YCbCrSubsampleRatio
-}
-
-// PixOffset returns the index of the first element of Pix that corresponds to
-// the pixel at (x, y).
-func (p *ycc) PixOffset(x, y int) int {
-	return (y-p.Rect.Min.Y)*p.Stride + (x-p.Rect.Min.X)*3
-}
-
-func (p *ycc) Bounds() image.Rectangle {
-	return p.Rect
-}
-
-func (p *ycc) ColorModel() color.Model {
-	return color.YCbCrModel
-}
-
-func (p *ycc) At(x, y int) color.Color {
-	if !(image.Point{x, y}.In(p.Rect)) {
-		return color.YCbCr{}
-	}
-	i := p.PixOffset(x, y)
-	return color.YCbCr{
-		p.Pix[i+0],
-		p.Pix[i+1],
-		p.Pix[i+2],
-	}
-}
-
-func (p *ycc) Opaque() bool {
-	return true
-}
-
-// SubImage returns an image representing the portion of the image p visible
-// through r. The returned value shares pixels with the original image.
-func (p *ycc) SubImage(r image.Rectangle) image.Image {
-	r = r.Intersect(p.Rect)
-	if r.Empty() {
-		return &ycc{SubsampleRatio: p.SubsampleRatio}
-	}
-	i := p.PixOffset(r.Min.X, r.Min.Y)
-	return &ycc{
-		Pix:            p.Pix[i:],
-		Stride:         p.Stride,
-		Rect:           r,
-		SubsampleRatio: p.SubsampleRatio,
-	}
-}
-
-// newYCC returns a new ycc with the given bounds and subsample ratio.
-func newYCC(r image.Rectangle, s image.YCbCrSubsampleRatio) *ycc {
-	w, h := r.Dx(), r.Dy()
-	buf := make([]uint8, 3*w*h)
-	return &ycc{Pix: buf, Stride: 3 * w, Rect: r, SubsampleRatio: s}
-}
-
-// Copy of image.YCbCrSubsampleRatio constants - this allows us to support
-// older versions of Go where these constants are not defined (i.e. Go 1.4)
-const (
-	ycbcrSubsampleRatio444 image.YCbCrSubsampleRatio = iota
-	ycbcrSubsampleRatio422
-	ycbcrSubsampleRatio420
-	ycbcrSubsampleRatio440
-	ycbcrSubsampleRatio411
-	ycbcrSubsampleRatio410
-)
-
-// YCbCr converts ycc to a YCbCr image with the same subsample ratio
-// as the YCbCr image that ycc was generated from.
-func (p *ycc) YCbCr() *image.YCbCr {
-	ycbcr := image.NewYCbCr(p.Rect, p.SubsampleRatio)
-	switch ycbcr.SubsampleRatio {
-	case ycbcrSubsampleRatio422:
-		return p.ycbcr422(ycbcr)
-	case ycbcrSubsampleRatio420:
-		return p.ycbcr420(ycbcr)
-	case ycbcrSubsampleRatio440:
-		return p.ycbcr440(ycbcr)
-	case ycbcrSubsampleRatio444:
-		return p.ycbcr444(ycbcr)
-	case ycbcrSubsampleRatio411:
-		return p.ycbcr411(ycbcr)
-	case ycbcrSubsampleRatio410:
-		return p.ycbcr410(ycbcr)
-	}
-	return ycbcr
-}
-
-// imageYCbCrToYCC converts a YCbCr image to a ycc image for resizing.
-func imageYCbCrToYCC(in *image.YCbCr) *ycc {
-	w, h := in.Rect.Dx(), in.Rect.Dy()
-	p := ycc{
-		Pix:            make([]uint8, 3*w*h),
-		Stride:         3 * w,
-		Rect:           image.Rect(0, 0, w, h),
-		SubsampleRatio: in.SubsampleRatio,
-	}
-	switch in.SubsampleRatio {
-	case ycbcrSubsampleRatio422:
-		return convertToYCC422(in, &p)
-	case ycbcrSubsampleRatio420:
-		return convertToYCC420(in, &p)
-	case ycbcrSubsampleRatio440:
-		return convertToYCC440(in, &p)
-	case ycbcrSubsampleRatio444:
-		return convertToYCC444(in, &p)
-	case ycbcrSubsampleRatio411:
-		return convertToYCC411(in, &p)
-	case ycbcrSubsampleRatio410:
-		return convertToYCC410(in, &p)
-	}
-	return &p
-}
-
-func (p *ycc) ycbcr422(ycbcr *image.YCbCr) *image.YCbCr {
-	var off int
-	Pix := p.Pix
-	Y := ycbcr.Y
-	Cb := ycbcr.Cb
-	Cr := ycbcr.Cr
-	for y := 0; y < ycbcr.Rect.Max.Y-ycbcr.Rect.Min.Y; y++ {
-		yy := y * ycbcr.YStride
-		cy := y * ycbcr.CStride
-		for x := 0; x < ycbcr.Rect.Max.X-ycbcr.Rect.Min.X; x++ {
-			ci := cy + x/2
-			Y[yy+x] = Pix[off+0]
-			Cb[ci] = Pix[off+1]
-			Cr[ci] = Pix[off+2]
-			off += 3
-		}
-	}
-	return ycbcr
-}
-
-func (p *ycc) ycbcr420(ycbcr *image.YCbCr) *image.YCbCr {
-	var off int
-	Pix := p.Pix
-	Y := ycbcr.Y
-	Cb := ycbcr.Cb
-	Cr := ycbcr.Cr
-	for y := 0; y < ycbcr.Rect.Max.Y-ycbcr.Rect.Min.Y; y++ {
-		yy := y * ycbcr.YStride
-		cy := (y / 2) * ycbcr.CStride
-		for x := 0; x < ycbcr.Rect.Max.X-ycbcr.Rect.Min.X; x++ {
-			ci := cy + x/2
-			Y[yy+x] = Pix[off+0]
-			Cb[ci] = Pix[off+1]
-			Cr[ci] = Pix[off+2]
-			off += 3
-		}
-	}
-	return ycbcr
-}
-
-func (p *ycc) ycbcr440(ycbcr *image.YCbCr) *image.YCbCr {
-	var off int
-	Pix := p.Pix
-	Y := ycbcr.Y
-	Cb := ycbcr.Cb
-	Cr := ycbcr.Cr
-	for y := 0; y < ycbcr.Rect.Max.Y-ycbcr.Rect.Min.Y; y++ {
-		yy := y * ycbcr.YStride
-		cy := (y / 2) * ycbcr.CStride
-		for x := 0; x < ycbcr.Rect.Max.X-ycbcr.Rect.Min.X; x++ {
-			ci := cy + x
-			Y[yy+x] = Pix[off+0]
-			Cb[ci] = Pix[off+1]
-			Cr[ci] = Pix[off+2]
-			off += 3
-		}
-	}
-	return ycbcr
-}
-
-func (p *ycc) ycbcr444(ycbcr *image.YCbCr) *image.YCbCr {
-	var off int
-	Pix := p.Pix
-	Y := ycbcr.Y
-	Cb := ycbcr.Cb
-	Cr := ycbcr.Cr
-	for y := 0; y < ycbcr.Rect.Max.Y-ycbcr.Rect.Min.Y; y++ {
-		yy := y * ycbcr.YStride
-		cy := y * ycbcr.CStride
-		for x := 0; x < ycbcr.Rect.Max.X-ycbcr.Rect.Min.X; x++ {
-			ci := cy + x
-			Y[yy+x] = Pix[off+0]
-			Cb[ci] = Pix[off+1]
-			Cr[ci] = Pix[off+2]
-			off += 3
-		}
-	}
-	return ycbcr
-}
-
-func (p *ycc) ycbcr411(ycbcr *image.YCbCr) *image.YCbCr {
-	var off int
-	Pix := p.Pix
-	Y := ycbcr.Y
-	Cb := ycbcr.Cb
-	Cr := ycbcr.Cr
-	for y := 0; y < ycbcr.Rect.Max.Y-ycbcr.Rect.Min.Y; y++ {
-		yy := y * ycbcr.YStride
-		cy := y * ycbcr.CStride
-		for x := 0; x < ycbcr.Rect.Max.X-ycbcr.Rect.Min.X; x++ {
-			ci := cy + x/4
-			Y[yy+x] = Pix[off+0]
-			Cb[ci] = Pix[off+1]
-			Cr[ci] = Pix[off+2]
-			off += 3
-		}
-	}
-	return ycbcr
-}
-
-func (p *ycc) ycbcr410(ycbcr *image.YCbCr) *image.YCbCr {
-	var off int
-	Pix := p.Pix
-	Y := ycbcr.Y
-	Cb := ycbcr.Cb
-	Cr := ycbcr.Cr
-	for y := 0; y < ycbcr.Rect.Max.Y-ycbcr.Rect.Min.Y; y++ {
-		yy := y * ycbcr.YStride
-		cy := (y / 2) * ycbcr.CStride
-		for x := 0; x < ycbcr.Rect.Max.X-ycbcr.Rect.Min.X; x++ {
-			ci := cy + x/4
-			Y[yy+x] = Pix[off+0]
-			Cb[ci] = Pix[off+1]
-			Cr[ci] = Pix[off+2]
-			off += 3
-		}
-	}
-	return ycbcr
-}
-
-func convertToYCC422(in *image.YCbCr, p *ycc) *ycc {
-	var off int
-	Pix := p.Pix
-	Y := in.Y
-	Cb := in.Cb
-	Cr := in.Cr
-	for y := 0; y < in.Rect.Max.Y-in.Rect.Min.Y; y++ {
-		yy := y * in.YStride
-		cy := y * in.CStride
-		for x := 0; x < in.Rect.Max.X-in.Rect.Min.X; x++ {
-			ci := cy + x/2
-			Pix[off+0] = Y[yy+x]
-			Pix[off+1] = Cb[ci]
-			Pix[off+2] = Cr[ci]
-			off += 3
-		}
-	}
-	return p
-}
-
-func convertToYCC420(in *image.YCbCr, p *ycc) *ycc {
-	var off int
-	Pix := p.Pix
-	Y := in.Y
-	Cb := in.Cb
-	Cr := in.Cr
-	for y := 0; y < in.Rect.Max.Y-in.Rect.Min.Y; y++ {
-		yy := y * in.YStride
-		cy := (y / 2) * in.CStride
-		for x := 0; x < in.Rect.Max.X-in.Rect.Min.X; x++ {
-			ci := cy + x/2
-			Pix[off+0] = Y[yy+x]
-			Pix[off+1] = Cb[ci]
-			Pix[off+2] = Cr[ci]
-			off += 3
-		}
-	}
-	return p
-}
-
-func convertToYCC440(in *image.YCbCr, p *ycc) *ycc {
-	var off int
-	Pix := p.Pix
-	Y := in.Y
-	Cb := in.Cb
-	Cr := in.Cr
-	for y := 0; y < in.Rect.Max.Y-in.Rect.Min.Y; y++ {
-		yy := y * in.YStride
-		cy := (y / 2) * in.CStride
-		for x := 0; x < in.Rect.Max.X-in.Rect.Min.X; x++ {
-			ci := cy + x
-			Pix[off+0] = Y[yy+x]
-			Pix[off+1] = Cb[ci]
-			Pix[off+2] = Cr[ci]
-			off += 3
-		}
-	}
-	return p
-}
-
-func convertToYCC444(in *image.YCbCr, p *ycc) *ycc {
-	var off int
-	Pix := p.Pix
-	Y := in.Y
-	Cb := in.Cb
-	Cr := in.Cr
-	for y := 0; y < in.Rect.Max.Y-in.Rect.Min.Y; y++ {
-		yy := y * in.YStride
-		cy := y * in.CStride
-		for x := 0; x < in.Rect.Max.X-in.Rect.Min.X; x++ {
-			ci := cy + x
-			Pix[off+0] = Y[yy+x]
-			Pix[off+1] = Cb[ci]
-			Pix[off+2] = Cr[ci]
-			off += 3
-		}
-	}
-	return p
-}
-
-func convertToYCC411(in *image.YCbCr, p *ycc) *ycc {
-	var off int
-	Pix := p.Pix
-	Y := in.Y
-	Cb := in.Cb
-	Cr := in.Cr
-	for y := 0; y < in.Rect.Max.Y-in.Rect.Min.Y; y++ {
-		yy := y * in.YStride
-		cy := y * in.CStride
-		for x := 0; x < in.Rect.Max.X-in.Rect.Min.X; x++ {
-			ci := cy + x/4
-			Pix[off+0] = Y[yy+x]
-			Pix[off+1] = Cb[ci]
-			Pix[off+2] = Cr[ci]
-			off += 3
-		}
-	}
-	return p
-}
-
-func convertToYCC410(in *image.YCbCr, p *ycc) *ycc {
-	var off int
-	Pix := p.Pix
-	Y := in.Y
-	Cb := in.Cb
-	Cr := in.Cr
-	for y := 0; y < in.Rect.Max.Y-in.Rect.Min.Y; y++ {
-		yy := y * in.YStride
-		cy := (y / 2) * in.CStride
-		for x := 0; x < in.Rect.Max.X-in.Rect.Min.X; x++ {
-			ci := cy + x/4
-			Pix[off+0] = Y[yy+x]
-			Pix[off+1] = Cb[ci]
-			Pix[off+2] = Cr[ci]
-			off += 3
-		}
-	}
-	return p
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/pjbgf/sha1cd/Dockerfile.arm","mode":420,"size":563,"sha256":"308c3a9e6bf818c87df97351f11dc503657aa3a894952e70e1523853c9081887","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":563}
-FROM golang:1.25@sha256:31c1e53dfc1cc2d269deec9c83f58729fa3c53dc9a576f6426109d1e319e9e9a
-
-ENV GOOS=linux
-ENV GOARCH=arm
-ENV CGO_ENABLED=1
-ENV CC=arm-linux-gnueabihf-gcc
-ENV PATH="/go/bin/${GOOS}_${GOARCH}:${PATH}"
-ENV PKG_CONFIG_PATH=/usr/lib/arm-linux-gnueabihf/pkgconfig
-
-RUN dpkg --add-architecture armhf \
-    && apt update \
-    && apt install -y --no-install-recommends \
-        gcc-arm-linux-gnueabihf \
-        libc6-dev-armhf-cross \
-        pkg-config \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY . /src/workdir
-
-WORKDIR /src/workdir
-
-RUN go build ./...
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/pjbgf/sha1cd/Dockerfile.arm64","mode":420,"size":598,"sha256":"d6606dfbc74afca15f26331d4d46dc40c999e6fb7f49265763109a66e753bd5a","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":598}
-FROM golang:1.25@sha256:31c1e53dfc1cc2d269deec9c83f58729fa3c53dc9a576f6426109d1e319e9e9a
-
-ENV GOOS=linux
-ENV GOARCH=arm64
-ENV CGO_ENABLED=1
-ENV CC=aarch64-linux-gnu-gcc
-ENV PATH="/go/bin/${GOOS}_${GOARCH}:${PATH}"
-ENV PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig
-
-# install build & runtime dependencies
-RUN dpkg --add-architecture arm64 \
-    && apt update \
-    && apt install -y --no-install-recommends \
-        gcc-aarch64-linux-gnu \
-        libc6-dev-arm64-cross \
-        pkg-config \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY . /src/workdir
-
-WORKDIR /src/workdir
-
-RUN go build ./...
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/pjbgf/sha1cd/LICENSE","mode":420,"size":11335,"sha256":"c75aacd1e1f49bc504e3f00e7cfa58cb55d3bc7ff3d3c23f38e485da1906e0ad","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":11335}
-                                 Apache License
-                           Version 2.0, January 2004
-                        http://www.apache.org/licenses/
-
-   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
-
-   1. Definitions.
-
-      "License" shall mean the terms and conditions for use, reproduction,
-      and distribution as defined by Sections 1 through 9 of this document.
-
-      "Licensor" shall mean the copyright owner or entity authorized by
-      the copyright owner that is granting the License.
-
-      "Legal Entity" shall mean the union of the acting entity and all
-      other entities that control, are controlled by, or are under common
-      control with that entity. For the purposes of this definition,
-      "control" means (i) the power, direct or indirect, to cause the
-      direction or management of such entity, whether by contract or
-      otherwise, or (ii) ownership of fifty percent (50%) or more of the
-      outstanding shares, or (iii) beneficial ownership of such entity.
-
-      "You" (or "Your") shall mean an individual or Legal Entity
-      exercising permissions granted by this License.
-
-      "Source" form shall mean the preferred form for making modifications,
-      including but not limited to software source code, documentation
-      source, and configuration files.
-
-      "Object" form shall mean any form resulting from mechanical
-      transformation or translation of a Source form, including but
-      not limited to compiled object code, generated documentation,
-      and conversions to other media types.
-
-      "Work" shall mean the work of authorship, whether in Source or
-      Object form, made available under the License, as indicated by a
-      copyright notice that is included in or attached to the work
-      (an example is provided in the Appendix below).
-
-      "Derivative Works" shall mean any work, whether in Source or Object
-      form, that is based on (or derived from) the Work and for which the
-      editorial revisions, annotations, elaborations, or other modifications
-      represent, as a whole, an original work of authorship. For the purposes
-      of this License, Derivative Works shall not include works that remain
-      separable from, or merely link (or bind by name) to the interfaces of,
-      the Work and Derivative Works thereof.
-
-      "Contribution" shall mean any work of authorship, including
-      the original version of the Work and any modifications or additions
-      to that Work or Derivative Works thereof, that is intentionally
-      submitted to Licensor for inclusion in the Work by the copyright owner
-      or by an individual or Legal Entity authorized to submit on behalf of
-      the copyright owner. For the purposes of this definition, "submitted"
-      means any form of electronic, verbal, or written communication sent
-      to the Licensor or its representatives, including but not limited to
-      communication on electronic mailing lists, source code control systems,
-      and issue tracking systems that are managed by, or on behalf of, the
-      Licensor for the purpose of discussing and improving the Work, but
-      excluding communication that is conspicuously marked or otherwise
-      designated in writing by the copyright owner as "Not a Contribution."
-
-      "Contributor" shall mean Licensor and any individual or Legal Entity
-      on behalf of whom a Contribution has been received by Licensor and
-      subsequently incorporated within the Work.
-
-   2. Grant of Copyright License. Subject to the terms and conditions of
-      this License, each Contributor hereby grants to You a perpetual,
-      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
-      copyright license to reproduce, prepare Derivative Works of,
-      publicly display, publicly perform, sublicense, and distribute the
-      Work and such Derivative Works in Source or Object form.
-
-   3. Grant of Patent License. Subject to the terms and conditions of
-      this License, each Contributor hereby grants to You a perpetual,
-      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
-      (except as stated in this section) patent license to make, have made,
-      use, offer to sell, sell, import, and otherwise transfer the Work,
-      where such license applies only to those patent claims licensable
-      by such Contributor that are necessarily infringed by their
-      Contribution(s) alone or by combination of their Contribution(s)
-      with the Work to which such Contribution(s) was submitted. If You
-      institute patent litigation against any entity (including a
-      cross-claim or counterclaim in a lawsuit) alleging that the Work
-      or a Contribution incorporated within the Work constitutes direct
-      or contributory patent infringement, then any patent licenses
-      granted to You under this License for that Work shall terminate
-      as of the date such litigation is filed.
-
-   4. Redistribution. You may reproduce and distribute copies of the
-      Work or Derivative Works thereof in any medium, with or without
-      modifications, and in Source or Object form, provided that You
-      meet the following conditions:
-
-      (a) You must give any other recipients of the Work or
-          Derivative Works a copy of this License; and
-
-      (b) You must cause any modified files to carry prominent notices
-          stating that You changed the files; and
-
-      (c) You must retain, in the Source form of any Derivative Works
-          that You distribute, all copyright, patent, trademark, and
-          attribution notices from the Source form of the Work,
-          excluding those notices that do not pertain to any part of
-          the Derivative Works; and
-
-      (d) If the Work includes a "NOTICE" text file as part of its
-          distribution, then any Derivative Works that You distribute must
-          include a readable copy of the attribution notices contained
-          within such NOTICE file, excluding those notices that do not
-          pertain to any part of the Derivative Works, in at least one
-          of the following places: within a NOTICE text file distributed
-          as part of the Derivative Works; within the Source form or
-          documentation, if provided along with the Derivative Works; or,
-          within a display generated by the Derivative Works, if and
-          wherever such third-party notices normally appear. The contents
-          of the NOTICE file are for informational purposes only and
-          do not modify the License. You may add Your own attribution
-          notices within Derivative Works that You distribute, alongside
-          or as an addendum to the NOTICE text from the Work, provided
-          that such additional attribution notices cannot be construed
-          as modifying the License.
-
-      You may add Your own copyright statement to Your modifications and
-      may provide additional or different license terms and conditions
-      for use, reproduction, or distribution of Your modifications, or
-      for any such Derivative Works as a whole, provided Your use,
-      reproduction, and distribution of the Work otherwise complies with
-      the conditions stated in this License.
-
-   5. Submission of Contributions. Unless You explicitly state otherwise,
-      any Contribution intentionally submitted for inclusion in the Work
-      by You to the Licensor shall be under the terms and conditions of
-      this License, without any additional terms or conditions.
-      Notwithstanding the above, nothing herein shall supersede or modify
-      the terms of any separate license agreement you may have executed
-      with Licensor regarding such Contributions.
-
-   6. Trademarks. This License does not grant permission to use the trade
-      names, trademarks, service marks, or product names of the Licensor,
-      except as required for reasonable and customary use in describing the
-      origin of the Work and reproducing the content of the NOTICE file.
-
-   7. Disclaimer of Warranty. Unless required by applicable law or
-      agreed to in writing, Licensor provides the Work (and each
-      Contributor provides its Contributions) on an "AS IS" BASIS,
-      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
-      implied, including, without limitation, any warranties or conditions
-      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
-      PARTICULAR PURPOSE. You are solely responsible for determining the
-      appropriateness of using or redistributing the Work and assume any
-      risks associated with Your exercise of permissions under this License.
-
-   8. Limitation of Liability. In no event and under no legal theory,
-      whether in tort (including negligence), contract, or otherwise,
-      unless required by applicable law (such as deliberate and grossly
-      negligent acts) or agreed to in writing, shall any Contributor be
-      liable to You for damages, including any direct, indirect, special,
-      incidental, or consequential damages of any character arising as a
-      result of this License or out of the use or inability to use the
-      Work (including but not limited to damages for loss of goodwill,
-      work stoppage, computer failure or malfunction, or any and all
-      other commercial damages or losses), even if such Contributor
-      has been advised of the possibility of such damages.
-
-   9. Accepting Warranty or Additional Liability. While redistributing
-      the Work or Derivative Works thereof, You may choose to offer,
-      and charge a fee for, acceptance of support, warranty, indemnity,
-      or other liability obligations and/or rights consistent with this
-      License. However, in accepting such obligations, You may act only
-      on Your own behalf and on Your sole responsibility, not on behalf
-      of any other Contributor, and only if You agree to indemnify,
-      defend, and hold each Contributor harmless for any liability
-      incurred by, or claims asserted against, such Contributor by reason
-      of your accepting any such warranty or additional liability.
-
-   END OF TERMS AND CONDITIONS
-
-   APPENDIX: How to apply the Apache License to your work.
-
-      To apply the Apache License to your work, attach the following
-      boilerplate notice, with the fields enclosed by brackets "[]"
-      replaced with your own identifying information. (Don't include
-      the brackets!)  The text should be enclosed in the appropriate
-      comment syntax for the file format. We also recommend that a
-      file or class name and description of purpose be included on the
-      same "printed page" as the copyright notice for easier
-      identification within third-party archives.
-
-   Copyright 2023 pjbgf
-
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/pjbgf/sha1cd/Makefile","mode":420,"size":722,"sha256":"09e8fd63489314e70a056650e9e25305b6c0aa99cef31f79f7383277f082560d","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":722}
-FUZZ_TIME ?= 1m
-
-export CGO_ENABLED := 1
-
-.PHONY: test
-test:
-	go test -race -timeout 15s ./...
-
-.PHONY: bench
-bench:
-	go test -benchmem -run=^$$ -bench ^Benchmark ./...
-
-.PHONY: fuzz
-fuzz:
-	go test -tags gofuzz -fuzz=. -fuzztime=$(FUZZ_TIME) ./test/
-
-# Cross build project in arm/v7.
-build-arm:
-	docker build -t sha1cd-arm -f Dockerfile.arm .
-	docker run --rm sha1cd-arm
-
-# Cross build project in arm64.
-build-arm64:
-	docker build -t sha1cd-arm64 -f Dockerfile.arm64 .
-	docker run --rm sha1cd-arm64
-
-# Build with cgo disabled.
-build-nocgo:
-	CGO_ENABLED=0 go build ./cgo
-
-# Run cross-compilation to assure supported architectures.
-cross-build: build-arm build-arm64 build-nocgo
-
-verify:
-	git diff --exit-code
-	go vet ./...
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/pjbgf/sha1cd/README.md","mode":420,"size":1735,"sha256":"77a7b15d87a706d88b284b1045e6e95973783a558bda30dee3aa937dd6098a82","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1735}
-# sha1cd
-
-A Go implementation of SHA1 with counter-cryptanalysis, which detects
-collision attacks. 
-
-The `cgo/lib` code is a carbon copy of the [original code], based on
-the award winning [white paper] by Marc Stevens.
-
-The Go and native implementations are largely based off upstream Go.
-
-## Usage
-
-`sha1cd` can be used as a drop-in replacement for `crypto/sha1`:
-
-```golang
-import "github.com/pjbgf/sha1cd"
-
-func test(){
-	data := []byte("data to be sha1 hashed")
-	h := sha1cd.Sum(data)
-	fmt.Printf("hash: %q\n", hex.EncodeToString(h))
-}
-```
-
-To obtain information as to whether a collision was found, use the
-func `CollisionResistantSum`.
-
-```golang
-import "github.com/pjbgf/sha1cd"
-
-func test(){
-	data := []byte("data to be sha1 hashed")
-	h, col  := sha1cd.CollisionResistantSum(data)
-	if col {
-		fmt.Println("collision found!")
-	}
-	fmt.Printf("hash: %q", hex.EncodeToString(h))
-}
-```
-
-Note that the algorithm will automatically avoid collision, by 
-extending the SHA1 to 240-steps, instead of 80 when a collision
-attempt is detected. Therefore, inputs that contains the unavoidable
-bit conditions will yield a different hash from `sha1cd`, when compared
-with results using `crypto/sha1`. Valid inputs will have matching the outputs.
-
-## References
-- https://shattered.io/
-- https://github.com/cr-marcstevens/sha1collisiondetection
-- https://csrc.nist.gov/Projects/Cryptographic-Algorithm-Validation-Program/Secure-Hashing#shavs
-
-## Use of the Original Implementation
-- https://github.com/git/git/commit/28dc98e343ca4eb370a29ceec4c19beac9b5c01e
-- https://github.com/libgit2/libgit2/pull/4136
-
-[original code]: https://github.com/cr-marcstevens/sha1collisiondetection
-[white paper]: https://marc-stevens.nl/research/papers/C13-S.pdf
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/pjbgf/sha1cd/detection.go","mode":420,"size":287,"sha256":"da1e36b72f925b966b85bc1e35e1e79a81757e541506688981a4c0f78f208b6f","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":287}
-package sha1cd
-
-import "hash"
-
-type CollisionResistantHash interface {
-	// CollisionResistantSum extends on Sum by returning an additional boolean
-	// which indicates whether a collision was found during the hashing process.
-	CollisionResistantSum(b []byte) ([]byte, bool)
-
-	hash.Hash
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/pjbgf/sha1cd/internal/const.go","mode":420,"size":1063,"sha256":"edd4ec82b8ad1b433f3437ebcf9326b497f59c353e8897b928473e9b306379d0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1063}
-package shared
-
-const (
-	// Constants for the SHA-1 hash function.
-	K0 = 0x5A827999
-	K1 = 0x6ED9EBA1
-	K2 = 0x8F1BBCDC
-	K3 = 0xCA62C1D6
-
-	// Initial values for the buffer variables: h0, h1, h2, h3, h4.
-	Init0 = 0x67452301
-	Init1 = 0xEFCDAB89
-	Init2 = 0x98BADCFE
-	Init3 = 0x10325476
-	Init4 = 0xC3D2E1F0
-
-	// Initial values for the temporary variables (ihvtmp0, ihvtmp1, ihvtmp2, ihvtmp3, ihvtmp4) during the SHA recompression step.
-	InitTmp0 = 0xD5
-	InitTmp1 = 0x394
-	InitTmp2 = 0x8152A8
-	InitTmp3 = 0x0
-	InitTmp4 = 0xA7ECE0
-
-	// SHA1 contains 2 buffers, each based off 5 32-bit words.
-	WordBuffers = 5
-
-	// The output of SHA1 is 20 bytes (160 bits).
-	Size = 20
-
-	// Rounds represents the number of steps required to process each chunk.
-	Rounds = 80
-
-	// SHA1 processes the input data in chunks. Each chunk contains 64 bytes.
-	Chunk = 64
-
-	// The number of pre-step compression state to store.
-	// Currently there are 3 pre-step compression states required: 0, 58, 65.
-	PreStepState = 3
-
-	Magic         = "shacd\x01"
-	MarshaledSize = len(Magic) + 5*4 + Chunk + 8
-)
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/pjbgf/sha1cd/sha1cd.go","mode":420,"size":4886,"sha256":"3e61651f92671bacd67e1984338210cd42afd59ddf9372756ac30915c6637ed0","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":4886}
-// Copyright 2009 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
-// Package sha1cd implements collision detection based on the whitepaper
-// Counter-cryptanalysis from Marc Stevens. The original ubc implementation
-// was done by Marc Stevens and Dan Shumow, and can be found at:
-// https://github.com/cr-marcstevens/sha1collisiondetection
-package sha1cd
-
-// This SHA1 implementation is based on Go's generic SHA1.
-// Original: https://github.com/golang/go/blob/master/src/crypto/sha1/sha1.go
-
-import (
-	"encoding/binary"
-	"errors"
-	"hash"
-
-	shared "github.com/pjbgf/sha1cd/internal"
-)
-
-// The size of a SHA-1 checksum in bytes.
-const Size = shared.Size
-
-// The blocksize of SHA-1 in bytes.
-const BlockSize = shared.Chunk
-
-// digest represents the partial evaluation of a checksum.
-type digest struct {
-	h   [shared.WordBuffers]uint32
-	x   [shared.Chunk]byte
-	nx  int
-	len uint64
-
-	// col defines whether a collision has been found.
-	col bool
-}
-
-func (d *digest) MarshalBinary() ([]byte, error) {
-	b := make([]byte, 0, shared.MarshaledSize)
-	b = append(b, shared.Magic...)
-	b = appendUint32(b, d.h[0])
-	b = appendUint32(b, d.h[1])
-	b = appendUint32(b, d.h[2])
-	b = appendUint32(b, d.h[3])
-	b = appendUint32(b, d.h[4])
-	b = append(b, d.x[:d.nx]...)
-	b = b[:len(b)+len(d.x)-d.nx] // already zero
-	b = appendUint64(b, d.len)
-	return b, nil
-}
-
-func appendUint32(b []byte, v uint32) []byte {
-	return append(b,
-		byte(v>>24),
-		byte(v>>16),
-		byte(v>>8),
-		byte(v),
-	)
-}
-
-func appendUint64(b []byte, v uint64) []byte {
-	return append(b,
-		byte(v>>56),
-		byte(v>>48),
-		byte(v>>40),
-		byte(v>>32),
-		byte(v>>24),
-		byte(v>>16),
-		byte(v>>8),
-		byte(v),
-	)
-}
-
-func (d *digest) UnmarshalBinary(b []byte) error {
-	if len(b) < len(shared.Magic) || string(b[:len(shared.Magic)]) != shared.Magic {
-		return errors.New("crypto/sha1: invalid hash state identifier")
-	}
-	if len(b) != shared.MarshaledSize {
-		return errors.New("crypto/sha1: invalid hash state size")
-	}
-	b = b[len(shared.Magic):]
-	b, d.h[0] = consumeUint32(b)
-	b, d.h[1] = consumeUint32(b)
-	b, d.h[2] = consumeUint32(b)
-	b, d.h[3] = consumeUint32(b)
-	b, d.h[4] = consumeUint32(b)
-	b = b[copy(d.x[:], b):]
-	b, d.len = consumeUint64(b)
-	d.nx = int(d.len % shared.Chunk)
-	return nil
-}
-
-func consumeUint64(b []byte) ([]byte, uint64) {
-	_ = b[7]
-	x := uint64(b[7]) | uint64(b[6])<<8 | uint64(b[5])<<16 | uint64(b[4])<<24 |
-		uint64(b[3])<<32 | uint64(b[2])<<40 | uint64(b[1])<<48 | uint64(b[0])<<56
-	return b[8:], x
-}
-
-func consumeUint32(b []byte) ([]byte, uint32) {
-	_ = b[3]
-	x := uint32(b[3]) | uint32(b[2])<<8 | uint32(b[1])<<16 | uint32(b[0])<<24
-	return b[4:], x
-}
-
-func (d *digest) Reset() {
-	d.h[0] = shared.Init0
-	d.h[1] = shared.Init1
-	d.h[2] = shared.Init2
-	d.h[3] = shared.Init3
-	d.h[4] = shared.Init4
-	d.nx = 0
-	d.len = 0
-
-	d.col = false
-}
-
-// New returns a new hash.Hash computing the SHA1 checksum. The Hash also
-// implements encoding.BinaryMarshaler and encoding.BinaryUnmarshaler to
-// marshal and unmarshal the internal state of the hash.
-func New() hash.Hash {
-	var d digest
-	d.Reset()
-	return &d
-}
-
-func (d *digest) Size() int { return Size }
-
-func (d *digest) BlockSize() int { return BlockSize }
-
-func (d *digest) Write(p []byte) (nn int, err error) {
-	if len(p) == 0 {
-		return
-	}
-
-	nn = len(p)
-	d.len += uint64(nn)
-	if d.nx > 0 {
-		n := copy(d.x[d.nx:], p)
-		d.nx += n
-		if d.nx == shared.Chunk {
-			block(d, d.x[:])
-			d.nx = 0
-		}
-		p = p[n:]
-	}
-	if len(p) >= shared.Chunk {
-		n := len(p) &^ (shared.Chunk - 1)
-		block(d, p[:n])
-		p = p[n:]
-	}
-	if len(p) > 0 {
-		d.nx = copy(d.x[:], p)
-	}
-	return
-}
-
-func (d *digest) Sum(in []byte) []byte {
-	// Make a copy of d so that caller can keep writing and summing.
-	d0 := *d
-	hash := d0.checkSum()
-	return append(in, hash[:]...)
-}
-
-func (d *digest) checkSum() [Size]byte {
-	len := d.len
-	// Padding.  Add a 1 bit and 0 bits until 56 bytes mod 64.
-	var tmp [64 + 8]byte
-	tmp[0] = 0x80
-	var t uint64
-	if len%64 < 56 {
-		t = 56 - len%64
-	} else {
-		t = 64 + 56 - len%64
-	}
-
-	// Length in bits.
-	len <<= 3
-	padlen := tmp[:t+8]
-	binary.BigEndian.PutUint64(tmp[t:], len)
-	d.Write(padlen)
-
-	if d.nx != 0 {
-		panic("d.nx != 0")
-	}
-
-	var digest [Size]byte
-
-	binary.BigEndian.PutUint32(digest[0:], d.h[0])
-	binary.BigEndian.PutUint32(digest[4:], d.h[1])
-	binary.BigEndian.PutUint32(digest[8:], d.h[2])
-	binary.BigEndian.PutUint32(digest[12:], d.h[3])
-	binary.BigEndian.PutUint32(digest[16:], d.h[4])
-
-	return digest
-}
-
-// Sum returns the SHA-1 checksum of the data.
-func Sum(data []byte) ([Size]byte, bool) {
-	var d digest
-	d.Reset()
-	d.Write(data)
-	return d.checkSum(), d.col
-}
-
-func (d *digest) CollisionResistantSum(in []byte) ([]byte, bool) {
-	// Make a copy of d so that caller can keep writing and summing.
-	d0 := *d
-	hash := d0.checkSum()
-	return append(in, hash[:]...), d0.col
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/pjbgf/sha1cd/sha1cdblock_amd64.go","mode":420,"size":1263,"sha256":"28c7cf11d6e190537b24660845781425e701f7b1ff8110b80b104b2b8ffe8636","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1263}
-//go:build !noasm && gc && amd64 && !arm64
-// +build !noasm,gc,amd64,!arm64
-
-package sha1cd
-
-import (
-	"runtime"
-
-	"github.com/klauspost/cpuid/v2"
-	shared "github.com/pjbgf/sha1cd/internal"
-)
-
-var hasSHANI = (runtime.GOARCH == "amd64" &&
-	cpuid.CPU.Supports(cpuid.AVX) &&
-	cpuid.CPU.Supports(cpuid.SHA) &&
-	cpuid.CPU.Supports(cpuid.SSE3) &&
-	cpuid.CPU.Supports(cpuid.SSE4))
-
-// blockAMD64 hashes the message p into the current state in h.
-// Both m1 and cs are used to store intermediate results which are used by the collision detection logic.
-//
-//go:noescape
-func blockAMD64(h []uint32, p []byte, m1 []uint32, cs [][5]uint32)
-
-func block(dig *digest, p []byte) {
-	if forceGeneric || !hasSHANI {
-		blockGeneric(dig, p)
-		return
-	}
-
-	m1 := [shared.Rounds]uint32{}
-	cs := [shared.PreStepState][shared.WordBuffers]uint32{}
-
-	for len(p) >= shared.Chunk {
-		// The assembly code only supports processing a block at a time,
-		// so adjust the chunk accordingly.
-		chunk := p[:shared.Chunk]
-
-		blockAMD64(dig.h[:], chunk, m1[:], cs[:])
-		rectifyCompressionState(&m1, &cs)
-
-		col := checkCollision(&m1, &cs, &dig.h)
-		if col {
-			dig.col = true
-
-			blockAMD64(dig.h[:], chunk, m1[:], cs[:])
-			blockAMD64(dig.h[:], chunk, m1[:], cs[:])
-		}
-
-		p = p[shared.Chunk:]
-	}
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/pjbgf/sha1cd/sha1cdblock_amd64.s","mode":420,"size":5553,"sha256":"b38e282988e7f5d3bb8fb9edab3bed3358eb728372506aedc354564c0b9d7d35","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5553}
-//go:build !noasm && gc && amd64 && !arm64
-
-#include "textflag.h"
-
-// License information for the original SHA1 arm64 implemention:
-// Copyright 2024 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found at:
-// 	- https://github.com/golang/go/blob/master/LICENSE
-//
-// Reference implementations:
-// 	- https://github.com/golang/go/blob/master/src/crypto/sha1/sha1block_amd64.s
-
-// Reverse the dword order in abcd via PSHUFD then store the 16 bytes in one
-// move, instead of issuing four VPEXTRD's that each go through the store port.
-#define LOADCS(abcd, e, index, target) \
-	VPSHUFD $0x1B, abcd, X8; \
-	VMOVDQU X8, ((index*20)+0)(target); \
-	MOVL e, ((index*20)+16)(target);
-
-#define LOADM1(m1, index, target) \
-	VPSHUFD $0x1B, m1, X8; \
-	VMOVDQU X8, ((index*16)+0)(target);
-	
-// func blockAMD64(h []uint32, p []byte, m1 []uint32, cs [][5]uint32)
-// Requires: AVX, SHA, SSE2, SSE4.1, SSSE3
-TEXT ·blockAMD64(SB), NOSPLIT, $80-96
-	MOVQ h_base+0(FP), DI
-	MOVQ p_base+24(FP), SI
-	MOVQ p_len+32(FP), DX
-	MOVQ m1_base+48(FP), R13
-	MOVQ cs_base+72(FP), R15
-	CMPQ DX, $0x00
-	JEQ  done
-	ADDQ SI, DX
-
-	// Allocate space on the stack for saving ABCD and E0, and align it to 16 bytes
-	LEAQ 15(SP), AX
-	MOVQ $0x000000000000000f, CX
-	NOTQ CX
-	ANDQ CX, AX
-
-	// Load initial hash state
-	PINSRD  $0x03, 16(DI), X5
-	VMOVDQU (DI), X0
-	PAND    upper_mask<>+0(SB), X5
-	PSHUFD  $0x1b, X0, X0
-	VMOVDQA shuffle_mask<>+0(SB), X7
-
-loop:
-	// Save ABCD and E working values
-	VMOVDQA X5, (AX)
-	VMOVDQA X0, 16(AX)
-
-	// LOAD CS 0
-	VPEXTRD $3, X5, R12
-	LOADCS(X0, R12, 0, R15)
-
-	// Rounds 0-3
-	VMOVDQU   (SI), X1
-	PSHUFB    X7, X1
-	PADDD     X1, X5
-	VMOVDQA   X0, X6
-	SHA1RNDS4 $0x00, X5, X0
-	LOADM1(X1, 0, R13)
-
-	// Rounds 4-7
-	VMOVDQU   16(SI), X2
-	PSHUFB    X7, X2
-	SHA1NEXTE X2, X6
-	VMOVDQA   X0, X5
-	SHA1RNDS4 $0x00, X6, X0
-	SHA1MSG1  X2, X1
-	LOADM1(X2, 1, R13)
-
-	// Rounds 8-11
-	VMOVDQU   32(SI), X3
-	PSHUFB    X7, X3
-	SHA1NEXTE X3, X5
-	VMOVDQA   X0, X6
-	SHA1RNDS4 $0x00, X5, X0
-	SHA1MSG1  X3, X2
-	PXOR      X3, X1
-	LOADM1(X3, 2, R13)
-
-	// Rounds 12-15
-	VMOVDQU   48(SI), X4
-	PSHUFB    X7, X4
-	SHA1NEXTE X4, X6
-	VMOVDQA   X0, X5
-	SHA1MSG2  X4, X1
-	SHA1RNDS4 $0x00, X6, X0
-	SHA1MSG1  X4, X3
-	PXOR      X4, X2
-	LOADM1(X4, 3, R13)
-
-	// Rounds 16-19
-	SHA1NEXTE X1, X5
-	VMOVDQA   X0, X6
-	SHA1MSG2  X1, X2
-	SHA1RNDS4 $0x00, X5, X0
-	SHA1MSG1  X1, X4
-	PXOR      X1, X3
-	LOADM1(X1, 4, R13)
-
-	// Rounds 20-23
-	SHA1NEXTE X2, X6
-	VMOVDQA   X0, X5
-	SHA1MSG2  X2, X3
-	SHA1RNDS4 $0x01, X6, X0
-	SHA1MSG1  X2, X1
-	PXOR      X2, X4
-	LOADM1(X2, 5, R13)
-
-	// Rounds 24-27
-	SHA1NEXTE X3, X5
-	VMOVDQA   X0, X6
-	SHA1MSG2  X3, X4
-	SHA1RNDS4 $0x01, X5, X0
-	SHA1MSG1  X3, X2
-	PXOR      X3, X1
-	LOADM1(X3, 6, R13)
-
-	// Rounds 28-31
-	SHA1NEXTE X4, X6
-	VMOVDQA   X0, X5
-	SHA1MSG2  X4, X1
-	SHA1RNDS4 $0x01, X6, X0
-	SHA1MSG1  X4, X3
-	PXOR      X4, X2
-	LOADM1(X4, 7, R13)
-
-	// Rounds 32-35
-	SHA1NEXTE X1, X5
-	VMOVDQA   X0, X6
-	SHA1MSG2  X1, X2
-	SHA1RNDS4 $0x01, X5, X0
-	SHA1MSG1  X1, X4
-	PXOR      X1, X3
-	LOADM1(X1, 8, R13)
-
-	// Rounds 36-39
-	SHA1NEXTE X2, X6
-	VMOVDQA   X0, X5
-	SHA1MSG2  X2, X3
-	SHA1RNDS4 $0x01, X6, X0
-	SHA1MSG1  X2, X1
-	PXOR      X2, X4
-	LOADM1(X2, 9, R13)
-
-	// Rounds 40-43
-	SHA1NEXTE X3, X5
-	VMOVDQA   X0, X6
-	SHA1MSG2  X3, X4
-	SHA1RNDS4 $0x02, X5, X0
-	SHA1MSG1  X3, X2
-	PXOR      X3, X1
-	LOADM1(X3, 10, R13)
-
-	// Rounds 44-47
-	SHA1NEXTE X4, X6
-	VMOVDQA   X0, X5
-	SHA1MSG2  X4, X1
-	SHA1RNDS4 $0x02, X6, X0
-	SHA1MSG1  X4, X3
-	PXOR      X4, X2
-	LOADM1(X4, 11, R13)
-
-	// Rounds 48-51
-	SHA1NEXTE X1, X5
-	VMOVDQA   X0, X6
-	SHA1MSG2  X1, X2
-	SHA1RNDS4 $0x02, X5, X0
-	VPEXTRD $0, X5, R12
-	SHA1MSG1  X1, X4
-	PXOR      X1, X3
-	LOADM1(X1, 12, R13)
-
-	// derive pre-round 56's E out of round 51's A.
-	VPEXTRD $3, X0, R12
-	ROLL $30, R12
-
-	// Rounds 52-55
-	SHA1NEXTE X2, X6
-	VMOVDQA   X0, X5
-	SHA1MSG2  X2, X3
-	SHA1RNDS4 $0x02, X6, X0
-	SHA1MSG1  X2, X1
-	PXOR      X2, X4
-	LOADM1(X2, 13, R13)
-
-	// LOAD CS 58 (gathers 56 which will be rectified in Go)
-	LOADCS(X0, R12, 1, R15)
-
-	// Rounds 56-59
-	SHA1NEXTE X3, X5
-	VMOVDQA   X0, X6
-	SHA1MSG2  X3, X4
-	SHA1RNDS4 $0x02, X5, X0
-	VPEXTRD $0, X5, R12
-	SHA1MSG1  X3, X2
-	PXOR      X3, X1
-	LOADM1(X3, 14, R13)
-
-	// derive pre-round 64's E out of round 59's A.
-	VPEXTRD $3, X0, R12
-	ROLL $30, R12
-
-	// Rounds 60-63
-	SHA1NEXTE X4, X6
-	VMOVDQA   X0, X5
-	SHA1MSG2  X4, X1
-	SHA1RNDS4 $0x03, X6, X0
-	SHA1MSG1  X4, X3
-	PXOR      X4, X2
-	LOADM1(X4, 15, R13)
-
-	// LOAD CS 65 (gathers 64 which will be rectified in Go)
-	LOADCS(X0, R12, 2, R15)
-
-	// Rounds 64-67
-	SHA1NEXTE X1, X5
-	VMOVDQA   X0, X6
-	SHA1MSG2  X1, X2
-	SHA1RNDS4 $0x03, X5, X0
-	SHA1MSG1  X1, X4
-	PXOR      X1, X3
-	LOADM1(X1, 16, R13)
-
-	// Rounds 68-71
-	SHA1NEXTE X2, X6
-	VMOVDQA   X0, X5
-	SHA1MSG2  X2, X3
-	SHA1RNDS4 $0x03, X6, X0
-	PXOR      X2, X4
-	LOADM1(X2, 17, R13)
-
-	// Rounds 72-75
-	SHA1NEXTE X3, X5
-	VMOVDQA   X0, X6
-	SHA1MSG2  X3, X4
-	SHA1RNDS4 $0x03, X5, X0
-	LOADM1(X3, 18, R13)
-
-	// Rounds 76-79
-	SHA1NEXTE X4, X6
-	VMOVDQA   X0, X5
-	SHA1RNDS4 $0x03, X6, X0
-	LOADM1(X4, 19, R13)
-
-	// Add saved E and ABCD
-	SHA1NEXTE (AX), X5
-	PADDD     16(AX), X0
-
-	// Check if we are done, if not return to the loop
-	ADDQ $0x40, SI
-	CMPQ SI, DX
-	JNE  loop
-
-	// Write the hash state back to digest
-	PSHUFD  $0x1b, X0, X0
-	VMOVDQU X0, (DI)
-	PEXTRD  $0x03, X5, 16(DI)
-
-done:
-	RET
-
-DATA upper_mask<>+0(SB)/8, $0x0000000000000000
-DATA upper_mask<>+8(SB)/8, $0xffffffff00000000
-GLOBL upper_mask<>(SB), RODATA, $16
-
-DATA shuffle_mask<>+0(SB)/8, $0x08090a0b0c0d0e0f
-DATA shuffle_mask<>+8(SB)/8, $0x0001020304050607
-GLOBL shuffle_mask<>(SB), RODATA, $16
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/pjbgf/sha1cd/sha1cdblock_arm64.go","mode":420,"size":1157,"sha256":"540a388578e98b65a7c736f2ce2f635180deb3f59c9f6b18c06b3f3066c65ac2","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":1157}
-//go:build !noasm && gc && arm64 && !amd64
-// +build !noasm,gc,arm64,!amd64
-
-package sha1cd
-
-import (
-	"runtime"
-
-	"github.com/klauspost/cpuid/v2"
-	shared "github.com/pjbgf/sha1cd/internal"
-)
-
-var hasSHA1 = (runtime.GOARCH == "arm64" && cpuid.CPU.Supports(cpuid.SHA1))
-
-// blockARM64 hashes the message p into the current state in h.
-// Both m1 and cs are used to store intermediate results which are used by the collision detection logic.
-//
-//go:noescape
-func blockARM64(h []uint32, p []byte, m1 []uint32, cs [][5]uint32)
-
-func block(dig *digest, p []byte) {
-	if forceGeneric || !hasSHA1 {
-		blockGeneric(dig, p)
-		return
-	}
-
-	m1 := [shared.Rounds]uint32{}
-	cs := [shared.PreStepState][shared.WordBuffers]uint32{}
-
-	for len(p) >= shared.Chunk {
-		// The assembly code only supports processing a block at a time,
-		// so adjust the chunk accordingly.
-		chunk := p[:shared.Chunk]
-
-		blockARM64(dig.h[:], chunk, m1[:], cs[:])
-
-		rectifyCompressionState(&m1, &cs)
-		col := checkCollision(&m1, &cs, &dig.h)
-		if col {
-			dig.col = true
-
-			blockARM64(dig.h[:], chunk, m1[:], cs[:])
-			blockARM64(dig.h[:], chunk, m1[:], cs[:])
-		}
-
-		p = p[shared.Chunk:]
-	}
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/pjbgf/sha1cd/sha1cdblock_arm64.s","mode":420,"size":5338,"sha256":"9b7bcc59c5d40cddd3d4f3c1c1c21c85e0392b5d45900562c67eb94915a231a8","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":5338}
-//go:build !noasm && gc && arm64 && !amd64
-
-#include "textflag.h"
-
-// License information for the original SHA1 arm64 implemention:
-// Copyright 2017 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found at:
-// 	- https://github.com/golang/go/blob/master/LICENSE
-//
-// Reference implementations:
-// 	- https://github.com/noloader/SHA-Intrinsics/blob/master/sha1-arm.c
-// 	- https://github.com/golang/go/blob/master/src/crypto/sha1/sha1block_arm64.s
-
-#define HASHUPDATECHOOSE \
-	SHA1C	V16.S4, V1, V2 \
-	SHA1H	V3, V1 \
-	VMOV	V2.B16, V3.B16
-
-#define HASHUPDATEPARITY \
-	SHA1P	V16.S4, V1, V2 \
-	SHA1H	V3, V1 \
-	VMOV	V2.B16, V3.B16
-
-#define HASHUPDATEMAJ \
-	SHA1M	V16.S4, V1, V2 \
-	SHA1H	V3, V1 \
-	VMOV	V2.B16, V3.B16
-
-// func blockARM64(h []uint32, p []byte, m1 []uint32, cs [][5]uint32)
-TEXT ·blockARM64(SB), NOSPLIT, $80-96
-	MOVD	h_base+0(FP), R0
-	MOVD	p_base+24(FP), R1
-	MOVD	p_len+32(FP), R2
-	MOVD	m1_base+48(FP), R3
-	MOVD	cs_base+72(FP), R4
-
-    LSR     $6, R2, R2
-    LSL     $6, R2, R2
-    ADD     R16, R2, R21
-
-	VLD1.P	16(R0), [V0.S4]
-	FMOVS	(R0), F20
-	SUB	$16, R0, R0
-
-loop:
-	CMP     R16, R21
-	BLS     end
-
-	// Load block (p) into 16-bytes vectors.
-	VLD1.P	16(R1), [V4.B16]
-	VLD1.P	16(R1), [V5.B16]
-	VLD1.P	16(R1), [V6.B16]
-	VLD1.P	16(R1), [V7.B16]
-	
-	// Load K constants to V19
-	MOVD  $·sha1Ks(SB), R22
-	VLD1  (R22), [V19.S4]
-                              
-	VMOV	V0.B16, V2.B16
-	VMOV	V20.S[0], V1
-	VMOV	V2.B16, V3.B16
-	VDUP	V19.S[0], V17.S4
-	
-	// Little Endian
-	VREV32	V4.B16, V4.B16
-	VREV32	V5.B16, V5.B16
-	VREV32	V6.B16, V6.B16
-	VREV32	V7.B16, V7.B16
-	
-	// LOAD M1 rounds 0-15
-	VST1.P    [V4.S4], (R3)
-	VST1.P    [V5.S4], (R3)
-	VST1.P    [V6.S4], (R3)
-	VST1.P    [V7.S4], (R3)
-
-	// LOAD CS 0
-    VST1.P    [V0.S4], (R4)  // ABCD pre-round 0
-	VST1.P    V1.S[0], 4(R4) // E pre-round 0
-
-	// Rounds 0-3
-	VDUP	V19.S[1], V18.S4
-	VADD	V17.S4, V4.S4, V16.S4
-	SHA1SU0	V6.S4, V5.S4, V4.S4
-	HASHUPDATECHOOSE
-	SHA1SU1	V7.S4, V4.S4
-
-	// Rounds 4-7
-	VADD	V17.S4, V5.S4, V16.S4
-	SHA1SU0	V7.S4, V6.S4, V5.S4
-	HASHUPDATECHOOSE
-	SHA1SU1	V4.S4, V5.S4
-	// LOAD M1 rounds 16-19
-	VST1.P    [V4.S4], (R3)
-
-	// Rounds 8-11
-	VADD	V17.S4, V6.S4, V16.S4
-	SHA1SU0	V4.S4, V7.S4, V6.S4
-	HASHUPDATECHOOSE
-	SHA1SU1	V5.S4, V6.S4
-	// LOAD M1 rounds 20-23
-	VST1.P    [V5.S4], (R3)
-
-	// Rounds 12-15
-	VADD	V17.S4, V7.S4, V16.S4
-	SHA1SU0	V5.S4, V4.S4, V7.S4
-	HASHUPDATECHOOSE
-	SHA1SU1	V6.S4, V7.S4
-	// LOAD M1 rounds 24-27
-	VST1.P    [V6.S4], (R3)
-
-	// Rounds 16-19
-	VADD	V17.S4, V4.S4, V16.S4
-	SHA1SU0	V6.S4, V5.S4, V4.S4
-	HASHUPDATECHOOSE
-	SHA1SU1	V7.S4, V4.S4
-	// LOAD M1 rounds 28-31
-	VST1.P    [V7.S4], (R3)
-
-	// Rounds 20-23
-	VDUP	V19.S[2], V17.S4
-	VADD	V18.S4, V5.S4, V16.S4
-	SHA1SU0	V7.S4, V6.S4, V5.S4
-	HASHUPDATEPARITY
-	SHA1SU1	V4.S4, V5.S4
-	// LOAD M1 rounds 32-35
-	VST1.P    [V4.S4], (R3)
-
-	// Rounds 24-27
-	VADD	V18.S4, V6.S4, V16.S4
-	SHA1SU0	V4.S4, V7.S4, V6.S4
-	HASHUPDATEPARITY
-	SHA1SU1	V5.S4, V6.S4
-	// LOAD M1 rounds 36-39
-	VST1.P    [V5.S4], (R3)
-
-	// Rounds 28-31
-	VADD	V18.S4, V7.S4, V16.S4
-	SHA1SU0	V5.S4, V4.S4, V7.S4
-	HASHUPDATEPARITY
-	SHA1SU1	V6.S4, V7.S4
-	// LOAD M1 rounds 40-43
-	VST1.P    [V6.S4], (R3)
-
-	// Rounds 32-35
-	VADD	V18.S4, V4.S4, V16.S4
-	SHA1SU0	V6.S4, V5.S4, V4.S4
-	HASHUPDATEPARITY
-	SHA1SU1	V7.S4, V4.S4
-	// LOAD M1 rounds 44-47
-	VST1.P    [V7.S4], (R3)
-
-	// Rounds 36-39
-	VADD	V18.S4, V5.S4, V16.S4
-	SHA1SU0	V7.S4, V6.S4, V5.S4
-	HASHUPDATEPARITY
-	SHA1SU1	V4.S4, V5.S4
-	// LOAD M1 rounds 48-51
-	VST1.P    [V4.S4], (R3)
-
-	// Rounds 44-47
-	VDUP	V19.S[3], V18.S4
-	VADD	V17.S4, V6.S4, V16.S4
-	SHA1SU0	V4.S4, V7.S4, V6.S4
-	HASHUPDATEMAJ
-	SHA1SU1	V5.S4, V6.S4
-	// LOAD M1 rounds 52-55
-	VST1.P    [V5.S4], (R3)
-
-	// Rounds 44-47
-	VADD	V17.S4, V7.S4, V16.S4
-	SHA1SU0	V5.S4, V4.S4, V7.S4
-	HASHUPDATEMAJ
-	SHA1SU1	V6.S4, V7.S4
-	// LOAD M1 rounds 56-59
-	VST1.P    [V6.S4], (R3)
-
-	// Rounds 48-51
-	VADD	V17.S4, V4.S4, V16.S4
-	SHA1SU0	V6.S4, V5.S4, V4.S4
-	HASHUPDATEMAJ
-	SHA1SU1	V7.S4, V4.S4
-	// LOAD M1 rounds 60-63
-	VST1.P    [V7.S4], (R3)
-	
-	// Rounds 52-55
-	VADD	V17.S4, V5.S4, V16.S4
-	SHA1SU0	V7.S4, V6.S4, V5.S4
-	HASHUPDATEMAJ
-	SHA1SU1	V4.S4, V5.S4
-
-	// LOAD CS 58
-    VST1.P    [V3.S4], (R4)  // ABCD pre-round 56
-	VST1.P    V1.S[0], 4(R4) // E pre-round 56
-
-	// Rounds 56-59
-	VADD	V17.S4, V6.S4, V16.S4
-	SHA1SU0	V4.S4, V7.S4, V6.S4
-	HASHUPDATEMAJ
-	SHA1SU1	V5.S4, V6.S4
-
-	// Rounds 60-63
-	VADD	V18.S4, V7.S4, V16.S4
-	SHA1SU0	V5.S4, V4.S4, V7.S4
-	HASHUPDATEPARITY
-	SHA1SU1	V6.S4, V7.S4
-
-	// LOAD CS 65
-    VST1.P    [V3.S4], (R4)  // ABCD pre-round 64
-	VST1.P    V1.S[0], 4(R4) // E pre-round 64
-
-	// Rounds 64-67
-	VADD	V18.S4, V4.S4, V16.S4
-	HASHUPDATEPARITY
-
-	// LOAD M1 rounds 68-79
-	VST1.P    [V4.S4], (R3)
-	VST1.P    [V5.S4], (R3)
-	VST1.P    [V6.S4], (R3)
-	VST1.P    [V7.S4], (R3)
-
-	// Rounds 68-71
-	VADD	V18.S4, V5.S4, V16.S4
-	HASHUPDATEPARITY
-
-	// Rounds 72-75
-	VADD	V18.S4, V6.S4, V16.S4
-	HASHUPDATEPARITY
-
-	// Rounds 76-79
-	VADD	V18.S4, V7.S4, V16.S4
-	HASHUPDATEPARITY
-
-	// Add working registers to hash state.
-	VADD	V2.S4, V0.S4, V0.S4
-	VADD	V1.S4, V20.S4, V20.S4
-
-end:
-	// Update h with final hash values.
-	VST1.P	[V0.S4], (R0)
-	FMOVS	F20, (R0)
-	
-	RET
-
-DATA ·sha1Ks+0(SB)/4,  $0x5A827999 // K0
-DATA ·sha1Ks+4(SB)/4,  $0x6ED9EBA1 // K1
-DATA ·sha1Ks+8(SB)/4,  $0x8F1BBCDC // K2
-DATA ·sha1Ks+12(SB)/4, $0xCA62C1D6 // K3
-GLOBL ·sha1Ks(SB), RODATA, $16
 
 @@END
