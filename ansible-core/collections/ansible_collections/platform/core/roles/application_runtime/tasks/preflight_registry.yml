@@ -1,0 +1,39 @@
+---
+- name: Предварительная проверка выбранного реестра
+  when: application_runtime_job.authority.repository.reference is defined
+  block:
+    - name: Проверка явного одобрения реестра на целевом узле приложения
+      ansible.builtin.assert:
+        that:
+          - application_runtime_job.authority.repository.reference.split('/')[0] in platform_application_approved_registries or (application_runtime_job.registryCredentials | default({}) | length > 0)
+        fail_msg: APPLICATION_REGISTRY_NOT_APPROVED
+
+    - name: Проверка манифеста выбранной платформы в разрешённом реестре
+      block:
+        - name: Подготовка аутентификации реестра для проверки образа без изменений
+          ansible.builtin.include_tasks: registry_auth.yml
+        - name: Проверка только утвержденного неизменяемого манифеста платформы
+          ansible.builtin.command:
+            argv: [docker, manifest, inspect, "{{ application_manifest.reference | platform.core.application_pinned_registry_reference(application_manifest.manifestDigest) }}"]
+          loop: "{{ application_registry_group.probes | map(attribute='repository') | list if (application_preflight_mode | default('direct')) == 'registry' else [application_runtime_job.authority.repository] }}"
+          loop_control:
+            loop_var: application_manifest
+          become_user: "{{ application_runtime_job.account }}"
+          environment: "{{ application_registry_environment }}"
+          register: application_registry_probe
+          changed_when: false
+          failed_when: false
+          no_log: true
+      always:
+        - name: Удаление временной аутентификации реестра проверки образа
+          ansible.builtin.file:
+            path: "{{ application_registry_auth_stage.path }}"
+            state: absent
+          when: application_registry_auth_stage.path is defined
+          changed_when: false
+
+    - name: Выбор совместимого источника для размещений с общим наблюдением реестра
+      platform.core.application_preflight_facts:
+        operation: registry
+      no_log: true
+      when: (application_preflight_mode | default('direct')) == 'registry'

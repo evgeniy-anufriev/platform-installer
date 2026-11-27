@@ -34,8 +34,8 @@ class SharedPathRuntimeTests(unittest.TestCase):
                 '  *) exit 2;;\n'
                 'esac\n')
             docker.chmod(0o700)
-            source = yaml.safe_load((TASKS / 'preflight.yml').read_text())
-            checks = [task for task in source[4]['block'] if task.get('name') in (
+            source = yaml.safe_load((TASKS / 'preflight_direct_checks.yml').read_text())
+            checks = [task for task in source[0]['block'] if task.get('name') in (
                 'Проверка точного контейнера, не раскрывая среду',
                 'Проверка меток владения существующим контейнером')]
             account = pwd.getpwuid(os.getuid()).pw_name
@@ -110,8 +110,8 @@ class SharedPathRuntimeTests(unittest.TestCase):
             (library / 'two' / 'config').symlink_to('/tmp')
         elif problem == 'traversal':
             jobs[1]['placement']['runtimePath'] = '../two'
-        source = yaml.safe_load((TASKS / 'preflight.yml').read_text())
-        direct_checks = source[4]['block']
+        source = yaml.safe_load((TASKS / 'preflight_direct_checks.yml').read_text())
+        direct_checks = source[0]['block']
         check = next(task for task in direct_checks if task.get('name') == 'Проверка наблюдений путей текущего размещения')
         tasks = [{'ansible.builtin.set_fact': dict(application_runtime_inputs=dict(jobs=jobs))}]
         if batched:

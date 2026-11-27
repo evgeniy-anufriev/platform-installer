@@ -86,7 +86,7 @@
     - name: Проверка утверждённых манифестов по общему контексту реестра
       ansible.builtin.include_role:
         name: platform.core.application_runtime
-        tasks_from: preflight
+        tasks_from: preflight_registry
       vars:
         application_preflight_mode: registry
         application_runtime_job: "{{ application_registry_group.job }}"
@@ -100,7 +100,7 @@
         operation: placements
       when:
         - application_host_jobs | length > 0
-        - not hostvars['localhost']._application_preflight_native
+        - application_host_jobs | length > _application_preflight_native | length
       no_log: true
     - name: Проверка размещений с динамическими шаблонами
       ansible.builtin.include_role:
@@ -110,7 +110,7 @@
         application_preflight_mode: native
         application_runtime_defer_archive_verification: true
         application_runtime_job: "{{ _application_preflight_job }}"
-      loop: "{{ range(application_host_jobs | length) | list if hostvars['localhost']._application_preflight_native else [] }}"
+      loop: "{{ _application_preflight_native }}"
       loop_control:
         loop_var: application_preflight_index
     - name: Сбор результатов предварительной проверки размещений узла

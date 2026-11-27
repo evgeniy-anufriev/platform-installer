@@ -31,7 +31,7 @@ class ApplicationRuntimeDiscoveryQA(unittest.TestCase):
         self.fail("%s; private evidence: %s" % (message, path))
 
     def test_configuration_keys_are_cached_per_target_and_per_invocation(self):
-        routing = yaml.safe_load((TASKS / "preflight.yml").read_text())[0]['block'][:2]
+        routing = yaml.safe_load((TASKS / "preflight_direct_context.yml").read_text())[0]['block'][:2]
         self.assertEqual(list(ROUTING_NAMES), [task.get("name") for task in routing])
         discovery_route = routing[1]['block'][0]
         self.assertEqual("discover_runtime.yml", discovery_route.get("ansible.builtin.include_tasks"))
