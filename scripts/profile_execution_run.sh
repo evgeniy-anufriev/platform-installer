@@ -11,6 +11,8 @@ import os
 from pathlib import Path
 import re
 import sys
+import tempfile
+import time
 
 BASE = Path('/var/lib/platform-installer/execution/runs')
 RESOLVER = 'platform.core.resolve_application_libraries'
@@ -138,6 +140,65 @@ def report_library_gaps(tasks, start, end):
             detail = f' | Начато без результата: {opened}' if opened else ''
             stamp = datetime.fromtimestamp(begin, timezone.utc).isoformat()
             print(f'{stop - begin:8.2f} сек | {stamp} | После: {before} | Перед: {after}{detail}')
+    transitions = defaultdict(lambda: [0.0, 0])
+    for begin, stop, before, after in gaps:
+        totals = transitions[(before, after)]
+        totals[0] += stop - begin
+        totals[1] += 1
+    repeated = [(names, totals) for names, totals in transitions.items() if totals[1] > 1]
+    if repeated:
+        print('Повторяющиеся переходы с наибольшей суммой разрывов:')
+        for (before, after), (seconds, count) in sorted(repeated, key=lambda row: -row[1][0])[:5]:
+            print(f'{seconds:8.2f} сек | {count} раз | в среднем {seconds / count:.2f} сек | {before} → {after}')
+
+
+def benchmark_journal(directory, size, event_count, status_size, stage_event_count):
+    samples = 32
+    entry_size = (size + event_count - 1) // event_count
+    entry_prefix, entry_suffix = b'{"sequence":1,"pad":"', b'"}\n'
+    entry = entry_prefix + b'x' * (entry_size - len(entry_prefix) - len(entry_suffix)) + entry_suffix
+    status_data = b'{"pad":"' + b'x' * (status_size - 10) + b'"}'
+    measurements = defaultdict(list)
+
+    with tempfile.TemporaryDirectory(prefix='.profile-journal-', dir=directory) as scratch:
+        work = Path(scratch)
+        journal = work / 'events.jsonl'
+        with journal.open('wb') as stream:
+            for _ in range(event_count):
+                stream.write(entry)
+
+        for _ in range(samples):
+            began = time.perf_counter()
+            for _ in range(2):
+                with journal.open('rb') as stream:
+                    json.loads(stream.read().rstrip(b'\n').split(b'\n')[-1])
+            read = time.perf_counter()
+            with journal.open('ab') as stream:
+                stream.write(entry)
+                stream.flush()
+                os.fsync(stream.fileno())
+            appended = time.perf_counter()
+            with tempfile.NamedTemporaryFile(dir=work, delete=False) as temporary:
+                temporary.write(status_data)
+                temporary.flush()
+                os.fsync(temporary.fileno())
+            os.replace(temporary.name, work / 'status.json')
+            saved = time.perf_counter()
+
+            measurements['Два чтения журнала и разбор номера'].append(read - began)
+            measurements['Дописать событие и fsync'].append(appended - read)
+            measurements['Записать статус, fsync и заменить файл'].append(saved - appended)
+            measurements['Итого на событие'].append(saved - began)
+
+    print(f'Стендовый замер журнала на том же файловом разделе: {samples} записей, '
+          f'исходный размер около {size / (1024 * 1024):.2f} МиБ.')
+    for name, results in measurements.items():
+        average = sum(results) / samples
+        percentile = sorted(results)[(samples * 95 + 99) // 100 - 1]
+        print(f'{name}: среднее {average * 1000:.2f} мс, p95 {percentile * 1000:.2f} мс.')
+    estimate = sum(measurements['Итого на событие']) / samples * stage_event_count
+    print(f'Ориентир на {stage_event_count} учтённых событий: {estimate:.2f} сек.')
+    print('Замер на временных данных. Ожидание блокировки, нагрузка Ansible и исходного запуска не измерены.')
 
 
 def report(events, status, cutoff, top=None, library=None):
@@ -192,6 +253,8 @@ def main():
     parser.add_argument('--events', help='Путь к events.jsonl, в том числе сохранённой копии журнала')
     parser.add_argument('--library', help='Показать только этап установки и проверки указанной библиотеки')
     parser.add_argument('--top', metavar='N', type=int, help='Сколько строк задач показать (с --library по умолчанию 10)')
+    parser.add_argument('--benchmark-journal', action='store_true',
+                        help='Дополнительно замерить операции журнала на временных файлах рядом с ним')
     args = parser.parse_args()
     if args.top is not None and args.top < 1:
         parser.error('--top должен быть положительным')
@@ -239,6 +302,7 @@ def main():
         status = json.loads((path.parent / 'status.json').read_text())
     except (OSError, ValueError):
         pass
+    journal_event_count = len(events)
     if args.library:
         events, boundary = library_events(events, args.library)
     cutoff = max(timestamp(e['timestamp']) for e in events)
@@ -256,6 +320,8 @@ def main():
         print(f'Предупреждение: пропущено неполных/некорректных строк: {broken}')
     top = 10 if args.library and args.top is None else args.top
     report(events, status, cutoff, top=top, library=args.library)
+    if args.benchmark_journal:
+        benchmark_journal(path.parent, len(raw), journal_event_count, len(json.dumps(status)), len(events))
     return 0
 
 
