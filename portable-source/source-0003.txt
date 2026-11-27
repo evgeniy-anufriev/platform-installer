@@ -3120,7 +3120,7 @@ if __name__ == "__main__":
     sys.exit(main())
 
 @@END
-@@PORTABLE {"path":"scripts/profile_execution_run.sh","mode":420,"size":11820,"sha256":"8f82780fc123a01f4f73cbe79685a0cc64ae54af9e443d86495ea7c036730b06","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":11820}
+@@PORTABLE {"path":"scripts/profile_execution_run.sh","mode":420,"size":14704,"sha256":"618105176bf1c8073f9f293325ef625cbe4b2a1caf635b9c052aece80541a436","index":0,"count":1,"newline":"lf","encoding":"utf-8","payloadBytes":14704}
 #!/bin/sh
 # Read-only profile of an existing Installer run. Run on the Execution Node.
 set -eu
@@ -3149,6 +3149,7 @@ def timestamp(value):
 def library_events(events, library):
     action = LIBRARY_ACTION_PREFIX + library
     selected = []
+    boundary = None
     for event in events:
         event_action = event.get('actionId', '')
         kind = event.get('eventType')
@@ -3160,17 +3161,19 @@ def library_events(events, library):
             selected.append(event)
             break
         if kind == 'ACTION_STARTED' and (event_action or '').startswith(LIBRARY_ACTION_PREFIX):
+            boundary = event
             break
         if event_action != 'applications:apply':
             continue
         if kind == 'ACTION_COMPLETED' or (
                 kind == 'TASK_STARTED' and event.get('task', {}).get('name') == LIBRARIES_CLEANUP):
+            boundary = event
             break
         if kind in ('TASK_STARTED', 'TASK_COMPLETED'):
             selected.append(event)
     if not selected:
         raise ValueError(f'В журнале нет события начала установки библиотеки {library}')
-    return selected
+    return selected, boundary
 
 
 def profile(events):
@@ -3225,10 +3228,45 @@ def profile(events):
     return actions, resolves, tasks, groups
 
 
-def report(events, status, cutoff):
+def report_library_gaps(events, tasks, start, end):
+    covered = 0.0
+    edge = start
+    for begin, stop in sorted((row['start'], row['end']) for row in tasks if row['end'] is not None):
+        covered += max(0, min(stop, end) - max(begin, edge))
+        edge = max(edge, stop)
+    print(f'Интервалы задач с результатом без перекрытий: {covered:.2f} сек.')
+    print(f'Вне этих интервалов: {max(0, end - start - covered):.2f} сек. '
+          'Задач без результата: ' + str(sum(row['end'] is None for row in tasks)) + '.')
+
+    gaps = []
+    previous = events[0]
+    for event in events[1:]:
+        seconds = timestamp(event['timestamp']) - timestamp(previous['timestamp'])
+        if seconds >= 10:
+            gaps.append((seconds, previous))
+        previous = event
+    seconds = end - timestamp(previous['timestamp'])
+    if seconds >= 10:
+        gaps.append((seconds, previous))
+    if gaps:
+        print('До трёх самых длинных пауз в журнале, с предыдущим событием:')
+        for seconds, event in sorted(gaps, key=lambda row: -row[0])[:3]:
+            task = event.get('task', {}).get('name', event.get('actionId', '-'))
+            print(f"{seconds:8.2f} сек | {event['timestamp']} | {event['eventType']} | {task}")
+
+
+def report(events, status, cutoff, top=None, library=None):
     actions, resolves, tasks, groups = profile(events)
     print(f"Событий прочитано: {len(events)}. Начатых задач: {len(tasks)}. Задач с результатом: {sum(t['elapsed'] is not None for t in tasks)}")
     print(f"Состояние запуска: {status.get('state', 'неизвестно')}")
+    if library:
+        stage = next(row for row in actions if row['action'] == LIBRARY_ACTION_PREFIX + library)
+        end = stage['end'] if stage['end'] is not None else cutoff
+        stage_status = stage['status'] if stage['end'] is not None else 'нет маркера завершения'
+        print(f"Длительность этапа библиотеки: {max(0, end - stage['start']):.2f} сек ({stage_status})")
+    print(f'Сумма по всем задачам с результатом: {sum(group[0] for group in groups.values()):.2f} сек.')
+    if library:
+        report_library_gaps(events, tasks, stage['start'], end)
     unmatched = sum(e.get('eventType') == 'TASK_COMPLETED' for e in events) - sum(t['results'] for t in tasks)
     if unmatched:
         print(f'Предупреждение: результатов задач без события начала: {unmatched}')
@@ -3246,8 +3284,13 @@ def report(events, status, cutoff):
         print(f"{number:3}. {max(0,end-row['start']):9.2f} сек | {label} | {row['action']}")
     print('\nЗадачи по суммарному времени (в каждой операции отдельно):')
     print('Сумма, сек | Вызовы | Среднее, сек | Результаты хостов | Ошибки хостов | Операция / роль / задача')
-    for (action, role, name), (seconds, calls, results, failed) in sorted(groups.items(), key=lambda item: -item[1][0]):
+    ranked = sorted(groups.items(), key=lambda item: -item[1][0])
+    for (action, role, name), (seconds, calls, results, failed) in ranked[:top]:
         print(f'{seconds:10.2f} | {calls:6} | {seconds/calls:12.3f} | {results:16} | {failed:6} | {action} / {role} / {name}')
+    if top is not None and top < len(ranked):
+        print(f'Показано {top} из {len(ranked)} строк. Итог включает все задачи с результатом.')
+    if top is not None:
+        return
     print('\nПоследние начатые задачи без результата (включают include-задачи, это не обязательно зависание):')
     for row in [t for t in tasks if t['elapsed'] is None][-10:]:
         print(f"{datetime.fromtimestamp(row['start'],timezone.utc).isoformat()} | {row['action']} | {row['role']} | {row['name']}")
@@ -3263,7 +3306,10 @@ def main():
     parser.add_argument('run', nargs='?', help='ID запуска installer-…; без аргумента — выбор из списка')
     parser.add_argument('--events', help='Путь к events.jsonl, в том числе сохранённой копии журнала')
     parser.add_argument('--library', help='Показать только этап установки и проверки указанной библиотеки')
+    parser.add_argument('--top', metavar='N', type=int, help='Сколько строк задач показать (с --library по умолчанию 10)')
     args = parser.parse_args()
+    if args.top is not None and args.top < 1:
+        parser.error('--top должен быть положительным')
     if args.run and args.events:
         parser.error('Укажите либо ID запуска, либо --events')
     if args.events:
@@ -3309,9 +3355,11 @@ def main():
     except (OSError, ValueError):
         pass
     if args.library:
-        events = library_events(events, args.library)
+        events, boundary = library_events(events, args.library)
     cutoff = max(timestamp(e['timestamp']) for e in events)
-    if not args.library:
+    if args.library and boundary is not None:
+        cutoff = max(cutoff, timestamp(boundary['timestamp']))
+    elif not args.library:
         try:
             cutoff = max(cutoff,timestamp(status['updatedAt']))
         except (ValueError, KeyError, TypeError):
@@ -3321,7 +3369,8 @@ def main():
         print(f'Библиотека: {args.library}')
     if broken:
         print(f'Предупреждение: пропущено неполных/некорректных строк: {broken}')
-    report(events, status, cutoff)
+    top = 10 if args.library and args.top is None else args.top
+    report(events, status, cutoff, top=top, library=args.library)
     return 0
 
 
