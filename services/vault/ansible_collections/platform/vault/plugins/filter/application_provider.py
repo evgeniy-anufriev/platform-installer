@@ -124,6 +124,13 @@ def group_sources(sources, credential_files=None):
     return list(groups.values())
 
 
+def network_groups(jobs):
+    groups = {}
+    for job in jobs:
+        groups.setdefault((job['providerId'], tuple(job['hosts'])), job)
+    return list(groups.values())
+
+
 def document_state(result, cached, provider):
     if not result.get('skipped'):
         return result
@@ -169,6 +176,7 @@ class FilterModule:
     def filters(self):
         return {'application_vault_retained_policy': retained_policy, 'application_vault_document_cache': document_cache, 'application_vault_verify_fields': verify_fields, 'application_vault_role_changed': role_changed, 'application_vault_source_cache': source_cache, 'application_kv_delta': delta, 'application_vault_cidrs': cidrs,
                 'application_vault_group_sources': group_sources,
+                'application_vault_network_groups': network_groups,
                 'application_vault_document_state': document_state,
                 'application_vault_plan_documents': plan_documents,
                 'application_vault_cas_conflict': cas_conflict,

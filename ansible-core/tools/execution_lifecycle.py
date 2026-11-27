@@ -269,8 +269,10 @@ class Journal(object):
     def metadata(self): return _read(self.metadata_path)
     def status(self): return _read(self.status_path)
 
-    def _append_event_locked(self, current, event):
-        sequence = max(int(current.get("sequence", 0)), self._last_complete_event_sequence()) + 1
+    def _append_event_locked(self, current, event, previous_sequence=None):
+        if previous_sequence is None:
+            previous_sequence = max(int(current.get("sequence", 0)), self._last_complete_event_sequence())
+        sequence = previous_sequence + 1
         if sequence > MAX_EVENTS:
             raise LifecycleError("RUN_EVENT_LIMIT")
         event["sequence"] = sequence
@@ -300,20 +302,39 @@ class Journal(object):
             flags |= os.O_NOFOLLOW
         descriptor = os.open(self.events_path, flags)
         with os.fdopen(descriptor, "rb+") as stream:
-            content = stream.read()
-            complete = content.rfind(b"\n")
-            if complete < 0:
-                stream.seek(0); stream.truncate(); stream.flush(); os.fsync(stream.fileno())
-                return 0
-            if complete != len(content) - 1:
-                stream.seek(complete + 1); stream.truncate(); stream.flush(); os.fsync(stream.fileno())
-                content = content[:complete + 1]
-            lines = content.rstrip(b"\n").split(b"\n")
-            if not lines:
+            size = offset = stream.seek(0, os.SEEK_END)
+            complete, record_end, record_start = None, None, 0
+            while offset:
+                length = min(offset, 4096)
+                offset -= length
+                stream.seek(offset)
+                block = stream.read(length)
+                if complete is None:
+                    newline = block.rfind(b"\n")
+                    if newline < 0:
+                        continue
+                    complete = offset + newline + 1
+                    block = block[:newline]
+                if record_end is None:
+                    block = block.rstrip(b"\n")
+                    if not block:
+                        continue
+                    record_end = offset + len(block)
+                newline = block.rfind(b"\n")
+                if newline >= 0:
+                    record_start = offset + newline + 1
+                    break
+            if (complete or 0) != size:
+                stream.truncate(complete or 0)
+                stream.flush()
+                os.fsync(stream.fileno())
+            if complete is None:
                 return 0
             try:
-                return int(json.loads(lines[-1].decode("utf-8")).get("sequence", 0))
-            except (UnicodeDecodeError, ValueError, TypeError):
+                stream.seek(record_start)
+                record = stream.read(record_end - record_start) if record_end is not None else b""
+                return int(json.loads(record.decode("utf-8")).get("sequence", 0))
+            except (UnicodeDecodeError, ValueError, TypeError, AttributeError):
                 raise LifecycleError("RUN_EVENT_STREAM_INVALID")
 
     def _event_locked(self, current, event_type, status, message, fields):
@@ -397,7 +418,7 @@ class Journal(object):
             if status == "FAILED":
                 from execution_task_error import safe_task_error
                 event["error"] = safe_task_error(failure_result, no_log)
-            committed = self._append_event_locked(current, event)
+            committed = self._append_event_locked(current, event, previous_sequence=sequence)
             if truncated:
                 _write(self.task_failure_reported_path, {"reported": True})
             return committed

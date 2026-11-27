@@ -86,6 +86,22 @@ class _Result(object):
 
 
 class ExecutionTaskObservabilityTests(unittest.TestCase):
+    def test_task_append_uses_one_tail_lookup_and_recovers_incomplete_line(self):
+        with tempfile.TemporaryDirectory() as root:
+            journal = _active_journal(root)
+            path = Path(journal.events_path)
+            complete = json.dumps({'sequence': 18, 'payload': 'x' * 9000}).encode() + b'\n'
+            with path.open('ab') as stream:
+                stream.write(complete + b'\n' + b'partial' * 700)
+            with mock.patch.object(journal, '_last_complete_event_sequence',
+                                   wraps=journal._last_complete_event_sequence) as lookup:
+                appended = journal.task_event('TASK_STARTED', 'RUNNING', 'task-1')
+            self.assertEqual(1, lookup.call_count)
+            self.assertEqual(19, appended['sequence'])
+            self.assertEqual(19, journal.status()['sequence'])
+            self.assertIn(complete, path.read_bytes())
+            self.assertNotIn(b'partial', path.read_bytes())
+
     def test_default_event_limit_accepts_32768_and_rejects_next_event(self):
         with tempfile.TemporaryDirectory() as root:
             journal = _active_journal(root)
@@ -665,11 +681,11 @@ class ControllerTaskStreamAcceptanceTests(unittest.TestCase):
                 elif callback_fault == "detail_writer_failure":
                     injection = (
                         "\n_qa_append = Journal._append_event_locked\n"
-                        "def _qa_append_failure(self, current, event):\n"
+                        "def _qa_append_failure(self, current, event, previous_sequence=None):\n"
                         "    if event['eventType'].startswith('TASK_'):\n"
                         "        open(%r, 'a').close()\n"
                         "        raise OSError('qa-private-injection-payload')\n"
-                        "    return _qa_append(self, current, event)\n"
+                        "    return _qa_append(self, current, event, previous_sequence)\n"
                         "Journal._append_event_locked = _qa_append_failure\n" % marker
                     )
                 elif callback_fault == "tiny_capacity":

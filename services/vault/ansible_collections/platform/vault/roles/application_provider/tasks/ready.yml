@@ -1,0 +1,36 @@
+---
+- name: Однократное обнаружение сетей новых групп размещений Vault
+  ansible.builtin.include_tasks: networks.yml
+  loop: "{{ platform_vault_ready_jobs | platform.vault.application_vault_network_groups }}"
+  loop_control:
+    loop_var: application_vault_network_job
+  vars:
+    platform_vault_application_job: "{{ application_vault_network_job }}"
+    application_vault_network_scope: "{{ [application_vault_network_job.providerId, application_vault_network_job.hosts] | to_json }}"
+    application_vault_network_key: "{{ platform_application_vault_network_keys[application_vault_network_scope] | string }}"
+  when: application_vault_network_key not in (platform_application_vault_networks | default({}))
+  no_log: true
+
+- name: Пакетная доставка документов Vault, политик и AppRole готовых потребителей
+  block:
+    - name: Согласование всех готовых экземпляров с контролем владельца и CAS
+      platform.vault.application_document:
+        operation: ready_instances
+        jobs: "{{ platform_vault_ready_jobs }}"
+        providers: "{{ platform_application_vault_runtime }}"
+        secret_root: "{{ platform_application_secret_root }}"
+        secret_files: "{{ platform_application_secret_files | combine(platform_application_credential_files | default({})) }}"
+        states: "{{ platform_application_vault_documents | default({}) }}"
+        values: "{{ platform_application_vault_values | default({}) }}"
+        generated: "{{ platform_application_generated_values | default({}) }}"
+        identities: "{{ platform_application_vault_identities | default({}) }}"
+        network_keys: "{{ platform_application_vault_network_keys }}"
+        networks: "{{ platform_application_vault_networks }}"
+        token_ttl: "{{ platform_vault_application_token_ttl }}"
+        token_max_ttl: "{{ platform_vault_application_token_max_ttl }}"
+      register: application_vault_ready_result
+      no_log: true
+  rescue:
+    - name: "Ошибка пакетной доставки Vault (HTTP {{ application_vault_ready_result.http_status | default(-1) | int }}, {{ application_vault_ready_result.category | default('module') }})"
+      ansible.builtin.fail:
+        msg: "{{ application_vault_ready_result.msg | default('') | regex_search('APPLICATION_(?:VAULT_[A-Z_]+|GENERATED_PROFILE_INVALID)') | default('APPLICATION_VAULT_DOCUMENT_WRITE_FAILED', true) }}"

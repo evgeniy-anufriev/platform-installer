@@ -225,8 +225,11 @@ class VaultDeliveryRuntimeTests(unittest.TestCase):
                 preflight_play = yaml.safe_load((DELIVERY.parents[1] / 'stages/vault-preflight.yml').read_text())[0]
                 preflight_task = next(task for task in preflight_play['tasks']
                                       if task.get('ansible.builtin.include_role', {}).get('tasks_from') == 'preflight')
+                prepare_network_keys = next(task for task in preflight_play['tasks']
+                                            if 'platform_application_vault_network_keys' in task.get('ansible.builtin.set_fact', {}))
                 initial_tasks = [
                     {'ansible.builtin.set_fact': facts},
+                    prepare_network_keys,
                     preflight_task,
                 ]
                 if grouped_sources:
@@ -254,10 +257,8 @@ class VaultDeliveryRuntimeTests(unittest.TestCase):
                                      (result.stdout + result.stderr)[-3000:])
                     self.assertNotIn('fixture-password', result.stdout + result.stderr)
                     if batch:
-                        self.assertEqual(2, result.stdout.count(
-                            'TASK [platform.vault.application_provider : Расчёт дельт всех KV-документов Vault]'))
-                        self.assertEqual(2, result.stdout.count(
-                            'TASK [platform.vault.application_provider : Запись только изменённых полей с проверкой версии CAS]'))
+                        self.assertEqual(1, result.stdout.count(
+                            'TASK [platform.vault.application_provider : Согласование всех готовых экземпляров с контролем владельца и CAS]'))
                 if foreign:
                     self.assertEqual(0, state['writes'])
                     return

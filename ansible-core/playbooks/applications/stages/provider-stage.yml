@@ -125,13 +125,17 @@
           loop: "{{ application_provider_inputs.jobs | selectattr('serviceType', 'equalto', 'kafka') | selectattr('accounts') | list }}"
           loop_control:
             loop_var: platform_kafka_application_job
+        - name: Выбор готовых экземпляров для пакетной публикации учётных данных
+          ansible.builtin.set_fact:
+            application_ready_instance_vault_jobs: "{{ application_vault_inputs.instanceJobs | platform.core.application_ready_vault_jobs(application_runtime_inputs.integrations, [], []) }}"
+          no_log: true
         - name: Публикация учетных данных каждого экземпляра и AppRole один раз
           ansible.builtin.include_role:
             name: platform.vault.application_provider
-            tasks_from: instance
-          loop: "{{ application_vault_inputs.instanceJobs | platform.core.application_ready_vault_jobs(application_runtime_inputs.integrations, [], []) }}"
-          loop_control:
-            loop_var: platform_vault_application_job
+            tasks_from: ready
+          vars:
+            platform_vault_ready_jobs: "{{ application_ready_instance_vault_jobs }}"
+          when: application_ready_instance_vault_jobs | length > 0
         - name: "Сохранение результатов доставки учётных данных экземпляров для координатора выполнения"
           ansible.builtin.set_fact:
             platform_application_delivered_shared_fields: >-
@@ -139,10 +143,8 @@
                  platform.core.application_ready_shared_jobs(application_runtime_inputs.integrations, []) |
                  platform.core.application_shared_vault_fields }}
             platform_application_delivered_instances: >-
-              {{ (application_vault_inputs.instanceJobs | platform.core.application_ready_vault_jobs(
-                  application_runtime_inputs.integrations, [], [])) |
-                 map(attribute='libraryId') | zip((application_vault_inputs.instanceJobs |
-                   platform.core.application_ready_vault_jobs(application_runtime_inputs.integrations, [], [])) |
+              {{ application_ready_instance_vault_jobs |
+                 map(attribute='libraryId') | zip(application_ready_instance_vault_jobs |
                    map(attribute='instanceId')) | map('join', '/') | list }}
           no_log: true
         - name: Передача производных учетных данных в среду выполнения

@@ -1294,3 +1294,22 @@ verified by `test_exact_application_credential_cleanup_preserves_unrelated_and_s
 The descriptor response-bound test fails on both revisions. No full Apply or
 real Wails acceptance is asserted. All three VMs started; node3 subsequently
 timed out in SSH banner exchange.
+
+## Execution journal tail and ready Vault delivery
+
+Same-node comparison on RED OS 8.3 node1, Ansible 2.18.15. Baseline `90f034dc`;
+changed source from the working tree. Each measurement starts with equivalent
+fixtures. Phases were measured independently.
+
+| Body | Before | After | Work count |
+|---|---:|---:|---|
+| 100 real Journal task-event writes, initial journal about 26.2 MiB | 17.598 / 17.162 s | 0.039 / 0.035 s | sequence lookups per task event 2 → 1 |
+| Deferred Vault delivery, 20 ready consumers and one pending consumer | 30.181 / 41.540 s | 2.595 / 2.881 s | Ansible task headers 289 → 11 |
+
+Vault timing used the production `deliver-ready.yml` path, a local HTTP fixture
+and cached network observations for a three-host placement group. HTTP calls
+remained 120 with identical order and final state. The pending consumer did not
+contact Vault. Separate native TLS tests cover cold network discovery, CAS
+conflict/retry, foreign document and identity, and generated credential custody.
+Journal tests cover one lookup, concurrent writers and incomplete trailing lines.
+No Wails or complete Apply timing from this comparison.
